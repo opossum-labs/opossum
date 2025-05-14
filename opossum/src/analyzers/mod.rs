@@ -17,6 +17,7 @@ pub use raytrace::RayTraceConfig;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
+use strum::IntoEnumIterator;
 use utoipa::ToSchema;
 
 /// Type of analysis to be performed.
@@ -42,14 +43,24 @@ pub enum AnalyzerType {
     #[schema(value_type=())]
     GhostFocus(GhostFocusConfig),
 }
+impl AnalyzerType {
+    /// Returns the available analyzer types.
+    ///
+    /// This function returns a vector of all available analyzer types. This is needed for
+    /// the backend / gui to determine which analyzers are available.
+    #[must_use]
+    pub fn analyzer_types() -> Vec<Self> {
+        Self::iter().collect()
+    }
+}
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = match self {
-            Self::Energy => "energy",
-            Self::RayTrace(_) => "ray tracing",
-            Self::GhostFocus(_) => "ghost focus",
+            Self::Energy => "Energy",
+            Self::RayTrace(_) => "RayTracing",
+            Self::GhostFocus(_) => "GhostFocus",
         };
-        write!(f, "{msg} analysis")
+        write!(f, "{msg}")
     }
 }
 #[cfg(test)]
@@ -57,14 +68,14 @@ mod test {
     use super::*;
     #[test]
     fn display() {
-        assert_eq!(format!("{}", AnalyzerType::Energy), "energy analysis");
+        assert_eq!(format!("{}", AnalyzerType::Energy), "Energy");
         assert_eq!(
             format!("{}", AnalyzerType::RayTrace(RayTraceConfig::default())),
-            "ray tracing analysis"
+            "RayTracing"
         );
         assert_eq!(
             format!("{}", AnalyzerType::GhostFocus(GhostFocusConfig::default())),
-            "ghost focus analysis"
+            "GhostFocus"
         );
     }
     #[test]

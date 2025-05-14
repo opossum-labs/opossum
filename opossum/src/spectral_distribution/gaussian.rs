@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use super::SpectralDistribution;
@@ -8,6 +9,7 @@ use crate::utils::math_distribution_functions::gaussian;
 use itertools::Itertools;
 use kahan::KahanSummator;
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Gaussian {
     wvl_range: (Length, Length),
     num_points: usize,
@@ -42,7 +44,7 @@ impl Gaussian {
             return Err(OpossumError::Other(
                 "range start must be positive and finite".into(),
             ));
-        };
+        }
         if !wvl_range.1.is_normal() || wvl_range.1.is_sign_negative() {
             return Err(OpossumError::Other(
                 "range end must be positive and finite".into(),
@@ -52,18 +54,17 @@ impl Gaussian {
             return Err(OpossumError::Other(
                 "mean value must be positive and finite!".into(),
             ));
-        };
+        }
         if !fwhm.is_normal() || fwhm.is_sign_negative() {
             return Err(OpossumError::Other(
                 "fwhm must be greater than zero and finite!".into(),
             ));
-        };
+        }
         if !power.is_normal() || power.is_sign_negative() {
             return Err(OpossumError::Other(
                 "power of the distribution must be positive and finite!".into(),
             ));
-        };
-
+        }
         Ok(Self {
             wvl_range,
             num_points,
@@ -92,6 +93,11 @@ impl SpectralDistribution for Gaussian {
             .zip(wvls.iter())
             .map(|v| (meter!(*v.1), *v.0 / sum))
             .collect_vec())
+    }
+}
+impl From<Gaussian> for super::SpecDistType {
+    fn from(g: Gaussian) -> Self {
+        Self::Gaussian(g)
     }
 }
 #[cfg(test)]

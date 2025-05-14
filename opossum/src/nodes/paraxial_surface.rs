@@ -129,7 +129,7 @@ impl AnalysisGhostFocus for ParaxialSurface {
 
             apodized |= rays.apodize(surf.aperture(), &iso)?;
             if apodized {
-                warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", optic_name);
+                warn!("Rays have been apodized at input aperture of {optic_name}. Results might not be accurate.");
             }
             surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
         }
@@ -197,14 +197,13 @@ impl AnalysisRayTrace for ParaxialSurface {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 } else {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
+                }
                 if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
                     rays.apodize(aperture, &iso)?;
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 } else {
                     return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-
+                }
                 let mut light_result = LightResult::default();
                 light_result.insert(out_port.into(), LightData::Geometric(rays));
                 Ok(light_result)
@@ -247,7 +246,7 @@ mod test {
             assert!(false, "cannot read focal length");
         }
         assert_eq!(node.node_color(), "palegreen");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {

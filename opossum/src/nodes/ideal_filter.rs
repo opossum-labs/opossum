@@ -13,7 +13,6 @@ use crate::{
     properties::Proptype,
     rays::Rays,
     spectrum::Spectrum,
-    utils::EnumProxy,
 };
 use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
@@ -25,6 +24,11 @@ pub enum FilterType {
     Constant(f64),
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
+}
+impl From<FilterType> for Proptype {
+    fn from(f: FilterType) -> Self {
+        Self::FilterType(f)
+    }
 }
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("darkgray")]
@@ -53,10 +57,7 @@ impl Default for IdealFilter {
             .create_property(
                 "filter type",
                 "used filter algorithm",
-                EnumProxy::<FilterType> {
-                    value: FilterType::Constant(1.0),
-                }
-                .into(),
+                FilterType::Constant(1.0).into(),
             )
             .unwrap();
         let mut idf = Self { node_attr };
@@ -80,13 +81,9 @@ impl IdealFilter {
             }
         }
         let mut filter = Self::default();
-        filter.node_attr.set_property(
-            "filter type",
-            EnumProxy::<FilterType> {
-                value: filter_type.clone(),
-            }
-            .into(),
-        )?;
+        filter
+            .node_attr
+            .set_property("filter type", filter_type.clone().into())?;
         filter.node_attr.set_name(name);
         Ok(filter)
     }
@@ -99,7 +96,7 @@ impl IdealFilter {
         if let Proptype::FilterType(filter_type) =
             self.node_attr.get_property("filter type").unwrap()
         {
-            filter_type.value.clone()
+            filter_type.clone()
         } else {
             panic!("wrong data type")
         }
@@ -112,13 +109,8 @@ impl IdealFilter {
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
     pub fn set_transmission(&mut self, transmission: f64) -> OpmResult<()> {
         if (0.0..=1.0).contains(&transmission) {
-            self.node_attr.set_property(
-                "filter type",
-                EnumProxy::<FilterType> {
-                    value: FilterType::Constant(transmission),
-                }
-                .into(),
-            )?;
+            self.node_attr
+                .set_property("filter type", FilterType::Constant(transmission).into())?;
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -136,10 +128,7 @@ impl IdealFilter {
         if density >= 0.0 {
             self.node_attr.set_property(
                 "filter type",
-                EnumProxy::<FilterType> {
-                    value: FilterType::Constant(f64::powf(10.0, -1.0 * density)),
-                }
-                .into(),
+                FilterType::Constant(f64::powf(10.0, -1.0 * density)).into(),
             )?;
             Ok(())
         } else {
@@ -201,10 +190,10 @@ impl AnalysisEnergy for IdealFilter {
         let Some(input) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
-        if let LightData::Energy(e) = input {
-            let mut new_data = e.clone();
-            new_data.filter(&self.filter_type())?;
-            let light_data = LightData::Energy(new_data);
+        if let LightData::Energy(s) = input {
+            let mut new_spectrum = s.clone();
+            new_spectrum.filter_with_type(&self.filter_type())?;
+            let light_data = LightData::Energy(new_spectrum);
             Ok(LightResult::from([(out_port.into(), light_data)]))
         } else {
             Err(OpossumError::Analysis("expected energy light data".into()))
@@ -245,14 +234,13 @@ impl AnalysisRayTrace for IdealFilter {
             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
-        };
+        }
         if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
             rays.apodize(aperture, &iso)?;
             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         } else {
             return Err(OpossumError::OpticPort("output aperture not found".into()));
-        };
-
+        }
         let light_data = LightData::Geometric(rays);
         Ok(LightResult::from([(out_port.into(), light_data)]))
     }
@@ -264,15 +252,9 @@ mod test {
     use uom::si::energy::joule;
 
     use crate::{
-        analyzers::RayTraceConfig,
-        joule,
-        lightdata::{DataEnergy, LightData},
-        millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
-        optic_ports::PortType,
-        position_distributions::Hexapolar,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
+        analyzers::RayTraceConfig, joule, lightdata::LightData, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, optic_ports::PortType,
+        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
         utils::geom_transformation::Isometry,
     };
 
@@ -285,7 +267,7 @@ mod test {
         assert_eq!(node.node_type(), "ideal filter");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkgray");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {
@@ -353,9 +335,7 @@ mod test {
     fn analyze_wrong() {
         let mut node = IdealFilter::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
@@ -368,9 +348,7 @@ mod test {
     fn analyze_energy_ok() {
         let mut node = IdealFilter::new("test", &FilterType::Constant(0.5)).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         assert!(
             AnalysisRayTrace::analyze(&mut node, input.clone(), &RayTraceConfig::default())
@@ -382,9 +360,7 @@ mod test {
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        let expected_output_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(0.5).unwrap(),
-        });
+        let expected_output_light = LightData::Energy(create_he_ne_spec(0.5).unwrap());
         assert_eq!(*output, expected_output_light);
     }
     #[test]
@@ -419,9 +395,7 @@ mod test {
         let mut node = IdealFilter::new("test", &FilterType::Constant(0.5)).unwrap();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("input_1"));
@@ -429,9 +403,7 @@ mod test {
         let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        let expected_output_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(0.5).unwrap(),
-        });
+        let expected_output_light = LightData::Energy(create_he_ne_spec(0.5).unwrap());
         assert_eq!(*output, expected_output_light);
     }
 }

@@ -1,5 +1,8 @@
 //! General endpoints
+use std::fmt::Display;
+
 use actix_web::{get, web::Json, Responder};
+use opossum::analyzers::AnalyzerType;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -8,13 +11,26 @@ use crate::error::ErrorResponse;
 
 /// Structure holding the version information
 #[derive(ToSchema, Serialize, Deserialize)]
-struct VersionInfo {
+pub struct VersionInfo {
     /// version of the OPOSSUM API backend
     #[schema(example = "0.1.0")]
     backend_version: String,
     /// version of the OPOSSUM library (possibly including the git hash)
     #[schema(example = "0.6.0-18-g80cb67f (2025/02/19 15:29)")]
     opossum_version: String,
+}
+
+impl VersionInfo {
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn backend_version(&self) -> &str {
+        &self.backend_version
+    }
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn opossum_version(&self) -> &str {
+        &self.opossum_version
+    }
 }
 
 /// Return a welcome message
@@ -38,9 +54,14 @@ async fn get_version() -> impl Responder {
     })
 }
 #[derive(Deserialize, Serialize, ToSchema)]
-struct NodeType {
+pub struct NodeType {
     node_type: String,
     description: String,
+}
+impl Display for NodeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.node_type)
+    }
 }
 /// Return a list of all available node types of OPOSSUM
 ///
@@ -58,10 +79,20 @@ async fn get_node_types() -> Result<Json<Vec<NodeType>>, ErrorResponse> {
         .collect();
     Ok(Json(node_types))
 }
+/// Return a list of available analyzer types of OPOSSUM
+///
+/// Return a list of all available analyzer types from the OPOSSUM library.
+#[utoipa::path(get, responses((status = OK, description = "success", body = Vec<AnalyzerType>)), tag="general")]
+#[get("/analyzer_types")]
+async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, ErrorResponse> {
+    let analyzer_types = opossum::analyzers::AnalyzerType::analyzer_types();
+    Ok(Json(analyzer_types))
+}
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_version);
     cfg.service(get_hello);
     cfg.service(get_node_types);
+    cfg.service(get_analyzer_types);
 }
 #[cfg(test)]
 mod test {
@@ -84,5 +115,21 @@ mod test {
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let _: VersionInfo = test::read_body_json(resp).await;
+    }
+    #[actix_web::test]
+    async fn get_node_types() {
+        let app = test::init_service(App::new().service(super::get_node_types)).await;
+        let req = test::TestRequest::get().uri("/node_types").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let _: Vec<NodeType> = test::read_body_json(resp).await;
+    }
+    #[actix_web::test]
+    async fn get_analyzer_types() {
+        let app = test::init_service(App::new().service(super::get_analyzer_types)).await;
+        let req = test::TestRequest::get().uri("/analyzer_types").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let _: Vec<AnalyzerType> = test::read_body_json(resp).await;
     }
 }

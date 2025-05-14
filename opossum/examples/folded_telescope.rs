@@ -8,12 +8,11 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
     optic_node::{Alignable, OpticNode},
     position_distributions::Hexapolar,
-    rays::Rays,
     refractive_index::RefrIndexSellmeier1,
     spectral_distribution::Gaussian,
     utils::geom_transformation::Isometry,
@@ -32,20 +31,19 @@ pub fn main() -> OpmResult<()> {
         nanometer!(300.)..nanometer!(1200.),
     )?;
     let mut scenery = NodeGroup::default();
-    let rays = Rays::new_collimated_with_spectrum(
-        &Gaussian::new(
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+        pos_dist: Hexapolar::new(millimeter!(10.), 10)?.into(),
+        energy_dist: UniformDist::new(joule!(1.))?.into(),
+        spect_dist: Gaussian::new(
             (nanometer!(1054.), nanometer!(1068.)),
             1,
             nanometer!(1054.),
             nanometer!(8.),
             1.,
-        )?,
-        &UniformDist::new(joule!(1.))?,
-        &Hexapolar::new(millimeter!(10.), 10)?,
-    )?;
-
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("collimated ray source", &light);
+        )?
+        .into(),
+    });
+    let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_alignment_wavelength(alignment_wvl)?;
     src.set_isometry(Isometry::identity())?;
 

@@ -9,7 +9,7 @@ use crate::{
     properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{geo_surface::GeoSurfaceRef, Plane},
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;
 use num::Zero;
@@ -60,10 +60,7 @@ impl Default for Wedge {
             .create_property(
                 "refractive index",
                 "refractive index of the lens material",
-                EnumProxy::<RefractiveIndexType> {
-                    value: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
-                }
-                .into(),
+                RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()).into(),
             )
             .unwrap();
         node_attr
@@ -100,13 +97,9 @@ impl Wedge {
             .node_attr
             .set_property("center thickness", center_thickness.into())?;
 
-        wedge.node_attr.set_property(
-            "refractive index",
-            EnumProxy::<RefractiveIndexType> {
-                value: refractive_index.to_enum(),
-            }
-            .into(),
-        )?;
+        wedge
+            .node_attr
+            .set_property("refractive index", refractive_index.to_enum().into())?;
         if !wedge_angle.is_finite() || wedge_angle.get::<degree>().abs() > 90.0 {
             return Err(crate::error::OpossumError::Other(
                 "wedge angle must be within the interval ]-90 deg; 90 deg[ and finite".into(),
@@ -180,7 +173,7 @@ mod test {
         analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
         degree, joule,
         light_result::LightResult,
-        lightdata::{DataEnergy, LightData},
+        lightdata::LightData,
         nanometer,
         nodes::test_helper::test_helper::*,
         optic_ports::PortType,
@@ -209,7 +202,7 @@ mod test {
             assert!(false, "could not read angle.");
         }
         if let Ok(Proptype::RefractiveIndex(p)) = node.properties().get("refractive index") {
-            if let RefractiveIndexType::Const(val) = &p.value {
+            if let RefractiveIndexType::Const(val) = &p {
                 let idx = val.get_refractive_index(nanometer!(1000.0)).unwrap();
                 assert_eq!(idx, 1.5);
             } else {
@@ -318,7 +311,7 @@ mod test {
             assert!(false, "could not read angle.");
         }
         if let Ok(Proptype::RefractiveIndex(p)) = n.properties().get("refractive index") {
-            if let RefractiveIndexType::Const(val) = &p.value {
+            if let RefractiveIndexType::Const(val) = &p {
                 let idx = val.get_refractive_index(nanometer!(1000.0)).unwrap();
                 assert_eq!(idx, 1.0);
             } else {
@@ -360,9 +353,7 @@ mod test {
     fn analyze_energy_ok() {
         let mut node = Wedge::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("output_1"));

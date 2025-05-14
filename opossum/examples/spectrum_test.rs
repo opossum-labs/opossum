@@ -20,7 +20,7 @@ fn main() -> OpmResult<()> {
         PltBackEnd::SVG,
     )?;
 
-    let s4 = Spectrum::from_csv("./opossum/playground/NE03B.csv")?;
+    let s4 = Spectrum::from_csv(Path::new("./opossum/playground/NE03B.csv"))?;
     s4.to_plot(
         Path::new("./opossum/playground/ne03b_raw.svg"),
         PltBackEnd::SVG,

@@ -65,6 +65,11 @@ impl RefractiveIndex for RefrIndexConrady {
         RefractiveIndexType::Conrady(self.clone())
     }
 }
+impl From<RefrIndexConrady> for RefractiveIndexType {
+    fn from(refr: RefrIndexConrady) -> Self {
+        Self::Conrady(refr)
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;

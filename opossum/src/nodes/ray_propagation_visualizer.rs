@@ -180,7 +180,7 @@ impl AnalysisRayTrace for RayPropagationVisualizer {
 /// struct that holds the history of the rays' positions for rays of a specific wavelength
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPositionHistorySpectrum {
-    /// Ray history (This is a hack...only used for visualization with bevy...)
+    /// Ray history
     pub history: Vec<MatrixXx3<Length>>,
     center_wavelength: Length,
     wavelength_bin_size: Length,
@@ -400,9 +400,8 @@ impl Plottable for RayPositionHistories {
 mod test {
     use super::*;
     use crate::{
-        joule, lightdata::DataEnergy, millimeter, nanometer, nodes::test_helper::test_helper::*,
-        optic_ports::PortType, position_distributions::Hexapolar, rays::Rays,
-        spectrum_helper::create_he_ne_spec,
+        joule, millimeter, nanometer, nodes::test_helper::test_helper::*, optic_ports::PortType,
+        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
     };
     use approx::assert_relative_eq;
     use uom::si::length::{millimeter, nanometer};
@@ -414,7 +413,7 @@ mod test {
         assert_eq!(node.node_type(), "ray propagation");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkgreen");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {
@@ -456,9 +455,7 @@ mod test {
     fn analyze_ok() {
         let mut node = RayPropagationVisualizer::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("output_1"));
@@ -477,9 +474,7 @@ mod test {
         let mut node = RayPropagationVisualizer::default();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
@@ -490,34 +485,6 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-    // #[test]
-    // fn export_data() {
-    //     testing_logger::setup();
-    //     let mut rpv = RayPropagationVisualizer::default();
-    //     assert!(rpv.export_data(Path::new(""), "").is_ok());
-    //     check_warnings(vec![
-    //         "ray-propagation visualizer: no light data for export available. Cannot create plot!",
-    //     ]);
-    //     // rpv.light_data = Some(LightData::Energy(DataEnergy {
-    //     //     spectrum: Spectrum::new(nanometer!(1000.)..nanometer!(1100.), nanometer!(1.)).unwrap(),
-    //     // }));
-    //     // assert!(rpv.export_data(Path::new(""), "").is_ok());
-    //     // check_warnings(vec![
-    //     //     "ray-propagation visualizer: wrong light data. Cannot create plot!",
-    //     // ]);
-    //     rpv.light_data = Some(Rays::default());
-    //     let path = NamedTempFile::new().unwrap();
-    //     assert!(rpv.export_data(path.path().parent().unwrap(), "").is_err());
-    //     rpv.light_data = Some(
-    //         Rays::new_uniform_collimated(
-    //             nanometer!(1053.0),
-    //             joule!(1.0),
-    //             &Hexapolar::new(Length::zero(), 1).unwrap(),
-    //         )
-    //         .unwrap(),
-    //     );
-    //     assert!(rpv.export_data(path.path().parent().unwrap(), "").is_ok());
-    // }
     #[test]
     fn report() {
         let mut fd = RayPropagationVisualizer::default();

@@ -5,9 +5,11 @@ use crate::error::{OpmResult, OpossumError};
 use nalgebra::{point, Point3};
 use num::Zero;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, uniform random distribution
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Random {
     nr_of_points: usize,
     side_length_x: Length,
@@ -31,17 +33,17 @@ impl Random {
             return Err(OpossumError::Other(
                 "At least one side length must be != zero".into(),
             ));
-        };
+        }
         if side_length_x.is_sign_negative() || !side_length_x.is_normal() {
             return Err(OpossumError::Other(
                 "side_length_x must be >= zero and finite".into(),
             ));
-        };
+        }
         if side_length_y.is_sign_negative() || !side_length_y.is_normal() {
             return Err(OpossumError::Other(
                 "side_length_y must be >= zero and finite".into(),
             ));
-        };
+        }
         if nr_of_points.is_zero() {
             return Err(OpossumError::Other("nr_of_points must be >= 1.".into()));
         }
@@ -62,6 +64,11 @@ impl PositionDistribution for Random {
             points.push(point![point_x, point_y, Length::zero()]);
         }
         points
+    }
+}
+impl From<Random> for super::PosDistType {
+    fn from(random: Random) -> Self {
+        Self::Random(random)
     }
 }
 #[cfg(test)]

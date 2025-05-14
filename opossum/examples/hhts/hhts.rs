@@ -14,7 +14,7 @@ use opossum::{
     energy_distributions::General2DGaussian,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     millimeter, nanometer,
     nodes::{
         BeamSplitter, Dummy, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
@@ -25,8 +25,8 @@ use opossum::{
     position_distributions::HexagonalTiling,
     radian,
     ray::SplittingConfig,
-    rays::Rays,
     refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
+    spectral_distribution::LaserLines,
     spectrum::Spectrum,
     spectrum_helper::generate_filter_spectrum,
     utils::geom_transformation::Isometry,
@@ -35,17 +35,6 @@ use opossum::{
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let wvl_1w = nanometer!(1054.0);
-    let wvl_2w = wvl_1w / 2.0;
-
-    let energy_1w = joule!(100.0);
-    let energy_2w = joule!(50.0);
-
-    // let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
-    let beam_dist_1w = HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0., 0.))?;
-    let beam_dist_2w = HexagonalTiling::new(millimeter!(100.), 10, millimeter!(1., 1.))?;
-    // let beam_dist_2w = beam_dist_1w.clone();
-
     let refr_index_hk9l = RefrIndexSellmeier1::new(
         6.14555251E-1,
         6.56775017E-1,
@@ -75,70 +64,27 @@ fn main() -> OpmResult<()> {
     )?;
 
     // apertures
-    // let circle_config = CircleConfig::new(millimeter!(25.4), millimeter!(0., 0.))?;
-    // let a_2inch = Aperture::BinaryCircle(circle_config);
     let circle_config = CircleConfig::new(millimeter!(12.7), millimeter!(0., 0.))?;
     let a_1inch = Aperture::BinaryCircle(circle_config);
 
     // collimated source
-
-    let rays_1w = Rays::new_collimated(
-        wvl_1w,
-        &General2DGaussian::new(
-            energy_1w,
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+        pos_dist: HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0., 0.))?.into(),
+        energy_dist: General2DGaussian::new(
+            joule!(150.0),
             millimeter!(0., 0.),
             millimeter!(60.6389113608, 60.6389113608),
             5.,
             radian!(0.),
             false,
-        )?,
-        &beam_dist_1w,
-    )?;
-    let mut rays_2w = Rays::new_collimated(
-        wvl_2w,
-        &General2DGaussian::new(
-            energy_2w,
-            millimeter!(0., 0.),
-            millimeter!(60.6389113608, 60.6389113608),
-            5.,
-            radian!(0.),
-            false,
-        )?,
-        &beam_dist_2w,
-    )?;
-    // let rays_1w = Rays::new_uniform_collimated(wvl_1w, energy_1w, &beam_dist_1w)?;
-    // let mut rays_2w = Rays::new_uniform_collimated(wvl_2w, energy_2w, &beam_dist_2w)?;
-
-    // point source
-
-    // let rays_1w = Rays::new_hexapolar_point_source(
-    //     millimeter!(
-    //         0.,
-    //         75.0,
-    //         0.,
-    //     ),
-    //     degree!(0.183346572),
-    //     6,
-    //     wvl_1w,
-    //     energy_1w,
-    // )?;
-    // let mut rays_2w = Rays::new_hexapolar_point_source(
-    //     millimeter!(
-    //         0.,
-    //         75.0,
-    //         0.,
-    //     ),
-    //     degree!(0.183346572),
-    //     6,
-    //     wvl_2w,
-    //     energy_2w,
-    // )?;
-
-    let mut rays = rays_1w;
-    rays.add_rays(&mut rays_2w);
+        )?
+        .into(),
+        spect_dist: LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 0.5)])?
+            .into(),
+    });
 
     let mut scenery = NodeGroup::new("HHT Sensor");
-    let mut src = Source::new("Source", &LightData::Geometric(rays));
+    let mut src = Source::new("Source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(src)?;
     let input_group = scenery.add_node(hhts_input()?)?;
@@ -224,9 +170,9 @@ fn main() -> OpmResult<()> {
     let bs = group_bs.add_node(BeamSplitter::new("Dichroic BS HBSY21", &short_pass)?)?;
 
     // Long pass filter (1w)
-    let felh1000 = FilterType::Spectrum(Spectrum::from_csv(
+    let felh1000 = FilterType::Spectrum(Spectrum::from_csv(Path::new(
         "opossum/examples/hhts/FELH1000_Transmission.csv",
-    )?);
+    ))?);
     let mut node = IdealFilter::new("1w Longpass filter", &felh1000)?;
     node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
     let filter_1w = group_bs.add_node(node)?;
@@ -239,9 +185,9 @@ fn main() -> OpmResult<()> {
     )?;
 
     // Long pass filter (2w)
-    let fesh0700 = FilterType::Spectrum(Spectrum::from_csv(
+    let fesh0700 = FilterType::Spectrum(Spectrum::from_csv(Path::new(
         "opossum/examples/hhts/FESH0700_Transmission.csv",
-    )?);
+    ))?);
     let mut node = IdealFilter::new("2w Shortpass filter", &fesh0700)?;
     node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
     let filter_2w = group_bs.add_node(node)?;

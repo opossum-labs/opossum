@@ -2,9 +2,10 @@ use num::Zero;
 use opossum::{
     analyzers::AnalyzerType,
     error::OpmResult,
-    lightdata::{DataEnergy, LightData},
+    joule,
+    lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
+    nanometer,
     nodes::{BeamSplitter, Dummy, NodeGroup, NodeReference, Source},
-    spectrum_helper::create_he_ne_spec,
     OpmDocument,
 };
 use std::path::Path;
@@ -12,12 +13,11 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Michaelson interferomater");
-    let src = scenery.add_node(Source::new(
-        "Source",
-        &LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0)?,
-        }),
-    ))?;
+    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+        vec![(nanometer!(633.0), joule!(1.0))],
+        nanometer!(1.0),
+    ));
+    let src = scenery.add_node(Source::new("Source", light_data_builder))?;
     let bs = scenery.add_node(BeamSplitter::default())?;
     let sample = scenery.add_node(Dummy::new("Sample"))?;
     let rf = NodeReference::from_node(&scenery.node(sample)?);

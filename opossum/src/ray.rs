@@ -19,6 +19,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule, meter,
     nodes::{fluence_detector::Fluence, FilterType},
+    properties::Proptype,
     rays::{FluenceRays, Rays},
     spectrum::Spectrum,
     surface::{
@@ -48,7 +49,11 @@ impl SplittingConfig {
         }
     }
 }
-
+impl From<SplittingConfig> for Proptype {
+    fn from(config: SplittingConfig) -> Self {
+        Self::SplitterType(config)
+    }
+}
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {
@@ -126,7 +131,7 @@ impl Ray {
     }
 
     /// Marks the ray as helper ray if `is_helper` is true
-    pub fn set_is_helper(&mut self, is_helper: bool) {
+    pub const fn set_is_helper(&mut self, is_helper: bool) {
         self.is_helper = is_helper;
     }
     /// Create a new collimated ray with 3 additional helper rays.
@@ -213,7 +218,7 @@ impl Ray {
     ///
     /// Necessary for ghost focus analysis of reflective optics
     //todo: nicer way around this "hack" would be cool
-    pub fn reduce_bounce_counter(&mut self) {
+    pub const fn reduce_bounce_counter(&mut self) {
         self.number_of_bounces -= 1;
     }
 
@@ -762,7 +767,7 @@ impl Ray {
         self.valid
     }
     /// Invalidates this [`Ray`].
-    pub fn set_invalid(&mut self) {
+    pub const fn set_invalid(&mut self) {
         self.valid = false;
     }
     /// Get [`Ray`] translated and rotated by given [`Isometry`]
@@ -1451,7 +1456,7 @@ mod test {
         let mut ray = Ray::new_collimated(position, nanometer!(502.0), e_1j).unwrap();
         let mut spec_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         spec_path.push("files_for_testing/spectrum/test_filter.csv");
-        let s = Spectrum::from_csv(spec_path.to_str().unwrap()).unwrap();
+        let s = Spectrum::from_csv(&spec_path).unwrap();
         let filter = FilterType::Spectrum(s);
         let _ = ray.filter_energy(&filter).unwrap();
         assert_eq!(ray.e, e_1j);

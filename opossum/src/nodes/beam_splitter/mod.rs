@@ -8,7 +8,7 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{raytrace::MissedSurfaceStrategy, AnalyzerType},
     error::{OpmResult, OpossumError},
-    lightdata::{DataEnergy, LightData},
+    lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
@@ -16,7 +16,7 @@ use crate::{
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
     surface::{geo_surface::GeoSurfaceRef, Plane},
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
 use std::sync::{Arc, Mutex};
@@ -51,10 +51,7 @@ impl Default for BeamSplitter {
             .create_property(
                 "splitter config",
                 "config data of the beam splitter",
-                EnumProxy::<SplittingConfig> {
-                    value: SplittingConfig::Ratio(0.5),
-                }
-                .into(),
+                SplittingConfig::Ratio(0.5).into(),
             )
             .unwrap();
         let mut bs = Self { node_attr };
@@ -75,13 +72,8 @@ impl BeamSplitter {
         }
         let mut bs = Self::default();
         bs.node_attr.set_name(name);
-        bs.node_attr.set_property(
-            "splitter config",
-            EnumProxy::<SplittingConfig> {
-                value: config.clone(),
-            }
-            .into(),
-        )?;
+        bs.node_attr
+            .set_property("splitter config", config.clone().into())?;
         bs.update_surfaces()?;
         Ok(bs)
     }
@@ -93,7 +85,7 @@ impl BeamSplitter {
     #[must_use]
     pub fn splitting_config(&self) -> SplittingConfig {
         if let Ok(Proptype::SplitterType(config)) = self.node_attr.get_property("splitter config") {
-            return config.value.clone();
+            return config.clone();
         }
         panic!("property `splitter config` does not exist or has wrong data format")
     }
@@ -102,13 +94,8 @@ impl BeamSplitter {
     /// # Errors
     /// This function returns an [`OpossumError::Other`] if the [`SplittingConfig`] is invalid.
     pub fn set_splitting_config(&mut self, config: &SplittingConfig) -> OpmResult<()> {
-        self.node_attr.set_property(
-            "splitter config",
-            EnumProxy::<SplittingConfig> {
-                value: config.clone(),
-            }
-            .into(),
-        )?;
+        self.node_attr
+            .set_property("splitter config", config.clone().into())?;
         Ok(())
     }
     fn split_spectrum(
@@ -117,19 +104,19 @@ impl BeamSplitter {
     ) -> OpmResult<(Option<Spectrum>, Option<Spectrum>)> {
         if let Some(in1) = input {
             match in1 {
-                LightData::Energy(e) => {
+                LightData::Energy(spectrum) => {
                     match self.splitting_config() {
                         SplittingConfig::Ratio(r) => {
-                            let mut s = e.spectrum.clone();
+                            let mut s = spectrum.clone();
                             s.scale_vertical(&r)?;
                             let out1_spectrum = Some(s);
-                            let mut s = e.spectrum.clone();
+                            let mut s = spectrum.clone();
                             s.scale_vertical(&(1.0 - r))?;
                             let out2_spectrum = Some(s);
                             Ok((out1_spectrum, out2_spectrum))
                         },
                         SplittingConfig::Spectrum(spec) => {
-                            let mut s = e.spectrum.clone();
+                            let mut s = spectrum.clone();
                             let split_spectrum=s.split_by_spectrum(&spec);
                             let out1_spectrum = Some(s);
                             let out2_spectrum = Some(split_spectrum);
@@ -160,14 +147,10 @@ impl BeamSplitter {
         let mut out1_data: Option<LightData> = None;
         let mut out2_data: Option<LightData> = None;
         if let Some(out1_spec) = out1_spec {
-            out1_data = Some(LightData::Energy(DataEnergy {
-                spectrum: out1_spec,
-            }));
+            out1_data = Some(LightData::Energy(out1_spec));
         }
         if let Some(out2_spec) = out2_spec {
-            out2_data = Some(LightData::Energy(DataEnergy {
-                spectrum: out2_spec,
-            }));
+            out2_data = Some(LightData::Energy(out2_spec));
         }
         Ok((out1_data, out2_data))
     }
@@ -185,7 +168,7 @@ impl BeamSplitter {
 
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
-        };
+        }
         let Proptype::SplitterType(splitting_config) =
             self.node_attr.get_property("splitter config")?.clone()
         else {
@@ -215,14 +198,14 @@ impl BeamSplitter {
                             rays.apodize(aperture, &self.effective_surface_iso(in1_port)?)?;
                         } else {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
-                        };
+                        }
                     } else {
                         return Err(OpossumError::OpticPort(
                             "input optic surface not found".into(),
                         ));
                     }
 
-                    let split_rays = rays.split(&splitting_config.value)?;
+                    let split_rays = rays.split(&splitting_config)?;
                     (rays, split_rays)
                 }
                 _ => {
@@ -249,9 +232,8 @@ impl BeamSplitter {
                             rays.apodize(aperture, &self.effective_surface_iso(in2_port)?)?;
                         } else {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
-                        };
-
-                        let split_rays = rays.split(&splitting_config.value)?;
+                        }
+                        let split_rays = rays.split(&splitting_config)?;
                         (rays, split_rays)
                     } else {
                         return Err(OpossumError::OpticPort(
@@ -279,7 +261,7 @@ impl BeamSplitter {
             }
         } else {
             return Err(OpossumError::OpticPort("ouput aperture not found".into()));
-        };
+        }
         if let Some(aperture) = self.ports().aperture(&PortType::Output, out2_port) {
             in_ray2.apodize(aperture, &iso)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -287,7 +269,7 @@ impl BeamSplitter {
             }
         } else {
             return Err(OpossumError::OpticPort("ouput aperture not found".into()));
-        };
+        }
         Ok((
             Some(LightData::Geometric(in_ray1)),
             Some(LightData::Geometric(in_ray2)),
@@ -339,7 +321,7 @@ mod test {
         assert_eq!(node.node_type(), "beam splitter");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightpink");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {

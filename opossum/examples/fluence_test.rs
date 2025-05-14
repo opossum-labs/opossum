@@ -6,7 +6,7 @@ use opossum::{
     energy_distributions::General2DGaussian,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    lightdata::light_data_builder::LightDataBuilder,
     millimeter, nanometer,
     nodes::{FluenceDetector, NodeGroup, Source},
     optic_node::OpticNode,
@@ -41,7 +41,8 @@ fn main() -> OpmResult<()> {
             peak.get::<millijoule_per_square_centimeter>()
         );
     }
-    let mut source = Source::new("source", &LightData::Geometric(rays));
+    let light_data_builder = LightDataBuilder::Geometric(rays.into());
+    let mut source = Source::new("source", light_data_builder);
     source.set_isometry(Isometry::identity())?;
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(source)?;

@@ -91,6 +91,11 @@ impl RefractiveIndex for RefrIndexSellmeier1 {
         RefractiveIndexType::Sellmeier1(self.clone())
     }
 }
+impl From<RefrIndexSellmeier1> for RefractiveIndexType {
+    fn from(refr: RefrIndexSellmeier1) -> Self {
+        Self::Sellmeier1(refr)
+    }
+}
 #[cfg(test)]
 mod test {
     use crate::nanometer;

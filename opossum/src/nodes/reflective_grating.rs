@@ -280,7 +280,7 @@ mod test {
 
     use super::*;
     use crate::{
-        analyzers::RayTraceConfig, degree, joule, lightdata::DataEnergy, millimeter, nanometer,
+        analyzers::RayTraceConfig, degree, joule, millimeter, nanometer,
         nodes::test_helper::test_helper::*, optic_ports::PortType, ray::Ray, rays::Rays,
         spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
@@ -351,9 +351,7 @@ mod test {
     fn analyze_wrong() {
         let mut node = ReflectiveGrating::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
@@ -362,9 +360,7 @@ mod test {
     fn analyze_energy_ok() {
         let mut node = ReflectiveGrating::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("output_1"));

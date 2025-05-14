@@ -1,10 +1,14 @@
 //! Module for handling energy distributions
-use nalgebra::Point2;
-use uom::si::f64::{Energy, Length};
-
 pub mod general_gaussian;
 pub mod uniform;
+pub use general_gaussian::General2DGaussian;
+use serde::{Deserialize, Serialize};
+pub use uniform::UniformDist;
+
+use crate::joule;
 use kahan::KahanSummator;
+use nalgebra::Point2;
+use uom::si::f64::{Energy, Length};
 
 pub trait EnergyDistribution {
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy>;
@@ -31,10 +35,18 @@ pub trait EnergyDistribution {
     }
 }
 
-pub use general_gaussian::General2DGaussian;
-pub use uniform::UniformDist;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum EnergyDistType {
+    Uniform(UniformDist),
+    General2DGaussian(general_gaussian::General2DGaussian),
+}
 
-use crate::joule;
-// pub use hexapolar::Hexapolar;
-// pub use random::Random;
-// pub use sobol::SobolDist;
+impl EnergyDistType {
+    #[must_use]
+    pub fn generate(&self) -> &dyn EnergyDistribution {
+        match self {
+            Self::Uniform(dist) => dist,
+            Self::General2DGaussian(dist) => dist,
+        }
+    }
+}

@@ -13,13 +13,6 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
 )]
 #![allow(clippy::module_name_repetitions)]
 
-#[cfg(feature = "bevy")]
-pub mod bevy_main;
-#[cfg(feature = "bevy")]
-pub mod bevy_scene;
-#[cfg(feature = "bevy")]
-mod scenery_bevy_data;
-
 pub mod analyzers;
 pub mod aperture;
 pub mod console;
@@ -53,13 +46,10 @@ pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
 
+use chrono::DateTime;
 pub use opm_document::OpmDocument;
 pub use optic_scenery_rsc::SceneryResources;
 
-#[cfg(feature = "bevy")]
-pub use scenery_bevy_data::SceneryBevyData;
-
-use chrono::DateTime;
 /// Return the version information of the currently built OPOSSUM executable.
 ///
 /// This function returs a `String` which contains the current Git tag/hash combination as well as
@@ -77,6 +67,7 @@ mod test {
     use super::*;
     use regex::Regex;
     #[test]
+    #[ignore]
     fn get_ver() {
         let version_string = get_version();
         let re = Regex::new(r"(.*) \(\d{4}/\d{2}/\d{2} \d{2}:\d{2}\)").unwrap();

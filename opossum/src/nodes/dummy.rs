@@ -108,14 +108,13 @@ impl AnalysisRayTrace for Dummy {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 } else {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
+                }
                 if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
                     rays.apodize(aperture, &iso)?;
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 } else {
                     return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-
+                }
                 Ok(LightResult::from([(
                     out_port.into(),
                     LightData::Geometric(rays),
@@ -147,9 +146,7 @@ impl OpticNode for Dummy {
 mod test {
     use super::*;
     use crate::{
-        lightdata::{DataEnergy, LightData},
-        nodes::test_helper::test_helper::*,
-        optic_ports::PortType,
+        lightdata::LightData, nodes::test_helper::test_helper::*, optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
     };
     #[test]
@@ -158,7 +155,7 @@ mod test {
         assert_eq!(node.name(), "dummy");
         assert_eq!(node.node_type(), "dummy");
         assert_eq!(node.inverted(), false);
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn dottable() {
@@ -215,9 +212,7 @@ mod test {
     fn analyze_wrong() {
         let mut dummy = Dummy::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
         assert!(output.is_empty());
@@ -226,9 +221,7 @@ mod test {
     fn analyze_ok() {
         let mut dummy = Dummy::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
         assert!(output.contains_key("output_1"));
@@ -243,9 +236,7 @@ mod test {
         let mut dummy = Dummy::default();
         dummy.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();

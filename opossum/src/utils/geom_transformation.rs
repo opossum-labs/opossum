@@ -2,7 +2,6 @@
 #![warn(missing_docs)]
 use std::fmt::Display;
 
-use super::EnumProxy;
 use crate::{
     degree,
     error::{OpmResult, OpossumError},
@@ -11,14 +10,12 @@ use crate::{
     radian,
 };
 use approx::relative_eq;
-#[cfg(feature = "bevy")]
-use bevy::{
-    math::{Quat, Vec3, Vec4},
-    transform::components::Transform,
-};
 use nalgebra::{vector, Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3};
 use num::Zero;
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{self, MapAccess, Visitor},
+    Deserialize, Serialize,
+};
 use uom::si::{
     angle::radian,
     f64::{Angle, Length},
@@ -26,9 +23,10 @@ use uom::si::{
 };
 
 /// Struct to store the isometric transofmeation matrix and its inverse
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
 pub struct Isometry {
     transform: Isometry3<f64>,
+    #[serde(skip_serializing)]
     inverse: Isometry3<f64>,
 }
 impl Isometry {
@@ -37,7 +35,7 @@ impl Isometry {
     /// # Attributes
     /// - `translation`: vector of translation for each axis as [`Length`]
     /// - `axes_angles`: rotation [`Angle`]s for each axis
-    ///    Note: the rotation is applied in the order x -> y -> z
+    ///   Note: the rotation is applied in the order x -> y -> z
     ///
     /// # Errors
     /// his function return an error if the
@@ -114,7 +112,7 @@ impl Isometry {
     /// Internally, rotation is handled in radians
     /// # Attributes
     /// - `axes_angles`: rotation [`Angle`]s for each axis
-    ///    Note: the rotation is applied in the order x -> y -> z
+    ///   Note: the rotation is applied in the order x -> y -> z
     ///
     /// # Errors
     /// his function return an error if the
@@ -405,34 +403,90 @@ impl Display for Isometry {
         )
     }
 }
-impl From<EnumProxy<Option<Isometry>>> for Proptype {
-    fn from(value: EnumProxy<Option<Isometry>>) -> Self {
+impl From<Option<Isometry>> for Proptype {
+    fn from(value: Option<Isometry>) -> Self {
         Self::Isometry(value)
     }
 }
-impl From<Option<Isometry>> for Proptype {
-    fn from(value: Option<Isometry>) -> Self {
-        Self::Isometry(EnumProxy { value })
-    }
-}
-#[cfg(feature = "bevy")]
-#[allow(clippy::cast_possible_truncation)]
-const fn as_f32(x: f64) -> f32 {
-    x as f32
-}
-#[cfg(feature = "bevy")]
-impl From<Isometry> for Transform {
-    fn from(value: Isometry) -> Self {
-        let t = value.transform.translation;
-        let r = value.transform.rotation;
-        Self::from_translation(Vec3::new(as_f32(t.x), as_f32(t.y), as_f32(t.z))).with_rotation(
-            Quat::from_vec4(Vec4::new(
-                as_f32(r.i),
-                as_f32(r.j),
-                as_f32(r.k),
-                as_f32(r.w),
-            )),
-        )
+/// Custom deserializer for [`Isometry`]
+///
+/// This is necessary since only the `transform` field need to be serialized and deserialized while the
+/// `inverse` field is automatically calculated during deserialization.
+impl<'de> Deserialize<'de> for Isometry {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        enum Field {
+            Transform,
+        }
+        const FIELDS: &[&str] = &["transform"];
+
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct FieldVisitor;
+
+                impl Visitor<'_> for FieldVisitor {
+                    type Value = Field;
+
+                    fn expecting(
+                        &self,
+                        formatter: &mut std::fmt::Formatter<'_>,
+                    ) -> std::fmt::Result {
+                        formatter.write_str("`transform`")
+                    }
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
+                    where
+                        E: de::Error,
+                    {
+                        match value {
+                            "transform" => Ok(Field::Transform),
+                            _ => Err(de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+
+        struct OpticRefVisitor;
+
+        impl<'de> Visitor<'de> for OpticRefVisitor {
+            type Value = Isometry;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a struct OpticRef")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> std::result::Result<Isometry, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                // let mut node_type = None;
+                let mut transform = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Transform => {
+                            if transform.is_some() {
+                                return Err(de::Error::duplicate_field("attributes"));
+                            }
+                            transform = Some(map.next_value::<Isometry3<f64>>()?);
+                        }
+                    }
+                }
+
+                let transform = transform.ok_or_else(|| de::Error::missing_field("transform"))?;
+                let iso = Isometry {
+                    transform,
+                    inverse: transform.inverse(),
+                };
+                Ok(iso)
+            }
+        }
+        deserializer.deserialize_struct("OpticRef", FIELDS, OpticRefVisitor)
     }
 }
 /// This function defines the coordinate axes on a plane.
@@ -452,7 +506,7 @@ pub fn define_plane_coordinate_axes_directions(
         return Err(OpossumError::Other(
             "plane normal vector must have a non zero length!".into(),
         ));
-    };
+    }
     //define the coordinate axes of the view onto the plane that is defined by the propagation axis as normal vector
     let (vec1, vec2) = if plane_normal_vector.cross(&Vector3::x()).norm() < f64::EPSILON {
         //parallel to the x-axis: co_ax_1: z-axis / co_ax2: y-axis
@@ -515,13 +569,12 @@ pub fn project_points_to_plane(
         return Err(OpossumError::Other(
             "plane normal vector must have a non zero length and be finite!".into(),
         ));
-    };
+    }
     if plane_normal_anchor.iter().any(|x| !f64::is_finite(*x)) {
         return Err(OpossumError::Other(
             "plane normal anchor must be finite!".into(),
         ));
-    };
-
+    }
     let mut pos_projection = MatrixXx3::<f64>::zeros(points_to_project.len());
     for (row, pos) in points_to_project.iter().enumerate() {
         let normed_normal_vec = plane_normal_vector / plane_normal_vector.norm();
@@ -559,13 +612,12 @@ pub fn project_pos_to_plane_with_base_vectors(
         return Err(OpossumError::Other(
             "plane normal vector must have a non zero length and be finite!".into(),
         ));
-    };
+    }
     if plane_normal_anchor.iter().any(|x| !f64::is_finite(*x)) {
         return Err(OpossumError::Other(
             "plane normal anchor must be finite!".into(),
         ));
-    };
-
+    }
     let (plane_co_ax_1, plane_co_ax_2) = if let (Some(plane_base_vec_1), Some(plane_base_vec_2)) =
         (plane_base_vec_1_opt, plane_base_vec_2_opt)
     {
@@ -590,14 +642,12 @@ pub fn project_pos_to_plane_with_base_vectors(
         return Err(OpossumError::Other(
             "base vector of the plane contains non-finite values!".into(),
         ));
-    };
-
+    }
     if relative_eq!(plane_co_ax_1.norm(), 0.0) || relative_eq!(plane_co_ax_2.norm(), 0.0) {
         return Err(OpossumError::Other(
             "base vector of the plane has a length of zero!".into(),
         ));
-    };
-
+    }
     let mut pos_projection = MatrixXx2::<f64>::zeros(points_to_project.len());
     for (row, pos) in points_to_project.iter().enumerate() {
         let closest_to_axis_vec = pos
@@ -980,12 +1030,5 @@ mod test {
     #[test]
     fn from() {
         assert_matches!(Some(Isometry::identity()).into(), Proptype::Isometry(_));
-        assert_matches!(
-            EnumProxy {
-                value: Some(Isometry::identity())
-            }
-            .into(),
-            Proptype::Isometry(_)
-        );
     }
 }

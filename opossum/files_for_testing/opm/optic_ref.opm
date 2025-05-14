@@ -1,63 +1,36 @@
-type: dummy
-attributes:
-  alignment: null
-  isometry: null
-  name: test123
-  uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb
-  lidt: 10000.
-  ports:
-    inputs:
-      input_1:
-        anchor_point_iso:
-          transform:
-            rotation:
-            - 0.0
-            - 0.0
-            - 0.0
-            - 1.0
-            translation:
-            - 0.0
-            - 0.0
-            - 0.0
-          inverse:
-            rotation:
-            - 0.0
-            - 0.0
-            - 0.0
-            - 1.0
-            translation:
-            - 0.0
-            - 0.0
-            - 0.0
-        aperture: None
-        coating: IdealAR
-        lidt: 10000.0
-    outputs:
-      output_1:
-        anchor_point_iso:
-          transform:
-            rotation:
-            - 0.0
-            - 0.0
-            - 0.0
-            - 1.0
-            translation:
-            - 0.0
-            - 0.0
-            - 0.0
-          inverse:
-            rotation:
-            - 0.0
-            - 0.0
-            - 0.0
-            - 1.0
-            translation:
-            - 0.0
-            - 0.0
-            - 0.0
-        aperture: None
-        coating: IdealAR
-        lidt: 10000.0
-  inverted: false
-  props:
-      
+(
+    attributes: (
+        node_type: "dummy",
+        name: "test123",
+        ports: (
+            inputs: {
+                "input_1": (
+                    anchor_point_iso: (
+                        transform: (
+                            rotation: (0.0, 0.0, 0.0, 1.0),
+                            translation: (0.0, 0.0, 0.0),
+                        ),
+                    ),
+                    coating: IdealAR,
+                    lidt: 10000.0,
+                ),
+            },
+            outputs: {
+                "output_1": (
+                    anchor_point_iso: (
+                        transform: (
+                            rotation: (0.0, 0.0, 0.0, 1.0),
+                            translation: (0.0, 0.0, 0.0),
+                        ),
+                    ),
+                    coating: IdealAR,
+                    lidt: 10000.0,
+                ),
+            },
+        ),
+        uuid: "98248e7f-dc4c-4131-8710-f3d5be2ff087",
+        lidt: 10000.0,
+        props: {},
+        inverted: false,
+    ),
+)

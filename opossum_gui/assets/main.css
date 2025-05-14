@@ -1,0 +1,184 @@
+.graph-editor {
+    flex-grow: 1;
+    position: relative;
+    background-color: #414141;
+    padding: 10px;
+    display: flex;
+    align-items: stretch;
+    padding: 0;
+    height: 500px;
+    overflow: hidden;
+    outline: none;
+}
+
+.context-menu-item {
+    margin: 1px;
+    padding: 3px 1px 0px 5px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    position: relative;
+    color: white;
+    border-radius: 3px;
+}
+
+.context-menu-item:hover {
+    cursor: pointer;
+    background-color: #525252;
+
+}
+
+#context-menu {
+    position: absolute;
+    background: #303030;
+    border: 1px solid gray;
+    box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+    font-size: 10pt;
+    z-index: 100000000000000;
+}
+
+/* #node_drop_down_menu {
+    max-height: 500px;
+    overflow-y: scroll;
+} */
+
+/* width */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+    background: rgb(39, 39, 39);
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+    background: rgb(82, 82, 82);
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+    background: rgb(100, 100, 100);
+}
+
+.node-content {
+    position: relative;
+}
+
+.node-body {
+    position: relative;
+}
+
+.node-header {
+    position: relative;
+    border-bottom: 1px solid rgb(120, 120, 120);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    background-color: rgb(85, 85, 85);
+    border-radius: 9px 9px 0px 0px;
+    color: white;
+    overflow: hidden;
+    white-space: nowrap; /* Kein Zeilenumbruch */
+}
+
+.optical-node {
+    background-color: rgb(85, 85, 85);
+}
+.analyzer-node {
+    background-color: #4d1818;
+}
+.node-header:active {
+    cursor: grabbing;
+}
+
+.unselectable {
+    user-select: none;
+  }
+
+.node {
+    position: absolute;
+    outline: none; /* prevents a white frame if node receives keyboard focus */
+    border: 1px solid rgb(120, 120, 120);
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3);
+    border-radius: 10px 10px 4px 4px;
+    background-color: rgb(39, 39, 39);
+    user-select: none;
+}
+
+.node:not(.active-node):hover {
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87c5f8;
+}
+
+.active-node {
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87c5f8;
+}
+
+/* Ports styling */
+.port {
+    position: absolute;
+    border-radius: 30%;
+    border: 1px solid rgb(120, 120, 120);
+    cursor: pointer;
+    transform: translate(-50%, -50%);
+}
+.port:hover {
+    box-shadow: 0 0 10px #e68c05;
+}
+.output-port {
+    background-color: rgba(206, 255, 208);
+}
+.input-port {
+    background-color: rgb(197, 216, 255);
+}
+
+.log-container {
+    z-index: 99999;
+    height: 120px;
+    overflow-y: scroll;
+}
+
+.node_attributes {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.node_attributes input {
+    position: relative;
+    top: 2px;
+}
+
+path {
+    /* stroke-width: 2; */
+    transition: stroke-width 0.1s, filter 0.1s;
+    outline: none; /* prevents a white frame if node receives keyboard focus */
+}
+
+path:hover {
+    /* stroke-width: 3; */
+    cursor: pointer;
+    filter: drop-shadow(0px 0px 4px rgba(47, 197, 10, 0.5));
+}
+.zoom-shift-container {
+    outline-color: red;
+}
+svg {
+    outline: none;
+}
+/* Three3D.js */
+/* .canvas-container {
+    width: 100%;
+    height: 100%;
+    background-color: red;
+    position: relative;
+}
+canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+} */

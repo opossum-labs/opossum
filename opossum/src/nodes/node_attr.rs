@@ -1,6 +1,7 @@
 //! Common optcial node attributes.
 //!
 //! This module handles common attributes of optical nodes such as [`Properties`] or geometric data (isometries, etc.)
+use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
@@ -36,6 +37,8 @@ pub struct NodeAttr {
     global_conf: Option<Arc<Mutex<SceneryResources>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     align_like_node_at_distance: Option<(Uuid, Length)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    gui_position: Option<Point2<f64>>,
 }
 impl NodeAttr {
     /// Creates new node attributes ([`NodeAttr`]).
@@ -63,6 +66,7 @@ impl NodeAttr {
             align_like_node_at_distance: None,
             uuid: Uuid::new_v4(),
             lidt: J_per_cm2!(1.),
+            gui_position: None,
         }
     }
     /// Returns the name property of this node.
@@ -146,7 +150,7 @@ impl NodeAttr {
         }
     }
     /// Sets the isometry of this [`NodeAttr`].
-    pub fn set_isometry(&mut self, isometry: Isometry) {
+    pub const fn set_isometry(&mut self, isometry: Isometry) {
         self.isometry = Some(isometry);
     }
     /// Returns a reference to the isometry of this [`NodeAttr`].
@@ -163,7 +167,7 @@ impl NodeAttr {
     ///
     /// # Panics
     /// This function could theoretically panic if the property `alignment` is not defined.
-    pub fn set_alignment(&mut self, isometry: Isometry) {
+    pub const fn set_alignment(&mut self, isometry: Isometry) {
         self.alignment = Some(isometry);
     }
     /// Returns a reference to the global config (if any) of this [`NodeAttr`].
@@ -180,7 +184,7 @@ impl NodeAttr {
         self.name = name.to_string();
     }
     /// Sets this [`NodeAttr`] as `inverted`.
-    pub fn set_inverted(&mut self, inverted: bool) {
+    pub const fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;
     }
     /// Returns a reference to the optic ports of this [`NodeAttr`].
@@ -191,7 +195,7 @@ impl NodeAttr {
 
     /// Returns a mutable reference to the optic ports of this [`NodeAttr`].
     #[must_use]
-    pub fn ports_mut(&mut self) -> &mut OpticPorts {
+    pub const fn ports_mut(&mut self) -> &mut OpticPorts {
         &mut self.ports
     }
     /// Sets the apertures of this [`NodeAttr`].
@@ -205,7 +209,7 @@ impl NodeAttr {
         self.uuid
     }
     ///Sets the uuid of this [`NodeAttr`].
-    pub fn set_uuid(&mut self, uuid: Uuid) {
+    pub const fn set_uuid(&mut self, uuid: Uuid) {
         self.uuid = uuid;
     }
 
@@ -228,5 +232,21 @@ impl NodeAttr {
     #[must_use]
     pub const fn get_align_like_node_at_distance(&self) -> &Option<(Uuid, Length)> {
         &self.align_like_node_at_distance
+    }
+    /// Returns the GUI position of an optical node.
+    ///
+    /// This function returns the position of an optical node in a frontend diagram.
+    /// If the value is `None`, no value has been set and the node might possibly be placed
+    /// automatically.
+    ///
+    /// The position is a [`Point3`] since the `x` & `y` coordinates represent the position on a 2D
+    /// frontend diagram. The `z` component is used for the depth level for handling overlapping nodes.
+    #[must_use]
+    pub const fn gui_position(&self) -> Option<Point2<f64>> {
+        self.gui_position
+    }
+    /// Sets the GUI position of the optical node.
+    pub const fn set_gui_position(&mut self, gui_position: Option<Point2<f64>>) {
+        self.gui_position = gui_position;
     }
 }

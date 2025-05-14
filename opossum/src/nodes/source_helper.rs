@@ -2,15 +2,16 @@
 //! Helper functions for easier creation of `standard` ray [`Source`]s.
 use super::Source;
 use crate::{
-    error::OpmResult,
-    lightdata::LightData,
-    nanometer,
+    degree,
+    energy_distributions::UniformDist,
+    error::{OpmResult, OpossumError},
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    millimeter, nanometer,
     optic_node::OpticNode,
     position_distributions::{Grid, Hexapolar},
-    rays::Rays,
+    spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::Point3;
 use num::Zero;
 use uom::si::f64::{Angle, Energy, Length};
 
@@ -29,13 +30,12 @@ pub fn round_collimated_ray_source(
     energy: Energy,
     nr_of_rings: u8,
 ) -> OpmResult<Source> {
-    let rays = Rays::new_uniform_collimated(
-        nanometer!(1000.0),
-        energy,
-        &Hexapolar::new(radius, nr_of_rings)?,
-    )?;
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("collimated ray source", &light);
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+        pos_dist: Hexapolar::new(radius, nr_of_rings)?.into(),
+        energy_dist: UniformDist::new(energy)?.into(),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    });
+    let mut src = Source::new("collimated line ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)
 }
@@ -55,20 +55,19 @@ pub fn collimated_line_ray_source(
     energy: Energy,
     nr_of_points_y: usize,
 ) -> OpmResult<Source> {
-    let rays = Rays::new_uniform_collimated(
-        nanometer!(1000.0),
-        energy,
-        &Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?,
-    )?;
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("collimated line ray source", &light);
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+        pos_dist: Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?.into(),
+        energy_dist: UniformDist::new(energy)?.into(),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    });
+    let mut src = Source::new("collimated line ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)
 }
 /// Create a point [`Source`] on the optical axis with a given cone angle.
 ///
 /// This is a convenience function, which generates a [`Ray`](crate::ray::Ray) [`Source`] containing a hexapolar, cone-shaped ray bundle at 1000 nm
-/// and a given energy. The origin of all [`Rays`] is at the origin of optical axis (0.0, 0.0, 0.0). The direction of the cone is symmetric along the optical axis
+/// and a given energy. The origin of all [`Rays`](crate::rays::Rays) is at the origin of optical axis (0.0, 0.0, 0.0). The direction of the cone is symmetric along the optical axis
 /// in positive direction (z-axis). If the given `cone_angle` is zero, this function generates a [`Source`] a single ray along the optical axis.
 ///
 /// # Errors
@@ -77,22 +76,29 @@ pub fn collimated_line_ray_source(
 ///  - the given energy is < 0.0, Nan, or +inf.
 ///  - the given angle is < 0.0 degrees or >= 180.0 degrees.
 pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> {
-    let rays = Rays::new_hexapolar_point_source(
-        Point3::origin(),
-        cone_angle,
-        3,
-        nanometer!(1000.0),
-        energy,
-    )?;
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("point ray source", &light);
+    if cone_angle.is_sign_negative() || cone_angle >= degree!(180.0) {
+        return Err(OpossumError::Other(
+            "cone angle must be within (0.0..180.0) degrees range".into(),
+        ));
+    }
+    let size_after_unit_length = (cone_angle / 2.0).tan().value;
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc {
+        pos_dist: Hexapolar::new(millimeter!(size_after_unit_length), 3)?.into(),
+        energy_dist: UniformDist::new(energy)?.into(),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        reference_length: millimeter!(1.0),
+    });
+    let mut src = Source::new("point ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)
 }
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{degree, joule, millimeter, optic_node::OpticNode, properties::Proptype, ray::Ray};
+    use crate::{
+        degree, joule, lightdata::LightData, millimeter, optic_node::OpticNode,
+        properties::Proptype, ray::Ray,
+    };
     use approx::assert_abs_diff_eq;
     use uom::si::energy::joule;
     #[test]
@@ -102,8 +108,11 @@ mod test {
         assert!(round_collimated_ray_source(millimeter!(1.0), joule!(f64::INFINITY), 3).is_err());
         assert!(round_collimated_ray_source(millimeter!(-0.1), joule!(1.0), 3).is_err());
         let src = round_collimated_ray_source(Length::zero(), joule!(1.0), 3).unwrap();
-        if let Proptype::LightData(light_data) = src.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = &light_data.value {
+        if let Proptype::LightDataBuilder(light_data_builder) =
+            src.properties().get("light data").unwrap()
+        {
+            let data = light_data_builder.clone().unwrap().build().unwrap();
+            if let LightData::Geometric(rays) = data {
                 assert_eq!(rays.nr_of_rays(true), 1);
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
@@ -117,8 +126,11 @@ mod test {
             panic!("property light data has wrong type");
         }
         let src = round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 3).unwrap();
-        if let Proptype::LightData(data) = src.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = &data.value {
+        if let Proptype::LightDataBuilder(light_data_builder) =
+            src.properties().get("light data").unwrap()
+        {
+            let data = light_data_builder.clone().unwrap().build().unwrap();
+            if let LightData::Geometric(rays) = data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
                     1.0,
@@ -138,8 +150,11 @@ mod test {
         assert!(point_ray_source(degree!(180.0), Energy::zero()).is_err());
         assert!(point_ray_source(degree!(190.0), Energy::zero()).is_err());
         let src = point_ray_source(Angle::zero(), joule!(1.0)).unwrap();
-        if let Proptype::LightData(data) = src.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = &data.value {
+        if let Proptype::LightDataBuilder(light_data_builder) =
+            src.properties().get("light data").unwrap()
+        {
+            let data = light_data_builder.clone().unwrap().build().unwrap();
+            if let LightData::Geometric(rays) = &data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
                     1.0,
@@ -154,7 +169,7 @@ mod test {
         }
         let src = point_ray_source(degree!(1.0), joule!(1.0)).unwrap();
         if let Proptype::LightData(data) = src.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = &data.value {
+            if let Some(LightData::Geometric(rays)) = &data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
                     1.0,
@@ -180,7 +195,7 @@ mod test {
 
         let s = collimated_line_ray_source(millimeter!(1.0), joule!(1.0), 2).unwrap();
         if let Proptype::LightData(data) = s.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = &data.value {
+            if let Some(LightData::Geometric(rays)) = &data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
                     1.0,

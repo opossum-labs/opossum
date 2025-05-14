@@ -93,6 +93,11 @@ impl RefractiveIndex for RefrIndexSchott {
         RefractiveIndexType::Schott(self.clone())
     }
 }
+impl From<RefrIndexSchott> for RefractiveIndexType {
+    fn from(refr: RefrIndexSchott) -> Self {
+        Self::Schott(refr)
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;

@@ -17,26 +17,67 @@ use crate::{
     SceneryResources,
 };
 use log::{info, warn};
+use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     fs::{self, File},
     io::Write,
     path::Path,
     sync::{Arc, Mutex},
 };
+use utoipa::ToSchema;
+use uuid::Uuid;
+/// A structu containing the [`AnalyzerType`] together with its position on a frontend GUI.
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct AnalyzerInfo {
+    analyzer_type: AnalyzerType,
+    id: Uuid,
+    gui_position: Option<(f64, f64)>,
+}
+impl AnalyzerInfo {
+    /// Creates a new [`AnalyzerInfo`].
+    #[allow(clippy::missing_const_for_fn)]
+    #[must_use]
+    pub fn new(analyzer_type: AnalyzerType, id: Uuid, gui_position: Point2<f64>) -> Self {
+        Self {
+            analyzer_type,
+            id,
+            gui_position: Some((gui_position.x, gui_position.y)),
+        }
+    }
+    /// Returns the gui position of this [`AnalyzerInfo`].
+    #[must_use]
+    pub fn gui_position(&self) -> Option<Point2<f64>> {
+        self.gui_position.map(|(x, y)| Point2::new(x, y))
+    }
+    /// Sets the gui position of this [`AnalyzerInfo`].
+    pub fn set_gui_position(&mut self, gui_position: Option<Point2<f64>>) {
+        self.gui_position = gui_position.map(|gp| (gp.x, gp.y));
+    }
+    /// Returns a reference to the analyzer type of this [`AnalyzerInfo`].
+    #[must_use]
+    pub const fn analyzer_type(&self) -> &AnalyzerType {
+        &self.analyzer_type
+    }
+    /// Returns the id of this [`AnalyzerInfo`].
+    #[must_use]
+    pub const fn id(&self) -> Uuid {
+        self.id
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 /// The main structure of an OPOSSUM model.
 /// It contains the [`NodeGroup`] representing the optical model, a list of analyzers and a global configuration.
 pub struct OpmDocument {
-    #[serde(rename = "opm file version")]
     opm_file_version: String,
     #[serde(default)]
     scenery: NodeGroup,
     #[serde(default, rename = "global")]
     global_conf: Arc<Mutex<SceneryResources>>,
     #[serde(default)]
-    analyzers: Vec<AnalyzerType>,
+    analyzers: HashMap<Uuid, AnalyzerInfo>,
 }
 impl Default for OpmDocument {
     fn default() -> Self {
@@ -44,7 +85,7 @@ impl Default for OpmDocument {
             opm_file_version: env!("OPM_FILE_VERSION").to_string(),
             scenery: NodeGroup::default(),
             global_conf: Arc::new(Mutex::new(SceneryResources::default())),
-            analyzers: vec![],
+            analyzers: HashMap::default(),
         }
     }
 }
@@ -69,23 +110,7 @@ impl OpmDocument {
         let contents = fs::read_to_string(path).map_err(|e| {
             OpossumError::OpmDocument(format!("cannot read file {} : {}", path.display(), e))
         })?;
-        let mut document: Self = serde_yaml::from_str(&contents)
-            .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
-        if document.opm_file_version != env!("OPM_FILE_VERSION") {
-            warn!("OPM file version does not match the used OPOSSUM version.");
-            warn!(
-                "read version '{}' <-> program file version '{}'",
-                document.opm_file_version,
-                env!("OPM_FILE_VERSION")
-            );
-            warn!("This file might haven been written by an older or newer version of OPOSSUM. The model import might not be correct.");
-        }
-        document.scenery.after_deserialization_hook()?;
-        document
-            .scenery
-            .graph_mut()
-            .update_global_config(&Some(document.global_conf.clone()));
-        Ok(document)
+        Self::from_string(&contents)
     }
     /// Create a new [`OpmDocument`] from the given `.opm` file string.
     ///
@@ -93,7 +118,7 @@ impl OpmDocument {
     ///
     /// This function will return an error if the parsing of the `.opm` file failed.
     pub fn from_string(file_string: &str) -> OpmResult<Self> {
-        let mut document: Self = serde_yaml::from_str(file_string)
+        let mut document: Self = ron::from_str(file_string)
             .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
         if document.opm_file_version != env!("OPM_FILE_VERSION") {
             warn!("OPM file version does not match the used OPOSSUM version.");
@@ -143,33 +168,72 @@ impl OpmDocument {
     ///
     /// This function will return an error if the serialization of the internal structures fail.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
-        serde_yaml::to_string(&self).map_err(|e| {
-            OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
-        })
+        ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::new().new_line("\n")).map_err(
+            |e| OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}")),
+        )
     }
     /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]
-    pub fn analyzers(&self) -> Vec<AnalyzerType> {
+    pub fn analyzers(&self) -> HashMap<Uuid, AnalyzerInfo> {
         self.analyzers.clone()
     }
+    /// Return an [`AnalyzerInfo`] with the given [`Uuid`] from this [`OpmDocument`].
+    ///
+    /// # Errors
+    ///
+    /// This functions returns an error if the [`AnalyzerInfo`] with the given [`Uuid`] was not found.
+    pub fn analyzer(&self, id: Uuid) -> OpmResult<AnalyzerInfo> {
+        self.analyzers.get(&id).map_or_else(
+            || {
+                Err(OpossumError::OpmDocument(
+                    "Analyzer with given Uuid not found.".into(),
+                ))
+            },
+            |analyzer_info| Ok(analyzer_info.clone()),
+        )
+    }
     /// Add an analyzer to this [`OpmDocument`].
-    pub fn add_analyzer(&mut self, analyzer: AnalyzerType) {
-        self.analyzers.push(analyzer);
+    pub fn add_analyzer(&mut self, analyzer_type: AnalyzerType) -> Uuid {
+        let analyzer_info = AnalyzerInfo {
+            analyzer_type,
+            id: Uuid::new_v4(),
+            gui_position: None,
+        };
+        self.add_analyzer_info(&analyzer_info)
+    }
+    /// Add an analyzer to this [`OpmDocument`].
+    pub fn add_analyzer_with_position(
+        &mut self,
+        analyzer_type: AnalyzerType,
+        gui_position: Option<(f64, f64)>,
+    ) -> Uuid {
+        let analyzer_info = AnalyzerInfo {
+            analyzer_type,
+            id: Uuid::new_v4(),
+            gui_position,
+        };
+        self.add_analyzer_info(&analyzer_info)
+    }
+    /// Add an analyzer (with a GUI position) to this [`OpmDocument`].
+    pub fn add_analyzer_info(&mut self, analyzer_info: &AnalyzerInfo) -> Uuid {
+        self.analyzers
+            .insert(analyzer_info.id, analyzer_info.clone());
+        analyzer_info.id
     }
     /// Remove an analyzer from this [`OpmDocument`].
     ///
-    /// This function removes an [`AnalyzerType`] with the given `index` from this [`OpmDocument`].
+    /// This function removes an [`AnalyzerType`] with the given [`Uuid`] from this [`OpmDocument`].
     /// # Errors
     ///
-    /// This function will return an error if an [`AnalyzerType`] with the given `index` was not found.
-    pub fn remove_analyzer(&mut self, index: usize) -> OpmResult<()> {
-        if index >= self.analyzers.len() {
-            return Err(OpossumError::OpmDocument(format!(
-                "Analyzer with index {index} does not exist"
-            )));
+    /// This function will return an error if an [`AnalyzerType`] with the given [`Uuid`] was not found.
+    pub fn remove_analyzer(&mut self, id: Uuid) -> OpmResult<()> {
+        if self.analyzers.remove(&id).is_some() {
+            Ok(())
+        } else {
+            Err(OpossumError::OpmDocument(
+                "Analyzer with given Uuid not found".into(),
+            ))
         }
-        self.analyzers.remove(index);
-        Ok(())
     }
     /// Returns a reference to the scenery of this [`OpmDocument`].
     #[must_use]
@@ -177,11 +241,12 @@ impl OpmDocument {
         &self.scenery
     }
     /// Returns a mutable reference to the scenery of this [`OpmDocument`].
-    pub fn scenery_mut(&mut self) -> &mut NodeGroup {
+    pub const fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
     }
     /// Returns a reference to the global config of this [`OpmDocument`].
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn global_conf(&self) -> &Mutex<SceneryResources> {
         &self.global_conf
     }
@@ -207,7 +272,7 @@ impl OpmDocument {
         }
         let mut reports = vec![];
         for ana in self.analyzers.iter().enumerate() {
-            let analyzer: &dyn Analyzer = match ana.1 {
+            let analyzer: &dyn Analyzer = match ana.1 .1.analyzer_type.clone() {
                 AnalyzerType::Energy => &EnergyAnalyzer::default(),
                 AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
                 AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config.clone()),
@@ -219,6 +284,10 @@ impl OpmDocument {
             self.scenery.reset_data();
         }
         Ok(reports)
+    }
+    /// Returns a mutable reference to the analyzers of this [`OpmDocument`].
+    pub const fn analyzers_mut(&mut self) -> &mut HashMap<Uuid, AnalyzerInfo> {
+        &mut self.analyzers
     }
 }
 
@@ -273,7 +342,7 @@ mod test {
             OpmDocument::from_file(&Path::new("./files_for_testing/opm/incorrect_opm.opm"));
         assert_eq!(
             result.unwrap_err().to_string(),
-            "OpmDocument:parsing of model failed: missing field `opm file version`"
+            "OpmDocument:parsing of model failed: 1:2: Unexpected missing field named `opm_file_version` in `OpmDocument`"
         );
         assert!(
             OpmDocument::from_file(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
@@ -301,6 +370,28 @@ mod test {
         document.add_analyzer(AnalyzerType::Energy);
         document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
         assert_eq!(document.analyzers().len(), 2);
+    }
+    #[test]
+    fn analyzer() {
+        let mut document = OpmDocument::default();
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+
+        assert!(document.analyzer(uuid1).is_ok());
+        assert!(document.analyzer(uuid2).is_ok());
+        assert!(document.analyzer(Uuid::nil()).is_err());
+    }
+    #[test]
+    fn remove_analyzer() {
+        let mut document = OpmDocument::default();
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+
+        assert!(document.remove_analyzer(uuid1).is_ok());
+        assert_eq!(document.analyzers.len(), 1);
+        assert!(document.remove_analyzer(Uuid::nil()).is_err());
+        assert!(document.remove_analyzer(uuid2).is_ok());
+        assert!(document.analyzers.is_empty());
     }
     #[test]
     fn all_nodes_integration_test() {

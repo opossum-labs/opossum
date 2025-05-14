@@ -32,11 +32,12 @@ impl Coating for Fresnel {
         // so far, we assume unpolarized (50/50) rays -> take average
         r_p.mul_add(r_p, r_s.powi(2)) / 2.
     }
-    fn to_enum(&self) -> super::CoatingType {
-        CoatingType::Fresnel
+}
+impl From<Fresnel> for CoatingType {
+    fn from(_coating: Fresnel) -> Self {
+        Self::Fresnel
     }
 }
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -45,9 +46,9 @@ mod test {
     use nalgebra::vector;
 
     #[test]
-    fn to_enum() {
+    fn from() {
         let coating = Fresnel;
-        assert!(matches!(coating.to_enum(), CoatingType::Fresnel));
+        assert!(matches!(coating.into(), CoatingType::Fresnel));
     }
     #[test]
     fn calc_refl_same_index() {

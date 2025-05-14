@@ -4,18 +4,6 @@
 use core::f64;
 use std::ops::Range;
 
-use itertools::Itertools;
-use log::warn;
-use nalgebra::{DMatrix, DVector, MatrixXx2, Point2, Point3};
-use num::Zero;
-use serde::{Deserialize, Serialize};
-use uom::si::{
-    energy::joule,
-    f64::{Area, Energy, Length},
-    length,
-    radiant_exposure::joule_per_square_centimeter,
-};
-
 use crate::{
     centimeter,
     error::{OpmResult, OpossumError},
@@ -32,6 +20,18 @@ use crate::{
         usize_to_f64,
     },
     J_per_cm2,
+};
+use itertools::Itertools;
+use libm::modf;
+use log::warn;
+use nalgebra::{DMatrix, DVector, MatrixXx2, Point2, Point3};
+use num::Zero;
+use serde::{Deserialize, Serialize};
+use uom::si::{
+    energy::joule,
+    f64::{Area, Energy, Length},
+    length,
+    radiant_exposure::joule_per_square_centimeter,
 };
 
 use super::fluence_estimator::FluenceEstimator;
@@ -268,7 +268,7 @@ impl RaysHitMap {
                     ));
                 }
             }
-        };
+        }
         Ok(())
     }
 
@@ -313,7 +313,7 @@ impl RaysHitMap {
                     ))
                 }
             },
-        };
+        }
         Ok(())
     }
 
@@ -343,18 +343,37 @@ impl RaysHitMap {
                 };
             let bin_width: Length = (right - left) / usize_to_f64(nr_of_points.0);
             let bin_height: Length = (top - bottom) / usize_to_f64(nr_of_points.1);
+
             let bin_area: Area = bin_width * bin_height;
-            let width_step = ((right - left) / (usize_to_f64(nr_of_points.0 - 1))).value;
-            let height_step = ((top - bottom) / (usize_to_f64(nr_of_points.1 - 1))).value;
+
+            let width_step = (right - left) / (usize_to_f64(nr_of_points.0 - 1));
+            let height_step = (top - bottom) / (usize_to_f64(nr_of_points.1 - 1));
+
             let mut fluence_matrix = DMatrix::<Fluence>::zeros(nr_of_points.1, nr_of_points.0);
             for hit_point in hit_points {
-                let x_index =
-                    f64_to_usize(((hit_point.position.x.value - left.value) / width_step).floor());
-                let y_index = f64_to_usize(
-                    ((hit_point.position.y.value - bottom.value) / height_step).floor(),
-                );
+                let (fract_index_x, int_index_x) =
+                    modf((hit_point.position.x - left).value / width_step.value);
+                let (fract_index_y, int_index_y) =
+                    modf((hit_point.position.y - bottom).value / height_step.value);
+                let x_index = f64_to_usize(int_index_x);
+                let y_index = f64_to_usize(int_index_y);
+
                 let fluence = hit_point.value / bin_area;
-                fluence_matrix[(y_index, x_index)] += fluence;
+                let fluence_x = (1.0 - fract_index_x) * (1.0 - fract_index_y) * fluence;
+                let fl_next_x = fract_index_x * (1.0 - fract_index_y) * fluence;
+                let fl_next_y = (1.0 - fract_index_x) * fract_index_y * fluence;
+                let fl_xy_next = fract_index_x * fract_index_y * fluence;
+
+                fluence_matrix[(y_index, x_index)] += fluence_x;
+                if x_index < nr_of_points.0 - 1 {
+                    fluence_matrix[(y_index, x_index + 1)] += fl_next_x;
+                    if y_index < nr_of_points.1 - 1 {
+                        fluence_matrix[(y_index + 1, x_index + 1)] += fl_xy_next;
+                    }
+                }
+                if y_index < nr_of_points.1 - 1 {
+                    fluence_matrix[(y_index + 1, x_index)] += fl_next_y;
+                }
             }
             Ok(FluenceData::new(
                 fluence_matrix,

@@ -1,9 +1,7 @@
 #![warn(missing_docs)]
 //! Contains the basic trait representing an optical element
-#[cfg(feature = "bevy")]
-use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point2, Point3, Vector3};
 use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
@@ -24,9 +22,7 @@ use crate::{
     surface::{geo_surface::GeoSurfaceRef, hit_map::HitMap, optic_surface::OpticSurface, Plane},
     utils::geom_transformation::Isometry,
 };
-use core::fmt::Debug;
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
 /// This is the basic trait that must be implemented by all concrete optical components.
@@ -193,7 +189,7 @@ pub trait OpticNode: Dottable {
     ///
     /// # Errors
     /// This function will return an error if the [`OpticNode`] does not have the `node_type` property "group".
-    fn as_group(&mut self) -> OpmResult<&mut NodeGroup> {
+    fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
     /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
@@ -303,7 +299,7 @@ pub trait OpticNode: Dottable {
                         }
                     }
                     _ => self.set_property(prop.0, prop.1.prop().clone())?,
-                };
+                }
             }
         }
         Ok(())
@@ -356,6 +352,7 @@ pub trait OpticNode: Dottable {
 
         node_attr_mut.set_uuid(node_attributes.uuid());
         node_attr_mut.set_lidt(node_attributes.lidt());
+        node_attr_mut.set_gui_position(node_attributes.gui_position());
     }
     /// Get the node type of this [`OpticNode`]
     fn node_type(&self) -> String {
@@ -364,6 +361,10 @@ pub trait OpticNode: Dottable {
     /// Get the name of this [`OpticNode`]
     fn name(&self) -> String {
         self.node_attr().name()
+    }
+    /// Get the gui position of this [`OpticNode`].
+    fn gui_position(&self) -> Option<Point2<f64>> {
+        self.node_attr().gui_position()
     }
     /// Return all properties of this [`OpticNode`].
     fn properties(&self) -> &Properties {
@@ -421,17 +422,6 @@ pub trait OpticNode: Dottable {
         self.node_attr_mut().set_alignment(align);
         self.update_surfaces()
     }
-    ///
-    #[cfg(feature = "bevy")]
-    fn mesh(&self) -> Mesh {
-        let mesh: Mesh = Cuboid::new(0.3, 0.3, 0.001).into();
-        if let Some(iso) = self.effective_iso() {
-            mesh.transformed_by(iso.into())
-        } else {
-            warn!("Node has no isometry defined. Mesh will be located at origin.");
-            mesh
-        }
-    }
     /// Get a refrecne to a global configuration (if any).
     fn global_conf(&self) -> &Option<Arc<Mutex<SceneryResources>>> {
         self.node_attr().global_conf()
@@ -478,16 +468,6 @@ pub trait OpticNode: Dottable {
         self.node_attr()
             .ports()
             .get_optic_surface(&surf_name.to_owned())
-    }
-}
-impl Debug for dyn OpticNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self, f)
-    }
-}
-impl Display for dyn OpticNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}' ({})", self.name(), self.node_type())
     }
 }
 /// Helper trait for optical elements that can be locally aligned
@@ -555,5 +535,73 @@ pub trait LIDT: OpticNode + Analyzable + Sized {
         }
         self.node_attr_mut().set_lidt(&lidt);
         Ok(self)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use approx::assert_abs_diff_eq;
+
+    use super::*;
+    use crate::{degree, millimeter, nodes::Dummy};
+
+    #[test]
+    fn set_alignment() {
+        let mut node = Dummy::default();
+        let decenter = millimeter!(1.0, 2.0, 3.0);
+        let tilt = degree!(0.1, 0.2, 0.3);
+        assert!(node.set_alignment(decenter, tilt).is_ok());
+        let alignment = node.node_attr().alignment().clone().unwrap();
+        assert_abs_diff_eq!(alignment.translation().x.value, decenter.x.value);
+        assert_abs_diff_eq!(alignment.translation().y.value, decenter.y.value);
+        assert_abs_diff_eq!(alignment.translation().z.value, decenter.z.value);
+        assert_abs_diff_eq!(alignment.rotation().x.value, tilt.x.value);
+        assert_abs_diff_eq!(alignment.rotation().y.value, tilt.y.value);
+        assert_abs_diff_eq!(alignment.rotation().z.value, tilt.z.value);
+    }
+    #[test]
+    fn effective_node_iso() {
+        let mut node = Dummy::default();
+        let decenter = millimeter!(1.0, 2.0, 3.0);
+        let tilt = degree!(0.0, 0.0, 0.0);
+        let iso = Isometry::new(decenter, tilt).unwrap();
+        node.set_isometry(iso).unwrap();
+        let local_trans = millimeter!(4.0, 5.0, 6.0);
+        node.set_alignment(local_trans, degree!(0.0, 0.0, 0.0))
+            .unwrap();
+        let iso = node.effective_node_iso().unwrap();
+        assert_abs_diff_eq!(
+            iso.translation().x.value,
+            decenter.x.value + local_trans.x.value
+        );
+        assert_abs_diff_eq!(
+            iso.translation().y.value,
+            decenter.y.value + local_trans.y.value
+        );
+        assert_abs_diff_eq!(
+            iso.translation().z.value,
+            decenter.z.value + local_trans.z.value
+        );
+    }
+    #[test]
+    fn effective_surface_iso() {
+        let mut node = Dummy::default();
+        let decenter = millimeter!(1.0, 2.0, 3.0);
+        let tilt = degree!(0.1, 0.2, 0.3);
+        node.set_alignment(decenter, tilt).unwrap();
+        let msg = node.effective_surface_iso("input_1").unwrap_err();
+        assert_eq!(
+            msg.to_string(),
+            "Opossum Error:Other:no effective node iso defined"
+        );
+        node.set_isometry(Isometry::identity()).unwrap();
+        let msg = node.effective_surface_iso("wrong").unwrap_err();
+        assert_eq!(
+            msg.to_string(),
+            "Opossum Error:Other:no surface with name wrong defined"
+        );
+        let iso = node.effective_surface_iso("input_1").unwrap();
+        assert_abs_diff_eq!(iso.translation().x.value, decenter.x.value);
+        assert_abs_diff_eq!(iso.translation().y.value, decenter.y.value);
+        assert_abs_diff_eq!(iso.translation().z.value, decenter.z.value);
     }
 }

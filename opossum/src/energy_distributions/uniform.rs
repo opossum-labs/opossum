@@ -2,14 +2,15 @@
 
 use nalgebra::Point2;
 use num::ToPrimitive;
+use serde::{Deserialize, Serialize};
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
 };
 
-use crate::error::{OpmResult, OpossumError};
-
 use super::EnergyDistribution;
+use crate::error::{OpmResult, OpossumError};
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UniformDist {
     total_energy: Energy,
 }
@@ -28,7 +29,7 @@ impl UniformDist {
             return Err(OpossumError::Other(
                 "Energy must be greater than zero finite!".into(),
             ));
-        };
+        }
         Ok(Self { total_energy })
     }
 }
@@ -43,7 +44,11 @@ impl EnergyDistribution for UniformDist {
         self.total_energy
     }
 }
-
+impl From<UniformDist> for super::EnergyDistType {
+    fn from(ud: UniformDist) -> Self {
+        Self::Uniform(ud)
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;

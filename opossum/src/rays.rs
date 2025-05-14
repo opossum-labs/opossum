@@ -7,7 +7,9 @@ use crate::{
     energy_distributions::EnergyDistribution,
     error::{OpmResult, OpossumError},
     fluence_distributions::FluenceDistribution,
-    joule, meter, micrometer, millimeter, nanometer,
+    joule,
+    lightdata::ray_data_builder::RayDataBuilder,
+    meter, micrometer, millimeter, nanometer,
     nodes::{
         fluence_detector::{fluence_data::FluenceData, Fluence},
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
@@ -34,6 +36,7 @@ use crate::{
 };
 
 use approx::relative_eq;
+use image::{GrayImage, ImageReader};
 use itertools::{izip, Itertools};
 use kahan::KahanSummator;
 use log::warn;
@@ -43,7 +46,7 @@ use nalgebra::{
 };
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, ops::Range};
+use std::{fmt::Display, ops::Range, path::Path};
 use uom::{
     num_traits::Zero,
     si::{
@@ -82,6 +85,55 @@ impl Default for Rays {
 }
 
 impl Rays {
+    /// Create a light field of rays emitted from a 2D image.
+    ///
+    /// Each pixel of the image represents a point ray source, whose energy is defined by the pixel intensity.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the image cannot be read
+    pub fn from_image(
+        file_path: &Path,
+        pixel_size: Length,
+        energy: Energy,
+        wave_length: Length,
+        cone_angle: Angle,
+    ) -> OpmResult<Self> {
+        let image_reader = ImageReader::open(file_path)
+            .map_err(|e| OpossumError::Other(format!("could not read image from file: {e}")))?;
+        let gray_image: GrayImage = image_reader
+            .decode()
+            .map_err(|e| OpossumError::Other(format!("could decode image file: {e}")))?
+            .to_luma8();
+        let (width, height) = gray_image.dimensions();
+        let pixel_data = gray_image.into_raw(); // Extract pixel values as a Vec<u8>
+                                                // Create an nalgebra matrix with the correct dimensions
+        let image_matrix = DMatrix::from_row_slice(height as usize, width as usize, &pixel_data);
+        // Normalize image (sum=1)
+        let sum = image_matrix
+            .iter()
+            .fold(0.0f64, |sum: f64, x: &u8| sum + usize_to_f64(*x as usize));
+        let energy_matrix = image_matrix.map(|p| energy * f64::from(p) / sum);
+        let mut rays = Self::default();
+        for (y, row) in energy_matrix.row_iter().enumerate() {
+            for (x, pixel) in row.iter().enumerate() {
+                let centered_positions = (
+                    usize_to_f64(x) - f64::from(width) / 2.0,
+                    usize_to_f64(y) - f64::from(height) / 2.0,
+                );
+                let position = Point3::new(
+                    pixel_size * centered_positions.0,
+                    -1.0 * pixel_size * centered_positions.1, // image upside down
+                    meter!(0.0),
+                );
+                let mut point_rays =
+                    Self::new_hexapolar_point_source(position, cone_angle, 3, wave_length, *pixel)?;
+                rays.add_rays(&mut point_rays);
+            }
+        }
+        Ok(rays)
+    }
     /// Generate a set of collimated rays (collinear with optical axis) with uniform energy distribution.
     ///
     /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
@@ -179,22 +231,22 @@ impl Rays {
         &self.parent_pos_split_idx
     }
     /// Sets the parent uuid of this ray bundle
-    pub fn set_parent_uuid(&mut self, parent_uuid: Uuid) {
+    pub const fn set_parent_uuid(&mut self, parent_uuid: Uuid) {
         self.parent_id = Some(parent_uuid);
     }
 
     /// Sets the uuid of this ray bundle
-    pub fn set_uuid(&mut self, uuid: Uuid) {
+    pub const fn set_uuid(&mut self, uuid: Uuid) {
         self.uuid = uuid;
     }
 
     /// Sets the node origin uuid of this ray bundle
-    pub fn set_node_origin_uuid(&mut self, node_uuid: Uuid) {
+    pub const fn set_node_origin_uuid(&mut self, node_uuid: Uuid) {
         self.node_origin = Some(node_uuid);
     }
 
     /// Sets the parent node split index node origin uuid of this ray bundle
-    pub fn set_parent_node_split_idx(&mut self, split_idx: usize) {
+    pub const fn set_parent_node_split_idx(&mut self, split_idx: usize) {
         self.parent_pos_split_idx = split_idx;
     }
 
@@ -388,6 +440,71 @@ impl Rays {
             ];
             let ray = Ray::new(position, direction, wave_length, energy_per_ray)?;
             rays.push(ray);
+        }
+        Ok(Self {
+            rays,
+            node_origin: None,
+            uuid: Uuid::new_v4(),
+            parent_id: None,
+            parent_pos_split_idx: 0,
+        })
+    }
+    /// Generate a set of rays representing a point source.
+    ///
+    /// This function generates a bundle of rays with a given spectral distribution, energy distribution, and position distribution
+    /// representing a point source. The origin of all rays is (0,0,0). The direction of the rays is calculated from the position distribution
+    /// the ray bundle has after propagaing along the optical axis by the reference length.
+    ///
+    /// # Errors
+    /// This function returns an error if
+    /// - the given distributions return an error
+    /// - the given reference length is <= 0.0, NaN or +inf
+    pub fn new_point_src_with_spectrum(
+        spectral_distribution: &dyn SpectralDistribution,
+        energy_strategy: &dyn EnergyDistribution,
+        pos_strategy: &dyn PositionDistribution,
+        reference_length: Length,
+    ) -> OpmResult<Self> {
+        if reference_length.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "reference length must be positive".into(),
+            ));
+        }
+        if !reference_length.is_normal() {
+            return Err(OpossumError::Other(
+                "reference length must be finite".into(),
+            ));
+        }
+        let ray_pos = pos_strategy.generate();
+        let dist = spectral_distribution.generate()?;
+
+        //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
+        let ray_pos_plane = ray_pos
+            .iter()
+            .map(|p| Point2::<Length>::new(p.x, p.y))
+            .collect::<Vec<Point2<Length>>>();
+        //apply distribution strategy
+        let mut ray_energies = energy_strategy.apply(&ray_pos_plane);
+        energy_strategy.renormalize(&mut ray_energies);
+
+        //create rays
+        let nr_of_rays = ray_pos.len();
+        let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
+        for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
+            let direction = Vector3::new(
+                pos.x.get::<millimeter>(),
+                pos.y.get::<millimeter>(),
+                reference_length.get::<millimeter>(),
+            );
+            for value in &dist {
+                let ray = Ray::new(
+                    millimeter!(0.0, 0.0, 0.0),
+                    direction,
+                    value.0,
+                    *energy * value.1,
+                )?;
+                rays.push(ray);
+            }
         }
         Ok(Self {
             rays,
@@ -901,7 +1018,7 @@ impl Rays {
                     reflected_rays.add_ray(reflected);
                 } else {
                     rays_missed = true;
-                };
+                }
                 valid_rays_found = true;
             }
         }
@@ -966,7 +1083,7 @@ impl Rays {
                     reflected_rays.add_ray(reflected);
                 } else {
                     rays_missed = true;
-                };
+                }
                 valid_rays_found = true;
             }
         }
@@ -1033,7 +1150,7 @@ impl Rays {
             return Err(OpossumError::Other(
                 "threshold energy must be finite".into(),
             ));
-        };
+        }
         let _ = self
             .rays
             .iter_mut()
@@ -1048,7 +1165,7 @@ impl Rays {
     pub fn central_wavelength(&self) -> Option<Length> {
         if self.rays.is_empty() {
             return None;
-        };
+        }
         let mut center = Length::zero() * Energy::zero();
         for ray in self.rays.iter().filter(|r| r.valid()) {
             center += ray.energy() * ray.wavelength();
@@ -1062,7 +1179,7 @@ impl Rays {
     pub fn wavelength_range(&self) -> Option<Range<Length>> {
         if self.rays.is_empty() {
             return None;
-        };
+        }
         let mut min = millimeter!(f64::INFINITY);
         let mut max = Length::zero();
         for ray in &self.rays {
@@ -1089,16 +1206,18 @@ impl Rays {
     ///   - [`Rays`] is empty
     ///   - the `resolution` is invalid (negative, infinite)
     pub fn to_spectrum(&self, resolution: &Length) -> OpmResult<Spectrum> {
-        let mut range = self
-            .wavelength_range()
-            .ok_or_else(|| OpossumError::Other("from_rays: rays seems to be empty".into()))?;
-        range.end += *resolution * 2.0; // add 2* resolution to be sure to have all rays included in the wavelength range...
-        let mut spectrum = Spectrum::new(range, *resolution)?;
-        for ray in &self.rays {
-            if ray.valid() {
-                spectrum.add_single_peak(ray.wavelength(), ray.energy().get::<joule>())?;
-            }
+        let lines = self
+            .rays
+            .iter()
+            .filter(|r| r.valid())
+            .map(|r| (r.wavelength(), r.energy()))
+            .collect::<Vec<(Length, Energy)>>();
+        if lines.is_empty() {
+            return Err(OpossumError::Other(
+                "ray bundle is empty - cannot create spectrum".into(),
+            ));
         }
+        let spectrum = Spectrum::from_laser_lines(lines, *resolution)?;
         Ok(spectrum)
     }
     /// Set the refractive index of the medium all [`Rays`] are propagating in.
@@ -1305,9 +1424,9 @@ impl Rays {
         };
         Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), wvl, joule!(1.0))
     }
-    /// Return a ray bundle transformed by agiven [`Isometry`].
+    /// Return a ray bundle transformed by a given [`Isometry`].
     #[must_use]
-    pub fn transformed_rays(&self, isometry: &Isometry) -> Self {
+    pub fn transformed_by_iso(&self, isometry: &Isometry) -> Self {
         let mut rays = self.clone();
         for ray in &mut rays {
             *ray = ray.transformed_ray(isometry);
@@ -1403,7 +1522,7 @@ impl FluenceRays {
 
     /// Returns a mutable reference to the helper rays of these [`FluenceRays`]
     #[must_use]
-    pub fn rays_mut(&mut self) -> &mut Rays {
+    pub const fn rays_mut(&mut self) -> &mut Rays {
         &mut self.helper_rays
     }
 
@@ -1472,7 +1591,11 @@ impl From<Vec<Ray>> for Rays {
         }
     }
 }
-
+impl From<Rays> for RayDataBuilder {
+    fn from(value: Rays) -> Self {
+        Self::Raw(value)
+    }
+}
 impl<'a> IntoIterator for &'a mut Rays {
     type IntoIter = std::slice::IterMut<'a, Ray>;
     type Item = &'a mut Ray;

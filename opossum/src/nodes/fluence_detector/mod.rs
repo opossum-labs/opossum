@@ -100,7 +100,7 @@ impl OpticNode for FluenceDetector {
         else {
             return None;
         };
-        if let Ok(fluence_data) = hit_map.calc_fluence_map((51, 51), estimator) {
+        if let Ok(fluence_data) = hit_map.calc_fluence_map((100, 83), estimator) {
             props
                 .create(
                     &format!("Fluence ({})", fluence_data.estimator()),
@@ -221,10 +221,7 @@ mod test {
     use super::*;
     use crate::lightdata::LightData;
     use crate::optic_ports::PortType;
-    use crate::{
-        lightdata::DataEnergy, nodes::test_helper::test_helper::*,
-        spectrum_helper::create_he_ne_spec,
-    };
+    use crate::{nodes::test_helper::test_helper::*, spectrum_helper::create_he_ne_spec};
     #[test]
     fn default() {
         let mut node = FluenceDetector::default();
@@ -232,7 +229,7 @@ mod test {
         assert_eq!(node.node_type(), "fluence detector");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "hotpink");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {
@@ -264,9 +261,7 @@ mod test {
     fn analyze_wrong() {
         let mut node = FluenceDetector::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("wrong".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
@@ -275,9 +270,7 @@ mod test {
     fn analyze_ok() {
         let mut node = FluenceDetector::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("output_1"));
@@ -296,9 +289,7 @@ mod test {
         let mut node = FluenceDetector::default();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();

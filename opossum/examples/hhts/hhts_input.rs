@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use opossum::{
     error::OpmResult,
     millimeter,
@@ -6,15 +8,15 @@ use opossum::{
     spectrum::Spectrum,
 };
 pub fn hhts_input() -> OpmResult<NodeGroup> {
-    let dichroic_mirror = SplittingConfig::Spectrum(Spectrum::from_csv(
+    let dichroic_mirror = SplittingConfig::Spectrum(Spectrum::from_csv(Path::new(
         "opossum/examples/hhts/MM15_Transmission.csv",
-    )?);
-    let window_filter = FilterType::Spectrum(Spectrum::from_csv(
+    ))?);
+    let window_filter = FilterType::Spectrum(Spectrum::from_csv(Path::new(
         "opossum/examples/hhts/HHTS_W1_Transmission.csv",
-    )?);
-    let double_mirror = SplittingConfig::Spectrum(Spectrum::from_csv(
+    ))?);
+    let double_mirror = SplittingConfig::Spectrum(Spectrum::from_csv(Path::new(
         "opossum/examples/hhts/HHTS_T1_PM_Transmission.csv",
-    )?);
+    ))?);
     let mut group = NodeGroup::new("HHTS Input");
     let d1 = group.add_node(Dummy::new("d1"))?;
     let mm15 = group.add_node(BeamSplitter::new("MM15", &dichroic_mirror)?)?;

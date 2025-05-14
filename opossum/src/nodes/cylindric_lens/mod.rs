@@ -11,10 +11,8 @@ use crate::{
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{geo_surface::GeoSurfaceRef, Cylinder, Plane},
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::geom_transformation::Isometry,
 };
-#[cfg(feature = "bevy")]
-use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
 use num::Zero;
 use opm_macros_lib::OpmNode;
@@ -81,10 +79,7 @@ impl Default for CylindricLens {
             .create_property(
                 "refractive index",
                 "refractive index of the lens material",
-                EnumProxy::<RefractiveIndexType> {
-                    value: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
-                }
-                .into(),
+                RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()).into(),
             )
             .unwrap();
         let mut cyl_lens = Self { node_attr };
@@ -139,13 +134,9 @@ impl CylindricLens {
             .node_attr
             .set_property("center thickness", center_thickness.into())?;
 
-        cyl_lens.node_attr.set_property(
-            "refractive index",
-            EnumProxy::<RefractiveIndexType> {
-                value: refractive_index.to_enum(),
-            }
-            .into(),
-        )?;
+        cyl_lens
+            .node_attr
+            .set_property("refractive index", refractive_index.to_enum().into())?;
         cyl_lens.update_surfaces()?;
         Ok(cyl_lens)
     }
@@ -268,7 +259,7 @@ mod test {
         assert_eq!(node.node_type(), "cylindric lens");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "aqua");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
         let Ok(Proptype::Length(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
         };
@@ -285,10 +276,7 @@ mod test {
         else {
             panic!()
         };
-        assert_eq!(
-            (*index).value.get_refractive_index(Length::zero()).unwrap(),
-            1.5
-        );
+        assert_eq!((*index).get_refractive_index(Length::zero()).unwrap(), 1.5);
     }
     #[test]
     fn new() {
@@ -334,9 +322,8 @@ mod test {
             panic!()
         };
         assert_eq!(*roc, millimeter!(11.0));
-        let Ok(Proptype::RefractiveIndex(EnumProxy::<RefractiveIndexType> {
-            value: RefractiveIndexType::Const(ref_index_const),
-        })) = node.node_attr.get_property("refractive index")
+        let Ok(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_index_const))) =
+            node.node_attr.get_property("refractive index")
         else {
             panic!()
         };

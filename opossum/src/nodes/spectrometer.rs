@@ -158,7 +158,7 @@ impl OpticNode for Spectrometer {
         let data = &self.light_data;
         if let Some(light_data) = data {
             let spectrum = match light_data {
-                LightData::Energy(e) => Some(e.spectrum.clone()),
+                LightData::Energy(s) => Some(s.clone()),
                 LightData::Geometric(r) => r.to_spectrum(&nanometer!(0.2)).ok(),
                 LightData::Fourier => None,
                 LightData::GhostFocus(r) => {
@@ -216,8 +216,8 @@ impl Debug for Spectrometer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
             Some(data) => match data {
-                LightData::Energy(data_energy) => {
-                    let spectrum_range = data_energy.spectrum.range();
+                LightData::Energy(spectrum) => {
+                    let spectrum_range = spectrum.range();
                     write!(
                         f,
                         "Spectrum {:.3} - {:.3} nm (Type: {:?})",
@@ -296,7 +296,7 @@ impl Plottable for Spectrometer {
             Some(LightData::Geometric(rays)) => rays
                 .to_spectrum(&nanometer!(0.2))?
                 .get_plot_series(plt_type, legend),
-            Some(LightData::Energy(e)) => e.spectrum.get_plot_series(plt_type, legend),
+            Some(LightData::Energy(s)) => s.get_plot_series(plt_type, legend),
             _ => Ok(None),
         }
     }
@@ -307,7 +307,6 @@ mod test {
     use super::*;
     use crate::{
         joule,
-        lightdata::DataEnergy,
         nodes::{test_helper::test_helper::*, EnergyMeter},
         optic_ports::PortType,
         position_distributions::Hexapolar,
@@ -326,9 +325,7 @@ mod test {
         let _ = AnalysisEnergy::analyze(&mut node, input);
         assert_eq!(format!("{:?}", node), "no spectrum data to display");
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_visible_spec(),
-        });
+        let input_light = LightData::Energy(create_visible_spec());
         input.insert("input_1".into(), input_light.clone());
         AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert_eq!(
@@ -345,7 +342,7 @@ mod test {
         assert_eq!(node.node_type(), "spectrometer");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightseagreen");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {
@@ -387,9 +384,7 @@ mod test {
     fn analyze_wrong() {
         let mut node = Spectrometer::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
@@ -398,9 +393,7 @@ mod test {
     fn analyze_ok() {
         let mut node = Spectrometer::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("output_1"));
@@ -419,9 +412,7 @@ mod test {
         let mut node = Spectrometer::default();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();

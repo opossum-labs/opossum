@@ -369,8 +369,8 @@ mod test {
     use super::*;
     use crate::optic_ports::PortType;
     use crate::{
-        joule, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
-        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
+        joule, nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
+        spectrum_helper::create_he_ne_spec,
     };
     use uom::num_traits::Zero;
 
@@ -382,7 +382,7 @@ mod test {
         assert_eq!(node.node_type(), "spot diagram");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkorange");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {
@@ -431,9 +431,7 @@ mod test {
     fn analyze_energy_ok() {
         let mut node = SpotDiagram::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("output_1"));
@@ -452,9 +450,7 @@ mod test {
         let mut node = SpotDiagram::default();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();

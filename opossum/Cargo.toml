@@ -33,7 +33,7 @@ opm_macros_lib = { path = "opm_macros_lib" }
 petgraph = { version = "0.7", features = ["serde-1"] } # the graph library
 uom = {version="0.36", features = ["serde"] }
 serde = { version = "1", features = ['rc'] }
-serde_yaml = "0.9"
+ron="0.9"
 
 csv = "1"
 plotters = "0.3"
@@ -42,10 +42,11 @@ approx = "0.5" # assert macros for comparison of floats with tolerance
 clap = { version = "4", features = ["derive", "string"] } # command line argument parser
 
 rprompt = "2"
-strum = { version = "0.26", features = ["derive"] }
+strum = { version = "0.27", features = ["derive"] }
+strum_macros = "0.27"
 
 uuid = { version = "1", features = ["v4", "fast-rng", "serde", "js"] }
-
+libm = {version="0.2"}
 chrono = { version= "0.4", features = ["serde"] }
 
 embed-doc-image = "0.1" # allows for embedded images in the rust API doc
@@ -68,20 +69,17 @@ voronator = "0.2"
 rayon = "1.10"
 
 tinytemplate = "1"
-
-bevy={ version="0.15", optional=true }
-bevy_flycam = { version= "0.15", optional =true }
 spade = "2.12"
 earcutr = "0.4.3"
 utoipa = {version ="5.3.1", features = ["actix_extras", "uuid"] }
 wasm-bindgen = "0.2"
 
+mutants = "0.0.3"
 [lints.rust]
 # missing_docs = "warn"
 
 [features]
 doc-images = []
-bevy = ["dep:bevy", "dep:bevy_flycam"]
 
 [dev-dependencies]
 regex = "1"

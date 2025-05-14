@@ -1,6 +1,6 @@
 [workspace]
-members = [ "opossum", "xtask", "opossum_backend" ]
-default-members = ["opossum", "opossum_backend"]
+members = [ "opossum", "xtask", "opossum_backend", "opossum_gui" ]
+default-members = ["opossum", "opossum_backend", "opossum_gui"]
 resolver = "2"
 
 # The profile that 'cargo dist' will build with
@@ -16,3 +16,13 @@ strip = true
 [profile.test]
 debug = 0
 lto = "off"
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"

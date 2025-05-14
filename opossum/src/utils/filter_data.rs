@@ -54,7 +54,7 @@ pub fn get_unique_finite_values<T: Clone + RelativeEq + Num + Float>(array: &[T]
             if relative_eq!(unique_val, val) {
                 unique = false;
                 break;
-            };
+            }
         }
         if unique {
             unique_vals.push(*val);

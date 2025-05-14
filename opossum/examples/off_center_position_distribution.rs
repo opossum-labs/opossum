@@ -5,7 +5,7 @@ use opossum::{
     energy_distributions::General2DGaussian,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    lightdata::light_data_builder::LightDataBuilder,
     millimeter, nanometer,
     nodes::{NodeGroup, Source, SpotDiagram},
     optic_node::OpticNode,
@@ -54,8 +54,8 @@ fn main() -> OpmResult<()> {
     let mut rays = rays_1w;
     rays.add_rays(&mut rays_2w);
     let mut scenery = NodeGroup::new("test");
-
-    let mut src = Source::new("Source", &LightData::Geometric(rays));
+    let light_data_builder = LightDataBuilder::Geometric(rays.into());
+    let mut src = Source::new("Source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(src)?;
     let i_sd = scenery.add_node(SpotDiagram::default())?;

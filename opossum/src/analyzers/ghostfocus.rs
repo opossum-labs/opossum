@@ -40,7 +40,7 @@ impl GhostFocusConfig {
         self.max_bounces
     }
     /// Sets the maximum number of ray bounces to be considered during ghost focus analysis.
-    pub fn set_max_bounces(&mut self, max_bounces: usize) {
+    pub const fn set_max_bounces(&mut self, max_bounces: usize) {
         self.max_bounces = max_bounces;
     }
 
@@ -50,7 +50,7 @@ impl GhostFocusConfig {
         &self.fluence_estimator
     }
     /// Sets the fluence estimator to be considered during ghost focus analysis.
-    pub fn set_fluence_estimator(&mut self, fluence_estimator: FluenceEstimator) {
+    pub const fn set_fluence_estimator(&mut self, fluence_estimator: FluenceEstimator) {
         self.fluence_estimator = fluence_estimator;
     }
 }

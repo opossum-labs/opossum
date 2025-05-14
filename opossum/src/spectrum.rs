@@ -2,6 +2,7 @@
 //! Module for creation and handling of optical spectra
 use crate::{
     error::{OpmResult, OpossumError},
+    lightdata::energy_data_builder::EnergyDataBuilder,
     micrometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{f64_to_usize, usize_to_f64},
@@ -17,10 +18,14 @@ use std::{
     fmt::{Debug, Display},
     fs::File,
     ops::Range,
+    path::Path,
 };
-use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
 use uom::si::{f64::Length, length::micrometer, length::nanometer};
+use uom::{
+    fmt::DisplayStyle::Abbreviation,
+    si::{energy::joule, f64::Energy},
+};
 
 /// Structure for handling spectral data.
 ///
@@ -81,7 +86,7 @@ impl Spectrum {
     ///   - the file path is not found or could not be read.
     ///   - the file is empty.
     ///   - the file could not be parsed.
-    pub fn from_csv(path: &str) -> OpmResult<Self> {
+    pub fn from_csv(path: &Path) -> OpmResult<Self> {
         let file = File::open(path).map_err(|e| OpossumError::Spectrum(e.to_string()))?;
         let mut reader = ReaderBuilder::new()
             .has_headers(false)
@@ -108,6 +113,38 @@ impl Spectrum {
             ));
         }
         Ok(Self { data: datas })
+    }
+    /// Generate a spectrum from a list of narrow laser lines (center wavelength, Energy) and a spectrum resolution.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the resolution is not positive
+    /// - the wavelength is negative
+    /// - the energy is negative
+    /// - the list of lines is empty
+    pub fn from_laser_lines(lines: Vec<(Length, Energy)>, resolution: Length) -> OpmResult<Self> {
+        if lines.is_empty() {
+            return Err(OpossumError::Spectrum("no laser lines provided".into()));
+        }
+        if resolution <= Length::zero() {
+            return Err(OpossumError::Spectrum("resolution must be positive".into()));
+        }
+        let mut min_lambda = lines[0].0;
+        let mut max_lambda = lines[0].0;
+        for line in &lines {
+            if line.0 < min_lambda {
+                min_lambda = line.0;
+            }
+            if line.0 > max_lambda {
+                max_lambda = line.0;
+            }
+        }
+        let mut s = Self::new(min_lambda..max_lambda + 2.0 * resolution, resolution)?;
+        for line in lines {
+            s.add_single_peak(line.0, line.1.get::<joule>())?;
+        }
+        Ok(s)
     }
     fn lambda_vec(&self) -> Vec<f64> {
         self.data.iter().map(|data| data.0).collect()
@@ -400,6 +437,20 @@ impl Spectrum {
             .map(|d| (d.0 .0, d.0 .1 * d.1 .1))
             .collect();
     }
+    /// Filter a spectrum with a given filter type.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn filter_with_type(&mut self, filter_type: &crate::nodes::FilterType) -> OpmResult<()> {
+        match filter_type {
+            crate::nodes::FilterType::Constant(t) => self.scale_vertical(t)?,
+            crate::nodes::FilterType::Spectrum(s2) => {
+                self.filter(s2);
+            }
+        }
+        Ok(())
+    }
     /// Modify and generate spectrum for a beamsplitter.
     #[must_use]
     pub fn split_by_spectrum(&mut self, filter_spectrum: &Self) -> Self {
@@ -469,11 +520,11 @@ impl Plottable for Spectrum {
         let data = self.data.clone();
         let mut spec_mat = MatrixXx2::zeros(data.len());
         for (i, s) in data.iter().enumerate() {
-            spec_mat[(i, 0)] = s.0;
+            spec_mat[(i, 0)] = s.0 * 1000.0; // micrometer -> nanometer
             spec_mat[(i, 1)] = s.1;
         }
         match plt_type {
-            PlotType::Line2D(_) | PlotType::Scatter2D(_) => {
+            PlotType::Line2D(_) | PlotType::Scatter2D(_) | PlotType::Histogram2D(_) => {
                 let plt_series = PlotSeries::new(
                     &PlotData::Dim2 { xy_data: spec_mat },
                     RGBAColor(255, 0, 0, 1.),
@@ -491,9 +542,8 @@ impl Plottable for Spectrum {
             .set(&PlotArgs::PlotSize((800, 800)))?;
         Ok(())
     }
-
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::Line2D(plt_params.clone())
+        PlotType::Histogram2D(plt_params.clone())
     }
 }
 
@@ -502,6 +552,11 @@ impl<'a> IntoIterator for &'a Spectrum {
     type Item = &'a (f64, f64);
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+impl From<Spectrum> for EnergyDataBuilder {
+    fn from(spectrum: Spectrum) -> Self {
+        Self::Raw(spectrum)
     }
 }
 impl Display for Spectrum {
@@ -595,6 +650,7 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{joule, nanometer};
     use crate::{
         spectrum_helper::{
             create_he_ne_spec, create_nd_glass_spec, create_nir_spec, create_visible_spec,
@@ -621,6 +677,72 @@ mod test {
                 (3.5, 0.0)
             ]
         );
+    }
+    #[test]
+    fn from_csv_ok() {
+        let s = Spectrum::from_csv(Path::new(
+            "files_for_testing/spectrum/spec_to_csv_test_01.csv",
+        ));
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        let lambdas = s.lambda_vec();
+        assert!(lambdas
+            .into_iter()
+            .zip(vec![500.0E-3, 501.0E-3, 502.0E-3, 503.0E-3, 504.0E-3, 505.0E-3].iter())
+            .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
+        let datas = s.data_vec();
+        assert!(datas
+            .into_iter()
+            .zip(vec![5.0E-01, 4.981E-01, 4.982E-01, 4.984E-01, 4.996E-01, 5.010E-01].iter())
+            .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
+    }
+    #[test]
+    fn from_csv_err() {
+        assert!(Spectrum::from_csv(Path::new("wrong_path.csv")).is_err());
+        assert!(Spectrum::from_csv(Path::new(
+            "files_for_testing/spectrum/spec_to_csv_test_02.csv"
+        ))
+        .is_err());
+        assert!(Spectrum::from_csv(Path::new(
+            "files_for_testing/spectrum/spec_to_csv_test_03.csv"
+        ))
+        .is_err());
+        assert!(Spectrum::from_csv(Path::new(
+            "files_for_testing/spectrum/spec_to_csv_test_04.csv"
+        ))
+        .is_err());
+    }
+    #[test]
+    fn from_laser_lines_single() {
+        let s = Spectrum::from_laser_lines(vec![(micrometer!(1.0), joule!(1.0))], nanometer!(1.0))
+            .unwrap();
+        assert_eq!(s.total_energy(), 1.0);
+        assert_abs_diff_eq!(s.data[0].0, 1.0);
+        assert_abs_diff_eq!(s.data[1].0, 1.001);
+        assert_abs_diff_eq!(s.data[0].1, 1000.0, epsilon = 1.0E-9);
+        assert_abs_diff_eq!(s.data[1].1, 0.0);
+    }
+    #[test]
+    fn from_laser_lines_double() {
+        let s = Spectrum::from_laser_lines(
+            vec![
+                (micrometer!(1.0), joule!(1.0)),
+                (micrometer!(1.010), joule!(0.5)),
+            ],
+            nanometer!(1.0),
+        )
+        .unwrap();
+        assert_abs_diff_eq!(s.total_energy(), 1.5, epsilon = 1.0E-9);
+        assert_abs_diff_eq!(s.data[0].0, 1.0);
+        assert_abs_diff_eq!(s.data[0].1, 1000.0, epsilon = 1.0E-9);
+        assert_abs_diff_eq!(s.data[1].0, 1.001);
+        assert_abs_diff_eq!(s.data[1].1, 0.0);
+        assert_abs_diff_eq!(s.data[2].0, 1.002);
+        assert_abs_diff_eq!(s.data[2].1, 0.0);
+        assert_abs_diff_eq!(s.data[10].0, 1.010);
+        assert_abs_diff_eq!(s.data[10].1, 500.0, epsilon = 1.0E-9);
+        assert_abs_diff_eq!(s.data[11].0, 1.011);
+        assert_abs_diff_eq!(s.data[11].1, 0.0);
     }
     #[test]
     fn visible_spectrum() {
@@ -654,29 +776,6 @@ mod test {
     fn new_negative_range() {
         let s = Spectrum::new(micrometer!(-1.0)..micrometer!(4.0), micrometer!(0.5));
         assert!(s.is_err());
-    }
-    #[test]
-    fn from_csv_ok() {
-        let s = Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_01.csv");
-        assert!(s.is_ok());
-        let s = s.unwrap();
-        let lambdas = s.lambda_vec();
-        assert!(lambdas
-            .into_iter()
-            .zip(vec![500.0E-3, 501.0E-3, 502.0E-3, 503.0E-3, 504.0E-3, 505.0E-3].iter())
-            .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
-        let datas = s.data_vec();
-        assert!(datas
-            .into_iter()
-            .zip(vec![5.0E-01, 4.981E-01, 4.982E-01, 4.984E-01, 4.996E-01, 5.010E-01].iter())
-            .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
-    }
-    #[test]
-    fn from_csv_err() {
-        assert!(Spectrum::from_csv("wrong_path.csv").is_err());
-        assert!(Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_02.csv").is_err());
-        assert!(Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_03.csv").is_err());
-        assert!(Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_04.csv").is_err());
     }
     #[test]
     fn range() {
@@ -919,17 +1018,18 @@ mod test {
     #[test]
     fn serialize() {
         let s = prep();
-        let s_yaml = serde_yaml::to_string(&s);
-        assert!(s_yaml.is_ok());
-        assert_eq!(s_yaml.unwrap(),
-        "data:\n- - 1.0\n  - 0.0\n- - 1.5\n  - 0.0\n- - 2.0\n  - 0.0\n- - 2.5\n  - 0.0\n- - 3.0\n  - 0.0\n- - 3.5\n  - 0.0\n".to_string());
+        let s_ron =
+            ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).unwrap();
+        assert_eq!(s_ron,
+        "(\n    data: [\n        (1.0, 0.0),\n        (1.5, 0.0),\n        (2.0, 0.0),\n        (2.5, 0.0),\n        (3.0, 0.0),\n        (3.5, 0.0),\n    ],\n)".to_string());
     }
     #[test]
     fn deserialize() {
-        let s: std::result::Result<Spectrum, serde_yaml::Error>=serde_yaml::from_str("data:\n- - 1.0\n  - 0.1\n- - 1.5\n  - 0.2\n- - 2.0\n  - 0.3\n- - 2.5\n  - 0.4\n- - 3.0\n  - 0.5\n- - 3.5\n  - 0.6\n");
-        assert!(s.is_ok());
+        let s: Spectrum =
+            ron::from_str("(data:[(1.0, 0.1),(1.5,0.2),(2.0,0.3),(2.5,0.4),(3.0,0.5),(3.5,0.6)])")
+                .unwrap();
         assert_eq!(
-            s.unwrap().data,
+            s.data,
             vec![
                 (1.0, 0.1),
                 (1.5, 0.2),

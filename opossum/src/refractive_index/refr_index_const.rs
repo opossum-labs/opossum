@@ -46,7 +46,11 @@ impl RefractiveIndex for RefrIndexConst {
         RefractiveIndexType::Const(self.clone())
     }
 }
-
+impl From<RefrIndexConst> for RefractiveIndexType {
+    fn from(i: RefrIndexConst) -> Self {
+        Self::Const(i)
+    }
+}
 #[cfg(test)]
 mod test {
     use num::Zero;

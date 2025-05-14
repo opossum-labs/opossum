@@ -8,7 +8,7 @@ use crate::{
     analyzers::Analyzable,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, LightData},
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     optic_ref::OpticRef,
@@ -16,12 +16,13 @@ use crate::{
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
     surface::optic_surface::OpticSurface,
-    utils::EnumProxy,
     SceneryResources,
 };
 use num::Zero;
+use optic_graph::ConnectionInfo;
 pub use optic_graph::OpticGraph;
 use serde::{Deserialize, Serialize};
+use std::fmt::Write as _;
 use std::{
     collections::{BTreeMap, HashMap},
     fs::{self, File},
@@ -178,23 +179,18 @@ impl NodeGroup {
         };
         let node_props = node_props.clone();
         drop(node);
-        if let Proptype::LightData(ld) = node_props {
-            if let Some(LightData::Geometric(rays)) = &ld.value {
-                let mut new_rays = rays.clone();
-                new_rays.set_node_origin_uuid(node_id);
+        if let Proptype::LightData(Some(LightData::Geometric(rays))) = node_props {
+            let mut new_rays = rays;
+            new_rays.set_node_origin_uuid(node_id);
 
-                let mut node_ref = node_ref
-                    .optical_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
-                node_ref.node_attr_mut().set_property(
-                    "light data",
-                    EnumProxy::<Option<LightData>> {
-                        value: Some(LightData::Geometric(new_rays)),
-                    }
-                    .into(),
-                )?;
-            }
+            let mut node_ref = node_ref
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            node_ref.node_attr_mut().set_property(
+                "light data",
+                Some(LightDataBuilder::Geometric(new_rays.into())).into(),
+            )?;
         }
         Ok(())
     }
@@ -208,10 +204,26 @@ impl NodeGroup {
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
         self.graph.node(node_id)
     }
+    /// Return a reference to the optical node specified by its [`Uuid`].
+    ///
+    /// This function is similar to [`node`](NodeGroup::node()), but it also recursively searches
+    /// for the node in the subnodes of the group.
+    ///
+    /// # Errors
+    ///
+    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
+    pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<OpticRef> {
+        self.graph.node_recursive(node_id)
+    }
     /// Returns all nodes of this [`NodeGroup`].
     #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
         self.graph.nodes()
+    }
+    /// Returns all node connections of this [`NodeGroup`].
+    #[must_use]
+    pub fn connections(&self) -> Vec<ConnectionInfo> {
+        self.graph.connections()
     }
     /// Returns the number of nodes of this [`NodeGroup`].
     #[must_use]
@@ -255,6 +267,20 @@ impl NodeGroup {
     ///  - the node's given port is not connected.
     pub fn disconnect_nodes(&mut self, src_id: Uuid, src_port: &str) -> OpmResult<()> {
         self.graph.disconnect_nodes(src_id, src_port)
+    }
+    /// Update the distance of an already existing connection.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the connection cannot be found.
+    pub fn update_connection_distance(
+        &mut self,
+        src_id: Uuid,
+        src_port: &str,
+        distance: Length,
+    ) -> OpmResult<()> {
+        self.graph
+            .update_connection_distance(src_id, src_port, distance)
     }
     /// Map an input port of an internal node to an external port of the group.
     ///
@@ -387,7 +413,7 @@ impl NodeGroup {
             .insert(port_name.to_string(), distance);
     }
     /// Returns a mutable reference to the underlying [`OpticGraph`] of this [`NodeGroup`].
-    pub fn graph_mut(&mut self) -> &mut OpticGraph {
+    pub const fn graph_mut(&mut self) -> &mut OpticGraph {
         &mut self.graph
     }
     /// Returns a mutable reference to the underlying [`OpticGraph`] of this [`NodeGroup`].
@@ -425,12 +451,18 @@ impl NodeGroup {
     /// Returns the dot-file header of this [`NodeGroup`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
         let mut dot_string = String::from("digraph {\n\tfontsize = 10;\n");
-        dot_string.push_str("\tcompound = true;\n");
-        dot_string.push_str(&format!("\trankdir = \"{rankdir}\";\n"));
-        dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.node_attr.name()));
-        dot_string.push_str("\tfontname=\"Courier-monospace\"\n");
-        dot_string.push_str("\tnode [fontname=\"Courier-monospace\" fontsize = 10]\n");
-        dot_string.push_str("\tedge [fontname=\"Courier-monospace\" fontsize = 10]\n\n");
+        let _ = writeln!(dot_string, "\tcompound = true;");
+        let _ = writeln!(dot_string, "\trankdir = \"{rankdir}\";");
+        let _ = writeln!(dot_string, "\tlabel=\"{}\"", self.node_attr.name());
+        let _ = writeln!(dot_string, "\tfontname=\"Courier-monospace\"");
+        let _ = writeln!(
+            dot_string,
+            "\tnode [fontname=\"Courier-monospace\" fontsize = 10]"
+        );
+        let _ = writeln!(
+            dot_string,
+            "\tedge [fontname=\"Courier-monospace\" fontsize = 10]\n"
+        );
         dot_string
     }
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with
@@ -546,7 +578,7 @@ impl OpticNode for NodeGroup {
         ports.set_apertures(ports_to_be_set.clone()).unwrap();
         ports
     }
-    fn as_group(&mut self) -> OpmResult<&mut NodeGroup> {
+    fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
         Ok(self)
     }
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
@@ -644,7 +676,7 @@ mod test {
         analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
         joule,
         light_result::LightResult,
-        lightdata::LightData,
+        lightdata::light_data_builder::LightDataBuilder,
         millimeter, nanometer,
         nodes::{test_helper::test_helper::*, Dummy, EnergyMeter, Source},
         optic_node::OpticNode,
@@ -661,7 +693,7 @@ mod test {
         assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.expand_view().unwrap(), false);
         assert_eq!(node.node_color(), "yellow");
-        assert!(node.as_group().is_ok());
+        assert!(node.as_group_mut().is_ok());
         assert_eq!(node.graph.edge_count(), 0);
         assert_eq!(node.graph.node_count(), 0);
     }
@@ -726,7 +758,10 @@ mod test {
         let mut scenery = NodeGroup::default();
         scenery.add_node(Dummy::default()).unwrap();
         let report = scenery.toplevel_report().unwrap();
-        assert!(serde_yaml::to_string(&report).is_ok());
+        assert!(
+            ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::new().new_line("\n"))
+                .is_ok()
+        );
         // How shall we further parse the output?
     }
     #[test]
@@ -760,8 +795,9 @@ mod test {
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.1)).unwrap(),
         );
         let mut scenery = NodeGroup::default();
+        let light_data_builder = LightDataBuilder::Geometric(rays.into());
         let i_s = scenery
-            .add_node(Source::new("src", &LightData::Geometric(rays)))
+            .add_node(Source::new("src", light_data_builder))
             .unwrap();
         let mut em = EnergyMeter::default();
         em.set_isometry(Isometry::identity()).unwrap();
