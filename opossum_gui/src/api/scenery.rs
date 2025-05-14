@@ -1,7 +1,7 @@
 //! Scenery api calls
 
 use super::http_client::HTTPClient;
-use opossum_backend::scenery::NewAnalyzerInfo;
+use opossum_backend::{scenery::NewAnalyzerInfo, AnalyzerInfo};
 use uuid::Uuid;
 
 /// Send a request to delete the current scenery.
@@ -27,6 +27,11 @@ pub async fn post_add_analyzer(
 ) -> Result<Uuid, String> {
     client
         .post::<NewAnalyzerInfo, Uuid>("/api/scenery/analyzers", new_analyzer_info)
+        .await
+}
+pub async fn get_analyzers(client: &HTTPClient) -> Result<Vec<AnalyzerInfo>, String> {
+    client
+        .get::<Vec<AnalyzerInfo>>("/api/scenery/analyzers")
         .await
 }
 /// Send request to delete an analyzer with the given id.

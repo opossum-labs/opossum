@@ -32,40 +32,69 @@ impl GraphStore {
         let opm_string = fs::read_to_string(path);
         match opm_string {
             Ok(opm_string) => match api::post_opm_file(&HTTP_API_CLIENT(), opm_string).await {
-                Ok(_) => match api::get_nodes(&HTTP_API_CLIENT(), Uuid::nil()).await {
-                    Ok(nodes) => {
-                        self.nodes()().clear();
-                        self.edges()().clear();
-                        self.active_node.set(None);
-                        let node_elements: Vec<NodeElement> = nodes
-                            .iter()
-                            .map(|node| {
-                                let position =
-                                    node.gui_position().map_or_else(Point2D::zero, |position| {
-                                        Point2D::new(position.0, position.1)
-                                    });
-                                NodeElement::new(
-                                    NodeType::Optical(node.node_type().to_string()),
-                                    node.uuid(),
-                                    position,
-                                    Ports::new(node.input_ports(), node.output_ports()),
-                                )
-                            })
-                            .collect();
-                        let mut nodes = HashMap::<Uuid, NodeElement>::new();
-                        for node_element in node_elements {
-                            nodes.insert(node_element.id(), node_element);
-                        }
-                        self.nodes.set(nodes);
-                        match api::get_connections(&HTTP_API_CLIENT(), Uuid::nil()).await {
-                            Ok(connections) => {
-                                self.edges.set(connections);
+                Ok(_) => {
+                    self.nodes()().clear();
+                    self.edges()().clear();
+                    self.active_node.set(None);
+                    match api::get_nodes(&HTTP_API_CLIENT(), Uuid::nil()).await {
+                        Ok(nodes) => {
+                            let node_elements: Vec<NodeElement> = nodes
+                                .iter()
+                                .map(|node| {
+                                    let position = node
+                                        .gui_position()
+                                        .map_or_else(Point2D::zero, |position| {
+                                            Point2D::new(position.0, position.1)
+                                        });
+                                    NodeElement::new(
+                                        NodeType::Optical(node.node_type().to_string()),
+                                        node.uuid(),
+                                        position,
+                                        Ports::new(node.input_ports(), node.output_ports()),
+                                    )
+                                })
+                                .collect();
+                            let mut nodes = HashMap::<Uuid, NodeElement>::new();
+                            for node_element in node_elements {
+                                nodes.insert(node_element.id(), node_element);
                             }
-                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                            self.nodes.set(nodes);
                         }
+                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                     }
-                    Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                },
+                    match api::get_analyzers(&HTTP_API_CLIENT()).await {
+                        Ok(analyzers) => {
+                            let node_elements: Vec<NodeElement> = analyzers
+                                .iter()
+                                .map(|analyzer| {
+                                    let position = analyzer
+                                        .gui_position()
+                                        .map_or_else(Point2D::zero, |position| {
+                                            Point2D::new(position.x, position.y)
+                                        });
+                                    NodeElement::new(
+                                        NodeType::Analyzer(analyzer.analyzer_type().clone()),
+                                        analyzer.id(),
+                                        position,
+                                        Ports::default(),
+                                    )
+                                })
+                                .collect();
+                            let mut nodes = self.nodes()();
+                            for node_element in node_elements {
+                                nodes.insert(node_element.id(), node_element);
+                            }
+                            self.nodes.set(nodes);
+                        }
+                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                    }
+                    match api::get_connections(&HTTP_API_CLIENT(), Uuid::nil()).await {
+                        Ok(connections) => {
+                            self.edges.set(connections);
+                        }
+                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                    }
+                }
                 Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
             },
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string()),

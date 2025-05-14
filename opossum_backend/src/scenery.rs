@@ -73,7 +73,7 @@ async fn post_global_conf(
     web::Json(global_conf)
 }
 #[utoipa::path(tag = "scenery",
-    responses((status = 200, description = "List of analyzers", body = Vec<AnalyzerType>)),
+    responses((status = 200, description = "List of analyzers", body = Vec<AnalyzerInfo>)),
 )]
 /// Get a list of all analyzers of this model
 ///
@@ -82,6 +82,16 @@ async fn post_global_conf(
 #[get("/analyzers")]
 async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
     let analyzers = data.document.lock().unwrap().analyzers();
+    let analyzers: Vec<AnalyzerInfo> = analyzers
+        .values()
+        .map(|a| {
+            AnalyzerInfo::new(
+                a.analyzer_type().clone(),
+                a.id(),
+                a.gui_position().map_or(Point2::new(0.0, 0.0), |p| p),
+            )
+        })
+        .collect();
     web::Json(analyzers)
 }
 #[derive(Serialize, Deserialize, ToSchema, Clone)]
@@ -128,18 +138,10 @@ async fn add_analyzer(
     analyzer: web::Json<NewAnalyzerInfo>,
 ) -> impl Responder {
     let new_analyzer_info = analyzer.into_inner();
-    let analyzer_info = AnalyzerInfo::new(
+    let uuid = data.document.lock().unwrap().add_analyzer_with_position(
         new_analyzer_info.analyzer_type,
-        Point2::new(
-            new_analyzer_info.gui_position.0,
-            new_analyzer_info.gui_position.1,
-        ),
+        Some(new_analyzer_info.gui_position),
     );
-    let uuid = data
-        .document
-        .lock()
-        .unwrap()
-        .add_analyzer_info(analyzer_info);
     Json(uuid)
 }
 #[utoipa::path(tag = "scenery",

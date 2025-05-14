@@ -264,13 +264,15 @@ async fn post_subnode(
     drop(node);
     Ok(Json(node_info))
 }
+/// Update the GUI position of an optical or analyzer node
 #[utoipa::path(tag = "node",
     params(
-        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
+        ("uuid" = Uuid, Path, description = "UUID of the optical or analyzer node"),
     ),
     request_body(content = (f64,f64),
         description = "updated GUI position",
         content_type = "application/json",
+        example= "[1.0, 2.0]"
     ),
     responses(
         (status = OK, description = "Node position successfully updated"),
@@ -285,16 +287,26 @@ async fn post_node_position(
 ) -> Result<(), ErrorResponse> {
     let uuid = path.into_inner();
     let position = position.into_inner();
-    let document = data.document.lock().unwrap();
-    document
-        .scenery()
-        .node_recursive(uuid)?
-        .optical_ref
-        .lock()
-        .unwrap()
-        .node_attr_mut()
-        .set_gui_position(Some(Point2::new(position.0, position.1)));
-    Ok(())
+    let position = Point2::new(position.0, position.1);
+    let mut document = data.document.lock().unwrap();
+    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+        node_ref
+            .optical_ref
+            .lock()
+            .unwrap()
+            .node_attr_mut()
+            .set_gui_position(Some(position));
+        Ok(())
+    } else if let Some(analyzer) = document.analyzers_mut().get_mut(&uuid) {
+        analyzer.set_gui_position(Some(position));
+        Ok(())
+    } else {
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes or analyzers",
+        ))
+    }
 }
 /// Delete a node
 ///
