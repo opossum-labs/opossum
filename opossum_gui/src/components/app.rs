@@ -30,11 +30,11 @@ pub fn App() -> Element {
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
                 }
                 MenuSelection::OpenProject(path) => {
-                    let path=path.to_owned();
+                    let path = path.to_owned();
                     node_editor_command.set(Some(NodeEditorCommand::LoadFile(path)));
                 }
                 MenuSelection::SaveProject(path) => {
-                     let path=path.to_owned();
+                    let path = path.to_owned();
                     node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
                 }
                 MenuSelection::WinMaximize => {

@@ -1,9 +1,9 @@
 use super::{
     node::{NodeElement, NodeType, HEADER_HEIGHT, NODE_WIDTH},
-    ports::ports_component::{NodePorts, Ports},
+    ports::ports_component::Ports,
 };
 use crate::{
-    api::{self, http_client::HTTPClient},
+    api::{self},
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::{
@@ -38,29 +38,32 @@ impl GraphStore {
                             Ok(nodes) => {
                                 self.nodes()().clear();
                                 self.edges()().clear();
-                                // let mut active_node = self.active_node.write();
-                                // *active_node = None;
-                                let node_elements: Vec<NodeElement> = nodes.iter().map(|node| {  
-                                    let position = if let Some(position) = node.gui_position() {
-                                        Point2D::new(position.0, position.1)
-                                    } else {
-                                        Point2D::zero()
-                                    };
-                                    //let ports=self.get_ports(node.uuid()).await;
-                                    NodeElement::new(
-                                        NodeType::Optical(node.node_type().to_string()),
-                                        node.uuid(),
-                                        position,
-                                        Ports::default(),
-                                    )
-                                }).collect();
+                                self.active_node.set(None);
+                                let node_elements: Vec<NodeElement> = nodes
+                                    .iter()
+                                    .map(|node| {
+                                        let position = if let Some(position) = node.gui_position() {
+                                            Point2D::new(position.0, position.1)
+                                        } else {
+                                            Point2D::zero()
+                                        };
+                                        //let ports=self.get_ports(node.uuid()).await;
+                                        NodeElement::new(
+                                            NodeType::Optical(node.node_type().to_string()),
+                                            node.uuid(),
+                                            position,
+                                            Ports::default(),
+                                        )
+                                    })
+                                    .collect();
+                                let mut nodes = HashMap::<Uuid, NodeElement>::new();
                                 for node_element in node_elements {
-                                    self.nodes()().insert(node_element.id(), node_element);
+                                    nodes.insert(node_element.id(), node_element);
                                 }
+                                self.nodes.set(nodes);
                             }
                             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                         }
-                        // Update graph store
                     }
                     Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                 }
@@ -96,6 +99,15 @@ impl GraphStore {
     pub fn shift_node_position(&mut self, node_id: &Uuid, shift: Point2D<f64>) {
         if let Some(node) = self.nodes_mut().write().get_mut(node_id) {
             node.shift_position(shift);
+        }
+    }
+    pub async fn sync_node_position(&self, id: Uuid) {
+        if let Some(node_element) = self.nodes()().get(&id) {
+            if let Err(err_str) =
+                api::update_gui_position(&HTTP_API_CLIENT(), id, node_element.pos()).await
+            {
+                OPOSSUM_UI_LOGS.write().add_log(&err_str)
+            }
         }
     }
     #[must_use]

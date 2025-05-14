@@ -57,11 +57,7 @@ impl HTTPClient {
     /// # Errors
     ///
     /// This function will return an error if the request fails or if the response cannot be deserialized into the expected type.
-    pub async fn post_string(
-        &self,
-        route: &str,
-        body: String,
-    ) -> Result<String, String> {
+    pub async fn post_string(&self, route: &str, body: String) -> Result<String, String> {
         let res = self.client().post(self.url(route)).body(body).send().await;
         if let Ok(response) = res {
             self.process_response::<String>(response).await

@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use crate::components::scenery_editor::{
     edges::edges_component::{
         EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
@@ -13,6 +12,7 @@ use opossum_backend::{
     AnalyzerType,
 };
 use opossum_backend::{scenery::NewAnalyzerInfo, PortType};
+use std::path::PathBuf;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -21,7 +21,7 @@ pub enum NodeEditorCommand {
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     LoadFile(PathBuf),
-    SaveFile(PathBuf)
+    SaveFile(PathBuf),
 }
 #[derive(Clone, Copy)]
 pub struct EditorState {
@@ -41,7 +41,6 @@ pub fn GraphEditor(
     node_selected: Signal<Option<NodeElement>>,
 ) -> Element {
     // use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
-    // use_context_provider(|| Signal::new(None::<EdgeCreation>));
     let mut graph_store = use_context_provider(GraphStore::default);
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
@@ -72,12 +71,12 @@ pub fn GraphEditor(
                     spawn(async move { graph_store.add_analyzer(new_analyzer_info).await });
                 }
                 NodeEditorCommand::LoadFile(path) => {
-                    let path=path.to_owned();
-                    spawn(async move { graph_store.load_from_opm_file(&path).await});
+                    let path = path.to_owned();
+                    spawn(async move { graph_store.load_from_opm_file(&path).await });
                 }
                 NodeEditorCommand::SaveFile(path) => {
-                     let path=path.to_owned();
-                    spawn(async move { graph_store.save_to_opm_file(&path).await});
+                    let path = path.to_owned();
+                    spawn(async move { graph_store.save_to_opm_file(&path).await });
                 }
             }
         }
@@ -101,28 +100,39 @@ pub fn GraphEditor(
                 editor_status.drag_status.set(DragStatus::Graph);
             },
             onmouseup: move |_| {
-                editor_status.drag_status.set(DragStatus::None);
-                let edge_in_creation = editor_status.edge_in_creation.read().clone();
-                if let Some(edge_in_creation) = edge_in_creation {
-                    if edge_in_creation.is_valid() {
-                        let mut start_port = edge_in_creation.start_port();
-                        let mut end_port = edge_in_creation.end_port().unwrap();
-                        if start_port.port_type == PortType::Input {
-                            (start_port, end_port) = (end_port, start_port);
-                        }
-                        let new_edge = ConnectInfo::new(
-                            start_port.node_id,
-                            start_port.port_name.clone(),
-                            end_port.node_id,
-                            end_port.port_name.clone(),
-                            0.0,
-                        );
+                let drag_status=editor_status.drag_status.read().clone();
+                match drag_status {
+                    DragStatus::Node(uuid) => {
                         spawn(async move {
-                            graph_store.add_edge(new_edge).await;
+                            graph_store.sync_node_position(uuid).await;
                         });
-                    }
-                    editor_status.edge_in_creation.set(None);
+                    },
+                    DragStatus::Edge(_) => {
+                        let edge_in_creation = editor_status.edge_in_creation.read().clone();
+                        if let Some(edge_in_creation) = edge_in_creation {
+                            if edge_in_creation.is_valid() {
+                                let mut start_port = edge_in_creation.start_port();
+                                let mut end_port = edge_in_creation.end_port().unwrap();
+                                if start_port.port_type == PortType::Input {
+                                    (start_port, end_port) = (end_port, start_port);
+                                }
+                                let new_edge = ConnectInfo::new(
+                                    start_port.node_id,
+                                    start_port.port_name.clone(),
+                                    end_port.node_id,
+                                    end_port.port_name.clone(),
+                                    0.0,
+                                );
+                                spawn(async move {
+                                    graph_store.add_edge(new_edge).await;
+                                });
+                            }
+                            editor_status.edge_in_creation.set(None);
+                        }
+                    },
+                    _ => {}
                 }
+                editor_status.drag_status.set(DragStatus::None);
             },
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());

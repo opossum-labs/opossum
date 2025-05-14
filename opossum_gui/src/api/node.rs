@@ -1,3 +1,4 @@
+use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode, NodeInfo},
     NodeAttr,
@@ -14,7 +15,9 @@ use super::http_client::HTTPClient;
 /// - the request fails (e.g. the scenery is not valid)
 /// - the response cannot be deserialized into a vector of [`NodeInfo`] structs
 pub async fn get_nodes(client: &HTTPClient) -> Result<Vec<NodeInfo>, String> {
-    client.get::<Vec<NodeInfo>>("/api/scenery/00000000-0000-0000-0000-000000000000/nodes").await
+    client
+        .get::<Vec<NodeInfo>>("/api/scenery/00000000-0000-0000-0000-000000000000/nodes")
+        .await
 }
 /// Send a request to add a node to the scenery.
 ///
@@ -100,9 +103,16 @@ pub async fn update_distance(
         .put::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
         .await
 }
-// pub async fn put_node_properties(&self, uuid: Uuid, props: NodeAttr) -> Result<NodeAttr, String> {
-//     self.put::<NodeAttr, NodeAttr>(&format!("/api/scenery/nodes/{}", uuid.as_simple().to_string()), props.serialize(serializer)).await
-// }
-// pub async fn patch_node_properties(&self, uuid: Uuid, props: NodeAttr) -> Result<NodeAttr, String> {
-//     self.put::<NodeAttr, NodeAttr>(&format!("/api/scenery/nodes/{}", uuid.as_simple().to_string()), props.serialize(serializer)).await
-// }
+pub async fn update_gui_position(
+    client: &HTTPClient,
+    node_id: Uuid,
+    gui_position: Point2D<f64>,
+) -> Result<String, String> {
+    let position = (gui_position.x, gui_position.y);
+    client
+        .post::<(f64, f64), String>(
+            &format!("/api/scenery/position/{}", node_id.as_simple()),
+            position,
+        )
+        .await
+}

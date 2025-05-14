@@ -3,7 +3,7 @@ use actix_web::{
     delete, get, patch, post, put,
     web::{self, Json, PathConfig},
 };
-use nalgebra::{Point2, Point3};
+use nalgebra::Point2;
 use opossum::{
     meter,
     nodes::{create_node_ref, NodeAttr},
@@ -18,17 +18,22 @@ pub struct NodeInfo {
     uuid: Uuid,
     name: String,
     node_type: String,
-    gui_position: Option<(f64,f64)>
+    gui_position: Option<(f64, f64)>,
 }
 
 impl NodeInfo {
     #[must_use]
-    pub const fn new(uuid: Uuid, name: String, node_type: String, gui_position: Option<(f64,f64)>) -> Self {
+    pub const fn new(
+        uuid: Uuid,
+        name: String,
+        node_type: String,
+        gui_position: Option<(f64, f64)>,
+    ) -> Self {
         Self {
             uuid,
             name,
             node_type,
-            gui_position
+            gui_position,
         }
     }
     #[must_use]
@@ -45,7 +50,7 @@ impl NodeInfo {
     pub fn node_type(&self) -> &str {
         &self.node_type
     }
-     #[must_use]
+    #[must_use]
     pub fn gui_position(&self) -> Option<(f64, f64)> {
         self.gui_position
     }
@@ -81,13 +86,17 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
-                let gui_position= if let Some(position)=node.gui_position() {Some((position.x, position.y))} else {None};
+                let gui_position = if let Some(position) = node.gui_position() {
+                    Some((position.x, position.y))
+                } else {
+                    None
+                };
                 drop(node);
                 NodeInfo {
                     uuid: n.uuid(),
                     name,
                     node_type,
-                    gui_position
+                    gui_position,
                 }
             })
             .collect()
@@ -104,13 +113,17 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
-                let gui_position= if let Some(position)=node.gui_position() {Some((position.x, position.y))} else {None};
+                let gui_position = if let Some(position) = node.gui_position() {
+                    Some((position.x, position.y))
+                } else {
+                    None
+                };
                 drop(node);
                 NodeInfo {
                     uuid: n.uuid(),
                     name,
                     node_type,
-                    gui_position
+                    gui_position,
                 }
             })
             .collect()
@@ -146,7 +159,7 @@ impl NewNode {
     request_body(content = NewNode,
         description = "type and GUI position of node the optical node to be created",
         content_type = "application/json",
-        example ="{\"node_type\": \"dummy\", \"gui_position\": [0,0,0]}"
+        example ="{\"node_type\": \"dummy\", \"gui_position\": [0.0,0.0]}"
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
@@ -184,15 +197,48 @@ async fn post_subnode(
     };
     drop(document);
     let node = new_node_ref.optical_ref.lock().unwrap();
-    let gui_position= if let Some(position)=node.gui_position() {Some((position.x, position.y))} else {None};
+    let gui_position = if let Some(position) = node.gui_position() {
+        Some((position.x, position.y))
+    } else {
+        None
+    };
     let node_info = NodeInfo {
         uuid: new_node_uuid,
         name: node.name(),
         node_type: node.node_type(),
-        gui_position 
+        gui_position,
     };
     drop(node);
     Ok(Json(node_info))
+}
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
+    ),
+    request_body(content = (f64,f64),
+        description = "updated GUI position",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, description = "Node position successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/position/{uuid}")]
+async fn post_node_position(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    position: web::Json<(f64, f64)>,
+) -> Result<(), ErrorResponse> {
+    let uuid = path.into_inner();
+    let position=position.into_inner();
+    let document = data.document.lock().unwrap();
+    document.scenery().node_recursive(uuid)?
+    .optical_ref
+        .lock()
+        .unwrap()
+        .node_attr_mut().set_gui_position(Some(Point2::new(position.0, position.1)));
+    Ok(())
 }
 /// Delete a node
 ///
@@ -387,6 +433,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_subnodes);
     cfg.service(post_subnode);
     cfg.service(delete_subnode);
+    cfg.service(post_node_position);
 
     cfg.service(get_properties);
     cfg.service(patch_properties);

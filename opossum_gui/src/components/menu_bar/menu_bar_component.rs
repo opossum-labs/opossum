@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
@@ -6,12 +5,11 @@ use dioxus_free_icons::{
 };
 use opossum_backend::AnalyzerType;
 use rfd::FileDialog;
+use std::path::PathBuf;
 
-use crate::{
-    components::menu_bar::{
-        edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
-        help::about::About,
-    },
+use crate::components::menu_bar::{
+    edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+    help::about::About,
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
