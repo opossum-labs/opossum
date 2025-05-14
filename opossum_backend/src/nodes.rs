@@ -6,7 +6,8 @@ use actix_web::{
 use nalgebra::Point2;
 use opossum::{
     meter,
-    nodes::{create_node_ref, NodeAttr}, optic_ports::PortType,
+    nodes::{create_node_ref, NodeAttr},
+    optic_ports::PortType,
 };
 use serde::{Deserialize, Serialize};
 use uom::si::length::meter;
@@ -58,14 +59,14 @@ impl NodeInfo {
         &self.node_type
     }
     #[must_use]
-    pub fn gui_position(&self) -> Option<(f64, f64)> {
+    pub const fn gui_position(&self) -> Option<(f64, f64)> {
         self.gui_position
     }
-    
+    #[must_use]
     pub fn input_ports(&self) -> Vec<String> {
         self.input_ports.clone()
     }
-    
+    #[must_use]
     pub fn output_ports(&self) -> Vec<String> {
         self.output_ports.clone()
     }
@@ -101,13 +102,9 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
-                let input_ports=node.ports().names(&PortType::Input);
+                let input_ports = node.ports().names(&PortType::Input);
                 let output_ports = node.ports().names(&PortType::Output);
-                let gui_position = if let Some(position) = node.gui_position() {
-                    Some((position.x, position.y))
-                } else {
-                    None
-                };
+                let gui_position = node.gui_position().map(|position| (position.x, position.y));
                 drop(node);
                 NodeInfo {
                     uuid: n.uuid(),
@@ -132,13 +129,9 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
-                let input_ports=node.ports().names(&PortType::Input);
+                let input_ports = node.ports().names(&PortType::Input);
                 let output_ports = node.ports().names(&PortType::Output);
-                let gui_position = if let Some(position) = node.gui_position() {
-                    Some((position.x, position.y))
-                } else {
-                    None
-                };
+                let gui_position = node.gui_position().map(|position| (position.x, position.y));
                 drop(node);
                 NodeInfo {
                     uuid: n.uuid(),
@@ -259,11 +252,7 @@ async fn post_subnode(
     };
     drop(document);
     let node = new_node_ref.optical_ref.lock().unwrap();
-    let gui_position = if let Some(position) = node.gui_position() {
-        Some((position.x, position.y))
-    } else {
-        None
-    };
+    let gui_position = node.gui_position().map(|position| (position.x, position.y));
     let node_info = NodeInfo {
         uuid: new_node_uuid,
         name: node.name(),

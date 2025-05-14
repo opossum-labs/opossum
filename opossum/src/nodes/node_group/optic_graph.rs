@@ -633,6 +633,10 @@ impl OpticGraph {
         self.g.node_weights().collect()
     }
     /// Returns all node connections of this [`OpticGraph`].
+    ///
+    /// # Panics
+    ///
+    /// Panics theoretically, if the internal [`NodeIndex`]es were not found while looping over all edges.
     #[must_use]
     pub fn connections(&self) -> Vec<ConnectionInfo> {
         let mut connections = Vec::<ConnectionInfo>::new();
