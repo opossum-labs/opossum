@@ -17,7 +17,7 @@ use crate::{
     SceneryResources,
 };
 use log::{info, warn};
-use nalgebra::Point3;
+use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -31,12 +31,12 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnalyzerInfo {
     analyzer_type: AnalyzerType,
-    gui_position: Option<Point3<i32>>,
+    gui_position: Option<Point2<f64>>,
 }
 impl AnalyzerInfo {
     /// Creates a new [`AnalyzerInfo`].
     #[must_use]
-    pub const fn new(analyzer_type: AnalyzerType, gui_position: Point3<i32>) -> Self {
+    pub const fn new(analyzer_type: AnalyzerType, gui_position: Point2<f64>) -> Self {
         Self {
             analyzer_type,
             gui_position: Some(gui_position),

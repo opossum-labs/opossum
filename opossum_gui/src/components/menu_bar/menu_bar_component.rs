@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
@@ -89,7 +90,7 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                                 .add_filter("Opossum setup file", &["opm"])
                                                 .pick_file();
                                             if let Some(path) = path {
-                                                menu_item_selected.set(Some(MenuSelection::OpenProject(path)))
+                                                menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
                                             }
                                         },
                                         "Open Project"
@@ -106,7 +107,7 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                                 .add_filter("Opossum setup file", &["opm"])
                                                 .save_file();
                                             if let Some(path) = path {
-                                                menu_item_selected.set(Some(MenuSelection::SaveProject(path)))
+                                                menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
                                             }
                                         },
                                         "Save Project"

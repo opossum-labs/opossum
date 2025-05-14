@@ -37,7 +37,7 @@ pub async fn post_add_analyzer(
 /// - the Analyzer with the given id was not found.
 pub async fn delete_analyzer(client: &HTTPClient, id: Uuid) -> Result<String, String> {
     client
-        .delete::<String, String>(&format!("/api/scenery/analyzers/{}", id), String::new())
+        .delete::<String, String>(&format!("/api/scenery/analyzers/{id}"), String::new())
         .await
 }
 /// Send request to receive the `OPM` file representation (as string) of the scenery.

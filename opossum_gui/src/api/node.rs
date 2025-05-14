@@ -19,6 +19,14 @@ pub async fn get_nodes(client: &HTTPClient, group_id: Uuid) -> Result<Vec<NodeIn
         .get::<Vec<NodeInfo>>(&format!("/api/scenery/{}/nodes", group_id.as_simple()))
         .await
 }
+/// Get a list of all connections (edges) of the given node group.
+/// If the `node_id` is `Uuid::nil()` the connections of the toplevel group
+/// are returned.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the given `node_id` is not `Uuid::nil()` and does not correspond to a (sub-)group of the scenery.
 pub async fn get_connections(
     client: &HTTPClient,
     group_id: Uuid,
@@ -106,6 +114,11 @@ pub async fn delete_connection(
         .delete::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
         .await
 }
+/// Update the physical distance between two nodes.
+///
+/// # Errors
+///
+/// This function will return an error if the connection could not be found.
 pub async fn update_distance(
     client: &HTTPClient,
     connection: ConnectInfo,
@@ -114,6 +127,11 @@ pub async fn update_distance(
         .put::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
         .await
 }
+/// Update the GUI position coordinates of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
 pub async fn update_gui_position(
     client: &HTTPClient,
     node_id: Uuid,

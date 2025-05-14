@@ -11,7 +11,7 @@ use actix_web::{
     web::{self, Json},
     HttpResponse, Responder,
 };
-use nalgebra::Point3;
+use nalgebra::Point2;
 use opossum::{analyzers::AnalyzerType, opm_document::AnalyzerInfo, OpmDocument, SceneryResources};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -87,12 +87,12 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
 #[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct NewAnalyzerInfo {
     pub analyzer_type: AnalyzerType,
-    pub gui_position: (i32, i32, i32),
+    pub gui_position: (f64, f64),
 }
 
 impl NewAnalyzerInfo {
     #[must_use]
-    pub const fn new(analyzer_type: AnalyzerType, gui_position: (i32, i32, i32)) -> Self {
+    pub const fn new(analyzer_type: AnalyzerType, gui_position: (f64, f64)) -> Self {
         Self {
             analyzer_type,
             gui_position,
@@ -130,10 +130,9 @@ async fn add_analyzer(
     let new_analyzer_info = analyzer.into_inner();
     let analyzer_info = AnalyzerInfo::new(
         new_analyzer_info.analyzer_type,
-        Point3::new(
+        Point2::new(
             new_analyzer_info.gui_position.0,
             new_analyzer_info.gui_position.1,
-            new_analyzer_info.gui_position.2,
         ),
     );
     let uuid = data

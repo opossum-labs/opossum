@@ -40,11 +40,10 @@ impl GraphStore {
                         let node_elements: Vec<NodeElement> = nodes
                             .iter()
                             .map(|node| {
-                                let position = if let Some(position) = node.gui_position() {
-                                    Point2D::new(position.0, position.1)
-                                } else {
-                                    Point2D::zero()
-                                };
+                                let position =
+                                    node.gui_position().map_or_else(Point2D::zero, |position| {
+                                        Point2D::new(position.0, position.1)
+                                    });
                                 NodeElement::new(
                                     NodeType::Optical(node.node_type().to_string()),
                                     node.uuid(),
@@ -76,7 +75,7 @@ impl GraphStore {
         match api::get_opm_file(&HTTP_API_CLIENT()).await {
             Ok(opm_string) => {
                 if let Err(err_str) = fs::write(path, opm_string) {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string())
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
                 }
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
@@ -107,13 +106,13 @@ impl GraphStore {
             if let Err(err_str) =
                 api::update_gui_position(&HTTP_API_CLIENT(), id, node_element.pos()).await
             {
-                OPOSSUM_UI_LOGS.write().add_log(&err_str)
+                OPOSSUM_UI_LOGS.write().add_log(&err_str);
             }
         }
     }
     #[must_use]
     pub fn active_node(&self) -> Option<Uuid> {
-        self.active_node.read().clone()
+        *self.active_node.read()
     }
     pub fn set_node_active(&mut self, id: Uuid) {
         let mut active_node = self.active_node.write();
@@ -301,8 +300,8 @@ impl GraphStore {
                     NodeType::Analyzer(new_analyzer_info.analyzer_type.clone()),
                     analyzer_id,
                     Point2D::new(
-                        new_analyzer_info.clone().gui_position.0 as f64,
-                        new_analyzer_info.gui_position.1 as f64,
+                        new_analyzer_info.clone().gui_position.0,
+                        new_analyzer_info.gui_position.1,
                     ),
                     Ports::new(vec![], vec![]),
                 );

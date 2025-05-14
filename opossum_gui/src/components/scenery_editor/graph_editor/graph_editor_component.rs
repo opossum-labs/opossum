@@ -48,7 +48,7 @@ pub fn GraphEditor(
     });
     let mut graph_shift = use_signal(|| Point2D::<f64>::new(0.0, 0.0));
     let mut graph_zoom = use_signal(|| 1.0);
-    let mut current_mouse_pos = use_signal(|| (0, 0));
+    let mut current_mouse_pos = use_signal(|| (0.0, 0.0));
 
     use_effect(move || {
         let command = command.read();
@@ -67,7 +67,7 @@ pub fn GraphEditor(
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
                     let analyzer_type = analyzer_type.clone();
-                    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type, (100, 100, 0));
+                    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type, (100.0, 100.0));
                     spawn(async move { graph_store.add_analyzer(new_analyzer_info).await });
                 }
                 NodeEditorCommand::LoadFile(path) => {
@@ -94,8 +94,8 @@ pub fn GraphEditor(
             onmousedown: move |event| {
                 current_mouse_pos
                     .set((
-                        event.client_coordinates().x as i32,
-                        event.client_coordinates().y as i32,
+                        event.client_coordinates().x,
+                        event.client_coordinates().y,
                     ));
                 editor_status.drag_status.set(DragStatus::Graph);
             },
@@ -136,12 +136,12 @@ pub fn GraphEditor(
             },
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());
-                let rel_shift_x = event.client_coordinates().x - current_mouse_pos().0 as f64;
-                let rel_shift_y = event.client_coordinates().y - current_mouse_pos().1 as f64;
+                let rel_shift_x = event.client_coordinates().x - current_mouse_pos().0;
+                let rel_shift_y = event.client_coordinates().y - current_mouse_pos().1;
                 current_mouse_pos
                     .set((
-                        event.client_coordinates().x as i32,
-                        event.client_coordinates().y as i32,
+                        event.client_coordinates().x,
+                        event.client_coordinates().y,
                     ));
                 match drag_status {
                     DragStatus::Graph => {

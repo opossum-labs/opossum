@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
     edges::{define_bezier_path, edge_component::EdgeComponent},
     graph_editor::graph_editor_component::EditorState,
