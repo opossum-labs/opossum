@@ -32,7 +32,7 @@ use std::{
 };
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
-type ConnectionInfo = (Uuid, String, Uuid, String, Length);
+pub type ConnectionInfo = (Uuid, String, Uuid, String, Length);
 
 /// Data structure representing an optical graph
 #[derive(Debug, Default, Clone)]
@@ -631,6 +631,31 @@ impl OpticGraph {
     #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
         self.g.node_weights().collect()
+    }
+    /// Returns all node connections of this [`OpticGraph`].
+    ///
+    /// # Panics
+    ///
+    /// Panics theoretically, if the internal [`NodeIndex`]es were not found while looping over all edges.
+    #[must_use]
+    pub fn connections(&self) -> Vec<ConnectionInfo> {
+        let mut connections = Vec::<ConnectionInfo>::new();
+        for edge_ref in self.g.edge_references() {
+            let src_id = self.g.node_weight(edge_ref.source()).unwrap().uuid();
+            let target_id = self.g.node_weight(edge_ref.target()).unwrap().uuid();
+            let src_port = edge_ref.weight().src_port();
+            let target_port = edge_ref.weight().target_port();
+            let dist = edge_ref.weight().distance();
+            let connection: ConnectionInfo = (
+                src_id,
+                src_port.to_string(),
+                target_id,
+                target_port.to_string(),
+                *dist,
+            );
+            connections.push(connection);
+        }
+        connections
     }
     fn edge_by_idx(&self, idx: EdgeIndex) -> OpmResult<&LightFlow> {
         self.g

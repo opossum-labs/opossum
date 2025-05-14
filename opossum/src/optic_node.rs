@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Contains the basic trait representing an optical element
 use log::warn;
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point2, Point3, Vector3};
 use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
@@ -352,6 +352,7 @@ pub trait OpticNode: Dottable {
 
         node_attr_mut.set_uuid(node_attributes.uuid());
         node_attr_mut.set_lidt(node_attributes.lidt());
+        node_attr_mut.set_gui_position(node_attributes.gui_position());
     }
     /// Get the node type of this [`OpticNode`]
     fn node_type(&self) -> String {
@@ -360,6 +361,10 @@ pub trait OpticNode: Dottable {
     /// Get the name of this [`OpticNode`]
     fn name(&self) -> String {
         self.node_attr().name()
+    }
+    /// Get the gui position of this [`OpticNode`].
+    fn gui_position(&self) -> Option<Point2<f64>> {
+        self.node_attr().gui_position()
     }
     /// Return all properties of this [`OpticNode`].
     fn properties(&self) -> &Properties {

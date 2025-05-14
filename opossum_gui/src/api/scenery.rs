@@ -1,8 +1,8 @@
 //! Scenery api calls
 
-use opossum_backend::scenery::NewAnalyzerInfo;
-use uuid::Uuid;
 use super::http_client::HTTPClient;
+use opossum_backend::{scenery::NewAnalyzerInfo, AnalyzerInfo};
+use uuid::Uuid;
 
 /// Send a request to delete the current scenery.
 ///
@@ -29,6 +29,11 @@ pub async fn post_add_analyzer(
         .post::<NewAnalyzerInfo, Uuid>("/api/scenery/analyzers", new_analyzer_info)
         .await
 }
+pub async fn get_analyzers(client: &HTTPClient) -> Result<Vec<AnalyzerInfo>, String> {
+    client
+        .get::<Vec<AnalyzerInfo>>("/api/scenery/analyzers")
+        .await
+}
 /// Send request to delete an analyzer with the given id.
 ///
 /// # Errors
@@ -37,7 +42,7 @@ pub async fn post_add_analyzer(
 /// - the Analyzer with the given id was not found.
 pub async fn delete_analyzer(client: &HTTPClient, id: Uuid) -> Result<String, String> {
     client
-        .delete::<String, String>(&format!("/api/scenery/analyzers/{}", id), String::new())
+        .delete::<String, String>(&format!("/api/scenery/analyzers/{id}"), String::new())
         .await
 }
 /// Send request to receive the `OPM` file representation (as string) of the scenery.
@@ -57,7 +62,5 @@ pub async fn get_opm_file(client: &HTTPClient) -> Result<String, String> {
 /// - the `OPM` file cannot be parsed
 /// - the scenery cannot be constructed from the file data.
 pub async fn post_opm_file(client: &HTTPClient, opm_string: String) -> Result<String, String> {
-    client
-        .post::<String, String>("/api/scenery/opmfile", opm_string)
-        .await
+    client.post_string("/api/scenery/opmfile", opm_string).await
 }

@@ -11,6 +11,7 @@ pub mod utils;
 pub use opossum::{
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
     nodes::NodeAttr,
+    opm_document::AnalyzerInfo,
     optic_ports::PortType,
     utils::math_utils::usize_to_f64,
 };

@@ -1,5 +1,4 @@
-use std::fs;
-
+#![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
@@ -7,17 +6,11 @@ use dioxus_free_icons::{
 };
 use opossum_backend::AnalyzerType;
 use rfd::FileDialog;
+use std::path::PathBuf;
 
-use crate::{
-    api,
-    components::menu_bar::{
-        // callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
-        // controls::controls_menu::ControlsMenu,
-        edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
-        // file::callbacks::{use_new_project, use_open_project, use_save_project},
-        help::about::About,
-    },
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+use crate::components::menu_bar::{
+    edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+    help::about::About,
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
@@ -25,8 +18,8 @@ const FAVICON: Asset = asset!("./assets/favicon.ico");
 #[derive(Debug)]
 pub enum MenuSelection {
     NewProject,
-    OpenProject,
-    SaveProject,
+    OpenProject(PathBuf),
+    SaveProject(PathBuf),
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     WinMaximize,
@@ -90,7 +83,16 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                     a {
                                         class: "dropdown-item",
                                         role: "button",
-                                        onclick: move |_| { menu_item_selected.set(Some(MenuSelection::OpenProject)) },
+                                        onclick: move |_| {
+                                            let path = FileDialog::new()
+                                                .set_directory("/")
+                                                .set_title("Save OPOSSUM setup file")
+                                                .add_filter("Opossum setup file", &["opm"])
+                                                .pick_file();
+                                            if let Some(path) = path {
+                                                menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
+                                            }
+                                        },
                                         "Open Project"
                                     }
                                 }
@@ -105,16 +107,7 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                                 .add_filter("Opossum setup file", &["opm"])
                                                 .save_file();
                                             if let Some(path) = path {
-                                                spawn(async move {
-                                                    match api::get_opm_file(&HTTP_API_CLIENT()).await {
-                                                        Ok(opm_file) => {
-                                                            if let Err(e) = fs::write(path, opm_file) {
-                                                                OPOSSUM_UI_LOGS.write().add_log(&e.to_string())
-                                                            }
-                                                        }
-                                                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                                                    }
-                                                });
+                                                menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
                                             }
                                         },
                                         "Save Project"

@@ -64,7 +64,6 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 onchange: {
                     move |event: Event<FormData>| {
                         if let Ok(new_distance) = event.data.parsed::<f64>() {
-                            println!("new number {new_distance}");
                             edge.set_distance(new_distance);
                             let edge = edge.clone();
                             spawn(async move { graph_store.update_edge(&edge).await });
