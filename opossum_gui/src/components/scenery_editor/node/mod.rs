@@ -121,4 +121,7 @@ impl NodeElement {
     pub const fn node_type(&self) -> &NodeType {
         &self.node_type
     }
+    pub fn set_pos(&mut self, pos: Point2D<f64>) {
+        self.pos = pos;
+    }
 }

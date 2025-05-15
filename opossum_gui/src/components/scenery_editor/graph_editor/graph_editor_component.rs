@@ -22,6 +22,7 @@ pub enum NodeEditorCommand {
     AddAnalyzer(AnalyzerType),
     LoadFile(PathBuf),
     SaveFile(PathBuf),
+    AutoLayout,
 }
 #[derive(Clone, Copy)]
 pub struct EditorState {
@@ -66,9 +67,12 @@ pub fn GraphEditor(
                     });
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                    let analyzer_type = analyzer_type.clone();
-                    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type, (100.0, 100.0));
+                    let new_analyzer_info =
+                        NewAnalyzerInfo::new(analyzer_type.clone(), (100.0, 100.0));
                     spawn(async move { graph_store.add_analyzer(new_analyzer_info).await });
+                }
+                NodeEditorCommand::AutoLayout => {
+                    graph_store.optimize_layout();
                 }
                 NodeEditorCommand::LoadFile(path) => {
                     let path = path.to_owned();
@@ -184,6 +188,7 @@ pub fn GraphEditor(
                                 );
                             editor_status.edge_in_creation.set(Some(edge_in_creation));
                         }
+                        
                     }
                     DragStatus::None => {}
                 }

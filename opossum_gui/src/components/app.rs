@@ -26,6 +26,9 @@ pub fn App() -> Element {
                         analyzer_selected.clone(),
                     )));
                 }
+                MenuSelection::AutoLayout => {
+                    node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
+                }
                 MenuSelection::NewProject => {
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
                 }
