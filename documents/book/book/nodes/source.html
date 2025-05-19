@@ -156,13 +156,18 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="source"><a class="header" href="#source">Source</a></h1>
+<h2 id="ports"><a class="header" href="#ports">Ports</a></h2>
+<p><code>input_1</code>
+: Input port. <strong>Note</strong>: Don't us this port since it is not used during a normal calculation (input discard) but needed internally for a ghost focus calculation. This port might vanish in the future.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers the light data as defined by the source's properties (see below).</p>
 <h2 id="properties"><a class="header" href="#properties">Properties</a></h2>
 <p><code>light data</code>
 : Definition of the light field of the source. See <a href="../light_data.html">here</a> for more details.</p>
 <p><code>light data iso</code>
 : Isometry of the light data field. By defining this isometry it is possible to move a point source with respect to the anchor point of the source.</p>
 <p><code>alignment wavelength</code>
-: This property defines the wavelength if the single light ray which is used during alignment of the nodes.</p>
+: This property defines the wavelength of the single light ray which is used during alignment of the nodes.</p>
 
                     </main>
 

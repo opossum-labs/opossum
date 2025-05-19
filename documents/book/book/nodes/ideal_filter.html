@@ -156,6 +156,18 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="ideal-filter"><a class="header" href="#ideal-filter">Ideal filter</a></h1>
+<h2 id="ports"><a class="header" href="#ports">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
+<h2 id="properties"><a class="header" href="#properties">Properties</a></h2>
+<p><code>filter type</code>
+: The filter definition. Currently there are these options:</p>
+<ul>
+<li>Constant: The incoming energy is attenuated by a constant (wavelength independent) factor. A value of 0.0 corresponds to a total absorption while 1.0 denotes a fully transparent filter.</li>
+<li>Spectrum: The incoming energy is attenuated according to the given filter spectrum. The filter spectrum is an array of filter values (between 0.0 and 1.0) with respect to a wavelength bin.</li>
+</ul>
 
                     </main>
 

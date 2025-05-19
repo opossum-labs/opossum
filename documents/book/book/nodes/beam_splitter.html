@@ -155,7 +155,25 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="beam-splitter"><a class="header" href="#beam-splitter">Beam splitter</a></h1>
+                        <h1 id="ideal-beam-splitter"><a class="header" href="#ideal-beam-splitter">Ideal beam splitter</a></h1>
+<h2 id="ports"><a class="header" href="#ports">Ports</a></h2>
+<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<p><code>input_1</code>
+: Input 1 of the beam splitter / combiner.</p>
+<p><code>input_2</code>
+: Input 2 of the beam splitter / combiner.</p>
+<h3 id="outputs"><a class="header" href="#outputs">Outputs</a></h3>
+<p><code>out1_trans1_refl2</code>
+: Output 1. In terms of a beamsplitter cube, this corresponds to the transmitted light from <code>input_1</code> and the reflected light from <code>input_2</code>.</p>
+<p><code>out2_trans2_refl1</code>
+: Output 2. In terms of a beamsplitter cube, this corresponds to the transmitted light from <code>input_2</code> and the reflected light from <code>input_1</code>.</p>
+<h2 id="properties"><a class="header" href="#properties">Properties</a></h2>
+<p><code>splitter config</code>
+: Splitter configuration. This parameter defines how incoming beams are split or merged respectively. Possible options are:</p>
+<ul>
+<li>Ratio: The incoming energies are split according to a fixed ratio between 0.0 and 1.0. Thereby a value of 0.0 completely filters the input of port <code>input_1</code> and fully transmits <code>input_2</code>. For 1.0 the situation is vice versa.</li>
+<li>Spectrum: The incoming light is split with respect to its wavelength. The provided spectrum defines a wavelegth dependent splitting ratio between 0.0 and 1.0.</li>
+</ul>
 
                     </main>
 

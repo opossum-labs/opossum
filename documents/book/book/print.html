@@ -320,30 +320,192 @@ Each optical element consists of a given material. These are mostly different gl
 <h2 id="analysis-interface"><a class="header" href="#analysis-interface">Analysis interface</a></h2>
 <p>As discussed, the actual calculation is performed by the nodes. The presented framework will only make sure that all necessary input data will be provided. For this, each node has to implement an Analysis function with light data from the incoming edges as parameters. This function can now either directly perform a calculation or call specific external modules (such as C/C++ library code or a Python script).</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="source"><a class="header" href="#source">Source</a></h1>
+<h2 id="ports-1"><a class="header" href="#ports-1">Ports</a></h2>
+<p><code>input_1</code>
+: Input port. <strong>Note</strong>: Don't us this port since it is not used during a normal calculation (input discard) but needed internally for a ghost focus calculation. This port might vanish in the future.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers the light data as defined by the source's properties (see below).</p>
 <h2 id="properties"><a class="header" href="#properties">Properties</a></h2>
 <p><code>light data</code>
 : Definition of the light field of the source. See <a href="nodes/../light_data.html">here</a> for more details.</p>
 <p><code>light data iso</code>
 : Isometry of the light data field. By defining this isometry it is possible to move a point source with respect to the anchor point of the source.</p>
 <p><code>alignment wavelength</code>
-: This property defines the wavelength if the single light ray which is used during alignment of the nodes.</p>
+: This property defines the wavelength of the single light ray which is used during alignment of the nodes.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="dummy"><a class="header" href="#dummy">Dummy</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="beam-splitter"><a class="header" href="#beam-splitter">Beam splitter</a></h1>
+<h2 id="ports-2"><a class="header" href="#ports-2">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
+<h2 id="properties-1"><a class="header" href="#properties-1">Properties</a></h2>
+<p>This node type has no specific properties.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ideal-beam-splitter"><a class="header" href="#ideal-beam-splitter">Ideal beam splitter</a></h1>
+<h2 id="ports-3"><a class="header" href="#ports-3">Ports</a></h2>
+<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<p><code>input_1</code>
+: Input 1 of the beam splitter / combiner.</p>
+<p><code>input_2</code>
+: Input 2 of the beam splitter / combiner.</p>
+<h3 id="outputs"><a class="header" href="#outputs">Outputs</a></h3>
+<p><code>out1_trans1_refl2</code>
+: Output 1. In terms of a beamsplitter cube, this corresponds to the transmitted light from <code>input_1</code> and the reflected light from <code>input_2</code>.</p>
+<p><code>out2_trans2_refl1</code>
+: Output 2. In terms of a beamsplitter cube, this corresponds to the transmitted light from <code>input_2</code> and the reflected light from <code>input_1</code>.</p>
+<h2 id="properties-2"><a class="header" href="#properties-2">Properties</a></h2>
+<p><code>splitter config</code>
+: Splitter configuration. This parameter defines how incoming beams are split or merged respectively. Possible options are:</p>
+<ul>
+<li>Ratio: The incoming energies are split according to a fixed ratio between 0.0 and 1.0. Thereby a value of 0.0 completely filters the input of port <code>input_1</code> and fully transmits <code>input_2</code>. For 1.0 the situation is vice versa.</li>
+<li>Spectrum: The incoming light is split with respect to its wavelength. The provided spectrum defines a wavelegth dependent splitting ratio between 0.0 and 1.0.</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="energy-meter"><a class="header" href="#energy-meter">Energy meter</a></h1>
+<h2 id="ports-4"><a class="header" href="#ports-4">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
+<h2 id="properties-3"><a class="header" href="#properties-3">Properties</a></h2>
+<p><code>meter type</code>
+: The type of the energy meter. This property will be used in the future to model different energy / power meters with its characteristic properties (e.g. wavelength depenedent sensitivity, etc.). Current options are:</p>
+<ul>
+<li>IdealEnergyMeter</li>
+<li>IdealPowerMeter (currently not used)</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="node-group"><a class="header" href="#node-group">Node group</a></h1>
+<h2 id="ports-5"><a class="header" href="#ports-5">Ports</a></h2>
+<p>The ports of this node are defined by the port mapping of the internal node within this group.</p>
+<h2 id="properties-4"><a class="header" href="#properties-4">Properties</a></h2>
+<p><code>expand view</code>
+: A boolean value, which determines if the containing nodes are displayed in the report diagram (true) or just the collapsed group node (false). Defaults to <code>false</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ideal-filter"><a class="header" href="#ideal-filter">Ideal filter</a></h1>
+<h2 id="ports-6"><a class="header" href="#ports-6">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
+<h2 id="properties-5"><a class="header" href="#properties-5">Properties</a></h2>
+<p><code>filter type</code>
+: The filter definition. Currently there are these options:</p>
+<ul>
+<li>Constant: The incoming energy is attenuated by a constant (wavelength independent) factor. A value of 0.0 corresponds to a total absorption while 1.0 denotes a fully transparent filter.</li>
+<li>Spectrum: The incoming energy is attenuated according to the given filter spectrum. The filter spectrum is an array of filter values (between 0.0 and 1.0) with respect to a wavelength bin.</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="reflective-grating"><a class="header" href="#reflective-grating">Reflective grating</a></h1>
+<h2 id="ports-7"><a class="header" href="#ports-7">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port represents the light which has being reflected on the grating.</p>
+<h2 id="properties-6"><a class="header" href="#properties-6">Properties</a></h2>
+<p>This node type has no specific properties.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="reference-node"><a class="header" href="#reference-node">Reference node</a></h1>
+<h2 id="ports-8"><a class="header" href="#ports-8">Ports</a></h2>
+<p>The ports of a reference node correspond to the ports of the node it refers to.</p>
+<h2 id="properties-7"><a class="header" href="#properties-7">Properties</a></h2>
+<p>This node type has no specific properties itself. All properties of this node correspond to the original node it refers to.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="spherical-lens"><a class="header" href="#spherical-lens">Spherical lens</a></h1>
+<h2 id="ports-9"><a class="header" href="#ports-9">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port represents the light having passed the <code>back</code> surface of the lens.</p>
+<h2 id="properties-8"><a class="header" href="#properties-8">Properties</a></h2>
+<p>This node type has no specific properties.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="cylindric-lens"><a class="header" href="#cylindric-lens">Cylindric lens</a></h1>
+<h2 id="ports-10"><a class="header" href="#ports-10">Ports</a></h2>
+<p><code>input_1</code>
+: Input port. This represents the <code>front</code> surface of the lens.</p>
+<p><code>output_1</code>
+: Light ouput. This represents the <code>back</code> surface of the lens.</p>
+<h2 id="properties-9"><a class="header" href="#properties-9">Properties</a></h2>
+<p><code>front curvature</code>
+: Radius of curvature of the <code>front</code> surface.</p>
+<p><code>rear curvature</code>
+: Radius if curvature of the <code>back</code> surface.</p>
+<p><code>center thickness</code>
+: Thickness of the lens center along the optical axis.</p>
+<p><code>refractive index</code>
+: Refractive index of the (glass-) material. See <a href="nodes/../refractive_index.html">refractive index definition</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="spectrometer"><a class="header" href="#spectrometer">Spectrometer</a></h1>
+<h2 id="ports-11"><a class="header" href="#ports-11">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
+<h2 id="properties-10"><a class="header" href="#properties-10">Properties</a></h2>
+<p>This node type has no specific properties.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="spot-diagram"><a class="header" href="#spot-diagram">Spot diagram</a></h1>
+<h2 id="ports-12"><a class="header" href="#ports-12">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
+<h2 id="properties-11"><a class="header" href="#properties-11">Properties</a></h2>
+<p>This node type has no specific properties.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="wavefront-monitor"><a class="header" href="#wavefront-monitor">Wavefront monitor</a></h1>
+<h2 id="ports-13"><a class="header" href="#ports-13">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
+<h2 id="properties-12"><a class="header" href="#properties-12">Properties</a></h2>
+<p>This node type has no specific properties.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="paraxial-surface"><a class="header" href="#paraxial-surface">Paraxial surface</a></h1>
+<h2 id="ports-14"><a class="header" href="#ports-14">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port represents the light having passed this ideal lens.</p>
+<h2 id="properties-13"><a class="header" href="#properties-13">Properties</a></h2>
+<p>This node type has no specific properties.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="fluence-detector"><a class="header" href="#fluence-detector">Fluence detector</a></h1>
+<h2 id="ports-15"><a class="header" href="#ports-15">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
+<h2 id="properties-14"><a class="header" href="#properties-14">Properties</a></h2>
+<p><code>fluence estimator</code>
+: The algorithm used to estimate the fluence. Currently there are the following options:</p>
+<ul>
+<li>Voronoi:</li>
+<li>KDE:</li>
+<li>Binning:</li>
+<li>HelperRays:</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="wedge"><a class="header" href="#wedge">Wedge</a></h1>
+<h2 id="ports-16"><a class="header" href="#ports-16">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port represents the light having passed the <code>back</code> surface of the wedge.</p>
+<h2 id="properties-15"><a class="header" href="#properties-15">Properties</a></h2>
+<p>This node type has no specific properties.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="mirror"><a class="header" href="#mirror">Mirror</a></h1>
+<h2 id="ports-17"><a class="header" href="#ports-17">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
+<h2 id="properties-16"><a class="header" href="#properties-16">Properties</a></h2>
+<p><code>curvature</code>
+: The radius of curvature of the mirror surface. A negative value corresponds to a concave (= focussing) mirror while a positive value corresponds to a convex (= defocussing) mirror. A value of <code>infinity</code> represents a flat mirror.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="parabolic-mirror"><a class="header" href="#parabolic-mirror">Parabolic mirror</a></h1>
+<h2 id="ports-18"><a class="header" href="#ports-18">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port represents the light after the refelction on the mirro surface.</p>
+<h2 id="properties-17"><a class="header" href="#properties-17">Properties</a></h2>
+<p><code>focal length</code>
+: The focal length of the parabola. A positive value corresponds to a concave (=focussing) parabola.</p>
+<p><code>oa angle</code>
+: Off-axis angle. This value determines the off-axis angle of the parabola. Internally the parabola surface is shifted accordingly by the respective amount with respect to the parabola's origin. The direction of the shift is defined by the property <code>oa direction</code>.</p>
+<p><code>oa direction</code>
+: Orientation of the off-axis angle (see <code>oa angle</code>). This is a 2D vector denoting the direction of the off-axis shift with respect to the local coordinates.</p>
+<p><code>collimating</code>
+: Boolean value determinig if the parabola is used to collimate a beam.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="edges"><a class="header" href="#edges">Edges</a></h1>
 <p>Edges connect the nodes in the model graph. Edges contain the "light data" which needs to be exchanged between the nodes if analyzed by a <a href="./analyzers.html#sequential-analyzer">sequential analyzer</a>. The content of an edge depends on the type of analysis performed. For geometric optics, it contains an array of ray vectors (position &amp; angle) together with a wavelength and an intensity. For wavefront propagation,, it might contain a 2D complex array representing the nearfield distribution as well as the local phase.</p>
 <p>Possible types of data:</p>

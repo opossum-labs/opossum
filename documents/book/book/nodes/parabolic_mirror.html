@@ -156,6 +156,20 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="parabolic-mirror"><a class="header" href="#parabolic-mirror">Parabolic mirror</a></h1>
+<h2 id="ports"><a class="header" href="#ports">Ports</a></h2>
+<p><code>input_1</code>
+: Input port.</p>
+<p><code>output_1</code>
+: Light ouput. This port represents the light after the refelction on the mirro surface.</p>
+<h2 id="properties"><a class="header" href="#properties">Properties</a></h2>
+<p><code>focal length</code>
+: The focal length of the parabola. A positive value corresponds to a concave (=focussing) parabola.</p>
+<p><code>oa angle</code>
+: Off-axis angle. This value determines the off-axis angle of the parabola. Internally the parabola surface is shifted accordingly by the respective amount with respect to the parabola's origin. The direction of the shift is defined by the property <code>oa direction</code>.</p>
+<p><code>oa direction</code>
+: Orientation of the off-axis angle (see <code>oa angle</code>). This is a 2D vector denoting the direction of the off-axis shift with respect to the local coordinates.</p>
+<p><code>collimating</code>
+: Boolean value determinig if the parabola is used to collimate a beam.</p>
 
                     </main>
 
