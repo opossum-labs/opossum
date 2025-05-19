@@ -5,6 +5,28 @@
 }
 .accordion-button {
   padding: 0.5rem 0.75rem; 
-  font-size: 1.1rem;        
+  font-size: 1rem;        
   line-height: 1.2;
+  font-style: oblique;
+}
+
+.accordion-body > p {
+  margin-bottom: 0.5rem; 
+}
+
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.form-floating input{
+  font-size: 0.8rem;   
 }

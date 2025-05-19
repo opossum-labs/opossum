@@ -21,6 +21,9 @@ rfd = "0.15.3"
 reqwest = { version = "0.12.14", features = ["json"] }
 # async-trait = "0.1.88"
 chrono = "0.4.40"
+uom = {version="0.36", features = ["serde"] }
+nalgebra = {version = "0.33", features = ["serde-serialize", "rayon"]}
+
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 plotly = { version = "0.12", features = ["kaleido"] }
