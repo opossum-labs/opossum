@@ -72,7 +72,7 @@ pub fn GraphEditor(
                     spawn(async move { graph_store.add_analyzer(new_analyzer_info).await });
                 }
                 NodeEditorCommand::AutoLayout => {
-                    graph_store.optimize_layout();
+                    spawn(async move { graph_store.optimize_layout().await });
                 }
                 NodeEditorCommand::LoadFile(path) => {
                     let path = path.to_owned();
@@ -188,7 +188,7 @@ pub fn GraphEditor(
                                 );
                             editor_status.edge_in_creation.set(Some(edge_in_creation));
                         }
-                        
+
                     }
                     DragStatus::None => {}
                 }

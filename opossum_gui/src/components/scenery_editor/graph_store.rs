@@ -18,7 +18,7 @@ use opossum_backend::{
     scenery::NewAnalyzerInfo,
     PortType,
 };
-use rust_sugiyama::from_edges;
+use rust_sugiyama::{configure::RankingType, from_edges};
 use std::{collections::HashMap, fs, path::Path};
 use uuid::Uuid;
 
@@ -340,7 +340,7 @@ impl GraphStore {
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
     }
-    pub fn optimize_layout(&mut self) {
+    pub async fn optimize_layout(&mut self) {
         let mut reg = UuidRegistry::new();
         let mut edges_u32: Vec<(u32, u32)> = Vec::new();
         for edge in self.edges().read_unchecked().iter() {
@@ -348,18 +348,29 @@ impl GraphStore {
             let target = reg.register(edge.target_uuid());
             edges_u32.push((src, target));
         }
-        let layouts = from_edges(&edges_u32).vertex_spacing(250).build();
+        let layouts = from_edges(&edges_u32)
+            .vertex_spacing(250)
+            .layering_type(RankingType::Original)
+            .build();
         self.nodes.with_mut(|nodes| {
-            let mut height=0f64;
+            let mut height = 0f64;
             for (layout, group_height, _) in layouts {
                 for l in layout {
-                    if let Some(node) = nodes.get_mut(&reg.get_uuid(l.0 as u32).unwrap()) {
-                        node.set_pos(Point2D::new(-1.0*l.1.1 as f64, height+0.7*l.1.0 as f64));
+                    let uuid=&reg.get_uuid(l.0 as u32).unwrap();
+                    if let Some(node) = nodes.get_mut(uuid) {
+                        node.set_pos(Point2D::new(
+                            -1.0 * l.1 .1 as f64,
+                            height + 0.7 * l.1 .0 as f64,
+                        ));
                     }
                 }
-                height+=group_height as f64 *250.0;
+                height += group_height as f64 * 250.0;
             }
         });
+        // sync with backend
+        for node in self.nodes().read().clone().into_keys() {
+            self.sync_node_position(node).await;
+        }
     }
 }
 struct UuidRegistry {
