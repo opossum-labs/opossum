@@ -18,6 +18,7 @@ use opossum_backend::{
     scenery::NewAnalyzerInfo,
     PortType,
 };
+use rust_sugiyama::{configure::RankingType, from_edges};
 use std::{collections::HashMap, fs, path::Path};
 use uuid::Uuid;
 
@@ -162,9 +163,9 @@ impl GraphStore {
                 for node_id in deleted_ids {
                     self.nodes_mut().write().remove(&node_id);
                     // remove all edges no longer valid
-                    let mut edges = self.edges()();
-                    edges.retain_mut(|e| e.src_uuid() != node_id && e.target_uuid() != node_id);
-                    *self.edges().write() = edges;
+                    self.edges.with_mut(|edges| {
+                        edges.retain_mut(|e| e.src_uuid() != node_id && e.target_uuid() != node_id);
+                    });
                 }
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
@@ -338,5 +339,65 @@ impl GraphStore {
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
+    }
+    pub async fn optimize_layout(&mut self) {
+        let mut reg = UuidRegistry::new();
+        let mut edges_u32: Vec<(u32, u32)> = Vec::new();
+        for edge in self.edges().read_unchecked().iter() {
+            let src = reg.register(edge.src_uuid());
+            let target = reg.register(edge.target_uuid());
+            edges_u32.push((src, target));
+        }
+        let layouts = from_edges(&edges_u32)
+            .vertex_spacing(250)
+            .layering_type(RankingType::Original)
+            .build();
+        self.nodes.with_mut(|nodes| {
+            let mut height = 0f64;
+            for (layout, group_height, _) in layouts {
+                for l in layout {
+                    let uuid=&reg.get_uuid(l.0 as u32).unwrap();
+                    if let Some(node) = nodes.get_mut(uuid) {
+                        node.set_pos(Point2D::new(
+                            -1.0 * l.1 .1 as f64,
+                            height + 0.7 * l.1 .0 as f64,
+                        ));
+                    }
+                }
+                height += group_height as f64 * 250.0;
+            }
+        });
+        // sync with backend
+        for node in self.nodes().read().clone().into_keys() {
+            self.sync_node_position(node).await;
+        }
+    }
+}
+struct UuidRegistry {
+    forward: HashMap<Uuid, u32>,
+    backward: HashMap<u32, Uuid>,
+    next_id: u32,
+}
+impl UuidRegistry {
+    fn new() -> Self {
+        Self {
+            forward: HashMap::new(),
+            backward: HashMap::new(),
+            next_id: 0,
+        }
+    }
+
+    fn register(&mut self, uuid: Uuid) -> u32 {
+        if let Some(&id) = self.forward.get(&uuid) {
+            return id;
+        }
+        let id = self.next_id;
+        self.next_id += 1;
+        self.forward.insert(uuid, id);
+        self.backward.insert(id, uuid);
+        id
+    }
+    fn get_uuid(&self, id: u32) -> Option<Uuid> {
+        self.backward.get(&id).cloned()
     }
 }

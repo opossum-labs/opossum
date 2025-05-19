@@ -22,6 +22,7 @@ pub enum MenuSelection {
     SaveProject(PathBuf),
     AddNode(String),
     AddAnalyzer(AnalyzerType),
+    AutoLayout,
     WinMaximize,
     WinMinimize,
     WinClose,
@@ -144,6 +145,16 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                     }
                                     ul { class: "dropdown-menu dropdown-submenu",
                                         AnalyzersMenu { analyzer_selected }
+                                    }
+                                }
+                                li {
+                                    a {
+                                        class: "dropdown-item",
+                                        role: "button",
+                                        onclick: move |_| {
+                                          menu_item_selected.set(Some(MenuSelection::AutoLayout));  
+                                        },
+                                        "Auto Layout"
                                     }
                                 }
                             }
