@@ -398,7 +398,10 @@ Each optical element consists of a given material. These are mostly different gl
 <p><code>output_1</code>
 : Light ouput. This port represents the light which has being reflected on the grating.</p>
 <h2 id="properties-6"><a class="header" href="#properties-6">Properties</a></h2>
-<p>This node type has no specific properties.</p>
+<p><code>line density</code>
+: The density (lines per length) of the regular structure on the grating.</p>
+<p><code>diffraction order</code>
+: The diffraction order delivered a output port <code>output_1</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="reference-node"><a class="header" href="#reference-node">Reference node</a></h1>
 <h2 id="ports-8"><a class="header" href="#ports-8">Ports</a></h2>
 <p>The ports of a reference node correspond to the ports of the node it refers to.</p>
@@ -409,20 +412,27 @@ Each optical element consists of a given material. These are mostly different gl
 <p><code>input_1</code>
 : Input port.</p>
 <p><code>output_1</code>
-: Light ouput. This port represents the light having passed the <code>back</code> surface of the lens.</p>
+: Light ouput. This port represents the light having passed the <code>rear</code> surface of the lens.</p>
 <h2 id="properties-8"><a class="header" href="#properties-8">Properties</a></h2>
-<p>This node type has no specific properties.</p>
+<p><code>front curvature</code>
+: Radius of curvature of the <code>front</code> surface. A positive value denotes a convex surface.</p>
+<p><code>rear curvature</code>
+:Radius of curvature of the <code>rear</code> surface. A positive value denotes a concave surface.</p>
+<p><code>center thickness</code>
+: Thickness of the lens center along the optical axis.</p>
+<p><code>refractive index</code>
+: Refractive index of the (glass-) material. See <a href="nodes/../refractive_index.html">refractive index definition</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="cylindric-lens"><a class="header" href="#cylindric-lens">Cylindric lens</a></h1>
 <h2 id="ports-10"><a class="header" href="#ports-10">Ports</a></h2>
 <p><code>input_1</code>
 : Input port. This represents the <code>front</code> surface of the lens.</p>
 <p><code>output_1</code>
-: Light ouput. This represents the <code>back</code> surface of the lens.</p>
+: Light ouput. This represents the <code>rear</code> surface of the lens.</p>
 <h2 id="properties-9"><a class="header" href="#properties-9">Properties</a></h2>
 <p><code>front curvature</code>
 : Radius of curvature of the <code>front</code> surface.</p>
 <p><code>rear curvature</code>
-: Radius if curvature of the <code>back</code> surface.</p>
+: Radius if curvature of the <code>rear</code> surface.</p>
 <p><code>center thickness</code>
 : Thickness of the lens center along the optical axis.</p>
 <p><code>refractive index</code>
@@ -434,7 +444,12 @@ Each optical element consists of a given material. These are mostly different gl
 <p><code>output_1</code>
 : Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
 <h2 id="properties-10"><a class="header" href="#properties-10">Properties</a></h2>
-<p>This node type has no specific properties.</p>
+<p><code>spectrometer type</code>
+: The type of the spectrometer. Currently the following options are available.</p>
+<ul>
+<li>Ideal: Ideal spectrometer with constant (wavelength independent) sensitivity.</li>
+<li>H2000: Ocean Optics HR2000 spectrometer. Not really supported yet.</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="spot-diagram"><a class="header" href="#spot-diagram">Spot diagram</a></h1>
 <h2 id="ports-12"><a class="header" href="#ports-12">Ports</a></h2>
 <p><code>input_1</code>
@@ -442,7 +457,8 @@ Each optical element consists of a given material. These are mostly different gl
 <p><code>output_1</code>
 : Light ouput. This port delivers a copy of the light data from the port <code>input_1</code>.</p>
 <h2 id="properties-11"><a class="header" href="#properties-11">Properties</a></h2>
-<p>This node type has no specific properties.</p>
+<p><code>plot aperture</code>
+: Boolean value. Show the aperture of the <code>input_1</code> port in the plot. Defaults to <code>false</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="wavefront-monitor"><a class="header" href="#wavefront-monitor">Wavefront monitor</a></h1>
 <h2 id="ports-13"><a class="header" href="#ports-13">Ports</a></h2>
 <p><code>input_1</code>
@@ -458,7 +474,8 @@ Each optical element consists of a given material. These are mostly different gl
 <p><code>output_1</code>
 : Light ouput. This port represents the light having passed this ideal lens.</p>
 <h2 id="properties-13"><a class="header" href="#properties-13">Properties</a></h2>
-<p>This node type has no specific properties.</p>
+<p><code>focal length</code>
+: The focal length of this ideal lens. A positive values denotes a focussing lens.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="fluence-detector"><a class="header" href="#fluence-detector">Fluence detector</a></h1>
 <h2 id="ports-15"><a class="header" href="#ports-15">Ports</a></h2>
 <p><code>input_1</code>
@@ -481,7 +498,12 @@ Each optical element consists of a given material. These are mostly different gl
 <p><code>output_1</code>
 : Light ouput. This port represents the light having passed the <code>back</code> surface of the wedge.</p>
 <h2 id="properties-15"><a class="header" href="#properties-15">Properties</a></h2>
-<p>This node type has no specific properties.</p>
+<p><code>center thickness</code>
+: Thickness of the wedge in its center along the (local) optical axis.</p>
+<p><code>refractive index</code>
+: Refractive index of the (glass-) material. See <a href="nodes/../refractive_index.html">refractive index definition</a>.</p>
+<p><code>wedge</code>
+: Wedge angle. Angle between the front and back surface. An angle of zero corresponds to parallel surfaces.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="mirror"><a class="header" href="#mirror">Mirror</a></h1>
 <h2 id="ports-17"><a class="header" href="#ports-17">Ports</a></h2>
 <p><code>input_1</code>

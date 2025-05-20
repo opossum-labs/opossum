@@ -10,4 +10,8 @@
 
 ## Properties
 
-This node type has no specific properties.
+`spectrometer type`
+: The type of the spectrometer. Currently the following options are available.
+
+- Ideal: Ideal spectrometer with constant (wavelength independent) sensitivity.
+- H2000: Ocean Optics HR2000 spectrometer. Not really supported yet.

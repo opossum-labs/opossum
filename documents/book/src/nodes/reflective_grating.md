@@ -10,4 +10,8 @@
 
 ## Properties
 
-This node type has no specific properties.
+`line density`
+: The density (lines per length) of the regular structure on the grating.
+
+`diffraction order`
+: The diffraction order delivered a output port `output_1`.

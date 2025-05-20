@@ -10,4 +10,11 @@
 
 ## Properties
 
-This node type has no specific properties.
+`center thickness`
+: Thickness of the wedge in its center along the (local) optical axis.
+
+`refractive index`
+: Refractive index of the (glass-) material. See [refractive index definition](../refractive_index.md).
+
+`wedge`
+: Wedge angle. Angle between the front and back surface. An angle of zero corresponds to parallel surfaces.

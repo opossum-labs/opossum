@@ -6,7 +6,7 @@
 : Input port. This represents the `front` surface of the lens.
 
 `output_1`
-: Light ouput. This represents the `back` surface of the lens.
+: Light ouput. This represents the `rear` surface of the lens.
 
 ## Properties
 
@@ -14,7 +14,7 @@
 : Radius of curvature of the `front` surface.
 
 `rear curvature`
-: Radius if curvature of the `back` surface.
+: Radius if curvature of the `rear` surface.
 
 `center thickness`
 : Thickness of the lens center along the optical axis.

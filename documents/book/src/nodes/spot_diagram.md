@@ -10,4 +10,5 @@
 
 ## Properties
 
-This node type has no specific properties.
+`plot aperture`
+: Boolean value. Show the aperture of the `input_1` port in the plot. Defaults to `false`.

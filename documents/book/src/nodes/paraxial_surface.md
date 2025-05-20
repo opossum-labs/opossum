@@ -10,4 +10,5 @@
 
 ## Properties
 
-This node type has no specific properties.
+`focal length`
+: The focal length of this ideal lens. A positive values denotes a focussing lens.
