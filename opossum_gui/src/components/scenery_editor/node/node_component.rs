@@ -7,7 +7,6 @@ use crate::components::scenery_editor::{
     ports::ports_component::NodePorts,
 };
 use dioxus::prelude::*;
-use uuid::Uuid;
 
 #[component]
 pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> Element {
@@ -15,15 +14,13 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
     let mut graph_store = use_context::<GraphStore>();
     let position = node.pos();
     let active_node_id = graph_store.active_node();
-    let is_active = if let Some(active_node_id) = active_node_id {
+    let is_active = active_node_id.map_or("", |active_node_id| {
         if active_node_id == node.id() {
             "active-node"
         } else {
             ""
         }
-    } else {
-        ""
-    };
+    });
     let id = node.id();
     let z_index = node.z_index();
     rsx! {
@@ -33,8 +30,8 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
             draggable: false,
             style: format!(
                 "left: {}px; top: {}px; z-index: {z_index};",
-                position.x as i32,
-                position.y as i32,
+                position.x,
+                position.y,
             ),
             onmousedown: move |event: MouseEvent| {
                 editor_status.drag_status.set(DragStatus::Node(id));

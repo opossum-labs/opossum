@@ -1,5 +1,9 @@
 //! Routes for managing the scenery (top-level `NodeGroup`)
-use crate::{app_state::AppState, error::ErrorResponse, nodes};
+use crate::{
+    app_state::AppState,
+    error::ErrorResponse,
+    nodes::{self},
+};
 use actix_web::{
     delete, get,
     http::StatusCode,
@@ -7,7 +11,7 @@ use actix_web::{
     web::{self, Json},
     HttpResponse, Responder,
 };
-use nalgebra::Point3;
+use nalgebra::Point2;
 use opossum::{analyzers::AnalyzerType, opm_document::AnalyzerInfo, OpmDocument, SceneryResources};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -69,7 +73,7 @@ async fn post_global_conf(
     web::Json(global_conf)
 }
 #[utoipa::path(tag = "scenery",
-    responses((status = 200, description = "List of analyzers", body = Vec<AnalyzerType>)),
+    responses((status = 200, description = "List of analyzers", body = Vec<AnalyzerInfo>)),
 )]
 /// Get a list of all analyzers of this model
 ///
@@ -78,17 +82,27 @@ async fn post_global_conf(
 #[get("/analyzers")]
 async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
     let analyzers = data.document.lock().unwrap().analyzers();
+    let analyzers: Vec<AnalyzerInfo> = analyzers
+        .values()
+        .map(|a| {
+            AnalyzerInfo::new(
+                a.analyzer_type().clone(),
+                a.id(),
+                a.gui_position().map_or(Point2::new(0.0, 0.0), |p| p),
+            )
+        })
+        .collect();
     web::Json(analyzers)
 }
 #[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct NewAnalyzerInfo {
     pub analyzer_type: AnalyzerType,
-    pub gui_position: (i32, i32, i32),
+    pub gui_position: (f64, f64),
 }
 
 impl NewAnalyzerInfo {
     #[must_use]
-    pub const fn new(analyzer_type: AnalyzerType, gui_position: (i32, i32, i32)) -> Self {
+    pub const fn new(analyzer_type: AnalyzerType, gui_position: (f64, f64)) -> Self {
         Self {
             analyzer_type,
             gui_position,
@@ -124,19 +138,10 @@ async fn add_analyzer(
     analyzer: web::Json<NewAnalyzerInfo>,
 ) -> impl Responder {
     let new_analyzer_info = analyzer.into_inner();
-    let analyzer_info = AnalyzerInfo::new(
+    let uuid = data.document.lock().unwrap().add_analyzer_with_position(
         new_analyzer_info.analyzer_type,
-        Point3::new(
-            new_analyzer_info.gui_position.0,
-            new_analyzer_info.gui_position.1,
-            new_analyzer_info.gui_position.2,
-        ),
+        Some(new_analyzer_info.gui_position),
     );
-    let uuid = data
-        .document
-        .lock()
-        .unwrap()
-        .add_analyzer_info(analyzer_info);
     Json(uuid)
 }
 #[utoipa::path(tag = "scenery",
@@ -166,7 +171,10 @@ async fn get_opmfile(data: web::Data<AppState>) -> Result<String, ErrorResponse>
     let document = data.document.lock().unwrap();
     Ok(document.to_opm_file_string()?)
 }
-#[utoipa::path(tag = "scenery",
+#[utoipa::path(tag = "scenery", request_body(content = String,
+    description = "OPM file as string",
+    content_type = "text/plain",
+),
     responses((status = 200, description = "OPM file sucessfully parsed"),
     (status = 400, description = "Error parsing OPM file"))
 )]

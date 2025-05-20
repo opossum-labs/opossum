@@ -1,3 +1,4 @@
+use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode, NodeInfo},
     NodeAttr,
@@ -13,8 +14,29 @@ use super::http_client::HTTPClient;
 /// This function will return an error if
 /// - the request fails (e.g. the scenery is not valid)
 /// - the response cannot be deserialized into a vector of [`NodeInfo`] structs
-pub async fn get_nodes(client: &HTTPClient) -> Result<Vec<NodeInfo>, String> {
-    client.get::<Vec<NodeInfo>>("/api/scenery/nodes").await
+pub async fn get_nodes(client: &HTTPClient, group_id: Uuid) -> Result<Vec<NodeInfo>, String> {
+    client
+        .get::<Vec<NodeInfo>>(&format!("/api/scenery/{}/nodes", group_id.as_simple()))
+        .await
+}
+/// Get a list of all connections (edges) of the given node group.
+/// If the `node_id` is `Uuid::nil()` the connections of the toplevel group
+/// are returned.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the given `node_id` is not `Uuid::nil()` and does not correspond to a (sub-)group of the scenery.
+pub async fn get_connections(
+    client: &HTTPClient,
+    group_id: Uuid,
+) -> Result<Vec<ConnectInfo>, String> {
+    client
+        .get::<Vec<ConnectInfo>>(&format!(
+            "/api/scenery/{}/connections",
+            group_id.as_simple()
+        ))
+        .await
 }
 /// Send a request to add a node to the scenery.
 ///
@@ -92,6 +114,11 @@ pub async fn delete_connection(
         .delete::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
         .await
 }
+/// Update the physical distance between two nodes.
+///
+/// # Errors
+///
+/// This function will return an error if the connection could not be found.
 pub async fn update_distance(
     client: &HTTPClient,
     connection: ConnectInfo,
@@ -100,9 +127,21 @@ pub async fn update_distance(
         .put::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
         .await
 }
-// pub async fn put_node_properties(&self, uuid: Uuid, props: NodeAttr) -> Result<NodeAttr, String> {
-//     self.put::<NodeAttr, NodeAttr>(&format!("/api/scenery/nodes/{}", uuid.as_simple().to_string()), props.serialize(serializer)).await
-// }
-// pub async fn patch_node_properties(&self, uuid: Uuid, props: NodeAttr) -> Result<NodeAttr, String> {
-//     self.put::<NodeAttr, NodeAttr>(&format!("/api/scenery/nodes/{}", uuid.as_simple().to_string()), props.serialize(serializer)).await
-// }
+/// Update the GUI position coordinates of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_gui_position(
+    client: &HTTPClient,
+    node_id: Uuid,
+    gui_position: Point2D<f64>,
+) -> Result<String, String> {
+    let position = (gui_position.x, gui_position.y);
+    client
+        .post::<(f64, f64), String>(
+            &format!("/api/scenery/position/{}", node_id.as_simple()),
+            position,
+        )
+        .await
+}

@@ -1,7 +1,7 @@
 //! Common optcial node attributes.
 //!
 //! This module handles common attributes of optical nodes such as [`Properties`] or geometric data (isometries, etc.)
-use nalgebra::Point3;
+use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
@@ -38,7 +38,7 @@ pub struct NodeAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     align_like_node_at_distance: Option<(Uuid, Length)>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    gui_position: Option<Point3<i32>>,
+    gui_position: Option<Point2<f64>>,
 }
 impl NodeAttr {
     /// Creates new node attributes ([`NodeAttr`]).
@@ -242,11 +242,11 @@ impl NodeAttr {
     /// The position is a [`Point3`] since the `x` & `y` coordinates represent the position on a 2D
     /// frontend diagram. The `z` component is used for the depth level for handling overlapping nodes.
     #[must_use]
-    pub const fn gui_position(&self) -> Option<&Point3<i32>> {
-        self.gui_position.as_ref()
+    pub const fn gui_position(&self) -> Option<Point2<f64>> {
+        self.gui_position
     }
     /// Sets the GUI position of the optical node.
-    pub const fn set_gui_position(&mut self, gui_position: Option<Point3<i32>>) {
+    pub const fn set_gui_position(&mut self, gui_position: Option<Point2<f64>>) {
         self.gui_position = gui_position;
     }
 }

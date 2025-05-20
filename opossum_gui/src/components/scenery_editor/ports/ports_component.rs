@@ -75,7 +75,7 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
                         edge_in_creation
                             .set_end_port(
                                 Some(EdgePort {
-                                    node_id: node_id,
+                                    node_id,
                                     port_name: port_name.clone(),
                                     port_type: port_type.clone(),
                                 }),

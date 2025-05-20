@@ -17,7 +17,7 @@ use crate::{
     SceneryResources,
 };
 use log::{info, warn};
-use nalgebra::Point3;
+use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -26,21 +26,44 @@ use std::{
     path::Path,
     sync::{Arc, Mutex},
 };
+use utoipa::ToSchema;
 use uuid::Uuid;
 /// A structu containing the [`AnalyzerType`] together with its position on a frontend GUI.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnalyzerInfo {
     analyzer_type: AnalyzerType,
-    gui_position: Option<Point3<i32>>,
+    id: Uuid,
+    gui_position: Option<(f64, f64)>,
 }
 impl AnalyzerInfo {
     /// Creates a new [`AnalyzerInfo`].
+    #[allow(clippy::missing_const_for_fn)]
     #[must_use]
-    pub const fn new(analyzer_type: AnalyzerType, gui_position: Point3<i32>) -> Self {
+    pub fn new(analyzer_type: AnalyzerType, id: Uuid, gui_position: Point2<f64>) -> Self {
         Self {
             analyzer_type,
-            gui_position: Some(gui_position),
+            id,
+            gui_position: Some((gui_position.x, gui_position.y)),
         }
+    }
+    /// Returns the gui position of this [`AnalyzerInfo`].
+    #[must_use]
+    pub fn gui_position(&self) -> Option<Point2<f64>> {
+        self.gui_position.map(|(x, y)| Point2::new(x, y))
+    }
+    /// Sets the gui position of this [`AnalyzerInfo`].
+    pub fn set_gui_position(&mut self, gui_position: Option<Point2<f64>>) {
+        self.gui_position = gui_position.map(|gp| (gp.x, gp.y));
+    }
+    /// Returns a reference to the analyzer type of this [`AnalyzerInfo`].
+    #[must_use]
+    pub const fn analyzer_type(&self) -> &AnalyzerType {
+        &self.analyzer_type
+    }
+    /// Returns the id of this [`AnalyzerInfo`].
+    #[must_use]
+    pub const fn id(&self) -> Uuid {
+        self.id
     }
 }
 
@@ -173,15 +196,29 @@ impl OpmDocument {
     pub fn add_analyzer(&mut self, analyzer_type: AnalyzerType) -> Uuid {
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
+            id: Uuid::new_v4(),
             gui_position: None,
         };
-        self.add_analyzer_info(analyzer_info)
+        self.add_analyzer_info(&analyzer_info)
+    }
+    /// Add an analyzer to this [`OpmDocument`].
+    pub fn add_analyzer_with_position(
+        &mut self,
+        analyzer_type: AnalyzerType,
+        gui_position: Option<(f64, f64)>,
+    ) -> Uuid {
+        let analyzer_info = AnalyzerInfo {
+            analyzer_type,
+            id: Uuid::new_v4(),
+            gui_position,
+        };
+        self.add_analyzer_info(&analyzer_info)
     }
     /// Add an analyzer (with a GUI position) to this [`OpmDocument`].
-    pub fn add_analyzer_info(&mut self, analyzer_info: AnalyzerInfo) -> Uuid {
-        let uuid = Uuid::new_v4();
-        self.analyzers.insert(uuid, analyzer_info);
-        uuid
+    pub fn add_analyzer_info(&mut self, analyzer_info: &AnalyzerInfo) -> Uuid {
+        self.analyzers
+            .insert(analyzer_info.id, analyzer_info.clone());
+        analyzer_info.id
     }
     /// Remove an analyzer from this [`OpmDocument`].
     ///
@@ -247,6 +284,10 @@ impl OpmDocument {
             self.scenery.reset_data();
         }
         Ok(reports)
+    }
+    /// Returns a mutable reference to the analyzers of this [`OpmDocument`].
+    pub const fn analyzers_mut(&mut self) -> &mut HashMap<Uuid, AnalyzerInfo> {
+        &mut self.analyzers
     }
 }
 

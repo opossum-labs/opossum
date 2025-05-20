@@ -19,6 +19,7 @@ use crate::{
     SceneryResources,
 };
 use num::Zero;
+use optic_graph::ConnectionInfo;
 pub use optic_graph::OpticGraph;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
@@ -218,6 +219,11 @@ impl NodeGroup {
     #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
         self.graph.nodes()
+    }
+    /// Returns all node connections of this [`NodeGroup`].
+    #[must_use]
+    pub fn connections(&self) -> Vec<ConnectionInfo> {
+        self.graph.connections()
     }
     /// Returns the number of nodes of this [`NodeGroup`].
     #[must_use]

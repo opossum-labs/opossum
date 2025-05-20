@@ -19,25 +19,27 @@ pub fn App() -> Element {
         if let Some(menu_item) = &*(menu_item) {
             match menu_item {
                 MenuSelection::AddNode(node_selected) => {
-                    println!("App::Node selected: {node_selected}");
                     node_editor_command
                         .set(Some(NodeEditorCommand::AddNode(node_selected.clone())));
                 }
                 MenuSelection::AddAnalyzer(analyzer_selected) => {
-                    println!("App::Analyzer selected: {analyzer_selected}");
                     node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(
                         analyzer_selected.clone(),
                     )));
                 }
+                MenuSelection::AutoLayout => {
+                    node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
+                }
                 MenuSelection::NewProject => {
-                    println!("App::New project selected");
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
                 }
-                MenuSelection::OpenProject => {
-                    println!("App::Open project selected");
+                MenuSelection::OpenProject(path) => {
+                    let path = path.to_owned();
+                    node_editor_command.set(Some(NodeEditorCommand::LoadFile(path)));
                 }
-                MenuSelection::SaveProject => {
-                    println!("App::Save project selected");
+                MenuSelection::SaveProject(path) => {
+                    let path = path.to_owned();
+                    node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
                 }
                 MenuSelection::WinMaximize => {
                     println!("App::Window maximize selected");

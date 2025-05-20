@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
@@ -5,12 +6,10 @@ use dioxus_free_icons::{
 };
 use opossum_backend::AnalyzerType;
 use rfd::FileDialog;
+use std::path::PathBuf;
 
 use crate::components::menu_bar::{
-    // callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
-    // controls::controls_menu::ControlsMenu,
     edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
-    // file::callbacks::{use_new_project, use_open_project, use_save_project},
     help::about::About,
 };
 
@@ -19,10 +18,11 @@ const FAVICON: Asset = asset!("./assets/favicon.ico");
 #[derive(Debug)]
 pub enum MenuSelection {
     NewProject,
-    OpenProject,
-    SaveProject,
+    OpenProject(PathBuf),
+    SaveProject(PathBuf),
     AddNode(String),
     AddAnalyzer(AnalyzerType),
+    AutoLayout,
     WinMaximize,
     WinMinimize,
     WinClose,
@@ -84,7 +84,16 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                     a {
                                         class: "dropdown-item",
                                         role: "button",
-                                        onclick: move |_| { menu_item_selected.set(Some(MenuSelection::OpenProject)) },
+                                        onclick: move |_| {
+                                            let path = FileDialog::new()
+                                                .set_directory("/")
+                                                .set_title("Save OPOSSUM setup file")
+                                                .add_filter("Opossum setup file", &["opm"])
+                                                .pick_file();
+                                            if let Some(path) = path {
+                                                menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
+                                            }
+                                        },
                                         "Open Project"
                                     }
                                 }
@@ -93,13 +102,15 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                         class: "dropdown-item",
                                         role: "button",
                                         onclick: move |_| {
-                                            let _path = FileDialog::new()
+                                            let path = FileDialog::new()
                                                 .set_directory("/")
                                                 .set_title("Save OPOSSUM setup file")
                                                 .add_filter("Opossum setup file", &["opm"])
                                                 .save_file();
+                                            if let Some(path) = path {
+                                                menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
+                                            }
                                         },
-                                        // menu_item_selected.set(Some(MenuSelection::SaveProject)) },
                                         "Save Project"
                                     }
                                 }
@@ -134,6 +145,16 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                     }
                                     ul { class: "dropdown-menu dropdown-submenu",
                                         AnalyzersMenu { analyzer_selected }
+                                    }
+                                }
+                                li {
+                                    a {
+                                        class: "dropdown-item",
+                                        role: "button",
+                                        onclick: move |_| {
+                                          menu_item_selected.set(Some(MenuSelection::AutoLayout));  
+                                        },
+                                        "Auto Layout"
                                     }
                                 }
                             }

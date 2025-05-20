@@ -8,7 +8,7 @@ pub use node_component::Node;
 use super::ports::ports_component::Ports;
 
 // Constants for node dimensions and port positions
-const GOLDEN_RATIO: f64 = 1.6180339887;
+const GOLDEN_RATIO: f64 = 1.618_033_988_7;
 // The node width is fixed, but the height is dynamic
 // depending on the number of ports
 pub const NODE_WIDTH: f64 = 130.0;
@@ -96,7 +96,7 @@ impl NodeElement {
             .iter()
             .position(|port| port == port_name)
             .unwrap_or(0);
-        let y_pos = PORT_VER_SPACING.mul_add(port_index as f64, PORT_VER_PADDING);
+        let y_pos = PORT_VER_SPACING.mul_add(usize_to_f64(port_index), PORT_VER_PADDING);
         Point2D::new(x_pos, y_pos)
     }
     #[must_use]
@@ -120,5 +120,8 @@ impl NodeElement {
     #[must_use]
     pub const fn node_type(&self) -> &NodeType {
         &self.node_type
+    }
+    pub fn set_pos(&mut self, pos: Point2D<f64>) {
+        self.pos = pos;
     }
 }

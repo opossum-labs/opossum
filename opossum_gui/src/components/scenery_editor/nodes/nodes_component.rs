@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
     graph_store::GraphStore,
     node::{Node, NodeElement},
@@ -11,7 +12,7 @@ pub fn Nodes(node_activated: Signal<Option<NodeElement>>) -> Element {
         for node in nodes_store.nodes().read().iter() {
             {
                 rsx! {
-                    Node { node: node.1.clone(), node_activated: node_activated }
+                    Node { node: node.1.clone(), node_activated }
                 }
             }
         }
