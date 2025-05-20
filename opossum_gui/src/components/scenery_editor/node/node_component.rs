@@ -7,7 +7,7 @@ use crate::components::scenery_editor::{
     ports::ports_component::NodePorts,
 };
 use dioxus::prelude::*;
-
+const NODE_ICON:Asset = asset!("./assets/node_lens.svg");
 #[component]
 pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> Element {
     let mut editor_status = use_context::<EditorState>();
@@ -56,6 +56,11 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                         class: "node-body",
                         draggable: false,
                         style: format!("height: {}px;", node.node_body_height()),
+                        img {
+                            src: NODE_ICON,
+                            width: "50px",
+                            style: "display: block; margin: auto;"
+                        },
                         NodePorts { node: node.clone() }
                     }
                 },
