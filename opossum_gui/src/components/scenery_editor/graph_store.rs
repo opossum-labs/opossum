@@ -356,7 +356,7 @@ impl GraphStore {
             let mut height = 0f64;
             for (layout, group_height, _) in layouts {
                 for l in layout {
-                    let uuid=&reg.get_uuid(l.0 as u32).unwrap();
+                    let uuid = &reg.get_uuid(l.0 as u32).unwrap();
                     if let Some(node) = nodes.get_mut(uuid) {
                         node.set_pos(Point2D::new(
                             -1.0 * l.1 .1 as f64,

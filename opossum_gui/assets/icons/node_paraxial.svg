@@ -2,9 +2,9 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="50.474998mm"
-   height="49.974995mm"
-   viewBox="0 0 50.474998 49.974995"
+   width="50.474987mm"
+   height="49.974991mm"
+   viewBox="0 0 50.474987 49.974991"
    version="1.1"
    id="svg1"
    inkscape:version="1.4 (86a8ad7, 2024-10-11)"
@@ -16,7 +16,7 @@
    xmlns:svg="http://www.w3.org/2000/svg">
   <sodipodi:namedview
      id="namedview1"
-     pagecolor="#ffffff"
+     pagecolor="#292929"
      bordercolor="#000000"
      borderopacity="0.25"
      inkscape:showpageshadow="2"
@@ -25,9 +25,9 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      showgrid="true"
-     inkscape:zoom="0.5"
-     inkscape:cx="551"
-     inkscape:cy="547"
+     inkscape:zoom="1.4142136"
+     inkscape:cx="396.33335"
+     inkscape:cy="298.04551"
      inkscape:window-width="1920"
      inkscape:window-height="1147"
      inkscape:window-x="-8"
@@ -37,8 +37,8 @@
     <inkscape:grid
        id="grid1"
        units="mm"
-       originx="-64.773644"
-       originy="-9.7513638"
+       originx="-119.7625"
+       originy="-9.7513634"
        spacingx="0.99999998"
        spacingy="1"
        empcolor="#0099e5"
@@ -51,8 +51,8 @@
     <inkscape:page
        x="0"
        y="0"
-       width="50.474998"
-       height="49.974995"
+       width="50.474987"
+       height="49.974991"
        id="page2"
        margin="0"
        bleed="0" />
@@ -69,40 +69,60 @@
      inkscape:tile-h="50.499999"
      inkscape:tile-x0="14.75"
      inkscape:tile-y0="24.749999"
-     transform="translate(-64.773646,-9.7513635)">
+     transform="translate(-119.7625,-9.7513635)">
     <rect
-       style="fill:none;stroke:#000000;stroke-width:0.497271;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       style="fill:none;stroke:#808080;stroke-width:0.497271;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
        id="rect1"
        width="49.977726"
        height="49.477722"
        x="9.7736397"
        y="10.273639"
        ry="4.7263608"
-       inkscape:export-filename="node_unknown.svg"
+       inkscape:export-filename="..\..\opossum_gui\assets\icons\node_unknown.svg"
        inkscape:export-xdpi="96"
        inkscape:export-ydpi="96" />
     <use
        x="0"
        y="0"
        xlink:href="#rect1"
-       id="use144"
-       transform="translate(55.248637,-0.27363901)" />
+       id="use145"
+       transform="translate(110.2375,-0.27363901)"
+       inkscape:export-filename="node_paraxial.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
   </g>
   <g
      inkscape:groupmode="layer"
      id="layer2"
      inkscape:label="Icon Frame 1"
-     transform="translate(-64.773646,-9.7513635)">
-    <text
-       xml:space="preserve"
-       style="font-weight:bold;font-size:5.64444px;font-family:Arial;-inkscape-font-specification:'Arial Bold';text-align:center;writing-mode:lr-tb;direction:ltr;text-anchor:middle;fill:#000000;stroke:none;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
-       x="89.881256"
-       y="44.764095"
-       id="text152"><tspan
-         sodipodi:role="line"
-         id="tspan152"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:35.2778px;font-family:Sans;-inkscape-font-specification:'Sans, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;stroke:none;stroke-width:0.5"
-         x="89.881256"
-         y="44.764095">{}</tspan></text>
+     transform="translate(-119.7625,-9.7513635)">
+    <path
+       style="fill:none;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 150,49.999999 5,-5 5,5"
+       id="path156"
+       sodipodi:nodetypes="ccc" />
+    <path
+       style="fill:none;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 150,19.999999 5,5 5,-5"
+       id="path155" />
+    <path
+       style="fill:#000000;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 135,19.999999 v 30"
+       id="path152"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 130,24.999999 5,-5 v 0 l 5,5"
+       id="path153" />
+    <path
+       style="fill:none;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 130,44.999999 5,5 5.5,-4.5"
+       id="path154"
+       sodipodi:nodetypes="ccc" />
+    <path
+       style="fill:#000000;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 155,24.999999 v 20"
+       id="path152-8"
+       sodipodi:nodetypes="cc" />
   </g>
 </svg>

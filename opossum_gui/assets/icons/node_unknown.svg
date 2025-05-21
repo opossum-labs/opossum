@@ -3,8 +3,8 @@
 
 <svg
    width="50.474995mm"
-   height="49.974995mm"
-   viewBox="0 0 50.474995 49.974995"
+   height="49.974991mm"
+   viewBox="0 0 50.474995 49.974991"
    version="1.1"
    id="svg1"
    inkscape:version="1.4 (86a8ad7, 2024-10-11)"
@@ -15,7 +15,7 @@
    xmlns:svg="http://www.w3.org/2000/svg">
   <sodipodi:namedview
      id="namedview1"
-     pagecolor="#ffffff"
+     pagecolor="#292929"
      bordercolor="#000000"
      borderopacity="0.25"
      inkscape:showpageshadow="2"
@@ -24,9 +24,9 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      showgrid="true"
-     inkscape:zoom="0.5"
-     inkscape:cx="551"
-     inkscape:cy="547"
+     inkscape:zoom="1.4142136"
+     inkscape:cx="396.33335"
+     inkscape:cy="298.04551"
      inkscape:window-width="1920"
      inkscape:window-height="1147"
      inkscape:window-x="-8"
@@ -36,8 +36,8 @@
     <inkscape:grid
        id="grid1"
        units="mm"
-       originx="-9.5250033"
-       originy="-10.025003"
+       originx="-9.5250044"
+       originy="-10.025004"
        spacingx="0.99999998"
        spacingy="1"
        empcolor="#0099e5"
@@ -51,7 +51,7 @@
        x="0"
        y="0"
        width="50.474995"
-       height="49.974995"
+       height="49.974991"
        id="page2"
        margin="0"
        bleed="0" />
@@ -68,31 +68,28 @@
      inkscape:tile-h="50.499999"
      inkscape:tile-x0="14.75"
      inkscape:tile-y0="24.749999"
-     transform="translate(-9.5250036,-10.025003)">
+     transform="translate(-9.5250045,-10.025004)">
     <rect
-       style="fill:none;stroke:#000000;stroke-width:0.497271;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       style="fill:none;stroke:#808080;stroke-width:0.497271;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
        id="rect1"
        width="49.977726"
        height="49.477722"
        x="9.7736397"
        y="10.273639"
-       ry="4.7263608" />
+       ry="4.7263608"
+       inkscape:export-filename="..\..\opossum_gui\opossum_gui\assets\icons\node_unknown.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
   </g>
   <g
      inkscape:groupmode="layer"
      id="layer2"
      inkscape:label="Icon Frame 1"
-     transform="translate(-9.5250036,-10.025003)">
-    <text
-       xml:space="preserve"
-       style="font-weight:bold;font-size:5.64444px;font-family:Arial;-inkscape-font-specification:'Arial Bold';text-align:center;writing-mode:lr-tb;direction:ltr;text-anchor:middle;fill:#000000;stroke:none;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
-       x="34.650536"
-       y="47.494335"
-       id="text151"><tspan
-         id="tspan151"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:35.2778px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;stroke:none;stroke-width:0.5"
-         x="34.650536"
-         y="47.494335"
-         sodipodi:role="line">?</tspan></text>
+     transform="translate(-9.5250045,-10.025004)">
+    <path
+       style="font-weight:bold;font-size:35.2778px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';text-align:center;text-anchor:middle;fill:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel"
+       d="m 36.812334,40.9831 h -4.392499 q -0.01723,-0.947402 -0.01723,-1.154107 0,-2.135961 0.706245,-3.514 0.706245,-1.378039 2.824981,-3.100588 2.118735,-1.722549 2.532146,-2.256539 0.637343,-0.844049 0.637343,-1.860353 0,-1.41249 -1.136882,-2.411569 -1.119657,-1.016303 -3.031686,-1.016303 -1.843127,0 -3.083362,1.050754 -1.240236,1.050755 -1.705324,3.203941 L 25.70189,29.373121 q 0.18948,-3.083363 2.618274,-5.236549 2.44602,-2.153186 6.407882,-2.153186 4.168569,0 6.631814,2.187637 2.463244,2.170412 2.463244,5.064294 0,1.60197 -0.91295,3.031686 -0.895726,1.429715 -3.85851,3.89296 -1.533068,1.274687 -1.912029,2.049834 -0.361736,0.775147 -0.327285,2.773303 z m -4.392499,6.511235 v -4.840362 h 4.840362 v 4.840362 z"
+       id="text151"
+       aria-label="?" />
   </g>
 </svg>

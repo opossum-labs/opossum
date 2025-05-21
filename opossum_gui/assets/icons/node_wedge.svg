@@ -2,9 +2,9 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="50.474998mm"
+   width="50.474995mm"
    height="49.974995mm"
-   viewBox="0 0 50.474998 49.974995"
+   viewBox="0 0 50.474995 49.974995"
    version="1.1"
    id="svg1"
    inkscape:version="1.4 (86a8ad7, 2024-10-11)"
@@ -16,7 +16,7 @@
    xmlns:svg="http://www.w3.org/2000/svg">
   <sodipodi:namedview
      id="namedview1"
-     pagecolor="#ffffff"
+     pagecolor="#292929"
      bordercolor="#000000"
      borderopacity="0.25"
      inkscape:showpageshadow="2"
@@ -25,9 +25,9 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      showgrid="true"
-     inkscape:zoom="0.5"
-     inkscape:cx="551"
-     inkscape:cy="547"
+     inkscape:zoom="1.4142136"
+     inkscape:cx="396.33335"
+     inkscape:cy="298.04551"
      inkscape:window-width="1920"
      inkscape:window-height="1147"
      inkscape:window-x="-8"
@@ -37,8 +37,8 @@
     <inkscape:grid
        id="grid1"
        units="mm"
-       originx="-9.7625028"
-       originy="-64.751366"
+       originx="-64.762505"
+       originy="-64.751356"
        spacingx="0.99999998"
        spacingy="1"
        empcolor="#0099e5"
@@ -51,7 +51,7 @@
     <inkscape:page
        x="0"
        y="0"
-       width="50.474998"
+       width="50.474995"
        height="49.974995"
        id="page2"
        margin="0"
@@ -61,24 +61,24 @@
      id="defs1">
     <linearGradient
        id="linearGradient157"
-       inkscape:collect="always">
+       inkscape:label="Glass">
       <stop
          style="stop-color:#00dcff;stop-opacity:1;"
          offset="0"
-         id="stop157" />
+         id="stop55" />
       <stop
          style="stop-color:#0000ff;stop-opacity:0;"
          offset="1"
-         id="stop158" />
+         id="stop56" />
     </linearGradient>
     <linearGradient
        inkscape:collect="always"
        xlink:href="#linearGradient157"
-       id="linearGradient158"
-       x1="25"
+       id="linearGradient161"
+       x1="80"
        y1="80"
-       x2="43.275608"
-       y2="99.510414"
+       x2="100"
+       y2="100"
        gradientUnits="userSpaceOnUse" />
   </defs>
   <g
@@ -91,34 +91,37 @@
      inkscape:tile-h="50.499999"
      inkscape:tile-x0="14.75"
      inkscape:tile-y0="24.749999"
-     transform="translate(-9.762503,-64.751364)">
+     transform="translate(-64.762505,-64.751357)">
     <rect
-       style="fill:none;stroke:#000000;stroke-width:0.497271;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       style="fill:none;stroke:#808080;stroke-width:0.497271;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
        id="rect1"
        width="49.977726"
        height="49.477722"
        x="9.7736397"
        y="10.273639"
        ry="4.7263608"
-       inkscape:export-filename="node_unknown.svg"
+       inkscape:export-filename="..\..\opossum_gui\assets\icons\node_unknown.svg"
        inkscape:export-xdpi="96"
        inkscape:export-ydpi="96" />
     <use
        x="0"
        y="0"
        xlink:href="#rect1"
-       id="use146"
-       transform="translate(0.23749814,54.726359)" />
+       id="use147"
+       transform="translate(55.237499,54.726359)"
+       inkscape:export-filename="node_wedge.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
   </g>
   <g
      inkscape:groupmode="layer"
      id="layer2"
      inkscape:label="Icon Frame 1"
-     transform="translate(-9.762503,-64.751364)">
+     transform="translate(-64.762505,-64.751357)">
     <path
-       style="fill:url(#linearGradient158);stroke:#000000;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
-       d="m 30,74.999997 h 10.000002 c 0,0 4.999999,5.000001 4.999997,14.999999 C 44.999997,99.999994 40.000002,105 40.000002,105 H 30 c 0,0 -5.000001,-5.000006 -5,-15.000004 1e-6,-9.999998 5,-14.999999 5,-14.999999 z"
-       id="path157"
-       sodipodi:nodetypes="cczcczc" />
+       style="fill:url(#linearGradient161);fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+       d="m 80.000002,74.999998 h 15 L 100,105 H 80.000002 Z"
+       id="path158"
+       sodipodi:nodetypes="ccccc" />
   </g>
 </svg>

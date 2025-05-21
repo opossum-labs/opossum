@@ -97,10 +97,7 @@ pub fn GraphEditor(
             },
             onmousedown: move |event| {
                 current_mouse_pos
-                    .set((
-                        event.client_coordinates().x,
-                        event.client_coordinates().y,
-                    ));
+                    .set((event.client_coordinates().x, event.client_coordinates().y));
                 editor_status.drag_status.set(DragStatus::Graph);
             },
             onmouseup: move |_| {
@@ -143,10 +140,7 @@ pub fn GraphEditor(
                 let rel_shift_x = event.client_coordinates().x - current_mouse_pos().0;
                 let rel_shift_y = event.client_coordinates().y - current_mouse_pos().1;
                 current_mouse_pos
-                    .set((
-                        event.client_coordinates().x,
-                        event.client_coordinates().y,
-                    ));
+                    .set((event.client_coordinates().x, event.client_coordinates().y));
                 match drag_status {
                     DragStatus::Graph => {
                         graph_shift
@@ -188,7 +182,6 @@ pub fn GraphEditor(
                                 );
                             editor_status.edge_in_creation.set(Some(edge_in_creation));
                         }
-
                     }
                     DragStatus::None => {}
                 }

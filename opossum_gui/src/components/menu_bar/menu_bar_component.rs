@@ -152,7 +152,7 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                         class: "dropdown-item",
                                         role: "button",
                                         onclick: move |_| {
-                                          menu_item_selected.set(Some(MenuSelection::AutoLayout));  
+                                            menu_item_selected.set(Some(MenuSelection::AutoLayout));
                                         },
                                         "Auto Layout"
                                     }
