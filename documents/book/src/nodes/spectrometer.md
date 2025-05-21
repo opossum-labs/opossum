@@ -1,5 +1,7 @@
 # Spectrometer
 
+![Spectrometer icon](../images/icons/node_spectrometer.svg)
+
 ## Ports
 
 `input_1`

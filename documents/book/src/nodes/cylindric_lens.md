@@ -1,5 +1,7 @@
 # Cylindric lens
 
+![Cylindric lens icon](../images/icons/node_cylindric_lens.svg)
+
 ## Ports
 
 `input_1`

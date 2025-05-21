@@ -1,5 +1,7 @@
 # Dummy
 
+![dummy icon](../images/icons/node_unknown.svg)
+
 ## Ports
 
 `input_1`

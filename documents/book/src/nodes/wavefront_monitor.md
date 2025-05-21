@@ -1,5 +1,7 @@
 # Wavefront monitor
 
+![Wavefront monitor icon](../images/icons/node_unknown.svg)
+
 ## Ports
 
 `input_1`

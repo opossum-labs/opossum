@@ -1,5 +1,7 @@
 # Reflective grating
 
+![Grating icon](../images/icons/node_grating.svg)
+
 ## Ports
 
 `input_1`

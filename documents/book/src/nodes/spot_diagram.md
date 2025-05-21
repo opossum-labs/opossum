@@ -1,5 +1,7 @@
 # Spot diagram
 
+![Spot diagram icon](../images/icons/node_spotdiagram.svg)
+
 ## Ports
 
 `input_1`

@@ -1,5 +1,7 @@
 # Source
 
+![Source node logo](../images/icons/node_source.svg)
+
 ## Ports
 
 `input_1`

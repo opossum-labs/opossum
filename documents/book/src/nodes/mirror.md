@@ -1,5 +1,7 @@
 # Mirror
 
+![Mirror icon](../images/icons/node_mirror.svg)
+
 ## Ports
 
 `input_1`

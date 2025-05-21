@@ -1,5 +1,7 @@
 # Paraxial surface
 
+![Paraxial icon](../images/icons/node_paraxial.svg)
+
 ## Ports
 
 `input_1`

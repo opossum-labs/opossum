@@ -1,5 +1,7 @@
 # Wedge
 
+![Wedge icon](../images/icons/node_wedge.svg)
+
 ## Ports
 
 `input_1`

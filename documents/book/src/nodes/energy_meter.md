@@ -1,5 +1,7 @@
 # Energy meter
 
+![Energy meter icon](../images/icons/node_energymeter.svg)
+
 ## Ports
 
 `input_1`

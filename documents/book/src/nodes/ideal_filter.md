@@ -1,5 +1,7 @@
 # Ideal filter
 
+![ideal filter icon](../images/icons/node_filter.svg)
+
 ## Ports
 
 `input_1`

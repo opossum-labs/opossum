@@ -1,5 +1,7 @@
 # Fluence detector
 
+![fluence detector icon](../images/icons/node_fluence.svg)
+
 ## Ports
 
 `input_1`

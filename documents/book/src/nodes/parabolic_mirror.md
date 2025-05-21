@@ -1,5 +1,7 @@
 # Parabolic mirror
 
+![Parabola icon](../images/icons/node_parabola.svg)
+
 ## Ports
 
 `input_1`

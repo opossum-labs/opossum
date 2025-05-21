@@ -1,5 +1,7 @@
 # Spherical lens
 
+![Lens icon](../images/icons/node_lens.svg)
+
 ## Ports
 
 `input_1`

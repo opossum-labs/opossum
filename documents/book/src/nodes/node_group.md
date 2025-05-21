@@ -1,5 +1,7 @@
 # Node group
 
+![Group icon](../images/icons/node_group.svg)
+
 ## Ports
 
 The ports of this node are defined by the port mapping of the internal node within this group.
