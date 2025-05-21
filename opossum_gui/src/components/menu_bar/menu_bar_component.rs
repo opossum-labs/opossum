@@ -41,10 +41,10 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
     //         "🗖"
     //     }
     // });
-    use_effect(move || menu_item_selected.set(Some(MenuSelection::AddNode(node_selected()))));
     use_effect(move || {
-        menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_selected())));
+        menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_selected())))
     });
+    use_effect(move || menu_item_selected.set(Some(MenuSelection::AddNode(node_selected()))));
     rsx! {
         nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",
             div { class: "container-fluid",
@@ -152,7 +152,7 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                         class: "dropdown-item",
                                         role: "button",
                                         onclick: move |_| {
-                                          menu_item_selected.set(Some(MenuSelection::AutoLayout));  
+                                            menu_item_selected.set(Some(MenuSelection::AutoLayout));
                                         },
                                         "Auto Layout"
                                     }

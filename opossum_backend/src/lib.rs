@@ -13,5 +13,5 @@ pub use opossum::{
     nodes::NodeAttr,
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
-    utils::{geom_transformation::Isometry, math_utils::usize_to_f64}
+    utils::{geom_transformation::Isometry, math_utils::usize_to_f64},
 };

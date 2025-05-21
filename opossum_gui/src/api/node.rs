@@ -145,3 +145,21 @@ pub async fn update_gui_position(
         )
         .await
 }
+
+/// Update the names of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_name(
+    client: &HTTPClient,
+    node_id: Uuid,
+    node_name: String,
+) -> Result<String, String> {
+    client
+        .post::<String, String>(
+            &format!("/api/scenery/name/{}", node_id.as_simple()),
+            node_name,
+        )
+        .await
+}

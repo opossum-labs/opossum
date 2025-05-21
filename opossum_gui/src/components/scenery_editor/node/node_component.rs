@@ -28,11 +28,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
             tabindex: 0, // necessary to allow to receive keyboard focus
             class: "node {is_active}",
             draggable: false,
-            style: format!(
-                "left: {}px; top: {}px; z-index: {z_index};",
-                position.x,
-                position.y,
-            ),
+            style: format!("left: {}px; top: {}px; z-index: {z_index};", position.x, position.y),
             onmousedown: move |event: MouseEvent| {
                 editor_status.drag_status.set(DragStatus::Node(id));
                 let previously_selected = graph_store.active_node();

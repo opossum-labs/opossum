@@ -37,6 +37,7 @@ impl Default for NodeType {
 }
 #[derive(Clone, PartialEq, Default)]
 pub struct NodeElement {
+    name: String,
     node_type: NodeType,
     id: Uuid,
     pos: Point2D<f64>,
@@ -46,8 +47,15 @@ pub struct NodeElement {
 
 impl NodeElement {
     #[must_use]
-    pub const fn new(node_type: NodeType, id: Uuid, pos: Point2D<f64>, ports: Ports) -> Self {
+    pub const fn new(
+        name: String,
+        node_type: NodeType,
+        id: Uuid,
+        pos: Point2D<f64>,
+        ports: Ports,
+    ) -> Self {
         Self {
+            name,
             node_type,
             pos,
             id,
@@ -74,7 +82,7 @@ impl NodeElement {
     #[must_use]
     pub fn name(&self) -> String {
         match &self.node_type {
-            NodeType::Optical(name) => name.clone(),
+            NodeType::Optical(_) => self.name.clone(),
             NodeType::Analyzer(analyzer_type) => format!("{analyzer_type}"),
         }
     }
@@ -123,5 +131,8 @@ impl NodeElement {
     }
     pub fn set_pos(&mut self, pos: Point2D<f64>) {
         self.pos = pos;
+    }
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
     }
 }

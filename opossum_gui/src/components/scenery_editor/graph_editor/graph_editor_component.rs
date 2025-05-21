@@ -51,6 +51,25 @@ pub fn GraphEditor(
     let mut graph_zoom = use_signal(|| 1.0);
     let mut current_mouse_pos = use_signal(|| (0.0, 0.0));
 
+    use_effect({
+        let mut graph_store = graph_store.clone();
+        println!("changing name");
+        move || {
+            let node_read = node_selected.read();
+            node_read.as_ref().map(|act_node| {
+                graph_store
+                    .nodes_mut()
+                    .write()
+                    .get_mut(&act_node.id())
+                    .map_or((), |n| {
+                        if n.name() != act_node.name() {
+                            n.set_name(act_node.name())
+                        }
+                    })
+            });
+        }
+    });
+
     use_effect(move || {
         let command = command.read();
         if let Some(command) = &*(command) {
@@ -63,7 +82,9 @@ pub fn GraphEditor(
                 NodeEditorCommand::AddNode(node_type) => {
                     let new_node_info = NewNode::new(node_type.to_owned(), (100.0, 100.0));
                     spawn(async move {
-                        graph_store.add_optic_node(new_node_info).await;
+                        graph_store
+                            .add_optic_node(new_node_info, node_selected)
+                            .await;
                     });
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
@@ -97,10 +118,7 @@ pub fn GraphEditor(
             },
             onmousedown: move |event| {
                 current_mouse_pos
-                    .set((
-                        event.client_coordinates().x,
-                        event.client_coordinates().y,
-                    ));
+                    .set((event.client_coordinates().x, event.client_coordinates().y));
                 editor_status.drag_status.set(DragStatus::Graph);
             },
             onmouseup: move |_| {
@@ -143,10 +161,7 @@ pub fn GraphEditor(
                 let rel_shift_x = event.client_coordinates().x - current_mouse_pos().0;
                 let rel_shift_y = event.client_coordinates().y - current_mouse_pos().1;
                 current_mouse_pos
-                    .set((
-                        event.client_coordinates().x,
-                        event.client_coordinates().y,
-                    ));
+                    .set((event.client_coordinates().x, event.client_coordinates().y));
                 match drag_status {
                     DragStatus::Graph => {
                         graph_shift
@@ -188,7 +203,6 @@ pub fn GraphEditor(
                                 );
                             editor_status.edge_in_creation.set(Some(edge_in_creation));
                         }
-
                     }
                     DragStatus::None => {}
                 }

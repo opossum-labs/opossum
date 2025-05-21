@@ -11,7 +11,6 @@ pub fn App() -> Element {
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
     let selected_node = use_signal(|| None::<NodeElement>);
-    let node_property_changed = use_signal(|| false);
     // let mut main_window = use_signal(|| None::<Rc<MountedData>>);
 
     use_effect(move || {
@@ -62,7 +61,7 @@ pub fn App() -> Element {
             }
             div { class: "row",
                 div { class: "col-2",
-                    NodeEditor { node: selected_node, changed: node_property_changed }
+                    NodeEditor { node: selected_node }
                 }
                 div { class: "col",
                     GraphEditor {

@@ -308,6 +308,46 @@ async fn post_node_position(
         ))
     }
 }
+/// Update the GUI position of an optical or analyzer node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "name of the optical node"),
+    ),
+    request_body(content = String,
+        description = "updated name of node",
+        content_type = "application/json",
+        example= "Lens 1"
+    ),
+    responses(
+        (status = OK, description = "Node name successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/name/{uuid}")]
+async fn post_node_name(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    name: web::Json<String>,
+) -> Result<(), ErrorResponse> {
+    let uuid: Uuid = path.into_inner();
+    let name = name.into_inner();
+    let mut document = data.document.lock().unwrap();
+    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+        node_ref
+            .optical_ref
+            .lock()
+            .unwrap()
+            .node_attr_mut()
+            .set_name(&name);
+        Ok(())
+    } else {
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+        ))
+    }
+}
 /// Delete a node
 ///
 /// This function deletes a node. It also deletes reference nodes which refer to this node.
@@ -502,6 +542,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_subnode);
     cfg.service(delete_subnode);
     cfg.service(post_node_position);
+    cfg.service(post_node_name);
 
     cfg.service(get_properties);
     cfg.service(patch_properties);
