@@ -29,8 +29,8 @@ fn main() -> OpmResult<()> {
     )?;
     let mut lens1 = Lens::new(
         "75 mm lens",
-        millimeter!(130.0),
-        millimeter!(-130.0),
+        millimeter!(122.25),
+        millimeter!(-122.25),
         millimeter!(10.0),
         &refr_index_hzf52,
     )?;
