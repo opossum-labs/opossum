@@ -27,10 +27,10 @@ dialog = "opossum/logo/Logo_InstallDialog.png"
 
 [dependencies]
 opm_macros_lib = { path = "opm_macros_lib" }
-petgraph = { version = "0.7", features = ["serde-1"] } # the graph library
-uom = {version="0.36", features = ["serde"] }
+petgraph = { version = "0.8.1", features = ["serde-1"] } # the graph library
+uom = {version="0.37", features = ["serde"] }
 serde = { version = "1", features = ['rc'] }
-ron="0.9"
+ron="0.10.1"
 
 csv = "1"
 plotters = "0.3"
