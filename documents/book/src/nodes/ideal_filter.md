@@ -2,6 +2,8 @@
 
 ![ideal filter icon](../images/icons/node_filter.svg)
 
+This node represents an ideal absorptive filter. Hence it has no geometric thickness or material properties. This element only changes the energy of the incoming light. The geometry of single rays remains unchanged.
+
 ## Ports
 
 `input_1`

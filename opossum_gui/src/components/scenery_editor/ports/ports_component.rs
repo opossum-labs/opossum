@@ -101,8 +101,6 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
 
 #[component]
 pub fn NodePorts(node: NodeElement) -> Element {
-    // let port_w_h = 12.;
-    // let border_radius = 1.;
     rsx! {
         for in_port in node.input_ports() {
             NodePort {
