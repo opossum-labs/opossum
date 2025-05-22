@@ -1,28 +1,32 @@
 # Nodes
 
-Nodes form the building blocks of the optical model. Maybe it makes sense to introduce different general node types:
+Nodes form the building blocks of the optical model and normally represent optical components. Nodes are configured through properties (see below) and can be connected by edges. Furthermore, nodes might contain an "inner state" (which cannot be modified directly). This is interesting (in the future) for simulating effects like depletion or simply accumulating energy on an energy meter during multiple passes etc... In addition, there are two special nodes
 
-1. Basic node
+- Group nodes
 
-   This node type represents the lowest level modeling optical components. This category includes all ideal components such as "ideal lens", "ideal filter", "ideal mirror", etc... Furthermore, it can represent an interface between two materials such as a flat or curved surface.
+ A (sequential) group node contains a nested directed graph of other nodes or even further group nodes. This allows for struturing the model by modeling subsystems. Each group defines external ports by mapping input and / or output ports of internal nodes.
 
-1. Propagation node
+- Reference node
 
-   *This might also fall in the first category?*. This node represents propagation through a given material. This includes free-space propagation (eg. in air or vacuum).
+A reference node refers to an already existing node in the model. Reference nodes are necessary in multi pass setups. Another use case is the modeling of linear resonators.
 
-1. Sequential group node
+## Node Properties
 
-   A sequential group node contains a nested directed graph of basic, propagation or other group nodes. A real lens could be a group node consisting of a (curved) input surface node, a propagation node (inside of the lens), and an exit surface.
+All nodes con be configured through node properties. All nodes have a common set of properties as shown below. In addition, nodes can have additional properties specific to the respective node type. An example would be the center thickness of a lens. Properties common to all nodes are:
 
-1. Non-sequential group node
+`name`
+: While not strictly necessary it is strongly recommended to assign a name to a node for easier identification. In principle, different nodes can have the same name but this might cause much confusion. Internally the model uses unique IDs for each node in order to distinguish them but these IDs are not available to the user.
 
-   A non-sequential group contains other nodes (which might still be set up as a graph but do not use the structure) which are simply placed in 3D space. This could be used for simulating flashlamp-pumped systems which need the illumination of a laser rod to be simulated. *One has to think about the definition of input and output ports (see later) for these systems.*
+`inverted`
+: Flag denoting the direction of the passing light. It might be necessary to propagate through a node in a reverse direction (e.g. for back reflection / ghost-focus analysis). Hence each node should have a "reverse" function. In the case of a propagation node, this would be identical. For a basic node, it might change the sign of some properties such as the radius of curvature. For group nodes, the underlying order of sub-nodes has to be reversed. The reference node only needs a qualifier to denote whether the propagation is reversed or not.
 
-1. Reference node
+`global position`
+: Global position in 3D space.
 
-   This node type represents a link to another node. It could be necessary to use reference nodes while modeling loops such as [resonators](optical_model.md#loops-for-modelling-resonators).
+`local position`
+: Local position / alignment relative to the `global position`.
 
-**Note:** It might be necessary to propagate through a node in a reverse direction (e.g. for back reflection / ghost-focus analysis). Hence each node should have a "reverse" function. In the case of a propagation node, this would be identical. For a basic node, it might change the sign of some properties such as the radius of curvature. For group nodes, the underlying order of sub-nodes has to be reversed. The reference node only needs a qualifier to denote whether the propagation is reversed or not.
+`damage threshold`
 
 ## Ports
 
@@ -40,21 +44,12 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 
 ### Common attributes for all nodes
 
-1. Node type
-
-   This defines node model such as basic node types (propagation, ideal lens, ideal filter etc..) as well as the type sequential / non-sequential group node. Maybe this is not strictly an attribute but a given rust struct type.
-
-1. Node name
-
-    While not strictly necessary it is strongly recommended to assign a name to a node for easier identification. In principle, different nodes can have the same name but this might cause much confusion. Internally the model uses unique IDs for each node in order to distinguish them but these IDs are only internally handled.
-
 1. Component Database ID (optional)
 
    If set, this could be a reference to a (local) component database. It should be considered to also include the database information while exporting the model to a file. If the ID is not set, it would be a "manually configured" component.
 
 1. Material
 
-   *This is strictly necessary only for propagation nodes...*
    Each optical element consists of a given material. These are mostly different glass materials but could also be metals (i.e. for mirrors) or other substances. Even for free-space propagation nodes a material must be given. This might often be "air" or "vacuum". Since materials have a plethora of attributes and will be used by different nodes within a model, the material will be a reference pointing to a materials database.
 
    **Note**: For interoperability, it might not be always a good idea to only have the material properties in a (local) database. If the model data is given to another user, this data might not be found in his (also local) database. Hence it should be possible to attach the actual material data to the model during export. The alternative would be to have a global database...
@@ -70,8 +65,6 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 1. Aperture shape
 
    Each real-world optical component has a limited physical / mechanical size which also determines the area of incoming light it can handle. Incoming beams farther away from the optical axis than the component's extent will simply be lost during the analysis. Hence, each node can define an aperture with different shapes (mostly circular or rectangular). The exact handling of the aperture is defined by the specific node. Without a given aperture many nodes assume an infinitely large component such that all beams are always caught.
-
-   **Note**: It might be necessary to extend this to one aperture per input port for asymmetric parts.
 
 1. 3D mechanical model
 

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="50.474987mm"
+   height="49.974983mm"
+   viewBox="0 0 50.474987 49.974983"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4 (86a8ad7, 2024-10-11)"
+   sodipodi:docname="NodeIcons.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#292929"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="true"
+     inkscape:zoom="1.4142136"
+     inkscape:cx="656.54863"
+     inkscape:cy="556.84658"
+     inkscape:window-width="1920"
+     inkscape:window-height="1147"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer2">
+    <inkscape:grid
+       id="grid1"
+       units="mm"
+       originx="-174.77365"
+       originy="-119.75135"
+       spacingx="0.99999998"
+       spacingy="1"
+       empcolor="#0099e5"
+       empopacity="0.30196078"
+       color="#0099e5"
+       opacity="0.14901961"
+       empspacing="5"
+       enabled="true"
+       visible="true" />
+    <inkscape:page
+       x="0"
+       y="0"
+       width="50.474987"
+       height="49.974983"
+       id="page2"
+       margin="0"
+       bleed="0" />
+  </sodipodi:namedview>
+  <defs
+     id="defs1">
+    <marker
+       style="overflow:visible"
+       id="ArrowWide"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       inkscape:stockid="Wide arrow"
+       markerWidth="1"
+       markerHeight="1"
+       viewBox="0 0 1 1"
+       inkscape:isstock="true"
+       inkscape:collect="always"
+       preserveAspectRatio="xMidYMid">
+      <path
+         style="fill:none;stroke:context-stroke;stroke-width:1;stroke-linecap:butt"
+         d="M 3,-3 0,0 3,3"
+         transform="rotate(180,0.125,0)"
+         sodipodi:nodetypes="ccc"
+         id="path1" />
+    </marker>
+  </defs>
+  <g
+     inkscape:label="Icon Frame"
+     inkscape:groupmode="layer"
+     id="layer1"
+     inkscape:tile-cx="39.999999"
+     inkscape:tile-cy="49.999999"
+     inkscape:tile-w="50.499999"
+     inkscape:tile-h="50.499999"
+     inkscape:tile-x0="14.75"
+     inkscape:tile-y0="24.749999"
+     transform="translate(-174.77365,-119.75136)">
+    <rect
+       style="fill:none;stroke:#808080;stroke-width:0.497271;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       id="rect1"
+       width="49.977726"
+       height="49.477722"
+       x="9.7736397"
+       y="10.273639"
+       ry="4.7263608"
+       inkscape:export-filename="..\..\opossum_gui\assets\icons\node_unknown.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#rect1"
+       id="use53"
+       transform="translate(165.24864,109.72636)"
+       inkscape:export-filename="..\..\opossum_gui\assets\icons\node_energymeter.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer2"
+     inkscape:label="Icon Frame 1"
+     transform="translate(-174.77365,-119.75136)">
+    <text
+       xml:space="preserve"
+       style="font-size:35.2777px;font-family:Sans;-inkscape-font-specification:'Sans, Normal';text-align:center;writing-mode:lr-tb;direction:ltr;text-anchor:middle;fill:#808080;fill-opacity:1;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       x="200.62219"
+       y="163.17732"
+       id="text3"><tspan
+         sodipodi:role="line"
+         id="tspan3"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:19.7556px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#808080;stroke-width:0.5"
+         x="200.62219"
+         y="163.17732">J</tspan></text>
+    <rect
+       style="fill:none;fill-opacity:1;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       id="rect3"
+       width="30.000002"
+       height="40"
+       x="185"
+       y="125" />
+    <rect
+       style="fill:none;fill-opacity:1;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       id="rect4"
+       width="20.000002"
+       height="15.000001"
+       x="190"
+       y="130" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#808080;stroke-width:0.499999;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.499999, 1.5;stroke-dashoffset:0"
+       id="path4"
+       sodipodi:type="arc"
+       sodipodi:cx="-200"
+       sodipodi:cy="-142"
+       sodipodi:rx="8"
+       sodipodi:ry="8"
+       sodipodi:start="0"
+       sodipodi:end="3.1300297"
+       sodipodi:open="true"
+       sodipodi:arc-type="arc"
+       d="m -192,-142 a 8,8 0 0 1 -7.95375,7.99987 8,8 0 0 1 -8.04572,-7.90737"
+       transform="scale(-1)" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#808080;stroke-width:0.499999;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0;marker-end:url(#ArrowWide)"
+       d="m 200,143 -5,-5"
+       id="path5" />
+  </g>
+</svg>

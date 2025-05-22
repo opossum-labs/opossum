@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="50.474998mm"
+   height="49.974983mm"
+   viewBox="0 0 50.474998 49.974983"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4 (86a8ad7, 2024-10-11)"
+   sodipodi:docname="NodeIcons.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#292929"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="true"
+     inkscape:zoom="1.4142136"
+     inkscape:cx="396.33335"
+     inkscape:cy="298.04551"
+     inkscape:window-width="1920"
+     inkscape:window-height="1147"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer2">
+    <inkscape:grid
+       id="grid1"
+       units="mm"
+       originx="-9.7625029"
+       originy="-174.75135"
+       spacingx="0.99999998"
+       spacingy="1"
+       empcolor="#0099e5"
+       empopacity="0.30196078"
+       color="#0099e5"
+       opacity="0.14901961"
+       empspacing="5"
+       enabled="true"
+       visible="true" />
+    <inkscape:page
+       x="0"
+       y="0"
+       width="50.474998"
+       height="49.974983"
+       id="page2"
+       margin="0"
+       bleed="0" />
+  </sodipodi:namedview>
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Icon Frame"
+     inkscape:groupmode="layer"
+     id="layer1"
+     inkscape:tile-cx="39.999999"
+     inkscape:tile-cy="49.999999"
+     inkscape:tile-w="50.499999"
+     inkscape:tile-h="50.499999"
+     inkscape:tile-x0="14.75"
+     inkscape:tile-y0="24.749999"
+     transform="translate(-9.7625029,-174.75135)">
+    <rect
+       style="fill:none;stroke:#808080;stroke-width:0.497271;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       id="rect1"
+       width="49.977726"
+       height="49.477722"
+       x="9.7736397"
+       y="10.273639"
+       ry="4.7263608"
+       inkscape:export-filename="..\..\opossum_gui\assets\icons\node_unknown.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#rect1"
+       id="use1"
+       transform="translate(0.23749814,164.72636)" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer2"
+     inkscape:label="Icon Frame 1"
+     transform="translate(-9.7625029,-174.75135)">
+    <g
+       id="g6-8"
+       transform="translate(3.4513955e-7,55.000004)">
+      <path
+         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         d="m 15,130 v 29.99999 h 40"
+         id="path167-8" />
+      <path
+         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         d="m 14,131 1,-1 1,1"
+         id="path169-2" />
+      <path
+         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         d="m 54,158.99999 1,1 -1,1"
+         id="path170-4" />
+    </g>
+    <path
+       style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 20,204.99999 h 10 v -15 h 5.000001 l 15,3"
+       id="path6"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 20,206.99999 7.999999,2e-5 v -15 h 7.000002 l 15,-2e-5"
+       id="path7"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 20,208.99999 h 6 v -15 h 9.000001 l 15,-3"
+       id="path8"
+       sodipodi:nodetypes="ccccc" />
+    <path
+       style="fill:none;fill-opacity:0.560784;stroke:#5599ff;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 31.000001,203.99999 -6.000001,6"
+       id="path9" />
+    <path
+       style="fill:none;fill-opacity:0.560784;stroke:#5599ff;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       d="m 31.000001,188.99999 -6.000001,6"
+       id="path10" />
+    <ellipse
+       style="fill:#5599ff;fill-opacity:0.774295;stroke:#5599ff;stroke-width:0;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+       id="path11"
+       cx="35"
+       cy="191.99998"
+       rx="1"
+       ry="2.9999998" />
+  </g>
+</svg>
