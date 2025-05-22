@@ -1,8 +1,8 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode, NodeInfo},
-    NodeAttr,
+    nodes::{ConnectInfo, NewNode, NodeInfo}, Fluence, NodeAttr
 };
+use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
 use super::http_client::HTTPClient;
@@ -146,7 +146,7 @@ pub async fn update_gui_position(
         .await
 }
 
-/// Update the names of the node with the given `node_id`.
+/// Update the name of the node with the given `node_id`.
 ///
 /// # Errors
 ///
@@ -163,3 +163,57 @@ pub async fn update_node_name(
         )
         .await
 }
+
+/// Update the lidt of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_lidt(
+    client: &HTTPClient,
+    node_id: Uuid,
+    node_lidt: Fluence,
+) -> Result<String, String> {
+    client
+        .post::<Fluence, String>(
+            &format!("/api/scenery/lidt/{}", node_id.as_simple()),
+            node_lidt,
+        )
+        .await
+}
+
+/// Update the translation alignment of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_translation(
+    client: &HTTPClient,
+    node_id: Uuid,
+    translation: (Length, usize),
+) -> Result<String, String> {
+    client
+        .post::<(Length, usize), String>(
+            &format!("/api/scenery/alignmenttranslation/{}", node_id.as_simple()),
+            translation,
+        )
+        .await
+}
+/// Update the rotation alignment of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_rotation(
+    client: &HTTPClient,
+    node_id: Uuid,
+    rotation: (Angle, usize),
+) -> Result<String, String> {
+    client
+        .post::<(Angle, usize), String>(
+            &format!("/api/scenery/alignmentrotation/{}", node_id.as_simple()),
+            rotation,
+        )
+        .await
+}
+

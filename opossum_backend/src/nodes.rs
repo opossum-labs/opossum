@@ -3,14 +3,14 @@ use actix_web::{
     delete, get, patch, post, put,
     web::{self, Json, PathConfig},
 };
-use nalgebra::Point2;
+use nalgebra::{Point2, Point3};
 use opossum::{
     meter,
-    nodes::{create_node_ref, NodeAttr},
-    optic_ports::PortType,
+    nodes::{create_node_ref, fluence_detector::Fluence, NodeAttr},
+    optic_ports::PortType, utils::geom_transformation::Isometry,
 };
 use serde::{Deserialize, Serialize};
-use uom::si::length::meter;
+use uom::si::{f64::{Angle, Length}, length::meter};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -308,7 +308,7 @@ async fn post_node_position(
         ))
     }
 }
-/// Update the GUI position of an optical or analyzer node
+/// Update the GUI name of an optica node
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "name of the optical node"),
@@ -348,6 +348,175 @@ async fn post_node_name(
         ))
     }
 }
+/// Update the laser-induced damage threshold (LIDT) of an optical node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "lidt of the optical node"),
+    ),
+    request_body(content = String,
+        description = "updated lidt of node in J/cm²",
+        content_type = "application/json",
+        example= "1.56"
+    ),
+    responses(
+        (status = OK, description = "Node LIDT successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/lidt/{uuid}")]
+async fn post_node_lidt(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    lidt: web::Json<Fluence>,
+) -> Result<(), ErrorResponse> {
+    let uuid: Uuid = path.into_inner();
+    let lidt = lidt.into_inner();
+    let document = data.document.lock().unwrap();
+    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+        node_ref
+            .optical_ref
+            .lock()
+            .unwrap()
+            .node_attr_mut()
+            .set_lidt(&lidt);
+        Ok(())
+    } else {
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+        ))
+    }
+}
+
+/// Update the alignment translation of an optical node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "alignment translation of the optical node"),
+    ),
+    request_body(content = String,
+        description = "updated alignment translation of node",
+        content_type = "application/json",
+        example= "(1.56, 0)"
+    ),
+    responses(
+        (status = OK, description = "Node alignment translation successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/alignmenttranslation/{uuid}")]
+async fn post_node_alignment_translation(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    translation_from_gui: web::Json<(Length, usize)>,
+) -> Result<(), ErrorResponse> {
+    let uuid: Uuid = path.into_inner();
+    let (translation_from_gui, idx) = translation_from_gui.into_inner();
+    let document = data.document.lock().unwrap();
+    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+        let (mut translation, rotation) = if let Some(alignment) = node_ref
+            .optical_ref
+            .lock()
+            .unwrap()
+            .node_attr_mut()
+            .alignment(){
+                (alignment.translation(), alignment.rotation())
+            }
+            else{
+                (Point3::origin(), Point3::origin())
+            };
+        if idx == 0{
+            translation.x = translation_from_gui;
+        }
+        else if idx == 1{
+            translation.y = translation_from_gui;
+        }
+        else{
+            translation.z = translation_from_gui;
+        };
+        if let Ok(new_alignment) = Isometry::new(translation, rotation){
+            node_ref
+                .optical_ref
+                .lock()
+                .unwrap()
+                .node_attr_mut()
+                .set_alignment(new_alignment);
+        }
+        Ok(())
+    } else {
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+        ))
+    }
+}
+
+/// Update the alignment rotation of an optical node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "alignment rotation of the optical node"),
+    ),
+    request_body(content = String,
+        description = "updated alignment rotation of node",
+        content_type = "application/json",
+        example= "(1.56, 0)"
+    ),
+    responses(
+        (status = OK, description = "Node alignment rotation successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/alignmentrotation/{uuid}")]
+async fn post_node_alignment_rotation(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    rotation_from_gui: web::Json<(Angle, usize)>,
+) -> Result<(), ErrorResponse> {
+    let uuid: Uuid = path.into_inner();
+    let (rotation_from_gui, idx) = rotation_from_gui.into_inner();
+    let document = data.document.lock().unwrap();
+    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+        let (translation, mut rotation) = if let Some(alignment) = node_ref
+            .optical_ref
+            .lock()
+            .unwrap()
+            .node_attr_mut()
+            .alignment(){
+                (alignment.translation(), alignment.rotation())
+            }
+            else{
+                (Point3::origin(), Point3::origin())
+            };
+
+        if idx == 0{
+            rotation.x = rotation_from_gui;
+        }
+        else if idx == 1{
+            rotation.y = rotation_from_gui;
+        }
+        else{
+            rotation.z = rotation_from_gui;
+        };
+        if let Ok(new_alignment) = Isometry::new(translation, rotation){
+            node_ref
+                .optical_ref
+                .lock()
+                .unwrap()
+                .node_attr_mut()
+                .set_alignment(new_alignment);
+        }
+        Ok(())
+    } else {
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+        ))
+    }
+}
+
+
 /// Delete a node
 ///
 /// This function deletes a node. It also deletes reference nodes which refer to this node.
@@ -543,6 +712,9 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_subnode);
     cfg.service(post_node_position);
     cfg.service(post_node_name);
+    cfg.service(post_node_lidt);
+    cfg.service(post_node_alignment_translation);
+    cfg.service(post_node_alignment_rotation);
 
     cfg.service(get_properties);
     cfg.service(patch_properties);

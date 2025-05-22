@@ -53,7 +53,6 @@ pub fn GraphEditor(
 
     use_effect({
         let mut graph_store = graph_store.clone();
-        println!("changing name");
         move || {
             let node_read = node_selected.read();
             node_read.as_ref().map(|act_node| {

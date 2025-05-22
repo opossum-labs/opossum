@@ -1,15 +1,16 @@
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::{html::geometry::euclid::num::Zero, prelude::*};
 use nalgebra::Point3;
-use opossum_backend::{Isometry, NodeAttr};
-use uom::si::f64::Angle;
+use opossum_backend::{Fluence, Isometry, NodeAttr};
+use uom::si::f64::{Angle, RadiantExposure};
+use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uom::si::{angle::degree, f64::Length, length::meter};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChange {
     Name(String),
-    LIDT(f64),
+    LIDT(Fluence),
     TranslationX(Length),
     TranslationY(Length),
     TranslationZ(Length),
@@ -27,10 +28,10 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     use_effect(move || {
         let node_change_opt = node_change.read().clone();
         let mut node = node.clone();
-        if let (Some(node_change), Some(mut active_node)) =
+        if let (Some(node_changed), Some(mut active_node)) =
             (node_change_opt, active_node_opt.clone())
         {
-            match node_change {
+            match node_changed {
                 NodeChange::Name(name) => {
                     spawn(async move {
                         if let Err(err_str) = api::update_node_name(
@@ -42,20 +43,102 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                         {
                             OPOSSUM_UI_LOGS.write().add_log(&err_str);
                         } else {
-                            println!("setting name");
                             active_node.set_name(name);
                             node.set(Some(active_node));
                         }
                     });
-                }
-                // NodeChange::LIDT(lidt) => {
-                //         if let Some(node) = *node.read() {
-                //             spawn(async move {
-                //                 api::set_node_lidt(&HTTP_API_CLIENT(), node.id(), lidt.clone())
-                //                 .await
-                //                 .unwrap()});
-                //         }
-                // }
+                },
+                NodeChange::LIDT(lidt) => {
+                    spawn(async move {
+                        if let Err(err_str) = api::update_node_lidt(
+                            &HTTP_API_CLIENT(),
+                            active_node.id(),
+                            lidt.clone(),
+                        )
+                        .await
+                        {
+                            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        };
+                    });
+                },
+                NodeChange::TranslationX(x_trans) => {
+                    spawn(async move {
+                        if let Err(err_str) = api::update_node_translation(
+                            &HTTP_API_CLIENT(),
+                            active_node.id(),
+                            (x_trans, 0),
+                        )
+                        .await
+                        {
+                            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        };
+                    });
+                },
+                NodeChange::TranslationY(y_trans) => {
+                    spawn(async move {
+                        if let Err(err_str) = api::update_node_translation(
+                            &HTTP_API_CLIENT(),
+                            active_node.id(),
+                            (y_trans,1),
+                        )
+                        .await
+                        {
+                            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        };
+                    });
+                },
+                NodeChange::TranslationZ(z_trans) => {
+                    spawn(async move {
+                        if let Err(err_str) = api::update_node_translation(
+                            &HTTP_API_CLIENT(),
+                            active_node.id(),
+                            (z_trans,2),
+                        )
+                        .await
+                        {
+                            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        };
+                    });
+                },
+                NodeChange::RotationRoll(roll) => {
+                    spawn(async move {
+                        if let Err(err_str) = api::update_node_rotation(
+                            &HTTP_API_CLIENT(),
+                            active_node.id(),
+                            (roll, 0),
+                        )
+                        .await
+                        {
+                            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        };
+                    });
+                },
+                NodeChange::RotationPitch(pitch) => {
+                    spawn(async move {
+                        if let Err(err_str) = api::update_node_rotation(
+                            &HTTP_API_CLIENT(),
+                            active_node.id(),
+                            (pitch,1),
+                        )
+                        .await
+                        {
+                            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        };
+                    });
+                },
+                NodeChange::RotationYaw(yaw) => {
+                    spawn(async move {
+                        if let Err(err_str) = api::update_node_rotation(
+                            &HTTP_API_CLIENT(),
+                            active_node.id(),
+                            (yaw,2),
+                        )
+                        .await
+                        {
+                            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        };
+                    });
+                },
                 _ => {}
             }
         }
@@ -65,7 +148,9 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
         let node = node.read();
         if let Some(node) = &*(node) {
             match api::get_node_properties(&HTTP_API_CLIENT(), node.id()).await {
-                Ok(node_attr) => Some(node_attr),
+                Ok(node_attr) => {
+                    Some(node_attr)
+                },
                 Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                     None
@@ -120,7 +205,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                 NodePropInput {
                                     name: "LIDT".to_string(),
                                     placeholder: "LIDT in J/cm²".to_string(),
-                                    node_change: NodeChange::LIDT(node_attr.lidt().value / 10000.),
+                                    node_change: NodeChange::LIDT(node_attr.lidt().clone()),
                                 }
                             }
                         }
@@ -181,7 +266,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                 NodePropInput {
                                     name: "Pitch".to_string(),
                                     placeholder: "Pitch angle in degree".to_string(),
-                                    node_change: NodeChange::RotationRoll(
+                                    node_change: NodeChange::RotationPitch(
                                         node_attr.alignment().as_ref().map_or(Angle::zero(), |a| a.rotation().y),
                                     ),
                                 
@@ -189,7 +274,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                 NodePropInput {
                                     name: "Yaw".to_string(),
                                     placeholder: "Yaw angle in degree".to_string(),
-                                    node_change: NodeChange::RotationRoll(
+                                    node_change: NodeChange::RotationYaw(
                                         node_attr.alignment().as_ref().map_or(Angle::zero(), |a| a.rotation().z),
                                     ),
                                 }
@@ -197,8 +282,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                         }
                     }
                 }
-            
-
             // node_type: String,
             // name: String,
             // ports: OpticPorts,
@@ -234,20 +317,21 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
 
     let (init_value, input_type, readonly) = match node_change {
         NodeChange::Name(ref node_name) => (node_name.clone(), "text", false),
-        NodeChange::LIDT(lidt) => (format!("{:.2}", lidt / 10000.), "number", false),
-        NodeChange::TranslationX(x_trans) => {
-            (format!("{:.6}", x_trans.get::<meter>()), "number", false)
-        }
-        NodeChange::TranslationY(y_trans) => {
-            (format!("{:.6}", y_trans.get::<meter>()), "number", false)
-        }
-        NodeChange::TranslationZ(z_trans) => {
-            (format!("{:.6}", z_trans.get::<meter>()), "number", false)
-        }
-        NodeChange::RotationRoll(roll) => (format!("{:.6}", roll.get::<degree>()), "number", false),
-        NodeChange::RotationPitch(pitch) => {
-            (format!("{:.6}", pitch.get::<degree>()), "number", false)
-        }
+        NodeChange::LIDT(lidt) => (format!("{:.2}", lidt.value / 10000.), "number", false),
+        NodeChange::TranslationX(x_trans) => 
+            (format!("{:.6}", x_trans.get::<meter>()), "number", false),
+        
+        NodeChange::TranslationY(y_trans) => 
+            (format!("{:.6}", y_trans.get::<meter>()), "number", false),
+        
+        NodeChange::TranslationZ(z_trans) => 
+            (format!("{:.6}", z_trans.get::<meter>()), "number", false),
+        
+        NodeChange::RotationRoll(roll) => 
+        (format!("{:.6}", roll.get::<degree>()), "number", false),
+        NodeChange::RotationPitch(pitch) => 
+            (format!("{:.6}", pitch.get::<degree>()), "number", false),
+        
         NodeChange::RotationYaw(yaw) => (format!("{:.6}", yaw.get::<degree>()), "number", false),
         NodeChange::Inverted(inverted) => (format!("{inverted}"), "checkbox", false),
         NodeChange::NodeConst(ref val) => (val.clone(), "text", true),
@@ -291,13 +375,12 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
                         move |event: Event<FormData>| {
                             match node_change {
                                 NodeChange::Name(_) => {
-                                    if let Ok(name) = event.data.parsed::<String>() {
-                                        node_change_signal.set(Some(NodeChange::Name(name)));
-                                    }
+                                    let Ok(name) = event.data.parsed::<String>() ;
+                                    node_change_signal.set(Some(NodeChange::Name(name)));
                                 }
                                 NodeChange::LIDT(_) => {
                                     if let Ok(lidt) = event.data.parsed::<f64>() {
-                                        node_change_signal.set(Some(NodeChange::LIDT(lidt)));
+                                        node_change_signal.set(Some(NodeChange::LIDT(RadiantExposure::new::<joule_per_square_centimeter>(lidt))));
                                     }
                                 }
                                 NodeChange::TranslationX(_) => {
