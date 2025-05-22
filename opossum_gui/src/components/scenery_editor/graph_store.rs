@@ -150,6 +150,10 @@ impl GraphStore {
         let mut active_node = self.active_node.write();
         *active_node = Some(id);
     }
+    pub fn set_active_node_none(&mut self) {
+        let mut active_node = self.active_node.write();
+        *active_node = None;
+    }
     pub async fn delete_node(&mut self, node_id: Uuid) {
         let nodes = self.nodes()();
         if let Some(node_element) = nodes.get(&node_id) {
