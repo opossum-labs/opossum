@@ -1,5 +1,18 @@
 use opossum::{
-    analyzers::{AnalyzerType, RayTraceConfig}, aperture::{Aperture, CircleConfig}, degree, error::OpmResult, joule, lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder}, micrometer, millimeter, nanometer, nodes::{FluenceDetector, Lens, NodeGroup, RayPropagationVisualizer, Source}, optic_node::OpticNode, optic_ports::PortType, refractive_index::refr_index_schott::RefrIndexSchott, surface::hit_map::fluence_estimator::FluenceEstimator, utils::geom_transformation::Isometry, OpmDocument
+    analyzers::{AnalyzerType, RayTraceConfig},
+    aperture::{Aperture, CircleConfig},
+    degree,
+    error::OpmResult,
+    joule,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    micrometer, millimeter, nanometer,
+    nodes::{FluenceDetector, Lens, NodeGroup, Source},
+    optic_node::OpticNode,
+    optic_ports::PortType,
+    refractive_index::refr_index_schott::RefrIndexSchott,
+    surface::hit_map::fluence_estimator::FluenceEstimator,
+    utils::geom_transformation::Isometry,
+    OpmDocument,
 };
 use std::path::Path;
 
@@ -45,18 +58,16 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     let i_pl2 = scenery.add_node(lens2)?;
-    let i_sd3 = scenery.add_node(RayPropagationVisualizer::new("after telecope", None)?)?;
     let mut fluence_det = FluenceDetector::new("Image Plane");
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
     let i_sd4 = scenery.add_node(fluence_det)?;
     scenery.connect_nodes(i_src, "output_1", i_sd5, "input_1", millimeter!(0.001))?;
     scenery.connect_nodes(i_sd5, "output_1", i_pl1, "input_1", millimeter!(70.0))?;
     scenery.connect_nodes(i_pl1, "output_1", i_pl2, "input_1", millimeter!(125.0))?;
-    scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(58.0))?;
-    scenery.connect_nodes(i_sd3, "output_1", i_sd4, "input_1", millimeter!(0.1))?;
+    scenery.connect_nodes(i_pl2, "output_1", i_sd4, "input_1", millimeter!(58.0))?;
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new(
-        "./opossum/playground/workshop_kepler_imaging_field.opm",
+        "./opossum/playground/workshop_05_kepler_imaging_field.opm",
     ))
 }
