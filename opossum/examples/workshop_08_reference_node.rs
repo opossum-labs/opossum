@@ -1,15 +1,26 @@
 use opossum::{
-    analyzers::{AnalyzerType, RayTraceConfig}, degree, energy_distributions::UniformDist, error::OpmResult, joule, lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder}, millimeter, nanometer, nodes::{
-        Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror
-    }, optic_node::{Alignable, OpticNode}, position_distributions::Grid, refractive_index::refr_index_schott::RefrIndexSchott, spectral_distribution::LaserLines, utils::geom_transformation::Isometry, OpmDocument
+    analyzers::{AnalyzerType, RayTraceConfig},
+    degree,
+    energy_distributions::UniformDist,
+    error::OpmResult,
+    joule,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    millimeter, nanometer,
+    nodes::{Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
+    optic_node::{Alignable, OpticNode},
+    position_distributions::Grid,
+    refractive_index::refr_index_schott::RefrIndexSchott,
+    spectral_distribution::LaserLines,
+    utils::geom_transformation::Isometry,
+    OpmDocument,
 };
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
 
-     let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc {
-        pos_dist: Grid::new((millimeter!(0.0),millimeter!(5.0)), (1,5))?.into(),
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc {
+        pos_dist: Grid::new((millimeter!(0.0), millimeter!(5.0)), (1, 5))?.into(),
         energy_dist: UniformDist::new(joule!(1.0))?.into(),
         spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         reference_length: millimeter!(75.0),

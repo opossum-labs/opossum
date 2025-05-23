@@ -33,7 +33,8 @@ fn main() -> OpmResult<()> {
         millimeter!(-122.25),
         millimeter!(10.0),
         &refr_index_hzf52,
-    )?.with_decenter(millimeter!(0.0,5.0,0.0))?;
+    )?
+    .with_decenter(millimeter!(0.0, 5.0, 0.0))?;
     let circle = CircleConfig::new(millimeter!(25.), millimeter!(0., 0.))?;
     lens1.set_aperture(&PortType::Input, "input_1", &Aperture::BinaryCircle(circle))?;
     let i_pl1 = scenery.add_node(lens1)?;
