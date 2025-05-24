@@ -15,9 +15,7 @@ There might be different analyzers available such as:
 
 ## Sequential Analyzer
 
-A sequential analyzer uses the node relations defined by the edges of the model graph. It would traverse the graph from one or more sources to one or more detector nodes. While traversing, it calls the respective analysis functions of each node. The input data is taken from previously calculated light information stored in the input edges of a node. The node's analysis result will be stored on the output edges.
 
-For each analysis, the corresponding node attributes must be set. For example, a light source node has to define a set of rays with a given position and angle if a geometric analysis is performed. For wavefront propagation, a complex intensity / wavefront matrix must be defined.
 
 **Note**: Also in this case the model might contain inconsistent values such as a wavefront that does not fit the set of rays defined. [How do we deal with this?](https://git.gsi.de/phelix/rust/opossum/-/issues/9)
 
