@@ -9,6 +9,11 @@ pub mod server;
 pub mod utils;
 
 pub use opossum::{
+    nanometer, millimeter, joule,
+    lightdata::{light_data_builder, ray_data_builder, energy_data_builder},
+    position_distributions::*,
+    energy_distributions::*,
+    spectral_distribution::*,
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
     nodes::{fluence_detector::Fluence,
         NodeAttr},

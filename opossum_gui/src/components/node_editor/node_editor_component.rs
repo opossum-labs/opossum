@@ -1,7 +1,12 @@
+use std::collections::HashMap;
+
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::{html::geometry::euclid::num::Zero, prelude::*};
 use nalgebra::Point3;
-use opossum_backend::{Fluence, Isometry, NodeAttr};
+use opossum_backend::energy_data_builder::EnergyDataBuilder;
+use opossum_backend::light_data_builder::LightDataBuilder;
+use opossum_backend::ray_data_builder::RayDataBuilder;
+use opossum_backend::{joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, UniformDist};
 use uom::si::f64::{Angle, RadiantExposure};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uom::si::{angle::degree, f64::Length, length::meter};
@@ -24,6 +29,20 @@ pub enum NodeChange {
 #[component]
 pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     let mut node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
+
+    let geom_light_data = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+        pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
+        energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)]).unwrap().into(),
+    });
+    // let energy_light_data = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+    //                                                         vec![(nanometer!(633.0), joule!(1.0))],
+    //                                                         nanometer!(1.0),
+    //                                                     ));
+    // let mut light_data_builder = HashMap::<String, LightDataBuilder>::new();
+
+
+    let mut source_type = use_signal(|| geom_light_data);
     let active_node_opt = node();
     use_effect(move || {
         let node_change_opt = node_change.read().clone();
@@ -195,7 +214,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                     name: "NodeType".to_string(),
                                     placeholder: "Node Type".to_string(),
                                     node_change: NodeChange::NodeConst(format!("{}", node_attr.node_type().to_string())),
-                                
                                 }
                                 NodePropInput {
                                     name: "NodeName".to_string(),
@@ -212,6 +230,91 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     }
                 
                 }
+
+                            div {
+                                hidden: {node_attr.node_type() == "source"},
+                                class: "accordion accordion-borderless bg-dark ",
+                                id: "accordionSource",
+                                div { class: "accordion-item bg-dark text-light",
+                                    h2 { class: "accordion-header", id: "sourceHeading",
+                                        button {
+                                            class: "accordion-button collapsed bg-dark text-light",
+                                            r#type: "button",
+                                            "data-mdb-collapse-init": "",
+                                            "data-mdb-target": "#sourceCollapse",
+                                            "aria-expanded": "false",
+                                            "aria-controls": "sourceCollapse",
+                                            "Light Source"
+                                        }
+                                    }
+                                    div {
+                                        id: "sourceCollapse",
+                                        class: "accordion-collapse collapse  bg-dark",
+                                        "aria-labelledby": "sourceHeading",
+                                        "data-mdb-parent": "#accordionSource",
+                                        div { class: "accordion-body  bg-dark",
+                                        
+                                        div { class: "form-floating", id:"selectSourceType" ,
+                                            select{ 
+                                                class:"form-select", "aria-label":"Select source type",
+                                                onchange: move |e| {
+                                                    if e.value() == "energy"{
+                                                        source_type.set(LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+                                                            vec![(nanometer!(633.0), joule!(1.0))],
+                                                            nanometer!(1.0),
+                                                        )));
+                                                    }
+                                                    else{
+                                                        source_type.set(LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+                                                        pos_dist: Hexapolar::new(millimeter!(4.), 5).unwrap().into(),
+                                                        energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
+                                                        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)]).unwrap().into(),
+                                                    }));
+                                                    }
+                                                    
+                                                },
+                                                option{ value:"energy","Energy"},
+                                                option{ selected: true, value:"rays","Rays"},
+                                            }
+                                            label {for:"selectSourceType", "Source Type"  }
+                                        }
+
+
+                                        // div{ class:"form-check",
+                                        //     input {class:"form-check-input", type:"radio", name:"flexRadioDefault", id:"flexRadioDefault1"},
+                                        //     label{ class:"form-check-label", for:"flexRadioDefault1", "Energy" 
+                                        // }
+                                        // div{ class:"form-check",
+                                        //     input {class:"form-check-input", type:"radio", name:"flexRadioDefault", id:"flexRadioDefault2"},
+                                        //     label{ class:"form-check-label", for:"flexRadioDefault2", "Rays" 
+                                        // }
+                                    }
+                                            // NodePropInput {
+                                            //     name: "NodeId".to_string(),
+                                            //     placeholder: "Node ID".to_string(),
+                                            //     node_change: NodeChange::NodeConst(format!("{}", node_attr.uuid())),
+                                            // }
+                                            // NodePropInput {
+                                            //     name: "NodeType".to_string(),
+                                            //     placeholder: "Node Type".to_string(),
+                                            //     node_change: NodeChange::NodeConst(format!("{}", node_attr.node_type().to_string())),
+                                            
+                                            // }
+                                            // NodePropInput {
+                                            //     name: "NodeName".to_string(),
+                                            //     placeholder: "Node Name".to_string(),
+                                            //     node_change: NodeChange::Name(node_attr.name().to_string()),
+                                            // }
+                                            // NodePropInput {
+                                            //     name: "LIDT".to_string(),
+                                            //     placeholder: "LIDT in J/cm²".to_string(),
+                                            //     node_change: NodeChange::LIDT(node_attr.lidt().clone()),
+                                            // }
+                                            // node_type: String,
+                                        }
+                                    }
+                                }
+                            
                 div {
                     class: "accordion accordion-borderless bg-dark ",
                     id: "accordionAlignment",
@@ -282,25 +385,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                         }
                     }
                 }
-            // node_type: String,
-            // name: String,
-            // ports: OpticPorts,
-            // uuid: Uuid,
-            // lidt: Fluence,
-            // #[serde(default)]
-            // props: Properties,
-            // #[serde(skip_serializing_if = "Option::is_none")]
-            // isometry: Option<Isometry>,
-            // #[serde(default)]
-            // inverted: bool,
-            // #[serde(skip_serializing_if = "Option::is_none")]
-            // alignment: Option<Isometry>,
-            // #[serde(skip)]
-            // global_conf: Option<Arc<Mutex<SceneryResources>>>,
-            // #[serde(skip_serializing_if = "Option::is_none")]
-            // align_like_node_at_distance: Option<(Uuid, Length)>,
-            // #[serde(skip_serializing_if = "Option::is_none")]
-            // gui_position: Option<Point3<i32>>,
             }
         }
     } else {
