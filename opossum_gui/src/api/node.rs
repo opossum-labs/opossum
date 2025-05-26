@@ -1,6 +1,7 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode, NodeInfo}, Fluence, NodeAttr
+    nodes::{ConnectInfo, NewNode, NodeInfo},
+    Fluence, NodeAttr,
 };
 use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
@@ -216,4 +217,3 @@ pub async fn update_node_rotation(
         )
         .await
 }
-

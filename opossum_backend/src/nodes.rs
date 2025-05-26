@@ -7,10 +7,14 @@ use nalgebra::{Point2, Point3};
 use opossum::{
     meter,
     nodes::{create_node_ref, fluence_detector::Fluence, NodeAttr},
-    optic_ports::PortType, utils::geom_transformation::Isometry,
+    optic_ports::PortType,
+    utils::geom_transformation::Isometry,
 };
 use serde::{Deserialize, Serialize};
-use uom::si::{f64::{Angle, Length}, length::meter};
+use uom::si::{
+    f64::{Angle, Length},
+    length::meter,
+};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -419,22 +423,20 @@ async fn post_node_alignment_translation(
             .lock()
             .unwrap()
             .node_attr_mut()
-            .alignment(){
-                (alignment.translation(), alignment.rotation())
-            }
-            else{
-                (Point3::origin(), Point3::origin())
-            };
-        if idx == 0{
+            .alignment()
+        {
+            (alignment.translation(), alignment.rotation())
+        } else {
+            (Point3::origin(), Point3::origin())
+        };
+        if idx == 0 {
             translation.x = translation_from_gui;
-        }
-        else if idx == 1{
+        } else if idx == 1 {
             translation.y = translation_from_gui;
-        }
-        else{
+        } else {
             translation.z = translation_from_gui;
         };
-        if let Ok(new_alignment) = Isometry::new(translation, rotation){
+        if let Ok(new_alignment) = Isometry::new(translation, rotation) {
             node_ref
                 .optical_ref
                 .lock()
@@ -482,23 +484,21 @@ async fn post_node_alignment_rotation(
             .lock()
             .unwrap()
             .node_attr_mut()
-            .alignment(){
-                (alignment.translation(), alignment.rotation())
-            }
-            else{
-                (Point3::origin(), Point3::origin())
-            };
+            .alignment()
+        {
+            (alignment.translation(), alignment.rotation())
+        } else {
+            (Point3::origin(), Point3::origin())
+        };
 
-        if idx == 0{
+        if idx == 0 {
             rotation.x = rotation_from_gui;
-        }
-        else if idx == 1{
+        } else if idx == 1 {
             rotation.y = rotation_from_gui;
-        }
-        else{
+        } else {
             rotation.z = rotation_from_gui;
         };
-        if let Ok(new_alignment) = Isometry::new(translation, rotation){
+        if let Ok(new_alignment) = Isometry::new(translation, rotation) {
             node_ref
                 .optical_ref
                 .lock()
@@ -515,7 +515,6 @@ async fn post_node_alignment_rotation(
         ))
     }
 }
-
 
 /// Delete a node
 ///

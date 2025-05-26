@@ -4,9 +4,11 @@ use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT,
 use dioxus::{html::geometry::euclid::num::Zero, prelude::*};
 use nalgebra::Point3;
 use opossum_backend::energy_data_builder::EnergyDataBuilder;
-use opossum_backend::light_data_builder::LightDataBuilder;
+use opossum_backend::light_data_builder::{self, LightDataBuilder};
 use opossum_backend::ray_data_builder::RayDataBuilder;
-use opossum_backend::{joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, UniformDist};
+use opossum_backend::{
+    joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, Proptype, UniformDist
+};
 use uom::si::f64::{Angle, RadiantExposure};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uom::si::{angle::degree, f64::Length, length::meter};
@@ -28,21 +30,24 @@ pub enum NodeChange {
 
 #[component]
 pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
-    let mut node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
+    let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
 
     let geom_light_data = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
         pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
         energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)]).unwrap().into(),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])
+            .unwrap()
+            .into(),
     });
-    // let energy_light_data = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-    //                                                         vec![(nanometer!(633.0), joule!(1.0))],
-    //                                                         nanometer!(1.0),
-    //                                                     ));
-    // let mut light_data_builder = HashMap::<String, LightDataBuilder>::new();
+    let energy_light_data = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+        vec![(nanometer!(633.0), joule!(1.0))],
+        nanometer!(1.0),
+    ));
+    let mut light_data_builder = HashMap::<String, LightDataBuilder>::new();
+    light_data_builder.insert("Rays".to_string(), geom_light_data);
+    light_data_builder.insert("Energy".to_string(), energy_light_data);
+    let mut source_type = use_signal(|| None::<LightDataBuilder>);
 
-
-    let mut source_type = use_signal(|| geom_light_data);
     let active_node_opt = node();
     use_effect(move || {
         let node_change_opt = node_change.read().clone();
@@ -66,7 +71,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             node.set(Some(active_node));
                         }
                     });
-                },
+                }
                 NodeChange::LIDT(lidt) => {
                     spawn(async move {
                         if let Err(err_str) = api::update_node_lidt(
@@ -79,7 +84,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             OPOSSUM_UI_LOGS.write().add_log(&err_str);
                         };
                     });
-                },
+                }
                 NodeChange::TranslationX(x_trans) => {
                     spawn(async move {
                         if let Err(err_str) = api::update_node_translation(
@@ -92,33 +97,33 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             OPOSSUM_UI_LOGS.write().add_log(&err_str);
                         };
                     });
-                },
+                }
                 NodeChange::TranslationY(y_trans) => {
                     spawn(async move {
                         if let Err(err_str) = api::update_node_translation(
                             &HTTP_API_CLIENT(),
                             active_node.id(),
-                            (y_trans,1),
+                            (y_trans, 1),
                         )
                         .await
                         {
                             OPOSSUM_UI_LOGS.write().add_log(&err_str);
                         };
                     });
-                },
+                }
                 NodeChange::TranslationZ(z_trans) => {
                     spawn(async move {
                         if let Err(err_str) = api::update_node_translation(
                             &HTTP_API_CLIENT(),
                             active_node.id(),
-                            (z_trans,2),
+                            (z_trans, 2),
                         )
                         .await
                         {
                             OPOSSUM_UI_LOGS.write().add_log(&err_str);
                         };
                     });
-                },
+                }
                 NodeChange::RotationRoll(roll) => {
                     spawn(async move {
                         if let Err(err_str) = api::update_node_rotation(
@@ -131,33 +136,33 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             OPOSSUM_UI_LOGS.write().add_log(&err_str);
                         };
                     });
-                },
+                }
                 NodeChange::RotationPitch(pitch) => {
                     spawn(async move {
                         if let Err(err_str) = api::update_node_rotation(
                             &HTTP_API_CLIENT(),
                             active_node.id(),
-                            (pitch,1),
+                            (pitch, 1),
                         )
                         .await
                         {
                             OPOSSUM_UI_LOGS.write().add_log(&err_str);
                         };
                     });
-                },
+                }
                 NodeChange::RotationYaw(yaw) => {
                     spawn(async move {
                         if let Err(err_str) = api::update_node_rotation(
                             &HTTP_API_CLIENT(),
                             active_node.id(),
-                            (yaw,2),
+                            (yaw, 2),
                         )
                         .await
                         {
                             OPOSSUM_UI_LOGS.write().add_log(&err_str);
                         };
                     });
-                },
+                }
                 _ => {}
             }
         }
@@ -167,9 +172,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
         let node = node.read();
         if let Some(node) = &*(node) {
             match api::get_node_properties(&HTTP_API_CLIENT(), node.id()).await {
-                Ok(node_attr) => {
-                    Some(node_attr)
-                },
+                Ok(node_attr) => Some(node_attr),
                 Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                     None
@@ -228,93 +231,86 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             }
                         }
                     }
-                
                 }
 
-                            div {
-                                hidden: {node_attr.node_type() == "source"},
-                                class: "accordion accordion-borderless bg-dark ",
-                                id: "accordionSource",
-                                div { class: "accordion-item bg-dark text-light",
-                                    h2 { class: "accordion-header", id: "sourceHeading",
-                                        button {
-                                            class: "accordion-button collapsed bg-dark text-light",
-                                            r#type: "button",
-                                            "data-mdb-collapse-init": "",
-                                            "data-mdb-target": "#sourceCollapse",
-                                            "aria-expanded": "false",
-                                            "aria-controls": "sourceCollapse",
-                                            "Light Source"
-                                        }
+                div {
+                    hidden: {node_attr.node_type() == "source"},
+                    class: "accordion accordion-borderless bg-dark ",
+                    id: "accordionSource",
+                    div { class: "accordion-item bg-dark text-light",
+                        h2 { class: "accordion-header", id: "sourceHeading",
+                            button {
+                                class: "accordion-button collapsed bg-dark text-light",
+                                r#type: "button",
+                                "data-mdb-collapse-init": "",
+                                "data-mdb-target": "#sourceCollapse",
+                                "aria-expanded": "false",
+                                "aria-controls": "sourceCollapse",
+                                "Light Source"
+                            }
+                        }
+                        div {
+                            id: "sourceCollapse",
+                            class: "accordion-collapse collapse  bg-dark",
+                            "aria-labelledby": "sourceHeading",
+                            "data-mdb-parent": "#accordionSource",
+                            div { class: "accordion-body  bg-dark",
+                                div {
+                                    class: "form-floating",
+                                    id: "selectSourceType",
+                                    select {
+                                        class: "form-select",
+                                        "aria-label": "Select source type",
+                                        onchange: move |e| source_type.set(light_data_builder.get(e.value().as_str()).cloned()),
                                     }
-                                    div {
-                                        id: "sourceCollapse",
-                                        class: "accordion-collapse collapse  bg-dark",
-                                        "aria-labelledby": "sourceHeading",
-                                        "data-mdb-parent": "#accordionSource",
-                                        div { class: "accordion-body  bg-dark",
-                                        
-                                        div { class: "form-floating", id:"selectSourceType" ,
-                                            select{ 
-                                                class:"form-select", "aria-label":"Select source type",
-                                                onchange: move |e| {
-                                                    if e.value() == "energy"{
-                                                        source_type.set(LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-                                                            vec![(nanometer!(633.0), joule!(1.0))],
-                                                            nanometer!(1.0),
-                                                        )));
-                                                    }
-                                                    else{
-                                                        source_type.set(LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-                                                        pos_dist: Hexapolar::new(millimeter!(4.), 5).unwrap().into(),
-                                                        energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
-                                                        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)]).unwrap().into(),
-                                                    }));
-                                                    }
-                                                    
-                                                },
-                                                option{ value:"energy","Energy"},
-                                                option{ selected: true, value:"rays","Rays"},
+                                    {
+                                        node_attr.properties().get("light data").map_or({
+                                            rsx!{
+                                                option { selected:true, disabled: true, value: "None", "None" }
+                                                option { value: "Energy", "Energy" }
+                                                option { value: "Rays", "Rays" }
                                             }
-                                            label {for:"selectSourceType", "Source Type"  }
-                                        }
-
-
-                                        // div{ class:"form-check",
-                                        //     input {class:"form-check-input", type:"radio", name:"flexRadioDefault", id:"flexRadioDefault1"},
-                                        //     label{ class:"form-check-label", for:"flexRadioDefault1", "Energy" 
-                                        // }
-                                        // div{ class:"form-check",
-                                        //     input {class:"form-check-input", type:"radio", name:"flexRadioDefault", id:"flexRadioDefault2"},
-                                        //     label{ class:"form-check-label", for:"flexRadioDefault2", "Rays" 
-                                        // }
+                                        }, |p| {
+                                            match p {
+                                                Proptype::LightDataBuilder(Some(light_data_builder)) => {
+                                                    source_type.set(Some(light_data_builder.clone()));
+                                                    match light_data_builder {
+                                                        LightDataBuilder::Energy(e) => {
+                                                            rsx!{
+                                                                option { disabled: true, value: "None", "None" }
+                                                                option { selected:true, value: "Energy", "Energy" }
+                                                                option { value: "Rays", "Rays" }
+                                                            }
+                                                        },
+                                                        LightDataBuilder::Geometric(g) => {
+                                                            rsx!{
+                                                                option { disabled: true, value: "None", "None" }
+                                                                option { value: "Energy", "Energy" }
+                                                                option { selected: true, value: "Rays", "Rays" }
+                                                            }
+                                                        },
+                                                        _ => rsx!{
+                                                            option { selected:true, disabled: true, value: "None", "None" }
+                                                            option { value: "Energy", "Energy" }
+                                                            option { value: "Rays", "Rays" }
+                                                        },
+                                                    }
+                                                },
+                                                _ => rsx!{
+                                                    option { selected:true, disabled: true, value: "None", "None" }
+                                                    option { value: "Energy", "Energy" }
+                                                    option { value: "Rays", "Rays" }
+                                                },
+                                            }
+                                        })
                                     }
-                                            // NodePropInput {
-                                            //     name: "NodeId".to_string(),
-                                            //     placeholder: "Node ID".to_string(),
-                                            //     node_change: NodeChange::NodeConst(format!("{}", node_attr.uuid())),
-                                            // }
-                                            // NodePropInput {
-                                            //     name: "NodeType".to_string(),
-                                            //     placeholder: "Node Type".to_string(),
-                                            //     node_change: NodeChange::NodeConst(format!("{}", node_attr.node_type().to_string())),
-                                            
-                                            // }
-                                            // NodePropInput {
-                                            //     name: "NodeName".to_string(),
-                                            //     placeholder: "Node Name".to_string(),
-                                            //     node_change: NodeChange::Name(node_attr.name().to_string()),
-                                            // }
-                                            // NodePropInput {
-                                            //     name: "LIDT".to_string(),
-                                            //     placeholder: "LIDT in J/cm²".to_string(),
-                                            //     node_change: NodeChange::LIDT(node_attr.lidt().clone()),
-                                            // }
-                                            // node_type: String,
-                                        }
-                                    }
+                                    
                                 }
-                            
+                                label { r#for: "selectSourceType", "Source Type" }
+                            }
+                        }
+                    }
+                }
                 div {
                     class: "accordion accordion-borderless bg-dark ",
                     id: "accordionAlignment",
@@ -349,7 +345,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                     node_change: NodeChange::TranslationY(
                                         node_attr.alignment().as_ref().map_or(Length::zero(), |a| a.translation().y),
                                     ),
-                                
                                 }
                                 NodePropInput {
                                     name: "ZTranslation".to_string(),
@@ -357,7 +352,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                     node_change: NodeChange::TranslationZ(
                                         node_attr.alignment().as_ref().map_or(Length::zero(), |a| a.translation().z),
                                     ),
-                                
                                 }
                                 NodePropInput {
                                     name: "Roll".to_string(),
@@ -372,7 +366,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                     node_change: NodeChange::RotationPitch(
                                         node_attr.alignment().as_ref().map_or(Angle::zero(), |a| a.rotation().y),
                                     ),
-                                
                                 }
                                 NodePropInput {
                                     name: "Yaw".to_string(),
@@ -402,20 +395,23 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
     let (init_value, input_type, readonly) = match node_change {
         NodeChange::Name(ref node_name) => (node_name.clone(), "text", false),
         NodeChange::LIDT(lidt) => (format!("{:.2}", lidt.value / 10000.), "number", false),
-        NodeChange::TranslationX(x_trans) => 
-            (format!("{:.6}", x_trans.get::<meter>()), "number", false),
-        
-        NodeChange::TranslationY(y_trans) => 
-            (format!("{:.6}", y_trans.get::<meter>()), "number", false),
-        
-        NodeChange::TranslationZ(z_trans) => 
-            (format!("{:.6}", z_trans.get::<meter>()), "number", false),
-        
-        NodeChange::RotationRoll(roll) => 
-        (format!("{:.6}", roll.get::<degree>()), "number", false),
-        NodeChange::RotationPitch(pitch) => 
-            (format!("{:.6}", pitch.get::<degree>()), "number", false),
-        
+        NodeChange::TranslationX(x_trans) => {
+            (format!("{:.6}", x_trans.get::<meter>()), "number", false)
+        }
+
+        NodeChange::TranslationY(y_trans) => {
+            (format!("{:.6}", y_trans.get::<meter>()), "number", false)
+        }
+
+        NodeChange::TranslationZ(z_trans) => {
+            (format!("{:.6}", z_trans.get::<meter>()), "number", false)
+        }
+
+        NodeChange::RotationRoll(roll) => (format!("{:.6}", roll.get::<degree>()), "number", false),
+        NodeChange::RotationPitch(pitch) => {
+            (format!("{:.6}", pitch.get::<degree>()), "number", false)
+        }
+
         NodeChange::RotationYaw(yaw) => (format!("{:.6}", yaw.get::<degree>()), "number", false),
         NodeChange::Inverted(inverted) => (format!("{inverted}"), "checkbox", false),
         NodeChange::NodeConst(ref val) => (val.clone(), "text", true),
@@ -459,12 +455,19 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
                         move |event: Event<FormData>| {
                             match node_change {
                                 NodeChange::Name(_) => {
-                                    let Ok(name) = event.data.parsed::<String>() ;
+                                    let Ok(name) = event.data.parsed::<String>();
                                     node_change_signal.set(Some(NodeChange::Name(name)));
                                 }
                                 NodeChange::LIDT(_) => {
                                     if let Ok(lidt) = event.data.parsed::<f64>() {
-                                        node_change_signal.set(Some(NodeChange::LIDT(RadiantExposure::new::<joule_per_square_centimeter>(lidt))));
+                                        node_change_signal
+                                            .set(
+                                                Some(
+                                                    NodeChange::LIDT(
+                                                        RadiantExposure::new::<joule_per_square_centimeter>(lidt),
+                                                    ),
+                                                ),
+                                            );
                                     }
                                 }
                                 NodeChange::TranslationX(_) => {
