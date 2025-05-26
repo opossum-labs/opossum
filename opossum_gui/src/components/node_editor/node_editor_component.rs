@@ -234,7 +234,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                 }
 
                 div {
-                    hidden: {node_attr.node_type() == "source"},
+                    hidden: {node_attr.node_type() != "source"},
                     class: "accordion accordion-borderless bg-dark ",
                     id: "accordionSource",
                     div { class: "accordion-item bg-dark text-light",
@@ -262,7 +262,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                         class: "form-select",
                                         "aria-label": "Select source type",
                                         onchange: move |e| source_type.set(light_data_builder.get(e.value().as_str()).cloned()),
-                                    }
+                                    
                                     {
                                         node_attr.properties().get("light data").map_or({
                                             rsx!{
@@ -304,9 +304,10 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                             }
                                         })
                                     }
-                                    
                                 }
+                                    
                                 label { r#for: "selectSourceType", "Source Type" }
+                                }
                             }
                         }
                     }
