@@ -357,9 +357,27 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                                                 class: "form-select",
                                                                 "aria-label": "Select rays type",
                                                                 onchange: {
-                                                                    let light_data_builder = light_data_builder.clone();
+                                                                    let mut light_data_builder = light_data_builder.clone();
 
-                                                                    move |_e| {
+                                                                    move |e| {
+                                                                        match e.value().as_str() {
+                                                                            "Collimated" => {
+                                                                                light_data_builder.insert("Rays".to_string(), LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+                                                                                    pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
+                                                                                    energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
+                                                                                    spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)]).unwrap().into(),
+                                                                                }));
+                                                                            },
+                                                                            "Point Source" => {
+                                                                                light_data_builder.insert("Rays".to_string(), LightDataBuilder::Geometric(RayDataBuilder::PointSrc {
+                                                                                    pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
+                                                                                    energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
+                                                                                    spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)]).unwrap().into(),
+                                                                                }));
+                                                                            },
+                                                                            _ => {}
+                                                                        }
+
                                                                     node_change.set(
                                                                         Some(NodeChange::Property(
                                                                             "light data".to_owned(), serde_json::to_value(Proptype::LightDataBuilder(light_data_builder.get("Rays").cloned())).unwrap())));

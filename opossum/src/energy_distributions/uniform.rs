@@ -32,6 +32,12 @@ impl UniformDist {
         }
         Ok(Self { total_energy })
     }
+    pub fn set_energy(&mut self, energy: Energy) {
+        if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
+            panic!("Energy must be greater than zero finite!");
+        }
+        self.total_energy = energy;
+    }
 }
 impl EnergyDistribution for UniformDist {
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy> {

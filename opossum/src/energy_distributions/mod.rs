@@ -49,4 +49,11 @@ impl EnergyDistType {
             Self::General2DGaussian(dist) => dist,
         }
     }
+
+    pub fn set_energy(&mut self, energy: Energy){
+        match self {
+            EnergyDistType::Uniform(uniform_dist) => uniform_dist.set_energy(energy),
+            EnergyDistType::General2DGaussian(general2_dgaussian) => general2_dgaussian.set_energy(energy),
+        }
+    }
 }

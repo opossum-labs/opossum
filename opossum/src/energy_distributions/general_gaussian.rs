@@ -88,6 +88,16 @@ impl General2DGaussian {
             rectangular,
         })
     }
+
+    pub fn set_energy(&mut self , energy: Energy) -> OpmResult<()> {
+        if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
+            return Err(OpossumError::Other(
+                "Energy must be greater than zero finite!".into(),
+            ));
+        }
+        self.total_energy = energy;
+        Ok(())
+    }
 }
 impl EnergyDistribution for General2DGaussian {
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy> {

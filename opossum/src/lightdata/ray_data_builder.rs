@@ -107,6 +107,21 @@ impl RayDataBuilder {
             )?)),
         }
     }
+
+    pub fn set_energy(&mut self, energy: Energy){
+        match self {
+            RayDataBuilder::Raw(rays) => todo!(),
+            RayDataBuilder::Collimated { pos_dist, energy_dist, spect_dist } => {
+                energy_dist.set_energy(energy);
+            },
+            RayDataBuilder::PointSrc { pos_dist, energy_dist, spect_dist, reference_length } => {
+                energy_dist.set_energy(energy);
+            },
+            RayDataBuilder::Image { file_path, pixel_size, total_energy, wave_length, cone_angle } => {
+                *total_energy = energy;
+            },
+        }
+    }
 }
 
 impl Display for RayDataBuilder {
