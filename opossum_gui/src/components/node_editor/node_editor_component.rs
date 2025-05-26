@@ -26,6 +26,7 @@ pub enum NodeChange {
     RotationYaw(Angle),
     Inverted(bool),
     NodeConst(String), // AlignLikeNodeAtDistance(Uuid, Length),
+    Property(String, Vec<u8>),
 }
 
 #[component]
@@ -156,6 +157,19 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             &HTTP_API_CLIENT(),
                             active_node.id(),
                             (yaw, 2),
+                        )
+                        .await
+                        {
+                            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        };
+                    });
+                }
+                NodeChange::Property(key, prop) => {
+                    spawn(async move {
+                        if let Err(err_str) = api::update_node_property(
+                            &HTTP_API_CLIENT(),
+                            active_node.id(),
+                            (key, prop),
                         )
                         .await
                         {
@@ -304,8 +318,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                             }
                                         })
                                     }
-                                }
-                                    
+                                }                                    
                                 label { r#for: "selectSourceType", "Source Type" }
                                 }
                             }
@@ -416,6 +429,7 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
         NodeChange::RotationYaw(yaw) => (format!("{:.6}", yaw.get::<degree>()), "number", false),
         NodeChange::Inverted(inverted) => (format!("{inverted}"), "checkbox", false),
         NodeChange::NodeConst(ref val) => (val.clone(), "text", true),
+        NodeChange::Property(_, _ ) => ("not used".to_owned(), "text", true)
     };
 
     if input_type == "checkbox" {
@@ -531,6 +545,7 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
                                     }
                                 }
                                 NodeChange::NodeConst(_) => {}
+                                NodeChange::Property(_,_) => {}
                             };
                         }
                     },

@@ -5,10 +5,7 @@ use actix_web::{
 };
 use nalgebra::{Point2, Point3};
 use opossum::{
-    meter,
-    nodes::{create_node_ref, fluence_detector::Fluence, NodeAttr},
-    optic_ports::PortType,
-    utils::geom_transformation::Isometry,
+    meter, nodes::{create_node_ref, fluence_detector::Fluence, NodeAttr}, optic_ports::PortType, properties::Proptype, utils::geom_transformation::Isometry
 };
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -454,6 +451,58 @@ async fn post_node_alignment_translation(
     }
 }
 
+/// Update the alignment translation of an optical node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "Update a single property of the optical node"),
+    ),
+    request_body(content = String,
+        description = "updated property of node",
+        content_type = "application/json",
+        example= "(\"key\", \"value\")"
+    ),
+    responses(
+        (status = OK, description = "Node property successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/property/{uuid}")]
+async fn post_node_property(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    key_val_pair: web::Json<(String, Vec<u8>)>,
+) -> Result<(), ErrorResponse> {
+    let uuid: Uuid = path.into_inner();
+    let (prop_key, prop_value_serialized) = key_val_pair.into_inner();
+    let prop_value: Proptype = match serde_json::from_slice(&prop_value_serialized) {
+        Ok(value) => value,
+        Err(e) => {
+            return Err(ErrorResponse::new(
+                400,
+                "Opossum",
+                &format!("Failed to deserialize property value: {}", e),
+            ))
+        }
+    };
+    let document = data.document.lock().unwrap();
+    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+        node_ref
+                .optical_ref
+                .lock()
+                .unwrap()
+                .node_attr_mut()
+                .set_property(prop_key.as_str(), prop_value)?;
+        Ok(())
+    } else {
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+        ))
+    }
+}
+
+
 /// Update the alignment rotation of an optical node
 #[utoipa::path(tag = "node",
     params(
@@ -714,7 +763,8 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_lidt);
     cfg.service(post_node_alignment_translation);
     cfg.service(post_node_alignment_rotation);
-
+    cfg.service(post_node_property);
+    
     cfg.service(get_properties);
     cfg.service(patch_properties);
 

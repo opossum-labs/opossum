@@ -1,7 +1,7 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode, NodeInfo},
-    Fluence, NodeAttr,
+    Fluence, NodeAttr, Proptype,
 };
 use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
@@ -217,3 +217,23 @@ pub async fn update_node_rotation(
         )
         .await
 }
+
+/// Update the property of the node with the given `node_id`.
+/// The property value is already passes as a Vec<u8> to avoid implementing PartialEq for every property type.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_property(
+    client: &HTTPClient,
+    node_id: Uuid,
+    property_key_val: (String, Vec<u8>),
+) -> Result<String, String> {
+    client
+        .post::<(String, Vec<u8>), String>(
+            &format!("/api/scenery/property/{}", node_id.as_simple()),
+            property_key_val,
+        )
+        .await
+}
+
