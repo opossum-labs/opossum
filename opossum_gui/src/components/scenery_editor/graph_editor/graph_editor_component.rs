@@ -192,7 +192,7 @@ pub fn GraphEditor(
                 graph_shift.set(Point2D::new(-center.x, 250.0 - center.y));
             },
             div {
-                class: "zoom-shift-container",
+                // class: "zoom-shift-container",
                 draggable: false,
                 style: format!(
                     "transform: translate({}px, {}px) scale({graph_zoom});",
