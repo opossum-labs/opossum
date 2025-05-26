@@ -38,7 +38,8 @@ use crate::{
 ///     - `out1`
 ///
 /// ## Properties
-///   - `name`
+///   - `view direction`
+///   - `ray transperency`
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -58,6 +59,9 @@ impl Default for RayPropagationVisualizer {
         "plane to project the ray positions onto, defined by the normal vector. default: y-z plane", 
                 Proptype::Vec3(Vector3::x())).unwrap();
 
+        node_attr.create_property("ray transparency", 
+        "transparency (alpha) value of the ray colors to be plotted. Must be in the interval [0.0,1.0]", 
+                0.4.into()).unwrap();
         let mut rpv = Self {
             light_data: None,
             node_attr,
@@ -100,6 +104,9 @@ impl OpticNode for RayPropagationVisualizer {
             if let Ok(mut ray_position_histories) = rays.get_rays_position_history(true) {
                 if let Ok(Proptype::Vec3(view_vec)) = self.properties().get("view_direction") {
                     ray_position_histories.plot_view_direction = Some(*view_vec);
+                }
+                if let Ok(Proptype::F64(transparency)) = self.properties().get("ray transparency") {
+                    ray_position_histories.ray_transparency = *transparency;
                 }
                 props
                     .create(
@@ -304,6 +311,8 @@ pub struct RayPositionHistories {
     pub rays_pos_history: Vec<RayPositionHistorySpectrum>,
     /// view direction if the rayposition thistory is plotted
     pub plot_view_direction: Option<Vector3<f64>>,
+    /// color transparency for the plotted rays. Must be within [0.0, 1.0].
+    pub ray_transparency: f64,
 }
 impl RayPositionHistories {
     /// returns the center wavelengths of the individual [`RayPositionHistorySpectrum`] structs as a Vector
@@ -386,7 +395,7 @@ impl Plottable for RayPositionHistories {
                 };
                 plt_series.push(PlotSeries::new(
                     &plt_data,
-                    RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 0.4),
+                    RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, self.ray_transparency),
                     series_label,
                 ));
             }

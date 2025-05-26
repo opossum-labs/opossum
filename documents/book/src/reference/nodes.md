@@ -2,31 +2,44 @@
 
 Nodes form the building blocks of the optical model and normally represent optical components. Nodes are configured through properties (see below) and can be connected by edges. Furthermore, nodes might contain an "inner state" (which cannot be modified directly). This is interesting (in the future) for simulating effects like depletion or simply accumulating energy on an energy meter during multiple passes etc... In addition, there are two special nodes
 
-- Group nodes
+- [Group node](./nodes/node_group.md)
 
- A (sequential) group node contains a nested directed graph of other nodes or even further group nodes. This allows for struturing the model by modeling subsystems. Each group defines external ports by mapping input and / or output ports of internal nodes.
+    A (sequential) group node contains a nested directed graph of other nodes or even further group nodes.
+    This allows for struturing the model by modeling subsystems. Each group defines external ports by mapping
+    input and / or output ports of internal nodes.
 
-- Reference node
+- [Reference node](./nodes/reference_node.md)
 
-A reference node refers to an already existing node in the model. Reference nodes are necessary in multi pass setups. Another use case is the modeling of linear resonators.
+    A reference node refers to an already existing node in the model. Reference nodes are necessary in multi pass setups.
+    Another use case is the modeling of linear resonators.
 
 ## Node Properties
 
 All nodes con be configured through node properties. All nodes have a common set of properties as shown below. In addition, nodes can have additional properties specific to the respective node type. An example would be the center thickness of a lens. Properties common to all nodes are:
 
-`name`
-: While not strictly necessary it is strongly recommended to assign a name to a node for easier identification. In principle, different nodes can have the same name but this might cause much confusion. Internally the model uses unique IDs for each node in order to distinguish them but these IDs are not available to the user.
+- `name`
 
-`inverted`
-: Flag denoting the direction of the passing light. It might be necessary to propagate through a node in a reverse direction (e.g. for back reflection / ghost-focus analysis). Hence each node should have a "reverse" function. In the case of a propagation node, this would be identical. For a basic node, it might change the sign of some properties such as the radius of curvature. For group nodes, the underlying order of sub-nodes has to be reversed. The reference node only needs a qualifier to denote whether the propagation is reversed or not.
+    While not strictly necessary it is strongly recommended to assign a name to a node for easier identification.
+    In principle, different nodes can have the same name but this might cause much confusion. Internally the model uses
+    unique IDs for each node in order to distinguish them but these IDs are not available to the user.
 
-`global position`
-: Global position in 3D space.
+- `inverted`
 
-`local position`
-: Local position / alignment relative to the `global position`.
+	Flag denoting the direction of the passing light. It might be necessary to propagate through a node in a reverse
+	direction (e.g. for back reflection / ghost-focus analysis). Hence each node should have a "reverse" function. In the case 
+	of a propagation node, this would be identical. For a basic node, it might change the sign of some properties such as the 
+	radius of curvature. For group nodes, the underlying order of sub-nodes has to be reversed. The reference node only needs
+	a qualifier to denote whether the propagation is reversed or not.
 
-`damage threshold`
+- `global position`
+
+    Global position in 3D space.
+
+- `local position`
+
+    Local position / alignment relative to the `global position`.
+
+-  `damage threshold`
 
 ## Ports
 

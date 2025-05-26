@@ -183,7 +183,6 @@ impl PlotType {
         line_color: RGBAColor,
         label: Option<String>,
     ) {
-        println!("Draw histogram 2D");
         // get data points as vector
         let points = x
             .iter()
