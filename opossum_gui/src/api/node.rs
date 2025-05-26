@@ -230,8 +230,6 @@ pub async fn update_node_property(
     node_id: Uuid,
     property_key_val: (String, Value),
 ) -> Result<String, String> {
-    println!("sending property!");
-
     client
         .post::<(String, Value), String>(
             &format!("/api/scenery/property/{}", node_id.as_simple()),

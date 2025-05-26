@@ -485,7 +485,6 @@ async fn post_node_property(
             ))
         }
     };
-    println!("got property!");
     let document = data.document.lock().unwrap();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
