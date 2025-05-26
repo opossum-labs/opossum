@@ -32,7 +32,7 @@ pub enum NodeChange {
 
 #[component]
 pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
-    let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
+    let mut node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
 
     let geom_light_data = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
         pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
@@ -279,7 +279,12 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                     select {
                                         class: "form-select",
                                         "aria-label": "Select source type",
-                                        onchange: move |e| source_type.set(light_data_builder.get(e.value().as_str()).cloned()),
+                                        onchange: move |e| {
+                                            source_type.set(light_data_builder.get(e.value().as_str()).cloned());
+                                            node_change.set(
+                                                Some(NodeChange::Property(
+                                                    "light data".to_owned(), serde_json::to_value(Proptype::LightDataBuilder(light_data_builder.get(e.value().as_str()).cloned())).unwrap())));
+                                        },
                                     
                                     {
                                         node_attr.properties().get("light data").map_or({
