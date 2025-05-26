@@ -45,43 +45,43 @@ fn main() -> OpmResult<()> {
     let i_mm2 = scenery.add_node(ThinMirror::new("MM2").with_tilt(degree!(45.0, 0.0, 0.0))?)?;
 
     let disk_1 = Wedge::new("disk 1", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(56.0, 0.0, 0.0))?;
+        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
     let i_a1 = scenery.add_node(disk_1)?;
 
     let disk_2 = Wedge::new("disk 2", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
+        .with_tilt(degree!(56.0, 0.0, 0.0))?;
     let i_a2 = scenery.add_node(disk_2)?;
 
     let disk_3 = Wedge::new("disk 3", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(56.0, 0.0, 0.0))?;
+        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
     let i_a3 = scenery.add_node(disk_3)?;
 
     let disk_4 = Wedge::new("disk 4", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
+        .with_tilt(degree!(56.0, 0.0, 0.0))?;
     let i_a4 = scenery.add_node(disk_4)?;
 
     let disk_5 = Wedge::new("disk 5", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(56.0, 0.0, 0.0))?;
+        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
     let i_a5 = scenery.add_node(disk_5)?;
 
     let disk_6 = Wedge::new("disk 6", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
+        .with_tilt(degree!(56.0, 0.0, 0.0))?;
     let i_a6 = scenery.add_node(disk_6)?;
 
     let disk_7 = Wedge::new("disk 7", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(56.0, 0.0, 0.0))?;
+        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
     let i_a7 = scenery.add_node(disk_7)?;
 
     let disk_8 = Wedge::new("disk 8", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
+        .with_tilt(degree!(56.0, 0.0, 0.0))?;
     let i_a8 = scenery.add_node(disk_8)?;
 
     let disk_9 = Wedge::new("disk 9", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(56.0, 0.0, 0.0))?;
+        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
     let i_a9 = scenery.add_node(disk_9)?;
 
     let disk_10 = Wedge::new("disk 10", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
+        .with_tilt(degree!(56.0, 0.0, 0.0))?;
     let i_a10 = scenery.add_node(disk_10)?;
 
     let i_mm1 = scenery.add_node(ThinMirror::new("MM2").with_tilt(degree!(-0.5, 0.0, 0.0))?)?;

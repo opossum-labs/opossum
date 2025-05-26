@@ -59,7 +59,9 @@ fn main() -> OpmResult<()> {
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
     let i_sd4 = scenery.add_node(SpotDiagram::new("spot at image"))?;
-    scenery.connect_nodes(i_src, "output_1", i_pl1, "input_1", millimeter!(70.0))?;
+    let i_sd5 = scenery.add_node(SpotDiagram::new("spot at image"))?;
+    scenery.connect_nodes(i_src, "output_1", i_sd5, "input_1", millimeter!(0.0))?;
+    scenery.connect_nodes(i_sd5, "output_1", i_pl1, "input_1", millimeter!(70.0))?;
     scenery.connect_nodes(i_pl1, "output_1", i_pl2, "input_1", millimeter!(125.0))?;
     scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(58.0))?;
     scenery.connect_nodes(i_sd3, "output_1", i_sd4, "input_1", millimeter!(0.1))?;

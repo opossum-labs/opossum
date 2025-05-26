@@ -19,7 +19,7 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler image field");
     let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Image {
-        file_path: Path::new("./logo/Logo_square_tiny.png").to_path_buf(),
+        file_path: Path::new("./logo/Logo_square_tiny_grey_inverted.png").to_path_buf(),
         pixel_size: micrometer!(50.0),
         total_energy: joule!(1.0),
         wave_length: nanometer!(1000.0),
@@ -58,13 +58,26 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     let i_pl2 = scenery.add_node(lens2)?;
+    
+    let mut fluence_det = FluenceDetector::new("Before image Plane");
+    fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
+    let i_sd6 = scenery.add_node(fluence_det)?;
+   
     let mut fluence_det = FluenceDetector::new("Image Plane");
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
-    let i_sd4 = scenery.add_node(fluence_det)?;
+    let i_sd7 = scenery.add_node(fluence_det)?;
+   
+    let mut fluence_det = FluenceDetector::new("Adter image Plane");
+    fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
+    let i_sd8 = scenery.add_node(fluence_det)?;
+
     scenery.connect_nodes(i_src, "output_1", i_sd5, "input_1", millimeter!(0.001))?;
     scenery.connect_nodes(i_sd5, "output_1", i_pl1, "input_1", millimeter!(70.0))?;
     scenery.connect_nodes(i_pl1, "output_1", i_pl2, "input_1", millimeter!(125.0))?;
-    scenery.connect_nodes(i_pl2, "output_1", i_sd4, "input_1", millimeter!(58.0))?;
+    scenery.connect_nodes(i_pl2, "output_1", i_sd6, "input_1", millimeter!(54.0))?;
+    scenery.connect_nodes(i_sd6, "output_1", i_sd7, "input_1", millimeter!(4.0))?;
+    scenery.connect_nodes(i_sd7, "output_1", i_sd8, "input_1", millimeter!(4.0))?;
+
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new(
