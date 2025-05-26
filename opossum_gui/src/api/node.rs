@@ -3,6 +3,7 @@ use opossum_backend::{
     nodes::{ConnectInfo, NewNode, NodeInfo},
     Fluence, NodeAttr, Proptype,
 };
+use serde_json::Value;
 use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
@@ -219,7 +220,7 @@ pub async fn update_node_rotation(
 }
 
 /// Update the property of the node with the given `node_id`.
-/// The property value is already passes as a Vec<u8> to avoid implementing PartialEq for every property type.
+/// The property value is already passes as a serde_json::Value to avoid implementing PartialEq for every property type.
 ///
 /// # Errors
 ///
@@ -227,10 +228,12 @@ pub async fn update_node_rotation(
 pub async fn update_node_property(
     client: &HTTPClient,
     node_id: Uuid,
-    property_key_val: (String, Vec<u8>),
+    property_key_val: (String, Value),
 ) -> Result<String, String> {
+    println!("sending property!");
+
     client
-        .post::<(String, Vec<u8>), String>(
+        .post::<(String, Value), String>(
             &format!("/api/scenery/property/{}", node_id.as_simple()),
             property_key_val,
         )

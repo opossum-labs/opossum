@@ -8,6 +8,7 @@ use opossum::{
     meter, nodes::{create_node_ref, fluence_detector::Fluence, NodeAttr}, optic_ports::PortType, properties::Proptype, utils::geom_transformation::Isometry
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uom::si::{
     f64::{Angle, Length},
     length::meter,
@@ -470,12 +471,12 @@ async fn post_node_alignment_translation(
 async fn post_node_property(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    key_val_pair: web::Json<(String, Vec<u8>)>,
+    key_val_pair: web::Json<(String, Value)>,
 ) -> Result<(), ErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let (prop_key, prop_value_serialized) = key_val_pair.into_inner();
-    let prop_value: Proptype = match serde_json::from_slice(&prop_value_serialized) {
-        Ok(value) => value,
+    let prop_value: Proptype = match serde_json::from_value(prop_value_serialized) {
+        Ok(proptype) => proptype,
         Err(e) => {
             return Err(ErrorResponse::new(
                 400,
@@ -484,6 +485,7 @@ async fn post_node_property(
             ))
         }
     };
+    println!("got property!");
     let document = data.document.lock().unwrap();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref

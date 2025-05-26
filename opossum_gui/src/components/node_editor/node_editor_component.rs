@@ -9,6 +9,7 @@ use opossum_backend::ray_data_builder::RayDataBuilder;
 use opossum_backend::{
     joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, Proptype, UniformDist
 };
+use serde_json::Value;
 use uom::si::f64::{Angle, RadiantExposure};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uom::si::{angle::degree, f64::Length, length::meter};
@@ -26,7 +27,7 @@ pub enum NodeChange {
     RotationYaw(Angle),
     Inverted(bool),
     NodeConst(String), // AlignLikeNodeAtDistance(Uuid, Length),
-    Property(String, Vec<u8>),
+    Property(String, Value),
 }
 
 #[component]
@@ -166,6 +167,8 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                 }
                 NodeChange::Property(key, prop) => {
                     spawn(async move {
+                        println!("property changed in gui!");
+
                         if let Err(err_str) = api::update_node_property(
                             &HTTP_API_CLIENT(),
                             active_node.id(),
@@ -198,6 +201,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     });
 
     if let Some(Some(node_attr)) = &*resource_future.read_unchecked() {
+        // let test = serde_json::to_value(value) node_attr.properties().get("light data").unwrap();
         rsx! {
             div {
                 h6 { "Node Configuration" }
