@@ -33,7 +33,6 @@ fn main() -> OpmResult<()> {
     src.set_isometry(Isometry::identity())?;
     let i_src = scenery.add_node(src)?;
 
-    let fused_silica = RefrIndexConst::new(1.5)?;
     let lens1 = ParaxialSurface::new("Input lens", millimeter!(1400.0))?;
     let i_l1 = scenery.add_node(lens1)?;
     let i_m1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(45.0, 0.0, 0.0))?)?;
@@ -44,87 +43,39 @@ fn main() -> OpmResult<()> {
     let i_mm3 = scenery.add_node(ThinMirror::new("MM3").with_tilt(degree!(45.0, 0.0, 0.0))?)?;
     let i_mm2 = scenery.add_node(ThinMirror::new("MM2").with_tilt(degree!(45.0, 0.0, 0.0))?)?;
 
-    let disk_1 = Wedge::new("disk 1", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
-    let i_a1 = scenery.add_node(disk_1)?;
+    let mut amps = NodeGroup::new("Amps");
 
-    let disk_2 = Wedge::new("disk 2", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(56.0, 0.0, 0.0))?;
-    let i_a2 = scenery.add_node(disk_2)?;
+    let i_amp1=amps.add_node(amp("Amp 1")?)?;
+    let i_amp2=amps.add_node(amp("Amp 2")?)?;
+    let i_amp3=amps.add_node(amp("Amp 3")?)?;
+    let i_amp4=amps.add_node(amp("Amp 4")?)?;
+    let i_amp5=amps.add_node(amp("Amp 5")?)?;
 
-    let disk_3 = Wedge::new("disk 3", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
-    let i_a3 = scenery.add_node(disk_3)?;
+    amps.connect_nodes(i_amp1, "output", i_amp2, "input", millimeter!(800.0))?;
+    amps.connect_nodes(i_amp2, "output", i_amp3, "input", millimeter!(800.0))?;
+    amps.connect_nodes(i_amp3, "output", i_amp4, "input", millimeter!(800.0))?;
+    amps.connect_nodes(i_amp4, "output", i_amp5, "input", millimeter!(800.0))?;
 
-    let disk_4 = Wedge::new("disk 4", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(56.0, 0.0, 0.0))?;
-    let i_a4 = scenery.add_node(disk_4)?;
+    amps.map_input_port(i_amp1, "input", "input")?;
+    amps.map_output_port(i_amp5, "output", "output")?;
 
-    let disk_5 = Wedge::new("disk 5", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
-    let i_a5 = scenery.add_node(disk_5)?;
+    amps.set_property("expand view", true.into())?;
 
-    let disk_6 = Wedge::new("disk 6", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(56.0, 0.0, 0.0))?;
-    let i_a6 = scenery.add_node(disk_6)?;
+    let mut main_amp= NodeGroup::new("Double-Pass Amps");
 
-    let disk_7 = Wedge::new("disk 7", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
-    let i_a7 = scenery.add_node(disk_7)?;
+    let i_amps= main_amp.add_node(amps)?;
+    let i_mm1 = main_amp.add_node(ThinMirror::new("MM1").with_tilt(degree!(-0.5, 0.0, 0.0))?)?;
+    let mut r_amps = NodeReference::from_node(&main_amp.node(i_amps)?);
+    r_amps.set_inverted(true)?;
+    let i_r_amps = main_amp.add_node(r_amps)?;
 
-    let disk_8 = Wedge::new("disk 8", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(56.0, 0.0, 0.0))?;
-    let i_a8 = scenery.add_node(disk_8)?;
+    main_amp.connect_nodes(i_amps, "output", i_mm1, "input_1", millimeter!(800.0))?;
+    main_amp.connect_nodes(i_mm1,"output_1", i_r_amps, "output", millimeter!(0.0))?;
+    main_amp.map_input_port(i_amps, "input", "input")?;
+    main_amp.map_output_port(i_r_amps, "input", "output")?;
 
-    let disk_9 = Wedge::new("disk 9", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
-    let i_a9 = scenery.add_node(disk_9)?;
-
-    let disk_10 = Wedge::new("disk 10", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(56.0, 0.0, 0.0))?;
-    let i_a10 = scenery.add_node(disk_10)?;
-
-    let i_mm1 = scenery.add_node(ThinMirror::new("MM2").with_tilt(degree!(-0.5, 0.0, 0.0))?)?;
-
-    let mut r_a10 = NodeReference::from_node(&scenery.node(i_a10)?);
-    r_a10.set_inverted(true)?;
-    let i_r_a10 = scenery.add_node(r_a10)?;
-
-    let mut r_a9 = NodeReference::from_node(&scenery.node(i_a9)?);
-    r_a9.set_inverted(true)?;
-    let i_r_a9 = scenery.add_node(r_a9)?;
-
-    let mut r_a8 = NodeReference::from_node(&scenery.node(i_a8)?);
-    r_a8.set_inverted(true)?;
-    let i_r_a8 = scenery.add_node(r_a8)?;
-
-    let mut r_a7 = NodeReference::from_node(&scenery.node(i_a7)?);
-    r_a7.set_inverted(true)?;
-    let i_r_a7 = scenery.add_node(r_a7)?;
-
-    let mut r_a6 = NodeReference::from_node(&scenery.node(i_a6)?);
-    r_a6.set_inverted(true)?;
-    let i_r_a6 = scenery.add_node(r_a6)?;
-
-    let mut r_a5 = NodeReference::from_node(&scenery.node(i_a5)?);
-    r_a5.set_inverted(true)?;
-    let i_r_a5 = scenery.add_node(r_a5)?;
-
-    let mut r_a4 = NodeReference::from_node(&scenery.node(i_a4)?);
-    r_a4.set_inverted(true)?;
-    let i_r_a4 = scenery.add_node(r_a4)?;
-
-    let mut r_a3 = NodeReference::from_node(&scenery.node(i_a3)?);
-    r_a3.set_inverted(true)?;
-    let i_r_a3 = scenery.add_node(r_a3)?;
-
-    let mut r_a2 = NodeReference::from_node(&scenery.node(i_a2)?);
-    r_a2.set_inverted(true)?;
-    let i_r_a2 = scenery.add_node(r_a2)?;
-
-    let mut r_a1 = NodeReference::from_node(&scenery.node(i_a1)?);
-    r_a1.set_inverted(true)?;
-    let i_r_a1 = scenery.add_node(r_a1)?;
+    main_amp.set_property("expand view", true.into())?;
+    let i_main_amp=scenery.add_node(main_amp)?;
 
     let mut r_mm2 = NodeReference::from_node(&scenery.node(i_mm2)?);
     r_mm2.set_inverted(true)?;
@@ -141,7 +92,7 @@ fn main() -> OpmResult<()> {
     let lens3 = ParaxialSurface::new("Exit lens", millimeter!(7000.0))?;
     let i_l3 = scenery.add_node(lens3)?;
 
-    let i_mm4 = scenery.add_node(ThinMirror::new("MM4").with_tilt(degree!(-45.0, 0.0, 0.0))?)?;
+    let i_mm4 = scenery.add_node(ThinMirror::new("MM4").with_tilt(degree!(45.0, 0.0, 0.0))?)?;
 
     let mut ray_prop_vis = RayPropagationVisualizer::new("propagation", None)?;
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
@@ -155,31 +106,8 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_mm3, "output_1", i_mm2, "input_1", millimeter!(1500.0))?;
 
     // disks forward
-    scenery.connect_nodes(i_mm2, "output_1", i_a1, "input_1", millimeter!(1000.0))?;
-    scenery.connect_nodes(i_a1, "output_1", i_a2, "input_1", millimeter!(500.0))?;
-    scenery.connect_nodes(i_a2, "output_1", i_a3, "input_1", millimeter!(800.0))?;
-    scenery.connect_nodes(i_a3, "output_1", i_a4, "input_1", millimeter!(500.0))?;
-    scenery.connect_nodes(i_a4, "output_1", i_a5, "input_1", millimeter!(800.0))?;
-    scenery.connect_nodes(i_a5, "output_1", i_a6, "input_1", millimeter!(500.0))?;
-    scenery.connect_nodes(i_a6, "output_1", i_a7, "input_1", millimeter!(800.0))?;
-    scenery.connect_nodes(i_a7, "output_1", i_a8, "input_1", millimeter!(500.0))?;
-    scenery.connect_nodes(i_a8, "output_1", i_a9, "input_1", millimeter!(800.0))?;
-    scenery.connect_nodes(i_a9, "output_1", i_a10, "input_1", millimeter!(500.0))?;
-    scenery.connect_nodes(i_a10, "output_1", i_mm1, "input_1", millimeter!(800.0))?;
-
-    // disks backward
-    scenery.connect_nodes(i_mm1, "output_1", i_r_a10, "output_1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_r_a10, "input_1", i_r_a9, "output_1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_r_a9, "input_1", i_r_a8, "output_1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_r_a8, "input_1", i_r_a7, "output_1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_r_a7, "input_1", i_r_a6, "output_1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_r_a6, "input_1", i_r_a5, "output_1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_r_a5, "input_1", i_r_a4, "output_1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_r_a4, "input_1", i_r_a3, "output_1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_r_a3, "input_1", i_r_a2, "output_1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_r_a2, "input_1", i_r_a1, "output_1", millimeter!(0.0))?;
-
-    scenery.connect_nodes(i_r_a1, "input_1", i_r_mm2, "output_1", millimeter!(0.0))?;
+    scenery.connect_nodes(i_mm2, "output_1", i_main_amp, "input", millimeter!(1000.0))?;
+    scenery.connect_nodes(i_main_amp, "output", i_r_mm2, "output_1", millimeter!(0.0))?;
     scenery.connect_nodes(i_r_mm2, "input_1", i_r_mm3, "output_1", millimeter!(0.0))?;
     scenery.connect_nodes(i_r_mm3, "input_1", i_r_l2, "output_1", millimeter!(0.0))?;
 
@@ -191,4 +119,22 @@ fn main() -> OpmResult<()> {
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new("./opossum/playground/workshop_09_phelix.opm"))
+}
+
+fn amp(name: &str) -> OpmResult<NodeGroup> {
+    let fused_silica = RefrIndexConst::new(1.5)?;
+    let mut amp=NodeGroup::new(name);
+    let disk_a = Wedge::new("disk A", millimeter!(45.0), degree!(0.0), &fused_silica)?
+        .with_tilt(degree!(-56.0, 0.0, 0.0))?;
+    let i_a1 = amp.add_node(disk_a)?;
+
+    let disk_a = Wedge::new("disk B", millimeter!(45.0), degree!(0.0), &fused_silica)?
+        .with_tilt(degree!(56.0, 0.0, 0.0))?;
+    let i_a2 = amp.add_node(disk_a)?;
+
+    amp.connect_nodes(i_a1, "output_1", i_a2, "input_1", millimeter!(900.0))?;
+    amp.map_input_port(i_a1, "input_1", "input")?;
+    amp.map_output_port(i_a2, "output_1", "output")?;
+    amp.set_property("expand view", true.into())?;
+    Ok(amp)
 }
