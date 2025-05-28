@@ -58,15 +58,15 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     let i_pl2 = scenery.add_node(lens2)?;
-    
+
     let mut fluence_det = FluenceDetector::new("Before image Plane");
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
     let i_sd6 = scenery.add_node(fluence_det)?;
-   
+
     let mut fluence_det = FluenceDetector::new("Image Plane");
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
     let i_sd7 = scenery.add_node(fluence_det)?;
-   
+
     let mut fluence_det = FluenceDetector::new("Adter image Plane");
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
     let i_sd8 = scenery.add_node(fluence_det)?;

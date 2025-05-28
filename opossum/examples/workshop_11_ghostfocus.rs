@@ -1,12 +1,27 @@
 use opossum::{
-    analyzers::{AnalyzerType, GhostFocusConfig}, coatings::CoatingType, degree, energy_distributions::General2DGaussian, error::OpmResult, joule, lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder}, millimeter, nanometer, nodes::{Lens, NodeGroup, Source, ThinMirror}, optic_node::{Alignable, OpticNode}, optic_ports::PortType, position_distributions::HexagonalTiling, radian, spectral_distribution::LaserLines, utils::geom_transformation::Isometry, J_per_cm2, OpmDocument
+    analyzers::{AnalyzerType, GhostFocusConfig},
+    coatings::CoatingType,
+    degree,
+    energy_distributions::General2DGaussian,
+    error::OpmResult,
+    joule,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    millimeter, nanometer,
+    nodes::{Lens, NodeGroup, Source, ThinMirror},
+    optic_node::{Alignable, OpticNode},
+    optic_ports::PortType,
+    position_distributions::HexagonalTiling,
+    radian,
+    spectral_distribution::LaserLines,
+    utils::geom_transformation::Isometry,
+    J_per_cm2, OpmDocument,
 };
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Ghostfocus demo");
     let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-        pos_dist: HexagonalTiling::new(millimeter!(15.0), 5, millimeter!(0.0, 0.))?.into(),
+        pos_dist: HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
         energy_dist: General2DGaussian::new(
             joule!(2.),
             millimeter!(0., 0.),
