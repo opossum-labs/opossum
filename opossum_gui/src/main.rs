@@ -50,6 +50,6 @@ fn app() -> Element {
         document::Stylesheet { href: MDB_SUB_CSS }
         document::Stylesheet { href: MDB_ACC_CSS }
         document::Script { src: MDB_JS }
-        div { class: "vh-100", App {} }
+        App {}
     }
 }

@@ -47,158 +47,152 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
     use_effect(move || menu_item_selected.set(Some(MenuSelection::AddNode(node_selected()))));
     rsx! {
         nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",
-            div { class: "container-fluid",
-                button {
-                    class: "navbar-toggler",
-                    "data-mdb-target": "#navbarSupportedContent",
-                    "data-mdb-collapse-init": "",
-                    Icon { width: 25, icon: FaBars }
+            button {
+                class: "navbar-toggler",
+                "data-mdb-target": "#navbarSupportedContent",
+                "data-mdb-collapse-init": "",
+                Icon { width: 25, icon: FaBars }
+            }
+            div {
+                class: "collapse navbar-collapse",
+                id: "navbarSupportedContent",
+                img {
+                    class: "navbar-brand mt-lg-0",
+                    src: FAVICON,
+                    height: "40",
                 }
-                div {
-                    class: "collapse navbar-collapse",
-                    id: "navbarSupportedContent",
-                    img {
-                        class: "navbar-brand mt-lg-0",
-                        src: FAVICON,
-                        height: "40",
+                ul { class: "navbar-nav me-auto mt-lg-0",
+                    li { class: "nav-item dropdown",
+                        a {
+                            "data-mdb-dropdown-init": "",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            id: "navbarDropdownMenuLink",
+                            role: "button",
+                            "File"
+                        }
+                        ul { class: "dropdown-menu",
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| { menu_item_selected.set(Some(MenuSelection::NewProject)) },
+                                    "New Project"
+                                }
+                            }
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| {
+                                        let path = FileDialog::new()
+                                            .set_directory("/")
+                                            .set_title("Save OPOSSUM setup file")
+                                            .add_filter("Opossum setup file", &["opm"])
+                                            .pick_file();
+                                        if let Some(path) = path {
+                                            menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
+                                        }
+                                    },
+                                    "Open Project"
+                                }
+                            }
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| {
+                                        let path = FileDialog::new()
+                                            .set_directory("/")
+                                            .set_title("Save OPOSSUM setup file")
+                                            .add_filter("Opossum setup file", &["opm"])
+                                            .save_file();
+                                        if let Some(path) = path {
+                                            menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
+                                        }
+                                    },
+                                    "Save Project"
+                                }
+                            }
+                        }
                     }
-                    ul { class: "navbar-nav me-auto mt-lg-0",
-                        li { class: "nav-item dropdown",
-                            a {
-                                "data-mdb-dropdown-init": "",
-                                class: "nav-link dropdown-toggle link-secondary hidden-arrow",
-                                id: "navbarDropdownMenuLink",
-                                role: "button",
-                                "File"
+                    li { class: "nav-item",
+                        a {
+                            "data-mdb-dropdown-init": "",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            id: "navbarDropdownMenuLink",
+                            role: "button",
+                            "Edit"
+                        }
+                        ul { class: "dropdown-menu",
+                            li {
+                                a { class: "dropdown-item", role: "button",
+                                    "Add Node"
+                                    Icon { height: 10, icon: FaAngleRight }
+                                }
+                                ul { class: "dropdown-menu dropdown-submenu",
+                                    NodesMenu { node_selected }
+                                }
                             }
-                            ul { class: "dropdown-menu",
-                                li {
-                                    a {
-                                        class: "dropdown-item",
-                                        role: "button",
-                                        onclick: move |_| { menu_item_selected.set(Some(MenuSelection::NewProject)) },
-                                        "New Project"
-                                    }
+                            li {
+                                a { class: "dropdown-item", role: "button",
+                                    "Add Analyzer"
+                                    Icon { height: 10, icon: FaAngleRight }
                                 }
-                                li {
-                                    a {
-                                        class: "dropdown-item",
-                                        role: "button",
-                                        onclick: move |_| {
-                                            let path = FileDialog::new()
-                                                .set_directory("/")
-                                                .set_title("Save OPOSSUM setup file")
-                                                .add_filter("Opossum setup file", &["opm"])
-                                                .pick_file();
-                                            if let Some(path) = path {
-                                                menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
-                                            }
-                                        },
-                                        "Open Project"
-                                    }
+                                ul { class: "dropdown-menu dropdown-submenu",
+                                    AnalyzersMenu { analyzer_selected }
                                 }
-                                li {
-                                    a {
-                                        class: "dropdown-item",
-                                        role: "button",
-                                        onclick: move |_| {
-                                            let path = FileDialog::new()
-                                                .set_directory("/")
-                                                .set_title("Save OPOSSUM setup file")
-                                                .add_filter("Opossum setup file", &["opm"])
-                                                .save_file();
-                                            if let Some(path) = path {
-                                                menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
-                                            }
-                                        },
-                                        "Save Project"
-                                    }
+                            }
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| {
+                                        menu_item_selected.set(Some(MenuSelection::AutoLayout));
+                                    },
+                                    "Auto Layout"
                                 }
                             }
                         }
-                        li { class: "nav-item",
-                            a {
-                                "data-mdb-dropdown-init": "",
-                                class: "nav-link dropdown-toggle link-secondary hidden-arrow",
-                                id: "navbarDropdownMenuLink",
-                                role: "button",
-                                "Edit"
-                            }
-                            ul { class: "dropdown-menu",
-                                li {
-                                    a {
-                                        class: "dropdown-item",
-                                        role: "button",
-                                        "Add Node"
-                                        Icon { height: 10, icon: FaAngleRight }
-                                    }
-                                    ul { class: "dropdown-menu dropdown-submenu",
-                                        NodesMenu { node_selected }
-                                    }
-                                }
-                                li {
-                                    a {
-                                        class: "dropdown-item",
-                                        role: "button",
-                                        "Add Analyzer"
-                                        Icon { height: 10, icon: FaAngleRight }
-                                    }
-                                    ul { class: "dropdown-menu dropdown-submenu",
-                                        AnalyzersMenu { analyzer_selected }
-                                    }
-                                }
-                                li {
-                                    a {
-                                        class: "dropdown-item",
-                                        role: "button",
-                                        onclick: move |_| {
-                                            menu_item_selected.set(Some(MenuSelection::AutoLayout));
-                                        },
-                                        "Auto Layout"
-                                    }
-                                }
-                            }
+                    }
+                    li { class: "nav-item",
+                        a {
+                            "data-mdb-dropdown-init": "",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            id: "navbarDropdownMenuLink",
+                            role: "button",
+                            "Help"
                         }
-                        li { class: "nav-item",
-                            a {
-                                "data-mdb-dropdown-init": "",
-                                class: "nav-link dropdown-toggle link-secondary hidden-arrow",
-                                id: "navbarDropdownMenuLink",
-                                role: "button",
-                                "Help"
-                            }
-                            ul { class: "dropdown-menu",
-                                li {
-                                    a {
-                                        class: "dropdown-item",
-                                        role: "button",
-                                        onclick: move |_| about_window.set(true),
-                                        "About"
-                                    }
+                        ul { class: "dropdown-menu",
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| about_window.set(true),
+                                    "About"
                                 }
                             }
                         }
                     }
                 }
-                div { class: "d-flex align-items-center",
-                    a {
-                        class: "text-secondary me-2",
-                        role: "button",
-                        onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinMinimize)),
-                        Icon { width: 25, icon: FaWindowMinimize }
-                    }
-                    a {
-                        class: "text-secondary me-2",
-                        role: "button",
-                        onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinMaximize)),
-                        Icon { width: 25, icon: FaWindowMaximize }
-                    }
-                    a {
-                        class: "text-secondary me-2",
-                        role: "button",
-                        onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinClose)),
-                        Icon { width: 25, icon: FaPowerOff }
-                    }
+            }
+            div { class: "d-flex align-items-center",
+                a {
+                    class: "text-secondary me-2",
+                    role: "button",
+                    onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinMinimize)),
+                    Icon { width: 25, icon: FaWindowMinimize }
+                }
+                a {
+                    class: "text-secondary me-2",
+                    role: "button",
+                    onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinMaximize)),
+                    Icon { width: 25, icon: FaWindowMaximize }
+                }
+                a {
+                    class: "text-secondary me-2",
+                    role: "button",
+                    onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinClose)),
+                    Icon { width: 25, icon: FaPowerOff }
                 }
             }
         }

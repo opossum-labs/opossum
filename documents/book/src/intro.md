@@ -1,5 +1,7 @@
 # Introduction
 
+![OPOSSUM icon](images/Logo_text.svg)
+
 This book represents the project documentation of OPOSSUM (**OP**en **S**ource **O**ptics **S**imulation **S**ystem and **U**nified **M**odeller). The goal of this project is the development of a common software platform for simulating various aspects of optical systems in a holistic approach. It should be particularly useful for simulating and designing large-size, high-energy / intensity laser systems.
 
 While there are a plethora of, mostly commercial, simulation / calculation tools available, most of them only address specific aspects of an optical system. For example, there are tools for pure geometric optics (raytracing), the simulation of non-linear effects in materials, wavefront propagation, parasitic lasing, diffuse illumination / straylight simulation etc... Modern laser systems need to take all these aspects into account which requires a repeated change of the tools and / or remodeling the optical system. This project is an approach to unifying this design workflow.
