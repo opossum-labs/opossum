@@ -127,7 +127,8 @@ impl PlotType {
 
         match params.get_backend()? {
             PltBackEnd::Bitmap => {
-                let backend = BitMapBackend::new(&path, plot.fig_size).into_drawing_area();
+                // let backend = BitMapBackend::new(&path, plot.fig_size).into_drawing_area();
+                let backend = SVGBackend::new(&path, plot.fig_size).into_drawing_area();
                 self.create_plot(&backend, &mut plot);
                 Ok(None)
             }

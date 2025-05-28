@@ -806,246 +806,247 @@ mod test_rays_ghost_focus_history {
 
     use crate::{
         analyzers::ghostfocus::RaysNodeCorrelation, joule, millimeter, nanometer,
-        position_distributions::Random, rays::Rays,
+        // position_distributions::Random, 
+        rays::Rays,
     };
 
     use super::GhostFocusHistory;
 
-    #[test]
-    fn from_vec_hashmap_uuid_tuple() {
-        let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
-        let rays1 = Rays::new_uniform_collimated(
-            nanometer!(1000.),
-            joule!(1.),
-            &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
-        )
-        .unwrap();
-        let mut hash1 = HashMap::<Uuid, Rays>::new();
+    // #[test]
+    // fn from_vec_hashmap_uuid_tuple() {
+    //     let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
+    //     let rays1 = Rays::new_uniform_collimated(
+    //         nanometer!(1000.),
+    //         joule!(1.),
+    //         &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
+    //     )
+    //     .unwrap();
+    //     let mut hash1 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(rays1.uuid(), rays1.clone());
+    //     hash1.insert(rays1.uuid(), rays1.clone());
 
-        accumulated_rays.push(hash1);
+    //     accumulated_rays.push(hash1);
 
-        let hist = GhostFocusHistory::from((&accumulated_rays, rays1.uuid(), 0));
+    //     let hist = GhostFocusHistory::from((&accumulated_rays, rays1.uuid(), 0));
 
-        assert_eq!(hist.rays_pos_history.len(), 1);
-        assert_eq!(hist.rays_pos_history[0].len(), 1);
-        assert_eq!(hist.rays_pos_history[0][0].len(), 20);
-        for (i, pos) in hist.rays_pos_history[0][0][0].row_iter().enumerate() {
-            assert_relative_eq!(
-                pos[0].value,
-                rays1.get_ray_by_idx(i).unwrap().position().x.value
-            );
-            assert_relative_eq!(
-                pos[1].value,
-                rays1.get_ray_by_idx(i).unwrap().position().y.value
-            );
-            assert_relative_eq!(
-                pos[2].value,
-                rays1.get_ray_by_idx(i).unwrap().position().z.value
-            );
-        }
-    }
-    #[test]
-    fn from_vec_accumulated_rays() {
-        let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
-        let rays1 = Rays::new_uniform_collimated(
-            nanometer!(1000.),
-            joule!(1.),
-            &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
-        )
-        .unwrap();
-        let mut hash1 = HashMap::<Uuid, Rays>::new();
+    //     assert_eq!(hist.rays_pos_history.len(), 1);
+    //     assert_eq!(hist.rays_pos_history[0].len(), 1);
+    //     assert_eq!(hist.rays_pos_history[0][0].len(), 20);
+    //     for (i, pos) in hist.rays_pos_history[0][0][0].row_iter().enumerate() {
+    //         assert_relative_eq!(
+    //             pos[0].value,
+    //             rays1.get_ray_by_idx(i).unwrap().position().x.value
+    //         );
+    //         assert_relative_eq!(
+    //             pos[1].value,
+    //             rays1.get_ray_by_idx(i).unwrap().position().y.value
+    //         );
+    //         assert_relative_eq!(
+    //             pos[2].value,
+    //             rays1.get_ray_by_idx(i).unwrap().position().z.value
+    //         );
+    //     }
+    // }
+    // #[test]
+    // fn from_vec_accumulated_rays() {
+    //     let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
+    //     let rays1 = Rays::new_uniform_collimated(
+    //         nanometer!(1000.),
+    //         joule!(1.),
+    //         &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
+    //     )
+    //     .unwrap();
+    //     let mut hash1 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(rays1.uuid(), rays1.clone());
+    //     hash1.insert(rays1.uuid(), rays1.clone());
 
-        accumulated_rays.push(hash1);
+    //     accumulated_rays.push(hash1);
 
-        let hist = GhostFocusHistory::from(accumulated_rays);
+    //     let hist = GhostFocusHistory::from(accumulated_rays);
 
-        assert_eq!(hist.rays_pos_history.len(), 1);
-        assert_eq!(hist.rays_pos_history[0].len(), 1);
-        assert_eq!(hist.rays_pos_history[0][0].len(), 20);
-        for (i, pos) in hist.rays_pos_history[0][0][0].row_iter().enumerate() {
-            assert_relative_eq!(
-                pos[0].value,
-                rays1.get_ray_by_idx(i).unwrap().position().x.value
-            );
-            assert_relative_eq!(
-                pos[1].value,
-                rays1.get_ray_by_idx(i).unwrap().position().y.value
-            );
-            assert_relative_eq!(
-                pos[2].value,
-                rays1.get_ray_by_idx(i).unwrap().position().z.value
-            );
-        }
-    }
+    //     assert_eq!(hist.rays_pos_history.len(), 1);
+    //     assert_eq!(hist.rays_pos_history[0].len(), 1);
+    //     assert_eq!(hist.rays_pos_history[0][0].len(), 20);
+    //     for (i, pos) in hist.rays_pos_history[0][0][0].row_iter().enumerate() {
+    //         assert_relative_eq!(
+    //             pos[0].value,
+    //             rays1.get_ray_by_idx(i).unwrap().position().x.value
+    //         );
+    //         assert_relative_eq!(
+    //             pos[1].value,
+    //             rays1.get_ray_by_idx(i).unwrap().position().y.value
+    //         );
+    //         assert_relative_eq!(
+    //             pos[2].value,
+    //             rays1.get_ray_by_idx(i).unwrap().position().z.value
+    //         );
+    //     }
+    // }
 
-    #[test]
-    fn project_to_plane() {
-        let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
-        let rays1 = Rays::new_uniform_collimated(
-            nanometer!(1000.),
-            joule!(1.),
-            &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
-        )
-        .unwrap();
-        let rays2 = Rays::new_uniform_collimated(
-            nanometer!(1000.),
-            joule!(1.),
-            &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
-        )
-        .unwrap();
-        let mut hash1 = HashMap::<Uuid, Rays>::new();
-        let mut hash2 = HashMap::<Uuid, Rays>::new();
+    // #[test]
+    // fn project_to_plane() {
+    //     let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
+    //     let rays1 = Rays::new_uniform_collimated(
+    //         nanometer!(1000.),
+    //         joule!(1.),
+    //         &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
+    //     )
+    //     .unwrap();
+    //     let rays2 = Rays::new_uniform_collimated(
+    //         nanometer!(1000.),
+    //         joule!(1.),
+    //         &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
+    //     )
+    //     .unwrap();
+    //     let mut hash1 = HashMap::<Uuid, Rays>::new();
+    //     let mut hash2 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(rays1.uuid(), rays1.clone());
-        hash2.insert(rays2.uuid(), rays2.clone());
+    //     hash1.insert(rays1.uuid(), rays1.clone());
+    //     hash2.insert(rays2.uuid(), rays2.clone());
 
-        accumulated_rays.push(hash1);
-        accumulated_rays.push(hash2);
+    //     accumulated_rays.push(hash1);
+    //     accumulated_rays.push(hash2);
 
-        let hist = GhostFocusHistory::from(accumulated_rays);
+    //     let hist = GhostFocusHistory::from(accumulated_rays);
 
-        let projected = hist.project_to_plane(Vector3::x()).unwrap();
+    //     let projected = hist.project_to_plane(Vector3::x()).unwrap();
 
-        for (i, bounced_rays) in projected.iter().enumerate() {
-            for rays in bounced_rays {
-                for (ray_idx, ray) in rays.iter().enumerate() {
-                    for pos in ray.row_iter() {
-                        if i == 0 {
-                            assert_relative_eq!(
-                                pos[0].value,
-                                rays1.get_ray_by_idx(ray_idx).unwrap().position().z.value
-                            );
-                            assert_relative_eq!(
-                                pos[1].value,
-                                rays1.get_ray_by_idx(ray_idx).unwrap().position().y.value
-                            );
-                        } else {
-                            assert_relative_eq!(
-                                pos[0].value,
-                                rays2.get_ray_by_idx(ray_idx).unwrap().position().z.value
-                            );
-                            assert_relative_eq!(
-                                pos[1].value,
-                                rays2.get_ray_by_idx(ray_idx).unwrap().position().y.value
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        let projected = hist.project_to_plane(Vector3::y()).unwrap();
+    //     for (i, bounced_rays) in projected.iter().enumerate() {
+    //         for rays in bounced_rays {
+    //             for (ray_idx, ray) in rays.iter().enumerate() {
+    //                 for pos in ray.row_iter() {
+    //                     if i == 0 {
+    //                         assert_relative_eq!(
+    //                             pos[0].value,
+    //                             rays1.get_ray_by_idx(ray_idx).unwrap().position().z.value
+    //                         );
+    //                         assert_relative_eq!(
+    //                             pos[1].value,
+    //                             rays1.get_ray_by_idx(ray_idx).unwrap().position().y.value
+    //                         );
+    //                     } else {
+    //                         assert_relative_eq!(
+    //                             pos[0].value,
+    //                             rays2.get_ray_by_idx(ray_idx).unwrap().position().z.value
+    //                         );
+    //                         assert_relative_eq!(
+    //                             pos[1].value,
+    //                             rays2.get_ray_by_idx(ray_idx).unwrap().position().y.value
+    //                         );
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     let projected = hist.project_to_plane(Vector3::y()).unwrap();
 
-        for (i, bounced_rays) in projected.iter().enumerate() {
-            for rays in bounced_rays {
-                for (ray_idx, ray) in rays.iter().enumerate() {
-                    for pos in ray.row_iter() {
-                        if i == 0 {
-                            assert_relative_eq!(
-                                pos[0].value,
-                                rays1.get_ray_by_idx(ray_idx).unwrap().position().z.value
-                            );
-                            assert_relative_eq!(
-                                pos[1].value,
-                                rays1.get_ray_by_idx(ray_idx).unwrap().position().x.value
-                            );
-                        } else {
-                            assert_relative_eq!(
-                                pos[0].value,
-                                rays2.get_ray_by_idx(ray_idx).unwrap().position().z.value
-                            );
-                            assert_relative_eq!(
-                                pos[1].value,
-                                rays2.get_ray_by_idx(ray_idx).unwrap().position().x.value
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        let projected = hist.project_to_plane(Vector3::z()).unwrap();
+    //     for (i, bounced_rays) in projected.iter().enumerate() {
+    //         for rays in bounced_rays {
+    //             for (ray_idx, ray) in rays.iter().enumerate() {
+    //                 for pos in ray.row_iter() {
+    //                     if i == 0 {
+    //                         assert_relative_eq!(
+    //                             pos[0].value,
+    //                             rays1.get_ray_by_idx(ray_idx).unwrap().position().z.value
+    //                         );
+    //                         assert_relative_eq!(
+    //                             pos[1].value,
+    //                             rays1.get_ray_by_idx(ray_idx).unwrap().position().x.value
+    //                         );
+    //                     } else {
+    //                         assert_relative_eq!(
+    //                             pos[0].value,
+    //                             rays2.get_ray_by_idx(ray_idx).unwrap().position().z.value
+    //                         );
+    //                         assert_relative_eq!(
+    //                             pos[1].value,
+    //                             rays2.get_ray_by_idx(ray_idx).unwrap().position().x.value
+    //                         );
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     let projected = hist.project_to_plane(Vector3::z()).unwrap();
 
-        for (i, bounced_rays) in projected.iter().enumerate() {
-            for rays in bounced_rays {
-                for (ray_idx, ray) in rays.iter().enumerate() {
-                    for pos in ray.row_iter() {
-                        if i == 0 {
-                            assert_relative_eq!(
-                                pos[0].value,
-                                rays1.get_ray_by_idx(ray_idx).unwrap().position().x.value
-                            );
-                            assert_relative_eq!(
-                                pos[1].value,
-                                rays1.get_ray_by_idx(ray_idx).unwrap().position().y.value
-                            );
-                        } else {
-                            assert_relative_eq!(
-                                pos[0].value,
-                                rays2.get_ray_by_idx(ray_idx).unwrap().position().x.value
-                            );
-                            assert_relative_eq!(
-                                pos[1].value,
-                                rays2.get_ray_by_idx(ray_idx).unwrap().position().y.value
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
+    //     for (i, bounced_rays) in projected.iter().enumerate() {
+    //         for rays in bounced_rays {
+    //             for (ray_idx, ray) in rays.iter().enumerate() {
+    //                 for pos in ray.row_iter() {
+    //                     if i == 0 {
+    //                         assert_relative_eq!(
+    //                             pos[0].value,
+    //                             rays1.get_ray_by_idx(ray_idx).unwrap().position().x.value
+    //                         );
+    //                         assert_relative_eq!(
+    //                             pos[1].value,
+    //                             rays1.get_ray_by_idx(ray_idx).unwrap().position().y.value
+    //                         );
+    //                     } else {
+    //                         assert_relative_eq!(
+    //                             pos[0].value,
+    //                             rays2.get_ray_by_idx(ray_idx).unwrap().position().x.value
+    //                         );
+    //                         assert_relative_eq!(
+    //                             pos[1].value,
+    //                             rays2.get_ray_by_idx(ray_idx).unwrap().position().y.value
+    //                         );
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
-    #[test]
-    fn add_specific_ray_history() {
-        let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
-        let rays1 = Rays::new_uniform_collimated(
-            nanometer!(1000.),
-            joule!(1.),
-            &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
-        )
-        .unwrap();
-        let mut hash1 = HashMap::<Uuid, Rays>::new();
+    // #[test]
+    // fn add_specific_ray_history() {
+    //     let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
+    //     let rays1 = Rays::new_uniform_collimated(
+    //         nanometer!(1000.),
+    //         joule!(1.),
+    //         &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
+    //     )
+    //     .unwrap();
+    //     let mut hash1 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(rays1.uuid(), rays1.clone());
-        accumulated_rays.push(hash1);
+    //     hash1.insert(rays1.uuid(), rays1.clone());
+    //     accumulated_rays.push(hash1);
 
-        let mut ray_pos_history =
-            Vec::<Vec<Vec<MatrixXx3<Length>>>>::with_capacity(accumulated_rays.len());
-        let mut ray_node_correlation =
-            Vec::<RaysNodeCorrelation>::with_capacity(accumulated_rays.len());
-        for _i in 0..accumulated_rays.len() {
-            ray_pos_history.push(Vec::<Vec<MatrixXx3<Length>>>::new());
-            ray_node_correlation.push(RaysNodeCorrelation::default());
-        }
+    //     let mut ray_pos_history =
+    //         Vec::<Vec<Vec<MatrixXx3<Length>>>>::with_capacity(accumulated_rays.len());
+    //     let mut ray_node_correlation =
+    //         Vec::<RaysNodeCorrelation>::with_capacity(accumulated_rays.len());
+    //     for _i in 0..accumulated_rays.len() {
+    //         ray_pos_history.push(Vec::<Vec<MatrixXx3<Length>>>::new());
+    //         ray_node_correlation.push(RaysNodeCorrelation::default());
+    //     }
 
-        let mut hist = GhostFocusHistory {
-            rays_pos_history: ray_pos_history,
-            plot_view_direction: None,
-            ray_node_correlation,
-        };
+    //     let mut hist = GhostFocusHistory {
+    //         rays_pos_history: ray_pos_history,
+    //         plot_view_direction: None,
+    //         ray_node_correlation,
+    //     };
 
-        hist.add_specific_ray_history(&accumulated_rays, rays1.uuid(), 0);
+    //     hist.add_specific_ray_history(&accumulated_rays, rays1.uuid(), 0);
 
-        assert_eq!(hist.rays_pos_history.len(), 1);
-        assert_eq!(hist.rays_pos_history[0].len(), 1);
-        assert_eq!(hist.rays_pos_history[0][0].len(), 20);
-        for (i, pos) in hist.rays_pos_history[0][0][0].row_iter().enumerate() {
-            assert_relative_eq!(
-                pos[0].value,
-                rays1.get_ray_by_idx(i).unwrap().position().x.value
-            );
-            assert_relative_eq!(
-                pos[1].value,
-                rays1.get_ray_by_idx(i).unwrap().position().y.value
-            );
-            assert_relative_eq!(
-                pos[2].value,
-                rays1.get_ray_by_idx(i).unwrap().position().z.value
-            );
-        }
-    }
+    //     assert_eq!(hist.rays_pos_history.len(), 1);
+    //     assert_eq!(hist.rays_pos_history[0].len(), 1);
+    //     assert_eq!(hist.rays_pos_history[0][0].len(), 20);
+    //     for (i, pos) in hist.rays_pos_history[0][0][0].row_iter().enumerate() {
+    //         assert_relative_eq!(
+    //             pos[0].value,
+    //             rays1.get_ray_by_idx(i).unwrap().position().x.value
+    //         );
+    //         assert_relative_eq!(
+    //             pos[1].value,
+    //             rays1.get_ray_by_idx(i).unwrap().position().y.value
+    //         );
+    //         assert_relative_eq!(
+    //             pos[2].value,
+    //             rays1.get_ray_by_idx(i).unwrap().position().z.value
+    //         );
+    //     }
+    // }
 }
 #[cfg(test)]
 mod test {

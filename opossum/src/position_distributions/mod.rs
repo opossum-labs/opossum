@@ -24,14 +24,14 @@ mod fibonacci;
 mod grid;
 mod hexagonal_tiling;
 mod hexapolar;
-mod random;
+// mod random;
 mod sobol;
 
 pub use fibonacci::{FibonacciEllipse, FibonacciRectangle};
 pub use grid::Grid;
 pub use hexagonal_tiling::HexagonalTiling;
 pub use hexapolar::Hexapolar;
-pub use random::Random;
+// pub use random::Random;
 pub use sobol::SobolDist;
 
 /// Trait for the generation of point distributions
@@ -45,8 +45,8 @@ pub trait PositionDistribution {
 /// Enum for the different types of position distributions
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PosDistType {
-    /// Rectangular, uniform random distribution
-    Random(random::Random),
+    // /// Rectangular, uniform random distribution
+    // Random(random::Random),
     /// Rectangular, evenly-sized grid distribution
     Grid(grid::Grid),
     /// Hexagonal tiling distribution
@@ -65,7 +65,7 @@ impl PosDistType {
     #[must_use]
     pub fn generate(&self) -> &dyn PositionDistribution {
         match self {
-            Self::Random(dist) => dist,
+            // Self::Random(dist) => dist,
             Self::Grid(dist) => dist,
             Self::HexagonalTiling(dist) => dist,
             Self::Hexapolar(dist) => dist,

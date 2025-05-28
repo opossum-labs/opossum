@@ -11,7 +11,7 @@ use std::io::{BufReader, BufWriter};
 use clap::builder::Str;
 use clap::{builder::OsStr, Parser};
 use log::info;
-use rprompt::prompt_reply_from_bufread;
+// use rprompt::prompt_reply_from_bufread;
 use std::{io::Write, string::String};
 use std::{
     io::{stdin, stdout, BufRead},
@@ -120,17 +120,17 @@ fn get_args<T>(
 ) -> OpmResult<T> {
     if let Some(i) = input {
         let arg = func(i);
-        if arg.is_none() {
-            let prompt_str = create_prompt_str(arg_flag, "Invalid input!\n")?;
-            let input: String = prompt_reply_from_bufread(reader, writer, prompt_str).unwrap();
-            get_args(func, Some(input.as_str()), arg_flag, reader, writer)
-        } else {
+        //if arg.is_none() {
+        //     let prompt_str = create_prompt_str(arg_flag, "Invalid input!\n")?;
+        //     let input: String = prompt_reply_from_bufread(reader, writer, prompt_str).unwrap();
+        //     get_args(func, Some(input.as_str()), arg_flag, reader, writer)
+        // } else {
             arg.ok_or_else(|| OpossumError::Console("Could not extract argument!".into()))
-        }
+        //}
     } else {
-        let prompt_str = create_prompt_str(arg_flag, "")?;
-        let input: String = prompt_reply_from_bufread(reader, writer, prompt_str).unwrap();
-        get_args(func, Some(input.as_str()), arg_flag, reader, writer)
+    //     let prompt_str = create_prompt_str(arg_flag, "")?;
+    //     let input: String = prompt_reply_from_bufread(reader, writer, prompt_str).unwrap();
+        get_args(func, Some(""), arg_flag, reader, writer)
     }
 }
 /// Gets the parent directory of the passed file path

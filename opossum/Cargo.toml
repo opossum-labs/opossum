@@ -41,7 +41,7 @@ plotters = "0.3"
 approx = "0.5" # assert macros for comparison of floats with tolerance
 clap = { version = "4", features = ["derive", "string"] } # command line argument parser
 
-rprompt = "2"
+# rprompt = "2"
 strum = { version = "0.27", features = ["derive"] }
 
 uuid = { version = "1", features = ["v4", "fast-rng", "serde", "js"] }
@@ -52,7 +52,7 @@ embed-doc-image = "0.1" # allows for embedded images in the rust API doc
 
 image="0.25"
 tempfile="3"
-rand="0.9"
+# rand="0.9"
 sobol="1"
 itertools = "0.14"
 nalgebra = {version = "0.33", features = ["serde-serialize", "rayon"]}
@@ -84,7 +84,7 @@ doc-images = []
 regex = "1"
 assert_matches = "1"
 testing_logger= "0.1"
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.6.0", features = ["html_reports"] }
 
 [build-dependencies]
 vergen-git2 = { version = "1" } # get git version infos compiled in binary
