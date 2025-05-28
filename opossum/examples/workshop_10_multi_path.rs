@@ -23,10 +23,7 @@ fn main() -> OpmResult<()> {
     ));
     let src = Source::new("multi line source", light_data_builder);
     let i_src = scenery.add_node(src)?;
-    let i_s1 = scenery.add_node(Spectrometer::new(
-        "Source 1",
-        SpectrometerType::Ideal,
-    ))?;
+    let i_s1 = scenery.add_node(Spectrometer::new("Source 1", SpectrometerType::Ideal))?;
 
     let splitting_config_1 = SplittingConfig::Spectrum(generate_filter_spectrum(
         nanometer!(800.0)..nanometer!(1100.0),
@@ -38,15 +35,9 @@ fn main() -> OpmResult<()> {
     let bs1 = BeamSplitter::new("BS1", &splitting_config_1)?;
     let i_bs1 = scenery.add_node(bs1)?;
 
-    let i_s2 = scenery.add_node(Spectrometer::new(
-        "BS1 Output 1",
-        SpectrometerType::Ideal,
-    ))?;
+    let i_s2 = scenery.add_node(Spectrometer::new("BS1 Output 1", SpectrometerType::Ideal))?;
 
-    let i_s3 = scenery.add_node(Spectrometer::new(
-        "BS1 Output 2",
-        SpectrometerType::Ideal,
-    ))?;
+    let i_s3 = scenery.add_node(Spectrometer::new("BS1 Output 2", SpectrometerType::Ideal))?;
 
     let splitting_config_2 = SplittingConfig::Spectrum(generate_filter_spectrum(
         nanometer!(800.0)..nanometer!(1100.0),
@@ -65,15 +56,9 @@ fn main() -> OpmResult<()> {
     let src2 = Source::new("source 2", light_data_builder);
     let i_src2 = scenery.add_node(src2)?;
 
-    let i_s4 = scenery.add_node(Spectrometer::new(
-        "BS2 Output 1",
-        SpectrometerType::Ideal,
-    ))?;
+    let i_s4 = scenery.add_node(Spectrometer::new("BS2 Output 1", SpectrometerType::Ideal))?;
 
-    let i_s5 = scenery.add_node(Spectrometer::new(
-        "BS2 Output 2",
-        SpectrometerType::Ideal,
-    ))?;
+    let i_s5 = scenery.add_node(Spectrometer::new("BS2 Output 2", SpectrometerType::Ideal))?;
 
     scenery.connect_nodes(i_src, "output_1", i_s1, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(i_s1, "output_1", i_bs1, "input_1", millimeter!(100.0))?;
