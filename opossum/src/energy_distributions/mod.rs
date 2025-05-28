@@ -54,6 +54,6 @@ impl EnergyDistType {
         match self {
             EnergyDistType::Uniform(uniform_dist) => uniform_dist.set_energy(energy),
             EnergyDistType::General2DGaussian(general2_dgaussian) => general2_dgaussian.set_energy(energy),
-        }
+        };
     }
 }

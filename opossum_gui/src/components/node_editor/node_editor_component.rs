@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::components::node_editor::source_editor::SourceEditor;
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::{html::geometry::euclid::num::Zero, prelude::*};
 use nalgebra::Point3;
@@ -33,23 +34,7 @@ pub enum NodeChange {
 
 #[component]
 pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
-    let mut node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
-
-    let geom_light_data = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-        pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
-        energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])
-            .unwrap()
-            .into(),
-    });
-    let energy_light_data = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        vec![(nanometer!(633.0), joule!(1.0))],
-        nanometer!(1.0),
-    ));
-    let mut light_data_builder = HashMap::<String, LightDataBuilder>::new();
-    light_data_builder.insert("Rays".to_string(), geom_light_data);
-    light_data_builder.insert("Energy".to_string(), energy_light_data);
-    let mut source_type = use_signal(|| None::<LightDataBuilder>);
+    let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
 
     let active_node_opt = node();
     use_effect(move || {
@@ -217,6 +202,12 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     });
 
     if let Some(Some(node_attr)) = &*resource_future.read_unchecked() {
+        let light_data_builder_opt = node_attr.properties().get("light data").map_or(None, |p| {
+            match p{
+                Proptype::LightDataBuilder(l) => l.clone(),
+                _ => None
+            }
+        });
         rsx! {
             div {
                 h6 { "Node Configuration" }
@@ -266,204 +257,8 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     }
                 }
 
-                div {
-                    hidden: {node_attr.node_type() != "source"},
-                    class: "accordion accordion-borderless bg-dark ",
-                    id: "accordionSource",
-                    div { class: "accordion-item bg-dark text-light",
-                        h2 { class: "accordion-header", id: "sourceHeading",
-                            button {
-                                class: "accordion-button collapsed bg-dark text-light",
-                                r#type: "button",
-                                "data-mdb-collapse-init": "",
-                                "data-mdb-target": "#sourceCollapse",
-                                "aria-expanded": "false",
-                                "aria-controls": "sourceCollapse",
-                                "Light Source"
-                            }
-                        }
-                        div {
-                            id: "sourceCollapse",
-                            class: "accordion-collapse collapse  bg-dark",
-                            "aria-labelledby": "sourceHeading",
-                            "data-mdb-parent": "#accordionSource",
-                            div { class: "accordion-body  bg-dark",
-                            {
-                                let node_props = node_attr.properties().clone();
-                                if let Ok(light_data) = node_props.get("light data"){
-
-                                    rsx!{
-                                            div {
-                                                class: "form-floating",
-                                                select {
-                                                    class: "form-select",
-                                                    id: "selectSourceType",
-                                                    "aria-label": "Select source type",
-                                                    onchange: {
-                                                        let light_data_builder = light_data_builder.clone();
-                                                        move |e: Event<FormData>| {
-                                                        source_type.set(light_data_builder.get(e.value().as_str()).cloned());
-                                                        node_change.set(
-                                                            Some(NodeChange::Property(
-                                                                "light data".to_owned(), serde_json::to_value(Proptype::LightDataBuilder(light_data_builder.get(e.value().as_str()).cloned())).unwrap())));
-                                                    }
-                                                },
-
-                                                {
-                                                match light_data {
-                                                        Proptype::LightDataBuilder(Some(light_data_builder)) => {
-                                                            source_type.set(Some(light_data_builder.clone()));
-                                                            match light_data_builder {
-                                                                LightDataBuilder::Energy(_) => {
-                                                                    rsx!{
-                                                                        option { disabled: true, value: "None", "None" }
-                                                                        option { selected: true, value: "Energy", "Energy" }
-                                                                        option { value: "Rays", "Rays" }
-                                                                    }
-                                                                },
-                                                                LightDataBuilder::Geometric(_) => {
-                                                                    rsx!{
-                                                                        option { disabled: true, value: "None", "None" }
-                                                                        option { value: "Energy", "Energy" }
-                                                                        option { selected: true, value: "Rays", "Rays" }
-                                                                    }
-                                                                },
-                                                                _ => rsx!{
-                                                                    option { selected:true, disabled: true, value: "None", "None" }
-                                                                    option { value: "Energy", "Energy" }
-                                                                    option { value: "Rays", "Rays" }
-                                                                },
-                                                            }
-                                                        },
-                                                        _ => rsx!{
-                                                            option { selected:true, disabled: true, value: "None", "None" }
-                                                            option { value: "Energy", "Energy" }
-                                                            option { value: "Rays", "Rays" }
-                                                        },
-                                                    }
-                                                    
-                                                }
-                                            }                                    
-                                            label { r#for: "selectSourceType", "Source Type" },
-                                        }
-                                            {
-                                                
-                                                if let Proptype::LightDataBuilder(Some(LightDataBuilder::Geometric(ray_data_builder))) = light_data{
-                                                    rsx!{
-                                                        div {
-                                                            class: "form-floating",
-                                                            id: "selectRayType",
-                                                            select {
-                                                                class: "form-select",
-                                                                "aria-label": "Select rays type",
-                                                                onchange: {
-                                                                    let mut light_data_builder = light_data_builder.clone();
-
-                                                                    move |e| {
-                                                                        match e.value().as_str() {
-                                                                            "Collimated" => {
-                                                                                light_data_builder.insert("Rays".to_string(), LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-                                                                                    pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
-                                                                                    energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
-                                                                                    spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)]).unwrap().into(),
-                                                                                }));
-                                                                            },
-                                                                            "Point Source" => {
-                                                                                light_data_builder.insert("Rays".to_string(), LightDataBuilder::Geometric(RayDataBuilder::PointSrc {
-                                                                                    pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
-                                                                                    energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
-                                                                                    spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)]).unwrap().into(),
-                                                                                }));
-                                                                            },
-                                                                            _ => {}
-                                                                        }
-
-                                                                    node_change.set(
-                                                                        Some(NodeChange::Property(
-                                                                            "light data".to_owned(), serde_json::to_value(Proptype::LightDataBuilder(light_data_builder.get("Rays").cloned())).unwrap())));
-                                                                }},
-                                                                {
-                                                                    match ray_data_builder{
-                                                                        RayDataBuilder::Collimated{..} => rsx!{
-                                                                            option { selected: true, value: "Collimated", "Collimated" }
-                                                                            option { value: "Point Source", "Point Source" }
-                                                                        },
-                                                                        RayDataBuilder::PointSrc{..} => rsx!{
-                                                                            option { value: "Collimated", "Collimated" }
-                                                                            option { selected: true, value: "Point Source", "Point Source" }
-                                                                        },
-                                                                        _ => rsx!{}
-                                                                    }
-                                                                }
-                                                            }
-                                                            label { r#for: "selectRayType", "Source Type" },
-                                                        },
-                                                    }
-                                                }
-                                                else{
-                                                    rsx!{}
-                                                }
-                                            }
-                                            // }
-                                            // if let Some(source_type) = source_type() {
-                                            //     match source_type {
-                                            //         LightDataBuilder::Energy(energy_data) => {
-                                            //             rsx! {
-                                            //                 NodePropInput {
-                                            //                     name: "Wavelength".to_string(),
-                                            //                     placeholder: "Wavelength in nm".to_string(),
-                                            //                     node_change: NodeChange::W(
-                                            //                         "spectral lines".to_owned(),
-                                            //                         serde_json::to_value(Proptype::SpectralLines(energy_data.spectral_lines().clone())).unwrap()
-                                            //                     ),
-                                            //                 }
-                                            //                 NodePropInput {
-                                            //                     name: "Spectral Width".to_string(),
-                                            //                     placeholder: "Spectral Width in nm".to_string(),
-                                            //                     node_change: NodeChange::Property(
-                                            //                         "spectral width".to_owned(),
-                                            //                         serde_json::to_value(Proptype::Length(energy_data.spectral_width().get::<nanometer>())).unwrap()
-                                            //                     ),
-                                            //                 }
-                                            //             }
-                                            //         },
-                                            //         LightDataBuilder::Geometric(ray_data) => {
-                                            //             rsx! {
-                                            //                 NodePropInput {
-                                            //                     name: "Position Distribution".to_string(),
-                                            //                     placeholder: "Position Distribution".to_string(),
-                                            //                     node_change: NodeChange::Property(
-                                            //                         "position distribution".to_owned(),
-                                            //                         serde_json::to_value(Proptype::PositionDistribution(ray_data.position_distribution().clone())).unwrap()
-                                            //                     ),
-                                            //                 }
-                                            //                 NodePropInput {
-                                            //                     name: "Energy Distribution".to_string(),
-                                            //                     placeholder: "Energy Distribution".to_string(),
-                                            //                     node_change: NodeChange::Property(
-                                            //                         "energy distribution".to_owned(),
-                                            //                         serde_json::to_value(Proptype::EnergyDistribution(ray_data.energy_distribution().clone())).unwrap()
-                                            //                     ),
-                                            //                 }
-                                            //             }
-                                            //         },
-                                            //         _ => {}
-                                            //     }
-                                        // }
-                                    }
-                                }
-                                else{
-                                    rsx!{
-                                        option { selected:true, disabled: true, value: "None", "None" }
-                                        option { value: "Energy", "Energy" }
-                                        option { value: "Rays", "Rays" }
-                                    }
-                                }
-                                }
-                            }
-                        }
-                    }
-                }
+                SourceEditor {hide: node_attr.node_type() != "source", light_data_builder_opt, node_change: node_change.clone() },
+            
                 div {
                     class: "accordion accordion-borderless bg-dark ",
                     id: "accordionAlignment",
@@ -684,7 +479,7 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
                                     }
                                 }
                                 NodeChange::NodeConst(_) => {}
-                                NodeChange::Property(_,_) => {}
+                                NodeChange::Property(_, _) => {}
                             };
                         }
                     },

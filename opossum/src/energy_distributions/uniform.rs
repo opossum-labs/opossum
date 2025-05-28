@@ -32,11 +32,14 @@ impl UniformDist {
         }
         Ok(Self { total_energy })
     }
-    pub fn set_energy(&mut self, energy: Energy) {
+    pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
         if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
-            panic!("Energy must be greater than zero finite!");
+            return Err(OpossumError::Other(
+                "Energy must be greater than zero finite!".into(),
+            ));
         }
         self.total_energy = energy;
+        Ok(())
     }
 }
 impl EnergyDistribution for UniformDist {

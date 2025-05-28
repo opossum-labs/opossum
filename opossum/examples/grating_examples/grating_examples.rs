@@ -65,6 +65,7 @@ fn main() -> OpmResult<()> {
 
     let i_src = scenery.add_node(src.clone())?;
     let compressor_node = scenery.add_node(treacy_compressor(alignment_wvl)?)?;
+    
     let detectors = scenery.add_node(detector_group()?)?;
 
     scenery.connect_nodes(

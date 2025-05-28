@@ -27,6 +27,9 @@ input[type=number] {
   appearance: textfield;
 }
 
-.form-floating input{
-  font-size: 0.8rem;   
+
+.form-select{
+  font-size: 0.8rem !important;   
+  padding: 0.5rem 0.75rem; 
+  line-height: 1.;
 }
