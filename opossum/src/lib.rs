@@ -45,6 +45,7 @@ pub mod spectrum;
 pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
+pub mod typedefs;
 
 use chrono::DateTime;
 pub use opm_document::OpmDocument;
