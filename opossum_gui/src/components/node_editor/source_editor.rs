@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use dioxus::prelude::*;
-use opossum_backend::{energy_data_builder::EnergyDataBuilder, joule, light_data_builder::{self, LightDataBuilder}, millimeter, nanometer, ray_data_builder::{self, RayDataBuilder}, Hexapolar, LaserLines, NodeAttr, PosDistType, Proptype, Random, UniformDist};
+use opossum_backend::{energy_data_builder::EnergyDataBuilder, joule, light_data_builder::{self, LightDataBuilder}, millimeter, nanometer, ray_data_builder::{self, RayDataBuilder}, Grid, HexagonalTiling, Hexapolar, LaserLines, NodeAttr, PosDistType, Proptype, Random, UniformDist};
 
 use super::node_editor_component::NodeChange;
 
@@ -32,6 +32,7 @@ impl SourceSelection{
     }
 }
 
+#[derive(Clone, PartialEq)]
 struct PosDistSelection{
     pub pos_dist: PosDistType,
     pub rand: bool,
@@ -94,6 +95,11 @@ impl RayTypeSelection{
 }
 
 pub fn define_init_light_source_parameters(){
+    let random = Random::new(millimeter!(5.), millimeter!(5.),1000).unwrap();
+    let hexapolar =Hexapolar::new(millimeter!(5.), 5).unwrap();
+    let hexagonal =HexagonalTiling::new(millimeter!(5.), 5, millimeter!(0.,0.)).unwrap();
+    let hexagonal =Grid::new(millimeter!(5., 5.), (100,100)).unwrap();
+
 
 
     let geom_light_data = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
@@ -110,7 +116,6 @@ pub fn define_init_light_source_parameters(){
     let mut light_data_builder_hist = HashMap::<String, LightDataBuilder>::new();
     light_data_builder_hist.insert("Rays".to_string(), geom_light_data);
     light_data_builder_hist.insert("Energy".to_string(), energy_light_data);
-
 
 }
 
@@ -182,7 +187,7 @@ pub fn SourceEditor(hide: bool, light_data_builder_opt: Option<LightDataBuilder>
                     div { class: "accordion-body  bg-dark",
                         SourceLightDataBuilderSelector{src_selection,light_data_builder_opt, node_change, ray_data_builder_sig, light_data_builder_hist },
                         RayDataBuilderSelector{src_selection, ray_data_builder_sig: ray_type_selection, node_change },
-                        RayPositionDistributionSelector{src_selection, rays_pos_dist: pos_dist_selection, node_change} ,
+                        RayPositionDistributionSelector{src_selection, rays_pos_dist_signal: pos_dist_selection, node_change} ,
                         RayDistributionEditor{src_selection, rays_pos_dist: pos_dist_selection, node_change},
                         // PosDistBuilderSelector{src_selection, ray_data_builder_sig, node_change }
                         
@@ -344,7 +349,7 @@ pub fn RayDataBuilderDistributions(hide: bool, ray_data_builder_sig: Signal<Opti
 }
 
 #[component]
-pub fn RayPositionDistributionSelector(src_selection: Signal<SourceSelection>, rays_pos_dist_signal: Signal<PosDistSelection>, rays_pos_dist: PosDistSelection, node_change: Signal<Option<NodeChange>>) -> Element{
+pub fn RayPositionDistributionSelector(src_selection: Signal<SourceSelection>, rays_pos_dist_signal: Signal<PosDistSelection>, node_change: Signal<Option<NodeChange>>) -> Element{
 
     rsx!{
         div { class: "form-floating",
@@ -352,26 +357,26 @@ pub fn RayPositionDistributionSelector(src_selection: Signal<SourceSelection>, r
             select {
                 class: "form-select",
                 id: "selectRaysPosDistribution",
-                onchange : move |e: Event<FormData>| {
-                    match e.value().as_str(){
-                        "Random" => rays_pos_dist_signal.write().set_dist(PosDistType::Random(Random::new(millimeter!(1.), millimeter!(1.), 1000))),
-                        "Grid" => rays_pos_dist_signal.write().grid = true,
-                        "Hexagonal" => rays_pos_dist_signal.write().hexagonal = true,
-                        "Hexapolar" => rays_pos_dist_signal.write().hexapolar = true,
-                        "Fibonacci, rectangular" => rays_pos_dist_signal.write().fibonacci_rect = true,
-                        "Fibonacci, elliptical" => rays_pos_dist_signal.write().rand = true,
-                        "Sobol" => todo!(),
-                        _ => todo!(),
-                    }
-                },
+                // onchange : move |e: Event<FormData>| {
+                //     match e.value().as_str(){
+                //         "Random" => rays_pos_dist_signal.write().set_dist(PosDistType::Random(Random::new(millimeter!(1.), millimeter!(1.), 1000))),
+                //         "Grid" => rays_pos_dist_signal.write().grid = true,
+                //         "Hexagonal" => rays_pos_dist_signal.write().hexagonal = true,
+                //         "Hexapolar" => rays_pos_dist_signal.write().hexapolar = true,
+                //         "Fibonacci, rectangular" => rays_pos_dist_signal.write().fibonacci_rect = true,
+                //         "Fibonacci, elliptical" => rays_pos_dist_signal.write().rand = true,
+                //         "Sobol" => todo!(),
+                //         _ => todo!(),
+                //     }
+                // },
                 "aria-label": "Select ray position distribution",
-                    option { selected: rays_pos_dist.rand, value:     "Random", "Random" }
-                    option { selected: rays_pos_dist.grid, value:     "Grid", "Grid" }
-                    option { selected: rays_pos_dist.hexagonal, value:  "Hexagonal", "Hexagonal" }
-                    option { selected: rays_pos_dist.hexapolar, value:  "Hexapolar", "Hexapolar" }
-                    option { selected: rays_pos_dist.fibonacci_rect, value:  "Fibonacci, rectangular", "Fibonacci, rectangular" }
-                    option { selected: rays_pos_dist.fibonacci_ell, value:   "Fibonacci, elliptical", "Fibonacci, elliptical" }
-                    option { selected: rays_pos_dist.sobol, value:    "Sobol", "Sobol" }
+                    option { selected: rays_pos_dist_signal.read().rand, value:     "Random", "Random" }
+                    option { selected: rays_pos_dist_signal.read().grid, value:     "Grid", "Grid" }
+                    option { selected: rays_pos_dist_signal.read().hexagonal, value:  "Hexagonal", "Hexagonal" }
+                    option { selected: rays_pos_dist_signal.read().hexapolar, value:  "Hexapolar", "Hexapolar" }
+                    option { selected: rays_pos_dist_signal.read().fibonacci_rect, value:  "Fibonacci, rectangular", "Fibonacci, rectangular" }
+                    option { selected: rays_pos_dist_signal.read().fibonacci_ell, value:   "Fibonacci, elliptical", "Fibonacci, elliptical" }
+                    option { selected: rays_pos_dist_signal.read().sobol, value:    "Sobol", "Sobol" }
                 },
             label { r#for: "selectRaysPosDistribution", "Rays Position Distribution" }
         }
