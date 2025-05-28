@@ -66,9 +66,6 @@ use uuid::Uuid;
 ///   - `name`
 ///   - `inverted`
 ///   - `expand view`
-///   - `graph`
-///   - `input port map`
-///   - `output port map`
 ///
 /// **Note**: The group node does currently ignore all [`Aperture`](crate::aperture::Aperture) definitions on its publicly
 /// mapped input and output ports.

@@ -1385,6 +1385,7 @@ impl Rays {
         Ok(RayPositionHistories {
             rays_pos_history: ray_pos_hists,
             plot_view_direction: None,
+            ray_transparency: 0.4,
         })
     }
     /// Invalide all rays that have a number of refractions higher or equal than the given upper limit.

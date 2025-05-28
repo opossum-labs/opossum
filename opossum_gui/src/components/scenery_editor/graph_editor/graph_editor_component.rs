@@ -22,6 +22,7 @@ pub enum NodeEditorCommand {
     AddAnalyzer(AnalyzerType),
     LoadFile(PathBuf),
     SaveFile(PathBuf),
+    AutoLayout,
 }
 #[derive(Clone, Copy)]
 pub struct EditorState {
@@ -66,9 +67,12 @@ pub fn GraphEditor(
                     });
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                    let analyzer_type = analyzer_type.clone();
-                    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type, (100.0, 100.0));
+                    let new_analyzer_info =
+                        NewAnalyzerInfo::new(analyzer_type.clone(), (100.0, 100.0));
                     spawn(async move { graph_store.add_analyzer(new_analyzer_info).await });
+                }
+                NodeEditorCommand::AutoLayout => {
+                    spawn(async move { graph_store.optimize_layout().await });
                 }
                 NodeEditorCommand::LoadFile(path) => {
                     let path = path.to_owned();
@@ -93,10 +97,7 @@ pub fn GraphEditor(
             },
             onmousedown: move |event| {
                 current_mouse_pos
-                    .set((
-                        event.client_coordinates().x,
-                        event.client_coordinates().y,
-                    ));
+                    .set((event.client_coordinates().x, event.client_coordinates().y));
                 editor_status.drag_status.set(DragStatus::Graph);
             },
             onmouseup: move |_| {
@@ -139,10 +140,7 @@ pub fn GraphEditor(
                 let rel_shift_x = event.client_coordinates().x - current_mouse_pos().0;
                 let rel_shift_y = event.client_coordinates().y - current_mouse_pos().1;
                 current_mouse_pos
-                    .set((
-                        event.client_coordinates().x,
-                        event.client_coordinates().y,
-                    ));
+                    .set((event.client_coordinates().x, event.client_coordinates().y));
                 match drag_status {
                     DragStatus::Graph => {
                         graph_shift
@@ -194,7 +192,7 @@ pub fn GraphEditor(
                 graph_shift.set(Point2D::new(-center.x, 250.0 - center.y));
             },
             div {
-                class: "zoom-shift-container",
+                // class: "zoom-shift-container",
                 draggable: false,
                 style: format!(
                     "transform: translate({}px, {}px) scale({graph_zoom});",

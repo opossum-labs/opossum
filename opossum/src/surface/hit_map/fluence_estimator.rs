@@ -13,7 +13,7 @@ pub enum FluenceEstimator {
     Voronoi,
     /// Calculate the fluence at given point using a Kernel Density Estimator
     KDE,
-    /// Simply perform binning of the hit points on a given matrix (not implemented yet)
+    /// Simply perform binning of the hit points on a given matrix
     Binning,
     /// Using additional "helper rays" for each ray to calculate the evolution of a small area element around the intial ray to calcuklate the fluence
     HelperRays,

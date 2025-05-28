@@ -26,6 +26,9 @@ pub fn App() -> Element {
                         analyzer_selected.clone(),
                     )));
                 }
+                MenuSelection::AutoLayout => {
+                    node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
+                }
                 MenuSelection::NewProject => {
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
                 }
@@ -56,25 +59,19 @@ pub fn App() -> Element {
                     MenuBar { menu_item_selected }
                 }
             }
-            div { class: "row",
-                div { class: "col-2",
+            div { class: "row main-content-row",
+                div { class: "col-2 sidebar",
                     NodeEditor { node: selected_node }
                 }
-                div { class: "col",
+                div { class: "col px-0 graph-editor-container",
                     GraphEditor {
                         command: node_editor_command,
                         node_selected: selected_node,
                     }
                 }
             }
-            div { class: "row",
-                div { class: "col",
-                    footer {
-                        class: "footer p-1",
-                        style: "background-color:rgb(119, 119, 119);",
-                        Logger {}
-                    }
-                }
+            div { class: "row footer",
+                div { class: "col", Logger {} }
             }
         }
     }
