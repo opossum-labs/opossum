@@ -1,7 +1,8 @@
-use opossum_backend::error::ErrorResponse;
 use reqwest::{Client, Response};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::json;
+
+use super::error::ErrorResponse;
 
 #[derive(Clone)]
 pub struct HTTPClient {

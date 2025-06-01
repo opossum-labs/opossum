@@ -1,5 +1,5 @@
 use dioxus::html::geometry::euclid::default::Point2D;
-use opossum_backend::{usize_to_f64, AnalyzerType, PortType};
+use opossum::{analyzers::AnalyzerType, optic_ports::PortType, utils::usize_to_f64};
 use uuid::Uuid;
 mod graph_node_components;
 pub mod node_component;

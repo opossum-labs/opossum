@@ -1,6 +1,6 @@
 use crate::components::scenery_editor::{edges::define_bezier_path, graph_store::GraphStore};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{nodes::ConnectInfo, PortType};
+use opossum::{optic_ports::PortType, typedefs::ConnectInfo};
 
 #[component]
 pub fn EdgeComponent(edge: ConnectInfo) -> Element {

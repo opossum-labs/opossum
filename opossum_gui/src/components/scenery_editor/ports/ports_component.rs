@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
-use opossum_backend::PortType;
-
+use opossum::optic_ports::PortType;
 use crate::components::scenery_editor::{
     edges::edges_component::{EdgePort, NewEdgeCreationStart},
     graph_editor::graph_editor_component::{DragStatus, EditorState},

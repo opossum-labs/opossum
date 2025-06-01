@@ -1,7 +1,7 @@
 //! Scenery api calls
 
 use super::http_client::HTTPClient;
-use opossum_backend::{scenery::NewAnalyzerInfo, AnalyzerInfo};
+use opossum::{opm_document::AnalyzerInfo, typedefs::NewAnalyzerInfo};
 use uuid::Uuid;
 
 /// Send a request to delete the current scenery.

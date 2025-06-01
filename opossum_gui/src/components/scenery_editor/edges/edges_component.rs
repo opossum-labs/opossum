@@ -5,7 +5,7 @@ use crate::components::scenery_editor::{
     graph_store::GraphStore,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::PortType;
+use opossum::optic_ports::PortType;
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]

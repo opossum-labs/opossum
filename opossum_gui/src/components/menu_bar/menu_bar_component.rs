@@ -4,8 +4,8 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
     Icon,
 };
-use opossum_backend::AnalyzerType;
-use rfd::FileDialog;
+use opossum::analyzers::AnalyzerType;
+// use rfd::FileDialog;
 use std::path::PathBuf;
 
 use crate::components::menu_bar::{
@@ -84,14 +84,14 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                     class: "dropdown-item",
                                     role: "button",
                                     onclick: move |_| {
-                                        let path = FileDialog::new()
-                                            .set_directory("/")
-                                            .set_title("Save OPOSSUM setup file")
-                                            .add_filter("Opossum setup file", &["opm"])
-                                            .pick_file();
-                                        if let Some(path) = path {
-                                            menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
-                                        }
+                                        // let path = FileDialog::new()
+                                        //     .set_directory("/")
+                                        //     .set_title("Save OPOSSUM setup file")
+                                        //     .add_filter("Opossum setup file", &["opm"])
+                                        //     .pick_file();
+                                        // if let Some(path) = path {
+                                        //     menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
+                                        // }
                                     },
                                     "Open Project"
                                 }
@@ -101,14 +101,14 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                     class: "dropdown-item",
                                     role: "button",
                                     onclick: move |_| {
-                                        let path = FileDialog::new()
-                                            .set_directory("/")
-                                            .set_title("Save OPOSSUM setup file")
-                                            .add_filter("Opossum setup file", &["opm"])
-                                            .save_file();
-                                        if let Some(path) = path {
-                                            menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
-                                        }
+                                        // let path = FileDialog::new()
+                                        //     .set_directory("/")
+                                        //     .set_title("Save OPOSSUM setup file")
+                                        //     .add_filter("Opossum setup file", &["opm"])
+                                        //     .save_file();
+                                        // if let Some(path) = path {
+                                        //     menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
+                                        // }
                                     },
                                     "Save Project"
                                 }
