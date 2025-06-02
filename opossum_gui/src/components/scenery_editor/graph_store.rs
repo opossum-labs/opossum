@@ -16,7 +16,7 @@ use dioxus::{
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode},
     scenery::NewAnalyzerInfo,
-    PortType,
+    usize_to_f64, PortType,
 };
 use rust_sugiyama::{configure::RankingType, from_edges};
 use std::{collections::HashMap, fs, path::Path};
@@ -356,15 +356,15 @@ impl GraphStore {
             let mut height = 0f64;
             for (layout, group_height, _) in layouts {
                 for l in layout {
-                    let uuid = &reg.get_uuid(l.0 as u32).unwrap();
+                    let uuid = &reg.get_uuid(u32::try_from(l.0).unwrap()).unwrap();
                     if let Some(node) = nodes.get_mut(uuid) {
                         node.set_pos(Point2D::new(
                             -1.0 * l.1 .1 as f64,
-                            height + 0.7 * l.1 .0 as f64,
+                            0.7f64.mul_add(l.1 .0 as f64, height),
                         ));
                     }
                 }
-                height += group_height as f64 * 250.0;
+                height += usize_to_f64(group_height) * 250.0;
             }
         });
         // sync with backend
@@ -398,6 +398,6 @@ impl UuidRegistry {
         id
     }
     fn get_uuid(&self, id: u32) -> Option<Uuid> {
-        self.backward.get(&id).cloned()
+        self.backward.get(&id).copied()
     }
 }
