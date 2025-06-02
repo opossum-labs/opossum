@@ -249,6 +249,8 @@ pub fn SourceLightDataBuilderSelector(src_selection: Signal<SourceSelection>, li
 
 #[component]
 pub fn RayDataBuilderSelector(src_selection: Signal<SourceSelection>, ray_data_builder_sig: Signal<RayTypeSelection>, node_change: Signal<Option<NodeChange>>) -> Element{
+    
+    
     rsx!{
         div { class: "form-floating",
                 hidden: !src_selection.read().rays(),

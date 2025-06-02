@@ -204,7 +204,13 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     if let Some(Some(node_attr)) = &*resource_future.read_unchecked() {
         let light_data_builder = node_attr.properties().get("light data").map_or(LightDataBuilder::default(), |p| {
             match p{
-                Proptype::LightDataBuilder(l) => l.as_ref().unwrap().clone(),
+                Proptype::LightDataBuilder(l) =>{
+                    if let Some(light_data_builder) = l {
+                        light_data_builder.clone()
+                    } else {
+                        LightDataBuilder::default()
+                    }
+                },
                 _ => LightDataBuilder::default()
             }
         });
