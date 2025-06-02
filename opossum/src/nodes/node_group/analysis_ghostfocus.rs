@@ -1,9 +1,9 @@
 #![warn(missing_docs)]
 use super::NodeGroup;
 use crate::{
-    analyzers::{ghostfocus::AnalysisGhostFocus, GhostFocusConfig},
+    analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
     error::{OpmResult, OpossumError},
-    light_result::{light_rays_to_light_result, light_result_to_light_rays, LightRays},
+    light_result::{LightRays, light_rays_to_light_result, light_result_to_light_rays},
     lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::PortType,

@@ -10,8 +10,8 @@ pub mod refr_index_sellmeier1;
 
 use self::refr_index_schott::RefrIndexSchott;
 pub use refr_index_conrady::RefrIndexConrady;
-pub use refr_index_const::refr_index_vaccuum;
 pub use refr_index_const::RefrIndexConst;
+pub use refr_index_const::refr_index_vaccuum;
 pub use refr_index_sellmeier1::RefrIndexSellmeier1;
 
 use crate::error::{OpmResult, OpossumError};

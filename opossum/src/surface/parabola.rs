@@ -7,8 +7,8 @@ use crate::{
     meter,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::{vector, Point3, Vector3};
-use roots::{find_roots_quadratic, Roots};
+use nalgebra::{Point3, Vector3, vector};
+use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
 
 use super::geo_surface::GeoSurface;

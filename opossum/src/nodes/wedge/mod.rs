@@ -8,7 +8,7 @@ use crate::{
     optic_ports::PortType,
     properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{geo_surface::GeoSurfaceRef, Plane},
+    surface::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;
@@ -170,7 +170,7 @@ impl OpticNode for Wedge {
 mod test {
     use super::*;
     use crate::{
-        analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
         degree, joule,
         light_result::LightResult,
         lightdata::LightData,
@@ -214,84 +214,106 @@ mod test {
     }
     #[test]
     fn new() {
-        assert!(Wedge::new(
-            "test",
-            millimeter!(-0.1),
-            degree!(0.0),
-            &RefrIndexConst::new(1.5).unwrap()
-        )
-        .is_err());
-        assert!(Wedge::new(
-            "test",
-            millimeter!(f64::NEG_INFINITY),
-            degree!(0.0),
-            &RefrIndexConst::new(1.5).unwrap()
-        )
-        .is_err());
-        assert!(Wedge::new(
-            "test",
-            millimeter!(f64::INFINITY),
-            degree!(0.0),
-            &RefrIndexConst::new(1.5).unwrap()
-        )
-        .is_err());
-        assert!(Wedge::new(
-            "test",
-            millimeter!(f64::NAN),
-            degree!(0.0),
-            &RefrIndexConst::new(1.5).unwrap()
-        )
-        .is_err());
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(-0.1),
+                degree!(0.0),
+                &RefrIndexConst::new(1.5).unwrap()
+            )
+            .is_err()
+        );
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(f64::NEG_INFINITY),
+                degree!(0.0),
+                &RefrIndexConst::new(1.5).unwrap()
+            )
+            .is_err()
+        );
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(f64::INFINITY),
+                degree!(0.0),
+                &RefrIndexConst::new(1.5).unwrap()
+            )
+            .is_err()
+        );
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(f64::NAN),
+                degree!(0.0),
+                &RefrIndexConst::new(1.5).unwrap()
+            )
+            .is_err()
+        );
 
-        assert!(Wedge::new(
-            "test",
-            millimeter!(0.0),
-            degree!(f64::NEG_INFINITY),
-            &RefrIndexConst::new(1.0).unwrap()
-        )
-        .is_err());
-        assert!(Wedge::new(
-            "test",
-            millimeter!(0.0),
-            degree!(f64::INFINITY),
-            &RefrIndexConst::new(1.0).unwrap()
-        )
-        .is_err());
-        assert!(Wedge::new(
-            "test",
-            millimeter!(0.0),
-            degree!(f64::NAN),
-            &RefrIndexConst::new(1.0).unwrap()
-        )
-        .is_err());
-        assert!(Wedge::new(
-            "test",
-            millimeter!(0.0),
-            degree!(90.01),
-            &RefrIndexConst::new(1.0).unwrap()
-        )
-        .is_err());
-        assert!(Wedge::new(
-            "test",
-            millimeter!(0.0),
-            degree!(-90.01),
-            &RefrIndexConst::new(1.0).unwrap()
-        )
-        .is_err());
-        assert!(Wedge::new(
-            "test",
-            millimeter!(0.0),
-            degree!(89.99),
-            &RefrIndexConst::new(1.0).unwrap()
-        )
-        .is_ok());
-        assert!(Wedge::new(
-            "test",
-            millimeter!(0.0),
-            degree!(-89.99),
-            &RefrIndexConst::new(1.0).unwrap()
-        )
-        .is_ok());
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(0.0),
+                degree!(f64::NEG_INFINITY),
+                &RefrIndexConst::new(1.0).unwrap()
+            )
+            .is_err()
+        );
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(0.0),
+                degree!(f64::INFINITY),
+                &RefrIndexConst::new(1.0).unwrap()
+            )
+            .is_err()
+        );
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(0.0),
+                degree!(f64::NAN),
+                &RefrIndexConst::new(1.0).unwrap()
+            )
+            .is_err()
+        );
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(0.0),
+                degree!(90.01),
+                &RefrIndexConst::new(1.0).unwrap()
+            )
+            .is_err()
+        );
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(0.0),
+                degree!(-90.01),
+                &RefrIndexConst::new(1.0).unwrap()
+            )
+            .is_err()
+        );
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(0.0),
+                degree!(89.99),
+                &RefrIndexConst::new(1.0).unwrap()
+            )
+            .is_ok()
+        );
+        assert!(
+            Wedge::new(
+                "test",
+                millimeter!(0.0),
+                degree!(-89.99),
+                &RefrIndexConst::new(1.0).unwrap()
+            )
+            .is_ok()
+        );
         let n = Wedge::new(
             "test",
             millimeter!(0.0),

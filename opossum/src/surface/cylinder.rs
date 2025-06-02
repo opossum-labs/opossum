@@ -8,9 +8,9 @@ use crate::{
     ray::Ray,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::{vector, Point3, Vector3};
+use nalgebra::{Point3, Vector3, vector};
 use num::Zero;
-use roots::{find_roots_quadratic, Roots};
+use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
 
 #[derive(Debug, Clone)]

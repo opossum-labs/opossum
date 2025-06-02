@@ -8,7 +8,7 @@
                 inputs: {},
                 outputs: {},
             ),
-            uuid: "ffe7fa88-c99c-4cdc-94ec-201c078a1ae4",
+            uuid: "d18d6bf1-5d00-4fb1-b8d8-c226c8810050",
             lidt: 10000.0,
             props: {
                 "expand view": Bool(false),
@@ -47,7 +47,7 @@
                                 ),
                             },
                         ),
-                        uuid: "1ef4773f-9399-4f8b-af07-eba40f7c8513",
+                        uuid: "484d82d5-656a-450a-a92d-ba67a77ef27e",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -83,7 +83,7 @@
                                 ),
                             },
                         ),
-                        uuid: "c14a8c77-c88f-4747-a3c6-ea47ac0146bd",
+                        uuid: "d5230f4f-45e7-4c74-9b26-032158d26076",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -91,7 +91,7 @@
                 ),
             ],
             edges: [
-                ("1ef4773f-9399-4f8b-af07-eba40f7c8513", "output_1", "c14a8c77-c88f-4747-a3c6-ea47ac0146bd", "input_1", 0.0),
+                ("484d82d5-656a-450a-a92d-ba67a77ef27e", "output_1", "d5230f4f-45e7-4c74-9b26-032158d26076", "input_1", 0.0),
             ],
             input_map: ({}),
             output_map: ({}),
@@ -103,13 +103,14 @@
         )),
     ),
     analyzers: {
-        "aabb38a7-3ca6-427b-b530-c3576abf5b1e": (
+        "80ace307-7e0c-49a2-8b24-831f5f6a9b71": (
             analyzer_type: RayTrace((
                 min_energy_per_ray: 0.000000000001,
                 max_number_of_bounces: 1000,
                 max_number_of_refractions: 1000,
                 missed_surface_strategy: Stop,
             )),
+            id: "80ace307-7e0c-49a2-8b24-831f5f6a9b71",
             gui_position: None,
         ),
     },

@@ -2,6 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
+    OpmDocument,
     analyzers::AnalyzerType,
     error::OpmResult,
     joule,
@@ -10,7 +11,6 @@ use opossum::{
     nodes::{BeamSplitter, EnergyMeter, FilterType, IdealFilter, NodeGroup, Source, Spectrometer},
     ray::SplittingConfig,
     spectrum::Spectrum,
-    OpmDocument,
 };
 use uom::si::f64::Length;
 

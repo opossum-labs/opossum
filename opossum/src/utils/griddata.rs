@@ -14,8 +14,9 @@ use num::{Float, NumCast, ToPrimitive};
 use spade::{DelaunayTriangulation, HasPosition, Point2 as SpadeP, Triangulation};
 use std::ops::Add;
 use voronator::{
+    VoronoiDiagram,
     delaunator::{Coord, Point as VPoint},
-    polygon, VoronoiDiagram,
+    polygon,
 };
 
 struct PointWithHeight {
@@ -215,7 +216,9 @@ pub fn linspace<T: Float + Scalar>(start: T, end: T, num: usize) -> OpmResult<DV
     }
     let mut linspace = DVector::<T>::from_element(num, start);
     if num < 2 {
-        warn!("Using linspace with less than two elements results in an empty Vector for num=0 or a Vector with one entry being num=start");
+        warn!(
+            "Using linspace with less than two elements results in an empty Vector for num=0 or a Vector with one entry being num=start"
+        );
         return Ok(linspace);
     }
     let bin_size = (end - start)
@@ -640,24 +643,22 @@ mod test {
             Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 1., 1., 1., 1.]).transpose();
         let x_interp = linspace(-0.5, 1., 4).unwrap();
         let y_interp = linspace(-0.5, 1., 4).unwrap();
-        assert!(interpolate_3d_scatter_data(
-            &scattered_data,
-            &DVector::from_vec(vec![0.]),
-            &y_interp
-        )
-        .is_err());
-        assert!(interpolate_3d_scatter_data(
-            &scattered_data,
-            &x_interp,
-            &DVector::from_vec(vec![0.])
-        )
-        .is_err());
-        assert!(interpolate_3d_scatter_data(
-            &scattered_data,
-            &DVector::from_vec(vec![0.]),
-            &DVector::from_vec(vec![0.])
-        )
-        .is_err());
+        assert!(
+            interpolate_3d_scatter_data(&scattered_data, &DVector::from_vec(vec![0.]), &y_interp)
+                .is_err()
+        );
+        assert!(
+            interpolate_3d_scatter_data(&scattered_data, &x_interp, &DVector::from_vec(vec![0.]))
+                .is_err()
+        );
+        assert!(
+            interpolate_3d_scatter_data(
+                &scattered_data,
+                &DVector::from_vec(vec![0.]),
+                &DVector::from_vec(vec![0.])
+            )
+            .is_err()
+        );
 
         let scattered_data = Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0.]).transpose();
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());

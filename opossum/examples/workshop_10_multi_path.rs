@@ -1,4 +1,5 @@
 use opossum::{
+    OpmDocument,
     analyzers::AnalyzerType,
     error::OpmResult,
     joule,
@@ -6,8 +7,7 @@ use opossum::{
     millimeter, nanometer,
     nodes::{BeamSplitter, NodeGroup, Source, Spectrometer, SpectrometerType},
     ray::SplittingConfig,
-    spectrum_helper::{generate_filter_spectrum, FilterType},
-    OpmDocument,
+    spectrum_helper::{FilterType, generate_filter_spectrum},
 };
 use std::path::Path;
 

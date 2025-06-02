@@ -9,12 +9,12 @@ use crate::{
 use std::io::{BufReader, BufWriter};
 
 use clap::builder::Str;
-use clap::{builder::OsStr, Parser};
+use clap::{Parser, builder::OsStr};
 use log::info;
 // use rprompt::prompt_reply_from_bufread;
 use std::{io::Write, string::String};
 use std::{
-    io::{stdin, stdout, BufRead},
+    io::{BufRead, stdin, stdout},
     path::{Path, PathBuf},
 };
 /// Command line arguments for the OPOSSUM application.
@@ -89,14 +89,13 @@ fn eval_report_directory_input(report_path: &str) -> Option<PathBuf> {
 /// Errors if an invalid flag type has been used
 fn create_prompt_str(flag: &str, init_str: &str) -> OpmResult<String> {
     let prompt_str = init_str.to_owned();
-    match flag{
-        "f" =>{
-            Ok(prompt_str + "Please insert path to optical-setup-description file:\n")
-        },
-        "r" =>{
-            Ok(prompt_str + "Please insert a report directory or nothing to select the same directory as the optical-setup file\n")
-        },
-        _ => Err(OpossumError::Console("Invalid flag type! Cannot create prompt string!".into()))
+    match flag {
+        "f" => Ok(prompt_str + "Please insert path to optical-setup-description file:\n"),
+        "r" => Ok(prompt_str
+            + "Please insert a report directory or nothing to select the same directory as the optical-setup file\n"),
+        _ => Err(OpossumError::Console(
+            "Invalid flag type! Cannot create prompt string!".into(),
+        )),
     }
 }
 
@@ -307,7 +306,10 @@ mod test {
             create_prompt_str("f", "test_str\r\n").unwrap(),
             "test_str\r\nPlease insert path to optical-setup-description file:\n"
         );
-        assert_eq!(create_prompt_str("r", "test_str\r\n").unwrap(), "test_str\r\nPlease insert a report directory or nothing to select the same directory as the optical-setup file\n");
+        assert_eq!(
+            create_prompt_str("r", "test_str\r\n").unwrap(),
+            "test_str\r\nPlease insert a report directory or nothing to select the same directory as the optical-setup file\n"
+        );
         assert!(create_prompt_str("invalid_flag", "").is_err());
     }
     #[test]

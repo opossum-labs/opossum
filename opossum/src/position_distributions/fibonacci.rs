@@ -5,7 +5,7 @@ use std::f64::consts::PI;
 use crate::error::{OpmResult, OpossumError};
 
 use super::PositionDistribution;
-use nalgebra::{point, Point3};
+use nalgebra::{Point3, point};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
@@ -52,7 +52,7 @@ impl FibonacciRectangle {
 impl PositionDistribution for FibonacciRectangle {
     fn generate(&self) -> Vec<Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_rays);
-        let golden_ratio = (1. + f64::sqrt(5.)) / 2.;
+        let golden_ratio = f64::midpoint(1., f64::sqrt(5.));
         for i in 0_usize..self.nr_of_rays {
             let i_f64 = i.to_f64().unwrap();
             points.push(point![
@@ -112,7 +112,7 @@ impl FibonacciEllipse {
 impl PositionDistribution for FibonacciEllipse {
     fn generate(&self) -> Vec<Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_rays);
-        let golden_ratio = (1. + f64::sqrt(5.)) / 2.;
+        let golden_ratio = f64::midpoint(1., f64::sqrt(5.));
         for i in 0_usize..self.nr_of_rays {
             let sin_cos = f64::sin_cos(2. * PI * (i.to_f64().unwrap() / golden_ratio).fract());
             let sqrt_r = f64::sqrt(i.to_f64().unwrap() / self.nr_of_rays.to_f64().unwrap());

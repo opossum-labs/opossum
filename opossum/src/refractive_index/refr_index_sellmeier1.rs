@@ -111,16 +111,10 @@ mod test {
         assert!(
             RefrIndexSellmeier1::new(1.0, 1.0, 1.0, 1.0, 1.0, f64::NAN, valid_wvl.clone()).is_err()
         );
-        assert!(RefrIndexSellmeier1::new(
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            f64::INFINITY,
-            valid_wvl.clone()
-        )
-        .is_err());
+        assert!(
+            RefrIndexSellmeier1::new(1.0, 1.0, 1.0, 1.0, 1.0, f64::INFINITY, valid_wvl.clone())
+                .is_err()
+        );
 
         assert!(
             RefrIndexSellmeier1::new(1.0, 1.0, 1.0, 1.0, -1.0, 1.0, valid_wvl.clone()).is_err()
@@ -128,16 +122,10 @@ mod test {
         assert!(
             RefrIndexSellmeier1::new(1.0, 1.0, 1.0, 1.0, f64::NAN, 1.0, valid_wvl.clone()).is_err()
         );
-        assert!(RefrIndexSellmeier1::new(
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            f64::INFINITY,
-            1.0,
-            valid_wvl.clone()
-        )
-        .is_err());
+        assert!(
+            RefrIndexSellmeier1::new(1.0, 1.0, 1.0, 1.0, f64::INFINITY, 1.0, valid_wvl.clone())
+                .is_err()
+        );
 
         assert!(
             RefrIndexSellmeier1::new(1.0, 1.0, 1.0, -1.0, 1.0, 1.0, valid_wvl.clone()).is_err()
@@ -145,77 +133,83 @@ mod test {
         assert!(
             RefrIndexSellmeier1::new(1.0, 1.0, 1.0, f64::NAN, 1.0, 1.0, valid_wvl.clone()).is_err()
         );
-        assert!(RefrIndexSellmeier1::new(
-            1.0,
-            1.0,
-            1.0,
-            f64::INFINITY,
-            1.0,
-            1.0,
-            valid_wvl.clone()
-        )
-        .is_err());
-        assert!(RefrIndexSellmeier1::new(
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            nanometer!(-1.0)..nanometer!(2000.0)
-        )
-        .is_err());
-        assert!(RefrIndexSellmeier1::new(
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            nanometer!(f64::NAN)..nanometer!(2000.0)
-        )
-        .is_err());
-        assert!(RefrIndexSellmeier1::new(
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            nanometer!(f64::INFINITY)..nanometer!(2000.0)
-        )
-        .is_err());
+        assert!(
+            RefrIndexSellmeier1::new(1.0, 1.0, 1.0, f64::INFINITY, 1.0, 1.0, valid_wvl.clone())
+                .is_err()
+        );
+        assert!(
+            RefrIndexSellmeier1::new(
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                nanometer!(-1.0)..nanometer!(2000.0)
+            )
+            .is_err()
+        );
+        assert!(
+            RefrIndexSellmeier1::new(
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                nanometer!(f64::NAN)..nanometer!(2000.0)
+            )
+            .is_err()
+        );
+        assert!(
+            RefrIndexSellmeier1::new(
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                nanometer!(f64::INFINITY)..nanometer!(2000.0)
+            )
+            .is_err()
+        );
 
-        assert!(RefrIndexSellmeier1::new(
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            nanometer!(1000.0)..nanometer!(-1.0)
-        )
-        .is_err());
-        assert!(RefrIndexSellmeier1::new(
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            nanometer!(1000.0)..nanometer!(f64::NAN)
-        )
-        .is_err());
-        assert!(RefrIndexSellmeier1::new(
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            nanometer!(1000.0)..nanometer!(f64::INFINITY)
-        )
-        .is_err());
+        assert!(
+            RefrIndexSellmeier1::new(
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                nanometer!(1000.0)..nanometer!(-1.0)
+            )
+            .is_err()
+        );
+        assert!(
+            RefrIndexSellmeier1::new(
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                nanometer!(1000.0)..nanometer!(f64::NAN)
+            )
+            .is_err()
+        );
+        assert!(
+            RefrIndexSellmeier1::new(
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                nanometer!(1000.0)..nanometer!(f64::INFINITY)
+            )
+            .is_err()
+        );
     }
     #[test]
     fn new() {

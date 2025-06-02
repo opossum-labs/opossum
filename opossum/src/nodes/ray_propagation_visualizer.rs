@@ -13,8 +13,8 @@ use uom::si::{
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},

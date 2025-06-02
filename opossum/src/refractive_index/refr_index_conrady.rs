@@ -93,13 +93,10 @@ mod test {
         assert!(
             RefrIndexConrady::new(1.0, 1.0, 1.0, nanometer!(f64::NAN)..nanometer!(2000.0)).is_err()
         );
-        assert!(RefrIndexConrady::new(
-            1.0,
-            1.0,
-            1.0,
-            nanometer!(f64::INFINITY)..nanometer!(2000.0)
-        )
-        .is_err());
+        assert!(
+            RefrIndexConrady::new(1.0, 1.0, 1.0, nanometer!(f64::INFINITY)..nanometer!(2000.0))
+                .is_err()
+        );
 
         assert!(
             RefrIndexConrady::new(1.0, 1.0, 1.0, nanometer!(1000.0)..nanometer!(-1.0)).is_err()
@@ -107,13 +104,10 @@ mod test {
         assert!(
             RefrIndexConrady::new(1.0, 1.0, 1.0, nanometer!(1000.0)..nanometer!(f64::NAN)).is_err()
         );
-        assert!(RefrIndexConrady::new(
-            1.0,
-            1.0,
-            1.0,
-            nanometer!(1000.0)..nanometer!(f64::INFINITY)
-        )
-        .is_err());
+        assert!(
+            RefrIndexConrady::new(1.0, 1.0, 1.0, nanometer!(1000.0)..nanometer!(f64::INFINITY))
+                .is_err()
+        );
     }
     #[test]
     fn new() {

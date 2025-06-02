@@ -7,8 +7,8 @@ use uom::si::length::nanometer;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
     light_result::{LightRays, LightResult},
@@ -307,7 +307,7 @@ mod test {
     use super::*;
     use crate::{
         joule,
-        nodes::{test_helper::test_helper::*, EnergyMeter},
+        nodes::{EnergyMeter, test_helper::test_helper::*},
         optic_ports::PortType,
         position_distributions::Hexapolar,
         rays::Rays,

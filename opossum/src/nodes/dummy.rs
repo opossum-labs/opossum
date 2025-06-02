@@ -4,8 +4,8 @@ use opm_macros_lib::OpmNode;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        RayTraceConfig,
+        RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -103,17 +103,23 @@ impl AnalysisRayTrace for Dummy {
                     refraction_intended,
                     config.missed_surface_strategy(),
                 )?;
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
-                    rays.apodize(aperture, &iso)?;
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                match self.ports().aperture(&PortType::Input, in_port) {
+                    Some(aperture) => {
+                        rays.apodize(aperture, &iso)?;
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                    _ => {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    }
                 }
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
-                    rays.apodize(aperture, &iso)?;
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
+                match self.ports().aperture(&PortType::Output, out_port) {
+                    Some(aperture) => {
+                        rays.apodize(aperture, &iso)?;
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                    _ => {
+                        return Err(OpossumError::OpticPort("output aperture not found".into()));
+                    }
                 }
                 Ok(LightResult::from([(
                     out_port.into(),

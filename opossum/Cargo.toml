@@ -1,7 +1,7 @@
 [package]
 name = "opossum"
 version = "0.6.0"
-edition = "2021"
+edition = "2024"
 authors = [
   "Udo Eisenbarth <u.eisenbarth@gsi.de>",
   "Yannik Zobus <y.zobus@gsi.de>",
@@ -69,7 +69,7 @@ rayon = "1.10"
 
 tinytemplate = "1"
 spade = "2.12"
-earcutr = "0.4.3"
+earcutr = "0.5.0"
 utoipa = {version ="5.3.1", features = ["actix_extras", "uuid"] }
 wasm-bindgen = "0.2"
 

@@ -1,14 +1,14 @@
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
     nodes::{
-        collimated_line_ray_source, NodeGroup, NodeReference, RayPropagationVisualizer,
-        SpotDiagram, ThinMirror,
+        NodeGroup, NodeReference, RayPropagationVisualizer, SpotDiagram, ThinMirror,
+        collimated_line_ray_source,
     },
     optic_node::Alignable,
-    OpmDocument,
 };
 use std::path::Path;
 

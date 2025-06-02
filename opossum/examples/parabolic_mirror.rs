@@ -1,14 +1,14 @@
 use nalgebra::Vector3;
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
     nodes::{
-        round_collimated_ray_source, EnergyMeter, NodeGroup, ParabolicMirror,
-        RayPropagationVisualizer, SpotDiagram, WaveFront,
+        EnergyMeter, NodeGroup, ParabolicMirror, RayPropagationVisualizer, SpotDiagram, WaveFront,
+        round_collimated_ray_source,
     },
-    OpmDocument,
 };
 use std::path::Path;
 

@@ -1,6 +1,6 @@
 use actix_cors::Cors;
 use actix_web::{
-    dev::Server, middleware::Logger, web, App, HttpResponse, HttpServer, ResponseError,
+    App, HttpResponse, HttpServer, ResponseError, dev::Server, middleware::Logger, web,
 };
 use env_logger::Env;
 use std::net::Ipv4Addr;

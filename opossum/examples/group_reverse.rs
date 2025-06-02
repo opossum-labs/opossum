@@ -2,6 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
+    OpmDocument,
     analyzers::AnalyzerType,
     error::OpmResult,
     joule,
@@ -9,7 +10,6 @@ use opossum::{
     nanometer,
     nodes::{Dummy, EnergyMeter, NodeGroup, Source},
     optic_node::OpticNode,
-    OpmDocument,
 };
 use uom::si::f64::Length;
 

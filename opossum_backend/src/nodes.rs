@@ -6,7 +6,7 @@ use actix_web::{
 use nalgebra::Point2;
 use opossum::{
     meter,
-    nodes::{create_node_ref, NodeAttr},
+    nodes::{NodeAttr, create_node_ref},
     optic_ports::PortType,
 };
 use serde::{Deserialize, Serialize};
@@ -289,23 +289,29 @@ async fn post_node_position(
     let position = position.into_inner();
     let position = Point2::new(position.0, position.1);
     let mut document = data.document.lock().unwrap();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        node_ref
-            .optical_ref
-            .lock()
-            .unwrap()
-            .node_attr_mut()
-            .set_gui_position(Some(position));
-        Ok(())
-    } else if let Some(analyzer) = document.analyzers_mut().get_mut(&uuid) {
-        analyzer.set_gui_position(Some(position));
-        Ok(())
-    } else {
-        Err(ErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes or analyzers",
-        ))
+    match document.scenery().node_recursive(uuid) {
+        Ok(node_ref) => {
+            node_ref
+                .optical_ref
+                .lock()
+                .unwrap()
+                .node_attr_mut()
+                .set_gui_position(Some(position));
+            Ok(())
+        }
+        _ => document.analyzers_mut().get_mut(&uuid).map_or_else(
+            || {
+                Err(ErrorResponse::new(
+                    404,
+                    "Opossum",
+                    "uuid not found in nodes or analyzers",
+                ))
+            },
+            |analyzer| {
+                analyzer.set_gui_position(Some(position));
+                Ok(())
+            },
+        ),
     }
 }
 /// Delete a node
@@ -519,7 +525,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 #[cfg(test)]
 mod test {
     use crate::{app_state::AppState, error::ErrorResponse};
-    use actix_web::{dev::Service, http::StatusCode, test, web::Data, App};
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use uuid::Uuid;
 
     #[actix_web::test]

@@ -1,5 +1,5 @@
 use crate::{
-    analyzers::{raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
+    analyzers::{AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace},
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
@@ -72,7 +72,7 @@ impl AnalysisRayTrace for BeamSplitter {
                 _ => {
                     return Err(OpossumError::Analysis(
                         "expected Rays value at `input_1` port".into(),
-                    ))
+                    ));
                 }
             }
         } else {
@@ -98,7 +98,7 @@ mod test {
     use approx::assert_abs_diff_eq;
 
     use crate::{
-        analyzers::{raytrace::AnalysisRayTrace, RayTraceConfig},
+        analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
         joule,
         light_result::LightResult,
         lightdata::LightData,

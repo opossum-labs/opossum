@@ -1,10 +1,10 @@
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, meter,
-    nodes::{point_ray_source, NodeGroup, WaveFront},
-    OpmDocument,
+    nodes::{NodeGroup, WaveFront, point_ray_source},
 };
 use std::path::Path;
 

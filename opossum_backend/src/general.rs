@@ -1,7 +1,7 @@
 //! General endpoints
 use std::fmt::Display;
 
-use actix_web::{get, web::Json, Responder};
+use actix_web::{Responder, get, web::Json};
 use opossum::analyzers::AnalyzerType;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -97,7 +97,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use actix_web::{body::to_bytes, dev::Service, http::StatusCode, test, App};
+    use actix_web::{App, body::to_bytes, dev::Service, http::StatusCode, test};
 
     #[actix_web::test]
     async fn get_hello() {

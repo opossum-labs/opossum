@@ -2,17 +2,17 @@ use core::f64;
 
 use std::sync::{Arc, Mutex};
 
-use nalgebra::{vector, Isometry3, Point3, Vector2, Vector3};
+use nalgebra::{Isometry3, Point3, Vector2, Vector3, vector};
 use opm_macros_lib::OpmNode;
 use uom::si::f64::{Angle, Length};
 
 use super::NodeAttr;
 use crate::{
     analyzers::{
+        GhostFocusConfig, RayTraceConfig,
         energy::AnalysisEnergy,
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
-        GhostFocusConfig, RayTraceConfig,
     },
     coatings::CoatingType,
     degree,
@@ -25,7 +25,7 @@ use crate::{
     properties::Proptype,
     radian,
     rays::Rays,
-    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Parabola},
+    surface::{Parabola, geo_surface::GeoSurfaceRef, optic_surface::OpticSurface},
     utils::geom_transformation::Isometry,
 };
 
@@ -502,11 +502,14 @@ impl AnalysisRayTrace for ParabolicMirror {
             refraction_intended,
             config.missed_surface_strategy(),
         )?;
-        if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
-            reflected_rays.apodize(aperture, &self.effective_surface_iso(in_port)?)?;
-            reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-        } else {
-            return Err(OpossumError::OpticPort("input aperture not found".into()));
+        match self.ports().aperture(&PortType::Input, in_port) {
+            Some(aperture) => {
+                reflected_rays.apodize(aperture, &self.effective_surface_iso(in_port)?)?;
+                reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            }
+            _ => {
+                return Err(OpossumError::OpticPort("input aperture not found".into()));
+            }
         }
         let light_data = LightData::Geometric(reflected_rays);
         let light_result = LightResult::from([(out_port.into(), light_data)]);
@@ -526,11 +529,11 @@ impl AnalysisRayTrace for ParabolicMirror {
 mod test {
     use crate::{
         analyzers::{
-            energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-            GhostFocusConfig, RayTraceConfig,
+            GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy,
+            ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
         },
         degree, joule,
-        light_result::{light_result_to_light_rays, LightResult},
+        light_result::{LightResult, light_result_to_light_rays},
         lightdata::LightData,
         meter, millimeter, nanometer,
         nodes::ParabolicMirror,
@@ -616,27 +619,28 @@ mod test {
             ParabolicMirror::new_with_off_axis_x("Parabola", meter!(1.), true, degree!(-190.))
                 .is_err()
         );
-        assert!(ParabolicMirror::new_with_off_axis_x(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(f64::NAN)
-        )
-        .is_err());
-        assert!(ParabolicMirror::new_with_off_axis_x(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(f64::INFINITY)
-        )
-        .is_err());
-        assert!(ParabolicMirror::new_with_off_axis_x(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(f64::NEG_INFINITY)
-        )
-        .is_err());
+        assert!(
+            ParabolicMirror::new_with_off_axis_x("Parabola", meter!(1.), true, degree!(f64::NAN))
+                .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_x(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(f64::INFINITY)
+            )
+            .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_x(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(f64::NEG_INFINITY)
+            )
+            .is_err()
+        );
     }
     #[test]
     fn new_with_off_axis_y() {
@@ -667,158 +671,191 @@ mod test {
             ParabolicMirror::new_with_off_axis_y("Parabola", meter!(1.), true, degree!(-190.))
                 .is_err()
         );
-        assert!(ParabolicMirror::new_with_off_axis_y(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(f64::NAN)
-        )
-        .is_err());
-        assert!(ParabolicMirror::new_with_off_axis_y(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(f64::INFINITY)
-        )
-        .is_err());
-        assert!(ParabolicMirror::new_with_off_axis_y(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(f64::NEG_INFINITY)
-        )
-        .is_err());
+        assert!(
+            ParabolicMirror::new_with_off_axis_y("Parabola", meter!(1.), true, degree!(f64::NAN))
+                .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_y(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(f64::INFINITY)
+            )
+            .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_y(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(f64::NEG_INFINITY)
+            )
+            .is_err()
+        );
     }
     #[test]
     fn new_with_off_axis() {
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(1., 0.)
-        )
-        .is_ok());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(-1., 0.)
-        )
-        .is_ok());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(0., 1.)
-        )
-        .is_ok());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(0., -1.)
-        )
-        .is_ok());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(-1., -1.)
-        )
-        .is_ok());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(1., -1.)
-        )
-        .is_ok());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(1., 1.)
-        )
-        .is_ok());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(-1., 1.)
-        )
-        .is_ok());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(0., 0.)
-        )
-        .is_err());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(f64::NAN, 0.)
-        )
-        .is_err());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(f64::INFINITY, 0.)
-        )
-        .is_err());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(f64::NEG_INFINITY, 0.)
-        )
-        .is_err());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(0., f64::NAN)
-        )
-        .is_err());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(0., f64::INFINITY)
-        )
-        .is_err());
-        assert!(ParabolicMirror::new_with_off_axis(
-            "Parabola",
-            meter!(1.),
-            true,
-            degree!(45.),
-            Vector2::new(0., f64::NEG_INFINITY)
-        )
-        .is_err());
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(1., 0.)
+            )
+            .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(-1., 0.)
+            )
+            .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(0., 1.)
+            )
+            .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(0., -1.)
+            )
+            .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(-1., -1.)
+            )
+            .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(1., -1.)
+            )
+            .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(1., 1.)
+            )
+            .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(-1., 1.)
+            )
+            .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(0., 0.)
+            )
+            .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(f64::NAN, 0.)
+            )
+            .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(f64::INFINITY, 0.)
+            )
+            .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(f64::NEG_INFINITY, 0.)
+            )
+            .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(0., f64::NAN)
+            )
+            .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(0., f64::INFINITY)
+            )
+            .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis(
+                "Parabola",
+                meter!(1.),
+                true,
+                degree!(45.),
+                Vector2::new(0., f64::NEG_INFINITY)
+            )
+            .is_err()
+        );
     }
     #[test]
     fn set_parabola_properties() {
         let mut parabola = ParabolicMirror::default();
 
-        assert!(parabola
-            .set_parabola_properties(meter!(10.), true, None, None)
-            .is_ok());
+        assert!(
+            parabola
+                .set_parabola_properties(meter!(10.), true, None, None)
+                .is_ok()
+        );
         let Proptype::Length(focal_length) =
             parabola.node_attr.get_property("focal length").unwrap()
         else {
@@ -840,14 +877,16 @@ mod test {
         };
         assert_relative_eq!(*dir, Vector2::new(1., 0.));
 
-        assert!(parabola
-            .set_parabola_properties(
-                meter!(10.),
-                true,
-                Some(&degree!(45.)),
-                Some(&Vector2::new(3., 2.))
-            )
-            .is_ok());
+        assert!(
+            parabola
+                .set_parabola_properties(
+                    meter!(10.),
+                    true,
+                    Some(&degree!(45.)),
+                    Some(&Vector2::new(3., 2.))
+                )
+                .is_ok()
+        );
 
         let Proptype::Angle(angle) = parabola.node_attr.get_property("oa angle").unwrap() else {
             panic!()
@@ -1137,8 +1176,9 @@ mod test {
         .unwrap();
         let light_data = LightData::Geometric(rays);
         let input = LightResult::from([("input_1".into(), light_data)]);
-        assert!(node
-            .calc_node_positions(input, &RayTraceConfig::default())
-            .is_ok());
+        assert!(
+            node.calc_node_positions(input, &RayTraceConfig::default())
+                .is_ok()
+        );
     }
 }

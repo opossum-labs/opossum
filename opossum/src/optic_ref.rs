@@ -1,9 +1,9 @@
 #![warn(missing_docs)]
 //! Module for storing references to optical nodes.
 use serde::{
+    Deserialize, Serialize,
     de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
-    Deserialize, Serialize,
 };
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    nodes::{create_node_ref, NodeAttr, OpticGraph},
+    nodes::{NodeAttr, OpticGraph, create_node_ref},
     optic_scenery_rsc::SceneryResources,
 };
 

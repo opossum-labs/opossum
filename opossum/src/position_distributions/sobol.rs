@@ -1,10 +1,10 @@
 //! Rectangluar, low-discrepancy quasirandom distribution
 use super::PositionDistribution;
 use crate::error::{OpmResult, OpossumError};
-use nalgebra::{point, Point3};
+use nalgebra::{Point3, point};
 use num::Zero;
 use serde::{Deserialize, Serialize};
-use sobol::{params::JoeKuoD6, Sobol};
+use sobol::{Sobol, params::JoeKuoD6};
 use uom::si::f64::Length;
 
 /// Rectangluar, low-discrepancy quasirandom distribution

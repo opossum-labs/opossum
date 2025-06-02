@@ -111,59 +111,71 @@ mod test {
     use uom::si::f64::Length;
     #[test]
     fn new() {
-        assert!(Gaussian::new(
-            (nanometer!(1000.0), nanometer!(2000.0)),
-            10,
-            nanometer!(1500.0),
-            nanometer!(100.0),
-            1.0
-        )
-        .is_ok());
-        let test_values = vec![0.0, -0.1, f64::INFINITY, f64::NAN, f64::NEG_INFINITY];
-        for value in &test_values {
-            assert!(Gaussian::new(
+        assert!(
+            Gaussian::new(
                 (nanometer!(1000.0), nanometer!(2000.0)),
                 10,
                 nanometer!(1500.0),
                 nanometer!(100.0),
-                *value
+                1.0
             )
-            .is_err());
+            .is_ok()
+        );
+        let test_values = vec![0.0, -0.1, f64::INFINITY, f64::NAN, f64::NEG_INFINITY];
+        for value in &test_values {
+            assert!(
+                Gaussian::new(
+                    (nanometer!(1000.0), nanometer!(2000.0)),
+                    10,
+                    nanometer!(1500.0),
+                    nanometer!(100.0),
+                    *value
+                )
+                .is_err()
+            );
         }
         let wvl_values: Vec<Length> = test_values.iter().map(|v| nanometer!(*v)).collect();
         for value in &wvl_values {
-            assert!(Gaussian::new(
-                (*value, nanometer!(2000.0)),
-                10,
-                nanometer!(1500.0),
-                nanometer!(100.0),
-                1.0
-            )
-            .is_err());
-            assert!(Gaussian::new(
-                (nanometer!(2000.0), *value),
-                10,
-                nanometer!(1500.0),
-                nanometer!(100.0),
-                1.0
-            )
-            .is_err());
-            assert!(Gaussian::new(
-                (nanometer!(1000.0), nanometer!(2000.0)),
-                10,
-                *value,
-                nanometer!(100.0),
-                1.0
-            )
-            .is_err());
-            assert!(Gaussian::new(
-                (nanometer!(1000.0), nanometer!(2000.0)),
-                10,
-                nanometer!(1500.0),
-                *value,
-                1.0
-            )
-            .is_err());
+            assert!(
+                Gaussian::new(
+                    (*value, nanometer!(2000.0)),
+                    10,
+                    nanometer!(1500.0),
+                    nanometer!(100.0),
+                    1.0
+                )
+                .is_err()
+            );
+            assert!(
+                Gaussian::new(
+                    (nanometer!(2000.0), *value),
+                    10,
+                    nanometer!(1500.0),
+                    nanometer!(100.0),
+                    1.0
+                )
+                .is_err()
+            );
+            assert!(
+                Gaussian::new(
+                    (nanometer!(1000.0), nanometer!(2000.0)),
+                    10,
+                    *value,
+                    nanometer!(100.0),
+                    1.0
+                )
+                .is_err()
+            );
+            assert!(
+                Gaussian::new(
+                    (nanometer!(1000.0), nanometer!(2000.0)),
+                    10,
+                    nanometer!(1500.0),
+                    *value,
+                    1.0
+                )
+                .is_err()
+            );
         }
     }
     #[test]

@@ -10,7 +10,7 @@ use crate::{
     properties::Proptype,
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{geo_surface::GeoSurfaceRef, Plane, Sphere},
+    surface::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -328,7 +328,7 @@ impl OpticNode for Lens {
 mod test {
     use super::*;
     use crate::{
-        analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
         aperture::Aperture,
         joule,
         light_result::LightResult,
@@ -515,10 +515,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 0.031224989991992);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -541,10 +542,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 0.04358898943540674);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -565,10 +567,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 0.04358898943540674);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -591,10 +594,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -615,10 +619,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -639,10 +644,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -665,10 +671,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -689,10 +696,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -715,10 +723,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 0.09637888196533964);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -739,10 +748,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 0.09637888196533964);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -763,10 +773,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 0.09987492177719105);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -787,10 +798,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 0.09987492177719105);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -813,10 +825,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {
@@ -837,10 +850,11 @@ mod test {
         {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .is_some());
+        assert!(
+            node.ports()
+                .aperture(&PortType::Output, "output_1")
+                .is_some()
+        );
         if let Some(Aperture::BinaryCircle(c)) =
             node.ports().aperture(&PortType::Output, "output_1")
         {

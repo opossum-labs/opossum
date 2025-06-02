@@ -2,7 +2,7 @@
 //! Rectangular, uniform random distribution
 use super::PositionDistribution;
 use crate::error::{OpmResult, OpossumError};
-use nalgebra::{point, Point3};
+use nalgebra::{Point3, point};
 use num::Zero;
 use rand::Rng;
 use serde::{Deserialize, Serialize};

@@ -4,18 +4,18 @@ use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     aperture::Aperture,
     error::{OpmResult, OpossumError},
-    lightdata::{light_data_builder::LightDataBuilder, LightData},
+    lightdata::{LightData, light_data_builder::LightDataBuilder},
     nodes::{
-        fluence_detector::{fluence_data::FluenceData, Fluence},
+        FilterType, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
+        fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity,
-        FilterType, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
     },
     optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
-    surface::hit_map::{fluence_estimator::FluenceEstimator, HitMap},
+    surface::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
@@ -26,11 +26,11 @@ use num::Float;
 use serde::{Deserialize, Serialize};
 use tinytemplate::TinyTemplate;
 use uom::si::{
+    Dimension, Quantity, Unit, Units,
     energy::joule,
     f64::{Energy, Length},
     length::meter,
     radiant_exposure::joule_per_square_centimeter,
-    Dimension, Quantity, Unit, Units,
 };
 use uom::{lib::fmt::Debug, si::f64::Angle};
 use uuid::Uuid;
@@ -286,7 +286,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{joule, meter, nanometer, properties::Properties, J_per_m2};
+    use crate::{J_per_m2, joule, meter, nanometer, properties::Properties};
     use assert_matches::assert_matches;
     use uom::si::length::nanometer;
     #[test]

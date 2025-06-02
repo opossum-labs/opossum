@@ -1,6 +1,6 @@
 //!This module should contain all the functions that are used for filtering arrays, vectors and such.
 
-use approx::{relative_eq, RelativeEq};
+use approx::{RelativeEq, relative_eq};
 use num::{Float, Num};
 
 /// This method filters out all NaN and infinite values  

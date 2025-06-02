@@ -9,12 +9,12 @@ use uuid::Uuid;
 
 use super::fluence_detector::Fluence;
 use crate::{
+    J_per_cm2,
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,
     optic_scenery_rsc::SceneryResources,
     properties::{Properties, Proptype},
     utils::geom_transformation::Isometry,
-    J_per_cm2,
 };
 
 /// Struct for storing common attributes of optical nodes.

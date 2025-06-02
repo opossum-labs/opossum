@@ -1,16 +1,16 @@
 use nalgebra::Vector3;
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
     nodes::{
-        round_collimated_ray_source, CylindricLens, NodeGroup, RayPropagationVisualizer,
-        SpotDiagram,
+        CylindricLens, NodeGroup, RayPropagationVisualizer, SpotDiagram,
+        round_collimated_ray_source,
     },
     optic_node::Alignable,
     refractive_index::RefrIndexConst,
-    OpmDocument,
 };
 use std::path::Path;
 

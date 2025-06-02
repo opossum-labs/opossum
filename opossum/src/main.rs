@@ -5,14 +5,14 @@ use env_logger::Env;
 use log::{error, info, warn};
 use opossum::reporting::analysis_report::AnalysisReport;
 use opossum::{
+    OpmDocument,
     console::{Args, PartialArgs},
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
-    OpmDocument,
 };
 use std::{
     env,
-    fs::{create_dir, remove_dir_all, File},
+    fs::{File, create_dir, remove_dir_all},
     io::{self, Write},
     path::{Path, PathBuf},
 };

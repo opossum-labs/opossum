@@ -5,21 +5,20 @@ use core::f64;
 use std::ops::Range;
 
 use crate::{
-    centimeter,
+    J_per_cm2, centimeter,
     error::{OpmResult, OpossumError},
     kde::Kde,
     meter,
-    nodes::fluence_detector::{fluence_data::FluenceData, Fluence},
+    nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     plottable::AxLims,
     utils::{
         f64_to_usize,
         griddata::{
-            calc_closed_poly_area, create_voronoi_cells, interpolate_3d_triangulated_scatter_data,
-            linspace, VoronoiedData,
+            VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
+            interpolate_3d_triangulated_scatter_data, linspace,
         },
         usize_to_f64,
     },
-    J_per_cm2,
 };
 use itertools::Itertools;
 use libm::modf;
@@ -134,7 +133,7 @@ pub enum HitPoints {
 impl HitPoints {
     /// Returns the length of the store hit-point vector within this [`HitPoints`]
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         match self {
             Self::Energy(vec) => vec.len(),
             Self::Fluence(vec) => vec.len(),
@@ -142,7 +141,7 @@ impl HitPoints {
     }
     /// Checks if the stored hit-point vectors are emtpy. Returns true if empty, false otherwise.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         match self {
             Self::Energy(vec) => vec.is_empty(),
             Self::Fluence(vec) => vec.is_empty(),
@@ -298,7 +297,7 @@ impl RaysHitMap {
                 HitPoints::Fluence(_) => {
                     return Err(OpossumError::Analysis(
                         "wrong hit point type for this hitmap! Must be Fluencehitpoint!".into(),
-                    ))
+                    ));
                 }
             },
             HitPoints::Fluence(mut_vec) => match &other_map.hit_points {
@@ -310,7 +309,7 @@ impl RaysHitMap {
                 HitPoints::Energy(_) => {
                     return Err(OpossumError::Analysis(
                         "wrong hit point type for this hitmap! Must be Fluencehitpoint!".into(),
-                    ))
+                    ));
                 }
             },
         }
@@ -382,7 +381,9 @@ impl RaysHitMap {
                 FluenceEstimator::Binning,
             ))
         } else if let HitPoints::Fluence(_) = &self.hit_points {
-            warn!("Unexpected type of HitPoints for binning estimator! Changing to helper-ray estimator!");
+            warn!(
+                "Unexpected type of HitPoints for binning estimator! Changing to helper-ray estimator!"
+            );
             self.calc_fluence_with_helper_rays(nr_of_points, ax_1_range, ax_2_range)
         } else {
             Err(OpossumError::Analysis("wrong hit point type for to calculate fluence with binning! Must be an Energyhitpoint!".into()))
@@ -510,7 +511,9 @@ impl RaysHitMap {
             );
             Ok(fluence_data)
         } else if let HitPoints::Fluence(_) = &self.hit_points {
-            warn!("Unexpected type of HitPoints for Voronoi estimator! Changing to helper-ray estimator!");
+            warn!(
+                "Unexpected type of HitPoints for Voronoi estimator! Changing to helper-ray estimator!"
+            );
             self.calc_fluence_with_helper_rays(nr_of_points, ax_1_range, ax_2_range)
         } else {
             Err(OpossumError::Analysis("wrong hit point type for to calculate fluence with voronoi cells! Must be an Energyhitpoint!".into()))
@@ -599,7 +602,9 @@ impl RaysHitMap {
             );
             Ok(fluence_data)
         } else if let HitPoints::Fluence(_) = &self.hit_points {
-            warn!("Unexpected type of HitPoints for kernel density estimator! Changing to helper-ray estimator!");
+            warn!(
+                "Unexpected type of HitPoints for kernel density estimator! Changing to helper-ray estimator!"
+            );
             self.calc_fluence_with_helper_rays(nr_of_points, ax_1_range, ax_2_range)
         } else {
             Err(OpossumError::Analysis("Wrong hit point type for to calculate fluence with kde! Must be an EnergyHitpoint!".into()))
@@ -716,7 +721,9 @@ impl RaysHitMap {
                 FluenceEstimator::HelperRays,
             ))
         } else if let HitPoints::Energy(_) = &self.hit_points {
-            warn!("Unexpected type of HitPoints for helper-ray estimator! Changing to voronoi estimator!");
+            warn!(
+                "Unexpected type of HitPoints for helper-ray estimator! Changing to voronoi estimator!"
+            );
             self.calc_fluence_with_voronoi(nr_of_points, ax_1_range, ax_2_range)
         } else {
             Err(OpossumError::Analysis("Wrong hit point type for to calculate fluence with helper rays! Must be a FluenceHitpoint!".into()))
@@ -799,9 +806,8 @@ impl RaysHitMap {
 #[cfg(test)]
 mod test_hitpoint {
     use crate::{
-        joule, meter,
+        J_per_cm2, joule, meter,
         surface::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
-        J_per_cm2,
     };
     use core::f64;
     #[test]
@@ -873,9 +879,8 @@ mod test_hitpoint {
 mod test_hitpoints {
     use super::HitPoints;
     use crate::{
-        joule, meter,
+        J_per_cm2, joule, meter,
         surface::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
-        J_per_cm2,
     };
     #[test]
     fn len() {
@@ -884,11 +889,9 @@ mod test_hitpoints {
         let hp = HitPoints::Fluence(vec![]);
         assert!(hp.is_empty());
 
-        let hp = HitPoints::Energy(vec![EnergyHitPoint::new(
-            meter!(1.0, 2.0, 3.0),
-            joule!(4.0),
-        )
-        .unwrap()]);
+        let hp = HitPoints::Energy(vec![
+            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(4.0)).unwrap(),
+        ]);
         assert!(!hp.is_empty());
         assert!(hp.len() == 1);
 
@@ -918,9 +921,8 @@ mod test_hitpoints {
 mod test_rays_hit_map {
     use super::RaysHitMap;
     use crate::{
-        joule, meter,
+        J_per_cm2, joule, meter,
         surface::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint, HitPoints},
-        J_per_cm2,
     };
     use core::f64;
     #[test]
