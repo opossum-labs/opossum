@@ -120,35 +120,30 @@ impl RayTypeSelection{
 // }
 
 #[component]
-pub fn SourceEditor(hide: bool, light_data_builder_opt: Option<LightDataBuilder>, node_change: Signal<Option<NodeChange>>) -> Element{
+pub fn SourceEditor(hide: bool, light_data_builder: LightDataBuilder, node_change: Signal<Option<NodeChange>>) -> Element{
     let pos_dist= Hexapolar::new(millimeter!(5.), 5).unwrap();
     let energy_dist= UniformDist::new(joule!(1.)).unwrap();
     let spect_dist= LaserLines::new(vec![(nanometer!(1054.0), 1.0)]).unwrap();
     let src_selection = use_signal(|| SourceSelection::new());
     let pos_dist_selection = use_signal(|| PosDistSelection::new(Hexapolar::default().into()));
     let ray_type_selection = use_signal(|| RayTypeSelection::new(RayDataBuilder::default()));
-    let energy_data_builder_sig = Signal::new(light_data_builder_opt.clone().map_or(None, |l|{
-        match l{
-            LightDataBuilder::Energy(energy_data_builder) => Some(energy_data_builder),
+    let energy_data_builder_sig = use_signal(|| {
+        match &light_data_builder{
+            LightDataBuilder::Energy(energy_data_builder) => Some(energy_data_builder.clone()),
             _ => None,
         }
-    }));
-    let ray_data_builder_sig = Signal::new(light_data_builder_opt.clone().map_or(None, |l|{
-        match l{
-            LightDataBuilder::Geometric(ray_data_builder) => Some(ray_data_builder),
+    });
+    
+    let ray_data_builder_sig = use_signal(|| {
+        match  &light_data_builder{
+            LightDataBuilder::Geometric(ray_data_builder) => Some(ray_data_builder.clone()),
             _ => None,
         }
-    }));
+    });
+    
 
     let mut light_data_builder_hist = HashMap::<String, LightDataBuilder>::new();
     light_data_builder_hist.insert("Rays".to_string(), LightDataBuilder::default());
-
-    // let fourier_data_builder_opt = light_data_builder_opt.map_or_else(None, |l|{
-    //     match l{
-    //         LightDataBuilder::Fourier => todo!(),
-    //         _ => None
-    //     }
-    // });
 
     rsx!{
         div {
@@ -173,7 +168,7 @@ pub fn SourceEditor(hide: bool, light_data_builder_opt: Option<LightDataBuilder>
                     "aria-labelledby": "sourceHeading",
                     "data-mdb-parent": "#accordionSource",
                     div { class: "accordion-body  bg-dark",
-                        SourceLightDataBuilderSelector{src_selection,light_data_builder_opt, node_change, ray_data_builder_sig, light_data_builder_hist },
+                        SourceLightDataBuilderSelector{src_selection,light_data_builder, node_change, ray_data_builder_sig, light_data_builder_hist },
                         RayDataBuilderSelector{src_selection, ray_data_builder_sig: ray_type_selection, node_change },
                         RayPositionDistributionSelector{src_selection, rays_pos_dist_signal: pos_dist_selection, node_change} ,
                         RayDistributionEditor{src_selection, rays_pos_dist: pos_dist_selection, node_change},
@@ -187,7 +182,7 @@ pub fn SourceEditor(hide: bool, light_data_builder_opt: Option<LightDataBuilder>
 }
 
 #[component]
-pub fn SourceLightDataBuilderSelector(src_selection: Signal<SourceSelection>, light_data_builder_opt: Option<LightDataBuilder>, node_change: Signal<Option<NodeChange>>, ray_data_builder_sig: Signal<Option<RayDataBuilder>>, light_data_builder_hist: HashMap<String, LightDataBuilder>) -> Element{
+pub fn SourceLightDataBuilderSelector(src_selection: Signal<SourceSelection>, light_data_builder: LightDataBuilder, node_change: Signal<Option<NodeChange>>, ray_data_builder_sig: Signal<Option<RayDataBuilder>>, light_data_builder_hist: HashMap<String, LightDataBuilder>) -> Element{
     rsx!{
         div { class:"form-floating",
             select {
@@ -223,36 +218,25 @@ pub fn SourceLightDataBuilderSelector(src_selection: Signal<SourceSelection>, li
                     }
                 },
                 {
-                    if let Some(ref light_data_builder) = light_data_builder_opt{
-                        match light_data_builder {
-                            LightDataBuilder::Energy(_) => {
-                                rsx! {
-                                    option { disabled: true, value: "None", "None" }
-                                    option { selected: true, value: "Energy", "Energy" }
-                                    option { value: "Rays", "Rays" }
-                                }
-                            }
-                            LightDataBuilder::Geometric(_) => {
-                                rsx! {
-                                    option { disabled: true, value: "None", "None" }
-                                    option { value: "Energy", "Energy" }
-                                    option { selected: true, value: "Rays", "Rays" }
-                                }
-                            }
-                            _ => rsx! {
-                                option { selected: true, disabled: true, value: "None", "None" }
-                                option { value: "Energy", "Energy" }
+                    match light_data_builder {
+                        LightDataBuilder::Energy(_) => {
+                            rsx! {
+                                option { selected: true, value: "Energy", "Energy" }
                                 option { value: "Rays", "Rays" }
-                            },
+                            }
                         }
-                    }
-                    else{
-                    rsx! {
-                            option { selected: true, disabled: true, value: "None", "None" }
+                        LightDataBuilder::Geometric(_) => {
+                            rsx! {
+                                option { value: "Energy", "Energy" }
+                                option { selected: true, value: "Rays", "Rays" }
+                            }
+                        }
+                        _ => rsx! {
                             option { value: "Energy", "Energy" }
-                            option { value: "Rays", "Rays" }
-                        }
-                    }
+                            option { selected: true, value: "Rays", "Rays" }
+                        },
+                    }                   
+                    
                 }
 
             },

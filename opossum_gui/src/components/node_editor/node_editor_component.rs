@@ -202,10 +202,10 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     });
 
     if let Some(Some(node_attr)) = &*resource_future.read_unchecked() {
-        let light_data_builder_opt = node_attr.properties().get("light data").map_or(None, |p| {
+        let light_data_builder = node_attr.properties().get("light data").map_or(LightDataBuilder::default(), |p| {
             match p{
-                Proptype::LightDataBuilder(l) => l.clone(),
-                _ => None
+                Proptype::LightDataBuilder(l) => l.as_ref().unwrap().clone(),
+                _ => LightDataBuilder::default()
             }
         });
         rsx! {
@@ -257,7 +257,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     }
                 }
 
-                SourceEditor {hide: node_attr.node_type() != "source", light_data_builder_opt, node_change: node_change.clone() },
+                SourceEditor {hide: node_attr.node_type() != "source", light_data_builder, node_change: node_change.clone() },
             
                 div {
                     class: "accordion accordion-borderless bg-dark ",

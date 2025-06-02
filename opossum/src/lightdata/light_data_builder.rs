@@ -26,7 +26,6 @@ impl Default for LightDataBuilder{
     }
 }
 
-
 impl LightDataBuilder {
     /// Create [`LightData`] from the builder definition.
     ///
