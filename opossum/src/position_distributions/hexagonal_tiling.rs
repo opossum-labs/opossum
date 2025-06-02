@@ -3,7 +3,7 @@ use std::f64::consts::PI;
 
 use crate::{
     error::{OpmResult, OpossumError},
-    meter,
+    meter, millimeter,
 };
 
 use super::PositionDistribution;
@@ -48,6 +48,16 @@ impl HexagonalTiling {
             radius,
             center,
         })
+    }
+}
+
+impl Default for HexagonalTiling{
+    fn default() -> Self {
+        Self {
+            nr_of_hex_along_radius: 7,
+            radius: millimeter!(5.),
+            center: millimeter!(0.,0.),
+        }
     }
 }
 

@@ -3,7 +3,7 @@ use uom::si::f64::Length;
 
 use super::SpectralDistribution;
 use crate::error::{OpmResult, OpossumError};
-use crate::meter;
+use crate::{meter, nanometer};
 use crate::utils::griddata::linspace;
 use crate::utils::math_distribution_functions::gaussian;
 use itertools::Itertools;
@@ -74,6 +74,20 @@ impl Gaussian {
         })
     }
 }
+
+impl Default for Gaussian{
+    fn default() -> Self {
+        Self {
+            wvl_range:(nanometer!(1000.), nanometer!(1100.)),
+            num_points:50,
+            mu:nanometer!(1054.),
+            fwhm:nanometer!(10.),
+            power:1.,
+        }
+    }
+}
+
+
 impl SpectralDistribution for Gaussian {
     fn generate(&self) -> OpmResult<Vec<(Length, f64)>> {
         let wvls = linspace(
@@ -95,6 +109,9 @@ impl SpectralDistribution for Gaussian {
             .collect_vec())
     }
 }
+
+
+
 impl From<Gaussian> for super::SpecDistType {
     fn from(g: Gaussian) -> Self {
         Self::Gaussian(g)

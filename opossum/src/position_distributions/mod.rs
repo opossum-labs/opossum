@@ -60,6 +60,13 @@ pub enum PosDistType {
     /// Pseudo random Sobol distribution
     Sobol(sobol::SobolDist),
 }
+
+impl Default for PosDistType{
+    fn default() -> Self{
+        Self::Hexapolar(Hexapolar::default())
+    }
+}
+
 impl PosDistType {
     /// Generate the point distribution.
     #[must_use]

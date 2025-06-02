@@ -7,6 +7,7 @@ use uom::si::{
     energy::joule,
     f64::{Energy, Length},
 };
+use crate::joule;
 
 use super::EnergyDistribution;
 use crate::error::{OpmResult, OpossumError};
@@ -42,6 +43,15 @@ impl UniformDist {
         Ok(())
     }
 }
+
+impl Default for UniformDist{
+    fn default() -> Self {
+        Self {
+            total_energy:joule!(0.1),
+        }
+    }
+}
+
 impl EnergyDistribution for UniformDist {
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy> {
         let input_len = input.len();

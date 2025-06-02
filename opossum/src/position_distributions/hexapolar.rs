@@ -1,5 +1,5 @@
 //! Circular, hexapolar distribution
-use crate::error::{OpmResult, OpossumError};
+use crate::{error::{OpmResult, OpossumError}, millimeter};
 
 use super::PositionDistribution;
 use nalgebra::{point, Point3};
@@ -34,6 +34,16 @@ impl Hexapolar {
         })
     }
 }
+
+impl Default for Hexapolar{
+    fn default() -> Self {
+        Self {
+            nr_of_rings: 7,
+            radius: millimeter!(5.),
+        }
+    }
+}
+
 impl PositionDistribution for Hexapolar {
     fn generate(&self) -> Vec<Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::new();

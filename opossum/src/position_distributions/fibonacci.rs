@@ -2,7 +2,7 @@
 //! Circular and square, fibbonacci distribution
 use std::f64::consts::PI;
 
-use crate::error::{OpmResult, OpossumError};
+use crate::{error::{OpmResult, OpossumError}, millimeter};
 
 use super::PositionDistribution;
 use nalgebra::{point, Point3};
@@ -49,6 +49,17 @@ impl FibonacciRectangle {
         })
     }
 }
+
+impl Default for FibonacciRectangle{
+    fn default() -> Self {
+        Self {
+            nr_of_rays: 1000,
+            side_length_x:millimeter!(5.),
+            side_length_y:millimeter!(5.),
+        }
+    }
+}
+
 impl PositionDistribution for FibonacciRectangle {
     fn generate(&self) -> Vec<Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_rays);
@@ -109,6 +120,16 @@ impl FibonacciEllipse {
     }
 }
 
+impl Default for FibonacciEllipse{
+    fn default() -> Self {
+        Self {
+            nr_of_rays: 1000,
+            radius_x:millimeter!(5.),
+            radius_y:millimeter!(5.),
+        }
+    }
+}
+
 impl PositionDistribution for FibonacciEllipse {
     fn generate(&self) -> Vec<Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_rays);
@@ -125,6 +146,7 @@ impl PositionDistribution for FibonacciEllipse {
         points
     }
 }
+
 impl From<FibonacciEllipse> for super::PosDistType {
     fn from(f: FibonacciEllipse) -> Self {
         Self::FibonacciEllipse(f)

@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Rectangular, uniform random distribution
 use super::PositionDistribution;
-use crate::error::{OpmResult, OpossumError};
+use crate::{error::{OpmResult, OpossumError}, millimeter};
 use nalgebra::{point, Point3};
 use num::Zero;
 use rand::Rng;
@@ -54,6 +54,17 @@ impl Random {
         })
     }
 }
+
+impl Default for Random{
+    fn default() -> Self {
+        Self {
+            nr_of_points: 1000,
+            side_length_x: millimeter!(5.),
+            side_length_y: millimeter!(5.),
+        }
+    }
+}
+
 impl PositionDistribution for Random {
     fn generate(&self) -> Vec<nalgebra::Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_points);

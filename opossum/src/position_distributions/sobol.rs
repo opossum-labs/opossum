@@ -1,6 +1,6 @@
 //! Rectangluar, low-discrepancy quasirandom distribution
 use super::PositionDistribution;
-use crate::error::{OpmResult, OpossumError};
+use crate::{error::{OpmResult, OpossumError}, millimeter};
 use nalgebra::{point, Point3};
 use num::Zero;
 use serde::{Deserialize, Serialize};
@@ -54,6 +54,16 @@ impl SobolDist {
             side_length_x,
             side_length_y,
         })
+    }
+}
+
+impl Default for SobolDist{
+    fn default() -> Self {
+        Self {
+            nr_of_points: 1000,
+            side_length_x: millimeter!(5.),
+            side_length_y: millimeter!(5.),
+        }
     }
 }
 

@@ -4,7 +4,7 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, RayDataBuilder}},
     millimeter, nanometer,
     nodes::{EnergyMeter, FluenceDetector, Lens, NodeGroup, RayPropagationVisualizer, Source},
     optic_node::OpticNode,
@@ -19,11 +19,11 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Fresnel coating example");
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-        pos_dist: Grid::new((millimeter!(9.), millimeter!(9.)), (100, 100))?.into(),
-        energy_dist: UniformDist::new(joule!(1.))?.into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1000.), 1.0)])?.into(),
-    });
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated  (CollimatedSrc::new(
+         Grid::new((millimeter!(9.), millimeter!(9.)), (100, 100))?.into(),
+         UniformDist::new(joule!(1.))?.into(),
+         LaserLines::new(vec![(nanometer!(1000.), 1.0)])?.into(),
+    )));
     let mut source = Source::new("src", light_data_builder);
     source.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(source)?;

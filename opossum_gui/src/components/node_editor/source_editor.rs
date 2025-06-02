@@ -94,30 +94,30 @@ impl RayTypeSelection{
     }
 }
 
-pub fn define_init_light_source_parameters(){
-    let random = Random::new(millimeter!(5.), millimeter!(5.),1000).unwrap();
-    let hexapolar =Hexapolar::new(millimeter!(5.), 5).unwrap();
-    let hexagonal =HexagonalTiling::new(millimeter!(5.), 5, millimeter!(0.,0.)).unwrap();
-    let hexagonal =Grid::new(millimeter!(5., 5.), (100,100)).unwrap();
+// pub fn define_init_light_source_parameters(){
+//     let random = Random::new(millimeter!(5.), millimeter!(5.),1000).unwrap();
+//     let hexapolar =Hexapolar::new(millimeter!(5.), 5).unwrap();
+//     let hexagonal =HexagonalTiling::new(millimeter!(5.), 5, millimeter!(0.,0.)).unwrap();
+//     let hexagonal =Grid::new(millimeter!(5., 5.), (100,100)).unwrap();
 
 
 
-    let geom_light_data = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-    pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
-    energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
-    spect_dist: LaserLines::new(vec![(nanometer!(1054.0), 1.0)])
-        .unwrap()
-        .into(),
-    });
-    let energy_light_data = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        vec![(nanometer!(1054.0), joule!(1.0))],
-        nanometer!(1.0),
-    ));
-    let mut light_data_builder_hist = HashMap::<String, LightDataBuilder>::new();
-    light_data_builder_hist.insert("Rays".to_string(), geom_light_data);
-    light_data_builder_hist.insert("Energy".to_string(), energy_light_data);
+//     let geom_light_data = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+//     pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
+//     energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
+//     spect_dist: LaserLines::new(vec![(nanometer!(1054.0), 1.0)])
+//         .unwrap()
+//         .into(),
+//     });
+//     let energy_light_data = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+//         vec![(nanometer!(1054.0), joule!(1.0))],
+//         nanometer!(1.0),
+//     ));
+//     let mut light_data_builder_hist = HashMap::<String, LightDataBuilder>::new();
+//     light_data_builder_hist.insert("Rays".to_string(), geom_light_data);
+//     light_data_builder_hist.insert("Energy".to_string(), energy_light_data);
 
-}
+// }
 
 #[component]
 pub fn SourceEditor(hide: bool, light_data_builder_opt: Option<LightDataBuilder>, node_change: Signal<Option<NodeChange>>) -> Element{
@@ -125,8 +125,8 @@ pub fn SourceEditor(hide: bool, light_data_builder_opt: Option<LightDataBuilder>
     let energy_dist= UniformDist::new(joule!(1.)).unwrap();
     let spect_dist= LaserLines::new(vec![(nanometer!(1054.0), 1.0)]).unwrap();
     let src_selection = use_signal(|| SourceSelection::new());
-    let pos_dist_selection = use_signal(|| PosDistSelection::new(Hexapolar::new(millimeter!(5.), 5).unwrap().into()));
-    let ray_type_selection = use_signal(|| RayTypeSelection::new(RayDataBuilder::Collimated { pos_dist:pos_dist.clone().into(), energy_dist:energy_dist.clone().into(), spect_dist:spect_dist.clone().into() }));
+    let pos_dist_selection = use_signal(|| PosDistSelection::new(Hexapolar::default().into()));
+    let ray_type_selection = use_signal(|| RayTypeSelection::new(RayDataBuilder::default()));
     let energy_data_builder_sig = Signal::new(light_data_builder_opt.clone().map_or(None, |l|{
         match l{
             LightDataBuilder::Energy(energy_data_builder) => Some(energy_data_builder),
@@ -140,20 +140,8 @@ pub fn SourceEditor(hide: bool, light_data_builder_opt: Option<LightDataBuilder>
         }
     }));
 
-    let geom_light_data = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-        pos_dist: Hexapolar::new(millimeter!(5.), 5).unwrap().into(),
-        energy_dist: UniformDist::new(joule!(1.)).unwrap().into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1054.0), 1.0)])
-            .unwrap()
-            .into(),
-    });
-    let energy_light_data = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        vec![(nanometer!(1054.0), joule!(1.0))],
-        nanometer!(1.0),
-    ));
     let mut light_data_builder_hist = HashMap::<String, LightDataBuilder>::new();
-    light_data_builder_hist.insert("Rays".to_string(), geom_light_data);
-    light_data_builder_hist.insert("Energy".to_string(), energy_light_data);
+    light_data_builder_hist.insert("Rays".to_string(), LightDataBuilder::default());
 
     // let fourier_data_builder_opt = light_data_builder_opt.map_or_else(None, |l|{
     //     match l{
@@ -324,12 +312,12 @@ pub fn RayDataBuilderDistributions(hide: bool, ray_data_builder_sig: Signal<Opti
                 {
                     if let Some(ref ray_data_builder) = ray_data_builder_opt{
                         match ray_data_builder {
-                            RayDataBuilder::Collimated { pos_dist, energy_dist, spect_dist } => 
+                            RayDataBuilder::Collimated (collimated_src) => 
                             rsx! {
                                     option { selected: true, value: "Collimated", "Collimated" }
                                     option { value: "Point Source", "Point Source" }
                                 },
-                            RayDataBuilder::PointSrc { pos_dist, energy_dist, spect_dist, reference_length } => 
+                            RayDataBuilder::PointSrc(point_src) => 
                             rsx! {
                                     p{"hier weiter machen"}
                                 },

@@ -1,10 +1,9 @@
 //! Generalized 2D Gaussian distribution
 use super::EnergyDistribution;
 use crate::{
-    error::{OpmResult, OpossumError},
-    utils::math_distribution_functions::{
+    degree, error::{OpmResult, OpossumError}, joule, millimeter, utils::math_distribution_functions::{
         general_2d_super_gaussian_point_elliptical, general_2d_super_gaussian_point_rectangular,
-    },
+    }
 };
 use kahan::KahanSummator;
 use nalgebra::Point2;
@@ -99,6 +98,20 @@ impl General2DGaussian {
         Ok(())
     }
 }
+
+impl Default for General2DGaussian{
+    fn default() -> Self {
+        Self {
+            total_energy:joule!(0.1),
+            mu_xy:millimeter!(0.,0.),
+            sigma_xy:millimeter!(5.,5.),
+            power:1.,
+            theta:degree!(0.),
+            rectangular:false,
+        }
+    }
+}
+
 impl EnergyDistribution for General2DGaussian {
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy> {
         let mut energy_distribution = Vec::<f64>::with_capacity(input.len());

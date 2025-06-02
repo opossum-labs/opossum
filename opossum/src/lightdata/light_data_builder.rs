@@ -20,6 +20,13 @@ pub enum LightDataBuilder {
     Fourier,
 }
 
+impl Default for LightDataBuilder{
+    fn default() -> Self{
+        Self::Geometric(RayDataBuilder::default())
+    }
+}
+
+
 impl LightDataBuilder {
     /// Create [`LightData`] from the builder definition.
     ///

@@ -35,6 +35,12 @@ pub trait EnergyDistribution {
     }
 }
 
+impl Default for EnergyDistType{
+    fn default() -> Self{
+        Self::Uniform(UniformDist::default())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum EnergyDistType {
     Uniform(UniformDist),

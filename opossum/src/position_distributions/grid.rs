@@ -2,8 +2,7 @@
 //! Rectangular, evenly-sized grid distribution
 use super::PositionDistribution;
 use crate::{
-    error::{OpmResult, OpossumError},
-    utils::usize_to_f64,
+    error::{OpmResult, OpossumError}, millimeter, utils::usize_to_f64
 };
 use nalgebra::Point3;
 use num::Zero;
@@ -51,6 +50,15 @@ impl Grid {
             nr_of_points,
             side_length,
         })
+    }
+}
+
+impl Default for Grid{
+    fn default() -> Self {
+        Self {
+            nr_of_points: (100,100),
+            side_length: (millimeter!(5.),millimeter!(5.)),
+        }
     }
 }
 
