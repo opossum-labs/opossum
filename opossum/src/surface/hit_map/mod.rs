@@ -122,7 +122,7 @@ impl HitMap {
     }
     /// Returns `true` the [`HitMap`] is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.hit_map.is_empty()
     }
     /// returns a reference to the `critical_fluence` field of this [`HitMap`] which contains:

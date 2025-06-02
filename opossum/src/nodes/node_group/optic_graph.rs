@@ -555,25 +555,24 @@ impl OpticGraph {
     ///
     /// This function will return an error if .
     pub fn node_recursive(&self, uuid: Uuid) -> OpmResult<OpticRef> {
-        match self.node(uuid) {
-            Ok(node) => Ok(node),
-            _ => {
-                for node_ref in self.g.node_weights() {
-                    let mut node = node_ref
-                        .optical_ref
-                        .lock()
-                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+        if let Ok(node) = self.node(uuid) {
+            Ok(node)
+        } else {
+            for node_ref in self.g.node_weights() {
+                let mut node = node_ref
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
 
-                    if let Ok(group) = node.as_group_mut() {
-                        if let Ok(node) = group.graph.node_recursive(uuid) {
-                            return Ok(node);
-                        }
+                if let Ok(group) = node.as_group_mut() {
+                    if let Ok(node) = group.graph.node_recursive(uuid) {
+                        return Ok(node);
                     }
                 }
-                Err(OpossumError::OpticScenery(
-                    "node with given uuid does not exist".into(),
-                ))
             }
+            Err(OpossumError::OpticScenery(
+                "node with given uuid does not exist".into(),
+            ))
         }
     }
     /// Return a reference to the optical node specified by its node index.

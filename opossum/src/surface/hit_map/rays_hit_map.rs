@@ -133,7 +133,7 @@ pub enum HitPoints {
 impl HitPoints {
     /// Returns the length of the store hit-point vector within this [`HitPoints`]
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         match self {
             Self::Energy(vec) => vec.len(),
             Self::Fluence(vec) => vec.len(),
@@ -141,7 +141,7 @@ impl HitPoints {
     }
     /// Checks if the stored hit-point vectors are emtpy. Returns true if empty, false otherwise.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         match self {
             Self::Energy(vec) => vec.is_empty(),
             Self::Fluence(vec) => vec.is_empty(),

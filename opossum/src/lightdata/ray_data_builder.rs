@@ -144,7 +144,8 @@ impl Display for RayDataBuilder {
             } => {
                 write!(
                     f,
-                    "Image field({file_path:?}, {pixel_size:?}, {total_energy:?}, {wave_length:?}, {cone_angle:?})"
+                    "Image field({}, {pixel_size:?}, {total_energy:?}, {wave_length:?}, {cone_angle:?}",
+                    file_path.display()
                 )
             }
         }

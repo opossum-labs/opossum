@@ -342,7 +342,8 @@ impl NodeGroup {
             Ok(format!("{node_id}:{port_name}"))
         }
     }
-    /// Returns the expansion flag of this [`NodeGroup`].  
+    /// Returns the expansion flag of this [`NodeGroup`].
+    ///   
     /// If true, the group expands and the internal nodes of this group are displayed in the dot format.
     /// If false, only the group node itself is displayed and the internal setup is not shown
     /// # Errors
