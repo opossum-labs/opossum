@@ -1,6 +1,6 @@
 use super::BeamSplitter;
 use crate::{
-    analyzers::{ghostfocus::AnalysisGhostFocus, AnalyzerType, GhostFocusConfig},
+    analyzers::{AnalyzerType, GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
     error::{OpmResult, OpossumError},
     light_result::LightRays,
     lightdata::LightData,

@@ -6,15 +6,15 @@
 //!
 //! This module also handles reading and writing of `.opm` files.
 use crate::{
+    SceneryResources,
     analyzers::{
-        energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
-        Analyzer, AnalyzerType,
+        Analyzer, AnalyzerType, energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer,
+        raytrace::RayTracingAnalyzer,
     },
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     optic_node::OpticNode,
     reporting::analysis_report::AnalysisReport,
-    SceneryResources,
 };
 use log::{info, warn};
 use nalgebra::Point2;
@@ -127,7 +127,9 @@ impl OpmDocument {
                 document.opm_file_version,
                 env!("OPM_FILE_VERSION")
             );
-            warn!("This file might haven been written by an older or newer version of OPOSSUM. The model import might not be correct.");
+            warn!(
+                "This file might haven been written by an older or newer version of OPOSSUM. The model import might not be correct."
+            );
         }
         document.scenery.after_deserialization_hook()?;
         document
@@ -272,7 +274,7 @@ impl OpmDocument {
         }
         let mut reports = vec![];
         for ana in self.analyzers.iter().enumerate() {
-            let analyzer: &dyn Analyzer = match ana.1 .1.analyzer_type.clone() {
+            let analyzer: &dyn Analyzer = match ana.1.1.analyzer_type.clone() {
                 AnalyzerType::Energy => &EnergyAnalyzer::default(),
                 AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
                 AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config.clone()),
@@ -296,15 +298,15 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{
-            ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer, Analyzer,
-            GhostFocusConfig, RayTraceConfig,
+            Analyzer, GhostFocusConfig, RayTraceConfig, ghostfocus::GhostFocusAnalyzer,
+            raytrace::RayTracingAnalyzer,
         },
         degree, joule, millimeter, nanometer,
         nodes::{
-            collimated_line_ray_source, round_collimated_ray_source, BeamSplitter, CylindricLens,
-            Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens, ParabolicMirror,
-            ParaxialSurface, RayPropagationVisualizer, ReflectiveGrating, Spectrometer,
-            SpotDiagram, ThinMirror, WaveFront, Wedge,
+            BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens,
+            ParabolicMirror, ParaxialSurface, RayPropagationVisualizer, ReflectiveGrating,
+            Spectrometer, SpotDiagram, ThinMirror, WaveFront, Wedge, collimated_line_ray_source,
+            round_collimated_ray_source,
         },
         optic_node::{Alignable, OpticNode},
         refractive_index::RefrIndexConst,

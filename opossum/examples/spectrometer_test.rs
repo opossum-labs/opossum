@@ -1,4 +1,5 @@
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     energy_distributions::UniformDist,
     error::OpmResult,
@@ -10,7 +11,6 @@ use opossum::{
     position_distributions::Hexapolar,
     spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 
 fn main() -> OpmResult<()> {

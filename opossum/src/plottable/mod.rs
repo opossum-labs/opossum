@@ -10,7 +10,7 @@ use crate::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace
 use approx::relative_ne;
 use colorous::Gradient;
 use image::RgbImage;
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{
@@ -21,11 +21,11 @@ use plotters::{
     backend::DrawingBackend,
     backend::PixelFormat,
     chart::{ChartBuilder, ChartContext, LabelAreaPosition, MeshStyle, SeriesLabelPosition},
-    coord::{cartesian::Cartesian2d, ranged3d::Cartesian3d, types::RangedCoordf64, Shift},
+    coord::{Shift, cartesian::Cartesian2d, ranged3d::Cartesian3d, types::RangedCoordf64},
     element::{Circle, PathElement, Polygon, Rectangle},
     prelude::{BitMapBackend, DrawingArea, IntoDrawingArea, SVGBackend},
     series::LineSeries,
-    style::{Color, IntoFont, RGBAColor, ShapeStyle, BLACK, WHITE},
+    style::{BLACK, Color, IntoFont, RGBAColor, ShapeStyle, WHITE},
 };
 use std::{collections::HashMap, env::current_dir, f64::consts::PI, path::Path, path::PathBuf};
 use strum::IntoEnumIterator;
@@ -452,7 +452,9 @@ impl PlotType {
                     );
                     label_flag |= plt_series.get_series_label().is_some();
                 } else {
-                    warn!("Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!");
+                    warn!(
+                        "Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!"
+                    );
                 }
             }
             if label_flag {
@@ -487,7 +489,9 @@ impl PlotType {
                     );
                     label_flag |= plt_series.get_series_label().is_some();
                 } else {
-                    warn!("Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!");
+                    warn!(
+                        "Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!"
+                    );
                 }
             }
             if label_flag {
@@ -564,7 +568,9 @@ impl PlotType {
                     );
                     label_flag |= plt_series.get_series_label().is_some();
                 } else {
-                    warn!("Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!");
+                    warn!(
+                        "Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!"
+                    );
                 }
             }
 
@@ -612,7 +618,9 @@ impl PlotType {
                         );
                     }
                 } else {
-                    warn!("Wrong PlotData stored for this plot type! Must use MultiDim2! Not all series will be plotted!");
+                    warn!(
+                        "Wrong PlotData stored for this plot type! Must use MultiDim2! Not all series will be plotted!"
+                    );
                 }
             }
             if label_flag {
@@ -650,7 +658,9 @@ impl PlotType {
                         );
                     }
                 } else {
-                    warn!("Wrong PlotData stored for this plot type! Must use MultiDim3! Not all series will be plotted!");
+                    warn!(
+                        "Wrong PlotData stored for this plot type! Must use MultiDim3! Not all series will be plotted!"
+                    );
                 }
             }
             if label_flag {
@@ -664,7 +674,9 @@ impl PlotType {
     fn plot_triangulated_surface<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
         if let Some(plt_series_vec) = plt.get_plot_series_vec() {
             if plt_series_vec.len() > 1 {
-                warn!("For this type of plot only one series can be plotted at a time. Only the first series will be used!");
+                warn!(
+                    "For this type of plot only one series can be plotted at a time. Only the first series will be used!"
+                );
             }
             if let PlotData::TriangulatedSurface {
                 triangle_idx,
@@ -686,7 +698,9 @@ impl PlotType {
                     triangle_normals,
                 );
             } else {
-                warn!("Wrong PlotData stored for this plot type! Must use TriangulatedSurface! Not all series will be plotted!");
+                warn!(
+                    "Wrong PlotData stored for this plot type! Must use TriangulatedSurface! Not all series will be plotted!"
+                );
             }
         } else {
             warn!("No plot series defined! Cannot create plot!");
@@ -695,7 +709,9 @@ impl PlotType {
     fn plot_color_mesh<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
         if let Some(plt_series_vec) = plt.get_plot_series_vec() {
             if plt_series_vec.len() > 1 {
-                warn!("For this type of plot only one series can be plotted at a time. Only the first series will be used!");
+                warn!(
+                    "For this type of plot only one series can be plotted at a time. Only the first series will be used!"
+                );
             }
             if let PlotData::ColorMesh {
                 x_dat_n,
@@ -768,7 +784,9 @@ impl PlotType {
                     plt.bounds.z.unwrap(),
                 );
             } else {
-                warn!("Wrong PlotData stored for this plot type! Must use ColorMesh! Not all series will be plotted!");
+                warn!(
+                    "Wrong PlotData stored for this plot type! Must use ColorMesh! Not all series will be plotted!"
+                );
             }
         } else {
             warn!("No plot series defined! Cannot create plot!");
@@ -2328,7 +2346,9 @@ impl Plot {
             (x_range, y_range, &mut self.bounds.x, &mut self.bounds.y)
         {
             if (y_range / x_range).log10().abs() > 1. {
-                warn!("Too large difference in axes limits! Axes ranges won't be set to equal to avoid too strong plot distortion");
+                warn!(
+                    "Too large difference in axes limits! Axes ranges won't be set to equal to avoid too strong plot distortion"
+                );
             } else {
                 let points_per_pixel_x = x_range / plot_width.to_f64().unwrap();
                 let points_per_pixel_y = y_range / plot_height.to_f64().unwrap();
@@ -2823,9 +2843,11 @@ mod test {
     #[test]
     fn plot_params_set_invalid() {
         let mut plt_params = PlotParameters::default();
-        assert!(plt_params
-            .set(&&PlotArgs::FName("test.invalidfileext".to_owned()))
-            .is_err());
+        assert!(
+            plt_params
+                .set(&&PlotArgs::FName("test.invalidfileext".to_owned()))
+                .is_err()
+        );
     }
     #[test]
     fn plot_params_backend() {

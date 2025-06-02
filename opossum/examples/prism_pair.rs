@@ -1,13 +1,13 @@
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
-    nodes::{collimated_line_ray_source, NodeGroup, RayPropagationVisualizer, SpotDiagram, Wedge},
+    nodes::{NodeGroup, RayPropagationVisualizer, SpotDiagram, Wedge, collimated_line_ray_source},
     optic_node::OpticNode,
     refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 use std::path::Path;
 

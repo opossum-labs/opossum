@@ -5,7 +5,7 @@ use std::f64::consts::PI;
 use crate::error::{OpmResult, OpossumError};
 
 use super::PositionDistribution;
-use nalgebra::{point, Point3};
+use nalgebra::{Point3, point};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;

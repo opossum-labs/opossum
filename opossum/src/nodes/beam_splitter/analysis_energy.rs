@@ -32,7 +32,7 @@ impl AnalysisEnergy for BeamSplitter {
 
 #[cfg(test)]
 mod test {
-    use approx::{assert_abs_diff_eq, AbsDiffEq};
+    use approx::{AbsDiffEq, assert_abs_diff_eq};
 
     use crate::{
         analyzers::energy::AnalysisEnergy, light_result::LightResult, lightdata::LightData,

@@ -1,5 +1,5 @@
 //! This module contains the [`AxLims`] struct, which is used to define the axis limits of a plot.
-use approx::{abs_diff_ne, RelativeEq};
+use approx::{RelativeEq, abs_diff_ne};
 use log::warn;
 use nalgebra::{DVector, DVectorView};
 
@@ -65,7 +65,9 @@ impl AxLims {
     pub fn finite_from_dvector(dat_vec: &DVectorView<'_, f64>) -> Option<Self> {
         let filtered_data = DVector::from_vec(filter_nan_infinite(dat_vec.as_slice()));
         if filtered_data.len() < 2 {
-            warn!("Length of input data after filtering out non-finite values is below 2! Useful Axlims cannot be returned! AxLimit is set to None!");
+            warn!(
+                "Length of input data after filtering out non-finite values is below 2! Useful Axlims cannot be returned! AxLimit is set to None!"
+            );
             None
         } else {
             let axlim = Self {
@@ -179,39 +181,49 @@ mod tests {
     #[test]
     fn check_ax_lim_validity_valid() {
         assert!(AxLims { min: 0., max: 1. }.check_validity());
-        assert!(AxLims {
-            min: -10.,
-            max: 10.
-        }
-        .check_validity());
+        assert!(
+            AxLims {
+                min: -10.,
+                max: 10.
+            }
+            .check_validity()
+        );
     }
     #[test]
     fn check_ax_lim_validity_nan() {
-        assert!(!AxLims {
-            min: f64::NAN,
-            max: 1.
-        }
-        .check_validity());
-        assert!(!AxLims {
-            min: 0.,
-            max: f64::NAN
-        }
-        .check_validity());
+        assert!(
+            !AxLims {
+                min: f64::NAN,
+                max: 1.
+            }
+            .check_validity()
+        );
+        assert!(
+            !AxLims {
+                min: 0.,
+                max: f64::NAN
+            }
+            .check_validity()
+        );
     }
     #[test]
     fn check_ax_lim_validity_equal() {
         assert!(!AxLims { min: 1., max: 1. }.check_validity());
         assert!(!AxLims { min: -1., max: -1. }.check_validity());
-        assert!(!AxLims {
-            min: 1e20,
-            max: 1e20
-        }
-        .check_validity());
-        assert!(!AxLims {
-            min: -1e20,
-            max: -1e20
-        }
-        .check_validity());
+        assert!(
+            !AxLims {
+                min: 1e20,
+                max: 1e20
+            }
+            .check_validity()
+        );
+        assert!(
+            !AxLims {
+                min: -1e20,
+                max: -1e20
+            }
+            .check_validity()
+        );
     }
     #[test]
     fn check_ax_lim_validity_max_smaller() {
@@ -219,26 +231,34 @@ mod tests {
     }
     #[test]
     fn check_ax_lim_validity_infinite() {
-        assert!(!AxLims {
-            min: f64::INFINITY,
-            max: 1.
-        }
-        .check_validity());
-        assert!(!AxLims {
-            min: 0.,
-            max: f64::INFINITY
-        }
-        .check_validity());
-        assert!(!AxLims {
-            min: -f64::INFINITY,
-            max: 1.
-        }
-        .check_validity());
-        assert!(!AxLims {
-            min: 0.,
-            max: -f64::INFINITY
-        }
-        .check_validity());
+        assert!(
+            !AxLims {
+                min: f64::INFINITY,
+                max: 1.
+            }
+            .check_validity()
+        );
+        assert!(
+            !AxLims {
+                min: 0.,
+                max: f64::INFINITY
+            }
+            .check_validity()
+        );
+        assert!(
+            !AxLims {
+                min: -f64::INFINITY,
+                max: 1.
+            }
+            .check_validity()
+        );
+        assert!(
+            !AxLims {
+                min: 0.,
+                max: -f64::INFINITY
+            }
+            .check_validity()
+        );
     }
     #[test]
     fn axlim_new() {

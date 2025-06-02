@@ -2,6 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     joule,
@@ -11,7 +12,6 @@ use opossum::{
     position_distributions::{FibonacciEllipse, Hexapolar},
     rays::Rays,
     refractive_index::RefrIndexConst,
-    OpmDocument,
 };
 use uom::si::f64::Length;
 

@@ -2,10 +2,10 @@
 //! A paraxial surface (ideal lens)
 use crate::{
     analyzers::{
+        GhostFocusConfig, RayTraceConfig,
         energy::AnalysisEnergy,
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
-        GhostFocusConfig, RayTraceConfig,
     },
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
@@ -129,7 +129,9 @@ impl AnalysisGhostFocus for ParaxialSurface {
 
             apodized |= rays.apodize(surf.aperture(), &iso)?;
             if apodized {
-                warn!("Rays have been apodized at input aperture of {optic_name}. Results might not be accurate.");
+                warn!(
+                    "Rays have been apodized at input aperture of {optic_name}. Results might not be accurate."
+                );
             }
             surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
         }
@@ -192,17 +194,23 @@ impl AnalysisRayTrace for ParaxialSurface {
                     config.missed_surface_strategy(),
                 )?;
                 rays.refract_paraxial(focal_length, &iso)?;
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
-                    rays.apodize(aperture, &iso)?;
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                match self.ports().aperture(&PortType::Input, in_port) {
+                    Some(aperture) => {
+                        rays.apodize(aperture, &iso)?;
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                    _ => {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    }
                 }
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
-                    rays.apodize(aperture, &iso)?;
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
+                match self.ports().aperture(&PortType::Output, out_port) {
+                    Some(aperture) => {
+                        rays.apodize(aperture, &iso)?;
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                    _ => {
+                        return Err(OpossumError::OpticPort("output aperture not found".into()));
+                    }
                 }
                 let mut light_result = LightResult::default();
                 light_result.insert(out_port.into(), LightData::Geometric(rays));

@@ -1,7 +1,7 @@
 #[cfg(test)]
 pub mod test_helper {
     use crate::{
-        analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
         aperture::{Aperture, CircleConfig},
         joule,
         light_result::LightResult,
@@ -25,24 +25,30 @@ pub mod test_helper {
     ) {
         let mut node = T::default();
         let aperture = Aperture::default();
-        assert!(node
-            .set_aperture(&PortType::Input, input_port_name, &aperture)
-            .is_ok());
-        assert!(node
-            .set_aperture(&PortType::Input, output_port_name, &aperture)
-            .is_err());
-        assert!(node
-            .set_aperture(&PortType::Input, "no port", &aperture)
-            .is_err());
-        assert!(node
-            .set_aperture(&PortType::Output, input_port_name, &aperture)
-            .is_err());
-        assert!(node
-            .set_aperture(&PortType::Output, output_port_name, &aperture)
-            .is_ok());
-        assert!(node
-            .set_aperture(&PortType::Output, "no port", &aperture)
-            .is_err());
+        assert!(
+            node.set_aperture(&PortType::Input, input_port_name, &aperture)
+                .is_ok()
+        );
+        assert!(
+            node.set_aperture(&PortType::Input, output_port_name, &aperture)
+                .is_err()
+        );
+        assert!(
+            node.set_aperture(&PortType::Input, "no port", &aperture)
+                .is_err()
+        );
+        assert!(
+            node.set_aperture(&PortType::Output, input_port_name, &aperture)
+                .is_err()
+        );
+        assert!(
+            node.set_aperture(&PortType::Output, output_port_name, &aperture)
+                .is_ok()
+        );
+        assert!(
+            node.set_aperture(&PortType::Output, "no port", &aperture)
+                .is_err()
+        );
     }
     pub fn test_analyze_empty<T: Default + AnalysisEnergy>() {
         let mut node = T::default();
@@ -84,9 +90,11 @@ pub mod test_helper {
         let input_light = LightData::Geometric(rays);
         input.insert("input_1".into(), input_light.clone());
         AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
-        let msg=format!("Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.", 
+        let msg = format!(
+            "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
             node.node_attr().name(),
-            node.node_attr().node_type());
+            node.node_attr().node_type()
+        );
         check_logs(log::Level::Warn, vec![&msg]);
     }
     pub fn test_analyze_geometric_no_isometry<T: Default + AnalysisRayTrace>(

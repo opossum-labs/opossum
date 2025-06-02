@@ -2,14 +2,14 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     joule, millimeter,
     nodes::{
-        round_collimated_ray_source, NodeGroup, ParaxialSurface, RayPropagationVisualizer,
-        WaveFront,
+        NodeGroup, ParaxialSurface, RayPropagationVisualizer, WaveFront,
+        round_collimated_ray_source,
     },
-    OpmDocument,
 };
 use uom::si::f64::Length;
 

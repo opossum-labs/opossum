@@ -1,4 +1,5 @@
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, GhostFocusConfig},
     coatings::CoatingType,
     degree,
@@ -14,7 +15,6 @@ use opossum::{
     radian,
     spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 use std::path::Path;
 

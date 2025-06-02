@@ -203,14 +203,16 @@ mod test {
     #[test]
     fn test_short_pass_filter() {
         testing_logger::setup();
-        assert!(generate_filter_spectrum(
-            micrometer!(1.0)..micrometer!(5.0),
-            micrometer!(1.0),
-            &FilterType::ShortPassStep {
-                cut_off: micrometer!(7.0)
-            }
-        )
-        .is_ok());
+        assert!(
+            generate_filter_spectrum(
+                micrometer!(1.0)..micrometer!(5.0),
+                micrometer!(1.0),
+                &FilterType::ShortPassStep {
+                    cut_off: micrometer!(7.0)
+                }
+            )
+            .is_ok()
+        );
         check_logs(
             log::Level::Warn,
             vec!["cut-off wavelength must be inside the spectrum range"],
@@ -232,14 +234,16 @@ mod test {
     #[test]
     fn test_long_pass_filter() {
         testing_logger::setup();
-        assert!(generate_filter_spectrum(
-            micrometer!(1.0)..micrometer!(5.0),
-            micrometer!(1.0),
-            &FilterType::LongPassStep {
-                cut_off: micrometer!(7.0)
-            }
-        )
-        .is_ok());
+        assert!(
+            generate_filter_spectrum(
+                micrometer!(1.0)..micrometer!(5.0),
+                micrometer!(1.0),
+                &FilterType::LongPassStep {
+                    cut_off: micrometer!(7.0)
+                }
+            )
+            .is_ok()
+        );
         check_logs(
             log::Level::Warn,
             vec!["cut-off wavelength must be inside the spectrum range"],
@@ -261,24 +265,28 @@ mod test {
     fn test_short_pass_smooth_filter() {
         let range = micrometer!(1.0)..micrometer!(5.0);
         let resolution = micrometer!(0.5);
-        assert!(generate_filter_spectrum(
-            range.clone(),
-            resolution,
-            &FilterType::ShortPassSmooth {
-                cut_off: micrometer!(3.0),
-                width: Length::zero()
-            }
-        )
-        .is_err());
-        assert!(generate_filter_spectrum(
-            range.clone(),
-            resolution,
-            &FilterType::ShortPassSmooth {
-                cut_off: micrometer!(3.0),
-                width: micrometer!(-1.0)
-            }
-        )
-        .is_err());
+        assert!(
+            generate_filter_spectrum(
+                range.clone(),
+                resolution,
+                &FilterType::ShortPassSmooth {
+                    cut_off: micrometer!(3.0),
+                    width: Length::zero()
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            generate_filter_spectrum(
+                range.clone(),
+                resolution,
+                &FilterType::ShortPassSmooth {
+                    cut_off: micrometer!(3.0),
+                    width: micrometer!(-1.0)
+                }
+            )
+            .is_err()
+        );
         let s = generate_filter_spectrum(
             range,
             resolution,
@@ -299,24 +307,28 @@ mod test {
     fn test_long_pass_smooth_filter() {
         let range = micrometer!(1.0)..micrometer!(5.0);
         let resolution = micrometer!(0.5);
-        assert!(generate_filter_spectrum(
-            range.clone(),
-            resolution,
-            &FilterType::LongPassSmooth {
-                cut_off: micrometer!(3.0),
-                width: Length::zero()
-            }
-        )
-        .is_err());
-        assert!(generate_filter_spectrum(
-            range.clone(),
-            resolution,
-            &FilterType::LongPassSmooth {
-                cut_off: micrometer!(3.0),
-                width: micrometer!(-1.0)
-            }
-        )
-        .is_err());
+        assert!(
+            generate_filter_spectrum(
+                range.clone(),
+                resolution,
+                &FilterType::LongPassSmooth {
+                    cut_off: micrometer!(3.0),
+                    width: Length::zero()
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            generate_filter_spectrum(
+                range.clone(),
+                resolution,
+                &FilterType::LongPassSmooth {
+                    cut_off: micrometer!(3.0),
+                    width: micrometer!(-1.0)
+                }
+            )
+            .is_err()
+        );
         let s = generate_filter_spectrum(
             range,
             resolution,

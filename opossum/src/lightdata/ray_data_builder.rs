@@ -142,7 +142,10 @@ impl Display for RayDataBuilder {
                 wave_length,
                 cone_angle,
             } => {
-                write!(f, "Image field({file_path:?}, {pixel_size:?}, {total_energy:?}, {wave_length:?}, {cone_angle:?})")
+                write!(
+                    f,
+                    "Image field({file_path:?}, {pixel_size:?}, {total_energy:?}, {wave_length:?}, {cone_angle:?})"
+                )
             }
         }
     }

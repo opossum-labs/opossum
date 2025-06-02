@@ -3,13 +3,13 @@ use std::ops::Range;
 
 use super::Fluence;
 use crate::{
+    J_per_cm2,
     error::OpmResult,
     joule,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
     surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::{griddata::linspace, usize_to_f64},
-    J_per_cm2,
 };
 use nalgebra::{DMatrix, DVector};
 use plotters::style::RGBAColor;
@@ -197,11 +197,10 @@ impl Plottable for FluenceData {
 mod test {
     use super::FluenceData;
     use crate::{
-        joule, meter,
+        J_per_cm2, J_per_m2, joule, meter,
         plottable::{PlotType, Plottable},
         properties::Proptype,
         surface::hit_map::fluence_estimator::FluenceEstimator,
-        J_per_cm2, J_per_m2,
     };
     use assert_matches::assert_matches;
     use nalgebra::{dmatrix, vector};

@@ -10,11 +10,11 @@ use crate::{
     radian,
 };
 use approx::relative_eq;
-use nalgebra::{vector, Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3};
+use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3, vector};
 use num::Zero;
 use serde::{
-    de::{self, MapAccess, Visitor},
     Deserialize, Serialize,
+    de::{self, MapAccess, Visitor},
 };
 use uom::si::{
     angle::radian,
@@ -853,54 +853,68 @@ mod test {
         assert_relative_eq!(pos[(1, 0)], 10.);
         assert_relative_eq!(pos[(1, 1)], 1.);
 
-        assert!(project_points_to_plane(
-            &Vector3::zeros(),
-            &Vector3::zeros(),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
-        )
-        .is_err());
+        assert!(
+            project_points_to_plane(
+                &Vector3::zeros(),
+                &Vector3::zeros(),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+            )
+            .is_err()
+        );
 
-        assert!(project_points_to_plane(
-            &Vector3::new(0., 0., f64::NAN),
-            &Vector3::z(),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
-        )
-        .is_err());
+        assert!(
+            project_points_to_plane(
+                &Vector3::new(0., 0., f64::NAN),
+                &Vector3::z(),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+            )
+            .is_err()
+        );
 
-        assert!(project_points_to_plane(
-            &Vector3::new(0., 0., f64::INFINITY),
-            &Vector3::z(),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
-        )
-        .is_err());
+        assert!(
+            project_points_to_plane(
+                &Vector3::new(0., 0., f64::INFINITY),
+                &Vector3::z(),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+            )
+            .is_err()
+        );
 
-        assert!(project_points_to_plane(
-            &Vector3::new(0., 0., f64::NEG_INFINITY),
-            &Vector3::z(),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
-        )
-        .is_err());
+        assert!(
+            project_points_to_plane(
+                &Vector3::new(0., 0., f64::NEG_INFINITY),
+                &Vector3::z(),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+            )
+            .is_err()
+        );
 
-        assert!(project_points_to_plane(
-            &Vector3::z(),
-            &Vector3::new(0., 1., f64::NAN),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
-        )
-        .is_err());
+        assert!(
+            project_points_to_plane(
+                &Vector3::z(),
+                &Vector3::new(0., 1., f64::NAN),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+            )
+            .is_err()
+        );
 
-        assert!(project_points_to_plane(
-            &Vector3::z(),
-            &Vector3::new(0., 1., f64::INFINITY),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
-        )
-        .is_err());
+        assert!(
+            project_points_to_plane(
+                &Vector3::z(),
+                &Vector3::new(0., 1., f64::INFINITY),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+            )
+            .is_err()
+        );
 
-        assert!(project_points_to_plane(
-            &Vector3::z(),
-            &Vector3::new(0., 1., f64::NEG_INFINITY),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
-        )
-        .is_err());
+        assert!(
+            project_points_to_plane(
+                &Vector3::z(),
+                &Vector3::new(0., 1., f64::NEG_INFINITY),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+            )
+            .is_err()
+        );
     }
     #[test]
     fn project_pos_to_plane_with_base_vectors_test() {
@@ -919,113 +933,137 @@ mod test {
         assert_relative_eq!(proj[(1, 0)], 10.);
         assert_relative_eq!(proj[(1, 1)], 0.);
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::zeros(),
-            &Vector3::zeros(),
-            Some(&Vector3::x()),
-            Some(&Vector3::y()),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::zeros(),
+                &Vector3::zeros(),
+                Some(&Vector3::x()),
+                Some(&Vector3::y()),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::new(0., 0., f64::NAN),
-            &Vector3::z(),
-            Some(&Vector3::x()),
-            Some(&Vector3::y()),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::new(0., 0., f64::NAN),
+                &Vector3::z(),
+                Some(&Vector3::x()),
+                Some(&Vector3::y()),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::new(0., 0., f64::INFINITY),
-            &Vector3::z(),
-            Some(&Vector3::x()),
-            Some(&Vector3::y()),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::new(0., 0., f64::INFINITY),
+                &Vector3::z(),
+                Some(&Vector3::x()),
+                Some(&Vector3::y()),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::new(0., 0., f64::NEG_INFINITY),
-            &Vector3::z(),
-            Some(&Vector3::x()),
-            Some(&Vector3::y()),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::new(0., 0., f64::NEG_INFINITY),
+                &Vector3::z(),
+                Some(&Vector3::x()),
+                Some(&Vector3::y()),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::zeros(),
-            &Vector3::z(),
-            Some(&Vector3::zeros()),
-            Some(&Vector3::y()),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::zeros(),
+                &Vector3::z(),
+                Some(&Vector3::zeros()),
+                Some(&Vector3::y()),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::zeros(),
-            &Vector3::z(),
-            Some(&Vector3::x()),
-            Some(&Vector3::zeros()),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::zeros(),
+                &Vector3::z(),
+                Some(&Vector3::x()),
+                Some(&Vector3::zeros()),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::zeros(),
-            &Vector3::z(),
-            Some(&Vector3::new(1., f64::NAN, 0.)),
-            Some(&Vector3::y()),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::zeros(),
+                &Vector3::z(),
+                Some(&Vector3::new(1., f64::NAN, 0.)),
+                Some(&Vector3::y()),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::zeros(),
-            &Vector3::z(),
-            Some(&Vector3::new(1., f64::INFINITY, 0.)),
-            Some(&Vector3::y()),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::zeros(),
+                &Vector3::z(),
+                Some(&Vector3::new(1., f64::INFINITY, 0.)),
+                Some(&Vector3::y()),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::zeros(),
-            &Vector3::z(),
-            Some(&Vector3::new(1., f64::NEG_INFINITY, 0.)),
-            Some(&Vector3::y()),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::zeros(),
+                &Vector3::z(),
+                Some(&Vector3::new(1., f64::NEG_INFINITY, 0.)),
+                Some(&Vector3::y()),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::zeros(),
-            &Vector3::z(),
-            Some(&Vector3::y()),
-            Some(&Vector3::new(1., f64::NAN, 0.)),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::zeros(),
+                &Vector3::z(),
+                Some(&Vector3::y()),
+                Some(&Vector3::new(1., f64::NAN, 0.)),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::zeros(),
-            &Vector3::z(),
-            Some(&Vector3::y()),
-            Some(&Vector3::new(1., f64::INFINITY, 0.)),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::zeros(),
+                &Vector3::z(),
+                Some(&Vector3::y()),
+                Some(&Vector3::new(1., f64::INFINITY, 0.)),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
 
-        assert!(project_pos_to_plane_with_base_vectors(
-            &Vector3::zeros(),
-            &Vector3::z(),
-            Some(&Vector3::y()),
-            Some(&Vector3::new(1., f64::NEG_INFINITY, 0.)),
-            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
-        )
-        .is_err());
+        assert!(
+            project_pos_to_plane_with_base_vectors(
+                &Vector3::zeros(),
+                &Vector3::z(),
+                Some(&Vector3::y()),
+                Some(&Vector3::new(1., f64::NEG_INFINITY, 0.)),
+                &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+            )
+            .is_err()
+        );
     }
     #[test]
     fn from() {

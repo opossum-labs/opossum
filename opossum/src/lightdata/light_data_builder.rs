@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-use super::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder, LightData};
+use super::{LightData, energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder};
 use crate::{error::OpmResult, properties::Proptype};
 
 /// Builder for the generation of [`LightData`].

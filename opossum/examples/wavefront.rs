@@ -1,13 +1,13 @@
 use num::Zero;
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     joule, meter,
     nodes::{
-        round_collimated_ray_source, FluenceDetector, NodeGroup, ParaxialSurface,
-        RayPropagationVisualizer, Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
+        FluenceDetector, NodeGroup, ParaxialSurface, RayPropagationVisualizer, Spectrometer,
+        SpectrometerType, SpotDiagram, WaveFront, round_collimated_ray_source,
     },
-    OpmDocument,
 };
 use std::path::Path;
 use uom::si::f64::Length;

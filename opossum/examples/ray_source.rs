@@ -1,13 +1,13 @@
 use num::Zero;
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     aperture::{Aperture, CircleConfig},
     error::OpmResult,
     joule, millimeter,
-    nodes::{round_collimated_ray_source, Dummy, EnergyMeter, NodeGroup, SpotDiagram},
+    nodes::{Dummy, EnergyMeter, NodeGroup, SpotDiagram, round_collimated_ray_source},
     optic_node::OpticNode,
     optic_ports::PortType,
-    OpmDocument,
 };
 use std::path::Path;
 use uom::si::f64::Length;

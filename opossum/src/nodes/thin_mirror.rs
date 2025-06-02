@@ -5,10 +5,10 @@ use std::sync::{Arc, Mutex};
 use super::NodeAttr;
 use crate::{
     analyzers::{
+        GhostFocusConfig, RayTraceConfig,
         energy::AnalysisEnergy,
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
-        GhostFocusConfig, RayTraceConfig,
     },
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
@@ -20,7 +20,7 @@ use crate::{
     properties::Proptype,
     radian,
     rays::Rays,
-    surface::{geo_surface::GeoSurfaceRef, Plane, Sphere},
+    surface::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use num::Zero;
@@ -226,12 +226,16 @@ impl AnalysisRayTrace for ThinMirror {
                     refraction_intended,
                     config.missed_surface_strategy(),
                 )?;
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
-                    reflected_rays.apodize(aperture, &self.effective_surface_iso(in_port)?)?;
-                    reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    reflected_rays
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                match self.ports().aperture(&PortType::Input, in_port) {
+                    Some(aperture) => {
+                        reflected_rays.apodize(aperture, &self.effective_surface_iso(in_port)?)?;
+                        reflected_rays
+                            .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        reflected_rays
+                    }
+                    _ => {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    }
                 }
             } else {
                 return Err(OpossumError::Analysis("no surface found. Aborting".into()));
@@ -304,18 +308,26 @@ mod test {
     }
     #[test]
     fn with_curvature() {
-        assert!(ThinMirror::default()
-            .with_curvature(Length::zero())
-            .is_err());
-        assert!(ThinMirror::default()
-            .with_curvature(millimeter!(f64::NAN))
-            .is_err());
-        assert!(ThinMirror::default()
-            .with_curvature(millimeter!(f64::INFINITY))
-            .is_ok());
-        assert!(ThinMirror::default()
-            .with_curvature(millimeter!(f64::NEG_INFINITY))
-            .is_ok());
+        assert!(
+            ThinMirror::default()
+                .with_curvature(Length::zero())
+                .is_err()
+        );
+        assert!(
+            ThinMirror::default()
+                .with_curvature(millimeter!(f64::NAN))
+                .is_err()
+        );
+        assert!(
+            ThinMirror::default()
+                .with_curvature(millimeter!(f64::INFINITY))
+                .is_ok()
+        );
+        assert!(
+            ThinMirror::default()
+                .with_curvature(millimeter!(f64::NEG_INFINITY))
+                .is_ok()
+        );
         let m = ThinMirror::default()
             .with_curvature(millimeter!(100.0))
             .unwrap();

@@ -25,7 +25,7 @@ impl PortMap {
         let in_map = self.0.clone();
         let mapping = in_map
             .iter()
-            .find(|m| m.1 .0 == node_id && m.1 .1 == internal_port_name);
+            .find(|m| m.1.0 == node_id && m.1.1 == internal_port_name);
         if let Some(input) = mapping {
             self.0.remove(input.0);
         }
@@ -53,7 +53,7 @@ impl PortMap {
         let p = self
             .0
             .iter()
-            .find(|p| p.1 .0 == node_id && p.1 .1 == internal_port_name);
+            .find(|p| p.1.0 == node_id && p.1.1 == internal_port_name);
         p.map(|p| p.0.to_string())
     }
     /// Check if this [`PortMap`] contains the given external port name.
@@ -62,14 +62,14 @@ impl PortMap {
     }
     /// Check if this [`PortMap`] contains the given node.
     pub fn contains_node(&self, node_id: Uuid) -> bool {
-        self.0.iter().any(|p| p.1 .0 == node_id)
+        self.0.iter().any(|p| p.1.0 == node_id)
     }
     /// Return a vector of port (external -> internal) port assignments for the given node.
     pub fn assigned_ports_for_node(&self, node_id: Uuid) -> Vec<(String, String)> {
         self.0
             .iter()
-            .filter(|p| p.1 .0 == node_id)
-            .map(|p| (p.0.to_string(), p.1 .1.to_string()))
+            .filter(|p| p.1.0 == node_id)
+            .map(|p| (p.0.to_string(), p.1.1.to_string()))
             .collect()
     }
     /// Return the number of entries in the port map.

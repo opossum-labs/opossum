@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
 use crate::{
+    J_per_cm2,
     analyzers::raytrace::MissedSurfaceStrategy,
     aperture::Aperture,
     centimeter, degree,
@@ -11,9 +12,9 @@ use crate::{
     lightdata::ray_data_builder::RayDataBuilder,
     meter, micrometer, millimeter, nanometer,
     nodes::{
-        fluence_detector::{fluence_data::FluenceData, Fluence},
-        ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
         FilterType, WaveFrontData, WaveFrontErrorMap,
+        fluence_detector::{Fluence, fluence_data::FluenceData},
+        ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
     },
     plottable::AxLims,
     position_distributions::{Hexapolar, PositionDistribution},
@@ -27,22 +28,21 @@ use crate::{
         filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
         geom_transformation::Isometry,
         griddata::{
-            calc_closed_poly_area, create_voronoi_cells, interpolate_3d_triangulated_scatter_data,
-            linspace, VoronoiedData,
+            VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
+            interpolate_3d_triangulated_scatter_data, linspace,
         },
         usize_to_f64,
     },
-    J_per_cm2,
 };
 
 use approx::relative_eq;
 use image::{GrayImage, ImageReader};
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{
-    distance, vector, DMatrix, DVector, Matrix2xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector2,
-    Vector3,
+    DMatrix, DVector, Matrix2xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3, distance,
+    vector,
 };
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -108,7 +108,7 @@ impl Rays {
             .to_luma8();
         let (width, height) = gray_image.dimensions();
         let pixel_data = gray_image.into_raw(); // Extract pixel values as a Vec<u8>
-                                                // Create an nalgebra matrix with the correct dimensions
+        // Create an nalgebra matrix with the correct dimensions
         let image_matrix = DMatrix::from_row_slice(height as usize, width as usize, &pixel_data);
         // Normalize image (sum=1)
         let sum = image_matrix
@@ -1637,7 +1637,7 @@ mod test {
         position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         radian,
         ray::SplittingConfig,
-        refractive_index::{refr_index_vaccuum, RefrIndexConst},
+        refractive_index::{RefrIndexConst, refr_index_vaccuum},
         surface::optic_surface::OpticSurface,
         utils::test_helper::test_helper::check_logs,
     };
@@ -1680,7 +1680,10 @@ mod test {
             Ray::new_collimated(millimeter!(0.0, 1.0, 0.0), nanometer!(1001.0), joule!(1.0))
                 .unwrap(),
         );
-        assert_eq!(format!("{}",rays),"pos: (0 m, 0 m, 0 m), dir: (0, 0, 1), energy: 1.000000 J, wavelength: 1000.0000 nm, valid: true\npos: (0 m, 0.001 m, 0 m), dir: (0, 0, 1), energy: 1.000000 J, wavelength: 1001.0000 nm, valid: true\n# of rays: 2");
+        assert_eq!(
+            format!("{}", rays),
+            "pos: (0 m, 0 m, 0 m), dir: (0, 0, 1), energy: 1.000000 J, wavelength: 1000.0000 nm, valid: true\npos: (0 m, 0.001 m, 0 m), dir: (0, 0, 1), energy: 1.000000 J, wavelength: 1001.0000 nm, valid: true\n# of rays: 2"
+        );
     }
     #[test]
     fn split_ray_bundle_by_wavelength_test() {
@@ -1952,14 +1955,10 @@ mod test {
             rays.rays[1].position()[2].value,
             millimeter!(1.0).value / f64::sqrt(2.0)
         );
-        assert!(Rays::new_hexapolar_point_source(
-            position,
-            degree!(-1.0),
-            1,
-            wave_length,
-            joule!(1.0),
-        )
-        .is_err());
+        assert!(
+            Rays::new_hexapolar_point_source(position, degree!(-1.0), 1, wave_length, joule!(1.0),)
+                .is_err()
+        );
         assert!(Rays::new_hexapolar_point_source(
             position,
             degree!(180.0),
@@ -1968,14 +1967,10 @@ mod test {
             joule!(1.0),
         )
         .is_err());
-        assert!(Rays::new_hexapolar_point_source(
-            position,
-            degree!(1.0),
-            1,
-            wave_length,
-            joule!(-0.1),
-        )
-        .is_err());
+        assert!(
+            Rays::new_hexapolar_point_source(position, degree!(1.0), 1, wave_length, joule!(-0.1),)
+                .is_err()
+        );
         let rays =
             Rays::new_hexapolar_point_source(position, Angle::zero(), 1, wave_length, joule!(1.0))
                 .unwrap();
@@ -2121,21 +2116,26 @@ mod test {
     #[test]
     fn refract_paraxial() {
         let mut rays = Rays::default();
-        assert!(rays
-            .refract_paraxial(millimeter!(0.0), &Isometry::identity())
-            .is_err());
-        assert!(rays
-            .refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
-            .is_err());
-        assert!(rays
-            .refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
-            .is_err());
-        assert!(rays
-            .refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
-            .is_err());
-        assert!(rays
-            .refract_paraxial(millimeter!(100.0), &Isometry::identity())
-            .is_ok());
+        assert!(
+            rays.refract_paraxial(millimeter!(0.0), &Isometry::identity())
+                .is_err()
+        );
+        assert!(
+            rays.refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
+                .is_err()
+        );
+        assert!(
+            rays.refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
+                .is_err()
+        );
+        assert!(
+            rays.refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
+                .is_err()
+        );
+        assert!(
+            rays.refract_paraxial(millimeter!(100.0), &Isometry::identity())
+                .is_ok()
+        );
         let ray0 =
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
         let ray1 =
@@ -2316,12 +2316,14 @@ mod test {
     fn invalidate_by_threshold() {
         testing_logger::setup();
         let mut rays = Rays::default();
-        assert!(rays
-            .invalidate_by_threshold_energy(joule!(f64::NAN))
-            .is_err());
-        assert!(rays
-            .invalidate_by_threshold_energy(joule!(f64::INFINITY))
-            .is_err());
+        assert!(
+            rays.invalidate_by_threshold_energy(joule!(f64::NAN))
+                .is_err()
+        );
+        assert!(
+            rays.invalidate_by_threshold_energy(joule!(f64::INFINITY))
+                .is_err()
+        );
         assert!(rays.invalidate_by_threshold_energy(joule!(-0.1)).is_ok());
         check_logs(
             log::Level::Warn,
@@ -2465,20 +2467,20 @@ mod test {
     #[test]
     #[ignore]
     fn get_rays_position_history_in_mm() {
-        let ray_vec = vec![Ray::new(
-            Point3::origin(),
-            vector![0., 1., 2.],
-            nanometer!(1053.),
-            joule!(1.),
-        )
-        .unwrap()];
+        let ray_vec = vec![
+            Ray::new(
+                Point3::origin(),
+                vector![0., 1., 2.],
+                nanometer!(1053.),
+                joule!(1.),
+            )
+            .unwrap(),
+        ];
         let mut rays = Rays::from(ray_vec);
         let _ = propagate(&mut rays, millimeter!(0.5));
         let _ = propagate(&mut rays, millimeter!(1.0));
 
-        let pos_hist_comp = vec![MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5])]; // 0., 1., 3.,
-                                                                                       //])];
-
+        let pos_hist_comp = vec![MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5])];
         let pos_hist = rays.get_rays_position_history(false).unwrap();
         for (ray_pos, ray_pos_calc) in izip!(
             pos_hist_comp.iter(),
@@ -2886,7 +2888,7 @@ mod fluence_rays_test {
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
 
-    use crate::{joule, meter, nanometer, ray::Ray, rays::Rays, J_per_cm2};
+    use crate::{J_per_cm2, joule, meter, nanometer, ray::Ray, rays::Rays};
 
     use super::FluenceRays;
 
@@ -2984,15 +2986,21 @@ mod fluence_rays_test {
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 1e-8);
 
         assert!(fluence_rays.change_effective_energy_by_factor(-1.).is_err());
-        assert!(fluence_rays
-            .change_effective_energy_by_factor(f64::NAN)
-            .is_err());
-        assert!(fluence_rays
-            .change_effective_energy_by_factor(f64::NEG_INFINITY)
-            .is_err());
-        assert!(fluence_rays
-            .change_effective_energy_by_factor(f64::INFINITY)
-            .is_err());
+        assert!(
+            fluence_rays
+                .change_effective_energy_by_factor(f64::NAN)
+                .is_err()
+        );
+        assert!(
+            fluence_rays
+                .change_effective_energy_by_factor(f64::NEG_INFINITY)
+                .is_err()
+        );
+        assert!(
+            fluence_rays
+                .change_effective_energy_by_factor(f64::INFINITY)
+                .is_err()
+        );
 
         assert!(fluence_rays.change_effective_energy_by_factor(2.).is_ok());
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 2e-8);

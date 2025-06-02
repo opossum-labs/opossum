@@ -10,7 +10,7 @@ use crate::{
     properties::Proptype,
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{geo_surface::GeoSurfaceRef, Cylinder, Plane},
+    surface::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -240,7 +240,7 @@ impl OpticNode for CylindricLens {
 mod test {
     use super::*;
     use crate::{
-        analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
         joule,
         light_result::LightResult,
         lightdata::LightData,

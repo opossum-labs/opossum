@@ -5,10 +5,11 @@ mod analysis_raytrace;
 mod optic_graph;
 use super::node_attr::NodeAttr;
 use crate::{
+    SceneryResources,
     analyzers::Analyzable,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    lightdata::{light_data_builder::LightDataBuilder, LightData},
+    lightdata::{LightData, light_data_builder::LightDataBuilder},
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     optic_ref::OpticRef,
@@ -16,7 +17,6 @@ use crate::{
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
     surface::optic_surface::OpticSurface,
-    SceneryResources,
 };
 use num::Zero;
 use optic_graph::ConnectionInfo;
@@ -670,12 +670,12 @@ impl Analyzable for NodeGroup {}
 mod test {
     use super::*;
     use crate::{
-        analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
         joule,
         light_result::LightResult,
         lightdata::light_data_builder::LightDataBuilder,
         millimeter, nanometer,
-        nodes::{test_helper::test_helper::*, Dummy, EnergyMeter, Source},
+        nodes::{Dummy, EnergyMeter, Source, test_helper::test_helper::*},
         optic_node::OpticNode,
         ray::Ray,
         rays::Rays,
@@ -721,15 +721,17 @@ mod test {
         assert!(og.ports().names(&PortType::Input).is_empty());
         assert!(og.ports().names(&PortType::Output).is_empty());
         og.map_input_port(sn1_i, "input_1", "input_1").unwrap();
-        assert!(og
-            .ports()
-            .names(&PortType::Input)
-            .contains(&("input_1".to_string())));
+        assert!(
+            og.ports()
+                .names(&PortType::Input)
+                .contains(&("input_1".to_string()))
+        );
         og.map_output_port(sn2_i, "output_1", "output_1").unwrap();
-        assert!(og
-            .ports()
-            .names(&PortType::Output)
-            .contains(&("output_1".to_string())));
+        assert!(
+            og.ports()
+                .names(&PortType::Output)
+                .contains(&("output_1".to_string()))
+        );
     }
     #[test]
     fn ports_inverted() {
@@ -741,14 +743,16 @@ mod test {
         og.map_input_port(sn1_i, "input_1", "input_1").unwrap();
         og.map_output_port(sn2_i, "output_1", "output_1").unwrap();
         og.set_inverted(true).unwrap();
-        assert!(og
-            .ports()
-            .names(&PortType::Output)
-            .contains(&("input_1".to_string())));
-        assert!(og
-            .ports()
-            .names(&PortType::Input)
-            .contains(&("output_1".to_string())));
+        assert!(
+            og.ports()
+                .names(&PortType::Output)
+                .contains(&("input_1".to_string()))
+        );
+        assert!(
+            og.ports()
+                .names(&PortType::Input)
+                .contains(&("output_1".to_string()))
+        );
     }
     #[test]
     fn report() {

@@ -1,5 +1,6 @@
 use num::Zero;
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     aperture::{Aperture, CircleConfig},
     energy_distributions::UniformDist,
@@ -14,7 +15,6 @@ use opossum::{
     refractive_index::refr_index_schott::RefrIndexSchott,
     spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 use std::path::Path;
 use uom::si::f64::Length;

@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     energy_distributions::General2DGaussian,
     error::OpmResult,
@@ -13,7 +14,6 @@ use opossum::{
     radian,
     rays::Rays,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 
 fn main() -> OpmResult<()> {

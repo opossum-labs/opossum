@@ -4,7 +4,7 @@ use core::f64;
 use std::{f64::consts::PI, fmt::Display};
 
 use approx::relative_ne;
-use nalgebra::{vector, MatrixXx3, Point3, Rotation3, Vector3};
+use nalgebra::{MatrixXx3, Point3, Rotation3, Vector3, vector};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -18,7 +18,7 @@ use crate::{
     analyzers::raytrace::MissedSurfaceStrategy,
     error::{OpmResult, OpossumError},
     joule, meter,
-    nodes::{fluence_detector::Fluence, FilterType},
+    nodes::{FilterType, fluence_detector::Fluence},
     properties::Proptype,
     rays::{FluenceRays, Rays},
     spectrum::Spectrum,
@@ -871,10 +871,10 @@ impl Display for Ray {
 mod test {
     use super::*;
     use crate::{
+        J_per_cm2,
         coatings::CoatingType,
         degree, joule, millimeter, nanometer,
         spectrum_helper::{self, generate_filter_spectrum},
-        J_per_cm2,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use core::f64;
@@ -1073,18 +1073,22 @@ mod test {
         let wvl = nanometer!(1053.0);
         let e = joule!(1.0);
         let mut ray = Ray::new_collimated(millimeter!(0., 0., 0.), wvl, e).unwrap();
-        assert!(ray
-            .refract_paraxial(millimeter!(0.0), &Isometry::identity())
-            .is_err());
-        assert!(ray
-            .refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
-            .is_err());
-        assert!(ray
-            .refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
-            .is_err());
-        assert!(ray
-            .refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
-            .is_err());
+        assert!(
+            ray.refract_paraxial(millimeter!(0.0), &Isometry::identity())
+                .is_err()
+        );
+        assert!(
+            ray.refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
+                .is_err()
+        );
+        assert!(
+            ray.refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
+                .is_err()
+        );
+        assert!(
+            ray.refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
+                .is_err()
+        );
     }
     #[test]
     fn refract_paraxial_on_axis() {
@@ -1200,30 +1204,33 @@ mod test {
         let mut s = OpticSurface::default();
         s.set_isometry(&isometry);
         s.set_coating(CoatingType::ConstantR { reflectivity });
-        assert!(ray
-            .refract_on_surface(
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(0.9),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
-        assert!(ray
-            .refract_on_surface(
+            .is_err()
+        );
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(f64::NAN),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
-        assert!(ray
-            .refract_on_surface(
+            .is_err()
+        );
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(f64::INFINITY),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
+            .is_err()
+        );
         let reflected_ray = ray
             .refract_on_surface(
                 &mut s,
@@ -1340,30 +1347,33 @@ mod test {
         .unwrap();
         let mut s = OpticSurface::default();
         s.set_isometry(&isometry);
-        assert!(ray
-            .refract_on_surface(
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(0.9),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
-        assert!(ray
-            .refract_on_surface(
+            .is_err()
+        );
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(f64::NAN),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
-        assert!(ray
-            .refract_on_surface(
+            .is_err()
+        );
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(f64::INFINITY),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
+            .is_err()
+        );
         ray.refract_on_surface(
             &mut s,
             Some(1.0),
@@ -1876,15 +1886,21 @@ mod test {
         )
         .unwrap();
         assert!(original_ray.change_helper_fluence_by_factor(-1.).is_err());
-        assert!(original_ray
-            .change_helper_fluence_by_factor(f64::NAN)
-            .is_err());
-        assert!(original_ray
-            .change_helper_fluence_by_factor(f64::NEG_INFINITY)
-            .is_err());
-        assert!(original_ray
-            .change_helper_fluence_by_factor(f64::INFINITY)
-            .is_err());
+        assert!(
+            original_ray
+                .change_helper_fluence_by_factor(f64::NAN)
+                .is_err()
+        );
+        assert!(
+            original_ray
+                .change_helper_fluence_by_factor(f64::NEG_INFINITY)
+                .is_err()
+        );
+        assert!(
+            original_ray
+                .change_helper_fluence_by_factor(f64::INFINITY)
+                .is_err()
+        );
         original_ray.change_helper_fluence_by_factor(4.).unwrap();
         assert_relative_eq!(
             original_ray.helper_ray_fluence().unwrap().value / 40000.,
