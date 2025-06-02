@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use dioxus::prelude::*;
-use opossum_backend::{energy_data_builder::EnergyDataBuilder, joule, light_data_builder::{self, LightDataBuilder}, millimeter, nanometer, ray_data_builder::{self, RayDataBuilder}, Grid, HexagonalTiling, Hexapolar, LaserLines, NodeAttr, PosDistType, Proptype, Random, UniformDist};
+use opossum_backend::{energy_data_builder::EnergyDataBuilder, joule, light_data_builder::{self, LightDataBuilder}, millimeter, nanometer, ray_data_builder::{self, CollimatedSrc, RayDataBuilder}, Grid, HexagonalTiling, Hexapolar, LaserLines, NodeAttr, PosDistType, Proptype, Random, UniformDist};
 
 use super::node_editor_component::NodeChange;
 
@@ -121,6 +121,7 @@ impl RayTypeSelection{
 
 #[component]
 pub fn SourceEditor(hide: bool, light_data_builder: LightDataBuilder, node_change: Signal<Option<NodeChange>>) -> Element{
+    let light_data_builder_sig = Signal::new(light_data_builder.clone());
     let pos_dist= Hexapolar::new(millimeter!(5.), 5).unwrap();
     let energy_dist= UniformDist::new(joule!(1.)).unwrap();
     let spect_dist= LaserLines::new(vec![(nanometer!(1054.0), 1.0)]).unwrap();
@@ -133,6 +134,8 @@ pub fn SourceEditor(hide: bool, light_data_builder: LightDataBuilder, node_chang
             _ => None,
         }
     });
+
+    // let test = light_data_builder_sig();
     
     let ray_data_builder_sig = use_signal(|| {
         match  &light_data_builder{
@@ -168,8 +171,11 @@ pub fn SourceEditor(hide: bool, light_data_builder: LightDataBuilder, node_chang
                     "aria-labelledby": "sourceHeading",
                     "data-mdb-parent": "#accordionSource",
                     div { class: "accordion-body  bg-dark",
-                        SourceLightDataBuilderSelector{src_selection,light_data_builder, node_change, ray_data_builder_sig, light_data_builder_hist },
-                        RayDataBuilderSelector{src_selection, ray_data_builder_sig: ray_type_selection, node_change },
+                        SourceLightDataBuilderSelector{
+                            src_selection,
+                            light_data_builder: light_data_builder_sig(), 
+                            node_change, light_data_builder_sig, light_data_builder_hist },
+                        RayDataBuilderSelector{src_selection, ray_data_builder_sig: ray_type_selection, node_change, light_data_builder_sig},
                         RayPositionDistributionSelector{src_selection, rays_pos_dist_signal: pos_dist_selection, node_change} ,
                         RayDistributionEditor{src_selection, rays_pos_dist: pos_dist_selection, node_change},
                         // PosDistBuilderSelector{src_selection, ray_data_builder_sig, node_change }
@@ -182,7 +188,13 @@ pub fn SourceEditor(hide: bool, light_data_builder: LightDataBuilder, node_chang
 }
 
 #[component]
-pub fn SourceLightDataBuilderSelector(src_selection: Signal<SourceSelection>, light_data_builder: LightDataBuilder, node_change: Signal<Option<NodeChange>>, ray_data_builder_sig: Signal<Option<RayDataBuilder>>, light_data_builder_hist: HashMap<String, LightDataBuilder>) -> Element{
+pub fn SourceLightDataBuilderSelector(
+    src_selection: Signal<SourceSelection>, 
+    light_data_builder: LightDataBuilder, 
+    node_change: Signal<Option<NodeChange>>, 
+    light_data_builder_sig: Signal<LightDataBuilder>, 
+    light_data_builder_hist: HashMap<String, LightDataBuilder>
+            ) -> Element{
     rsx!{
         div { class:"form-floating",
             select {
@@ -193,14 +205,42 @@ pub fn SourceLightDataBuilderSelector(src_selection: Signal<SourceSelection>, li
                     move |e: Event<FormData>| {    
                         light_data_builder_hist.get(e.value().as_str()).cloned().map(|l|{
                             match l{
-                                LightDataBuilder::Geometric(ray_data_builder) => {src_selection.write().set_to_rays(); ray_data_builder_sig.set(Some(ray_data_builder))},
-                                _ => {src_selection.write().set_to_energy(); ray_data_builder_sig.set(None)},
+                                LightDataBuilder::Geometric(ray_data_builder) => {
+                                    src_selection.write().set_to_rays(); 
+                                    light_data_builder_sig.set(LightDataBuilder::Geometric(ray_data_builder))
+                                },
+                                _ => {
+                                    src_selection.write().set_to_energy(); 
+                                    light_data_builder_sig.set(LightDataBuilder::Energy(EnergyDataBuilder::default()))
+                                },
                             }
-                        });
-                        // match e.value().as_str() {
-                        //     "Rays" => {ray_data_builder_signal.set(light_data_builder_hist.get(e.value().as_str()).cloned())}
-                        //     "Energy" => {ray_data_builder_signal.set(None)}
-                        // };                    
+                        });                        
+
+                        match e.value().as_str() {
+                            "Rays" => {
+                                src_selection.write().set_to_rays(); 
+                                if let Some(l) = light_data_builder_hist.get(e.value().as_str()){
+                                    light_data_builder_sig.set(l.clone())
+                                }
+                                else{
+                                    let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::default()));
+                                    light_data_builder_sig.set(new_ld_builder.clone());
+                                    light_data_builder_hist.insert("Rays".to_string(), new_ld_builder);
+                                }
+                            }
+                            "Energy" => {
+                                src_selection.write().set_to_energy(); 
+                                if let Some(l) = light_data_builder_hist.get(e.value().as_str()){
+                                    light_data_builder_sig.set(l.clone())
+                                }
+                                else{
+                                    let new_ld_builder = LightDataBuilder::Energy(EnergyDataBuilder::default());
+                                    light_data_builder_sig.set(new_ld_builder.clone());
+                                    light_data_builder_hist.insert("Energy".to_string(), new_ld_builder);
+                                }
+                            }
+                            _ => panic!("Unknown source type: {}", e.value().as_str()),
+                        };                    
                         node_change
                             .set(
                                 Some(
@@ -248,8 +288,7 @@ pub fn SourceLightDataBuilderSelector(src_selection: Signal<SourceSelection>, li
 
 
 #[component]
-pub fn RayDataBuilderSelector(src_selection: Signal<SourceSelection>, ray_data_builder_sig: Signal<RayTypeSelection>, node_change: Signal<Option<NodeChange>>) -> Element{
-    
+pub fn RayDataBuilderSelector(src_selection: Signal<SourceSelection>, ray_data_builder_sig: Signal<RayTypeSelection>, node_change: Signal<Option<NodeChange>>, light_data_builder_sig: Signal<LightDataBuilder>) -> Element{
     
     rsx!{
         div { class: "form-floating",
