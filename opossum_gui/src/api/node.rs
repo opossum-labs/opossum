@@ -1,5 +1,8 @@
 use dioxus::html::geometry::euclid::default::Point2D;
-use opossum::{nodes::NodeAttr, typedefs::{ConnectInfo, NewNode, NodeInfo}};
+use opossum::{
+    nodes::NodeAttr,
+    typedefs::{ConnectInfo, NewNode, NodeInfo},
+};
 use uuid::Uuid;
 
 use super::http_client::HTTPClient;

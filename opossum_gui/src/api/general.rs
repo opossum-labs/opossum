@@ -1,7 +1,10 @@
 //! General api calls
 
 use super::http_client::HTTPClient;
-use opossum::{analyzers::AnalyzerType, typedefs::{NodeType, VersionInfo}};
+use opossum::{
+    analyzers::AnalyzerType,
+    typedefs::{NodeType, VersionInfo},
+};
 
 /// Send a request to check if the bace url is reachable and corresponds to the opossum backend.
 ///

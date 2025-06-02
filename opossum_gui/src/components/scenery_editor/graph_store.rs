@@ -13,7 +13,10 @@ use dioxus::{
     },
     prelude::*,
 };
-use opossum::{optic_ports::PortType, typedefs::{ConnectInfo, NewAnalyzerInfo, NewNode}};
+use opossum::{
+    optic_ports::PortType,
+    typedefs::{ConnectInfo, NewAnalyzerInfo, NewNode},
+};
 use rust_sugiyama::{configure::RankingType, from_edges};
 use std::{collections::HashMap, fs, path::Path};
 use uuid::Uuid;

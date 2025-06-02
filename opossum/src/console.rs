@@ -113,24 +113,23 @@ fn create_prompt_str(flag: &str, init_str: &str) -> OpmResult<String> {
 fn get_args<T>(
     func: fn(&str) -> Option<T>,
     input: Option<&str>,
-    arg_flag: &str,
-    reader: &mut impl BufRead,
-    writer: &mut impl Write,
+    _arg_flag: &str,
+    _reader: &mut impl BufRead,
+    _writer: &mut impl Write,
 ) -> OpmResult<T> {
-    if let Some(i) = input {
-        let arg = func(i);
-        //if arg.is_none() {
-        //     let prompt_str = create_prompt_str(arg_flag, "Invalid input!\n")?;
-        //     let input: String = prompt_reply_from_bufread(reader, writer, prompt_str).unwrap();
-        //     get_args(func, Some(input.as_str()), arg_flag, reader, writer)
-        // } else {
+    input.map_or_else(
+        || get_args(func, Some(""), _arg_flag, _reader, _writer),
+        |i| {
+            let arg = func(i);
+            //if arg.is_none() {
+            //     let prompt_str = create_prompt_str(arg_flag, "Invalid input!\n")?;
+            //     let input: String = prompt_reply_from_bufread(reader, writer, prompt_str).unwrap();
+            //     get_args(func, Some(input.as_str()), arg_flag, reader, writer)
+            // } else {
             arg.ok_or_else(|| OpossumError::Console("Could not extract argument!".into()))
-        //}
-    } else {
-    //     let prompt_str = create_prompt_str(arg_flag, "")?;
-    //     let input: String = prompt_reply_from_bufread(reader, writer, prompt_str).unwrap();
-        get_args(func, Some(""), arg_flag, reader, writer)
-    }
+            //}
+        },
+    )
 }
 /// Gets the parent directory of the passed file path
 /// # Arguments

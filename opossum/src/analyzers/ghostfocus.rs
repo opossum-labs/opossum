@@ -805,8 +805,11 @@ mod test_rays_ghost_focus_history {
     use uuid::Uuid;
 
     use crate::{
-        analyzers::ghostfocus::RaysNodeCorrelation, joule, millimeter, nanometer,
-        // position_distributions::Random, 
+        analyzers::ghostfocus::RaysNodeCorrelation,
+        joule,
+        millimeter,
+        nanometer,
+        // position_distributions::Random,
         rays::Rays,
     };
 

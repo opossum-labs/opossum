@@ -1,6 +1,6 @@
+mod error;
 mod general;
 pub mod http_client;
-mod error;
 mod node;
 mod scenery;
 

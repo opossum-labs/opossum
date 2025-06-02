@@ -12,22 +12,22 @@ pub struct ErrorResponse {
     message: String,
 }
 impl ErrorResponse {
-//     #[must_use]
-//     pub fn new(status: u16, category: &str, message: &str) -> Self {
-//         Self {
-//             status,
-//             category: category.to_string(),
-//             message: message.to_string(),
-//         }
-//     }
-//     #[must_use]
-//     pub fn not_found() -> Self {
-//         Self {
-//             status: StatusCode::NOT_FOUND.as_u16(),
-//             category: "api not found".to_string(),
-//             message: "the OPOSSUM API endpoint was not found".to_string(),
-//         }
-//     }
+    //     #[must_use]
+    //     pub fn new(status: u16, category: &str, message: &str) -> Self {
+    //         Self {
+    //             status,
+    //             category: category.to_string(),
+    //             message: message.to_string(),
+    //         }
+    //     }
+    //     #[must_use]
+    //     pub fn not_found() -> Self {
+    //         Self {
+    //             status: StatusCode::NOT_FOUND.as_u16(),
+    //             category: "api not found".to_string(),
+    //             message: "the OPOSSUM API endpoint was not found".to_string(),
+    //         }
+    //     }
     #[must_use]
     pub const fn status(&self) -> u16 {
         self.status

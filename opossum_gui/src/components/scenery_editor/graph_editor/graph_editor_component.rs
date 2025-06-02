@@ -7,7 +7,11 @@ use crate::components::scenery_editor::{
     nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum::{analyzers::AnalyzerType, optic_ports::PortType, typedefs::{ConnectInfo, NewAnalyzerInfo, NewNode}};
+use opossum::{
+    analyzers::AnalyzerType,
+    optic_ports::PortType,
+    typedefs::{ConnectInfo, NewAnalyzerInfo, NewNode},
+};
 use std::path::PathBuf;
 use uuid::Uuid;
 
