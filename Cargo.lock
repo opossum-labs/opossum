@@ -4971,6 +4971,7 @@ dependencies = [
  "earcutr",
  "embed-doc-image",
  "env_logger",
+ "fastrand",
  "image 0.25.6",
  "itertools 0.14.0",
  "kahan",
