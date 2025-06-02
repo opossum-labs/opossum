@@ -4,7 +4,7 @@ use opossum::{
     aperture::{Aperture, CircleConfig},
     error::OpmResult,
     joule, millimeter, nanometer,
-    nodes::{Lens, NodeGroup, RayPropagationVisualizer, WaveFront, collimated_line_ray_source},
+    nodes::{Lens, NodeGroup, RayPropagationVisualizer, collimated_line_ray_source},
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
     refractive_index::refr_index_schott::RefrIndexSchott,
