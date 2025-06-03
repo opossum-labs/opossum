@@ -148,9 +148,9 @@ impl Ray {
     /// Creates a new collimated ray with three additional helper rays for fluence calculations.
     ///
     /// The ray is horizontally polarized and collinear with the z-axis (optical axis).
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// This function returns an error if:
     /// - The given wavelength is <= 0.0, `NaN`, or infinite.
     /// - The given energy is < 0.0, `NaN`, or infinite.

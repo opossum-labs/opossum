@@ -407,7 +407,21 @@ impl OpticGraph {
                 "external {name_type} port name already assigned"
             )));
         }
-        let node = self.node(node_id)?;
+        let Some(node_idx) = self.node_idx_by_uuid(node_id) else {
+            return Err(OpossumError::OpticGroup(format!(
+                "node with id {node_id} not found"
+            )));
+        };
+        if !self.external_nodes(port_type).contains(&node_idx) {
+            return Err(OpossumError::OpticGroup(format!(
+                "node to be mapped is not an {name_type} node of the group"
+            )));
+        }
+        let Some(node) = self.g.node_weight(node_idx) else {
+            return Err(OpossumError::OpticGroup(format!(
+                "node with id {node_id} not found"
+            )));
+        };
         if !node
             .optical_ref
             .lock()
@@ -418,16 +432,6 @@ impl OpticGraph {
         {
             return Err(OpossumError::OpticGroup(format!(
                 "internal {name_type} port name not found"
-            )));
-        }
-        let Some(node_idx) = self.node_idx_by_uuid(node_id) else {
-            return Err(OpossumError::OpticGroup(format!(
-                "node with id {node_id} not found"
-            )));
-        };
-        if !self.external_nodes(port_type).contains(&node_idx) {
-            return Err(OpossumError::OpticGroup(format!(
-                "node to be mapped is not an {name_type} node of the group"
             )));
         }
         let edge_direction = match port_type {
@@ -455,10 +459,10 @@ impl OpticGraph {
         match port_type {
             PortType::Input => self
                 .input_port_map
-                .add(external_name, node_id, internal_name),
+                .add(external_name, node_id, internal_name)?,
             PortType::Output => self
                 .output_port_map
-                .add(external_name, node_id, internal_name),
+                .add(external_name, node_id, internal_name)?,
         }
         Ok(())
     }
@@ -1743,18 +1747,16 @@ mod test {
         graph
             .map_port(i_d2, &PortType::Input, "input_1", "input_2")
             .unwrap();
-        assert_eq!(
-            graph.port_map(&PortType::Input).port_names(),
-            vec!["input_1", "input_2"]
-        );
+        let mut port_names = graph.port_map(&PortType::Input).port_names();
+        port_names.sort();
+        assert_eq!(port_names, vec!["input_1", "input_2"]);
         let serialized =
             ron::ser::to_string_pretty(&graph, ron::ser::PrettyConfig::new().new_line("\n"))
                 .unwrap();
         let deserialized: OpticGraph = ron::from_str(&serialized).unwrap();
-        assert_eq!(
-            deserialized.port_map(&PortType::Input).port_names(),
-            vec!["input_1", "input_2"]
-        );
+        let mut port_names = deserialized.port_map(&PortType::Input).port_names();
+        port_names.sort();
+        assert_eq!(port_names, vec!["input_1", "input_2"]);
     }
     #[test]
     fn next_node_with_uuid_single() {

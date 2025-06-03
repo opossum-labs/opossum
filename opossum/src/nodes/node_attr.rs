@@ -63,7 +63,7 @@ impl NodeAttr {
     /// # Arguments
     ///
     /// * `node_type` - The type of the optical node (e.g., "lens", "mirror").
-    /// 
+    ///
     /// # Panics
     ///
     /// This function may theoretically panic if the standard properties could not be created,

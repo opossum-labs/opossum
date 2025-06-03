@@ -136,13 +136,11 @@ impl Proptype {
     ///   - a property value could not be converted to html code.
     pub fn to_html(&self, id: &str, property_name: &str) -> OpmResult<String> {
         THREAD_TEMPLATES.with(|template_refcell| {
-            let template_engine = template_refcell.borrow(); // Borrow the TinyTemplate for this thread
-
-            // The add_template calls are no longer needed here.
+            let template_engine = template_refcell.borrow();
             let string_value = match self {
-                Proptype::String(value) => template_engine.render("simple", value),
-                Proptype::I32(value) => template_engine.render("simple", &format!("{value}")),
-                Proptype::F64(value) => template_engine.render("simple", &format!("{value:.6}")),
+                Self::String(value) => template_engine.render("simple", value),
+                Self::I32(value) => template_engine.render("simple", &format!("{value}")),
+                Self::F64(value) => template_engine.render("simple", &format!("{value:.6}")),
                 Self::Bool(value) => template_engine.render("simple", &format!("{value}")),
                 Self::SpectrometerType(value) => {
                     template_engine.render("simple", &value.to_string())
@@ -158,7 +156,6 @@ impl Proptype {
                 Self::WaveFrontData(_) | Self::FluenceData(_) => {
                     template_engine.render("image", &format!("data/{id}_{property_name}.png"))
                 }
-
                 Self::NodeReport(report) => {
                     let html_node_report = HtmlNodeReport {
                         node_name: report.name().into(),
@@ -199,8 +196,7 @@ impl Proptype {
                     msg: "proptype not supported".into(),
                 }),
             };
-            string_value
-                .map_err(|e| OpossumError::Other(format!("Template rendering error: {}", e)))
+            string_value.map_err(|e| OpossumError::Other(format!("Template rendering error: {e}")))
         })
     }
 }
