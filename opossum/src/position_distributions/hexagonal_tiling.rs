@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Circular, hexapolar distribution
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct HexagonalTiling {
     nr_of_hex_along_radius: u8,
     radius: Length,
@@ -48,6 +48,37 @@ impl HexagonalTiling {
             radius,
             center,
         })
+        
+    }
+    pub fn radius(&self) -> Length{
+        self.radius
+    }
+
+    pub fn nr_of_hex_along_radius(&self) -> u8{
+        self.nr_of_hex_along_radius
+    }
+
+    pub fn center(&self) -> Point2<Length>{
+        self.center
+    }
+
+    pub fn set_radius(&mut self, radius: Length){
+        self.radius = radius;
+    }
+
+    pub fn set_nr_of_hex_along_radius(&mut self, nr_of_hex_along_radius: u8){
+        self.nr_of_hex_along_radius = nr_of_hex_along_radius;
+    }
+
+    pub fn set_center(&mut self, center: Point2<Length>){
+        self.center = center;
+    }
+
+    pub fn set_center_x(&mut self, center_x: Length){
+        self.center.x = center_x;
+    }
+    pub fn set_center_y(&mut self, center_y: Length){
+        self.center.y = center_y;
     }
 }
 

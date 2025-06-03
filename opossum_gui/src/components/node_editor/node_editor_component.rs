@@ -8,13 +8,16 @@ use opossum_backend::energy_data_builder::EnergyDataBuilder;
 use opossum_backend::light_data_builder::{self, LightDataBuilder};
 use opossum_backend::ray_data_builder::RayDataBuilder;
 use opossum_backend::{
-    joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, Proptype, UniformDist
+    joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, Proptype,
+    UniformDist,
 };
 use serde_json::Value;
 use uom::si::f64::{Angle, RadiantExposure};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uom::si::{angle::degree, f64::Length, length::meter};
 use uuid::Uuid;
+
+use super::source_editor::LightDataBuilderHistory;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChange {
@@ -35,7 +38,7 @@ pub enum NodeChange {
 #[component]
 pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
-
+    let mut light_data_builder_sig = Signal::new(LightDataBuilderHistory::default());
     let active_node_opt = node();
     use_effect(move || {
         let node_change_opt = node_change.read().clone();
@@ -152,6 +155,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     });
                 }
                 NodeChange::Property(key, prop) => {
+                    println!("sending node property change request");
                     spawn(async move {
                         if let Err(err_str) = api::update_node_property(
                             &HTTP_API_CLIENT(),
@@ -164,23 +168,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                         };
                     });
                 }
-                // NodeChange::SourceWavelength(new_wvl) => {
-                //     let mut source_light_data_builder = source_type.read().clone();
-                //     if let Some(LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(ref mut wvl, res))) = source_light_data_builder{
-                //         *wvl = vec![(new_wvl, wvl[0].1)];
-                //         spawn(async move {
-                //             if let Err(err_str) = api::update_node_property(
-                //                 &HTTP_API_CLIENT(),
-                //                 active_node.id(),
-                //                 ("light data".to_owned(), serde_json::to_value(source_light_data_builder).unwrap())
-                //             )
-                //             .await
-                //             {
-                //                 OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                //             };
-                //         });
-                //     }
-                // }
                 _ => {}
             }
         }
@@ -202,24 +189,30 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     });
 
     if let Some(Some(node_attr)) = &*resource_future.read_unchecked() {
-        let light_data_builder = node_attr.properties().get("light data").map_or(LightDataBuilder::default(), |p| {
-            match p{
-                Proptype::LightDataBuilder(l) =>{
+        let (ld_builder, key) = node_attr.properties().get("light data").map_or(
+            (LightDataBuilder::default(), "Rays"),
+            |p| match p {
+                Proptype::LightDataBuilder(l) => {
                     if let Some(light_data_builder) = l {
-                        light_data_builder.clone()
+                        let key = match light_data_builder {
+                            LightDataBuilder::Geometric(_) => "Rays",
+                            _ => "Energy",
+                        };
+                        (light_data_builder.clone(), key)
                     } else {
-                        LightDataBuilder::default()
+                        (LightDataBuilder::default(), "Rays")
                     }
-                },
-                _ => LightDataBuilder::default()
-            }
-        });
+                }
+                _ => (LightDataBuilder::default(), "Rays"),
+            },
+        );
+        light_data_builder_sig.with_mut(|ldb| ldb.replace_or_insert_and_set_current(key, ld_builder));
         rsx! {
             div {
                 h6 { "Node Configuration" }
                 div {
                     class: "accordion accordion-borderless bg-dark ",
-                    id: "accordionGeneral",
+                    id: "accordionNodeConfig",
                     div { class: "accordion-item bg-dark text-light",
                         h2 { class: "accordion-header", id: "generalHeading",
                             button {
@@ -236,7 +229,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             id: "generalCollapse",
                             class: "accordion-collapse collapse  bg-dark",
                             "aria-labelledby": "generalHeading",
-                            "data-mdb-parent": "#accordionGeneral",
+                            "data-mdb-parent": "#accordionNodeConfig",
                             div { class: "accordion-body  bg-dark",
                                 NodePropInput {
                                     name: "NodeId".to_string(),
@@ -261,13 +254,11 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             }
                         }
                     }
-                }
-
-                SourceEditor {hide: node_attr.node_type() != "source", light_data_builder, node_change: node_change.clone() },
-            
-                div {
-                    class: "accordion accordion-borderless bg-dark ",
-                    id: "accordionAlignment",
+                    SourceEditor {
+                        hide: node_attr.node_type() != "source",
+                        light_data_builder_sig,
+                        node_change: node_change.clone(),
+                    }
                     div { class: "accordion-item bg-dark text-light",
                         h2 { class: "accordion-header", id: "alignmentHeading",
                             button {
@@ -284,7 +275,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             id: "alignmentCollapse",
                             class: "accordion-collapse collapse  bg-dark",
                             "aria-labelledby": "alignmentHeading",
-                            "data-mdb-parent": "#accordionAlignment",
+                            "data-mdb-parent": "#accordionNodeConfig",
                             div { class: "accordion-body  bg-dark",
                                 NodePropInput {
                                     name: "XTranslation".to_string(),
@@ -332,6 +323,9 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                         }
                     }
                 }
+            
+
+
             }
         }
     } else {
@@ -369,7 +363,7 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
         NodeChange::RotationYaw(yaw) => (format!("{:.6}", yaw.get::<degree>()), "number", false),
         NodeChange::Inverted(inverted) => (format!("{inverted}"), "checkbox", false),
         NodeChange::NodeConst(ref val) => (val.clone(), "text", true),
-        NodeChange::Property(_, _ ) => ("not used".to_owned(), "text", true)
+        NodeChange::Property(_, _) => ("not used".to_owned(), "text", true),
     };
 
     if input_type == "checkbox" {
@@ -397,9 +391,11 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
         }
     } else {
         rsx! {
-            div { class: "form-floating", "data-mdb-input-init": "",
+            div {
+                class: "form-floating border-start",
+                "data-mdb-input-init": "",
                 input {
-                    class: "form-control bg-dark text-light",
+                    class: "form-control bg-dark text-light form-control-sm",
                     r#type: input_type,
                     id: input_name.clone(),
                     name: input_name.clone(),
@@ -490,7 +486,7 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
                         }
                     },
                 }
-                label { class: "form-label", r#for: input_name, {placeholder.clone()} }
+                label { class: "form-label text-secondary", r#for: input_name, {placeholder.clone()} }
             }
         }
     }

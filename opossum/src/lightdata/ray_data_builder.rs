@@ -77,6 +77,15 @@ impl CollimatedSrc{
     pub fn spect_dist_mut(&mut self) -> &mut SpecDistType{
         &mut self.spect_dist
     }
+    pub fn set_pos_dist(&mut self, pos_dist: PosDistType){
+        self.pos_dist = pos_dist;
+    }
+    pub fn set_energy_dist(&mut self, energy_dist: EnergyDistType){
+        self.energy_dist = energy_dist;
+    }
+    pub fn set_spect_dist(&mut self, spect_dist: SpecDistType){
+        self.spect_dist = spect_dist;
+    }
 }
 
 impl Default for CollimatedSrc{
@@ -128,6 +137,18 @@ impl PointSrc{
     pub fn reference_length_mut(&mut self) -> &mut Length{
         &mut self.reference_length
     } 
+    pub fn set_pos_dist(&mut self, pos_dist: PosDistType){
+        self.pos_dist = pos_dist;
+    }
+    pub fn set_energy_dist(&mut self, energy_dist: EnergyDistType){
+        self.energy_dist = energy_dist;
+    }
+    pub fn set_spect_dist(&mut self, spect_dist: SpecDistType){
+        self.spect_dist = spect_dist;
+    }
+    pub fn set_reference_length(&mut self, ref_length: Length){
+        self.reference_length = ref_length;
+    }
 }
 
 impl Default for PointSrc{
