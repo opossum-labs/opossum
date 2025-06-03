@@ -2,10 +2,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
-
 use crate::error::{OpmResult, OpossumError};
-
-/// Mapping of the graph's internal `OpticPorts` to externally visible ports.
+/// Represents a mapping between externally visible port names and internal node-port pairs.
+///
+/// The `PortMap` stores associations where an external port name (e.g., "input_1")
+/// maps to a specific internal port name on a specific node (identified by a [`Uuid`])
+/// within a the optical graph.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct PortMap(HashMap<String, (Uuid, String)>);
 
@@ -95,7 +97,7 @@ impl PortMap {
             .map(|p| (p.0.to_string(), p.1.1.to_string()))
             .collect()
     }
-    /// Return the number of entries in the port map.
+    /// Returns the total number of external port mappings in this [`PortMap`].
     pub fn len(&self) -> usize {
         self.0.len()
     }

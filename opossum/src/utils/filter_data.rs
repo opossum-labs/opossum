@@ -1,12 +1,16 @@
-//!This module should contain all the functions that are used for filtering arrays, vectors and such.
+//! This module should contain all the functions that are used for filtering arrays, vectors and such.
 
 use approx::{RelativeEq, relative_eq};
 use num::{Float, Num};
 
-/// This method filters out all NaN and infinite values  
+/// This method filters out all NaN and infinite values
+///  
 /// # Attributes
+/// 
 /// - `ax_vals`: dynamically sized vector slice of the data vector on this axis
+/// 
 /// # Returns
+/// 
 /// This method returns an array containing only the non-NaN and finite entries of the passed vector
 #[must_use]
 pub fn filter_nan_infinite<T: Float>(ax_vals: &[T]) -> Vec<T> {
@@ -18,20 +22,21 @@ pub fn filter_nan_infinite<T: Float>(ax_vals: &[T]) -> Vec<T> {
 }
 
 /// This method returns the minimum and maximum value of the provided values while ignoring non-finite values
+/// 
 /// # Attributes
+/// 
 /// - `ax_vals`: dynamically sized vector slice of the data vector on this axis
+/// 
 /// # Returns
+/// 
 /// If Successful, this method returns an Option containting the minimum and maximum value: Option<(min, max)>.
 /// If `ax_vals` contains only non-finite values (inf, -inf, NaN), None is returned
 #[must_use]
-pub fn get_min_max_filter_nonfinite(ax_vals: &[f64]) -> Option<(f64, f64)> {
-    let (min, max) = ax_vals
-        .iter()
-        .filter(|x| x.is_finite())
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |arg, v| {
-            (f64::min(arg.0, *v), f64::max(arg.1, *v))
-        });
-
+pub fn get_min_max_filter_nonfinite<T: Float>(ax_vals: &[T]) -> Option<(T, T)> {
+    let (min, max) = ax_vals.iter().copied().filter(|x| x.is_finite()).fold(
+        (T::infinity(), T::neg_infinity()),
+        |(current_min, current_max), val| (current_min.min(val), current_max.max(val)),
+    );
     if !min.is_finite() || !max.is_finite() {
         None
     } else {
@@ -42,7 +47,9 @@ pub fn get_min_max_filter_nonfinite(ax_vals: &[f64]) -> Option<(f64, f64)> {
 ///
 /// This method returns a vector of all unique values in an array ignoring non finite values
 /// Here, unique means that the values only differ by a marginal amount according to the `relative_eq`! macro from the approx crate
+/// 
 /// # Attributes
+/// 
 /// - `array`: array of values
 #[must_use]
 pub fn get_unique_finite_values<T: Clone + RelativeEq + Num + Float>(array: &[T]) -> Vec<T> {
@@ -66,7 +73,6 @@ pub fn get_unique_finite_values<T: Clone + RelativeEq + Num + Float>(array: &[T]
 #[cfg(test)]
 mod test {
     use approx::assert_relative_eq;
-
     use super::*;
     #[test]
     fn get_unique_values_test() {
