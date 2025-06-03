@@ -54,7 +54,7 @@ impl NodeAttr {
     /// - `name`: Set to the provided `node_type` string.
     /// - `node_type`: Set to the provided `node_type` string.
     /// - `inverted`: Set to `false`.
-    /// - `apertures` (ports): Initialized with the default [`OpticPorts`] structure.
+    /// - `ports`: Set to default (empty) [`OpticPorts`] structure.
     /// - `alignment`: Set to `None`.
     /// - `uuid`: Randomly generated unique identifier.
     /// - `lidt`: Set to a default fluence value of 1 J/cm².
