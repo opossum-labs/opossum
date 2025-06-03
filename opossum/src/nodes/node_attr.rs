@@ -1,6 +1,7 @@
-//! Common optcial node attributes.
+//! Common optical node attributes.
 //!
-//! This module handles common attributes of optical nodes such as [`Properties`] or geometric data (isometries, etc.)
+//! This module provides common attributes and utilities for optical nodes, such as [`Properties`], geometric data (isometries), and GUI positioning.
+//! These attributes are shared across different types of optical nodes in the system.
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -18,11 +19,17 @@ use crate::{
 };
 
 /// Struct for storing common attributes of optical nodes.
+///
+/// `NodeAttr` encapsulates metadata and configuration for an optical node, including its type, name, ports, unique identifier,
+/// laser-induced damage threshold (LIDT), geometric transformations, alignment, and frontend GUI position.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeAttr {
+    /// The type of the node (e.g., "lens", "mirror").
     node_type: String,
+    /// The name of the node.
     name: String,
     ports: OpticPorts,
+    /// Universally unique identifier for this node.
     uuid: Uuid,
     lidt: Fluence,
     #[serde(default)]
@@ -43,15 +50,24 @@ pub struct NodeAttr {
 impl NodeAttr {
     /// Creates new node attributes ([`NodeAttr`]).
     ///
-    /// This automatically creates some "standard" properties common to all optic nodes (name, node type, inverted, apertures). The
-    /// standard properties / values are:
-    ///   - `name`: the given `node_type`
-    ///   - `inverted`: `false`
-    ///   - `apertures`: default [`OpticPorts`] structure
-    ///   - `alignment`: `None`
+    /// This constructor initializes a node with standard default properties common to all optical nodes:
+    /// - `name`: Set to the provided `node_type` string.
+    /// - `node_type`: Set to the provided `node_type` string.
+    /// - `inverted`: Set to `false`.
+    /// - `apertures` (ports): Initialized with the default [`OpticPorts`] structure.
+    /// - `alignment`: Set to `None`.
+    /// - `uuid`: Randomly generated unique identifier.
+    /// - `lidt`: Set to a default fluence value of 1 J/cm².
+    /// - `gui_position`: Set to `None`.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_type` - The type of the optical node (e.g., "lens", "mirror").
+    /// 
     /// # Panics
     ///
-    /// Panics theoretically if the standard properties could not be created.
+    /// This function may theoretically panic if the standard properties could not be created,
+    /// but this should not occur under normal circumstances.
     #[must_use]
     pub fn new(node_type: &str) -> Self {
         Self {
@@ -233,19 +249,18 @@ impl NodeAttr {
     pub const fn get_align_like_node_at_distance(&self) -> &Option<(Uuid, Length)> {
         &self.align_like_node_at_distance
     }
-    /// Returns the GUI position of an optical node.
+    /// Returns the GUI position of this optical node.
     ///
-    /// This function returns the position of an optical node in a frontend diagram.
-    /// If the value is `None`, no value has been set and the node might possibly be placed
-    /// automatically.
+    /// This function returns the position of the node in a frontend diagram, if set.
+    /// If the value is `None`, the node may be placed automatically by the frontend.
     ///
-    /// The position is a [`Point3`] since the `x` & `y` coordinates represent the position on a 2D
-    /// frontend diagram. The `z` component is used for the depth level for handling overlapping nodes.
+    /// The position is a [`Point2`] since the `x` & `y` coordinates represent the position on a 2D
+    /// frontend diagram.
     #[must_use]
     pub const fn gui_position(&self) -> Option<Point2<f64>> {
         self.gui_position
     }
-    /// Sets the GUI position of the optical node.
+    /// Sets the GUI position of this optical node.
     pub const fn set_gui_position(&mut self, gui_position: Option<Point2<f64>>) {
         self.gui_position = gui_position;
     }
