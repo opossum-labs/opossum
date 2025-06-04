@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
+use crate::error::{OpmResult, OpossumError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
-use crate::error::{OpmResult, OpossumError};
 /// Represents a mapping between externally visible port names and internal node-port pairs.
 ///
-/// The `PortMap` stores associations where an external port name (e.g., "input_1")
+/// The `PortMap` stores associations where an external port name (e.g., `input_1`)
 /// maps to a specific internal port name on a specific node (identified by a [`Uuid`])
 /// within a the optical graph.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

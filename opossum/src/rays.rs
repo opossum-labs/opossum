@@ -25,7 +25,7 @@ use crate::{
     spectrum::Spectrum,
     surface::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
     utils::{
-        filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
+        filter_data::get_unique_finite_values_sorted,
         geom_transformation::Isometry,
         griddata::{
             VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
@@ -583,7 +583,7 @@ impl Rays {
             .collect::<Vec<f64>>();
 
         //get unique wavelengths
-        let unique_wvls = get_unique_finite_values(wvls.as_slice());
+        let unique_wvls = get_unique_finite_values_sorted(wvls.as_slice());
 
         //return as Vec<Length>
         unique_wvls
@@ -1271,12 +1271,21 @@ impl Rays {
         }
     }
     /// Split an existing ray bundle into multiple ray bundles corresponding to their wavelength
+    ///
     /// # Attributes
+    ///
     /// - `wavelength_bin_size`: size of the wavelength binning
     ///
     /// If there is only one wavelength, the same ray bundle is returned
+    ///
     /// # Errors
-    /// This function errors if the minimum wavelength of the unique wavelengths can not be calculated. Normally, this cannot happen, since the wavlengths of a ray are finite from begin with.
+    ///
+    /// This function errors if the minimum wavelength of the unique wavelengths can not be calculated. Normally, this cannot happen,
+    /// since the wavlengths of a ray are finite from begin with.
+    ///
+    /// # Panics
+    ///
+    /// This function might only theoretically panic since internally an unwrap command is used.
     pub fn split_ray_bundle_by_wavelength(
         &self,
         wavelength_bin_size: Length,
@@ -1291,27 +1300,11 @@ impl Rays {
                 "No rays in this bundle! Cannot split ray bundle by wavelengths!".into(),
             ))
         } else {
-            //sort wavelengths
             //get "start" wavelength: smallest wavelength reduced by half a bin size
-            let (start_wvl_f64, start_wvl) = if let Some((min, _)) = get_min_max_filter_nonfinite(
-                unique_wavelengths
-                    .iter()
-                    .map(uom::si::f64::Length::get::<nanometer>)
-                    .collect::<Vec<f64>>()
-                    .as_slice(),
-            ) {
-                Ok((
-                    min - wavelength_bin_size.get::<nanometer>() / 2.,
-                    nanometer!(min),
-                ))
-            } else {
-                Err(OpossumError::Other(
-                    "Wavelength of ray is not finite! Cannot split ray bundle by wavelengths!"
-                        .into(),
-                ))
-            }?;
+            let start_wvl = *unique_wavelengths.first().unwrap();
+            let start_wvl_f64 = (start_wvl - wavelength_bin_size / 2.).get::<nanometer>();
 
-            //for calculation, get bin size in units instehat of length quantity
+            //for calculation, get bin size in units instead of length quantity
             let bin_size: f64 = wavelength_bin_size.get::<nanometer>();
 
             //initialize vectors
@@ -1717,7 +1710,6 @@ mod test {
         let (split_bundles, wavelengths) = ray_bundle
             .split_ray_bundle_by_wavelength(nanometer!(1.), true)
             .unwrap();
-
         assert_eq!(wavelengths.len(), 3);
         assert!(relative_eq!(
             wavelengths[0].get::<nanometer>(),
@@ -1835,7 +1827,7 @@ mod test {
         let unique = rays_1w.get_unique_wavelengths(true);
         assert_eq!(unique.len(), 3);
         assert!(relative_eq!(
-            unique[2].get::<nanometer>(),
+            unique[0].get::<nanometer>(),
             351.,
             max_relative = 2. * f64::EPSILON
         ));
@@ -1845,11 +1837,10 @@ mod test {
             max_relative = 2. * f64::EPSILON
         ));
         assert!(relative_eq!(
-            unique[0].get::<nanometer>(),
+            unique[2].get::<nanometer>(),
             1053.,
             max_relative = 2. * f64::EPSILON
         ));
-
         rays_1w.ray_bundle[0].set_invalid();
         rays_1w.ray_bundle[1].set_invalid();
         rays_1w.ray_bundle[2].set_invalid();
@@ -1860,19 +1851,18 @@ mod test {
         assert_eq!(unique.len(), 2);
         assert!(relative_eq!(
             unique[0].get::<nanometer>(),
-            527.,
+            351.,
             max_relative = 2. * f64::EPSILON
         ));
         assert!(relative_eq!(
             unique[1].get::<nanometer>(),
-            351.,
+            527.,
             max_relative = 2. * f64::EPSILON
         ));
-
         let unique = rays_1w.get_unique_wavelengths(false);
         assert_eq!(unique.len(), 3);
         assert!(relative_eq!(
-            unique[2].get::<nanometer>(),
+            unique[0].get::<nanometer>(),
             351.,
             max_relative = 2. * f64::EPSILON
         ));
@@ -1882,7 +1872,7 @@ mod test {
             max_relative = 2. * f64::EPSILON
         ));
         assert!(relative_eq!(
-            unique[0].get::<nanometer>(),
+            unique[2].get::<nanometer>(),
             1053.,
             max_relative = 2. * f64::EPSILON
         ));
