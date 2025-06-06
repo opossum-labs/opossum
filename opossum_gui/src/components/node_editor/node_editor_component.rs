@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use crate::components::node_editor::accordion::AccordionItem;
+use crate::components::node_editor::alignment_editor::AlignmentEditor;
+use crate::components::node_editor::general_editor::GeneralEditor;
 use crate::components::node_editor::lens_editor::LensEditor;
 use crate::components::node_editor::source_editor::SourceEditor;
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
@@ -221,7 +223,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
         if node_attr.node_type() == "source"{
             let (ld_builder, key) = extract_light_data_info(&node_attr);
             light_data_builder_hist.replace_or_insert_and_set_current(key, ld_builder)
-            // light_data_builder_sig.with_mut(|ldb| ldb.replace_or_insert_and_set_current(key, ld_builder));
         }
 
         rsx! {
@@ -254,7 +255,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                         center_thickness: {if let Some(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness").ok(){
                             center_thickness.clone()
                         }else{millimeter!(10.)}},
-                        refractive_index: {if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_ind))) = node_attr.get_property("crefractive index").ok(){
+                        refractive_index: {if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_ind))) = node_attr.get_property("refractive index").ok(){
                             ref_ind.refractive_index().clone()
                         }else{1.5}},
                     }
@@ -269,96 +270,8 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     }
 }
 
-#[component]
-pub fn AlignmentEditor(alignment: Option<Isometry>) -> Element{
-    let accordion_content = vec![
-            rsx!{
-                NodePropInput {
-                    name: "XTranslation".to_string(),
-                    placeholder: "X Translation in m".to_string(),
-                    node_change: NodeChange::TranslationX(
-                        alignment.as_ref().map_or(Length::zero(), |a| a.translation().x),
-                    ),
-                }
-                NodePropInput {
-                    name: "YTranslation".to_string(),
-                    placeholder: "Y Translation in m".to_string(),
-                    node_change: NodeChange::TranslationY(
-                        alignment.as_ref().map_or(Length::zero(), |a| a.translation().y),
-                    ),
-                }
-                NodePropInput {
-                    name: "ZTranslation".to_string(),
-                    placeholder: "Z Translation in m".to_string(),
-                    node_change: NodeChange::TranslationZ(
-                        alignment.as_ref().map_or(Length::zero(), |a| a.translation().z),
-                    ),
-                }
-                NodePropInput {
-                    name: "Roll".to_string(),
-                    placeholder: "Roll angle in degree".to_string(),
-                    node_change: NodeChange::RotationRoll(
-                        alignment.as_ref().map_or(Angle::zero(), |a| a.rotation().x),
-                    ),
-                }
-                NodePropInput {
-                    name: "Pitch".to_string(),
-                    placeholder: "Pitch angle in degree".to_string(),
-                    node_change: NodeChange::RotationPitch(
-                        alignment.as_ref().map_or(Angle::zero(), |a| a.rotation().y),
-                    ),
-                }
-                NodePropInput {
-                    name: "Yaw".to_string(),
-                    placeholder: "Yaw angle in degree".to_string(),
-                    node_change: NodeChange::RotationYaw(
-                        alignment.as_ref().map_or(Angle::zero(), |a| a.rotation().z),
-                    ),
-                }
-            }
-        ];
-    rsx!{
-        AccordionItem{elements: accordion_content, header: "Alignment", header_id: "alignmentHeading", parent_id: "accordionNodeConfig", content_id: "alignmentCollapse"}
-    }
-    
-                                    
-                                
-                        
-                        
 
-}
 
-#[component]
-pub fn GeneralEditor(uuid: Uuid, node_type: String, node_name: String, node_lidt: Fluence ) -> Element{
-let accordion_content = vec![
-            rsx!{
-                NodePropInput {
-                    name: "NodeId".to_string(),
-                    placeholder: "Node ID".to_string(),
-                    node_change: NodeChange::NodeConst(format!("{}", uuid)),
-                }
-                NodePropInput {
-                    name: "NodeType".to_string(),
-                    placeholder: "Node Type".to_string(),
-                    node_change: NodeChange::NodeConst(format!("{node_type}")),
-                }
-                NodePropInput {
-                    name: "NodeName".to_string(),
-                    placeholder: "Node Name".to_string(),
-                    node_change: NodeChange::Name(node_name),
-                }
-                NodePropInput {
-                    name: "LIDT".to_string(),
-                    placeholder: "LIDT in J/cm²".to_string(),
-                    node_change: NodeChange::LIDT(node_lidt),
-                }
-            }
-        ];
-    rsx!{
-        AccordionItem{elements: accordion_content, header: "General", header_id: "generalHeading", parent_id: "accordionNodeConfig", content_id: "generalCollapse"}
-    }
-
-}
 
 #[component]
 pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange) -> Element {
@@ -518,65 +431,3 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
         }
     }
 }
-
-// #[component]
-// pub fn AccordionElement(number: i32, node_attr: NodeAttr) -> Element{
-//     rsx!{
-//         div{
-//             class:"accordion accordion-borderless bg-dark ",
-//             id: format!("accordionElement{number}"),
-//             div{
-//                 class:"accordion-item bg-dark text-light",
-//                 h2{
-//                     class:"accordion-header",
-//                     id:format!("accordionHeading{number}"),
-//                     button{
-//                         class:"accordion-button collapsed bg-dark text-light",
-//                         type:"button",
-//                         "data-mdb-collapse-init": "",
-//                         "data-mdb-target":format!("#accordionCollapse{number}"),
-//                         "aria-expanded":"false",
-//                         "aria-controls":format!("accordionCollapse{number}"),
-//                         "General"
-//                     }
-//                 }
-//                 div{
-//                     id:format!("accordionCollapse{number}"),
-//                     class:"accordion-collapse collapse  bg-dark",
-//                     "aria-labelledby":format!("accordionHeading{number}"),
-//                     "data-mdb-parent":format!("#accordionElement{number}"),
-//                     div{
-//                         class:"accordion-body  bg-dark",
-//                         p{{format!("ID: {}", node_attr.uuid())}}
-//                         p{ {format!("Node Type: {}", node_attr.node_type())} }
-//                         p { {format!("Node Name: {}", node_attr.name())} }
-//                         p { {format!("LIDT: {:4.2} J/cm²", node_attr.lidt().value/10000.)} }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
-// const MAIN_CSS: Asset = asset!("./assets/main.css");
-// // const PLOTLY_JS: Asset = asset!("./assets/plotly.js");
-// // const THREE_MOD_JS: Asset = asset!("./assets/three_mod.js");
-// // const ORBIT_CTRLS: Asset = asset!("./assets/orbitControls.js");
-// const MDB_CSS: Asset = asset!("./assets/mdb.min.css");
-// const MDB_JS: Asset = asset!("./assets/mdb.umd.min.js");
-// const MDB_SUB_CSS: Asset = asset!("./assets/mdb_submenu.css");
-// #[component]
-// pub fn UserInfoWindow() -> Element {
-//     let menu_item_selected = use_signal(|| None::<MenuSelection>);
-
-// 	rsx! {
-//         document::Stylesheet { href: MAIN_CSS }
-//         document::Stylesheet { href: MDB_CSS }
-//         document::Stylesheet { href: MDB_SUB_CSS }
-//         document::Script { src: MDB_JS }
-//         div { class: "d-flex flex-column text-bg-dark vh-100",
-//             div {
-//                 MenuBar { menu_item_selected }
-//             }
-//         }
-// 	}
-// }

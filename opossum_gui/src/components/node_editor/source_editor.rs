@@ -226,11 +226,11 @@ impl LightDataBuilderHistory {
         self.hist.insert(key.to_owned(), ld_builder);
     }
 
-    pub fn replace_or_insert(&mut self, key: &str, new_ld_builder: LightDataBuilder) {
+    pub fn replace_or_insert(&mut self, key: &str, new_ld_builder: &LightDataBuilder) {
         if let Some(ld_builder) = self.hist.get_mut(key) {
-            *ld_builder = new_ld_builder;
+            *ld_builder = new_ld_builder.clone();
         } else {
-            self.insert(key, new_ld_builder);
+            self.insert(key, new_ld_builder.clone());
         }
     }
 
@@ -287,33 +287,29 @@ impl LightDataBuilderHistory {
     pub fn set_pos_dist_type(&mut self, new_pos_dist: PosDistType) {
         if let Some(rdb) = &mut self.get_current_ray_data_builder() {
             let pos_dist_string = format!("{new_pos_dist}");
-            let new_ld_builder = match rdb {
-                RayDataBuilder::Raw(rays) => todo!(),
+            match rdb {                
                 RayDataBuilder::Collimated(collimated_src) => {
                     collimated_src.set_pos_dist(new_pos_dist);
                     let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(
                         collimated_src.clone(),
                     ));
-                    self.replace_or_insert("Collimated", new_ld_builder.clone());
-                    new_ld_builder
+                    self.replace_or_insert("Collimated", &new_ld_builder);
+                    self.replace_or_insert("Rays", &new_ld_builder);
+                    self.replace_or_insert_and_set_current(&pos_dist_string, new_ld_builder);
                 }
                 RayDataBuilder::PointSrc(point_src) => {
                     point_src.set_pos_dist(new_pos_dist);
                     let new_ld_builder =
                         LightDataBuilder::Geometric(RayDataBuilder::PointSrc(point_src.clone()));
-                    self.replace_or_insert("Point Source", new_ld_builder.clone());
-                    new_ld_builder
+                    self.replace_or_insert("Point Source", &new_ld_builder);
+                    self.replace_or_insert("Rays", &new_ld_builder);
+                    self.replace_or_insert_and_set_current(&pos_dist_string, new_ld_builder);
                 }
-                RayDataBuilder::Image {
-                    file_path,
-                    pixel_size,
-                    total_energy,
-                    wave_length,
-                    cone_angle,
-                } => todo!(),
+                _ => {OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log(&format!("set_pos_dist_type: Unsupported RayDataBuilder type: {rdb}"));},
             };
-            self.replace_or_insert("Rays", new_ld_builder.clone());
-            self.replace_or_insert_and_set_current(&pos_dist_string, new_ld_builder);
+            
         }
     }
 }
@@ -324,7 +320,7 @@ pub fn SourceEditor(
     light_data_builder_hist: LightDataBuilderHistory,
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
-    let mut light_data_builder_sig = Signal::new(light_data_builder_hist);
+    let light_data_builder_sig = Signal::new(light_data_builder_hist);
 
     use_effect(move || {
         node_change.set(Some(NodeChange::Property(
@@ -346,12 +342,9 @@ pub fn SourceEditor(
             ReferenceLengthEditor { light_data_builder_sig }
             DistributionEditor { light_data_builder_sig }
     };
-
-
     rsx! {
         AccordionItem {elements: vec![accordion_item_content], header: "Light Source", header_id: "sourceHeading", parent_id: "accordionNodeConfig", content_id: "sourceCollapse"}
     }
-    // }
 }
 
 #[component]
@@ -372,41 +365,38 @@ pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory
 
 #[component]
 pub fn ReferenceLengthEditor(light_data_builder_sig: Signal<LightDataBuilderHistory>,) -> Element{
-    let (is_rays, is_collimated) = light_data_builder_sig.read().is_rays_is_collimated();
+    let (_, is_collimated) = light_data_builder_sig.read().is_rays_is_collimated();
     if let Some(RayDataBuilder::PointSrc(point_src)) =  light_data_builder_sig.read().get_current_ray_data_builder(){
-
-            rsx!{
-            
-                div { class: "form-floating border-start", "data-mdb-input-init": "", hidden: is_collimated,
-                    input {
-                        class: "form-control bg-dark text-light form-control-sm",
-                        r#type: "number",
-                        min: "0.0000000001",
-                        id: "pointsrcRefLength",
-                        name: "pointsrcRefLength",
-                        placeholder: "Reference length in mm",
-                        value: format!("{}", point_src.reference_length().get::<millimeter>()),
-                        "readonly": false,
-                        onchange: {
-                            let point_src = point_src.clone();
-                            move |e: Event<FormData>| {
-                                let mut point_src = point_src.clone();
-                                if let Ok(ref_length) = e.data.parsed::<f64>() {
-                                    point_src.set_reference_length(millimeter!(ref_length));
-                                    light_data_builder_sig
-                                        .with_mut(|ldb| {
-                                            if let LightDataBuilder::Geometric(RayDataBuilder::PointSrc(p)) = ldb.get_current_mut(){
-                                                *p = point_src; 
-                                            }
-                                        });
-                                }
+        rsx!{
+            div { class: "form-floating border-start", "data-mdb-input-init": "", hidden: is_collimated,
+                input {
+                    class: "form-control bg-dark text-light form-control-sm",
+                    r#type: "number",
+                    min: "0.0000000001",
+                    id: "pointsrcRefLength",
+                    name: "pointsrcRefLength",
+                    placeholder: "Reference length in mm",
+                    value: format!("{}", point_src.reference_length().get::<millimeter>()),
+                    "readonly": false,
+                    onchange: {
+                        let point_src = point_src.clone();
+                        move |e: Event<FormData>| {
+                            let mut point_src = point_src.clone();
+                            if let Ok(ref_length) = e.data.parsed::<f64>() {
+                                point_src.set_reference_length(millimeter!(ref_length));
+                                light_data_builder_sig
+                                    .with_mut(|ldb| {
+                                        if let LightDataBuilder::Geometric(RayDataBuilder::PointSrc(p)) = ldb.get_current_mut(){
+                                            *p = point_src; 
+                                        }
+                                    });
                             }
-                        },
-                    }
-                    label { class: "form-label text-secondary", r#for: "pointsrcRefLength", "Reference length in mm" }
+                        }
+                    },
                 }
+                label { class: "form-label text-secondary", r#for: "pointsrcRefLength", "Reference length in mm" }
             }
-        
+        }        
     }
     else{
         rsx!{
@@ -554,7 +544,7 @@ pub fn RayDataBuilderSelector(light_data_builder_sig: Signal<LightDataBuilderHis
                                 } else {
                                     ldb.get_current().clone()
                                 };
-                                ldb.replace_or_insert("Rays", new_ld_builder.clone());
+                                ldb.replace_or_insert("Rays", &new_ld_builder);
                                 ldb.replace_or_insert_and_set_current(val_str, new_ld_builder);
                             });
                     }
@@ -594,14 +584,14 @@ pub fn RayPositionDistributionSelector(
                                                 collimated_src.set_pos_dist(pos_dist_type);
                                                 ldb.replace_or_insert(
                                                     "Collimated",
-                                                    LightDataBuilder::Geometric(rdb.clone()).clone(),
+                                                    &LightDataBuilder::Geometric(rdb.clone()),
                                                 );
                                             }
                                             RayDataBuilder::PointSrc(ref mut point_src) => {
                                                 point_src.set_pos_dist(pos_dist_type);
                                                 ldb.replace_or_insert(
                                                     "Point Source",
-                                                    LightDataBuilder::Geometric(rdb.clone()).clone(),
+                                                    &LightDataBuilder::Geometric(rdb.clone()),
                                                 );
                                             }
                                             RayDataBuilder::Raw(rays) => todo!(),
@@ -620,7 +610,7 @@ pub fn RayPositionDistributionSelector(
                                 } else {
                                     ldb.get_current().clone()
                                 };
-                                ldb.replace_or_insert("Rays", new_ld_builder.clone());
+                                ldb.replace_or_insert("Rays", &new_ld_builder);
                                 ldb.replace_or_insert_and_set_current(val_str, new_ld_builder);
                             })
                     },
