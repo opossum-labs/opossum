@@ -256,73 +256,8 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             ref_ind.refractive_index().clone()
                         }else{1.5}},
                     }
-                    div { class: "accordion-item bg-dark text-light",
-                        h2 { class: "accordion-header", id: "alignmentHeading",
-                            button {
-                                class: "accordion-button collapsed bg-dark text-light",
-                                r#type: "button",
-                                "data-mdb-collapse-init": "",
-                                "data-mdb-target": "#alignmentCollapse",
-                                "aria-expanded": "false",
-                                "aria-controls": "alignmentCollapse",
-                                "Alignment"
-                            }
-                        }
-                        div {
-                            id: "alignmentCollapse",
-                            class: "accordion-collapse collapse  bg-dark",
-                            "aria-labelledby": "alignmentHeading",
-                            "data-mdb-parent": "#accordionNodeConfig",
-                            div { class: "accordion-body  bg-dark",
-                                NodePropInput {
-                                    name: "XTranslation".to_string(),
-                                    placeholder: "X Translation in m".to_string(),
-                                    node_change: NodeChange::TranslationX(
-                                        node_attr.alignment().as_ref().map_or(Length::zero(), |a| a.translation().x),
-                                    ),
-                                }
-                                NodePropInput {
-                                    name: "YTranslation".to_string(),
-                                    placeholder: "Y Translation in m".to_string(),
-                                    node_change: NodeChange::TranslationY(
-                                        node_attr.alignment().as_ref().map_or(Length::zero(), |a| a.translation().y),
-                                    ),
-                                }
-                                NodePropInput {
-                                    name: "ZTranslation".to_string(),
-                                    placeholder: "Z Translation in m".to_string(),
-                                    node_change: NodeChange::TranslationZ(
-                                        node_attr.alignment().as_ref().map_or(Length::zero(), |a| a.translation().z),
-                                    ),
-                                }
-                                NodePropInput {
-                                    name: "Roll".to_string(),
-                                    placeholder: "Roll angle in degree".to_string(),
-                                    node_change: NodeChange::RotationRoll(
-                                        node_attr.alignment().as_ref().map_or(Angle::zero(), |a| a.rotation().x),
-                                    ),
-                                }
-                                NodePropInput {
-                                    name: "Pitch".to_string(),
-                                    placeholder: "Pitch angle in degree".to_string(),
-                                    node_change: NodeChange::RotationPitch(
-                                        node_attr.alignment().as_ref().map_or(Angle::zero(), |a| a.rotation().y),
-                                    ),
-                                }
-                                NodePropInput {
-                                    name: "Yaw".to_string(),
-                                    placeholder: "Yaw angle in degree".to_string(),
-                                    node_change: NodeChange::RotationYaw(
-                                        node_attr.alignment().as_ref().map_or(Angle::zero(), |a| a.rotation().z),
-                                    ),
-                                }
-                            }
-                        }
-                    }
+                    AlignmentEditor {alignment: node_attr.alignment().clone()}
                 }
-            
-
-
             }
         }
     } else {
@@ -330,6 +265,65 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
             div { "No node selected" }
         }
     }
+}
+
+#[component]
+pub fn AlignmentEditor(alignment: Option<Isometry>) -> Element{
+    let accordion_content = vec![
+            rsx!{
+                NodePropInput {
+                    name: "XTranslation".to_string(),
+                    placeholder: "X Translation in m".to_string(),
+                    node_change: NodeChange::TranslationX(
+                        alignment.as_ref().map_or(Length::zero(), |a| a.translation().x),
+                    ),
+                }
+                NodePropInput {
+                    name: "YTranslation".to_string(),
+                    placeholder: "Y Translation in m".to_string(),
+                    node_change: NodeChange::TranslationY(
+                        alignment.as_ref().map_or(Length::zero(), |a| a.translation().y),
+                    ),
+                }
+                NodePropInput {
+                    name: "ZTranslation".to_string(),
+                    placeholder: "Z Translation in m".to_string(),
+                    node_change: NodeChange::TranslationZ(
+                        alignment.as_ref().map_or(Length::zero(), |a| a.translation().z),
+                    ),
+                }
+                NodePropInput {
+                    name: "Roll".to_string(),
+                    placeholder: "Roll angle in degree".to_string(),
+                    node_change: NodeChange::RotationRoll(
+                        alignment.as_ref().map_or(Angle::zero(), |a| a.rotation().x),
+                    ),
+                }
+                NodePropInput {
+                    name: "Pitch".to_string(),
+                    placeholder: "Pitch angle in degree".to_string(),
+                    node_change: NodeChange::RotationPitch(
+                        alignment.as_ref().map_or(Angle::zero(), |a| a.rotation().y),
+                    ),
+                }
+                NodePropInput {
+                    name: "Yaw".to_string(),
+                    placeholder: "Yaw angle in degree".to_string(),
+                    node_change: NodeChange::RotationYaw(
+                        alignment.as_ref().map_or(Angle::zero(), |a| a.rotation().z),
+                    ),
+                }
+            }
+        ];
+    rsx!{
+        AccordionItem{elements: accordion_content, header: "Alignment", header_id: "alignmentHeading", parent_id: "accordionNodeConfig", content_id: "alignmentCollapse"}
+    }
+    
+                                    
+                                
+                        
+                        
+
 }
 
 #[component]
