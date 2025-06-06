@@ -32,7 +32,7 @@ pub enum MenuSelection {
 pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>, project_directory: Signal<PathBuf>) -> Element {
     let mut about_window = use_signal(|| false);
     let node_selected = use_signal(String::new);
-    let analyzer_selected = use_signal(|| AnalyzerType::Energy);
+    let analyzer_selected = use_signal(|| None::<AnalyzerType>);
     // let window = use_window();
     // let is_dragging = use_signal(|| false);
     // let maximize_symbol = use_signal(|| {
@@ -42,10 +42,14 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>, project_direct
     //         "🗖"
     //     }
     // });
-    use_memo(move || {
-        menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_selected())))
+    use_effect(move || {
+        if let Some(analyzer) = analyzer_selected() {
+            menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer)))
+        }
+        if !node_selected.read().is_empty() {
+            menu_item_selected.set(Some(MenuSelection::AddNode(node_selected())))
+        }
     });
-    use_memo(move || menu_item_selected.set(Some(MenuSelection::AddNode(node_selected()))));
     rsx! {
         nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",
             button {

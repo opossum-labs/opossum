@@ -326,7 +326,7 @@ pub fn SourceEditor(
 ) -> Element {
     let mut light_data_builder_sig = Signal::new(light_data_builder_hist);
 
-    use_memo(move || {
+    use_effect(move || {
         node_change.set(Some(NodeChange::Property(
             "light data".to_owned(),
             serde_json::to_value(Proptype::LightDataBuilder(Some(

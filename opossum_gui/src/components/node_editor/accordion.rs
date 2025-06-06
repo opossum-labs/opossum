@@ -1,33 +1,6 @@
 use dioxus::prelude::*;
 
 #[component]
-fn Wrapper(children: Element) -> Element {
-    rsx! {
-        div {
-            class: "wrapper",
-            h2 { "Ich bin der Wrapper!" },
-            {children}
-        }
-    }
-}
-
-#[component]
-fn Greeting(name: String) -> Element {
-    rsx! {
-        p { "Hallo, {name}!" }
-    }
-}
-
-#[component]
-fn App() -> Element {
-    rsx! {
-        Wrapper {
-            Greeting { name: "Anna".to_string() }
-        }
-    }
-}
-
-#[component]
 pub fn AccordionItem(elements: Vec<Element>, header: &'static str, header_id: &'static str, parent_id: &'static str, content_id: &'static str) -> Element{
     rsx!{
         div { class: "accordion-item bg-dark text-light",
@@ -51,8 +24,6 @@ pub fn AccordionItem(elements: Vec<Element>, header: &'static str, header_id: &'
                         for element in elements {
                             { element }
                         }
-                        // RayPositionDistributionSelector { light_data_builder_sig }
-                        // RayDistributionEditor { light_data_builder_sig }
                     }
                 }
             }
