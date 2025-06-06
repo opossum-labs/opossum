@@ -45,8 +45,8 @@ impl EnergyDataBuilder {
     }
 }
 
-impl Default for EnergyDataBuilder{
-    fn default() -> Self{
+impl Default for EnergyDataBuilder {
+    fn default() -> Self {
         Self::LaserLines(vec![(nanometer!(1054.), joule!(0.1))], (nanometer!(0.1)))
     }
 }

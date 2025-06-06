@@ -2,7 +2,9 @@
 //! Rectangular, evenly-sized grid distribution
 use super::PositionDistribution;
 use crate::{
-    error::{OpmResult, OpossumError}, millimeter, utils::usize_to_f64
+    error::{OpmResult, OpossumError},
+    millimeter,
+    utils::usize_to_f64,
 };
 use nalgebra::Point3;
 use num::Zero;
@@ -52,40 +54,40 @@ impl Grid {
         })
     }
 
-    pub fn nr_of_points(&self) -> (usize, usize){
+    pub fn nr_of_points(&self) -> (usize, usize) {
         self.nr_of_points
     }
 
-    pub fn side_length(&self) -> (Length, Length){
+    pub fn side_length(&self) -> (Length, Length) {
         self.side_length
     }
 
-    pub fn set_nr_of_points(&mut self, nr_of_points: (usize, usize)){
+    pub fn set_nr_of_points(&mut self, nr_of_points: (usize, usize)) {
         self.nr_of_points = nr_of_points;
     }
-    pub fn set_nr_of_points_x(&mut self, nr_of_points_x: usize){
+    pub fn set_nr_of_points_x(&mut self, nr_of_points_x: usize) {
         self.nr_of_points.0 = nr_of_points_x;
     }
-    pub fn set_nr_of_points_y(&mut self, nr_of_points_y: usize){
+    pub fn set_nr_of_points_y(&mut self, nr_of_points_y: usize) {
         self.nr_of_points.1 = nr_of_points_y;
     }
 
-    pub fn set_side_length(&mut self, side_length: (Length, Length)){
+    pub fn set_side_length(&mut self, side_length: (Length, Length)) {
         self.side_length = side_length;
     }
-    pub fn set_side_length_x(&mut self, side_length_x: Length){
+    pub fn set_side_length_x(&mut self, side_length_x: Length) {
         self.side_length.0 = side_length_x;
     }
-    pub fn set_side_length_y(&mut self, side_length_y: Length){
+    pub fn set_side_length_y(&mut self, side_length_y: Length) {
         self.side_length.1 = side_length_y;
     }
 }
 
-impl Default for Grid{
+impl Default for Grid {
     fn default() -> Self {
         Self {
-            nr_of_points: (100,100),
-            side_length: (millimeter!(5.),millimeter!(5.)),
+            nr_of_points: (100, 100),
+            side_length: (millimeter!(5.), millimeter!(5.)),
         }
     }
 }

@@ -45,14 +45,21 @@ pub mod spectrum;
 pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
-use std::{fs::{create_dir, remove_dir_all, File}, io::{self, Write}, path::{Path, PathBuf}};
+use std::{
+    fs::{create_dir, remove_dir_all, File},
+    io::{self, Write},
+    path::{Path, PathBuf},
+};
 
 use chrono::DateTime;
 use log::info;
 pub use opm_document::OpmDocument;
 pub use optic_scenery_rsc::SceneryResources;
 
-use crate::{error::{OpmResult, OpossumError}, reporting::analysis_report::AnalysisReport};
+use crate::{
+    error::{OpmResult, OpossumError},
+    reporting::analysis_report::AnalysisReport,
+};
 pub fn create_data_dir(report_directory: &Path) -> OpmResult<()> {
     let data_dir = report_directory.join("data/");
     if data_dir.exists() {

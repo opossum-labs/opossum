@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::components::node_editor::accordion::AccordionItem;
 use crate::components::node_editor::lens_editor::LensEditor;
 use crate::components::node_editor::source_editor::SourceEditor;
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
@@ -220,54 +221,19 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
             },
         );
         light_data_builder_sig.with_mut(|ldb| ldb.replace_or_insert_and_set_current(key, ld_builder));
+        
         rsx! {
             div {
                 h6 { "Node Configuration" }
                 div {
                     class: "accordion accordion-borderless bg-dark ",
                     id: "accordionNodeConfig",
-                    // AccordionItem{elements: Vec<Element>, header: "General", header_id: "generalHeading", parent_id: &'static str, content_id: &'static str}
 
-                    div { class: "accordion-item bg-dark text-light",
-                        h2 { class: "accordion-header", id: "generalHeading",
-                            button {
-                                class: "accordion-button collapsed bg-dark text-light",
-                                r#type: "button",
-                                "data-mdb-collapse-init": "",
-                                "data-mdb-target": "#generalCollapse",
-                                "aria-expanded": "false",
-                                "aria-controls": "generalCollapse",
-                                "General"
-                            }
-                        }
-                        div {
-                            id: "generalCollapse",
-                            class: "accordion-collapse collapse  bg-dark",
-                            "aria-labelledby": "generalHeading",
-                            "data-mdb-parent": "#accordionNodeConfig",
-                            div { class: "accordion-body  bg-dark",
-                                NodePropInput {
-                                    name: "NodeId".to_string(),
-                                    placeholder: "Node ID".to_string(),
-                                    node_change: NodeChange::NodeConst(format!("{}", node_attr.uuid())),
-                                }
-                                NodePropInput {
-                                    name: "NodeType".to_string(),
-                                    placeholder: "Node Type".to_string(),
-                                    node_change: NodeChange::NodeConst(format!("{}", node_attr.node_type().to_string())),
-                                }
-                                NodePropInput {
-                                    name: "NodeName".to_string(),
-                                    placeholder: "Node Name".to_string(),
-                                    node_change: NodeChange::Name(node_attr.name().to_string()),
-                                }
-                                NodePropInput {
-                                    name: "LIDT".to_string(),
-                                    placeholder: "LIDT in J/cm²".to_string(),
-                                    node_change: NodeChange::LIDT(node_attr.lidt().clone()),
-                                }
-                            }
-                        }
+                    GeneralEditor {
+                        uuid: node_attr.uuid(),
+                        node_type: node_attr.node_type(),
+                        node_name: node_attr.name(),
+                        node_lidt: node_attr.lidt().clone(),
                     }
                     SourceEditor {
                         hide: node_attr.node_type() != "source",
@@ -364,6 +330,38 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
             div { "No node selected" }
         }
     }
+}
+
+#[component]
+pub fn GeneralEditor(uuid: Uuid, node_type: String, node_name: String, node_lidt: Fluence ) -> Element{
+let accordion_content = vec![
+            rsx!{
+                NodePropInput {
+                    name: "NodeId".to_string(),
+                    placeholder: "Node ID".to_string(),
+                    node_change: NodeChange::NodeConst(format!("{}", uuid)),
+                }
+                NodePropInput {
+                    name: "NodeType".to_string(),
+                    placeholder: "Node Type".to_string(),
+                    node_change: NodeChange::NodeConst(format!("{node_type}")),
+                }
+                NodePropInput {
+                    name: "NodeName".to_string(),
+                    placeholder: "Node Name".to_string(),
+                    node_change: NodeChange::Name(node_name),
+                }
+                NodePropInput {
+                    name: "LIDT".to_string(),
+                    placeholder: "LIDT in J/cm²".to_string(),
+                    node_change: NodeChange::LIDT(node_lidt),
+                }
+            }
+        ];
+    rsx!{
+        AccordionItem{elements: accordion_content, header: "General", header_id: "generalHeading", parent_id: "accordionNodeConfig", content_id: "generalCollapse"}
+    }
+
 }
 
 #[component]

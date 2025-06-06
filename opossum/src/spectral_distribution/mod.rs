@@ -15,7 +15,6 @@ pub trait SpectralDistribution {
     fn generate(&self) -> OpmResult<Vec<(Length, f64)>>;
 }
 
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Enum representing different types of spectral distributions
 pub enum SpecDistType {
@@ -35,8 +34,8 @@ impl SpecDistType {
     }
 }
 
-impl Default for SpecDistType{
-    fn default() -> Self{
+impl Default for SpecDistType {
+    fn default() -> Self {
         Self::Gaussian(Gaussian::default())
     }
 }

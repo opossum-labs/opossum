@@ -7,7 +7,10 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, RayDataBuilder}},
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, RayDataBuilder},
+    },
     millimeter, nanometer,
     nodes::{NodeGroup, RayPropagationVisualizer, Source, SpotDiagram, Wedge},
     optic_node::{Alignable, OpticNode},
@@ -34,12 +37,12 @@ fn main() -> OpmResult<()> {
     let wedge_angle_in_degree = 10.0;
 
     let mut scenery = NodeGroup::default();
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated  (CollimatedSrc::new(
-         Grid::new((Length::zero(), beam_size_y), (1, nr_of_rays))?.into(),
-         UniformDist::new(joule!(1.0))?.into(),
-         LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 1.0)])?
-            .into(),
-    )));
+    let light_data_builder =
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+            Grid::new((Length::zero(), beam_size_y), (1, nr_of_rays))?.into(),
+            UniformDist::new(joule!(1.0))?.into(),
+            LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 1.0)])?.into(),
+        )));
     let mut light_src = Source::new("collimated ray source", light_data_builder);
     light_src.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(light_src)?;

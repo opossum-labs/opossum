@@ -3,8 +3,8 @@
 //! This module provides a builder for the generation of [`LightData`] to be used in `Source`.
 //! This builder allows easier serialization / deserialization in OPM files.
 use serde::{Deserialize, Serialize};
-use uom::si::f64::Energy;
 use std::fmt::Display;
+use uom::si::f64::Energy;
 
 use super::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder, LightData};
 use crate::{error::OpmResult, properties::Proptype};
@@ -20,8 +20,8 @@ pub enum LightDataBuilder {
     Fourier,
 }
 
-impl Default for LightDataBuilder{
-    fn default() -> Self{
+impl Default for LightDataBuilder {
+    fn default() -> Self {
         Self::Geometric(RayDataBuilder::default())
     }
 }
@@ -40,12 +40,12 @@ impl LightDataBuilder {
         }
     }
 
-    pub fn set_energy(&mut self, energy: Energy){
+    pub fn set_energy(&mut self, energy: Energy) {
         match self {
             Self::Geometric(r) => {
                 r.set_energy(energy);
             }
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }

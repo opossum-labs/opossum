@@ -5,7 +5,10 @@ use crate::{
     degree,
     energy_distributions::UniformDist,
     error::{OpmResult, OpossumError},
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder}},
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},
+    },
     millimeter, nanometer,
     optic_node::OpticNode,
     position_distributions::{Grid, Hexapolar},
@@ -30,11 +33,12 @@ pub fn round_collimated_ray_source(
     energy: Energy,
     nr_of_rings: u8,
 ) -> OpmResult<Source> {
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated (CollimatedSrc::new(
-         Hexapolar::new(radius, nr_of_rings)?.into(),
-         UniformDist::new(energy)?.into(),
-         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-    )));
+    let light_data_builder =
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+            Hexapolar::new(radius, nr_of_rings)?.into(),
+            UniformDist::new(energy)?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        )));
     let mut src = Source::new("collimated line ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)
@@ -55,11 +59,12 @@ pub fn collimated_line_ray_source(
     energy: Energy,
     nr_of_points_y: usize,
 ) -> OpmResult<Source> {
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated (CollimatedSrc::new(
-         Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?.into(),
-         UniformDist::new(energy)?.into(),
-         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-    )));
+    let light_data_builder =
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+            Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?.into(),
+            UniformDist::new(energy)?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        )));
     let mut src = Source::new("collimated line ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)
@@ -82,11 +87,11 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
         ));
     }
     let size_after_unit_length = (cone_angle / 2.0).tan().value;
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc (PointSrc::new(
-         Hexapolar::new(millimeter!(size_after_unit_length), 3)?.into(),
-         UniformDist::new(energy)?.into(),
-         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-         millimeter!(1000.),
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
+        Hexapolar::new(millimeter!(size_after_unit_length), 3)?.into(),
+        UniformDist::new(energy)?.into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        millimeter!(1000.),
     )));
     let mut src = Source::new("point ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;

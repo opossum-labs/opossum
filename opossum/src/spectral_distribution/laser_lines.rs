@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-use crate::{error::{OpmResult, OpossumError}, nanometer};
+use crate::{
+    error::{OpmResult, OpossumError},
+    nanometer,
+};
 
 use super::SpectralDistribution;
 
@@ -58,10 +61,10 @@ impl LaserLines {
     }
 }
 
-impl Default for LaserLines{
+impl Default for LaserLines {
     fn default() -> Self {
         Self {
-            lines: vec![(nanometer!(1000.), 1.)]
+            lines: vec![(nanometer!(1000.), 1.)],
         }
     }
 }

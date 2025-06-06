@@ -48,46 +48,45 @@ impl HexagonalTiling {
             radius,
             center,
         })
-        
     }
-    pub fn radius(&self) -> Length{
+    pub fn radius(&self) -> Length {
         self.radius
     }
 
-    pub fn nr_of_hex_along_radius(&self) -> u8{
+    pub fn nr_of_hex_along_radius(&self) -> u8 {
         self.nr_of_hex_along_radius
     }
 
-    pub fn center(&self) -> Point2<Length>{
+    pub fn center(&self) -> Point2<Length> {
         self.center
     }
 
-    pub fn set_radius(&mut self, radius: Length){
+    pub fn set_radius(&mut self, radius: Length) {
         self.radius = radius;
     }
 
-    pub fn set_nr_of_hex_along_radius(&mut self, nr_of_hex_along_radius: u8){
+    pub fn set_nr_of_hex_along_radius(&mut self, nr_of_hex_along_radius: u8) {
         self.nr_of_hex_along_radius = nr_of_hex_along_radius;
     }
 
-    pub fn set_center(&mut self, center: Point2<Length>){
+    pub fn set_center(&mut self, center: Point2<Length>) {
         self.center = center;
     }
 
-    pub fn set_center_x(&mut self, center_x: Length){
+    pub fn set_center_x(&mut self, center_x: Length) {
         self.center.x = center_x;
     }
-    pub fn set_center_y(&mut self, center_y: Length){
+    pub fn set_center_y(&mut self, center_y: Length) {
         self.center.y = center_y;
     }
 }
 
-impl Default for HexagonalTiling{
+impl Default for HexagonalTiling {
     fn default() -> Self {
         Self {
             nr_of_hex_along_radius: 7,
             radius: millimeter!(5.),
-            center: millimeter!(0.,0.),
+            center: millimeter!(0., 0.),
         }
     }
 }

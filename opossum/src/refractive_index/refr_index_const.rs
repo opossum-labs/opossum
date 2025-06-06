@@ -37,11 +37,11 @@ impl RefrIndexConst {
         Ok(Self { refractive_index })
     }
 
-    pub fn refractive_index(&self) -> f64{
+    pub fn refractive_index(&self) -> f64 {
         self.refractive_index
     }
 
-    pub fn set_refractive_index(&mut self, ref_ind: f64){
+    pub fn set_refractive_index(&mut self, ref_ind: f64) {
         self.refractive_index = ref_ind;
     }
 }

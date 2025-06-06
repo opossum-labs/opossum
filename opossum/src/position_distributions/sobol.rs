@@ -1,6 +1,9 @@
 //! Rectangluar, low-discrepancy quasirandom distribution
 use super::PositionDistribution;
-use crate::{error::{OpmResult, OpossumError}, millimeter};
+use crate::{
+    error::{OpmResult, OpossumError},
+    millimeter,
+};
 use nalgebra::{point, Point3};
 use num::Zero;
 use serde::{Deserialize, Serialize};
@@ -55,27 +58,27 @@ impl SobolDist {
             side_length_y,
         })
     }
-    pub fn nr_of_points(&self) -> usize{
+    pub fn nr_of_points(&self) -> usize {
         self.nr_of_points
     }
-    pub fn side_length_x(&self) -> Length{
+    pub fn side_length_x(&self) -> Length {
         self.side_length_x
     }
-    pub fn side_length_y(&self) -> Length{
+    pub fn side_length_y(&self) -> Length {
         self.side_length_y
     }
-    pub fn set_nr_of_points(&mut self, nr_of_points:  usize){
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
         self.nr_of_points = nr_of_points;
     }
-    pub fn set_side_length_x(&mut self, side_length_x: Length){
+    pub fn set_side_length_x(&mut self, side_length_x: Length) {
         self.side_length_x = side_length_x;
     }
-    pub fn set_side_length_y(&mut self, side_length_y: Length){
+    pub fn set_side_length_y(&mut self, side_length_y: Length) {
         self.side_length_y = side_length_y;
     }
 }
 
-impl Default for SobolDist{
+impl Default for SobolDist {
     fn default() -> Self {
         Self {
             nr_of_points: 1000,

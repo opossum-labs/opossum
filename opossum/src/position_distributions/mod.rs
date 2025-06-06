@@ -63,8 +63,8 @@ pub enum PosDistType {
     Sobol(sobol::SobolDist),
 }
 
-impl Default for PosDistType{
-    fn default() -> Self{
+impl Default for PosDistType {
+    fn default() -> Self {
         Self::Hexapolar(Hexapolar::default())
     }
 }

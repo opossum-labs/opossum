@@ -2,7 +2,10 @@
 //! Circular and square, fibbonacci distribution
 use std::f64::consts::PI;
 
-use crate::{error::{OpmResult, OpossumError}, millimeter};
+use crate::{
+    error::{OpmResult, OpossumError},
+    millimeter,
+};
 
 use super::PositionDistribution;
 use nalgebra::{point, Point3};
@@ -49,32 +52,32 @@ impl FibonacciRectangle {
         })
     }
 
-     pub fn nr_of_points(&self) -> usize{
+    pub fn nr_of_points(&self) -> usize {
         self.nr_of_rays
     }
-     pub fn side_length_x(&self) -> Length{
+    pub fn side_length_x(&self) -> Length {
         self.side_length_x
     }
-    pub fn side_length_y(&self) -> Length{
+    pub fn side_length_y(&self) -> Length {
         self.side_length_y
     }
-    pub fn set_nr_of_points(&mut self, nr_of_points:  usize){
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
         self.nr_of_rays = nr_of_points;
     }
-    pub fn set_side_length_x(&mut self, side_length_x: Length){
+    pub fn set_side_length_x(&mut self, side_length_x: Length) {
         self.side_length_x = side_length_x;
     }
-    pub fn set_side_length_y(&mut self, side_length_y: Length){
+    pub fn set_side_length_y(&mut self, side_length_y: Length) {
         self.side_length_y = side_length_y;
     }
 }
 
-impl Default for FibonacciRectangle{
+impl Default for FibonacciRectangle {
     fn default() -> Self {
         Self {
             nr_of_rays: 1000,
-            side_length_x:millimeter!(5.),
-            side_length_y:millimeter!(5.),
+            side_length_x: millimeter!(5.),
+            side_length_y: millimeter!(5.),
         }
     }
 }
@@ -137,32 +140,32 @@ impl FibonacciEllipse {
             radius_y,
         })
     }
-     pub fn nr_of_points(&self) -> usize{
+    pub fn nr_of_points(&self) -> usize {
         self.nr_of_rays
     }
-     pub fn radius_x(&self) -> Length{
+    pub fn radius_x(&self) -> Length {
         self.radius_x
     }
-    pub fn radius_y(&self) -> Length{
+    pub fn radius_y(&self) -> Length {
         self.radius_y
     }
-    pub fn set_nr_of_points(&mut self, nr_of_points:  usize){
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
         self.nr_of_rays = nr_of_points;
     }
-    pub fn set_radius_x(&mut self, radius_x: Length){
+    pub fn set_radius_x(&mut self, radius_x: Length) {
         self.radius_x = radius_x;
     }
-    pub fn set_radius_y(&mut self, radius_y: Length){
+    pub fn set_radius_y(&mut self, radius_y: Length) {
         self.radius_y = radius_y;
     }
 }
 
-impl Default for FibonacciEllipse{
+impl Default for FibonacciEllipse {
     fn default() -> Self {
         Self {
             nr_of_rays: 1000,
-            radius_x:millimeter!(5.),
-            radius_y:millimeter!(5.),
+            radius_x: millimeter!(5.),
+            radius_y: millimeter!(5.),
         }
     }
 }

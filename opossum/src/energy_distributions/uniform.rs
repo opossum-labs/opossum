@@ -1,5 +1,6 @@
 //! Uniform energy distribution
 
+use crate::joule;
 use nalgebra::Point2;
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -7,7 +8,6 @@ use uom::si::{
     energy::joule,
     f64::{Energy, Length},
 };
-use crate::joule;
 
 use super::EnergyDistribution;
 use crate::error::{OpmResult, OpossumError};
@@ -44,10 +44,10 @@ impl UniformDist {
     }
 }
 
-impl Default for UniformDist{
+impl Default for UniformDist {
     fn default() -> Self {
         Self {
-            total_energy:joule!(0.1),
+            total_energy: joule!(0.1),
         }
     }
 }

@@ -1,5 +1,8 @@
 //! Circular, hexapolar distribution
-use crate::{error::{OpmResult, OpossumError}, millimeter};
+use crate::{
+    error::{OpmResult, OpossumError},
+    millimeter,
+};
 
 use super::PositionDistribution;
 use nalgebra::{point, Point3};
@@ -34,24 +37,24 @@ impl Hexapolar {
         })
     }
 
-    pub fn radius(&self) -> Length{
+    pub fn radius(&self) -> Length {
         self.radius
     }
 
-    pub fn nr_of_rings(&self) -> u8{
+    pub fn nr_of_rings(&self) -> u8 {
         self.nr_of_rings
     }
 
-    pub fn set_radius(&mut self, radius: Length){
+    pub fn set_radius(&mut self, radius: Length) {
         self.radius = radius;
     }
 
-    pub fn set_nr_of_rings(&mut self, nr_of_rings: u8){
+    pub fn set_nr_of_rings(&mut self, nr_of_rings: u8) {
         self.nr_of_rings = nr_of_rings;
     }
 }
 
-impl Default for Hexapolar{
+impl Default for Hexapolar {
     fn default() -> Self {
         Self {
             nr_of_rings: 7,

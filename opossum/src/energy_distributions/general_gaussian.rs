@@ -1,9 +1,12 @@
 //! Generalized 2D Gaussian distribution
 use super::EnergyDistribution;
 use crate::{
-    degree, error::{OpmResult, OpossumError}, joule, millimeter, utils::math_distribution_functions::{
+    degree,
+    error::{OpmResult, OpossumError},
+    joule, millimeter,
+    utils::math_distribution_functions::{
         general_2d_super_gaussian_point_elliptical, general_2d_super_gaussian_point_rectangular,
-    }
+    },
 };
 use kahan::KahanSummator;
 use nalgebra::Point2;
@@ -88,7 +91,7 @@ impl General2DGaussian {
         })
     }
 
-    pub fn set_energy(&mut self , energy: Energy) -> OpmResult<()> {
+    pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
         if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
             return Err(OpossumError::Other(
                 "Energy must be greater than zero finite!".into(),
@@ -99,15 +102,15 @@ impl General2DGaussian {
     }
 }
 
-impl Default for General2DGaussian{
+impl Default for General2DGaussian {
     fn default() -> Self {
         Self {
-            total_energy:joule!(0.1),
-            mu_xy:millimeter!(0.,0.),
-            sigma_xy:millimeter!(5.,5.),
-            power:1.,
-            theta:degree!(0.),
-            rectangular:false,
+            total_energy: joule!(0.1),
+            mu_xy: millimeter!(0., 0.),
+            sigma_xy: millimeter!(5., 5.),
+            power: 1.,
+            theta: degree!(0.),
+            rectangular: false,
         }
     }
 }

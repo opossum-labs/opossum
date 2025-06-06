@@ -3,13 +3,16 @@
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
-use opossum::{create_data_dir, create_dot_or_report_file_instance, create_f_path, create_report_and_data_files};
 use opossum::reporting::analysis_report::AnalysisReport;
 use opossum::{
     console::{Args, PartialArgs},
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     OpmDocument,
+};
+use opossum::{
+    create_data_dir, create_dot_or_report_file_instance, create_f_path,
+    create_report_and_data_files,
 };
 use std::{
     env,
@@ -32,14 +35,14 @@ fn create_dot_file(dot_path: &Path, scenery: &NodeGroup) -> OpmResult<()> {
     let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "svg", "diagram")?;
 
     let f_path = create_f_path(dot_path, "scenery", "dot");
-    scenery.toplevel_dot_svg(&f_path, &mut output).unwrap_or_else(|e| {
-        warn!("Creating SVG file failed: {e}");
-    });
+    scenery
+        .toplevel_dot_svg(&f_path, &mut output)
+        .unwrap_or_else(|e| {
+            warn!("Creating SVG file failed: {e}");
+        });
 
     Ok(())
 }
-
-
 
 fn opossum() -> OpmResult<()> {
     // by default, log everything from level `info` and up.

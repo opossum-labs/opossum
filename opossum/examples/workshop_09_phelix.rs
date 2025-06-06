@@ -5,7 +5,10 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, RayDataBuilder}},
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, RayDataBuilder},
+    },
     millimeter, nanometer,
     nodes::{
         NodeGroup, NodeReference, ParaxialSurface, RayPropagationVisualizer, Source, ThinMirror,
@@ -24,11 +27,12 @@ use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("PHELIX MainAmp");
 
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated (CollimatedSrc::new(
-         Grid::new((Length::zero(), millimeter!(60.0)), (1, 5))?.into(),
-         UniformDist::new(joule!(1.0))?.into(),
-         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-    )));
+    let light_data_builder =
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+            Grid::new((Length::zero(), millimeter!(60.0)), (1, 5))?.into(),
+            UniformDist::new(joule!(1.0))?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        )));
     let mut src = Source::new("incoming rays", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     let i_src = scenery.add_node(src)?;
@@ -45,11 +49,11 @@ fn main() -> OpmResult<()> {
 
     let mut amps = NodeGroup::new("Amps");
 
-    let i_amp1=amps.add_node(amp("Amp 1")?)?;
-    let i_amp2=amps.add_node(amp("Amp 2")?)?;
-    let i_amp3=amps.add_node(amp("Amp 3")?)?;
-    let i_amp4=amps.add_node(amp("Amp 4")?)?;
-    let i_amp5=amps.add_node(amp("Amp 5")?)?;
+    let i_amp1 = amps.add_node(amp("Amp 1")?)?;
+    let i_amp2 = amps.add_node(amp("Amp 2")?)?;
+    let i_amp3 = amps.add_node(amp("Amp 3")?)?;
+    let i_amp4 = amps.add_node(amp("Amp 4")?)?;
+    let i_amp5 = amps.add_node(amp("Amp 5")?)?;
 
     amps.connect_nodes(i_amp1, "output", i_amp2, "input", millimeter!(800.0))?;
     amps.connect_nodes(i_amp2, "output", i_amp3, "input", millimeter!(800.0))?;
@@ -61,21 +65,21 @@ fn main() -> OpmResult<()> {
 
     amps.set_property("expand view", true.into())?;
 
-    let mut main_amp= NodeGroup::new("Double-Pass Amps");
+    let mut main_amp = NodeGroup::new("Double-Pass Amps");
 
-    let i_amps= main_amp.add_node(amps)?;
+    let i_amps = main_amp.add_node(amps)?;
     let i_mm1 = main_amp.add_node(ThinMirror::new("MM1").with_tilt(degree!(-0.5, 0.0, 0.0))?)?;
     let mut r_amps = NodeReference::from_node(&main_amp.node(i_amps)?);
     r_amps.set_inverted(true)?;
     let i_r_amps = main_amp.add_node(r_amps)?;
 
     main_amp.connect_nodes(i_amps, "output", i_mm1, "input_1", millimeter!(800.0))?;
-    main_amp.connect_nodes(i_mm1,"output_1", i_r_amps, "output", millimeter!(0.0))?;
+    main_amp.connect_nodes(i_mm1, "output_1", i_r_amps, "output", millimeter!(0.0))?;
     main_amp.map_input_port(i_amps, "input", "input")?;
     main_amp.map_output_port(i_r_amps, "input", "output")?;
 
     main_amp.set_property("expand view", true.into())?;
-    let i_main_amp=scenery.add_node(main_amp)?;
+    let i_main_amp = scenery.add_node(main_amp)?;
 
     let mut r_mm2 = NodeReference::from_node(&scenery.node(i_mm2)?);
     r_mm2.set_inverted(true)?;
@@ -123,7 +127,7 @@ fn main() -> OpmResult<()> {
 
 fn amp(name: &str) -> OpmResult<NodeGroup> {
     let fused_silica = RefrIndexConst::new(1.5)?;
-    let mut amp=NodeGroup::new(name);
+    let mut amp = NodeGroup::new(name);
     let disk_a = Wedge::new("disk A", millimeter!(45.0), degree!(0.0), &fused_silica)?
         .with_tilt(degree!(-56.0, 0.0, 0.0))?;
     let i_a1 = amp.add_node(disk_a)?;
