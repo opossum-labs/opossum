@@ -226,6 +226,8 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                 div {
                     class: "accordion accordion-borderless bg-dark ",
                     id: "accordionNodeConfig",
+                    // AccordionItem{elements: Vec<Element>, header: "General", header_id: "generalHeading", parent_id: &'static str, content_id: &'static str}
+
                     div { class: "accordion-item bg-dark text-light",
                         h2 { class: "accordion-header", id: "generalHeading",
                             button {

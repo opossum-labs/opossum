@@ -103,7 +103,7 @@ pub fn create_dot_or_report_file_instance(
     let _ = io::stdout().flush();
 
     File::create(f_path)
-        .map_err(|e| OpossumError::Other(format!("{f_name} fdile creation failed: {e}")))
+        .map_err(|e| OpossumError::Other(format!("{f_name} file creation failed: {e}")))
 }
 
 /// Return the version information of the currently built OPOSSUM executable.

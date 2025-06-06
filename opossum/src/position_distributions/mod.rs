@@ -98,4 +98,17 @@ impl PosDistType {
             Self::Sobol(dist) => dist,
         }
     }
+
+    pub fn default_from_name(name: &str) -> Option<Self> {
+        match name {
+            "Random" => Some(Random::default().into()),
+            "Grid" => Some(Grid::default().into()),
+            "Hexagonal" => Some(HexagonalTiling::default().into()),
+            "Hexapolar" => Some(Hexapolar::default().into()),
+            "Fibonacci, rectangular" => Some(FibonacciRectangle::default().into()),
+            "Fibonacci, elliptical" => Some(FibonacciEllipse::default().into()),
+            "Sobol" => Some(SobolDist::default().into()),
+            _ => None,
+        }
+    }
 }

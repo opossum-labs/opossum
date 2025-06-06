@@ -23,8 +23,6 @@ fn read_and_parse_model(path: &Path) -> OpmResult<OpmDocument> {
     OpmDocument::from_file(path)
 }
 
-
-
 fn create_dot_file(dot_path: &Path, scenery: &NodeGroup) -> OpmResult<()> {
     let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "dot", "diagram")?;
 
@@ -34,7 +32,9 @@ fn create_dot_file(dot_path: &Path, scenery: &NodeGroup) -> OpmResult<()> {
     let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "svg", "diagram")?;
 
     let f_path = create_f_path(dot_path, "scenery", "dot");
-    scenery.toplevel_dot_svg(&f_path, &mut output)?;
+    scenery.toplevel_dot_svg(&f_path, &mut output).unwrap_or_else(|e| {
+        warn!("Creating SVG file failed: {e}");
+    });
 
     Ok(())
 }

@@ -28,10 +28,10 @@ fn App() -> Element {
 }
 
 #[component]
-pub fn AccordionItem(elements: Vec<Element>, header: &'static str, id: &'static str, parent: &'static str, content_id: &'static str) -> Element{
+pub fn AccordionItem(elements: Vec<Element>, header: &'static str, header_id: &'static str, parent_id: &'static str, content_id: &'static str) -> Element{
     rsx!{
         div { class: "accordion-item bg-dark text-light",
-                h6 { class: "accordion-header", id: id,
+                h6 { class: "accordion-header", id: header_id,
                     button {
                         class: "accordion-button collapsed bg-dark text-light",
                         r#type: "button",
@@ -45,8 +45,8 @@ pub fn AccordionItem(elements: Vec<Element>, header: &'static str, id: &'static 
                 div {
                     id: content_id,
                     class: "accordion-collapse collapse  bg-dark",
-                    "aria-labelledby": id,
-                    "data-mdb-parent": format!("#{parent}"),
+                    "aria-labelledby": header_id,
+                    "data-mdb-parent": format!("#{parent_id}"),
                     div { class: "accordion-body  bg-dark",
                         for element in elements {
                             { element }

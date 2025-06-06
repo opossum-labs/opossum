@@ -90,6 +90,26 @@ impl PosDistSelection {
 
         self.pos_dist = pos_dist;
     }
+
+    pub fn get_option_elements(&self) -> Element{
+        rsx! {
+            option { selected: self.rand, value: "Random", "Random" }
+            option { selected: self.grid, value: "Grid", "Grid" }
+            option { selected: self.hexagonal, value: "Hexagonal", "Hexagonal" }
+            option { selected: self.hexapolar, value: "Hexapolar", "Hexapolar" }
+            option {
+                selected: self.fibonacci_rect,
+                value: "Fibonacci, rectangular",
+                "Fibonacci, rectangular"
+            }
+            option {
+                selected: self.fibonacci_ell,
+                value: "Fibonacci, elliptical",
+                "Fibonacci, elliptical"
+            }
+            option { selected: self.sobol, value: "Sobol", "Sobol" }
+        }
+    }
 }
 
 impl TryFrom<LightDataBuilder> for PosDistSelection {
@@ -331,47 +351,14 @@ pub fn SourceEditor(
                 class: "accordion accordion-borderless bg-dark border-start",
                 id: "accordionSourceDists",
                 PositionDistributionEditor { light_data_builder_sig }
-                // EnergyDistributionEditor { light_data_builder_sig }
-                // SpectralDistributionEditor { light_data_builder_sig }
+                EnergyDistributionEditor { light_data_builder_sig }
+                SpectralDistributionEditor { light_data_builder_sig }
             }
     };
 
 
     rsx! {
-        AccordionItem {elements: vec![accordion_item_content], header: "Light Source", id: "sourceHeading", parent: "accordionNodeConfig", content_id: "sourceCollapse"}
-        // div { class: "accordion-item bg-dark text-light", hidden: hide,
-        //     h2 { class: "accordion-header", id: "sourceHeading",
-        //         button {
-        //             class: "accordion-button collapsed bg-dark text-light",
-        //             r#type: "button",
-        //             "data-mdb-collapse-init": "",
-        //             "data-mdb-target": "#sourceCollapse",
-        //             "aria-expanded": "false",
-        //             "aria-controls": "sourceCollapse",
-        //             "Light Source"
-        //         }
-        //     }
-        //     div {
-        //         id: "sourceCollapse",
-        //         class: "accordion-collapse collapse  bg-dark",
-        //         "aria-labelledby": "sourceHeading",
-        //         "data-mdb-parent": "#accordionNodeConfig",
-        //         div { class: "accordion-body  bg-dark",
-        //             SourceLightDataBuilderSelector { light_data_builder_sig }
-        //             RayDataBuilderSelector { light_data_builder_sig }
-        //             ReferenceLengthEditor { light_data_builder_sig }
-                    
-        //             div {
-        //                 hidden: !is_rays,
-        //                 class: "accordion accordion-borderless bg-dark border-start",
-        //                 id: "accordionSourceDists",
-        //                 PositionDistributionEditor { light_data_builder_sig }
-        //                 // EnergyDistributionEditor { light_data_builder_sig }
-        //                 // SpectralDistributionEditor { light_data_builder_sig }
-        //             }
-        //         }
-        //     }
-        // }
+        AccordionItem {elements: vec![accordion_item_content], header: "Light Source", header_id: "sourceHeading", parent_id: "accordionNodeConfig", content_id: "sourceCollapse"}
     }
     // }
 }
@@ -425,31 +412,14 @@ pub fn ReferenceLengthEditor(light_data_builder_sig: Signal<LightDataBuilderHist
 pub fn PositionDistributionEditor(
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
+
+    let accordion_item_content = rsx!{
+        RayPositionDistributionSelector { light_data_builder_sig }
+        RayDistributionEditor { light_data_builder_sig }
+    };
+
     rsx! {
-        div { class: "accordion-item bg-dark text-light",
-            h6 { class: "accordion-header", id: "sourcePositionDistHeading",
-                button {
-                    class: "accordion-button collapsed bg-dark text-light",
-                    r#type: "button",
-                    "data-mdb-collapse-init": "",
-                    "data-mdb-target": "#sourcePositionDistCollapse",
-                    "aria-expanded": "false",
-                    "aria-controls": "sourcePositionDistCollapse",
-                    "Position Distribution"
-                }
-            }
-            div {
-                id: "sourcePositionDistCollapse",
-                class: "accordion-collapse collapse  bg-dark",
-                "aria-labelledby": "sourcePositionDistHeading",
-                "data-mdb-parent": "#accordionSourceDists",
-                div { class: "accordion-body  bg-dark",
-                    
-                    RayPositionDistributionSelector { light_data_builder_sig }
-                    RayDistributionEditor { light_data_builder_sig }
-                }
-            }
-        }
+        AccordionItem {elements: vec![accordion_item_content], header: "Position Distribution", header_id: "sourcePositionDistHeading", parent_id: "accordionSourceDists", content_id: "sourcePositionDistCollapse"}
     }
 }
 
@@ -457,27 +427,11 @@ pub fn PositionDistributionEditor(
 pub fn EnergyDistributionEditor(
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
+    let accordion_item_content = rsx!{
+    };
+
     rsx! {
-        div { class: "accordion-item bg-dark text-light",
-            h6 { class: "accordion-header", id: "sourceEnergyDistHeading",
-                button {
-                    class: "accordion-button collapsed bg-dark text-light",
-                    r#type: "button",
-                    "data-mdb-collapse-init": "",
-                    "data-mdb-target": "#sourceEnergyDistCollapse",
-                    "aria-expanded": "false",
-                    "aria-controls": "sourceEnergyDistCollapse",
-                    "Energy Distribution"
-                }
-            }
-            div {
-                id: "sourceEnergyDistCollapse",
-                class: "accordion-collapse collapse  bg-dark",
-                "aria-labelledby": "sourceEnergyDistHeading",
-                "data-mdb-parent": "#accordionSourceDists",
-                div { class: "accordion-body  bg-dark" }
-            }
-        }
+        AccordionItem {elements: vec![accordion_item_content], header: "Energy Distribution", header_id: "sourceEnergyDistHeading", parent_id: "accordionSourceDists", content_id: "sourceEnergyDistCollapse"}
     }
 }
 
@@ -485,27 +439,11 @@ pub fn EnergyDistributionEditor(
 pub fn SpectralDistributionEditor(
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
+        let accordion_item_content = rsx!{
+    };
+
     rsx! {
-        div { class: "accordion-item bg-dark text-light",
-            h6 { class: "accordion-header", id: "sourceSpectralDistHeading",
-                button {
-                    class: "accordion-button collapsed bg-dark text-light",
-                    r#type: "button",
-                    "data-mdb-collapse-init": "",
-                    "data-mdb-target": "#sourceSpectralDistCollapse",
-                    "aria-expanded": "false",
-                    "aria-controls": "sourceSpectralDistCollapse",
-                    "Spectral Distribution"
-                }
-            }
-            div {
-                id: "sourceSpectralDistCollapse",
-                class: "accordion-collapse collapse  bg-dark",
-                "aria-labelledby": "sourceSpectralDistHeading",
-                "data-mdb-parent": "#accordionSourceDists",
-                div { class: "accordion-body  bg-dark" }
-            }
-        }
+        AccordionItem {elements: vec![accordion_item_content], header: "Spectral Distribution", header_id: "sourceSpectralDistHeading", parent_id: "accordionSourceDists", content_id: "sourceSpectralDistCollapse"}
     }
 }
 
@@ -643,17 +581,7 @@ pub fn RayPositionDistributionSelector(
                                 let mut ray_data_builder = ldb.get_current_ray_data_builder();
                                 let val_str = value.as_str();
                                 let new_ld_builder = if !ldb.set_current(val_str) {
-                                    let pos_dist_type: PosDistType = match val_str {
-                                        "Random" => Random::default().into(),
-                                        "Grid" => Grid::default().into(),
-                                        "Hexagonal" => HexagonalTiling::default().into(),
-                                        "Hexapolar" => Hexapolar::default().into(),
-                                        "Fibonacci, rectangular" => FibonacciRectangle::default().into(),
-                                        "Fibonacci, elliptical" => FibonacciEllipse::default().into(),
-                                        "Sobol" => SobolDist::default().into(),
-                                        _ => Hexapolar::default().into(),
-                                    };
-                                    if let Some(ref mut rdb) = ray_data_builder {
+                                    if let (Some(ref mut rdb), Some(pos_dist_type)) = (ray_data_builder, PosDistType::default_from_name(val_str)) {
                                         match rdb {
                                             RayDataBuilder::Collimated(ref mut collimated_src) => {
                                                 collimated_src.set_pos_dist(pos_dist_type);
@@ -690,21 +618,7 @@ pub fn RayPositionDistributionSelector(
                             })
                     },
                     "aria-label": "Select ray position distribution",
-                    option { selected: rpd.rand, value: "Random", "Random" }
-                    option { selected: rpd.grid, value: "Grid", "Grid" }
-                    option { selected: rpd.hexagonal, value: "Hexagonal", "Hexagonal" }
-                    option { selected: rpd.hexapolar, value: "Hexapolar", "Hexapolar" }
-                    option {
-                        selected: rpd.fibonacci_rect,
-                        value: "Fibonacci, rectangular",
-                        "Fibonacci, rectangular"
-                    }
-                    option {
-                        selected: rpd.fibonacci_ell,
-                        value: "Fibonacci, elliptical",
-                        "Fibonacci, elliptical"
-                    }
-                    option { selected: rpd.sobol, value: "Sobol", "Sobol" }
+                    {rpd.get_option_elements()}
                 }
                 label {
                     class: "text-secondary",
