@@ -240,24 +240,26 @@ impl GraphStore {
         let mut max_x = node.pos().x + NODE_WIDTH;
         let mut max_y = node.pos().y + HEADER_HEIGHT + node.node_body_height();
         for node in optic_nodes {
-            let x = node.1.pos().x;
-            let y = node.1.pos().y;
-            if min_x > x {
-                min_x = x;
+            let node_x_min = node.1.pos().x;
+            let node_y_min = node.1.pos().y;
+            let node_x_max=node_x_min + NODE_WIDTH;
+            let node_y_max=node_y_min + HEADER_HEIGHT + node.1.node_body_height();
+            if node_x_min< min_x {
+                min_x = node_x_min;
             }
-            if min_y > y {
-                min_y = y;
+            if node_y_min< min_y {
+                min_y = node_y_min;
             }
-            if max_x < x {
-                max_x = x;
+            if node_x_max > max_x {
+                max_x = node_x_max;
             }
-            if max_y < y {
-                max_y = y;
+            if node_y_max > max_y {
+                max_y = node_y_max;
             }
         }
         Rect::new(
             Point2D::new(min_x, min_y),
-            Size2D::new(max_x - min_y, max_y - min_y),
+            Size2D::new(max_x - min_x, max_y - min_y),
         )
     }
     // #[must_use]

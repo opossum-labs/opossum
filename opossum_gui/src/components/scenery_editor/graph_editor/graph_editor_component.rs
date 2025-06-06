@@ -6,7 +6,13 @@ use crate::components::scenery_editor::{
     node::NodeElement,
     nodes::Nodes,
 };
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus::{
+    html::geometry::{
+        euclid::{default::Point2D},
+        PixelsSize,
+    },
+    prelude::*,
+};
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode},
     AnalyzerType,
@@ -36,12 +42,13 @@ pub enum DragStatus {
     Node(Uuid),
     Edge(NewEdgeCreationStart),
 }
+
 #[component]
 pub fn GraphEditor(
     command: ReadOnlySignal<Option<NodeEditorCommand>>,
     node_selected: Signal<Option<NodeElement>>,
 ) -> Element {
-    // use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
+    let mut editor_size: Signal<Option<PixelsSize>> = use_signal(|| None);
     let mut graph_store = use_context_provider(GraphStore::default);
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
@@ -89,11 +96,11 @@ pub fn GraphEditor(
         div {
             class: "graph-editor",
             draggable: false,
-            // onmounted: use_on_mounted(),
-            // onresize: use_on_resize(),
-            onwheel: move |event| {
-                let delta = event.delta().strip_units().y;
-                if delta > 0.0 { graph_zoom *= 1.1 } else { graph_zoom /= 1.1 }
+            onwheel: {
+                move |event: Event<WheelData>| {
+                    let delta = event.delta().strip_units().y;
+                    if delta > 0.0 { graph_zoom *= 1.1 } else { graph_zoom /= 1.1 }
+                }
             },
             onmousedown: move |event| {
                 current_mouse_pos
@@ -134,6 +141,11 @@ pub fn GraphEditor(
                     _ => {}
                 }
                 editor_status.drag_status.set(DragStatus::None);
+            },
+            onresize: move |event| {
+                if let Ok(size) = event.data().get_content_box_size() {
+                    editor_size.set(Some(size));
+                }
             },
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());
@@ -189,13 +201,19 @@ pub fn GraphEditor(
             ondoubleclick: move |_| {
                 let bounding_box = graph_store.get_bounding_box();
                 let center = bounding_box.center();
-                graph_shift.set(Point2D::new(-center.x, 250.0 - center.y));
+                if let Some(window_size)=editor_size() {
+                    let zoom=graph_zoom();
+                    println!("Bounding box: {:?}",bounding_box);
+                    println!("Center: {:?}",center);
+                    println!("Editor size {:?}",window_size);
+                    println!("Zoom: {zoom}");
+                   graph_shift.set(Point2D::new(window_size.width / 2. -center.x / zoom, window_size.height / 2. -center.y / zoom)); 
+                }
             },
             div {
-                // class: "zoom-shift-container",
                 draggable: false,
                 style: format!(
-                    "transform: translate({}px, {}px) scale({graph_zoom});",
+                    "transform: scale({graph_zoom}) translate({}px, {}px);",
                     graph_shift().x,
                     graph_shift().y,
                 ),
