@@ -46,6 +46,8 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>, project_direct
         if let Some(analyzer) = analyzer_selected() {
             menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer)))
         }
+    });
+    use_effect(move ||{
         if !node_selected.read().is_empty() {
             menu_item_selected.set(Some(MenuSelection::AddNode(node_selected())))
         }
