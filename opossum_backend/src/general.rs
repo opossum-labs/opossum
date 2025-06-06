@@ -1,13 +1,13 @@
 //! General endpoints
 use std::fmt::Display;
 
-use actix_web::{get, web::Json, Responder};
-use opossum::analyzers::AnalyzerType;
+use actix_web::{get, web::{self, Json}, Responder};
+use opossum::{analyzers::AnalyzerType, reporting::analysis_report::AnalysisReport};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 
-use crate::error::ErrorResponse;
+use crate::{app_state::AppState, error::ErrorResponse};
 
 /// Structure holding the version information
 #[derive(ToSchema, Serialize, Deserialize)]
@@ -88,11 +88,28 @@ async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, ErrorResponse> 
     let analyzer_types = opossum::analyzers::AnalyzerType::analyzer_types();
     Ok(Json(analyzer_types))
 }
+
+/// Analyze current setup and eturn a vector of analysisreports
+#[utoipa::path(get, responses(
+    (status = OK, description = "success", content_type="application/json"),
+    (status = BAD_REQUEST, body = ErrorResponse, description = "Error during analysis", content_type="application/json")
+
+), tag="general")]
+#[get("/analyze")]
+async fn get_analyze(
+        data: web::Data<AppState>
+    ) -> Result<Json<Vec<AnalysisReport>>, ErrorResponse> {
+    let mut document = data.document.lock().unwrap();
+    let reports = document.analyze()?;
+    drop(document);
+    Ok(Json(reports))
+}
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_version);
     cfg.service(get_hello);
     cfg.service(get_node_types);
     cfg.service(get_analyzer_types);
+    cfg.service(get_analyze);
 }
 #[cfg(test)]
 mod test {

@@ -504,6 +504,46 @@ async fn post_node_property(
 }
 
 
+
+/// Update the isometry of an optical node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "isometry of the optical node"),
+    ),
+    request_body(content = String,
+        description = "updated isometry of node",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, description = "Node isometry successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/isometry/{uuid}")]
+async fn post_node_isometry(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    iso: web::Json<Isometry>,
+) -> Result<(), ErrorResponse> {
+    let uuid: Uuid = path.into_inner();
+    let iso = iso.into_inner();
+    let document = data.document.lock().unwrap();
+    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+        node_ref
+            .optical_ref
+            .lock()
+            .unwrap()
+            .node_attr_mut()
+            .set_isometry(iso);
+        Ok(())
+    } else {
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+        ))
+    }
+}
 /// Update the alignment rotation of an optical node
 #[utoipa::path(tag = "node",
     params(
@@ -765,6 +805,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_alignment_translation);
     cfg.service(post_node_alignment_rotation);
     cfg.service(post_node_property);
+    cfg.service(post_node_isometry);
     
     cfg.service(get_properties);
     cfg.service(patch_properties);

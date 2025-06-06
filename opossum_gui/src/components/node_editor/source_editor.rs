@@ -3,13 +3,7 @@ use std::{collections::HashMap, fmt::Display};
 use dioxus::prelude::*;
 use nalgebra::Point;
 use opossum_backend::{
-    energy_data_builder::EnergyDataBuilder,
-    joule,
-    light_data_builder::{self, LightDataBuilder},
-    millimeter, nanometer,
-    ray_data_builder::{self, CollimatedSrc, PointSrc, RayDataBuilder},
-    FibonacciEllipse, FibonacciRectangle, Grid, HexagonalTiling, Hexapolar, LaserLines, NodeAttr,
-    PosDistType, Proptype, Random, SobolDist, UniformDist,
+    energy_data_builder::EnergyDataBuilder, joule, light_data_builder::{self, LightDataBuilder}, millimeter, nanometer, ray_data_builder::{self, CollimatedSrc, PointSrc, RayDataBuilder}, FibonacciEllipse, FibonacciRectangle, Grid, HexagonalTiling, Hexapolar, Isometry, LaserLines, NodeAttr, PosDistType, Proptype, Random, SobolDist, UniformDist
 };
 use uom::si::length::millimeter;
 
@@ -312,8 +306,7 @@ pub fn SourceEditor(
 ) -> Element {
     // let mut light_data_builder_sig = Signal::new(light_data_builder);
 
-    use_effect(move || {
-        println!("node change _set");
+    use_memo(move || {
         node_change.set(Some(NodeChange::Property(
             "light data".to_owned(),
             serde_json::to_value(Proptype::LightDataBuilder(Some(
@@ -322,6 +315,12 @@ pub fn SourceEditor(
             .unwrap(),
         )))
     });
+
+    use_effect(move || {
+        node_change.set(Some(NodeChange::Isometry(Isometry::identity())))
+    });
+
+
 
     let (is_rays, _) = light_data_builder_sig.read().is_rays_is_collimated();
 

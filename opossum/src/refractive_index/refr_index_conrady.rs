@@ -13,7 +13,7 @@ use crate::error::OpossumError;
 use super::{RefractiveIndex, RefractiveIndexType};
 
 /// Refractive index model following the Conrady formula.
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct RefrIndexConrady {
     n0: f64,
     a: f64,

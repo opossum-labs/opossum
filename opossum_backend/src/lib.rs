@@ -20,5 +20,8 @@ pub use opossum::{
     optic_ports::PortType,
     position_distributions::*,
     spectral_distribution::*,
+    refractive_index::*,
+    reporting::*,
+    create_report_and_data_files,create_data_dir,
     utils::{geom_transformation::Isometry, math_utils::usize_to_f64},
 };

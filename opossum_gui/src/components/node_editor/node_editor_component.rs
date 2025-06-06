@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::components::node_editor::lens_editor::LensEditor;
 use crate::components::node_editor::source_editor::SourceEditor;
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::{html::geometry::euclid::num::Zero, prelude::*};
@@ -8,8 +9,7 @@ use opossum_backend::energy_data_builder::EnergyDataBuilder;
 use opossum_backend::light_data_builder::{self, LightDataBuilder};
 use opossum_backend::ray_data_builder::RayDataBuilder;
 use opossum_backend::{
-    joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, Proptype,
-    UniformDist,
+    joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, Proptype, RefractiveIndexType, UniformDist
 };
 use serde_json::Value;
 use uom::si::f64::{Angle, RadiantExposure};
@@ -32,6 +32,7 @@ pub enum NodeChange {
     Inverted(bool),
     NodeConst(String), // AlignLikeNodeAtDistance(Uuid, Length),
     Property(String, Value),
+    Isometry(Isometry)
     // SourceWavelength(Length),
 }
 
@@ -155,12 +156,24 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     });
                 }
                 NodeChange::Property(key, prop) => {
-                    println!("sending node property change request");
                     spawn(async move {
                         if let Err(err_str) = api::update_node_property(
                             &HTTP_API_CLIENT(),
                             active_node.id(),
                             (key, prop),
+                        )
+                        .await
+                        {
+                            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        };
+                    });
+                }
+                NodeChange::Isometry(iso) => {
+                    spawn(async move {
+                        if let Err(err_str) = api::update_node_isometry(
+                            &HTTP_API_CLIENT(),
+                            active_node.id(),
+                            iso,
                         )
                         .await
                         {
@@ -257,7 +270,23 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     SourceEditor {
                         hide: node_attr.node_type() != "source",
                         light_data_builder_sig,
-                        node_change: node_change.clone(),
+                        node_change,
+                    }
+                    LensEditor {  
+                        hide: node_attr.node_type() != "lens",
+                        node_change,
+                        front_radius:     {if let Some(Proptype::Length(front_curvature)) = node_attr.get_property("front curvature").ok(){
+                            front_curvature.clone()
+                        }else{millimeter!(500.)}},
+                        rear_radius:      {if let Some(Proptype::Length(rear_curvature)) = node_attr.get_property("rear curvature").ok(){
+                            rear_curvature.clone()
+                        }else{millimeter!(-500.)}},
+                        center_thickness: {if let Some(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness").ok(){
+                            center_thickness.clone()
+                        }else{millimeter!(10.)}},
+                        refractive_index: {if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_ind))) = node_attr.get_property("crefractive index").ok(){
+                            ref_ind.refractive_index().clone()
+                        }else{1.5}},
                     }
                     div { class: "accordion-item bg-dark text-light",
                         h2 { class: "accordion-header", id: "alignmentHeading",
@@ -364,6 +393,7 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
         NodeChange::Inverted(inverted) => (format!("{inverted}"), "checkbox", false),
         NodeChange::NodeConst(ref val) => (val.clone(), "text", true),
         NodeChange::Property(_, _) => ("not used".to_owned(), "text", true),
+        NodeChange::Isometry(_) => ("not used".to_owned(), "text", true),
     };
 
     if input_type == "checkbox" {
@@ -482,6 +512,7 @@ pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange)
                                 }
                                 NodeChange::NodeConst(_) => {}
                                 NodeChange::Property(_, _) => {}
+                                NodeChange::Isometry(_) => {}
                             };
                         }
                     },
