@@ -7,7 +7,7 @@ use opossum_backend::{
 };
 use uom::si::length::millimeter;
 
-use crate::OPOSSUM_UI_LOGS;
+use crate::{components::node_editor::accordion::AccordionItem, OPOSSUM_UI_LOGS};
 
 use super::node_editor_component::NodeChange;
 
@@ -320,44 +320,58 @@ pub fn SourceEditor(
         node_change.set(Some(NodeChange::Isometry(Isometry::identity())))
     });
 
-
-
     let (is_rays, _) = light_data_builder_sig.read().is_rays_is_collimated();
+    let accordion_item_content = rsx!{
+        SourceLightDataBuilderSelector { light_data_builder_sig }
+            RayDataBuilderSelector { light_data_builder_sig }
+            ReferenceLengthEditor { light_data_builder_sig }
+            
+            div {
+                hidden: !is_rays,
+                class: "accordion accordion-borderless bg-dark border-start",
+                id: "accordionSourceDists",
+                PositionDistributionEditor { light_data_builder_sig }
+                // EnergyDistributionEditor { light_data_builder_sig }
+                // SpectralDistributionEditor { light_data_builder_sig }
+            }
+    };
+
 
     rsx! {
-        div { class: "accordion-item bg-dark text-light", hidden: hide,
-            h2 { class: "accordion-header", id: "sourceHeading",
-                button {
-                    class: "accordion-button collapsed bg-dark text-light",
-                    r#type: "button",
-                    "data-mdb-collapse-init": "",
-                    "data-mdb-target": "#sourceCollapse",
-                    "aria-expanded": "false",
-                    "aria-controls": "sourceCollapse",
-                    "Light Source"
-                }
-            }
-            div {
-                id: "sourceCollapse",
-                class: "accordion-collapse collapse  bg-dark",
-                "aria-labelledby": "sourceHeading",
-                "data-mdb-parent": "#accordionNodeConfig",
-                div { class: "accordion-body  bg-dark",
-                    SourceLightDataBuilderSelector { light_data_builder_sig }
-                    RayDataBuilderSelector { light_data_builder_sig }
-                    ReferenceLengthEditor { light_data_builder_sig }
+        AccordionItem {elements: vec![accordion_item_content], header: "Light Source", id: "sourceHeading", parent: "accordionNodeConfig", content_id: "sourceCollapse"}
+        // div { class: "accordion-item bg-dark text-light", hidden: hide,
+        //     h2 { class: "accordion-header", id: "sourceHeading",
+        //         button {
+        //             class: "accordion-button collapsed bg-dark text-light",
+        //             r#type: "button",
+        //             "data-mdb-collapse-init": "",
+        //             "data-mdb-target": "#sourceCollapse",
+        //             "aria-expanded": "false",
+        //             "aria-controls": "sourceCollapse",
+        //             "Light Source"
+        //         }
+        //     }
+        //     div {
+        //         id: "sourceCollapse",
+        //         class: "accordion-collapse collapse  bg-dark",
+        //         "aria-labelledby": "sourceHeading",
+        //         "data-mdb-parent": "#accordionNodeConfig",
+        //         div { class: "accordion-body  bg-dark",
+        //             SourceLightDataBuilderSelector { light_data_builder_sig }
+        //             RayDataBuilderSelector { light_data_builder_sig }
+        //             ReferenceLengthEditor { light_data_builder_sig }
                     
-                    div {
-                        hidden: !is_rays,
-                        class: "accordion accordion-borderless bg-dark border-start",
-                        id: "accordionSourceDists",
-                        PositionDistributionEditor { light_data_builder_sig }
-                        // EnergyDistributionEditor { light_data_builder_sig }
-                        // SpectralDistributionEditor { light_data_builder_sig }
-                    }
-                }
-            }
-        }
+        //             div {
+        //                 hidden: !is_rays,
+        //                 class: "accordion accordion-borderless bg-dark border-start",
+        //                 id: "accordionSourceDists",
+        //                 PositionDistributionEditor { light_data_builder_sig }
+        //                 // EnergyDistributionEditor { light_data_builder_sig }
+        //                 // SpectralDistributionEditor { light_data_builder_sig }
+        //             }
+        //         }
+        //     }
+        // }
     }
     // }
 }
