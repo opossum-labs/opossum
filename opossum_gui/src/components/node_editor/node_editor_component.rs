@@ -37,10 +37,24 @@ pub enum NodeChange {
     // SourceWavelength(Length),
 }
 
+fn extract_light_data_info(
+    node_attr: &NodeAttr,
+) -> (LightDataBuilder, &'static str) {
+    match node_attr.properties().get("light data") {
+        Ok(Proptype::LightDataBuilder(Some(ld))) if matches!(ld, LightDataBuilder::Geometric(_)) => {
+            (ld.clone(), "Rays")
+        }
+        Ok(Proptype::LightDataBuilder(Some(ld))) => {
+            (ld.clone(), "Energy")
+        }
+        _ => (LightDataBuilder::default(), "Rays"),
+    }
+}
+
 #[component]
 pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
-    let mut light_data_builder_sig = Signal::new(LightDataBuilderHistory::default());
+    let mut light_data_builder_hist = LightDataBuilderHistory::default();
     let active_node_opt = node();
     use_effect(move || {
         let node_change_opt = node_change.read().clone();
@@ -203,25 +217,13 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     });
 
     if let Some(Some(node_attr)) = &*resource_future.read_unchecked() {
-        let (ld_builder, key) = node_attr.properties().get("light data").map_or(
-            (LightDataBuilder::default(), "Rays"),
-            |p| match p {
-                Proptype::LightDataBuilder(l) => {
-                    if let Some(light_data_builder) = l {
-                        let key = match light_data_builder {
-                            LightDataBuilder::Geometric(_) => "Rays",
-                            _ => "Energy",
-                        };
-                        (light_data_builder.clone(), key)
-                    } else {
-                        (LightDataBuilder::default(), "Rays")
-                    }
-                }
-                _ => (LightDataBuilder::default(), "Rays"),
-            },
-        );
-        light_data_builder_sig.with_mut(|ldb| ldb.replace_or_insert_and_set_current(key, ld_builder));
         
+        if node_attr.node_type() == "source"{
+            let (ld_builder, key) = extract_light_data_info(&node_attr);
+            light_data_builder_hist.replace_or_insert_and_set_current(key, ld_builder)
+            // light_data_builder_sig.with_mut(|ldb| ldb.replace_or_insert_and_set_current(key, ld_builder));
+        }
+
         rsx! {
             div {
                 h6 { "Node Configuration" }
@@ -237,7 +239,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     }
                     SourceEditor {
                         hide: node_attr.node_type() != "source",
-                        light_data_builder_sig,
+                        light_data_builder_hist,
                         node_change,
                     }
                     LensEditor {  

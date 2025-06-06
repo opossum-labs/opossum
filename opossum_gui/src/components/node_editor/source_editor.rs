@@ -321,10 +321,10 @@ impl LightDataBuilderHistory {
 #[component]
 pub fn SourceEditor(
     hide: bool,
-    light_data_builder_sig: Signal<LightDataBuilderHistory>,
+    light_data_builder_hist: LightDataBuilderHistory,
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
-    // let mut light_data_builder_sig = Signal::new(light_data_builder);
+    let mut light_data_builder_sig = Signal::new(light_data_builder_hist);
 
     use_memo(move || {
         node_change.set(Some(NodeChange::Property(
@@ -340,20 +340,11 @@ pub fn SourceEditor(
         node_change.set(Some(NodeChange::Isometry(Isometry::identity())))
     });
 
-    let (is_rays, _) = light_data_builder_sig.read().is_rays_is_collimated();
     let accordion_item_content = rsx!{
-        SourceLightDataBuilderSelector { light_data_builder_sig }
+            SourceLightDataBuilderSelector { light_data_builder_sig }
             RayDataBuilderSelector { light_data_builder_sig }
             ReferenceLengthEditor { light_data_builder_sig }
-            
-            div {
-                hidden: !is_rays,
-                class: "accordion accordion-borderless bg-dark border-start",
-                id: "accordionSourceDists",
-                PositionDistributionEditor { light_data_builder_sig }
-                EnergyDistributionEditor { light_data_builder_sig }
-                SpectralDistributionEditor { light_data_builder_sig }
-            }
+            DistributionEditor { light_data_builder_sig }
     };
 
 
@@ -361,6 +352,22 @@ pub fn SourceEditor(
         AccordionItem {elements: vec![accordion_item_content], header: "Light Source", header_id: "sourceHeading", parent_id: "accordionNodeConfig", content_id: "sourceCollapse"}
     }
     // }
+}
+
+#[component]
+pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Element{
+    let (is_rays, _) = light_data_builder_sig.read().is_rays_is_collimated();
+
+    rsx!{
+        div {
+            hidden: !is_rays,
+            class: "accordion accordion-borderless bg-dark border-start",
+            id: "accordionSourceDists",
+            PositionDistributionEditor { light_data_builder_sig }
+            EnergyDistributionEditor { light_data_builder_sig }
+            SpectralDistributionEditor { light_data_builder_sig }
+        }
+    }
 }
 
 #[component]
