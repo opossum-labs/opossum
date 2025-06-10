@@ -2,12 +2,13 @@ use dioxus::prelude::*;
 use opossum_backend::Fluence;
 use uuid::Uuid;
 
-use crate::components::node_editor::{accordion::AccordionItem, node_editor_component::{NodeChange, NodePropInput}};
+use crate::components::node_editor::{accordion::{AccordionItem, LabeledInput}, node_editor_component::{NodeChange, NodePropInput}};
 
 #[component]
 pub fn GeneralEditor(uuid: Uuid, node_type: String, node_name: String, node_lidt: Fluence ) -> Element{
 let accordion_content = vec![
             rsx!{
+                
                 NodePropInput {
                     name: "NodeId".to_string(),
                     placeholder: "Node ID".to_string(),
@@ -18,11 +19,7 @@ let accordion_content = vec![
                     placeholder: "Node Type".to_string(),
                     node_change: NodeChange::NodeConst(format!("{node_type}")),
                 }
-                NodePropInput {
-                    name: "NodeName".to_string(),
-                    placeholder: "Node Name".to_string(),
-                    node_change: NodeChange::Name(node_name),
-                }
+                NameInput{node_name}
                 NodePropInput {
                     name: "LIDT".to_string(),
                     placeholder: "LIDT in J/cm²".to_string(),
@@ -34,4 +31,21 @@ let accordion_content = vec![
         AccordionItem{elements: accordion_content, header: "General", header_id: "generalHeading", parent_id: "accordionNodeConfig", content_id: "generalCollapse"}
     }
 
+}
+
+#[component]
+pub fn NameInput(node_name: String) -> Element {
+    let mut node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+
+    rsx! {
+        LabeledInput {
+            id: "inputNodeName",
+            label: "Node Name",
+            value: value,
+            onchange: move |e:Event<FormData>|{                            
+                    let Ok(name) = e.data.parsed::<String>();
+                    node_change_signal.set(Some(NodeChange::Name(name)));
+            }
+        },
+    }    
 }
