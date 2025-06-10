@@ -41,7 +41,7 @@ pub fn NameInput(node_name: String) -> Element {
         LabeledInput {
             id: "inputNodeName",
             label: "Node Name",
-            value: value,
+            value: node_name,
             onchange: move |e:Event<FormData>|{                            
                     let Ok(name) = e.data.parsed::<String>();
                     node_change_signal.set(Some(NodeChange::Name(name)));
