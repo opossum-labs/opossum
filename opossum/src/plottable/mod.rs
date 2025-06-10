@@ -10,7 +10,7 @@ use crate::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace
 use approx::relative_ne;
 use colorous::Gradient;
 use image::RgbImage;
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{
@@ -21,11 +21,11 @@ use plotters::{
     backend::DrawingBackend,
     backend::PixelFormat,
     chart::{ChartBuilder, ChartContext, LabelAreaPosition, MeshStyle, SeriesLabelPosition},
-    coord::{cartesian::Cartesian2d, ranged3d::Cartesian3d, types::RangedCoordf64, Shift},
+    coord::{Shift, cartesian::Cartesian2d, ranged3d::Cartesian3d, types::RangedCoordf64},
     element::{Circle, PathElement, Polygon, Rectangle},
     prelude::{BitMapBackend, DrawingArea, IntoDrawingArea, SVGBackend},
     series::LineSeries,
-    style::{Color, IntoFont, RGBAColor, ShapeStyle, BLACK, WHITE},
+    style::{BLACK, Color, IntoFont, RGBAColor, ShapeStyle, WHITE},
 };
 use std::{collections::HashMap, env::current_dir, f64::consts::PI, path::Path, path::PathBuf};
 use strum::IntoEnumIterator;
@@ -120,8 +120,8 @@ impl PlotType {
         params.check_backend_file_ext_compatibility()?;
         let path = params.get_fpath()?;
         let mut plot = Plot::new(plt_series, params);
-        if plot.plot_auto_size {
-            plot.plot_auto_size();
+        if plot.auto_size {
+            plot.auto_size();
         }
         plot.add_margin_to_figure_size(self);
 
@@ -452,7 +452,9 @@ impl PlotType {
                     );
                     label_flag |= plt_series.get_series_label().is_some();
                 } else {
-                    warn!("Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!");
+                    warn!(
+                        "Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!"
+                    );
                 }
             }
             if label_flag {
@@ -487,7 +489,9 @@ impl PlotType {
                     );
                     label_flag |= plt_series.get_series_label().is_some();
                 } else {
-                    warn!("Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!");
+                    warn!(
+                        "Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!"
+                    );
                 }
             }
             if label_flag {
@@ -564,7 +568,9 @@ impl PlotType {
                     );
                     label_flag |= plt_series.get_series_label().is_some();
                 } else {
-                    warn!("Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!");
+                    warn!(
+                        "Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!"
+                    );
                 }
             }
 
@@ -612,7 +618,9 @@ impl PlotType {
                         );
                     }
                 } else {
-                    warn!("Wrong PlotData stored for this plot type! Must use MultiDim2! Not all series will be plotted!");
+                    warn!(
+                        "Wrong PlotData stored for this plot type! Must use MultiDim2! Not all series will be plotted!"
+                    );
                 }
             }
             if label_flag {
@@ -650,7 +658,9 @@ impl PlotType {
                         );
                     }
                 } else {
-                    warn!("Wrong PlotData stored for this plot type! Must use MultiDim3! Not all series will be plotted!");
+                    warn!(
+                        "Wrong PlotData stored for this plot type! Must use MultiDim3! Not all series will be plotted!"
+                    );
                 }
             }
             if label_flag {
@@ -664,7 +674,9 @@ impl PlotType {
     fn plot_triangulated_surface<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
         if let Some(plt_series_vec) = plt.get_plot_series_vec() {
             if plt_series_vec.len() > 1 {
-                warn!("For this type of plot only one series can be plotted at a time. Only the first series will be used!");
+                warn!(
+                    "For this type of plot only one series can be plotted at a time. Only the first series will be used!"
+                );
             }
             if let PlotData::TriangulatedSurface {
                 triangle_idx,
@@ -686,7 +698,9 @@ impl PlotType {
                     triangle_normals,
                 );
             } else {
-                warn!("Wrong PlotData stored for this plot type! Must use TriangulatedSurface! Not all series will be plotted!");
+                warn!(
+                    "Wrong PlotData stored for this plot type! Must use TriangulatedSurface! Not all series will be plotted!"
+                );
             }
         } else {
             warn!("No plot series defined! Cannot create plot!");
@@ -695,7 +709,9 @@ impl PlotType {
     fn plot_color_mesh<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
         if let Some(plt_series_vec) = plt.get_plot_series_vec() {
             if plt_series_vec.len() > 1 {
-                warn!("For this type of plot only one series can be plotted at a time. Only the first series will be used!");
+                warn!(
+                    "For this type of plot only one series can be plotted at a time. Only the first series will be used!"
+                );
             }
             if let PlotData::ColorMesh {
                 x_dat_n,
@@ -768,7 +784,9 @@ impl PlotType {
                     plt.bounds.z.unwrap(),
                 );
             } else {
-                warn!("Wrong PlotData stored for this plot type! Must use ColorMesh! Not all series will be plotted!");
+                warn!(
+                    "Wrong PlotData stored for this plot type! Must use ColorMesh! Not all series will be plotted!"
+                );
             }
         } else {
             warn!("No plot series defined! Cannot create plot!");
@@ -1387,7 +1405,6 @@ impl CGradient {
     }
 }
 impl Default for CGradient {
-    #[must_use]
     fn default() -> Self {
         Self {
             gradient: colorous::TURBO,
@@ -1495,7 +1512,6 @@ impl ColorBar {
 
 impl Default for ColorBar {
     /// Creates a new [`ColorBar`] struct with default values
-    #[must_use]
     fn default() -> Self {
         Self {
             cmap: colorous::TURBO,
@@ -1608,7 +1624,6 @@ impl Default for PlotParameters {
     /// This method returns a new [`PlotParameters`] struct
     /// # Panics
     /// This method panics if the current working directory is invalid. See `std::env:current_dir()`
-    #[must_use]
     fn default() -> Self {
         let mut plt_params = Self {
             params: HashMap::new(),
@@ -1929,7 +1944,7 @@ impl PlotParameters {
     /// This method returns an [`OpmResult<bool>`] with the min and max of the z values as f64
     /// # Errors
     /// This method throws an error if the argument is not found
-    pub fn get_plot_auto_size_flag(&self) -> OpmResult<bool> {
+    pub fn get_auto_size_flag(&self) -> OpmResult<bool> {
         if let Some(PlotArgs::PlotAutoSize(equal)) = self.params.get("plotautosize") {
             Ok(*equal)
         } else {
@@ -2223,11 +2238,11 @@ pub struct Plot {
     cbar: ColorBar,
     bounds: PlotBounds,
     ax_equal: bool,
-    plot_auto_size: bool,
+    auto_size: bool,
     expand_bounds: bool,
-    plot_size: (u32, u32),
+    size: (u32, u32),
     fig_size: (u32, u32),
-    plot_series: Option<Vec<PlotSeries>>,
+    pl_series: Option<Vec<PlotSeries>>,
     _view_3d: Vector3<f64>,
 }
 
@@ -2287,12 +2302,12 @@ impl Plot {
     /// - `plt_series_vec`: Vector of [`PlotSeries`] structs that should be added
     /// - `define_bounds`: flag to define if the plot boundaries should be updated according to the new plots series data. true to re-evaluate, false otherwise
     pub fn add_plot_series(&mut self, plt_series_vec: &Vec<PlotSeries>, join_bounds: bool) {
-        if let Some(stored_plt_series) = &mut self.plot_series {
+        if let Some(stored_plt_series) = &mut self.pl_series {
             for plt_series in plt_series_vec {
                 stored_plt_series.push(plt_series.clone());
             }
         } else {
-            self.plot_series = Some(plt_series_vec.clone());
+            self.pl_series = Some(plt_series_vec.clone());
         }
 
         let mut bounds = PlotBounds::default();
@@ -2317,18 +2332,20 @@ impl Plot {
     /// Returns a reference to the vector of [`PlotSeries`] of this [`Plot`]
     #[must_use]
     pub const fn get_plot_series_vec(&self) -> Option<&Vec<PlotSeries>> {
-        self.plot_series.as_ref()
+        self.pl_series.as_ref()
     }
 
     fn set_xy_axes_ranges_equal(&mut self) {
-        let (plot_width, plot_height) = &mut self.plot_size;
+        let (plot_width, plot_height) = &mut self.size;
         let x_range = self.bounds.get_x_range();
         let y_range = self.bounds.get_y_range();
         if let (Some(x_range), Some(y_range), Some(x_bounds), Some(y_bounds)) =
             (x_range, y_range, &mut self.bounds.x, &mut self.bounds.y)
         {
             if (y_range / x_range).log10().abs() > 1. {
-                warn!("Too large difference in axes limits! Axes ranges won't be set to equal to avoid too strong plot distortion");
+                warn!(
+                    "Too large difference in axes limits! Axes ranges won't be set to equal to avoid too strong plot distortion"
+                );
             } else {
                 let points_per_pixel_x = x_range / plot_width.to_f64().unwrap();
                 let points_per_pixel_y = y_range / plot_height.to_f64().unwrap();
@@ -2346,8 +2363,8 @@ impl Plot {
         }
     }
 
-    fn plot_auto_size(&mut self) {
-        let (plot_width, plot_height) = &mut self.plot_size;
+    fn auto_size(&mut self) {
+        let (plot_width, plot_height) = &mut self.size;
         let x_range = self.bounds.get_x_range();
         let y_range = self.bounds.get_y_range();
         if let (Some(x_range), Some(y_range)) = (x_range, y_range) {
@@ -2385,7 +2402,7 @@ impl Plot {
     /// - if `plot_series` is empty
     /// - if `self.plot_series` is None
     pub fn define_axes_bounds(&mut self) {
-        if let Some(plot_series) = &self.plot_series {
+        if let Some(plot_series) = &self.pl_series {
             if plot_series.is_empty() {
                 warn!("No plot series defined! Cannot define axes bounds!");
             } else {
@@ -2424,7 +2441,7 @@ impl TryFrom<&PlotParameters> for Plot {
         let y_lim = plt_params.get_ylim()?;
         let z_lim = plt_params.get_zlim()?;
         let ax_equal = plt_params.get_axis_equal_flag()?;
-        let plot_auto_size = plt_params.get_plot_auto_size_flag()?;
+        let auto_size = plt_params.get_auto_size_flag()?;
         let expand_bounds = plt_params.get_expand_bounds_flag()?;
         let x_label_str = plt_params.get_x_label()?;
         let y_label_str = plt_params.get_y_label()?;
@@ -2446,11 +2463,11 @@ impl TryFrom<&PlotParameters> for Plot {
             cbar,
             bounds: PlotBounds::new(x_lim, y_lim, z_lim),
             ax_equal,
-            plot_auto_size,
+            auto_size,
             expand_bounds,
-            plot_size,
+            size: plot_size,
             fig_size: plot_size,
-            plot_series: None,
+            pl_series: None,
             _view_3d: view_3d,
         })
     }
@@ -2823,9 +2840,11 @@ mod test {
     #[test]
     fn plot_params_set_invalid() {
         let mut plt_params = PlotParameters::default();
-        assert!(plt_params
-            .set(&&PlotArgs::FName("test.invalidfileext".to_owned()))
-            .is_err());
+        assert!(
+            plt_params
+                .set(&&PlotArgs::FName("test.invalidfileext".to_owned()))
+                .is_err()
+        );
     }
     #[test]
     fn plot_params_backend() {
@@ -2997,7 +3016,7 @@ mod test {
             plot.label[1].label_pos,
             plt_params.get_y_label_pos().unwrap()
         );
-        assert!(plot.plot_series.is_none());
+        assert!(plot.pl_series.is_none());
         assert_eq!(
             format!("{:?}", plot.cbar.cmap),
             format!("{:?}", plt_params.get_cmap().unwrap().get_gradient())
@@ -3007,7 +3026,7 @@ mod test {
             plot.cbar.label.label_pos,
             plt_params.get_cbar_label_pos().unwrap()
         );
-        assert_eq!(plot.plot_size, plt_params.get_plotsize().unwrap());
+        assert_eq!(plot.size, plt_params.get_plotsize().unwrap());
     }
 
     #[test]

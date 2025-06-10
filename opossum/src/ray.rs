@@ -4,7 +4,7 @@ use core::f64;
 use std::{f64::consts::PI, fmt::Display};
 
 use approx::relative_ne;
-use nalgebra::{vector, MatrixXx3, Point3, Rotation3, Vector3};
+use nalgebra::{MatrixXx3, Point3, Rotation3, Vector3, vector};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -18,7 +18,7 @@ use crate::{
     analyzers::raytrace::MissedSurfaceStrategy,
     error::{OpmResult, OpossumError},
     joule, meter,
-    nodes::{fluence_detector::Fluence, FilterType},
+    nodes::{FilterType, fluence_detector::Fluence},
     properties::Proptype,
     rays::{FluenceRays, Rays},
     spectrum::Spectrum,
@@ -30,17 +30,24 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-/// The configuration for splitting a [`Ray`].
+/// Configuration for splitting a [`Ray`] into multiple parts.
+///
+/// This enum defines how a ray is split, either by a fixed ratio or by a wavelength-dependent spectrum.
 pub enum SplittingConfig {
-    /// Ideal beam splitter with a fixed splitting ratio
+    /// Ideal beam splitter with a fixed splitting ratio.
+    ///
+    /// The `f64` value must be in the range (0.0..=1.0), where 1.0 means all energy remains in the initial beam,
+    /// and 0.0 means all energy is transferred to the split beam.
     Ratio(f64),
-    /// A beam splitter with a given transmission spectrum
+    /// Beam splitter with a wavelength-dependent transmission spectrum.
+    ///
+    /// The [`Spectrum`] must contain values in the range (0.0..=1.0).
     Spectrum(Spectrum),
 }
 impl SplittingConfig {
-    /// Check validity of [`SplittingConfig`].
+    /// Checks the validity of the [`SplittingConfig`].
     ///
-    /// This function returns ture if all values in a spectrum or the ratio is in the range (0.0..=1.0).
+    /// Returns `true` if all values in the spectrum or the ratio are within the range (0.0..=1.0).
     #[must_use]
     pub fn is_valid(&self) -> bool {
         match self {
@@ -57,45 +64,47 @@ impl From<SplittingConfig> for Proptype {
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {
-    /// Stores the current position of the ray
+    /// Current position of the ray in 3D space.
     pos: Point3<Length>,
-    /// Stores the position history of the ray
+    /// History of positions traversed by the ray.
     pos_hist: Vec<Point3<Length>>,
-    /// Stores the current propagation direction of the ray (stored as direction cosine)
+    /// Current propagation direction of the ray (as a normalized direction cosine vector).
     dir: Vector3<f64>,
-    /// Stores the last propagation direction of the ray. necessary for node positioning
+    /// Previous propagation direction, used for node positioning.
     prev_dir: Option<Vector3<f64>>,
-    // ///stores the polarization vector (Jones vector) of the ray
-    // pol: Vector2<Complex<f64>>,
-    /// Energy of the ray
+    // pol: Vector2<Complex<f64>>, // Polarization vector (Jones vector), currently unused.
+    /// Energy carried by the ray.
     e: Energy,
     /// Wavelength of the ray
     wvl: Length,
-    /// Bounce count of the ray. Used as stop criterion.
+    /// Number of times the ray has bounced (reflected). Used as stop criterion.
     number_of_bounces: usize,
-    /// Refraction count of the ray. Used as stop criterion.
+    /// Number of times the ray has refracted. Used as stop criterion.
     number_of_refractions: usize,
-    /// True if ray is allowd to further propagate, false else
+    /// Indicates whether the ray is allowed to propagate further.
     valid: bool,
-    /// optical path length of the ray
+    /// Total optical path length traversed by the ray.
     path_length: Length,
-    /// refractive index of the medium this ray is propagating in.
+    /// Refractive index of the medium in which the ray is propagating.
     refractive_index: f64,
-    /// helper rays used to calculate evolution of fluence or wavefront
+    /// Helper rays used for fluence or wavefront calculations.
     helper_rays: Option<FluenceRays>,
-    /// currently only a workaround to check if this is a helper ray or not. true: ray is a helper ray, false otherwise
+    /// Indicates if this is a helper ray (true) or a primary ray (false).
+    ///
+    /// This is currently a workaround until a new separate helper ray struct is available.
     is_helper: bool,
 }
 impl Ray {
-    /// Creates a new [`Ray`].
+    /// Creates a new [`Ray`] with the specified position, direction, wavelength, and energy.
     ///
-    /// The direction vector is normalized. The direction is thus stored as (`direction cosine`)[`https://en.wikipedia.org/wiki/Direction_cosine`]
+    /// The direction vector is normalized and thus stored as (`direction cosine`)[`https://en.wikipedia.org/wiki/Direction_cosine`]
     ///
     /// # Errors
-    /// This function returns an error if
-    ///  - the given wavelength is <= 0.0, `NaN` or +inf
-    ///  - the given energy is < 0.0, `NaN` or +inf
-    ///  - the direction vector has a zero length
+    ///
+    /// This function returns an error if:
+    /// - The given wavelength is <= 0.0, `NaN`, or infinite.
+    /// - The given energy is < 0.0, `NaN`, or infinite.
+    /// - The direction vector has zero length.
     pub fn new(
         position: Point3<Length>,
         direction: Vector3<f64>,
@@ -130,18 +139,21 @@ impl Ray {
         })
     }
 
-    /// Marks the ray as helper ray if `is_helper` is true
+    /// Marks the ray as a helper ray if `is_helper` is true.
+    ///
+    /// Helper rays are used for fluence or wavefront calculations.
     pub const fn set_is_helper(&mut self, is_helper: bool) {
         self.is_helper = is_helper;
     }
-    /// Create a new collimated ray with 3 additional helper rays.
+    /// Creates a new collimated ray with three additional helper rays for fluence calculations.
     ///
-    /// Generate a ray a horizontally polarized ray collinear with the z axis (optical axis).
+    /// The ray is horizontally polarized and collinear with the z-axis (optical axis).
     ///
     /// # Errors
-    /// This function returns an error if
-    ///  - the given wavelength is <= 0.0, `NaN` or +inf
-    ///  - the given energy is < 0.0, `NaN` or +inf
+    ///
+    /// This function returns an error if:
+    /// - The given wavelength is <= 0.0, `NaN`, or infinite.
+    /// - The given energy is < 0.0, `NaN`, or infinite.
     pub fn new_collimated_w_fluence_helper(
         position: Point3<Length>,
         wave_length: Length,
@@ -153,9 +165,9 @@ impl Ray {
         Ok(ray)
     }
 
-    /// Calculates the fluence of this [`Ray`] by using its helper rays
+    /// Calculates the fluence of this [`Ray`] using its helper rays.
     ///
-    /// Returns a fluence option if successful or None
+    /// Returns `Some(Fluence)` if successful, or `None` if helper rays are not available or incomplete.
     #[must_use]
     pub fn helper_ray_fluence(&self) -> Option<Fluence> {
         self.helper_rays.as_ref().and_then(|fluence| {
@@ -272,7 +284,7 @@ impl Ray {
         self.wvl
     }
     /// Adds a position to the position history of the ray.
-    /// Adds a position to the position history of the ray.
+    ///
     /// This is, for example, necessary for adding the position when the ray may be set invalid at an aperture.
     pub fn add_to_pos_hist(&mut self, pos: Point3<Length>) {
         self.pos_hist.push(pos);
@@ -415,7 +427,7 @@ impl Ray {
     }
     /// Create an [`Isometry`] from this [`Ray`].
     ///
-    /// This function creates an [`Isometry`] with its position based on the ray position and the orientation (rotation) baed on the ray direction.
+    /// This function creates an [`Isometry`] with its position based on the ray position and the orientation (rotation) based on the ray direction.
     #[must_use]
     pub fn to_isometry(&self, up_direction: Vector3<f64>) -> Isometry {
         Isometry::new_from_view(self.position(), self.direction(), up_direction)
@@ -871,10 +883,10 @@ impl Display for Ray {
 mod test {
     use super::*;
     use crate::{
+        J_per_cm2,
         coatings::CoatingType,
         degree, joule, millimeter, nanometer,
         spectrum_helper::{self, generate_filter_spectrum},
-        J_per_cm2,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use core::f64;
@@ -1073,18 +1085,22 @@ mod test {
         let wvl = nanometer!(1053.0);
         let e = joule!(1.0);
         let mut ray = Ray::new_collimated(millimeter!(0., 0., 0.), wvl, e).unwrap();
-        assert!(ray
-            .refract_paraxial(millimeter!(0.0), &Isometry::identity())
-            .is_err());
-        assert!(ray
-            .refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
-            .is_err());
-        assert!(ray
-            .refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
-            .is_err());
-        assert!(ray
-            .refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
-            .is_err());
+        assert!(
+            ray.refract_paraxial(millimeter!(0.0), &Isometry::identity())
+                .is_err()
+        );
+        assert!(
+            ray.refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
+                .is_err()
+        );
+        assert!(
+            ray.refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
+                .is_err()
+        );
+        assert!(
+            ray.refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
+                .is_err()
+        );
     }
     #[test]
     fn refract_paraxial_on_axis() {
@@ -1200,30 +1216,33 @@ mod test {
         let mut s = OpticSurface::default();
         s.set_isometry(&isometry);
         s.set_coating(CoatingType::ConstantR { reflectivity });
-        assert!(ray
-            .refract_on_surface(
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(0.9),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
-        assert!(ray
-            .refract_on_surface(
+            .is_err()
+        );
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(f64::NAN),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
-        assert!(ray
-            .refract_on_surface(
+            .is_err()
+        );
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(f64::INFINITY),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
+            .is_err()
+        );
         let reflected_ray = ray
             .refract_on_surface(
                 &mut s,
@@ -1340,30 +1359,33 @@ mod test {
         .unwrap();
         let mut s = OpticSurface::default();
         s.set_isometry(&isometry);
-        assert!(ray
-            .refract_on_surface(
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(0.9),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
-        assert!(ray
-            .refract_on_surface(
+            .is_err()
+        );
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(f64::NAN),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
-        assert!(ray
-            .refract_on_surface(
+            .is_err()
+        );
+        assert!(
+            ray.refract_on_surface(
                 &mut s,
                 Some(f64::INFINITY),
                 Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
-            .is_err());
+            .is_err()
+        );
         ray.refract_on_surface(
             &mut s,
             Some(1.0),
@@ -1876,15 +1898,21 @@ mod test {
         )
         .unwrap();
         assert!(original_ray.change_helper_fluence_by_factor(-1.).is_err());
-        assert!(original_ray
-            .change_helper_fluence_by_factor(f64::NAN)
-            .is_err());
-        assert!(original_ray
-            .change_helper_fluence_by_factor(f64::NEG_INFINITY)
-            .is_err());
-        assert!(original_ray
-            .change_helper_fluence_by_factor(f64::INFINITY)
-            .is_err());
+        assert!(
+            original_ray
+                .change_helper_fluence_by_factor(f64::NAN)
+                .is_err()
+        );
+        assert!(
+            original_ray
+                .change_helper_fluence_by_factor(f64::NEG_INFINITY)
+                .is_err()
+        );
+        assert!(
+            original_ray
+                .change_helper_fluence_by_factor(f64::INFINITY)
+                .is_err()
+        );
         original_ray.change_helper_fluence_by_factor(4.).unwrap();
         assert_relative_eq!(
             original_ray.helper_ray_fluence().unwrap().value / 40000.,

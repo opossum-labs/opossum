@@ -32,20 +32,17 @@
 //! assert_eq!(ap.apodization_factor(&millimeter!(0.0, 0.0)), 1.0);
 //! ```
 
-use core::f64;
-
 use crate::{
     error::{OpmResult, OpossumError},
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
     utils::math_distribution_functions::ellipse,
 };
+use core::f64;
 use earcutr::earcut;
-use itertools::Itertools;
 use nalgebra::{Isometry2, Matrix2xX, MatrixXx2, Point2, Vector2};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-// use triangulate::{formats, ListFormat, Polygon};
 use uom::si::{
     f64::Length,
     length::{meter, millimeter},
@@ -276,7 +273,7 @@ impl PolygonConfig {
         let polygon_vertices_flat = points
             .iter()
             .flat_map(|p| vec![p.x.get::<meter>(), p.y.get::<meter>()])
-            .collect_vec();
+            .collect::<Vec<f64>>();
 
         let triangulated_indices = earcut(polygon_vertices_flat.as_slice(), &[], 2)
             .map_err(|e| OpossumError::Other(format!("Triangulation of polygon failed:{e}")))?;
@@ -436,7 +433,7 @@ fn plot_circle(conf: &CircleConfig) -> Vec<PlotSeries> {
             circle_points
                 .iter()
                 .flat_map(|p| vec![p.x, p.y])
-                .collect_vec(),
+                .collect::<Vec<f64>>(),
         )
         .transpose(),
     };
@@ -515,7 +512,7 @@ impl Plottable for Aperture {
                         circle_points
                             .iter()
                             .flat_map(|p| vec![p.x, p.y])
-                            .collect_vec(),
+                            .collect::<Vec<f64>>(),
                     )
                     .transpose();
                     Some(vec![PlotSeries::new(

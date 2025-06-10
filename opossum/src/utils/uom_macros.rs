@@ -5,10 +5,10 @@
 #[macro_export]
 macro_rules! uom_unit_creator {
 
-    ($unit:ident, $unit_type:ident, $val1:expr) => {
+    ($unit:ident, $unit_type:ident, $val1:expr_2021) => {
         $unit_type::new::<$unit>($val1)
     };
-    ($unit:ident, $unit_type:ident, $val1:expr, $val2:expr) => {
+    ($unit:ident, $unit_type:ident, $val1:expr_2021, $val2:expr_2021) => {
         {
             use nalgebra::Point2;
         Point2::new(
@@ -17,7 +17,7 @@ macro_rules! uom_unit_creator {
         }
 
     };
-    ($unit:ident, $unit_type:ident, $val1:expr, $val2:expr, $val3:expr) => {
+    ($unit:ident, $unit_type:ident, $val1:expr_2021, $val2:expr_2021, $val3:expr_2021) => {
         {
         use nalgebra::Point3;
         Point3::new(
@@ -26,7 +26,7 @@ macro_rules! uom_unit_creator {
             $unit_type::new::<$unit>($val3))
         }
     };
-    ($unit:ident, $unit_type:ident, $( $x:expr ),*) => {
+    ($unit:ident, $unit_type:ident, $( $x:expr_2021 ),*) => {
         {
             use std::vec::Vec;
             let mut temp_vec = Vec::new();
@@ -41,7 +41,7 @@ macro_rules! uom_unit_creator {
 ///macro to create a Length in kilometer
 #[macro_export]
 macro_rules! kilometer {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::Length, length::kilometer};
         $crate::uom_unit_creator![kilometer, Length, $( $x ),*]
@@ -52,7 +52,7 @@ macro_rules! kilometer {
 #[macro_export]
 macro_rules! meter {
 
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
             use uom::si::{f64::Length, length::meter};
             $crate::uom_unit_creator![meter, Length, $( $x ),*]
@@ -62,7 +62,7 @@ macro_rules! meter {
 ///macro to create a Length in centimeter
 #[macro_export]
 macro_rules! centimeter {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Length, length::centimeter};
         $crate::uom_unit_creator![centimeter, Length, $( $x ),*]
     }};
@@ -70,7 +70,7 @@ macro_rules! centimeter {
 ///macro to create a Length in millimeter
 #[macro_export]
 macro_rules! millimeter {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Length, length::millimeter};
         $crate::uom_unit_creator![millimeter, Length, $( $x ),*]
     }};
@@ -78,7 +78,7 @@ macro_rules! millimeter {
 ///macro to create a Length in micrometer
 #[macro_export]
 macro_rules! micrometer {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Length, length::micrometer};
         $crate::uom_unit_creator![micrometer, Length, $( $x ),*]
     }};
@@ -86,7 +86,7 @@ macro_rules! micrometer {
 ///macro to create a Length in nanometer
 #[macro_export]
 macro_rules! nanometer {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Length, length::nanometer};
         $crate::uom_unit_creator![nanometer, Length, $( $x ),*]
     }};
@@ -94,7 +94,7 @@ macro_rules! nanometer {
 ///macro to create a Length in picometer
 #[macro_export]
 macro_rules! picometer {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Length, length::picometer};
         $crate::uom_unit_creator![picometer, Length, $( $x ),*]
     }};
@@ -102,7 +102,7 @@ macro_rules! picometer {
 ///macro to create a Length in femtometer
 #[macro_export]
 macro_rules! femtometer {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Length, length::femtometer};
         $crate::uom_unit_creator![femtometer, Length, $( $x ),*]
     }};
@@ -110,7 +110,7 @@ macro_rules! femtometer {
 ///macro to create a Length in attometer
 #[macro_export]
 macro_rules! attometer {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Length, length::femtometer};
         $crate::uom_unit_creator![attometer, Length, $( $x ),*]
     }};
@@ -118,7 +118,7 @@ macro_rules! attometer {
 ///macro to create a Length in zeptometer
 #[macro_export]
 macro_rules! zeptometer {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Length, length::femtometer};
         $crate::uom_unit_creator![zeptometer, Length, $( $x ),*]
     }};
@@ -127,7 +127,7 @@ macro_rules! zeptometer {
 ///macro to create an energy in Terajoule
 #[macro_export]
 macro_rules! terajoule {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Energy, energy::terajoule};
         $crate::uom_unit_creator![terajoule, Energy, $( $x ),*]
     }};
@@ -135,7 +135,7 @@ macro_rules! terajoule {
 ///macro to create an energy in Gigajoule
 #[macro_export]
 macro_rules! gigajoule {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Energy, energy::gigajoule};
         $crate::uom_unit_creator![gigajoule, Energy, $( $x ),*]
     }};
@@ -143,7 +143,7 @@ macro_rules! gigajoule {
 ///macro to create an energy in Megajoule
 #[macro_export]
 macro_rules! megajoule {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Energy, energy::megajoule};
         $crate::uom_unit_creator![megajoule, Energy, $( $x ),*]
     }};
@@ -151,7 +151,7 @@ macro_rules! megajoule {
 ///macro to create an energy in kilojoule
 #[macro_export]
 macro_rules! kilojoule {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Energy, energy::kilojoule};
         $crate::uom_unit_creator![kilojoule, Energy, $( $x ),*]
     }};
@@ -159,7 +159,7 @@ macro_rules! kilojoule {
 ///macro to create an energy in joule
 #[macro_export]
 macro_rules! joule {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         {
             use uom::si::{f64::Energy, energy::joule};
             $crate::uom_unit_creator![joule, Energy, $( $x ),*]
@@ -169,7 +169,7 @@ macro_rules! joule {
 ///macro to create an energy in millijoule
 #[macro_export]
 macro_rules! millijoule {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Energy, energy::millijoule};
         $crate::uom_unit_creator![millijoule, Energy, $( $x ),*]
     }};
@@ -177,7 +177,7 @@ macro_rules! millijoule {
 ///macro to create an energy in microjoule
 #[macro_export]
 macro_rules! microjoule {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Energy, energy::microjoule};
         $crate::uom_unit_creator![microjoule, Energy, $( $x ),*]
     }};
@@ -185,7 +185,7 @@ macro_rules! microjoule {
 ///macro to create an energy in nanojoule
 #[macro_export]
 macro_rules! nanojoule {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Energy, energy::nanojoule};
         $crate::uom_unit_creator![nanojoule, Energy, $( $x ),*]
     }};
@@ -193,7 +193,7 @@ macro_rules! nanojoule {
 ///macro to create an energy in picojoule
 #[macro_export]
 macro_rules! picojoule {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Energy, energy::picojoule};
         $crate::uom_unit_creator![picojoule, Energy, $( $x ),*]
     }};
@@ -201,7 +201,7 @@ macro_rules! picojoule {
 ///macro to create an energy in femtojoule
 #[macro_export]
 macro_rules! femtojoule {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Energy, energy::femtojoule};
         $crate::uom_unit_creator![femtojoule, Energy, $( $x ),*]
     }};
@@ -210,7 +210,7 @@ macro_rules! femtojoule {
 ///macro to create an angle in radian
 #[macro_export]
 macro_rules! radian {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Angle, angle::radian};
         $crate::uom_unit_creator![radian, Angle, $( $x ),*]
     }};
@@ -219,7 +219,7 @@ macro_rules! radian {
 ///macro to create an angle in milliradian
 #[macro_export]
 macro_rules! milliradian {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Angle, angle::radian};
         $crate::uom_unit_creator![radian, Angle, $( 1e-3*$x ),*]
     }};
@@ -228,7 +228,7 @@ macro_rules! milliradian {
 ///macro to create an angle in microradian
 #[macro_export]
 macro_rules! microradian {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Angle, angle::radian};
         $crate::uom_unit_creator![radian, Angle, $( 1e-6*$x ),*]
     }};
@@ -236,7 +236,7 @@ macro_rules! microradian {
 ///macro to create an angle in minute
 #[macro_export]
 macro_rules! minute {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Angle, angle::minute};
         $crate::uom_unit_creator![minute, Angle, $( $x ),*]
     }};
@@ -244,7 +244,7 @@ macro_rules! minute {
 ///macro to create an angle in second
 #[macro_export]
 macro_rules! second {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Angle, angle::second};
         $crate::uom_unit_creator![second, Angle, $( $x ),*]
     }};
@@ -252,7 +252,7 @@ macro_rules! second {
 ///macro to create an angle in degree
 #[macro_export]
 macro_rules! degree {
-    ($( $x:expr ),*) =>{{
+    ($( $x:expr_2021 ),*) =>{{
         use uom::si::{f64::Angle, angle::degree};
         $crate::uom_unit_creator![degree, Angle, $( $x ),*]
     }};
@@ -261,7 +261,7 @@ macro_rules! degree {
 ///macro to create a fluence in terajoule per square meter
 #[macro_export]
 macro_rules! TJ_per_m2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::terajoule_per_square_meter};
         $crate::uom_unit_creator![terajoule_per_square_meter, RadiantExposure, $( $x ),*]
@@ -272,7 +272,7 @@ macro_rules! TJ_per_m2 {
 ///macro to create a fluence in terajoule per square centimeter
 #[macro_export]
 macro_rules! TJ_per_cm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::terajoule_per_square_centimeter};
         $crate::uom_unit_creator![terajoule_per_square_centimeter, RadiantExposure, $( $x ),*]
@@ -283,7 +283,7 @@ macro_rules! TJ_per_cm2 {
 ///macro to create a fluence in terajoule per square millimeter
 #[macro_export]
 macro_rules! TJ_per_mm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::terajoule_per_square_millimeter};
         $crate::uom_unit_creator![terajoule_per_square_millimeter, RadiantExposure, $( $x ),*]
@@ -294,7 +294,7 @@ macro_rules! TJ_per_mm2 {
 ///macro to create a fluence in megajoule per square meter
 #[macro_export]
 macro_rules! GJ_per_m2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::gigajoule_per_square_meter};
         $crate::uom_unit_creator![gigajoule_per_square_meter, RadiantExposure, $( $x ),*]
@@ -305,7 +305,7 @@ macro_rules! GJ_per_m2 {
 ///macro to create a fluence in megajoule per square centimeter
 #[macro_export]
 macro_rules! GJ_per_cm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::gigajoule_per_square_centimeter};
         $crate::uom_unit_creator![gigajoule_per_square_centimeter, RadiantExposure, $( $x ),*]
@@ -316,7 +316,7 @@ macro_rules! GJ_per_cm2 {
 ///macro to create a fluence in megajoule per square millimeter
 #[macro_export]
 macro_rules! GJ_per_mm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::gigajoule_per_square_millimeter};
         $crate::uom_unit_creator![gigajoule_per_square_millimeter, RadiantExposure, $( $x ),*]
@@ -327,7 +327,7 @@ macro_rules! GJ_per_mm2 {
 ///macro to create a fluence in megajoule per square meter
 #[macro_export]
 macro_rules! MJ_per_m2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::megajoule_per_square_meter};
         $crate::uom_unit_creator![megajoule_per_square_meter, RadiantExposure, $( $x ),*]
@@ -338,7 +338,7 @@ macro_rules! MJ_per_m2 {
 ///macro to create a fluence in megajoule per square centimeter
 #[macro_export]
 macro_rules! MJ_per_cm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::megajoule_per_square_centimeter};
         $crate::uom_unit_creator![megajoule_per_square_centimeter, RadiantExposure, $( $x ),*]
@@ -349,7 +349,7 @@ macro_rules! MJ_per_cm2 {
 ///macro to create a fluence in megajoule per square millimeter
 #[macro_export]
 macro_rules! MJ_per_mm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::megajoule_per_square_millimeter};
         $crate::uom_unit_creator![megajoule_per_square_millimeter, RadiantExposure, $( $x ),*]
@@ -360,7 +360,7 @@ macro_rules! MJ_per_mm2 {
 ///macro to create a fluence in kilojoule per square meter
 #[macro_export]
 macro_rules! kJ_per_m2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::kilojoule_per_square_meter};
         $crate::uom_unit_creator![kilojoule_per_square_meter, RadiantExposure, $( $x ),*]
@@ -371,7 +371,7 @@ macro_rules! kJ_per_m2 {
 ///macro to create a fluence in kilojoule per square centimeter
 #[macro_export]
 macro_rules! kJ_per_cm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::kilojoule_per_square_centimeter};
         $crate::uom_unit_creator![kilojoule_per_square_centimeter, RadiantExposure, $( $x ),*]
@@ -382,7 +382,7 @@ macro_rules! kJ_per_cm2 {
 ///macro to create a fluence in kilojoule per square millimeter
 #[macro_export]
 macro_rules! kJ_per_mm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::kilojoule_per_square_millimeter};
         $crate::uom_unit_creator![kilojoule_per_square_millimeter, RadiantExposure, $( $x ),*]
@@ -393,7 +393,7 @@ macro_rules! kJ_per_mm2 {
 ///macro to create a fluence in joule per square meter
 #[macro_export]
 macro_rules! J_per_m2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::joule_per_square_meter};
         $crate::uom_unit_creator![joule_per_square_meter, RadiantExposure, $( $x ),*]
@@ -404,7 +404,7 @@ macro_rules! J_per_m2 {
 ///macro to create a fluence in joule per square centimeter
 #[macro_export]
 macro_rules! J_per_cm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::joule_per_square_centimeter};
         $crate::uom_unit_creator![joule_per_square_centimeter, RadiantExposure, $( $x ),*]
@@ -415,7 +415,7 @@ macro_rules! J_per_cm2 {
 ///macro to create a fluence in joule per square millimeter
 #[macro_export]
 macro_rules! J_per_mm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::joule_per_square_millimeter};
         $crate::uom_unit_creator![joule_per_square_millimeter, RadiantExposure, $( $x ),*]
@@ -426,7 +426,7 @@ macro_rules! J_per_mm2 {
 ///macro to create a fluence in millijoule per square meter
 #[macro_export]
 macro_rules! mJ_per_m2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::millijoule_per_square_meter};
         $crate::uom_unit_creator![millijoule_per_square_meter, RadiantExposure, $( $x ),*]
@@ -437,7 +437,7 @@ macro_rules! mJ_per_m2 {
 ///macro to create a fluence in millijoule per square centimeter
 #[macro_export]
 macro_rules! mJ_per_cm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::millijoule_per_square_centimeter};
         $crate::uom_unit_creator![millijoule_per_square_centimeter, RadiantExposure, $( $x ),*]
@@ -448,7 +448,7 @@ macro_rules! mJ_per_cm2 {
 ///macro to create a fluence in millijoule per square millimeter
 #[macro_export]
 macro_rules! mJ_per_mm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::millijoule_per_square_millimeter};
         $crate::uom_unit_creator![millijoule_per_square_millimeter, RadiantExposure, $( $x ),*]
@@ -459,7 +459,7 @@ macro_rules! mJ_per_mm2 {
 ///macro to create a fluence in microjoule per square meter
 #[macro_export]
 macro_rules! microJ_per_m2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::microjoule_per_square_meter};
         $crate::uom_unit_creator![microjoule_per_square_meter, RadiantExposure, $( $x ),*]
@@ -470,7 +470,7 @@ macro_rules! microJ_per_m2 {
 ///macro to create a fluence in microjoule per square centimeter
 #[macro_export]
 macro_rules! microJ_per_cm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::microjoule_per_square_centimeter};
         $crate::uom_unit_creator![microjoule_per_square_centimeter, RadiantExposure, $( $x ),*]
@@ -481,7 +481,7 @@ macro_rules! microJ_per_cm2 {
 ///macro to create a fluence in microjoule per square millimeter
 #[macro_export]
 macro_rules! microJ_per_mm2 {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::RadiantExposure, radiant_exposure::microjoule_per_square_millimeter};
         $crate::uom_unit_creator![microjoule_per_square_millimeter, RadiantExposure, $( $x ),*]
@@ -492,7 +492,7 @@ macro_rules! microJ_per_mm2 {
 ///macro to create a linear density in 1 per meter
 #[macro_export]
 macro_rules! num_per_m {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::LinearNumberDensity, linear_number_density::per_meter};
         $crate::uom_unit_creator![per_meter, LinearNumberDensity, $( $x ),*]
@@ -503,7 +503,7 @@ macro_rules! num_per_m {
 ///macro to create a line density in 1 per centimeter
 #[macro_export]
 macro_rules! num_per_cm {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::LinearNumberDensity, linear_number_density::per_centimeter};
         $crate::uom_unit_creator![per_centimeter, LinearNumberDensity, $( $x ),*]
@@ -514,7 +514,7 @@ macro_rules! num_per_cm {
 ///macro to create a line density in 1 per millimeter
 #[macro_export]
 macro_rules! num_per_mm {
-    ($( $x:expr ),*) =>{
+    ($( $x:expr_2021 ),*) =>{
         {
         use uom::si::{f64::LinearNumberDensity, linear_number_density::per_millimeter};
         $crate::uom_unit_creator![per_millimeter, LinearNumberDensity, $( $x ),*]

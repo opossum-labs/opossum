@@ -8,9 +8,9 @@ use crate::{
     ray::Ray,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::{vector, Point3, Vector3};
+use nalgebra::{Point3, Vector3, vector};
 use num::Zero;
-use roots::{find_roots_quadratic, Roots};
+use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
 
 #[derive(Debug, Clone)]
@@ -191,11 +191,10 @@ mod test {
             Sphere::new_at_position(millimeter!(f64::INFINITY), millimeter!(0.0, 0.0, 0.0))
                 .is_err()
         );
-        assert!(Sphere::new_at_position(
-            millimeter!(f64::NEG_INFINITY),
-            millimeter!(0.0, 0.0, 0.0)
-        )
-        .is_err());
+        assert!(
+            Sphere::new_at_position(millimeter!(f64::NEG_INFINITY), millimeter!(0.0, 0.0, 0.0))
+                .is_err()
+        );
         assert!(
             Sphere::new_at_position(millimeter!(1.0), millimeter!(f64::NAN, 0.0, 0.0)).is_err()
         );
@@ -203,11 +202,10 @@ mod test {
             Sphere::new_at_position(millimeter!(1.0), millimeter!(f64::INFINITY, 0.0, 0.0))
                 .is_err()
         );
-        assert!(Sphere::new_at_position(
-            millimeter!(1.0),
-            millimeter!(f64::NEG_INFINITY, 0.0, 0.0)
-        )
-        .is_err());
+        assert!(
+            Sphere::new_at_position(millimeter!(1.0), millimeter!(f64::NEG_INFINITY, 0.0, 0.0))
+                .is_err()
+        );
 
         let s = Sphere::new_at_position(millimeter!(2.0), millimeter!(1.0, 2.0, 3.0)).unwrap();
         assert_eq!(s.radius, millimeter!(2.0));

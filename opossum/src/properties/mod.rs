@@ -60,13 +60,11 @@ impl Properties {
     ///   - the property with the given name does not exist (i.e. has not been created before).
     ///   - property conditions defined during creation are not met.
     pub fn set(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
-        let mut property = self
+        let property = self
             .props
-            .get(name)
-            .ok_or_else(|| OpossumError::Properties(format!("property {name} does not exist")))?
-            .clone();
-        property.set_value(value)?;
-        self.props.insert(name.into(), property);
+            .get_mut(name) // Get mutable reference
+            .ok_or_else(|| OpossumError::Properties(format!("property {name} does not exist")))?;
+        property.set_value(value)?; // set_value would take Proptype by value
         Ok(())
     }
     /// Update [`Properties`] through another [`Properties`] input.

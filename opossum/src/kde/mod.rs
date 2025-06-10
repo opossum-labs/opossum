@@ -8,7 +8,7 @@ use crate::{
     utils::{f64_to_usize, math_utils::distance_2d_point, usize_to_f64},
 };
 use gaussian::Gaussian2D;
-use nalgebra::{point, DMatrix, Point2};
+use nalgebra::{DMatrix, Point2, point};
 use num::Zero;
 use rayon::prelude::*;
 use std::ops::Range;
@@ -49,7 +49,7 @@ impl Kde {
         let mut distances = Vec::default();
         for point1 in self.hit_map.iter().enumerate() {
             for point2 in &self.hit_map[point1.0 + 1..] {
-                let distance = distance_2d_point(&point1.1 .0, &point2.0);
+                let distance = distance_2d_point(&point1.1.0, &point2.0);
                 distances.push(distance);
                 sum += distance;
             }

@@ -191,22 +191,27 @@ pub trait Dottable {
             *port_1_count += 1;
         } else if ax_nums.0 == 1 && ax_nums.1 == 1 {
             if rankdir == "LR" {
-                let _ = writeln!(dot_str, "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>", 
-                                                row_col_span,
-                                                row_col_span,
-                                                self.node_color(),
-                                                node_cell_size,
-                                                node_cell_size,
-                                                node_name);
+                let _ = writeln!(
+                    dot_str,
+                    "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>",
+                    row_col_span,
+                    row_col_span,
+                    self.node_color(),
+                    node_cell_size,
+                    node_cell_size,
+                    node_name
+                );
             } else {
-                let _= writeln!(dot_str,
-                  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>", 
-                row_col_span,
-                row_col_span,
-                self.node_color(),
-                node_cell_size,
-                16+row_col_span-1,
-                node_name);
+                let _ = writeln!(
+                    dot_str,
+                    "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>",
+                    row_col_span,
+                    row_col_span,
+                    self.node_color(),
+                    node_cell_size,
+                    16 + row_col_span - 1,
+                    node_name
+                );
             }
         } else if (ax_nums.0 == 0 || ax_nums.0 == num_cells - 1)
             && (ax_nums.1 == 1 || ax_nums.1 == num_cells - 2)

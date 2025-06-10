@@ -1,14 +1,14 @@
 use std::path::Path;
 
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     aperture::{Aperture, RectangleConfig},
     error::OpmResult,
     joule, millimeter,
-    nodes::{round_collimated_ray_source, Dummy, NodeGroup, SpotDiagram},
+    nodes::{Dummy, NodeGroup, SpotDiagram, round_collimated_ray_source},
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
-    OpmDocument,
 };
 
 fn main() -> OpmResult<()> {

@@ -1,4 +1,5 @@
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
@@ -10,7 +11,6 @@ use opossum::{
     refractive_index::RefrIndexConst,
     surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 use std::path::Path;
 

@@ -1,6 +1,7 @@
 use std::{f64::consts::PI, path::Path};
 
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     energy_distributions::General2DGaussian,
@@ -14,7 +15,6 @@ use opossum::{
     rays::Rays,
     surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 use uom::si::{length::millimeter, radiant_exposure::millijoule_per_square_centimeter};
 fn main() -> OpmResult<()> {

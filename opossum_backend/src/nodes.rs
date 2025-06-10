@@ -6,7 +6,7 @@ use actix_web::{
 use nalgebra::{Point2, Point3};
 use opossum::{
     meter,
-    nodes::{create_node_ref, fluence_detector::Fluence, NodeAttr},
+    nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
     optic_ports::PortType,
     properties::Proptype,
     utils::geom_transformation::Isometry,
@@ -295,319 +295,31 @@ async fn post_node_position(
     let position = position.into_inner();
     let position = Point2::new(position.0, position.1);
     let mut document = data.document.lock().unwrap();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        node_ref
-            .optical_ref
-            .lock()
-            .unwrap()
-            .node_attr_mut()
-            .set_gui_position(Some(position));
-        Ok(())
-    } else if let Some(analyzer) = document.analyzers_mut().get_mut(&uuid) {
-        analyzer.set_gui_position(Some(position));
-        Ok(())
-    } else {
-        Err(ErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes or analyzers",
-        ))
-    }
-}
-/// Update the GUI name of an optica node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "name of the optical node"),
-    ),
-    request_body(content = String,
-        description = "updated name of node",
-        content_type = "application/json",
-        example= "Lens 1"
-    ),
-    responses(
-        (status = OK, description = "Node name successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/name/{uuid}")]
-async fn post_node_name(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    name: web::Json<String>,
-) -> Result<(), ErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let name = name.into_inner();
-    let mut document = data.document.lock().unwrap();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        node_ref
-            .optical_ref
-            .lock()
-            .unwrap()
-            .node_attr_mut()
-            .set_name(&name);
-        Ok(())
-    } else {
-        Err(ErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
-    }
-}
-/// Update the laser-induced damage threshold (LIDT) of an optical node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "lidt of the optical node"),
-    ),
-    request_body(content = String,
-        description = "updated lidt of node in J/cm²",
-        content_type = "application/json",
-        example= "1.56"
-    ),
-    responses(
-        (status = OK, description = "Node LIDT successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/lidt/{uuid}")]
-async fn post_node_lidt(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    lidt: web::Json<Fluence>,
-) -> Result<(), ErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let lidt = lidt.into_inner();
-    let document = data.document.lock().unwrap();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        node_ref
-            .optical_ref
-            .lock()
-            .unwrap()
-            .node_attr_mut()
-            .set_lidt(&lidt);
-        Ok(())
-    } else {
-        Err(ErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
-    }
-}
-
-/// Update the alignment translation of an optical node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "alignment translation of the optical node"),
-    ),
-    request_body(content = String,
-        description = "updated alignment translation of node",
-        content_type = "application/json",
-        example= "(1.56, 0)"
-    ),
-    responses(
-        (status = OK, description = "Node alignment translation successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/alignmenttranslation/{uuid}")]
-async fn post_node_alignment_translation(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    translation_from_gui: web::Json<(Length, usize)>,
-) -> Result<(), ErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let (translation_from_gui, idx) = translation_from_gui.into_inner();
-    let document = data.document.lock().unwrap();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        let (mut translation, rotation) = if let Some(alignment) = node_ref
-            .optical_ref
-            .lock()
-            .unwrap()
-            .node_attr_mut()
-            .alignment()
-        {
-            (alignment.translation(), alignment.rotation())
-        } else {
-            (Point3::origin(), Point3::origin())
-        };
-        if idx == 0 {
-            translation.x = translation_from_gui;
-        } else if idx == 1 {
-            translation.y = translation_from_gui;
-        } else {
-            translation.z = translation_from_gui;
-        };
-        if let Ok(new_alignment) = Isometry::new(translation, rotation) {
+    match document.scenery().node_recursive(uuid) {
+        Ok(node_ref) => {
             node_ref
                 .optical_ref
                 .lock()
                 .unwrap()
                 .node_attr_mut()
-                .set_alignment(new_alignment);
+                .set_gui_position(Some(position));
+            Ok(())
         }
-        Ok(())
-    } else {
-        Err(ErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
+        _ => document.analyzers_mut().get_mut(&uuid).map_or_else(
+            || {
+                Err(ErrorResponse::new(
+                    404,
+                    "Opossum",
+                    "uuid not found in nodes or analyzers",
+                ))
+            },
+            |analyzer| {
+                analyzer.set_gui_position(Some(position));
+                Ok(())
+            },
+        ),
     }
 }
-
-/// Update the alignment translation of an optical node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "Update a single property of the optical node"),
-    ),
-    request_body(content = String,
-        description = "updated property of node",
-        content_type = "application/json",
-        example= "(\"key\", \"value\")"
-    ),
-    responses(
-        (status = OK, description = "Node property successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/property/{uuid}")]
-async fn post_node_property(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    key_val_pair: web::Json<(String, Value)>,
-) -> Result<(), ErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let (prop_key, prop_value_serialized) = key_val_pair.into_inner();
-    let prop_value: Proptype = match serde_json::from_value(prop_value_serialized) {
-        Ok(proptype) => proptype,
-        Err(e) => {
-            return Err(ErrorResponse::new(
-                400,
-                "Opossum",
-                &format!("Failed to deserialize property value: {}", e),
-            ))
-        }
-    };
-    let document = data.document.lock().unwrap();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        node_ref
-            .optical_ref
-            .lock()
-            .unwrap()
-            .node_attr_mut()
-            .set_property(prop_key.as_str(), prop_value)?;
-        Ok(())
-    } else {
-        Err(ErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
-    }
-}
-
-/// Update the isometry of an optical node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "isometry of the optical node"),
-    ),
-    request_body(content = String,
-        description = "updated isometry of node",
-        content_type = "application/json",
-    ),
-    responses(
-        (status = OK, description = "Node isometry successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/isometry/{uuid}")]
-async fn post_node_isometry(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    iso: web::Json<Isometry>,
-) -> Result<(), ErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let iso = iso.into_inner();
-    let document = data.document.lock().unwrap();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        node_ref
-            .optical_ref
-            .lock()
-            .unwrap()
-            .node_attr_mut()
-            .set_isometry(iso);
-        Ok(())
-    } else {
-        Err(ErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
-    }
-}
-/// Update the alignment rotation of an optical node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "alignment rotation of the optical node"),
-    ),
-    request_body(content = String,
-        description = "updated alignment rotation of node",
-        content_type = "application/json",
-        example= "(1.56, 0)"
-    ),
-    responses(
-        (status = OK, description = "Node alignment rotation successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/alignmentrotation/{uuid}")]
-async fn post_node_alignment_rotation(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    rotation_from_gui: web::Json<(Angle, usize)>,
-) -> Result<(), ErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let (rotation_from_gui, idx) = rotation_from_gui.into_inner();
-    let document = data.document.lock().unwrap();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        let (translation, mut rotation) = if let Some(alignment) = node_ref
-            .optical_ref
-            .lock()
-            .unwrap()
-            .node_attr_mut()
-            .alignment()
-        {
-            (alignment.translation(), alignment.rotation())
-        } else {
-            (Point3::origin(), Point3::origin())
-        };
-
-        if idx == 0 {
-            rotation.x = rotation_from_gui;
-        } else if idx == 1 {
-            rotation.y = rotation_from_gui;
-        } else {
-            rotation.z = rotation_from_gui;
-        };
-        if let Ok(new_alignment) = Isometry::new(translation, rotation) {
-            node_ref
-                .optical_ref
-                .lock()
-                .unwrap()
-                .node_attr_mut()
-                .set_alignment(new_alignment);
-        }
-        Ok(())
-    } else {
-        Err(ErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
-    }
-}
-
 /// Delete a node
 ///
 /// This function deletes a node. It also deletes reference nodes which refer to this node.
@@ -825,7 +537,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 #[cfg(test)]
 mod test {
     use crate::{app_state::AppState, error::ErrorResponse};
-    use actix_web::{dev::Service, http::StatusCode, test, web::Data, App};
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use uuid::Uuid;
 
     #[actix_web::test]

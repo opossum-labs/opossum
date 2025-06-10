@@ -1,7 +1,7 @@
 [package]
 name = "opossum_backend"
 version = "0.6.0"
-edition = "2021"
+edition = "2024"
 authors = ["Udo Eisenbarth", "Yannik Zobus"]
 
 [package.metadata.wix]

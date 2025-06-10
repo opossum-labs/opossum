@@ -19,16 +19,16 @@ pub mod fluence_estimator;
 pub mod rays_hit_map;
 
 use crate::{
+    J_per_cm2,
     error::{OpmResult, OpossumError},
     meter,
-    nodes::fluence_detector::{fluence_data::FluenceData, Fluence},
+    nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
     utils::unit_format::{
         get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit,
         get_unit_value_as_length_with_format_by_exponent,
     },
-    J_per_cm2,
 };
 use fluence_estimator::FluenceEstimator;
 use log::warn;
@@ -122,7 +122,7 @@ impl HitMap {
     }
     /// Returns `true` the [`HitMap`] is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.hit_map.is_empty()
     }
     /// returns a reference to the `critical_fluence` field of this [`HitMap`] which contains:
@@ -257,7 +257,9 @@ impl HitMap {
                 FluenceEstimator::Voronoi,
             ))
         } else if let Some(HitPoints::Fluence(_)) = hit_point_opt {
-            warn!("Unexpected type of HitPoints for voronoi estimator! Changing to helper-ray estimator!");
+            warn!(
+                "Unexpected type of HitPoints for voronoi estimator! Changing to helper-ray estimator!"
+            );
             self.calc_combined_fluence_with_helper_rays(nr_of_points)
         } else {
             Err(OpossumError::Analysis("Wrong hit point type to calculate fluence with voronoi estimator! Must be an EnergyHitpoint!".into()))
@@ -306,7 +308,9 @@ impl HitMap {
                 FluenceEstimator::HelperRays,
             ))
         } else if let Some(HitPoints::Energy(_)) = hit_point_opt {
-            warn!("Unexpected type of HitPoints for helper-ray estimator! Changing to voronoi estimator!");
+            warn!(
+                "Unexpected type of HitPoints for helper-ray estimator! Changing to voronoi estimator!"
+            );
             self.calc_combined_fluence_with_voronoi(nr_of_points)
         } else {
             Err(OpossumError::Analysis("Wrong hit point type to calculate fluence with helper-ray estimator! Must be a FluenceHitpoint!".into()))
@@ -336,7 +340,9 @@ impl HitMap {
             self.get_merged_rays_hit_map()?
                 .calc_fluence_with_kde(nr_of_points, None, None)
         } else if let Some(HitPoints::Fluence(_)) = hit_point_opt {
-            warn!("Unexpected type of HitPoints for kernel density estimator! Changing to helper-ray estimator!");
+            warn!(
+                "Unexpected type of HitPoints for kernel density estimator! Changing to helper-ray estimator!"
+            );
             self.calc_combined_fluence_with_helper_rays(nr_of_points)
         } else {
             Err(OpossumError::Analysis("Wrong hit point type to calculate fluence with kernel density estimator! Must be an EnergyHitpoint!".into()))
@@ -363,7 +369,9 @@ impl HitMap {
             self.get_merged_rays_hit_map()?
                 .calc_fluence_with_binning(nr_of_points, None, None)
         } else if let Some(HitPoints::Fluence(_)) = hit_point_opt {
-            warn!("Unexpected type of HitPoints for binning estimator! Changing to helper-ray estimator!");
+            warn!(
+                "Unexpected type of HitPoints for binning estimator! Changing to helper-ray estimator!"
+            );
             self.calc_combined_fluence_with_helper_rays(nr_of_points)
         } else {
             Err(OpossumError::Analysis("Wrong hit point type to calculate fluence with binning estimator! Must be an EnergyHitpoint!".into()))
@@ -505,7 +513,7 @@ impl Plottable for HitMap {
 mod test_bounced_hit_map {
     use crate::{
         joule, meter,
-        surface::hit_map::{rays_hit_map::EnergyHitPoint, BouncedHitMap, HitPoint},
+        surface::hit_map::{BouncedHitMap, HitPoint, rays_hit_map::EnergyHitPoint},
     };
     use uuid::Uuid;
 
@@ -567,16 +575,15 @@ mod test_hit_map {
     use uuid::Uuid;
 
     use crate::{
-        joule, meter,
+        J_per_cm2, joule, meter,
         plottable::{PlotParameters, Plottable},
         properties::Proptype,
         surface::hit_map::{
+            HitMap, HitPoint,
             fluence_estimator::FluenceEstimator,
             rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
-            HitMap, HitPoint,
         },
         utils::test_helper::test_helper::check_logs,
-        J_per_cm2,
     };
 
     #[test]
@@ -615,15 +622,16 @@ mod test_hit_map {
             uuid,
         )
         .unwrap();
-        assert!(hm
-            .add_to_hitmap(
+        assert!(
+            hm.add_to_hitmap(
                 HitPoint::Fluence(
                     FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap()
                 ),
                 0,
                 uuid,
             )
-            .is_err());
+            .is_err()
+        );
     }
 
     #[test]
@@ -639,13 +647,14 @@ mod test_hit_map {
         )
         .unwrap();
 
-        assert!(hm
-            .add_to_hitmap(
+        assert!(
+            hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
                 0,
                 uuid,
             )
-            .is_err());
+            .is_err()
+        );
     }
 
     #[test]
@@ -660,13 +669,14 @@ mod test_hit_map {
         )
         .unwrap();
 
-        assert!(hm
-            .add_to_hitmap(
+        assert!(
+            hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
                 0,
                 Uuid::new_v4(),
             )
-            .is_ok());
+            .is_ok()
+        );
     }
 
     #[test]
@@ -682,13 +692,14 @@ mod test_hit_map {
         )
         .unwrap();
 
-        assert!(hm
-            .add_to_hitmap(
+        assert!(
+            hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
                 1,
                 uuid,
             )
-            .is_ok());
+            .is_ok()
+        );
     }
 
     #[test]
@@ -1006,7 +1017,12 @@ mod test_hit_map {
             .unwrap();
         }
         let fl_data = hm.calc_combined_fluence_with_voronoi((51, 51)).unwrap();
-        check_logs(log::Level::Warn, vec!["Unexpected type of HitPoints for voronoi estimator! Changing to helper-ray estimator!"]);
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "Unexpected type of HitPoints for voronoi estimator! Changing to helper-ray estimator!",
+            ],
+        );
         assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 10000.);
     }
 
@@ -1095,7 +1111,12 @@ mod test_hit_map {
             .unwrap();
         }
         let fl_data = hm.calc_combined_fluence_with_helper_rays((51, 51)).unwrap();
-        check_logs(log::Level::Warn, vec!["Unexpected type of HitPoints for helper-ray estimator! Changing to voronoi estimator!"]);
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "Unexpected type of HitPoints for helper-ray estimator! Changing to voronoi estimator!",
+            ],
+        );
         assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 2.);
     }
 
@@ -1167,7 +1188,12 @@ mod test_hit_map {
             .unwrap();
         }
         let fl_data = hm.calc_combined_fluence_with_kde((51, 51)).unwrap();
-        check_logs(log::Level::Warn, vec!["Unexpected type of HitPoints for kernel density estimator! Changing to helper-ray estimator!"]);
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "Unexpected type of HitPoints for kernel density estimator! Changing to helper-ray estimator!",
+            ],
+        );
         assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 10000.);
     }
 
@@ -1233,7 +1259,12 @@ mod test_hit_map {
             .unwrap();
         }
         let fl_data = hm.calc_combined_fluence_with_binning((51, 51)).unwrap();
-        check_logs(log::Level::Warn, vec!["Unexpected type of HitPoints for binning estimator! Changing to helper-ray estimator!"]);
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "Unexpected type of HitPoints for binning estimator! Changing to helper-ray estimator!",
+            ],
+        );
         assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 10000.);
     }
 
@@ -1256,18 +1287,22 @@ mod test_hit_map {
             )
             .unwrap();
         }
-        assert!(hm
-            .calc_fluence_map((51, 51), &FluenceEstimator::Voronoi)
-            .is_ok());
-        assert!(hm
-            .calc_fluence_map((51, 51), &FluenceEstimator::KDE)
-            .is_ok());
-        assert!(hm
-            .calc_fluence_map((51, 51), &FluenceEstimator::Binning)
-            .is_ok());
-        assert!(hm
-            .calc_fluence_map((51, 51), &FluenceEstimator::HelperRays)
-            .is_ok());
+        assert!(
+            hm.calc_fluence_map((51, 51), &FluenceEstimator::Voronoi)
+                .is_ok()
+        );
+        assert!(
+            hm.calc_fluence_map((51, 51), &FluenceEstimator::KDE)
+                .is_ok()
+        );
+        assert!(
+            hm.calc_fluence_map((51, 51), &FluenceEstimator::Binning)
+                .is_ok()
+        );
+        assert!(
+            hm.calc_fluence_map((51, 51), &FluenceEstimator::HelperRays)
+                .is_ok()
+        );
     }
 
     #[test]

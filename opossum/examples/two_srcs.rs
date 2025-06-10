@@ -1,9 +1,9 @@
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     joule, millimeter,
-    nodes::{collimated_line_ray_source, BeamSplitter, NodeGroup, RayPropagationVisualizer},
-    OpmDocument,
+    nodes::{BeamSplitter, NodeGroup, RayPropagationVisualizer, collimated_line_ray_source},
 };
 use std::path::Path;
 

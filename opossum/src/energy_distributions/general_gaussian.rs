@@ -160,325 +160,393 @@ mod test {
     use crate::{joule, meter, radian};
     #[test]
     fn new_gaussian_sigma() {
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(0., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(f64::NAN, 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(f64::INFINITY, 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(f64::NEG_INFINITY, 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(-1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(0., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(f64::NAN, 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(f64::INFINITY, 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(f64::NEG_INFINITY, 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(-1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
 
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 0.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., f64::NAN),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., f64::INFINITY),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., f64::NEG_INFINITY),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., -1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 0.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., f64::NAN),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., f64::INFINITY),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., f64::NEG_INFINITY),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., -1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
     }
     #[test]
     fn new_gaussian_power() {
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            0.,
-            radian!(0.),
-            true
-        )
-        .is_ok());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            -1.,
-            radian!(0.),
-            true
-        )
-        .is_ok());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            0.5,
-            radian!(0.),
-            true
-        )
-        .is_ok());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            f64::NAN,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            f64::INFINITY,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            f64::NEG_INFINITY,
-            radian!(0.),
-            true
-        )
-        .is_err());
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                0.,
+                radian!(0.),
+                true
+            )
+            .is_ok()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                -1.,
+                radian!(0.),
+                true
+            )
+            .is_ok()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                0.5,
+                radian!(0.),
+                true
+            )
+            .is_ok()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                f64::NAN,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                f64::INFINITY,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                f64::NEG_INFINITY,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
     }
     #[test]
     fn new_gaussian_energy() {
-        assert!(General2DGaussian::new(
-            joule!(f64::NAN),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(f64::INFINITY),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(f64::NEG_INFINITY),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(-1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(0.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_ok());
+        assert!(
+            General2DGaussian::new(
+                joule!(f64::NAN),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(f64::INFINITY),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(f64::NEG_INFINITY),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(-1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(0.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_ok()
+        );
     }
     #[test]
     fn new_gaussian_mean() {
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(f64::NAN, 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(f64::INFINITY, 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(f64::NEG_INFINITY, 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(-10., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_ok());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., f64::NAN),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., f64::INFINITY),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., f64::NEG_INFINITY),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., -10.),
-            meter!(1., 1.),
-            1.,
-            radian!(0.),
-            true
-        )
-        .is_ok());
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(f64::NAN, 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(f64::INFINITY, 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(f64::NEG_INFINITY, 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(-10., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_ok()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., f64::NAN),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., f64::INFINITY),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., f64::NEG_INFINITY),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., -10.),
+                meter!(1., 1.),
+                1.,
+                radian!(0.),
+                true
+            )
+            .is_ok()
+        );
     }
 
     #[test]
     fn new_gaussian_angle() {
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(f64::NAN),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(f64::INFINITY),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(f64::NEG_INFINITY),
-            true
-        )
-        .is_err());
-        assert!(General2DGaussian::new(
-            joule!(1.),
-            meter!(0., 0.),
-            meter!(1., 1.),
-            1.,
-            radian!(-10.),
-            true
-        )
-        .is_ok());
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(f64::NAN),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(f64::INFINITY),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(f64::NEG_INFINITY),
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            General2DGaussian::new(
+                joule!(1.),
+                meter!(0., 0.),
+                meter!(1., 1.),
+                1.,
+                radian!(-10.),
+                true
+            )
+            .is_ok()
+        );
     }
 }

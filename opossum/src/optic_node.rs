@@ -12,14 +12,14 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
-    nodes::{fluence_detector::Fluence, NodeAttr, NodeGroup, NodeReference},
+    nodes::{NodeAttr, NodeGroup, NodeReference, fluence_detector::Fluence},
     optic_ports::{OpticPorts, PortType},
     optic_scenery_rsc::SceneryResources,
     properties::{Properties, Proptype},
     rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
-    surface::{geo_surface::GeoSurfaceRef, hit_map::HitMap, optic_surface::OpticSurface, Plane},
+    surface::{Plane, geo_surface::GeoSurfaceRef, hit_map::HitMap, optic_surface::OpticSurface},
     utils::geom_transformation::Isometry,
 };
 use std::collections::HashMap;

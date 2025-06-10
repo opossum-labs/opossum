@@ -9,6 +9,7 @@ use hhts_input::hhts_input;
 
 use num::Zero;
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
     aperture::{Aperture, CircleConfig},
     energy_distributions::General2DGaussian,
@@ -28,12 +29,11 @@ use opossum::{
     position_distributions::HexagonalTiling,
     radian,
     ray::SplittingConfig,
-    refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
+    refractive_index::{RefrIndexSellmeier1, refr_index_schott::RefrIndexSchott},
     spectral_distribution::LaserLines,
     spectrum::Spectrum,
     spectrum_helper::generate_filter_spectrum,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 use uom::si::f64::Length;
 

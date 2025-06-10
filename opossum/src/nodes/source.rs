@@ -6,15 +6,15 @@ use uom::si::f64::Length;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
+        GhostFocusConfig, RayTraceConfig,
         energy::AnalysisEnergy,
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
-        GhostFocusConfig, RayTraceConfig,
     },
     error::{OpmResult, OpossumError},
     joule,
     light_result::{LightRays, LightResult},
-    lightdata::{light_data_builder::LightDataBuilder, LightData},
+    lightdata::{LightData, light_data_builder::LightDataBuilder},
     millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
@@ -212,14 +212,16 @@ impl AnalysisRayTrace for Source {
                     *rays = rays.transformed_by_iso(&iso);
                     // consider aperture only if not inverted (there is only an output port)
                     if !self.inverted() {
-                        if let Some(aperture) = self.ports().aperture(&PortType::Output, "output_1")
-                        {
-                            rays.apodize(aperture, &iso)?;
-                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        } else {
-                            return Err(OpossumError::OpticPort(
-                                "output aperture not found".into(),
-                            ));
+                        match self.ports().aperture(&PortType::Output, "output_1") {
+                            Some(aperture) => {
+                                rays.apodize(aperture, &iso)?;
+                                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                            }
+                            _ => {
+                                return Err(OpossumError::OpticPort(
+                                    "output aperture not found".into(),
+                                ));
+                            }
                         }
                     }
                 }
@@ -246,7 +248,9 @@ impl AnalysisRayTrace for Source {
                 {
                     Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), *alignment_wvl, joule!(1.0))
                 } else {
-                    info!("No alignment wavelength defined, using energy-weighted central wavelength for alignment");
+                    info!(
+                        "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
+                    );
                     rays.get_optical_axis_ray()
                 }?;
                 let iso = self.effective_surface_iso("input_1")?;
@@ -379,12 +383,14 @@ mod test {
         let mut node = Source::default();
         assert!(node.set_alignment_wavelength(nanometer!(0.0)).is_err());
         assert!(node.set_alignment_wavelength(nanometer!(f64::NAN)).is_err());
-        assert!(node
-            .set_alignment_wavelength(nanometer!(f64::INFINITY))
-            .is_err());
-        assert!(node
-            .set_alignment_wavelength(nanometer!(f64::NEG_INFINITY))
-            .is_err());
+        assert!(
+            node.set_alignment_wavelength(nanometer!(f64::INFINITY))
+                .is_err()
+        );
+        assert!(
+            node.set_alignment_wavelength(nanometer!(f64::NEG_INFINITY))
+                .is_err()
+        );
         assert!(node.set_alignment_wavelength(nanometer!(-0.1)).is_err());
         assert!(node.set_alignment_wavelength(nanometer!(600.0)).is_ok());
         let Proptype::LengthOption(wavelength) =

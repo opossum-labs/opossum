@@ -1,17 +1,17 @@
 use nalgebra::Vector2;
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     coatings::CoatingType,
     degree,
     error::OpmResult,
     joule, millimeter,
     nodes::{
-        round_collimated_ray_source, NodeGroup, ParabolicMirror, RayPropagationVisualizer,
-        ThinMirror,
+        NodeGroup, ParabolicMirror, RayPropagationVisualizer, ThinMirror,
+        round_collimated_ray_source,
     },
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
-    OpmDocument,
 };
 use std::path::Path;
 

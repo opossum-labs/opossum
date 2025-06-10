@@ -1,4 +1,5 @@
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     energy_distributions::UniformDist,
@@ -15,7 +16,6 @@ use opossum::{
     refractive_index::refr_index_schott::RefrIndexSchott,
     spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 use std::path::Path;
 

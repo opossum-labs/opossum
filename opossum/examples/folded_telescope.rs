@@ -3,6 +3,7 @@ use std::path::Path;
 
 use nalgebra::Vector3;
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     centimeter,
     energy_distributions::UniformDist,
@@ -19,7 +20,6 @@ use opossum::{
     refractive_index::RefrIndexSellmeier1,
     spectral_distribution::Gaussian,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 
 pub fn main() -> OpmResult<()> {

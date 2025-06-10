@@ -1,8 +1,8 @@
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        RayTraceConfig,
+        RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -186,7 +186,7 @@ mod test {
     use super::*;
     use crate::{
         lightdata::LightData,
-        nodes::{test_helper::test_helper::*, Dummy, NodeGroup, Source},
+        nodes::{Dummy, NodeGroup, Source, test_helper::test_helper::*},
         optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
     };

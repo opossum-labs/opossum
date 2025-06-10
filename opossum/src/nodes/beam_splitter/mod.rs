@@ -6,7 +6,7 @@ mod analysis_raytrace;
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::{raytrace::MissedSurfaceStrategy, AnalyzerType},
+    analyzers::{AnalyzerType, raytrace::MissedSurfaceStrategy},
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     optic_node::OpticNode,
@@ -14,8 +14,8 @@ use crate::{
     properties::Proptype,
     ray::SplittingConfig,
     rays::Rays,
-    spectrum::{merge_spectra, Spectrum},
-    surface::{geo_surface::GeoSurfaceRef, Plane},
+    spectrum::{Spectrum, merge_spectra},
+    surface::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
@@ -194,10 +194,15 @@ impl BeamSplitter {
                             missed_surface_strategy,
                         )?;
 
-                        if let Some(aperture) = self.ports().aperture(&PortType::Input, in1_port) {
-                            rays.apodize(aperture, &self.effective_surface_iso(in1_port)?)?;
-                        } else {
-                            return Err(OpossumError::OpticPort("input aperture not found".into()));
+                        match self.ports().aperture(&PortType::Input, in1_port) {
+                            Some(aperture) => {
+                                rays.apodize(aperture, &self.effective_surface_iso(in1_port)?)?;
+                            }
+                            _ => {
+                                return Err(OpossumError::OpticPort(
+                                    "input aperture not found".into(),
+                                ));
+                            }
                         }
                     } else {
                         return Err(OpossumError::OpticPort(
@@ -211,7 +216,7 @@ impl BeamSplitter {
                 _ => {
                     return Err(OpossumError::Analysis(
                         "expected Rays value at `input_1` port".into(),
-                    ))
+                    ));
                 }
             }
         } else {
@@ -228,10 +233,15 @@ impl BeamSplitter {
                             refraction_intended,
                             missed_surface_strategy,
                         )?;
-                        if let Some(aperture) = self.ports().aperture(&PortType::Input, in2_port) {
-                            rays.apodize(aperture, &self.effective_surface_iso(in2_port)?)?;
-                        } else {
-                            return Err(OpossumError::OpticPort("input aperture not found".into()));
+                        match self.ports().aperture(&PortType::Input, in2_port) {
+                            Some(aperture) => {
+                                rays.apodize(aperture, &self.effective_surface_iso(in2_port)?)?;
+                            }
+                            _ => {
+                                return Err(OpossumError::OpticPort(
+                                    "input aperture not found".into(),
+                                ));
+                            }
                         }
                         let split_rays = rays.split(&splitting_config)?;
                         (rays, split_rays)
@@ -244,7 +254,7 @@ impl BeamSplitter {
                 _ => {
                     return Err(OpossumError::Analysis(
                         "expected Rays value at `input_2` port".into(),
-                    ))
+                    ));
                 }
             }
         } else {
@@ -254,21 +264,27 @@ impl BeamSplitter {
         in_ray2.merge(&split1);
         let iso = self.effective_surface_iso(out1_port)?;
 
-        if let Some(aperture) = self.ports().aperture(&PortType::Output, out1_port) {
-            in_ray1.apodize(aperture, &iso)?;
-            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                in_ray1.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+        match self.ports().aperture(&PortType::Output, out1_port) {
+            Some(aperture) => {
+                in_ray1.apodize(aperture, &iso)?;
+                if let AnalyzerType::RayTrace(config) = analyzer_type {
+                    in_ray1.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                }
             }
-        } else {
-            return Err(OpossumError::OpticPort("ouput aperture not found".into()));
+            _ => {
+                return Err(OpossumError::OpticPort("ouput aperture not found".into()));
+            }
         }
-        if let Some(aperture) = self.ports().aperture(&PortType::Output, out2_port) {
-            in_ray2.apodize(aperture, &iso)?;
-            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                in_ray2.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+        match self.ports().aperture(&PortType::Output, out2_port) {
+            Some(aperture) => {
+                in_ray2.apodize(aperture, &iso)?;
+                if let AnalyzerType::RayTrace(config) = analyzer_type {
+                    in_ray2.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                }
             }
-        } else {
-            return Err(OpossumError::OpticPort("ouput aperture not found".into()));
+            _ => {
+                return Err(OpossumError::OpticPort("ouput aperture not found".into()));
+            }
         }
         Ok((
             Some(LightData::Geometric(in_ray1)),

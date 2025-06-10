@@ -118,7 +118,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use actix_web::{body::to_bytes, dev::Service, http::StatusCode, test, App};
+    use actix_web::{App, body::to_bytes, dev::Service, http::StatusCode, test};
 
     #[actix_web::test]
     async fn get_hello() {

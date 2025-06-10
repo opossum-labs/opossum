@@ -1,6 +1,6 @@
 use super::Wedge;
 use crate::{
-    analyzers::{raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
+    analyzers::{AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace},
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,

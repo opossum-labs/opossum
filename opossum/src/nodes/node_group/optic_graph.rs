@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 use crate::{
-    analyzers::{energy::AnalysisEnergy, Analyzable},
+    analyzers::{Analyzable, energy::AnalysisEnergy},
     error::{OpmResult, OpossumError},
     light_flow::LightFlow,
     light_result::LightResult,
@@ -10,20 +10,20 @@ use crate::{
     optic_ref::OpticRef,
     optic_scenery_rsc::SceneryResources,
     port_map::PortMap,
-    properties::{proptype::format_quantity, Proptype},
+    properties::{Proptype, proptype::format_quantity},
 };
 use log::warn;
 use nalgebra::Vector3;
 use petgraph::{
+    Directed, Direction,
     algo::{connected_components, is_cyclic_directed, toposort},
     graph::{DiGraph, EdgeIndex, Edges, NodeIndex},
     visit::EdgeRef,
-    Directed, Direction,
 };
 use serde::{
+    Deserialize, Serialize,
     de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
-    Deserialize, Serialize,
 };
 use std::fmt::Write as _;
 use std::{
@@ -407,7 +407,21 @@ impl OpticGraph {
                 "external {name_type} port name already assigned"
             )));
         }
-        let node = self.node(node_id)?;
+        let Some(node_idx) = self.node_idx_by_uuid(node_id) else {
+            return Err(OpossumError::OpticGroup(format!(
+                "node with id {node_id} not found"
+            )));
+        };
+        if !self.external_nodes(port_type).contains(&node_idx) {
+            return Err(OpossumError::OpticGroup(format!(
+                "node to be mapped is not an {name_type} node of the group"
+            )));
+        }
+        let Some(node) = self.g.node_weight(node_idx) else {
+            return Err(OpossumError::OpticGroup(format!(
+                "node with id {node_id} not found"
+            )));
+        };
         if !node
             .optical_ref
             .lock()
@@ -418,16 +432,6 @@ impl OpticGraph {
         {
             return Err(OpossumError::OpticGroup(format!(
                 "internal {name_type} port name not found"
-            )));
-        }
-        let Some(node_idx) = self.node_idx_by_uuid(node_id) else {
-            return Err(OpossumError::OpticGroup(format!(
-                "node with id {node_id} not found"
-            )));
-        };
-        if !self.external_nodes(port_type).contains(&node_idx) {
-            return Err(OpossumError::OpticGroup(format!(
-                "node to be mapped is not an {name_type} node of the group"
             )));
         }
         let edge_direction = match port_type {
@@ -455,10 +459,10 @@ impl OpticGraph {
         match port_type {
             PortType::Input => self
                 .input_port_map
-                .add(external_name, node_id, internal_name),
+                .add(external_name, node_id, internal_name)?,
             PortType::Output => self
                 .output_port_map
-                .add(external_name, node_id, internal_name),
+                .add(external_name, node_id, internal_name)?,
         }
         Ok(())
     }
@@ -1257,9 +1261,11 @@ mod test {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::default()).unwrap();
         let n2 = graph.add_node(Dummy::default()).unwrap();
-        assert!(graph
-            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
-            .is_ok());
+        assert!(
+            graph
+                .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+                .is_ok()
+        );
         assert_eq!(graph.g.edge_count(), 1);
     }
     #[test]
@@ -1271,12 +1277,18 @@ mod test {
         let err = og
             .connect_nodes(sn1_i, "wrong", sn2_i, "input_1", Length::zero())
             .unwrap_err();
-        assert_eq!(err.to_string(), "OpticScenery:source node 'dummy' (dummy) does not have an output port wrong. Possible values are: output_1");
+        assert_eq!(
+            err.to_string(),
+            "OpticScenery:source node 'dummy' (dummy) does not have an output port wrong. Possible values are: output_1"
+        );
         assert_eq!(og.g.edge_count(), 0);
         let err = og
             .connect_nodes(sn1_i, "output_1", sn2_i, "wrong", Length::zero())
             .unwrap_err();
-        assert_eq!(err.to_string(), "OpticScenery:target node 'dummy' (dummy) does not have an input port wrong. Possible values are: input_1");
+        assert_eq!(
+            err.to_string(),
+            "OpticScenery:target node 'dummy' (dummy) does not have an input port wrong. Possible values are: input_1"
+        );
         assert_eq!(og.g.edge_count(), 0);
     }
     #[test]
@@ -1284,33 +1296,43 @@ mod test {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::default()).unwrap();
         let n2 = graph.add_node(Dummy::default()).unwrap();
-        assert!(graph
-            .connect_nodes(n1, "output_1", Uuid::nil(), "input_1", Length::zero())
-            .is_err());
-        assert!(graph
-            .connect_nodes(Uuid::nil(), "output_1", n2, "input_1", Length::zero())
-            .is_err());
+        assert!(
+            graph
+                .connect_nodes(n1, "output_1", Uuid::nil(), "input_1", Length::zero())
+                .is_err()
+        );
+        assert!(
+            graph
+                .connect_nodes(Uuid::nil(), "output_1", n2, "input_1", Length::zero())
+                .is_err()
+        );
     }
     #[test]
     fn connect_nodes_wrong_distance() {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::default()).unwrap();
         let n2 = graph.add_node(Dummy::default()).unwrap();
-        assert!(graph
-            .connect_nodes(n1, "output_1", n2, "input_1", millimeter!(f64::NAN))
-            .is_err());
-        assert!(graph
-            .connect_nodes(n1, "output_1", n2, "input_1", millimeter!(f64::INFINITY))
-            .is_err());
-        assert!(graph
-            .connect_nodes(
-                n1,
-                "output_1",
-                n2,
-                "input_1",
-                millimeter!(f64::NEG_INFINITY)
-            )
-            .is_err());
+        assert!(
+            graph
+                .connect_nodes(n1, "output_1", n2, "input_1", millimeter!(f64::NAN))
+                .is_err()
+        );
+        assert!(
+            graph
+                .connect_nodes(n1, "output_1", n2, "input_1", millimeter!(f64::INFINITY))
+                .is_err()
+        );
+        assert!(
+            graph
+                .connect_nodes(
+                    n1,
+                    "output_1",
+                    n2,
+                    "input_1",
+                    millimeter!(f64::NEG_INFINITY)
+                )
+                .is_err()
+        );
     }
     #[test]
     fn connect_nodes_target_already_connected() {
@@ -1318,27 +1340,37 @@ mod test {
         let n1 = graph.add_node(Dummy::default()).unwrap();
         let n2 = graph.add_node(Dummy::default()).unwrap();
         let n3 = graph.add_node(Dummy::default()).unwrap();
-        assert!(graph
-            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
-            .is_ok());
-        assert!(graph
-            .connect_nodes(n3, "output_1", n2, "input_1", Length::zero())
-            .is_err());
-        assert!(graph
-            .connect_nodes(n1, "output_1", n3, "input_1", Length::zero())
-            .is_err());
+        assert!(
+            graph
+                .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+                .is_ok()
+        );
+        assert!(
+            graph
+                .connect_nodes(n3, "output_1", n2, "input_1", Length::zero())
+                .is_err()
+        );
+        assert!(
+            graph
+                .connect_nodes(n1, "output_1", n3, "input_1", Length::zero())
+                .is_err()
+        );
     }
     #[test]
     fn connect_nodes_loop_error() {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::default()).unwrap();
         let n2 = graph.add_node(Dummy::default()).unwrap();
-        assert!(graph
-            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
-            .is_ok());
-        assert!(graph
-            .connect_nodes(n2, "output_1", n1, "input_1", Length::zero())
-            .is_err());
+        assert!(
+            graph
+                .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+                .is_ok()
+        );
+        assert!(
+            graph
+                .connect_nodes(n2, "output_1", n1, "input_1", Length::zero())
+                .is_err()
+        );
         assert_eq!(graph.g.edge_count(), 1);
     }
     #[test]
@@ -1347,9 +1379,10 @@ mod test {
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(Dummy::default()).unwrap();
         og.set_is_inverted(true);
-        assert!(og
-            .connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
-            .is_err());
+        assert!(
+            og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
+                .is_err()
+        );
     }
     #[test]
     fn connect_nodes_update_port_mapping() {
@@ -1377,29 +1410,34 @@ mod test {
         og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
         // wrong port name
-        assert!(og
-            .map_port(sn1_i, &PortType::Input, "wrong", "input_1")
-            .is_err());
+        assert!(
+            og.map_port(sn1_i, &PortType::Input, "wrong", "input_1")
+                .is_err()
+        );
         assert_eq!(og.input_port_map.len(), 0);
         // wrong node index
-        assert!(og
-            .map_port(Uuid::nil(), &PortType::Input, "input_1", "input_1")
-            .is_err());
+        assert!(
+            og.map_port(Uuid::nil(), &PortType::Input, "input_1", "input_1")
+                .is_err()
+        );
         assert_eq!(og.input_port_map.len(), 0);
         // map output port
-        assert!(og
-            .map_port(sn2_i, &PortType::Input, "output_1", "input_1")
-            .is_err());
+        assert!(
+            og.map_port(sn2_i, &PortType::Input, "output_1", "input_1")
+                .is_err()
+        );
         assert_eq!(og.input_port_map.len(), 0);
         // map internal node
-        assert!(og
-            .map_port(sn2_i, &PortType::Input, "input_1", "input_1")
-            .is_err());
+        assert!(
+            og.map_port(sn2_i, &PortType::Input, "input_1", "input_1")
+                .is_err()
+        );
         assert_eq!(og.input_port_map.len(), 0);
         // correct usage
-        assert!(og
-            .map_port(sn1_i, &PortType::Input, "input_1", "input_1")
-            .is_ok());
+        assert!(
+            og.map_port(sn1_i, &PortType::Input, "input_1", "input_1")
+                .is_ok()
+        );
         assert_eq!(og.input_port_map.len(), 1);
     }
     #[test]
@@ -1411,17 +1449,20 @@ mod test {
             .unwrap();
 
         // node port already internally connected
-        assert!(og
-            .map_port(sn2_i, &PortType::Input, "input_1", "bs_input")
-            .is_err());
+        assert!(
+            og.map_port(sn2_i, &PortType::Input, "input_1", "bs_input")
+                .is_err()
+        );
 
         // correct usage
-        assert!(og
-            .map_port(sn1_i, &PortType::Input, "input_1", "input_1")
-            .is_ok());
-        assert!(og
-            .map_port(sn2_i, &PortType::Input, "input_2", "bs_input")
-            .is_ok());
+        assert!(
+            og.map_port(sn1_i, &PortType::Input, "input_1", "input_1")
+                .is_ok()
+        );
+        assert!(
+            og.map_port(sn2_i, &PortType::Input, "input_2", "bs_input")
+                .is_ok()
+        );
         assert_eq!(og.input_port_map.len(), 2);
     }
     #[test]
@@ -1433,29 +1474,34 @@ mod test {
             .unwrap();
 
         // wrong port name
-        assert!(og
-            .map_port(sn2_i, &PortType::Output, "wrong", "output_1")
-            .is_err());
+        assert!(
+            og.map_port(sn2_i, &PortType::Output, "wrong", "output_1")
+                .is_err()
+        );
         assert_eq!(og.output_port_map.len(), 0);
         // wrong node index
-        assert!(og
-            .map_port(Uuid::nil(), &PortType::Output, "output_1", "output_1")
-            .is_err());
+        assert!(
+            og.map_port(Uuid::nil(), &PortType::Output, "output_1", "output_1")
+                .is_err()
+        );
         assert_eq!(og.output_port_map.len(), 0);
         // map input port
-        assert!(og
-            .map_port(sn1_i, &PortType::Output, "input_1", "output_1")
-            .is_err());
+        assert!(
+            og.map_port(sn1_i, &PortType::Output, "input_1", "output_1")
+                .is_err()
+        );
         assert_eq!(og.output_port_map.len(), 0);
         // map internal node
-        assert!(og
-            .map_port(sn1_i, &PortType::Output, "output_1", "output_1")
-            .is_err());
+        assert!(
+            og.map_port(sn1_i, &PortType::Output, "output_1", "output_1")
+                .is_err()
+        );
         assert_eq!(og.output_port_map.len(), 0);
         // correct usage
-        assert!(og
-            .map_port(sn2_i, &PortType::Output, "output_1", "output_1")
-            .is_ok());
+        assert!(
+            og.map_port(sn2_i, &PortType::Output, "output_1", "output_1")
+                .is_ok()
+        );
         assert_eq!(og.output_port_map.len(), 1);
     }
     #[test]
@@ -1467,17 +1513,20 @@ mod test {
             .unwrap();
 
         // node port already internally connected
-        assert!(og
-            .map_port(sn1_i, &PortType::Output, "out1_trans1_refl2", "bs_output")
-            .is_err());
+        assert!(
+            og.map_port(sn1_i, &PortType::Output, "out1_trans1_refl2", "bs_output")
+                .is_err()
+        );
 
         // correct usage
-        assert!(og
-            .map_port(sn1_i, &PortType::Output, "out2_trans2_refl1", "bs_output")
-            .is_ok());
-        assert!(og
-            .map_port(sn2_i, &PortType::Output, "output_1", "output_1")
-            .is_ok());
+        assert!(
+            og.map_port(sn1_i, &PortType::Output, "out2_trans2_refl1", "bs_output")
+                .is_ok()
+        );
+        assert!(
+            og.map_port(sn2_i, &PortType::Output, "output_1", "output_1")
+                .is_ok()
+        );
         assert_eq!(og.output_port_map.len(), 2);
     }
     #[test]
@@ -1600,9 +1649,9 @@ mod test {
         check_logs(
             log::Level::Warn,
             vec![
-            "group contains unconnected sub-trees. Analysis might not be complete.",
-            "graph contains stale (completely unconnected) node 'stale node' (dummy). Skipping.",
-        ],
+                "group contains unconnected sub-trees. Analysis might not be complete.",
+                "graph contains stale (completely unconnected) node 'stale node' (dummy). Skipping.",
+            ],
         );
     }
     fn prepare_group() -> OpticGraph {
@@ -1698,18 +1747,16 @@ mod test {
         graph
             .map_port(i_d2, &PortType::Input, "input_1", "input_2")
             .unwrap();
-        assert_eq!(
-            graph.port_map(&PortType::Input).port_names(),
-            vec!["input_1", "input_2"]
-        );
+        let mut port_names = graph.port_map(&PortType::Input).port_names();
+        port_names.sort();
+        assert_eq!(port_names, vec!["input_1", "input_2"]);
         let serialized =
             ron::ser::to_string_pretty(&graph, ron::ser::PrettyConfig::new().new_line("\n"))
                 .unwrap();
         let deserialized: OpticGraph = ron::from_str(&serialized).unwrap();
-        assert_eq!(
-            deserialized.port_map(&PortType::Input).port_names(),
-            vec!["input_1", "input_2"]
-        );
+        let mut port_names = deserialized.port_map(&PortType::Input).port_names();
+        port_names.sort();
+        assert_eq!(port_names, vec!["input_1", "input_2"]);
     }
     #[test]
     fn next_node_with_uuid_single() {

@@ -290,7 +290,7 @@ impl Spectrum {
         let lambda_deltas = self.data.windows(2).map(|l| l[1].0 - l[0].0);
         let energies: Vec<f64> = lambda_deltas
             .zip(self.data.iter())
-            .map(|d| d.0 * d.1 .1)
+            .map(|d| d.0 * d.1.1)
             .collect();
         let kahan_sum: kahan::KahanSum<f64> = energies.iter().kahan_sum();
         kahan_sum.sum()
@@ -434,7 +434,7 @@ impl Spectrum {
             .data
             .iter()
             .zip(resampled_spec.data.iter())
-            .map(|d| (d.0 .0, d.0 .1 * d.1 .1))
+            .map(|d| (d.0.0, d.0.1 * d.1.1))
             .collect();
     }
     /// Filter a spectrum with a given filter type.
@@ -461,12 +461,12 @@ impl Spectrum {
             .data
             .iter()
             .zip(resampled_spec.data.iter())
-            .map(|d| (d.0 .0, d.0 .1 * d.1 .1))
+            .map(|d| (d.0.0, d.0.1 * d.1.1))
             .collect();
         split_data = split_data
             .iter()
             .zip(resampled_spec.data.iter())
-            .map(|d| (d.0 .0, d.0 .1 * (1.0 - d.1 .1)))
+            .map(|d| (d.0.0, d.0.1 * (1.0 - d.1.1)))
             .collect();
         Self { data: split_data }
     }
@@ -487,7 +487,7 @@ impl Spectrum {
             .data
             .iter()
             .zip(resampled_spec.data.iter())
-            .map(|d| (d.0 .0, d.0 .1 + d.1 .1))
+            .map(|d| (d.0.0, d.0.1 + d.1.1))
             .collect();
     }
     /// Subtract a given spectrum.
@@ -501,12 +501,7 @@ impl Spectrum {
             .data
             .iter()
             .zip(resampled_spec.data.iter())
-            .map(|d| {
-                (
-                    d.0 .0,
-                    (d.0 .1 - d.1 .1).clamp(0.0, f64::abs(d.0 .1 - d.1 .1)),
-                )
-            })
+            .map(|d| (d.0.0, (d.0.1 - d.1.1).clamp(0.0, f64::abs(d.0.1 - d.1.1))))
             .collect();
     }
 }
@@ -657,7 +652,7 @@ mod test {
         },
         utils::test_helper::test_helper::check_logs,
     };
-    use approx::{assert_abs_diff_eq, AbsDiffEq};
+    use approx::{AbsDiffEq, assert_abs_diff_eq};
     use testing_logger;
     fn prep() -> Spectrum {
         Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5)).unwrap()
@@ -686,31 +681,46 @@ mod test {
         assert!(s.is_ok());
         let s = s.unwrap();
         let lambdas = s.lambda_vec();
-        assert!(lambdas
-            .into_iter()
-            .zip(vec![500.0E-3, 501.0E-3, 502.0E-3, 503.0E-3, 504.0E-3, 505.0E-3].iter())
-            .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
+        assert!(
+            lambdas
+                .into_iter()
+                .zip(vec![500.0E-3, 501.0E-3, 502.0E-3, 503.0E-3, 504.0E-3, 505.0E-3].iter())
+                .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON))
+        );
         let datas = s.data_vec();
-        assert!(datas
-            .into_iter()
-            .zip(vec![5.0E-01, 4.981E-01, 4.982E-01, 4.984E-01, 4.996E-01, 5.010E-01].iter())
-            .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
+        assert!(
+            datas
+                .into_iter()
+                .zip(
+                    vec![
+                        5.0E-01, 4.981E-01, 4.982E-01, 4.984E-01, 4.996E-01, 5.010E-01
+                    ]
+                    .iter()
+                )
+                .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON))
+        );
     }
     #[test]
     fn from_csv_err() {
         assert!(Spectrum::from_csv(Path::new("wrong_path.csv")).is_err());
-        assert!(Spectrum::from_csv(Path::new(
-            "files_for_testing/spectrum/spec_to_csv_test_02.csv"
-        ))
-        .is_err());
-        assert!(Spectrum::from_csv(Path::new(
-            "files_for_testing/spectrum/spec_to_csv_test_03.csv"
-        ))
-        .is_err());
-        assert!(Spectrum::from_csv(Path::new(
-            "files_for_testing/spectrum/spec_to_csv_test_04.csv"
-        ))
-        .is_err());
+        assert!(
+            Spectrum::from_csv(Path::new(
+                "files_for_testing/spectrum/spec_to_csv_test_02.csv"
+            ))
+            .is_err()
+        );
+        assert!(
+            Spectrum::from_csv(Path::new(
+                "files_for_testing/spectrum/spec_to_csv_test_03.csv"
+            ))
+            .is_err()
+        );
+        assert!(
+            Spectrum::from_csv(Path::new(
+                "files_for_testing/spectrum/spec_to_csv_test_04.csv"
+            ))
+            .is_err()
+        );
     }
     #[test]
     fn from_laser_lines_single() {
@@ -839,23 +849,27 @@ mod test {
     #[test]
     fn add_lorentzian() {
         let mut s = Spectrum::new(micrometer!(1.0)..micrometer!(50.0), micrometer!(0.1)).unwrap();
-        assert!(s
-            .add_lorentzian_peak(micrometer!(25.0), micrometer!(0.5), 2.0)
-            .is_ok());
+        assert!(
+            s.add_lorentzian_peak(micrometer!(25.0), micrometer!(0.5), 2.0)
+                .is_ok()
+        );
         assert!(s.total_energy().abs_diff_eq(&2.0, 0.1));
     }
     #[test]
     fn add_lorentzian_wrong_params() {
         let mut s = prep();
-        assert!(s
-            .add_lorentzian_peak(micrometer!(-5.0), micrometer!(0.5), 2.0)
-            .is_err());
-        assert!(s
-            .add_lorentzian_peak(micrometer!(2.0), micrometer!(-0.5), 2.0)
-            .is_err());
-        assert!(s
-            .add_lorentzian_peak(micrometer!(2.0), micrometer!(0.5), -2.0)
-            .is_err());
+        assert!(
+            s.add_lorentzian_peak(micrometer!(-5.0), micrometer!(0.5), 2.0)
+                .is_err()
+        );
+        assert!(
+            s.add_lorentzian_peak(micrometer!(2.0), micrometer!(-0.5), 2.0)
+                .is_err()
+        );
+        assert!(
+            s.add_lorentzian_peak(micrometer!(2.0), micrometer!(0.5), -2.0)
+                .is_err()
+        );
     }
     #[test]
     fn total_energy() {
@@ -964,11 +978,12 @@ mod test {
         s2.add_single_peak(micrometer!(2.0), 1.0).unwrap();
         s1.resample(&s2);
         assert_eq!(s1.total_energy(), s2.total_energy());
-        assert!(s1
-            .data_vec()
-            .iter()
-            .zip(vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0])
-            .all(|v| (*v.0).abs_diff_eq(&v.1, f64::EPSILON)));
+        assert!(
+            s1.data_vec()
+                .iter()
+                .zip(vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0])
+                .all(|v| (*v.0).abs_diff_eq(&v.1, f64::EPSILON))
+        );
     }
     #[test]
     fn resample_interp2() {

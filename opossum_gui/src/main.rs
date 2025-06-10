@@ -1,7 +1,7 @@
 #![windows_subsystem = "windows"]
-
-use dioxus::prelude::*;
+use dioxus::{desktop::tao::window::Icon, prelude::*};
 use opossum_gui::components::app::App;
+use std::io::Cursor;
 
 const MAIN_CSS: Asset = asset!("./assets/main.css");
 // const PLOTLY_JS: Asset = asset!("./assets/plotly.js");
@@ -11,27 +11,37 @@ const MDB_CSS: Asset = asset!("./assets/mdb.min.css");
 const MDB_JS: Asset = asset!("./assets/mdb.umd.min.js");
 const MDB_SUB_CSS: Asset = asset!("./assets/mdb_submenu.css");
 const MDB_ACC_CSS: Asset = asset!("./assets/mdb_accordion.css");
+
+fn read_icon() -> Option<Icon> {
+    let icon_bytes: &[u8] = include_bytes!("../../opossum/logo/Logo_square.ico");
+    let mut reader = Cursor::new(icon_bytes);
+    let icon_dir = ico::IconDir::read(&mut reader).unwrap();
+    if let Some(entry) = icon_dir.entries().iter().next() {
+        let width = entry.width();
+        let height = entry.height();
+        if let Ok(image) = entry.decode() {
+            let data = image.rgba_data();
+            Icon::from_rgba(data.into(), width, height).ok()
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
 fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
-        use dioxus::desktop::{
-            tao::{self, window::Icon},
-            wry::dpi::PhysicalSize,
-        };
-        // let window = tao::window::WindowBuilder::new()
-        //     .with_resizable(true)
-        //     .with_inner_size(PhysicalSize::new(1000, 800))
-        //     //.with_background_color((37, 37, 37, 1))
-        //     // .with_decorations(false)
-        //     .with_title("Opossum");
-
+        let window = dioxus::desktop::WindowBuilder::new()
+            // .with_decorations(false)
+            .with_window_icon(read_icon())
+            .with_title("Opossum");
+        //let icon= Icon::from_rgba();
         dioxus::LaunchBuilder::new()
             .with_cfg(
-                dioxus::desktop::Config::new(), //.with_window(window)
-                                                // .with_menu(None)
-                                                // .with_icon(
-                                                //     Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
-                                                // ),
+                dioxus::desktop::Config::new()
+                    .with_window(window)
+                    .with_menu(None),
             )
             .launch(app);
     }

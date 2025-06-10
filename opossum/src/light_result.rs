@@ -9,11 +9,8 @@ use crate::{
 use std::collections::HashMap;
 
 pub type LightDings<T> = HashMap<String, T>;
-
 pub type LightResult = LightDings<LightData>;
-
 pub type LightRays = LightDings<Vec<Rays>>;
-//pub type LightBouncingRays = LightDings<Vec<Rays>>;
 
 /// converts a lightresult to lightrays
 ///

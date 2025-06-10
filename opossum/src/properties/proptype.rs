@@ -1,21 +1,23 @@
 #![warn(missing_docs)]
 //! Module for handling properties of optical nodes.
+use std::cell::RefCell;
+
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     aperture::Aperture,
     error::{OpmResult, OpossumError},
-    lightdata::{light_data_builder::LightDataBuilder, LightData},
+    lightdata::{LightData, light_data_builder::LightDataBuilder},
     nodes::{
-        fluence_detector::{fluence_data::FluenceData, Fluence},
+        FilterType, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
+        fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity,
-        FilterType, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
     },
     optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
-    surface::hit_map::{fluence_estimator::FluenceEstimator, HitMap},
+    surface::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
@@ -26,17 +28,31 @@ use num::Float;
 use serde::{Deserialize, Serialize};
 use tinytemplate::TinyTemplate;
 use uom::si::{
+    Dimension, Quantity, Unit, Units,
     energy::joule,
     f64::{Energy, Length},
     length::meter,
     radiant_exposure::joule_per_square_centimeter,
-    Dimension, Quantity, Unit, Units,
 };
 use uom::{lib::fmt::Debug, si::f64::Angle};
 use uuid::Uuid;
+
 static HTML_PROP_SIMPLE: &str = include_str!("../html/prop_simple.html");
 static HTML_PROP_IMAGE: &str = include_str!("../html/prop_image.html");
 static HTML_PROP_GROUP: &str = include_str!("../html/node_report.html");
+
+thread_local! {
+    static THREAD_TEMPLATES: RefCell<TinyTemplate<'static>> = RefCell::new({
+        let mut tt = TinyTemplate::new();
+        tt.add_template("simple", HTML_PROP_SIMPLE)
+            .expect("Failed to add simple template (thread-local)");
+        tt.add_template("image", HTML_PROP_IMAGE)
+            .expect("Failed to add image template (thread-local)");
+        tt.add_template("group", HTML_PROP_GROUP)
+            .expect("Failed to add group template (thread-local)");
+        tt
+    });
+}
 
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -119,68 +135,69 @@ impl Proptype {
     ///   - underlying html templates could not be compiled
     ///   - a property value could not be converted to html code.
     pub fn to_html(&self, id: &str, property_name: &str) -> OpmResult<String> {
-        let mut tt = TinyTemplate::new();
-        tt.add_template("simple", HTML_PROP_SIMPLE)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        tt.add_template("image", HTML_PROP_IMAGE)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        tt.add_template("group", HTML_PROP_GROUP)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        let string_value = match self {
-            Self::String(value) => tt.render("simple", &value),
-            Self::I32(value) => tt.render("simple", &format!("{value}")),
-            Self::F64(value) => tt.render("simple", &format!("{value:.6}")),
-            Self::Bool(value) => tt.render("simple", &format!("{value}")),
-            Self::SpectrometerType(value) => tt.render("simple", &value.to_string()),
-            Self::Metertype(value) => tt.render("simple", &value.to_string()),
-            Self::Spectrometer(_)
-            | Self::SpotDiagram(_)
-            | Self::HitMap(_)
-            | Self::RayPositionHistory(_)
-            | Self::GhostFocusHistory(_) => {
-                tt.render("image", &format!("data/{id}_{property_name}.svg"))
-            }
-            Self::WaveFrontData(_) | Self::FluenceData(_) => {
-                tt.render("image", &format!("data/{id}_{property_name}.png"))
-            }
-
-            Self::NodeReport(report) => {
-                let html_node_report = HtmlNodeReport {
-                    node_name: report.name().into(),
-                    node_type: report.node_type().into(),
-                    props: report.properties().html_props(&format!(
-                        "{id}_{}_{}",
-                        report.name(),
-                        report.uuid()
-                    )),
-                    uuid: report.uuid().to_string(),
-                    show_item: report.show_item(),
-                };
-                tt.render("group", &html_node_report)
-            }
-            Self::Fluence(value) => tt.render(
-                "simple",
-                &format!(
-                    "{}{}",
-                    format_value_with_prefix(value.get::<joule_per_square_centimeter>()),
-                    joule_per_square_centimeter::abbreviation()
+        THREAD_TEMPLATES.with(|template_refcell| {
+            let template_engine = template_refcell.borrow();
+            let string_value = match self {
+                Self::String(value) => template_engine.render("simple", value),
+                Self::I32(value) => template_engine.render("simple", &format!("{value}")),
+                Self::F64(value) => template_engine.render("simple", &format!("{value:.6}")),
+                Self::Bool(value) => template_engine.render("simple", &format!("{value}")),
+                Self::SpectrometerType(value) => {
+                    template_engine.render("simple", &value.to_string())
+                }
+                Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
+                Self::Spectrometer(_)
+                | Self::SpotDiagram(_)
+                | Self::HitMap(_)
+                | Self::RayPositionHistory(_)
+                | Self::GhostFocusHistory(_) => {
+                    template_engine.render("image", &format!("data/{id}_{property_name}.svg"))
+                }
+                Self::WaveFrontData(_) | Self::FluenceData(_) => {
+                    template_engine.render("image", &format!("data/{id}_{property_name}.png"))
+                }
+                Self::NodeReport(report) => {
+                    let html_node_report = HtmlNodeReport {
+                        node_name: report.name().into(),
+                        node_type: report.node_type().into(),
+                        props: report.properties().html_props(&format!(
+                            "{id}_{}_{}",
+                            report.name(),
+                            report.uuid()
+                        )),
+                        uuid: report.uuid().to_string(),
+                        show_item: report.show_item(),
+                    };
+                    template_engine.render("group", &html_node_report)
+                }
+                Self::Fluence(value) => template_engine.render(
+                    "simple",
+                    &format!(
+                        "{}{}",
+                        format_value_with_prefix(value.get::<joule_per_square_centimeter>()),
+                        joule_per_square_centimeter::abbreviation()
+                    ),
                 ),
-            ),
-            Self::WfLambda(value, wvl) => tt.render(
-                "simple",
-                &format!(
-                    "{}λ, (λ = {})",
-                    format_value_with_prefix(*value,),
-                    format_quantity(meter, *wvl)
+                Self::WfLambda(value, wvl) => template_engine.render(
+                    "simple",
+                    &format!(
+                        "{}λ, (λ = {})",
+                        format_value_with_prefix(*value,),
+                        format_quantity(meter, *wvl)
+                    ),
                 ),
-            ),
-            Self::Length(value) => tt.render("simple", &format_quantity(meter, *value)),
-            Self::Energy(value) => tt.render("simple", &format_quantity(joule, *value)),
-            _ => Err(tinytemplate::error::Error::GenericError {
-                msg: "proptype not supported".into(),
-            }),
-        };
-        string_value.map_err(|e| OpossumError::Other(e.to_string()))
+                Self::Length(value) => {
+                    template_engine.render("simple", &format_quantity(meter, *value))
+                }
+                Self::Energy(value) => {
+                    template_engine.render("simple", &format_quantity(joule, *value))
+                }
+                _ => Err(tinytemplate::error::Error::GenericError {
+                    msg: "proptype not supported".into(),
+                }),
+            };
+            string_value.map_err(|e| OpossumError::Other(format!("Template rendering error: {e}")))
+        })
     }
 }
 impl From<bool> for Proptype {
@@ -286,7 +303,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{joule, meter, nanometer, properties::Properties, J_per_m2};
+    use crate::{J_per_m2, joule, meter, nanometer, properties::Properties};
     use assert_matches::assert_matches;
     use uom::si::length::nanometer;
     #[test]

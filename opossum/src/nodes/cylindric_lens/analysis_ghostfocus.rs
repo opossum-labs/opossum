@@ -1,7 +1,7 @@
 use super::CylindricLens;
 use crate::{
     analyzers::{
-        ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace, AnalyzerType, GhostFocusConfig,
+        AnalyzerType, GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
     light_result::LightRays,

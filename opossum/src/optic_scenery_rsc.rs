@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-use crate::refractive_index::{refr_index_vaccuum, RefractiveIndexType};
+use crate::refractive_index::{RefractiveIndexType, refr_index_vaccuum};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

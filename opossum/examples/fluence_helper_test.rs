@@ -1,4 +1,5 @@
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     fluence_distributions::general_gaussian::General2DGaussian,
@@ -12,7 +13,6 @@ use opossum::{
     rays::Rays,
     surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::geom_transformation::Isometry,
-    OpmDocument,
 };
 use std::{f64::consts::PI, path::Path};
 use uom::si::radiant_exposure::joule_per_square_centimeter;

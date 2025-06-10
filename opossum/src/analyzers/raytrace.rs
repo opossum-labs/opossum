@@ -169,7 +169,9 @@ pub trait AnalysisRayTrace: OpticNode {
 
             apodized |= rays.apodize(surf.aperture(), &iso)?;
             if apodized {
-                warn!("Rays have been apodized at input aperture of {optic_name}. Results might not be accurate.");
+                warn!(
+                    "Rays have been apodized at input aperture of {optic_name}. Results might not be accurate."
+                );
             }
             if let AnalyzerType::GhostFocus(config) = analyzer_type {
                 surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
@@ -382,7 +384,7 @@ mod test {
     use super::*;
     use crate::{
         joule, millimeter,
-        nodes::{round_collimated_ray_source, ParaxialSurface},
+        nodes::{ParaxialSurface, round_collimated_ray_source},
         utils::test_helper::test_helper::check_logs,
     };
     #[test]
@@ -396,12 +398,16 @@ mod test {
     fn config_set_min_energy() {
         let mut rt_conf = RayTraceConfig::default();
         assert!(rt_conf.set_min_energy_per_ray(picojoule!(-0.1)).is_err());
-        assert!(rt_conf
-            .set_min_energy_per_ray(picojoule!(f64::NAN))
-            .is_err());
-        assert!(rt_conf
-            .set_min_energy_per_ray(picojoule!(f64::INFINITY))
-            .is_err());
+        assert!(
+            rt_conf
+                .set_min_energy_per_ray(picojoule!(f64::NAN))
+                .is_err()
+        );
+        assert!(
+            rt_conf
+                .set_min_energy_per_ray(picojoule!(f64::INFINITY))
+                .is_err()
+        );
         assert!(rt_conf.set_min_energy_per_ray(picojoule!(0.0)).is_ok());
         assert!(rt_conf.set_min_energy_per_ray(picojoule!(20.0)).is_ok());
         assert_eq!(rt_conf.min_energy_per_ray, picojoule!(20.0));

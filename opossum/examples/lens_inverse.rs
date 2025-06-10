@@ -1,15 +1,15 @@
 use opossum::{
+    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
     nodes::{
-        collimated_line_ray_source, Lens, NodeGroup, NodeReference, RayPropagationVisualizer,
-        ThinMirror,
+        Lens, NodeGroup, NodeReference, RayPropagationVisualizer, ThinMirror,
+        collimated_line_ray_source,
     },
     optic_node::{Alignable, OpticNode},
     refractive_index::RefrIndexConst,
-    OpmDocument,
 };
 use std::path::Path;
 

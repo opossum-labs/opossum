@@ -5,10 +5,10 @@ use std::f64::consts::PI;
 use super::NodeAttr;
 use crate::{
     analyzers::{
+        GhostFocusConfig, RayTraceConfig,
         energy::AnalysisEnergy,
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
-        GhostFocusConfig, RayTraceConfig,
     },
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
@@ -241,11 +241,15 @@ impl AnalysisRayTrace for ReflectiveGrating {
                     &diffraction_order,
                     refraction_intended,
                 )?;
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
-                    diffracted_rays.apodize(aperture, &iso)?;
-                    diffracted_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                match self.ports().aperture(&PortType::Input, in_port) {
+                    Some(aperture) => {
+                        diffracted_rays.apodize(aperture, &iso)?;
+                        diffracted_rays
+                            .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                    _ => {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    }
                 }
 
                 let light_result =

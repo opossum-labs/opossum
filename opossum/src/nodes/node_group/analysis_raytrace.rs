@@ -7,7 +7,7 @@ use uom::si::f64::Length;
 
 use super::{NodeGroup, OpticGraph};
 use crate::{
-    analyzers::{raytrace::AnalysisRayTrace, RayTraceConfig},
+    analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,

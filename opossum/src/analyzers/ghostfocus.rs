@@ -4,7 +4,7 @@ use log::{info, warn};
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use std::collections::{hash_map::Values, HashMap};
+use std::collections::{HashMap, hash_map::Values};
 use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
 use uuid::Uuid;
 
@@ -17,15 +17,15 @@ use crate::{
     optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{
-        proptype::{count_str, format_value_with_prefix},
         Properties, Proptype,
+        proptype::{count_str, format_value_with_prefix},
     },
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
     surface::hit_map::fluence_estimator::FluenceEstimator,
 };
 
-use super::{raytrace::AnalysisRayTrace, Analyzer, AnalyzerType, RayTraceConfig};
+use super::{Analyzer, AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace};
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
@@ -641,7 +641,7 @@ mod test_ghost_focus_analyzer {
         degree, joule,
         light_result::LightRays,
         millimeter,
-        nodes::{round_collimated_ray_source, Lens, NodeGroup, SpotDiagram, ThinMirror},
+        nodes::{Lens, NodeGroup, SpotDiagram, ThinMirror, round_collimated_ray_source},
         optic_node::{Alignable, OpticNode},
         optic_ports::PortType,
     };

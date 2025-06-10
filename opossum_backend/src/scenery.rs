@@ -5,14 +5,13 @@ use crate::{
     nodes::{self},
 };
 use actix_web::{
-    delete, get,
+    HttpResponse, Responder, delete, get,
     http::StatusCode,
     post,
     web::{self, Json},
-    HttpResponse, Responder,
 };
 use nalgebra::Point2;
-use opossum::{analyzers::AnalyzerType, opm_document::AnalyzerInfo, OpmDocument, SceneryResources};
+use opossum::{OpmDocument, SceneryResources, analyzers::AnalyzerType, opm_document::AnalyzerInfo};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -207,8 +206,8 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 }
 #[cfg(test)]
 mod test {
-    use actix_web::{dev::Service, test, web::Data, App};
-    use opossum::{nodes::Dummy, SceneryResources};
+    use actix_web::{App, dev::Service, test, web::Data};
+    use opossum::{SceneryResources, nodes::Dummy};
 
     use crate::{app_state::AppState, scenery::NrOfNodes};
 

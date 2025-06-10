@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
+    J_per_cm2,
     aperture::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
@@ -11,7 +12,6 @@ use crate::{
     rays::Rays,
     surface::hit_map::HitMap,
     utils::geom_transformation::Isometry,
-    J_per_cm2,
 };
 
 use super::{
@@ -215,7 +215,9 @@ impl OpticSurface {
                     );
                 }
             } else {
-                warn!("Could not estimate maximum fluence of ray bundle! Ray bundle will be ignored during calculation");
+                warn!(
+                    "Could not estimate maximum fluence of ray bundle! Ray bundle will be ignored during calculation"
+                );
             }
         }
         Ok(())
@@ -267,14 +269,14 @@ impl Debug for OpticSurface {
 mod test {
     use super::OpticSurface;
     use crate::{
+        J_per_cm2,
         aperture::{Aperture, CircleConfig},
         coatings::CoatingType,
         joule, meter, nanometer,
         ray::Ray,
         rays::Rays,
-        surface::{geo_surface::GeoSurfaceRef, Sphere},
+        surface::{Sphere, geo_surface::GeoSurfaceRef},
         utils::geom_transformation::Isometry,
-        J_per_cm2,
     };
     use core::f64;
     use std::sync::{Arc, Mutex};
@@ -293,34 +295,42 @@ mod test {
     #[test]
     fn new() {
         let gs = GeoSurfaceRef::default();
-        assert!(OpticSurface::new(
-            gs.clone(),
-            CoatingType::IdealAR,
-            Aperture::None,
-            J_per_cm2!(f64::NAN)
-        )
-        .is_err());
-        assert!(OpticSurface::new(
-            gs.clone(),
-            CoatingType::IdealAR,
-            Aperture::None,
-            J_per_cm2!(f64::NEG_INFINITY)
-        )
-        .is_err());
-        assert!(OpticSurface::new(
-            gs.clone(),
-            CoatingType::IdealAR,
-            Aperture::None,
-            J_per_cm2!(-0.1)
-        )
-        .is_err());
-        assert!(OpticSurface::new(
-            gs.clone(),
-            CoatingType::IdealAR,
-            Aperture::None,
-            J_per_cm2!(f64::INFINITY)
-        )
-        .is_ok());
+        assert!(
+            OpticSurface::new(
+                gs.clone(),
+                CoatingType::IdealAR,
+                Aperture::None,
+                J_per_cm2!(f64::NAN)
+            )
+            .is_err()
+        );
+        assert!(
+            OpticSurface::new(
+                gs.clone(),
+                CoatingType::IdealAR,
+                Aperture::None,
+                J_per_cm2!(f64::NEG_INFINITY)
+            )
+            .is_err()
+        );
+        assert!(
+            OpticSurface::new(
+                gs.clone(),
+                CoatingType::IdealAR,
+                Aperture::None,
+                J_per_cm2!(-0.1)
+            )
+            .is_err()
+        );
+        assert!(
+            OpticSurface::new(
+                gs.clone(),
+                CoatingType::IdealAR,
+                Aperture::None,
+                J_per_cm2!(f64::INFINITY)
+            )
+            .is_ok()
+        );
 
         let aperture =
             Aperture::BinaryCircle(CircleConfig::new(meter!(1.0), meter!(0.0, 0.0)).unwrap());

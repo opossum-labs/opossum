@@ -26,8 +26,8 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
     let distance_field_width = 60.0;
 
     let distance_field_position = Point2D::new(
-        (start_position().x + end_position().x) / 2.0 - distance_field_width / 2.0,
-        (start_position().y + end_position().y) / 2.0 - distance_field_height / 2.0,
+        f64::midpoint(start_position().x, end_position().x) - distance_field_width / 2.0,
+        f64::midpoint(start_position().y, end_position().y) - distance_field_height / 2.0,
     );
     rsx! {
         path {
