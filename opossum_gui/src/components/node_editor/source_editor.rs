@@ -1,15 +1,12 @@
 use std::{collections::HashMap, fmt::Display};
 
 use dioxus::prelude::*;
-use nalgebra::Point;
 use opossum_backend::{
     energy_data_builder::EnergyDataBuilder,
-    joule,
-    light_data_builder::{self, LightDataBuilder},
-    millimeter, nanometer,
-    ray_data_builder::{self, CollimatedSrc, PointSrc, RayDataBuilder},
-    FibonacciEllipse, FibonacciRectangle, Grid, HexagonalTiling, Hexapolar, Isometry, LaserLines,
-    NodeAttr, PosDistType, Proptype, Random, SobolDist, UniformDist,
+    light_data_builder::LightDataBuilder,
+    millimeter,
+    ray_data_builder::{self, CollimatedSrc, PointSrc, RayDataBuilder},Isometry,
+    PosDistType, Proptype,
 };
 use uom::si::length::millimeter;
 
@@ -140,15 +137,37 @@ impl TryFrom<LightDataBuilder> for PosDistSelection {
     }
 }
 
+/// A convenience struct representing the current ray type selection in the GUI state.
+/// 
+/// It stores the selected [`RayDataBuilder`] variant and provides boolean flags
+/// to indicate the selected ray type. This allows for easy querying and updating
+/// of the ray type in a user interface context.
 struct RayTypeSelection {
+    /// The currently selected ray type.
     pub ray_type: RayDataBuilder,
+    /// `true` if the selected ray type is `Collimated`.
     pub collimated: bool,
+    /// `true` if the selected ray type is `PointSrc`.
     pub point_src: bool,
+    /// `true` if the selected ray type is `Raw`.
     pub raw: bool,
+    /// `true` if the selected ray type is `Image`.
     pub image: bool,
 }
 
 impl RayTypeSelection {
+    /// Creates a new [`RayTypeSelection`] from a given [`RayDataBuilder`] variant.
+    ///
+    /// This function initializes the internal boolean flags to match the type of the provided
+    /// `ray_type`.
+    ///
+    /// # Arguments
+    ///
+    /// * `ray_type` - A variant of [`RayDataBuilder`] representing the selected ray type.
+    ///
+    /// # Returns
+    ///
+    /// A fully initialized `RayTypeSelection` with corresponding flags set.
     pub fn new(ray_type: RayDataBuilder) -> Self {
         let mut select = Self {
             ray_type: ray_type.clone(),
@@ -161,6 +180,14 @@ impl RayTypeSelection {
         select.set_ray_type(ray_type);
         select
     }
+    /// Updates the internal `ray_type` and sets the boolean flags accordingly.
+    ///
+    /// This function matches the provided `ray_type` and updates the internal state
+    /// so that only one of the flags (`collimated`, `point_src`, `raw`, `image`) is `true`.
+    ///
+    /// # Arguments
+    ///
+    /// * `ray_type` - A new [`RayDataBuilder`] to set.
     pub fn set_ray_type(&mut self, ray_type: RayDataBuilder) {
         (self.collimated, self.point_src, self.raw, self.image) = match ray_type {
             RayDataBuilder::Collimated { .. } => (true, false, false, false),
@@ -175,7 +202,13 @@ impl RayTypeSelection {
 
 impl TryFrom<LightDataBuilder> for RayTypeSelection {
     type Error = String;
-
+    /// Tries to construct a [`RayTypeSelection`] from a [`LightDataBuilder`].
+    ///
+    /// Only works if the provided `LightDataBuilder` is of the `Geometric` variant.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the `LightDataBuilder` is not of type `Geometric`.
     fn try_from(value: LightDataBuilder) -> Result<Self, Self::Error> {
         match value {
             LightDataBuilder::Geometric(ray_data_builder) => Ok(Self::new(ray_data_builder)),
@@ -184,12 +217,20 @@ impl TryFrom<LightDataBuilder> for RayTypeSelection {
     }
 }
 
+/// Stores the history of [`LightDataBuilder`] instances keyed by string identifiers.
+/// 
+/// This structure is used to preserve and restore the state of previously selected 
+/// attributes when switching between them in a GUI. This avoids resetting everything 
+/// to default values when navigating back and forth between configurations.
 #[derive(Clone, PartialEq)]
 pub struct LightDataBuilderHistory {
+    /// Internal mapping from string keys (e.g., "Rays", "Collimated") to [`LightDataBuilder`] instances.
     hist: HashMap<String, LightDataBuilder>,
+    /// Key of the currently active selection.
     current: String,
 }
 impl LightDataBuilderHistory {
+    /// Creates a default history with a single entry for `"Rays"` using the default [`RayDataBuilder`].
     pub fn default() -> Self {
         let current = "Rays".to_owned();
         let ld_builder = LightDataBuilder::Geometric(RayDataBuilder::default());
@@ -197,18 +238,25 @@ impl LightDataBuilderHistory {
         hist.insert(current.clone(), ld_builder);
         Self { hist, current }
     }
+    /// Returns a reference to the currently active [`LightDataBuilder`].
     pub fn get_current(&self) -> &LightDataBuilder {
         self.hist.get(&self.current).unwrap()
     }
 
+    /// Returns a mutable reference to the currently active [`LightDataBuilder`].
     pub fn get_current_mut(&mut self) -> &mut LightDataBuilder {
         self.hist.get_mut(&self.current).unwrap()
     }
 
+    /// Returns the key of the currently active entry.
     pub fn get_current_key(&self) -> &str {
         self.current.as_str()
     }
 
+    /// Attempts to set the active entry to the given key.
+    ///
+    /// Returns `true` if the key exists and the current selection was updated,
+    /// otherwise returns `false`.
     pub fn set_current(&mut self, key: &str) -> bool {
         if let Some(_) = self.hist.get(key) {
             self.current = key.to_owned();
@@ -218,18 +266,28 @@ impl LightDataBuilderHistory {
         }
     }
 
+    /// Returns a reference to the entry associated with the given key, if it exists.
     pub fn get(&self, key: &str) -> Option<&LightDataBuilder> {
         self.hist.get(key)
     }
+
+    /// Inserts a new [`LightDataBuilder`] and sets it as the current selection.
+    ///
+    /// If an entry with the same key already exists, it will be overwritten.
     pub fn insert_and_set_current(&mut self, key: &str, ld_builder: LightDataBuilder) {
         self.hist.insert(key.to_owned(), ld_builder);
         self.current = key.to_owned();
     }
 
+    /// Inserts a new [`LightDataBuilder`] under the given key.
+    ///
+    /// Overwrites the existing entry if the key already exists.
     pub fn insert(&mut self, key: &str, ld_builder: LightDataBuilder) {
         self.hist.insert(key.to_owned(), ld_builder);
     }
 
+    /// Replaces the [`LightDataBuilder`] at the given key if it exists,
+    /// otherwise inserts a new one.
     pub fn replace_or_insert(&mut self, key: &str, new_ld_builder: &LightDataBuilder) {
         if let Some(ld_builder) = self.hist.get_mut(key) {
             *ld_builder = new_ld_builder.clone();
@@ -238,6 +296,8 @@ impl LightDataBuilderHistory {
         }
     }
 
+    
+    /// Replaces or inserts a [`LightDataBuilder`] and sets it as the current entry.
     pub fn replace_or_insert_and_set_current(
         &mut self,
         key: &str,
@@ -251,6 +311,10 @@ impl LightDataBuilderHistory {
         self.current = key.to_owned();
     }
 
+    /// Returns a tuple `(is_geometric, is_collimated)` for the current builder.
+    ///
+    /// - `is_geometric` is `true` if the current builder is a `Geometric` ray source.
+    /// - `is_collimated` is `true` if the source is specifically a `Collimated` one.
     pub fn is_rays_is_collimated(&self) -> (bool, bool) {
         match self.get_current() {
             LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
@@ -261,6 +325,12 @@ impl LightDataBuilderHistory {
         }
     }
 
+    /// Returns the [`RayDataBuilder`] from the current [`LightDataBuilder`] if it is of type `Geometric`.
+    ///
+    /// # Returns
+    ///
+    /// `Some(RayDataBuilder)` if the current builder is of type `LightDataBuilder::Geometric`,  
+    /// otherwise `None`.
     pub fn get_current_ray_data_builder(&self) -> Option<RayDataBuilder> {
         match self.get_current() {
             LightDataBuilder::Geometric(ray_data_builder) => Some(ray_data_builder.clone()),
@@ -268,6 +338,13 @@ impl LightDataBuilderHistory {
         }
     }
 
+    /// Returns the [`PosDistType`] from the currently selected ray source,
+    /// if it supports positional distributions.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(PosDistType)` for `Collimated` or `PointSrc` ray types.
+    /// - `None` for `Raw`, `Image`, or non-geometric light sources.
     pub fn get_current_pos_dist_type(&self) -> Option<PosDistType> {
         match self.get_current() {
             LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
@@ -288,6 +365,18 @@ impl LightDataBuilderHistory {
         }
     }
 
+    /// Sets a new [`PosDistType`] for the currently selected ray source,
+    /// if it supports positional distributions (`Collimated` or `PointSrc`).
+    ///
+    /// The updated builder is saved under multiple keys:
+    /// - `"Rays"` and the specific ray type (e.g., `"Collimated"`)
+    /// - the stringified `PosDistType` (used as the new current key)
+    ///
+    /// Unsupported types are logged.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_pos_dist` - The new position distribution type to assign.
     pub fn set_pos_dist_type(&mut self, new_pos_dist: PosDistType) {
         if let Some(rdb) = &mut self.get_current_ray_data_builder() {
             let pos_dist_string = format!("{new_pos_dist}");

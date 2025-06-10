@@ -20,9 +20,11 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Ghostfocus demo");
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-        pos_dist: HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
-        energy_dist: General2DGaussian::new(
+    let light_data_builder = LightDataBuilder::Geometric(
+        RayDataBuilder::Collimated (
+            CollimatedSrc::new (
+         HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
+         General2DGaussian::new(
             joule!(2.),
             millimeter!(0., 0.),
             millimeter!(8., 8.),
@@ -31,8 +33,8 @@ fn main() -> OpmResult<()> {
             false,
         )?
         .into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-    });
+         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    )));
     let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     src.node_attr_mut().set_lidt(&J_per_cm2!(2.0));
