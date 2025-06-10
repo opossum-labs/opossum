@@ -1,6 +1,7 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode, NodeInfo}, Fluence, Isometry, NodeAttr, Proptype
+    nodes::{ConnectInfo, NewNode, NodeInfo},
+    Fluence, Isometry, NodeAttr, Proptype,
 };
 use serde_json::Value;
 use uom::si::f64::{Angle, Length};
@@ -248,4 +249,3 @@ pub async fn update_node_isometry(
         )
         .await
 }
-

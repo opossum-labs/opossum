@@ -5,7 +5,11 @@ use actix_web::{
 };
 use nalgebra::{Point2, Point3};
 use opossum::{
-    meter, nodes::{create_node_ref, fluence_detector::Fluence, NodeAttr}, optic_ports::PortType, properties::Proptype, utils::geom_transformation::Isometry
+    meter,
+    nodes::{create_node_ref, fluence_detector::Fluence, NodeAttr},
+    optic_ports::PortType,
+    properties::Proptype,
+    utils::geom_transformation::Isometry,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -488,11 +492,11 @@ async fn post_node_property(
     let document = data.document.lock().unwrap();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
-                .optical_ref
-                .lock()
-                .unwrap()
-                .node_attr_mut()
-                .set_property(prop_key.as_str(), prop_value)?;
+            .optical_ref
+            .lock()
+            .unwrap()
+            .node_attr_mut()
+            .set_property(prop_key.as_str(), prop_value)?;
         Ok(())
     } else {
         Err(ErrorResponse::new(
@@ -502,8 +506,6 @@ async fn post_node_property(
         ))
     }
 }
-
-
 
 /// Update the isometry of an optical node
 #[utoipa::path(tag = "node",
@@ -806,7 +808,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_alignment_rotation);
     cfg.service(post_node_property);
     cfg.service(post_node_isometry);
-    
+
     cfg.service(get_properties);
     cfg.service(patch_properties);
 

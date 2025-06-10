@@ -12,7 +12,8 @@ use opossum_backend::energy_data_builder::EnergyDataBuilder;
 use opossum_backend::light_data_builder::{self, LightDataBuilder};
 use opossum_backend::ray_data_builder::RayDataBuilder;
 use opossum_backend::{
-    joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, Proptype, RefractiveIndexType, UniformDist
+    joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, Proptype,
+    RefractiveIndexType, UniformDist,
 };
 use serde_json::Value;
 use uom::si::f64::{Angle, RadiantExposure};
@@ -35,20 +36,17 @@ pub enum NodeChange {
     Inverted(bool),
     NodeConst(String), // AlignLikeNodeAtDistance(Uuid, Length),
     Property(String, Value),
-    Isometry(Isometry)
-    // SourceWavelength(Length),
+    Isometry(Isometry), // SourceWavelength(Length),
 }
 
-fn extract_light_data_info(
-    node_attr: &NodeAttr,
-) -> (LightDataBuilder, &'static str) {
+fn extract_light_data_info(node_attr: &NodeAttr) -> (LightDataBuilder, &'static str) {
     match node_attr.properties().get("light data") {
-        Ok(Proptype::LightDataBuilder(Some(ld))) if matches!(ld, LightDataBuilder::Geometric(_)) => {
+        Ok(Proptype::LightDataBuilder(Some(ld)))
+            if matches!(ld, LightDataBuilder::Geometric(_)) =>
+        {
             (ld.clone(), "Rays")
         }
-        Ok(Proptype::LightDataBuilder(Some(ld))) => {
-            (ld.clone(), "Energy")
-        }
+        Ok(Proptype::LightDataBuilder(Some(ld))) => (ld.clone(), "Energy"),
         _ => (LightDataBuilder::default(), "Rays"),
     }
 }
@@ -187,12 +185,9 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                 }
                 NodeChange::Isometry(iso) => {
                     spawn(async move {
-                        if let Err(err_str) = api::update_node_isometry(
-                            &HTTP_API_CLIENT(),
-                            active_node.id(),
-                            iso,
-                        )
-                        .await
+                        if let Err(err_str) =
+                            api::update_node_isometry(&HTTP_API_CLIENT(), active_node.id(), iso)
+                                .await
                         {
                             OPOSSUM_UI_LOGS.write().add_log(&err_str);
                         };
@@ -219,8 +214,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     });
 
     if let Some(Some(node_attr)) = &*resource_future.read_unchecked() {
-        
-        if node_attr.node_type() == "source"{
+        if node_attr.node_type() == "source" {
             let (ld_builder, key) = extract_light_data_info(&node_attr);
             light_data_builder_hist.replace_or_insert_and_set_current(key, ld_builder)
         }
@@ -233,7 +227,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     id: "accordionNodeConfig",
 
                     GeneralEditor {
-                        uuid: node_attr.uuid(),
+                        node_id: node_attr.uuid(),
                         node_type: node_attr.node_type(),
                         node_name: node_attr.name(),
                         node_lidt: node_attr.lidt().clone(),
@@ -243,23 +237,51 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                         light_data_builder_hist,
                         node_change,
                     }
-                    LensEditor {  
+                    LensEditor {
                         hide: node_attr.node_type() != "lens",
                         node_change,
-                        front_radius:     {if let Some(Proptype::Length(front_curvature)) = node_attr.get_property("front curvature").ok(){
-                            front_curvature.clone()
-                        }else{millimeter!(500.)}},
-                        rear_radius:      {if let Some(Proptype::Length(rear_curvature)) = node_attr.get_property("rear curvature").ok(){
-                            rear_curvature.clone()
-                        }else{millimeter!(-500.)}},
-                        center_thickness: {if let Some(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness").ok(){
-                            center_thickness.clone()
-                        }else{millimeter!(10.)}},
-                        refractive_index: {if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_ind))) = node_attr.get_property("refractive index").ok(){
-                            ref_ind.refractive_index().clone()
-                        }else{1.5}},
+                        front_radius: {
+                            if let Some(Proptype::Length(front_curvature)) = node_attr
+                                .get_property("front curvature")
+                                .ok()
+                            {
+                                front_curvature.clone()
+                            } else {
+                                millimeter!(500.)
+                            }
+                        },
+                        rear_radius: {
+                            if let Some(Proptype::Length(rear_curvature)) = node_attr
+                                .get_property("rear curvature")
+                                .ok()
+                            {
+                                rear_curvature.clone()
+                            } else {
+                                millimeter!(- 500.)
+                            }
+                        },
+                        center_thickness: {
+                            if let Some(Proptype::Length(center_thickness)) = node_attr
+                                .get_property("center thickness")
+                                .ok()
+                            {
+                                center_thickness.clone()
+                            } else {
+                                millimeter!(10.)
+                            }
+                        },
+                        refractive_index: {
+                            if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_ind))) = node_attr
+                                .get_property("refractive index")
+                                .ok()
+                            {
+                                ref_ind.refractive_index().clone()
+                            } else {
+                                1.5
+                            }
+                        },
                     }
-                    AlignmentEditor {alignment: node_attr.alignment().clone()}
+                    AlignmentEditor { alignment: node_attr.alignment().clone() }
                 }
             }
         }
@@ -269,9 +291,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
         }
     }
 }
-
-
-
 
 #[component]
 pub fn NodePropInput(name: String, placeholder: String, node_change: NodeChange) -> Element {

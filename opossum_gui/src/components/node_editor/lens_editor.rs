@@ -11,10 +11,8 @@ pub fn LensEditor(
     front_radius: Length,
     rear_radius: Length,
     center_thickness: Length,
-    refractive_index: f64
-
+    refractive_index: f64,
 ) -> Element {
-
     rsx! {
         div { class: "accordion-item bg-dark text-light", hidden: hide,
             h2 { class: "accordion-header", id: "lensHeading",
@@ -34,7 +32,9 @@ pub fn LensEditor(
                 "aria-labelledby": "lensHeading",
                 "data-mdb-parent": "#accordionNodeConfig",
                 div { class: "accordion-body  bg-dark",
-                    div { class: "form-floating border-start", "data-mdb-input-init": "",
+                    div {
+                        class: "form-floating border-start",
+                        "data-mdb-input-init": "",
                         input {
                             class: "form-control bg-dark text-light form-control-sm",
                             r#type: "number",
@@ -46,19 +46,32 @@ pub fn LensEditor(
                             onchange: {
                                 move |e: Event<FormData>| {
                                     if let Ok(front_radius) = e.data.parsed::<f64>() {
-                                        node_change.set(Some(NodeChange::Property(
-                                            "front curvature".to_owned(),
-                                            serde_json::to_value(Proptype::Length(millimeter!(front_radius)))
-                                            .unwrap(),
-                                        )))
+                                        node_change
+                                            .set(
+                                                Some(
+                                                    NodeChange::Property(
+                                                        "front curvature".to_owned(),
+                                                        serde_json::to_value(
+                                                                Proptype::Length(millimeter!(front_radius)),
+                                                            )
+                                                            .unwrap(),
+                                                    ),
+                                                ),
+                                            )
                                     }
                                 }
                             },
                         }
-                        label { class: "form-label text-secondary", r#for: "lens_front_radius", "Front radius in mm" }
+                        label {
+                            class: "form-label text-secondary",
+                            r#for: "lens_front_radius",
+                            "Front radius in mm"
+                        }
                     }
 
-                    div { class: "form-floating border-start", "data-mdb-input-init": "",
+                    div {
+                        class: "form-floating border-start",
+                        "data-mdb-input-init": "",
                         input {
                             class: "form-control bg-dark text-light form-control-sm",
                             r#type: "number",
@@ -70,19 +83,32 @@ pub fn LensEditor(
                             onchange: {
                                 move |e: Event<FormData>| {
                                     if let Ok(rear_radius) = e.data.parsed::<f64>() {
-                                        node_change.set(Some(NodeChange::Property(
-                                            "rear curvature".to_owned(),
-                                            serde_json::to_value(Proptype::Length(millimeter!(rear_radius)))
-                                            .unwrap(),
-                                        )))
+                                        node_change
+                                            .set(
+                                                Some(
+                                                    NodeChange::Property(
+                                                        "rear curvature".to_owned(),
+                                                        serde_json::to_value(
+                                                                Proptype::Length(millimeter!(rear_radius)),
+                                                            )
+                                                            .unwrap(),
+                                                    ),
+                                                ),
+                                            )
                                     }
                                 }
                             },
                         }
-                        label { class: "form-label text-secondary", r#for: "lens_rear_radius", "Rear radius in mm" }
+                        label {
+                            class: "form-label text-secondary",
+                            r#for: "lens_rear_radius",
+                            "Rear radius in mm"
+                        }
                     }
 
-                    div { class: "form-floating border-start", "data-mdb-input-init": "",
+                    div {
+                        class: "form-floating border-start",
+                        "data-mdb-input-init": "",
                         input {
                             class: "form-control bg-dark text-light form-control-sm",
                             r#type: "number",
@@ -95,19 +121,32 @@ pub fn LensEditor(
                             onchange: {
                                 move |e: Event<FormData>| {
                                     if let Ok(center_thickness) = e.data.parsed::<f64>() {
-                                        node_change.set(Some(NodeChange::Property(
-                                            "center thickness".to_owned(),
-                                            serde_json::to_value(Proptype::Length(millimeter!(center_thickness)))
-                                            .unwrap(),
-                                        )))
+                                        node_change
+                                            .set(
+                                                Some(
+                                                    NodeChange::Property(
+                                                        "center thickness".to_owned(),
+                                                        serde_json::to_value(
+                                                                Proptype::Length(millimeter!(center_thickness)),
+                                                            )
+                                                            .unwrap(),
+                                                    ),
+                                                ),
+                                            )
                                     }
                                 }
                             },
                         }
-                        label { class: "form-label text-secondary", r#for: "lens_center_thickness", "Center thickness in mm" }
+                        label {
+                            class: "form-label text-secondary",
+                            r#for: "lens_center_thickness",
+                            "Center thickness in mm"
+                        }
                     }
 
-                    div { class: "form-floating border-start", "data-mdb-input-init": "",
+                    div {
+                        class: "form-floating border-start",
+                        "data-mdb-input-init": "",
                         input {
                             class: "form-control bg-dark text-light form-control-sm",
                             r#type: "number",
@@ -120,21 +159,36 @@ pub fn LensEditor(
                             onchange: {
                                 move |e: Event<FormData>| {
                                     if let Ok(ref_ind) = e.data.parsed::<f64>() {
-                                        if ref_ind > 1. && ref_ind.is_finite(){
-                                            node_change.set(Some(NodeChange::Property(
-                                                "refractive index".to_owned(),
-                                                serde_json::to_value(Proptype::RefractiveIndex(RefractiveIndexType::Const(RefrIndexConst::new(ref_ind).unwrap())))
-                                                .unwrap(),
-                                            )))
+                                        if ref_ind > 1. && ref_ind.is_finite() {
+                                            node_change
+                                                .set(
+                                                    Some(
+                                                        NodeChange::Property(
+                                                            "refractive index".to_owned(),
+                                                            serde_json::to_value(
+                                                                    Proptype::RefractiveIndex(
+                                                                        RefractiveIndexType::Const(
+                                                                            RefrIndexConst::new(ref_ind).unwrap(),
+                                                                        ),
+                                                                    ),
+                                                                )
+                                                                .unwrap(),
+                                                        ),
+                                                    ),
+                                                )
                                         }
                                     }
                                 }
                             },
                         }
-                        label { class: "form-label text-secondary", r#for: "lens_refr_index", "Refractive Index" }
+                        label {
+                            class: "form-label text-secondary",
+                            r#for: "lens_refr_index",
+                            "Refractive Index"
+                        }
                     }
-
-                    //todo refractive index
+                
+                //todo refractive index
                 }
             }
         }

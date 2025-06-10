@@ -29,7 +29,10 @@ pub enum MenuSelection {
     WinClose,
 }
 #[component]
-pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>, project_directory: Signal<PathBuf>) -> Element {
+pub fn MenuBar(
+    menu_item_selected: Signal<Option<MenuSelection>>,
+    project_directory: Signal<PathBuf>,
+) -> Element {
     let mut about_window = use_signal(|| false);
     let node_selected = use_signal(String::new);
     let analyzer_selected = use_signal(|| None::<AnalyzerType>);
@@ -47,7 +50,7 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>, project_direct
             menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer)))
         }
     });
-    use_effect(move ||{
+    use_effect(move || {
         if !node_selected.read().is_empty() {
             menu_item_selected.set(Some(MenuSelection::AddNode(node_selected())))
         }
@@ -82,18 +85,7 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>, project_direct
                                 a {
                                     class: "dropdown-item",
                                     role: "button",
-                                    onclick: move |_| { 
-                                        // let path = FileDialog::new()
-                                        //     .set_directory("/")
-                                        //     .set_title("Pick OPOSSUM project directory")
-                                        //     .pick_folder();
-                                        // if let Some(path) = path {
-                                        //     project_directory.set(path);
-                                        //     menu_item_selected.set(Some(MenuSelection::NewProject)) 
-                                        // }
-                                        menu_item_selected.set(Some(MenuSelection::NewProject)) 
-
-                                    },
+                                    onclick: move |_| { menu_item_selected.set(Some(MenuSelection::NewProject)) },
                                     "New Project"
                                 }
                             }
@@ -108,12 +100,7 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>, project_direct
                                             .add_filter("Opossum setup file", &["opm"])
                                             .pick_file();
                                         if let Some(path) = path {
-                                            // if let Some(path_dir) = path.clone().parent(){
-                                            //     project_directory.set(path_dir.to_path_buf().clone());
-                                            //     menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
-                                            // }
                                             menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
-
                                         }
                                     },
                                     "Open Project"
@@ -130,29 +117,23 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>, project_direct
                                             .add_filter("Opossum setup file", &["opm"])
                                             .save_file();
                                         if let Some(path) = path {
-                                            // if let Some(path_dir) =  path.clone().parent(){
-                                            //     project_directory.set(path_dir.to_path_buf().clone());
-                                            //     menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
-                                            // }                                                
                                             menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
-
-
                                         }
                                     },
                                     "Save Project"
                                 }
                             }
-                            // li {
-                            //     a {
-                            //         class: "dropdown-item",
-                            //         role: "button",
-                            //         onclick: move |_| {
-                            //             menu_item_selected.set(Some(MenuSelection::RunProject));
+                                                // li {
+                        //     a {
+                        //         class: "dropdown-item",
+                        //         role: "button",
+                        //         onclick: move |_| {
+                        //             menu_item_selected.set(Some(MenuSelection::RunProject));
 
-                            //         },
-                            //         "Run Project"
-                            //     }
-                            // }
+                        //         },
+                        //         "Run Project"
+                        //     }
+                        // }
                         }
                     }
                     li { class: "nav-item",

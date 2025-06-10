@@ -1,21 +1,35 @@
 use std::path::{Path, PathBuf};
 
-use crate::{api::{self, http_client::HTTPClient}, components::{
-    logger::logger_component::Logger,
-    menu_bar::menu_bar_component::{MenuBar, MenuSelection},
-    node_editor::NodeEditor,
-    scenery_editor::{graph_editor::NodeEditorCommand, node::NodeElement, GraphEditor},
-}, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
+use crate::{
+    api::{self, http_client::HTTPClient},
+    components::{
+        logger::logger_component::Logger,
+        menu_bar::menu_bar_component::{MenuBar, MenuSelection},
+        node_editor::NodeEditor,
+        scenery_editor::{graph_editor::NodeEditorCommand, node::NodeElement, GraphEditor},
+    },
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+};
 use dioxus::prelude::*;
-use opossum_backend::{create_report_and_data_files, create_data_dir};
+use opossum_backend::{create_data_dir, create_report_and_data_files};
 
 pub async fn analyze_setup(path: PathBuf) {
     match api::analyze(&HTTP_API_CLIENT()).await {
         Ok(reports) => {
-            create_data_dir(&path).unwrap_or( {OPOSSUM_UI_LOGS.write().add_log("Error while creating report-data directory"); ()});;
+            create_data_dir(&path).unwrap_or({
+                OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log("Error while creating report-data directory");
+                ()
+            });
             // create_dot_file(&opossum_args.report_directory, document.scenery())?;
             for report in reports.iter().enumerate() {
-                create_report_and_data_files(&path, report.1, report.0).unwrap_or( {OPOSSUM_UI_LOGS.write().add_log("Error while creating report and data files"); ()});
+                create_report_and_data_files(&path, report.1, report.0).unwrap_or({
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log("Error while creating report and data files");
+                    ()
+                });
             }
         }
         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
@@ -66,7 +80,7 @@ pub fn App() -> Element {
                 MenuSelection::WinClose => {
                     println!("App::Window close selected");
                 }
-                MenuSelection::RunProject =>{
+                MenuSelection::RunProject => {
                     spawn(async move { analyze_setup(project_directory()).await });
                 }
             }
@@ -76,7 +90,7 @@ pub fn App() -> Element {
         div { class: "container-fluid text-bg-dark",
             div { class: "row",
                 div { class: "col",
-                    MenuBar { menu_item_selected, project_directory}
+                    MenuBar { menu_item_selected, project_directory }
                 }
             }
             div { class: "row main-content-row",

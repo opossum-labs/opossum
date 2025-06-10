@@ -1,7 +1,11 @@
 //! General endpoints
 use std::fmt::Display;
 
-use actix_web::{get, web::{self, Json}, Responder};
+use actix_web::{
+    get,
+    web::{self, Json},
+    Responder,
+};
 use opossum::{analyzers::AnalyzerType, reporting::analysis_report::AnalysisReport};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -97,8 +101,8 @@ async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, ErrorResponse> 
 ), tag="general")]
 #[get("/analyze")]
 async fn get_analyze(
-        data: web::Data<AppState>
-    ) -> Result<Json<Vec<AnalysisReport>>, ErrorResponse> {
+    data: web::Data<AppState>,
+) -> Result<Json<Vec<AnalysisReport>>, ErrorResponse> {
     let mut document = data.document.lock().unwrap();
     let reports = document.analyze()?;
     drop(document);
