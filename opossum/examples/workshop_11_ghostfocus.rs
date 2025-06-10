@@ -1,20 +1,5 @@
 use opossum::{
-    J_per_cm2, OpmDocument,
-    analyzers::{AnalyzerType, GhostFocusConfig},
-    coatings::CoatingType,
-    degree,
-    energy_distributions::General2DGaussian,
-    error::OpmResult,
-    joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
-    millimeter, nanometer,
-    nodes::{Lens, NodeGroup, Source, ThinMirror},
-    optic_node::{Alignable, OpticNode},
-    optic_ports::PortType,
-    position_distributions::HexagonalTiling,
-    radian,
-    spectral_distribution::LaserLines,
-    utils::geom_transformation::Isometry,
+    analyzers::{AnalyzerType, GhostFocusConfig}, coatings::CoatingType, degree, energy_distributions::General2DGaussian, error::OpmResult, joule, lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, RayDataBuilder}}, millimeter, nanometer, nodes::{Lens, NodeGroup, Source, ThinMirror}, optic_node::{Alignable, OpticNode}, optic_ports::PortType, position_distributions::HexagonalTiling, radian, spectral_distribution::LaserLines, utils::geom_transformation::Isometry, J_per_cm2, OpmDocument
 };
 use std::path::Path;
 
