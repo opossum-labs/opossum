@@ -1,25 +1,15 @@
-use std::collections::HashMap;
-
-use crate::components::node_editor::accordion::AccordionItem;
-use crate::components::node_editor::alignment_editor::AlignmentEditor;
-use crate::components::node_editor::general_editor::GeneralEditor;
-use crate::components::node_editor::lens_editor::LensEditor;
-use crate::components::node_editor::source_editor::SourceEditor;
+use crate::components::node_editor::{alignment_editor::AlignmentEditor,general_editor::GeneralEditor
+,lens_editor::LensEditor
+,source_editor::SourceEditor};
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
-use dioxus::{html::geometry::euclid::num::Zero, prelude::*};
-use nalgebra::Point3;
-use opossum_backend::energy_data_builder::EnergyDataBuilder;
-use opossum_backend::light_data_builder::{self, LightDataBuilder};
-use opossum_backend::ray_data_builder::RayDataBuilder;
+use dioxus::prelude::*;
 use opossum_backend::{
-    joule, millimeter, nanometer, Fluence, Hexapolar, Isometry, LaserLines, NodeAttr, Proptype,
-    RefractiveIndexType, UniformDist,
+    millimeter, Fluence, Isometry, NodeAttr, Proptype,
+    RefractiveIndexType,
+light_data_builder::LightDataBuilder,
 };
 use serde_json::Value;
-use uom::si::f64::{Angle, RadiantExposure};
-use uom::si::radiant_exposure::joule_per_square_centimeter;
-use uom::si::{angle::degree, f64::Length, length::meter};
-use uuid::Uuid;
+use uom::si::{f64::{Angle, RadiantExposure}, {angle::degree, f64::Length, length::meter}, radiant_exposure::joule_per_square_centimeter};
 
 use super::source_editor::LightDataBuilderHistory;
 
@@ -34,9 +24,9 @@ pub enum NodeChange {
     RotationPitch(Angle),
     RotationYaw(Angle),
     Inverted(bool),
-    NodeConst(String), // AlignLikeNodeAtDistance(Uuid, Length),
+    NodeConst(String), 
     Property(String, Value),
-    Isometry(Isometry), // SourceWavelength(Length),
+    Isometry(Isometry), 
 }
 
 fn extract_light_data_info(node_attr: &NodeAttr) -> (LightDataBuilder, &'static str) {

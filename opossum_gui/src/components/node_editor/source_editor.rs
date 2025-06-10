@@ -5,44 +5,13 @@ use opossum_backend::{
     energy_data_builder::EnergyDataBuilder,
     light_data_builder::LightDataBuilder,
     millimeter,
-    ray_data_builder::{self, CollimatedSrc, PointSrc, RayDataBuilder},Isometry,
+    ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},Isometry,
     PosDistType, Proptype,
 };
 use uom::si::length::millimeter;
-
 use crate::{components::node_editor::accordion::AccordionItem, OPOSSUM_UI_LOGS};
-
 use super::node_editor_component::NodeChange;
 
-struct SourceSelection {
-    rays: bool,
-    energy: bool,
-}
-impl SourceSelection {
-    pub fn new() -> Self {
-        Self {
-            rays: true,
-            energy: false,
-        }
-    }
-
-    pub fn set_to_rays(&mut self) {
-        self.rays = true;
-        self.energy = false;
-    }
-
-    pub fn set_to_energy(&mut self) {
-        self.rays = false;
-        self.energy = true;
-    }
-
-    pub fn rays(&self) -> bool {
-        self.rays
-    }
-    pub fn energy(&self) -> bool {
-        self.energy
-    }
-}
 
 #[derive(Clone, PartialEq)]
 struct PosDistSelection {

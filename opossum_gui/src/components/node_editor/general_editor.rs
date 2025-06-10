@@ -2,7 +2,6 @@ use dioxus::prelude::*;
 use opossum_backend::{Fluence, J_per_cm2};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uuid::Uuid;
-
 use crate::components::node_editor::{
     accordion::{AccordionItem, LabeledInput},
     node_editor_component::NodeChange,

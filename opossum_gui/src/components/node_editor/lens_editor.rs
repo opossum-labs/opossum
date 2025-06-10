@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use opossum_backend::{millimeter, Proptype, RefrIndexConst, RefractiveIndexType};
 use uom::si::{f64::Length, length::millimeter};
-
 use crate::components::node_editor::node_editor_component::NodeChange;
 
 #[component]
