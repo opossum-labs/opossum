@@ -33,21 +33,16 @@ pub fn AccordionItem(elements: Vec<Element>, header: &'static str, header_id: &'
     }
 }
 
-pub fn name_onchange(
-    mut signal: Signal<Option<NodeChange>>,
-) -> Callback<Event<FormData>> {
-    use_callback(move |e: Event<FormData>| {
-        let Ok(name) = e.data.value().parse::<String>();
-        signal.set(Some(NodeChange::Name(name)));
-    })
-}
+
 
 #[component]
 pub fn LabeledInput(
     id: &'static str,
     label: &'static str,
     value: String,
-    onchange: Callback<Event<FormData>>,
+
+    #[props(default = None)]
+    onchange: Option<Callback<Event<FormData>>>,
 
     #[props(default = "text")]
     r#type: &'static str,
@@ -63,10 +58,8 @@ pub fn LabeledInput(
     
     #[props(default = false)]
     hidden: bool,
-
-    #[props(default = false)]
-    readonly: bool,
 ) -> Element {
+
     rsx! {
         div {
             class: "form-floating border-start",
@@ -79,12 +72,12 @@ pub fn LabeledInput(
                 name: id,
                 placeholder: label,
                 value: value,
-                readonly: readonly,
+                readonly: onchange.is_none(),
                 r#type: r#type,
                 step: step.unwrap_or_default(),
                 min: min.unwrap_or_default(),
                 max: max.unwrap_or_default(),
-                onchange: move |e| onchange(e),
+                onchange: onchange.unwrap_or_default(),
             }
 
             label {

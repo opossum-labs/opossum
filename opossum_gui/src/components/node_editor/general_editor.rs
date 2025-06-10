@@ -35,17 +35,40 @@ let accordion_content = vec![
 
 #[component]
 pub fn NameInput(node_name: String) -> Element {
-    let mut node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+    let node_change_signal = use_context::<Signal<Option<NodeChange>>>();
 
     rsx! {
         LabeledInput {
             id: "inputNodeName",
             label: "Node Name",
             value: node_name,
-            onchange: move |e:Event<FormData>|{                            
-                    let Ok(name) = e.data.parsed::<String>();
-                    node_change_signal.set(Some(NodeChange::Name(name)));
-            }
+            onchange: Some(name_onchange(node_change_signal)),
         },
     }    
 }
+
+pub fn name_onchange(
+    mut signal: Signal<Option<NodeChange>>,
+) -> Callback<Event<FormData>> {
+    use_callback(move |e: Event<FormData>| {
+        let Ok(name) = e.data.value().parse::<String>();
+        signal.set(Some(NodeChange::Name(name)));
+    })
+}
+
+// #[component]
+// pub fn IDInput(node_ID: Uuid) -> Element {
+//     let mut node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+
+//     rsx! {
+//         LabeledInput {
+//             id: "inputNodeID",
+//             label: "Node ID",
+//             value: node_name,
+//             onchange: move |e:Event<FormData>|{                            
+//                     let Ok(name) = e.data.parsed::<String>();
+//                     node_change_signal.set(Some(NodeChange::(name)));
+//             }
+//         },
+//     }    
+// }
