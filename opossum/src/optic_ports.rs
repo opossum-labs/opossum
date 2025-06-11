@@ -259,11 +259,6 @@ impl OpticPorts {
         self.inverted = inverted;
     }
 }
-impl From<OpticPorts> for Proptype {
-    fn from(value: OpticPorts) -> Self {
-        Self::OpticPorts(value)
-    }
-}
 impl Display for OpticPorts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "inputs:").unwrap();

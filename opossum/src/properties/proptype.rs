@@ -78,8 +78,6 @@ pub enum Proptype {
     Metertype(Metertype),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
-    /// A property for storing [`OpticPorts`].
-    OpticPorts(OpticPorts),
     /// A property for storing an optical [`Aperture`].
     Aperture(Aperture),
     /// A property for storing a [`Spectrum`](crate::spectrum::Spectrum).
