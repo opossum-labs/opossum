@@ -96,7 +96,7 @@ pub struct WaveFrontData {
 /// - `x`: the x axis of the wavefront map
 /// - `y`: the y axis of the wavefront map
 /// - `wf_map`: the wavefront map
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct WaveFrontErrorMap {
     wavelength: Length,
     ptv: f64,
