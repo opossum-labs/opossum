@@ -14,9 +14,10 @@ use crate::{
     optic_node::OpticNode,
 };
 use chrono::{DateTime, Local};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Deserialize)]
 /// Structure for storing data being integrated in an analysis report.
 pub struct AnalysisReport {
     opossum_version: String,

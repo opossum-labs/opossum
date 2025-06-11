@@ -48,6 +48,7 @@ impl GraphStore {
                                             Point2D::new(position.0, position.1)
                                         });
                                     NodeElement::new(
+                                        node.name().to_string(),
                                         NodeType::Optical(node.node_type().to_string()),
                                         node.uuid(),
                                         position,
@@ -74,6 +75,7 @@ impl GraphStore {
                                             Point2D::new(position.x, position.y)
                                         });
                                     NodeElement::new(
+                                        format!("{}", analyzer.analyzer_type().clone()),
                                         NodeType::Analyzer(analyzer.analyzer_type().clone()),
                                         analyzer.id(),
                                         position,
@@ -147,6 +149,10 @@ impl GraphStore {
     pub fn set_node_active(&mut self, id: Uuid) {
         let mut active_node = self.active_node.write();
         *active_node = Some(id);
+    }
+    pub fn set_active_node_none(&mut self) {
+        let mut active_node = self.active_node.write();
+        *active_node = None;
     }
     pub async fn delete_node(&mut self, node_id: Uuid) {
         let nodes = self.nodes()();
@@ -306,18 +312,26 @@ impl GraphStore {
             }
         }
     }
-    pub async fn add_optic_node(&mut self, new_node_info: NewNode) {
+    pub async fn add_optic_node(
+        &mut self,
+        new_node_info: NewNode,
+        mut selected_node: Signal<Option<NodeElement>>,
+    ) {
         match api::post_add_node(&HTTP_API_CLIENT(), new_node_info, Uuid::nil()).await {
             Ok(node_info) => {
                 let ports = self.get_ports(node_info.uuid()).await;
                 let new_node = NodeElement::new(
-                    NodeType::Optical(node_info.name().to_string()),
+                    node_info.name().to_string(),
+                    NodeType::Optical(node_info.node_type().to_string()),
                     node_info.uuid(),
                     Point2D::new(100.0, 100.0),
                     ports,
                 );
-                self.nodes_mut().write().insert(new_node.id(), new_node);
+                self.nodes_mut()
+                    .write()
+                    .insert(new_node.id(), new_node.clone());
                 self.set_node_active(node_info.uuid());
+                selected_node.set(Some(new_node));
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
@@ -327,6 +341,7 @@ impl GraphStore {
         match api::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer_info.clone()).await {
             Ok(analyzer_id) => {
                 let new_node = NodeElement::new(
+                    format!("{}", new_analyzer_info.analyzer_type.clone()),
                     NodeType::Analyzer(new_analyzer_info.analyzer_type.clone()),
                     analyzer_id,
                     Point2D::new(

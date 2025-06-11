@@ -3,6 +3,7 @@
 use super::PositionDistribution;
 use crate::{
     error::{OpmResult, OpossumError},
+    millimeter,
     utils::usize_to_f64,
 };
 use nalgebra::Point3;
@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, evenly-sized grid distribution
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy)]
 pub struct Grid {
     nr_of_points: (usize, usize),
     side_length: (Length, Length),
@@ -51,6 +52,43 @@ impl Grid {
             nr_of_points,
             side_length,
         })
+    }
+
+    pub fn nr_of_points(&self) -> (usize, usize) {
+        self.nr_of_points
+    }
+
+    pub fn side_length(&self) -> (Length, Length) {
+        self.side_length
+    }
+
+    pub fn set_nr_of_points(&mut self, nr_of_points: (usize, usize)) {
+        self.nr_of_points = nr_of_points;
+    }
+    pub fn set_nr_of_points_x(&mut self, nr_of_points_x: usize) {
+        self.nr_of_points.0 = nr_of_points_x;
+    }
+    pub fn set_nr_of_points_y(&mut self, nr_of_points_y: usize) {
+        self.nr_of_points.1 = nr_of_points_y;
+    }
+
+    pub fn set_side_length(&mut self, side_length: (Length, Length)) {
+        self.side_length = side_length;
+    }
+    pub fn set_side_length_x(&mut self, side_length_x: Length) {
+        self.side_length.0 = side_length_x;
+    }
+    pub fn set_side_length_y(&mut self, side_length_y: Length) {
+        self.side_length.1 = side_length_y;
+    }
+}
+
+impl Default for Grid {
+    fn default() -> Self {
+        Self {
+            nr_of_points: (100, 100),
+            side_length: (millimeter!(5.), millimeter!(5.)),
+        }
     }
 }
 

@@ -33,3 +33,9 @@ impl SpecDistType {
         }
     }
 }
+
+impl Default for SpecDistType {
+    fn default() -> Self {
+        Self::Gaussian(Gaussian::default())
+    }
+}

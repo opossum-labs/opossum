@@ -2,7 +2,7 @@
 //!
 //! This module provides a builder for the generation of energy spectra to be used in `LightData::Energy`.
 //! Using this builder allows easier serialization / deserialization in OPM files.
-use crate::{error::OpmResult, spectrum::Spectrum};
+use crate::{error::OpmResult, joule, nanometer, spectrum::Spectrum};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf};
 use uom::{
@@ -42,6 +42,12 @@ impl EnergyDataBuilder {
                 Ok(LightData::Energy(spectrum))
             }
         }
+    }
+}
+
+impl Default for EnergyDataBuilder {
+    fn default() -> Self {
+        Self::LaserLines(vec![(nanometer!(1054.), joule!(0.1))], (nanometer!(0.1)))
     }
 }
 

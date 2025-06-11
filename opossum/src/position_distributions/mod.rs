@@ -16,6 +16,8 @@
 //! assert_eq!(points.len(), 10);
 //! ```
 //! `points` now contains a vector of 10 randomly-placed 3D points within the rectangle (-0.5 mm .. 0.5 mm) x (-1.0 mm .. 1.0 mm).
+use std::fmt::Display;
+
 use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
@@ -43,7 +45,7 @@ pub trait PositionDistribution {
 }
 
 /// Enum for the different types of position distributions
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub enum PosDistType {
     /// Rectangular, uniform random distribution
     Random(random::Random),
@@ -60,6 +62,28 @@ pub enum PosDistType {
     /// Pseudo random Sobol distribution
     Sobol(sobol::SobolDist),
 }
+
+impl Default for PosDistType {
+    fn default() -> Self {
+        Self::Hexapolar(Hexapolar::default())
+    }
+}
+
+impl Display for PosDistType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dist_string = match self {
+            Self::Random(_) => "Random",
+            Self::Grid(_) => "Grid",
+            Self::HexagonalTiling(_) => "Hexagonal",
+            Self::Hexapolar(_) => "Hexapolar",
+            Self::FibonacciRectangle(_) => "Fibonacci, rectangular",
+            Self::FibonacciEllipse(_) => "Fibonacci, elliptical",
+            Self::Sobol(_) => "Sobol",
+        };
+        write!(f, "{dist_string}")
+    }
+}
+
 impl PosDistType {
     /// Generate the point distribution.
     #[must_use]
@@ -72,6 +96,19 @@ impl PosDistType {
             Self::FibonacciRectangle(dist) => dist,
             Self::FibonacciEllipse(dist) => dist,
             Self::Sobol(dist) => dist,
+        }
+    }
+
+    pub fn default_from_name(name: &str) -> Option<Self> {
+        match name {
+            "Random" => Some(Random::default().into()),
+            "Grid" => Some(Grid::default().into()),
+            "Hexagonal" => Some(HexagonalTiling::default().into()),
+            "Hexapolar" => Some(Hexapolar::default().into()),
+            "Fibonacci, rectangular" => Some(FibonacciRectangle::default().into()),
+            "Fibonacci, elliptical" => Some(FibonacciEllipse::default().into()),
+            "Sobol" => Some(SobolDist::default().into()),
+            _ => None,
         }
     }
 }

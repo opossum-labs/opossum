@@ -32,6 +32,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use uom::si::f64::Length;
+use utoipa::ToSchema;
 use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// The basic building block of an optical system. It represents a group of other optical

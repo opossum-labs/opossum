@@ -6,7 +6,10 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, RayDataBuilder},
+    },
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, RayPropagationVisualizer, Source},
     optic_node::OpticNode,
@@ -21,12 +24,12 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler chromatism");
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-        pos_dist: Grid::new((Length::zero(), millimeter!(45.0)), (1, 9))?.into(),
-        energy_dist: UniformDist::new(joule!(1.0))?.into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0), (nanometer!(350.0), 1.0)])?
-            .into(),
-    });
+    let light_data_builder =
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+            Grid::new((Length::zero(), millimeter!(45.0)), (1, 9))?.into(),
+            UniformDist::new(joule!(1.0))?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0), (nanometer!(350.0), 1.0)])?.into(),
+        )));
     let mut src = Source::new("bichromatic ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     let i_src = scenery.add_node(src)?;

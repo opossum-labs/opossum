@@ -37,6 +37,12 @@ pub trait EnergyDistribution {
     }
 }
 
+impl Default for EnergyDistType {
+    fn default() -> Self {
+        Self::Uniform(UniformDist::default())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum EnergyDistType {
     Uniform(UniformDist),
@@ -50,5 +56,14 @@ impl EnergyDistType {
             Self::Uniform(dist) => dist,
             Self::General2DGaussian(dist) => dist,
         }
+    }
+
+    pub fn set_energy(&mut self, energy: Energy) {
+        match self {
+            EnergyDistType::Uniform(uniform_dist) => uniform_dist.set_energy(energy),
+            EnergyDistType::General2DGaussian(general2_dgaussian) => {
+                general2_dgaussian.set_energy(energy)
+            }
+        };
     }
 }

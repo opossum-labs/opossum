@@ -1,7 +1,10 @@
 #![warn(missing_docs)]
 //! Rectangular, uniform random distribution
 use super::PositionDistribution;
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    millimeter,
+};
 use nalgebra::{Point3, point};
 use num::Zero;
 use rand::Rng;
@@ -9,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, uniform random distribution
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub struct Random {
     nr_of_points: usize,
     side_length_x: Length,
@@ -53,7 +56,37 @@ impl Random {
             side_length_y,
         })
     }
+
+    pub fn nr_of_points(&self) -> usize {
+        self.nr_of_points
+    }
+    pub fn side_length_x(&self) -> Length {
+        self.side_length_x
+    }
+    pub fn side_length_y(&self) -> Length {
+        self.side_length_y
+    }
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
+        self.nr_of_points = nr_of_points;
+    }
+    pub fn set_side_length_x(&mut self, side_length_x: Length) {
+        self.side_length_x = side_length_x;
+    }
+    pub fn set_side_length_y(&mut self, side_length_y: Length) {
+        self.side_length_y = side_length_y;
+    }
 }
+
+impl Default for Random {
+    fn default() -> Self {
+        Self {
+            nr_of_points: 1000,
+            side_length_x: millimeter!(5.),
+            side_length_y: millimeter!(5.),
+        }
+    }
+}
+
 impl PositionDistribution for Random {
     fn generate(&self) -> Vec<nalgebra::Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_points);

@@ -2,7 +2,10 @@
 //! Circular and square, fibbonacci distribution
 use std::f64::consts::PI;
 
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    millimeter,
+};
 
 use super::PositionDistribution;
 use nalgebra::{Point3, point};
@@ -13,7 +16,7 @@ use uom::si::f64::Length;
 /// Rectangular Fibonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct FibonacciRectangle {
     nr_of_rays: usize,
     side_length_x: Length,
@@ -48,7 +51,37 @@ impl FibonacciRectangle {
             side_length_y,
         })
     }
+
+    pub fn nr_of_points(&self) -> usize {
+        self.nr_of_rays
+    }
+    pub fn side_length_x(&self) -> Length {
+        self.side_length_x
+    }
+    pub fn side_length_y(&self) -> Length {
+        self.side_length_y
+    }
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
+        self.nr_of_rays = nr_of_points;
+    }
+    pub fn set_side_length_x(&mut self, side_length_x: Length) {
+        self.side_length_x = side_length_x;
+    }
+    pub fn set_side_length_y(&mut self, side_length_y: Length) {
+        self.side_length_y = side_length_y;
+    }
 }
+
+impl Default for FibonacciRectangle {
+    fn default() -> Self {
+        Self {
+            nr_of_rays: 1000,
+            side_length_x: millimeter!(5.),
+            side_length_y: millimeter!(5.),
+        }
+    }
+}
+
 impl PositionDistribution for FibonacciRectangle {
     fn generate(&self) -> Vec<Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_rays);
@@ -72,7 +105,7 @@ impl From<FibonacciRectangle> for super::PosDistType {
 /// Rectangular Fibbonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct FibonacciEllipse {
     nr_of_rays: usize,
     radius_x: Length,
@@ -107,6 +140,34 @@ impl FibonacciEllipse {
             radius_y,
         })
     }
+    pub fn nr_of_points(&self) -> usize {
+        self.nr_of_rays
+    }
+    pub fn radius_x(&self) -> Length {
+        self.radius_x
+    }
+    pub fn radius_y(&self) -> Length {
+        self.radius_y
+    }
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
+        self.nr_of_rays = nr_of_points;
+    }
+    pub fn set_radius_x(&mut self, radius_x: Length) {
+        self.radius_x = radius_x;
+    }
+    pub fn set_radius_y(&mut self, radius_y: Length) {
+        self.radius_y = radius_y;
+    }
+}
+
+impl Default for FibonacciEllipse {
+    fn default() -> Self {
+        Self {
+            nr_of_rays: 1000,
+            radius_x: millimeter!(5.),
+            radius_y: millimeter!(5.),
+        }
+    }
 }
 
 impl PositionDistribution for FibonacciEllipse {
@@ -125,6 +186,7 @@ impl PositionDistribution for FibonacciEllipse {
         points
     }
 }
+
 impl From<FibonacciEllipse> for super::PosDistType {
     fn from(f: FibonacciEllipse) -> Self {
         Self::FibonacciEllipse(f)

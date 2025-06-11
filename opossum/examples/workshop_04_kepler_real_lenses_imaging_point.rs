@@ -1,3 +1,4 @@
+use delaunator::Point;
 use opossum::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
@@ -5,7 +6,10 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{PointSrc, RayDataBuilder},
+    },
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, RayPropagationVisualizer, Source, SpotDiagram},
     optic_node::OpticNode,
@@ -19,12 +23,12 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler imaging point src");
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc {
-        pos_dist: Hexapolar::new(millimeter!(15.0), 8)?.into(),
-        energy_dist: UniformDist::new(joule!(1.0))?.into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-        reference_length: millimeter!(70.0),
-    });
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
+        Hexapolar::new(millimeter!(15.0), 8)?.into(),
+        UniformDist::new(joule!(1.0))?.into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        millimeter!(70.0),
+    )));
     let mut src = Source::new("point source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     let i_src = scenery.add_node(src)?;

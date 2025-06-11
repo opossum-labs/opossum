@@ -1,8 +1,10 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode, NodeInfo},
-    NodeAttr,
+    Fluence, Isometry, NodeAttr, Proptype,
 };
+use serde_json::Value;
+use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
 use super::http_client::HTTPClient;
@@ -142,6 +144,108 @@ pub async fn update_gui_position(
         .post::<(f64, f64), String>(
             &format!("/api/scenery/position/{}", node_id.as_simple()),
             position,
+        )
+        .await
+}
+
+/// Update the name of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_name(
+    client: &HTTPClient,
+    node_id: Uuid,
+    node_name: String,
+) -> Result<String, String> {
+    client
+        .post::<String, String>(
+            &format!("/api/scenery/name/{}", node_id.as_simple()),
+            node_name,
+        )
+        .await
+}
+
+/// Update the lidt of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_lidt(
+    client: &HTTPClient,
+    node_id: Uuid,
+    node_lidt: Fluence,
+) -> Result<String, String> {
+    client
+        .post::<Fluence, String>(
+            &format!("/api/scenery/lidt/{}", node_id.as_simple()),
+            node_lidt,
+        )
+        .await
+}
+
+/// Update the translation alignment of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_translation(
+    client: &HTTPClient,
+    node_id: Uuid,
+    translation: (Length, usize),
+) -> Result<String, String> {
+    client
+        .post::<(Length, usize), String>(
+            &format!("/api/scenery/alignmenttranslation/{}", node_id.as_simple()),
+            translation,
+        )
+        .await
+}
+/// Update the rotation alignment of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_rotation(
+    client: &HTTPClient,
+    node_id: Uuid,
+    rotation: (Angle, usize),
+) -> Result<String, String> {
+    client
+        .post::<(Angle, usize), String>(
+            &format!("/api/scenery/alignmentrotation/{}", node_id.as_simple()),
+            rotation,
+        )
+        .await
+}
+
+/// Update the property of the node with the given `node_id`.
+/// The property value is already passes as a serde_json::Value to avoid implementing PartialEq for every property type.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_property(
+    client: &HTTPClient,
+    node_id: Uuid,
+    property_key_val: (String, Value),
+) -> Result<String, String> {
+    client
+        .post::<(String, Value), String>(
+            &format!("/api/scenery/property/{}", node_id.as_simple()),
+            property_key_val,
+        )
+        .await
+}
+pub async fn update_node_isometry(
+    client: &HTTPClient,
+    node_id: Uuid,
+    iso: Isometry,
+) -> Result<String, String> {
+    client
+        .post::<Isometry, String>(
+            &format!("/api/scenery/isometry/{}", node_id.as_simple()),
+            iso,
         )
         .await
 }

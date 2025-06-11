@@ -6,7 +6,7 @@ use dioxus_free_icons::{
 };
 use opossum_backend::AnalyzerType;
 use rfd::FileDialog;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::components::menu_bar::{
     edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
@@ -18,6 +18,7 @@ const FAVICON: Asset = asset!("./assets/favicon.ico");
 #[derive(Debug)]
 pub enum MenuSelection {
     NewProject,
+    RunProject,
     OpenProject(PathBuf),
     SaveProject(PathBuf),
     AddNode(String),
@@ -28,10 +29,13 @@ pub enum MenuSelection {
     WinClose,
 }
 #[component]
-pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
+pub fn MenuBar(
+    menu_item_selected: Signal<Option<MenuSelection>>,
+    project_directory: Signal<PathBuf>,
+) -> Element {
     let mut about_window = use_signal(|| false);
     let node_selected = use_signal(String::new);
-    let analyzer_selected = use_signal(|| AnalyzerType::Energy);
+    let analyzer_selected = use_signal(|| None::<AnalyzerType>);
     // let window = use_window();
     // let is_dragging = use_signal(|| false);
     // let maximize_symbol = use_signal(|| {
@@ -41,9 +45,15 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
     //         "🗖"
     //     }
     // });
-    use_effect(move || menu_item_selected.set(Some(MenuSelection::AddNode(node_selected()))));
     use_effect(move || {
-        menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_selected())));
+        if let Some(analyzer) = analyzer_selected() {
+            menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer)))
+        }
+    });
+    use_effect(move || {
+        if !node_selected.read().is_empty() {
+            menu_item_selected.set(Some(MenuSelection::AddNode(node_selected())))
+        }
     });
     rsx! {
         nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",
@@ -113,6 +123,17 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                     "Save Project"
                                 }
                             }
+                                                // li {
+                        //     a {
+                        //         class: "dropdown-item",
+                        //         role: "button",
+                        //         onclick: move |_| {
+                        //             menu_item_selected.set(Some(MenuSelection::RunProject));
+
+                        //         },
+                        //         "Run Project"
+                        //     }
+                        // }
                         }
                     }
                     li { class: "nav-item",

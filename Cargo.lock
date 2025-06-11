@@ -5170,6 +5170,7 @@ dependencies = [
  "dioxus",
  "dioxus-free-icons",
  "ico",
+ "nalgebra",
  "opossum_backend",
  "plotly",
  "reqwest",
@@ -5177,6 +5178,7 @@ dependencies = [
  "rust-sugiyama",
  "serde",
  "serde_json",
+ "uom",
  "uuid",
 ]
 

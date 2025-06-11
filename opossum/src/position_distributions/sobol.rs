@@ -1,6 +1,9 @@
 //! Rectangluar, low-discrepancy quasirandom distribution
 use super::PositionDistribution;
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    millimeter,
+};
 use nalgebra::{Point3, point};
 use num::Zero;
 use serde::{Deserialize, Serialize};
@@ -10,7 +13,7 @@ use uom::si::f64::Length;
 /// Rectangluar, low-discrepancy quasirandom distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Sobol_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct SobolDist {
     nr_of_points: usize,
     side_length_x: Length,
@@ -54,6 +57,34 @@ impl SobolDist {
             side_length_x,
             side_length_y,
         })
+    }
+    pub fn nr_of_points(&self) -> usize {
+        self.nr_of_points
+    }
+    pub fn side_length_x(&self) -> Length {
+        self.side_length_x
+    }
+    pub fn side_length_y(&self) -> Length {
+        self.side_length_y
+    }
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
+        self.nr_of_points = nr_of_points;
+    }
+    pub fn set_side_length_x(&mut self, side_length_x: Length) {
+        self.side_length_x = side_length_x;
+    }
+    pub fn set_side_length_y(&mut self, side_length_y: Length) {
+        self.side_length_y = side_length_y;
+    }
+}
+
+impl Default for SobolDist {
+    fn default() -> Self {
+        Self {
+            nr_of_points: 1000,
+            side_length_x: millimeter!(5.),
+            side_length_y: millimeter!(5.),
+        }
     }
 }
 

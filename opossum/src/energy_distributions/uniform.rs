@@ -1,5 +1,6 @@
 //! Uniform energy distribution
 
+use crate::joule;
 use nalgebra::Point2;
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -32,7 +33,25 @@ impl UniformDist {
         }
         Ok(Self { total_energy })
     }
+    pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
+        if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
+            return Err(OpossumError::Other(
+                "Energy must be greater than zero finite!".into(),
+            ));
+        }
+        self.total_energy = energy;
+        Ok(())
+    }
 }
+
+impl Default for UniformDist {
+    fn default() -> Self {
+        Self {
+            total_energy: joule!(0.1),
+        }
+    }
+}
+
 impl EnergyDistribution for UniformDist {
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy> {
         let input_len = input.len();

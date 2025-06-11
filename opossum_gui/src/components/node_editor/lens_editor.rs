@@ -19,7 +19,6 @@ pub fn LensFrontCurvatureInput(front_curvature: Length) -> Element {
         }
     }
 }
-
 #[component]
 pub fn LensRearCurvatureInput(rear_curvature: Length) -> Element {
     let node_change_signal = use_context::<Signal<Option<NodeChange>>>();
