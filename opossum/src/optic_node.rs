@@ -272,38 +272,6 @@ pub trait OpticNode: Dottable {
     fn set_property(&mut self, name: &str, proptype: Proptype) -> OpmResult<()> {
         self.node_attr_mut().set_property(name, proptype)
     }
-    /// Set all properties of this [`OpticNode`].
-    ///
-    /// This is a convenience function. It internally calls [`set_property`](OpticNode::set_property) for all given properties. **Note**: Properties, which are not
-    /// present for the [`OpticNode`] are silently ignored.
-    ///
-    /// # Errors
-    /// This function will return an error if the Property conditions while setting a value are not met.
-    fn set_properties(&mut self, properties: Properties) -> OpmResult<()> {
-        let own_properties = self.properties().clone();
-        for prop in &properties {
-            if own_properties.contains(prop.0) {
-                match prop.0.as_str() {
-                    "node_type" => {}
-                    "apertures" => {
-                        let mut ports = self.ports();
-                        if let Proptype::OpticPorts(ports_to_be_set) = prop.1.prop().clone() {
-                            if self.node_type() == "group" {
-                                // apertures cannot be set here for groups since no port mapping is defined yet.
-                                // this will be done later dynamically in group:ports() function.
-                                self.node_attr_mut().set_ports(ports_to_be_set);
-                            } else {
-                                ports.set_apertures(ports_to_be_set)?;
-                                self.node_attr_mut().set_ports(ports);
-                            }
-                        }
-                    }
-                    _ => self.set_property(prop.0, prop.1.prop().clone())?,
-                }
-            }
-        }
-        Ok(())
-    }
     /// Set this [`OpticNode`] as inverted.
     ///
     /// This flag signifies that the [`OpticNode`] should be propagated in reverse order. This function normally simply sets the
