@@ -230,7 +230,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     LensEditor {
                         hide: node_attr.node_type() != "lens",
                         node_change,
-                        front_radius: {
+                        front_curvature: {
                             if let Some(Proptype::Length(front_curvature)) = node_attr
                                 .get_property("front curvature")
                                 .ok()
@@ -240,7 +240,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                                 millimeter!(500.)
                             }
                         },
-                        rear_radius: {
+                        rear_curvature: {
                             if let Some(Proptype::Length(rear_curvature)) = node_attr
                                 .get_property("rear curvature")
                                 .ok()
