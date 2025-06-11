@@ -242,12 +242,12 @@ impl GraphStore {
         for node in optic_nodes {
             let node_x_min = node.1.pos().x;
             let node_y_min = node.1.pos().y;
-            let node_x_max=node_x_min + NODE_WIDTH;
-            let node_y_max=node_y_min + HEADER_HEIGHT + node.1.node_body_height();
-            if node_x_min< min_x {
+            let node_x_max = node_x_min + NODE_WIDTH;
+            let node_y_max = node_y_min + HEADER_HEIGHT + node.1.node_body_height();
+            if node_x_min < min_x {
                 min_x = node_x_min;
             }
-            if node_y_min< min_y {
+            if node_y_min < min_y {
                 min_y = node_y_min;
             }
             if node_x_max > max_x {

@@ -32,15 +32,12 @@ fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
         let window = dioxus::desktop::WindowBuilder::new()
-            // .with_decorations(false)
+            //.with_decorations(true)
             .with_window_icon(read_icon())
             .with_title("Opossum");
-        //let icon= Icon::from_rgba();
         dioxus::LaunchBuilder::new()
             .with_cfg(
-                dioxus::desktop::Config::new()
-                    .with_window(window)
-                    .with_menu(None),
+                dioxus::desktop::Config::new().with_window(window), //.with_menu(None),
             )
             .launch(app);
     }

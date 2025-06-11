@@ -7,10 +7,7 @@ use crate::components::scenery_editor::{
     nodes::Nodes,
 };
 use dioxus::{
-    html::geometry::{
-        euclid::{default::Point2D},
-        PixelsSize,
-    },
+    html::geometry::{euclid::default::Point2D, PixelsSize},
     prelude::*,
 };
 use opossum_backend::{
@@ -99,7 +96,13 @@ pub fn GraphEditor(
             onwheel: {
                 move |event: Event<WheelData>| {
                     let delta = event.delta().strip_units().y;
-                    if delta > 0.0 { graph_zoom *= 1.1 } else { graph_zoom /= 1.1 }
+                    if delta > 0.0 {
+                        if graph_zoom() < 2.5 {
+                            graph_zoom *= 1.1;
+                        }
+                    } else {
+                        graph_zoom /= 1.1
+                    }
                 }
             },
             onmousedown: move |event| {
@@ -198,22 +201,27 @@ pub fn GraphEditor(
                     DragStatus::None => {}
                 }
             },
-            ondoubleclick: move |_| {
+            ondoubleclick: move |e| {
+                e.stop_propagation();
                 let bounding_box = graph_store.get_bounding_box();
                 let center = bounding_box.center();
-                if let Some(window_size)=editor_size() {
-                    let zoom=graph_zoom();
-                    println!("Bounding box: {:?}",bounding_box);
-                    println!("Center: {:?}",center);
-                    println!("Editor size {:?}",window_size);
-                    println!("Zoom: {zoom}");
-                   graph_shift.set(Point2D::new(window_size.width / 2. -center.x / zoom, window_size.height / 2. -center.y / zoom)); 
+                if let Some(window_size) = editor_size() {
+                    let zoom = graph_zoom();
+                    let view_center_x = window_size.width / 2.0;
+                    let view_center_y = window_size.height / 2.0;
+                    graph_shift
+                        .set(
+                            Point2D::new(
+                                view_center_x - center.x * zoom,
+                                view_center_y - center.y * zoom,
+                            ),
+                        );
                 }
             },
             div {
                 draggable: false,
                 style: format!(
-                    "transform: scale({graph_zoom}) translate({}px, {}px);",
+                    "transform-origin: 0 0; transform: translate({}px, {}px) scale({graph_zoom});",
                     graph_shift().x,
                     graph_shift().y,
                 ),
