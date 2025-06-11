@@ -443,7 +443,7 @@ impl PlotType {
             let mut label_flag = false;
             for plt_series in plt_series_vec {
                 if let PlotData::Dim2 { xy_data } = plt_series.get_plot_series_data() {
-                    Self::draw_histogram_2d(
+                    Self::draw_line_2d(
                         &mut chart,
                         &xy_data.column(0),
                         &xy_data.column(1),
@@ -480,7 +480,7 @@ impl PlotType {
             let mut label_flag = false;
             for plt_series in plt_series_vec {
                 if let PlotData::Dim2 { xy_data } = plt_series.get_plot_series_data() {
-                    Self::draw_line_2d(
+                    Self::draw_histogram_2d(
                         &mut chart,
                         &xy_data.column(0),
                         &xy_data.column(1),
@@ -498,7 +498,7 @@ impl PlotType {
                 Self::config_series_label_2d(&mut chart);
             }
         } else {
-            warn!("No plot series defined! Cannot create plot!!");
+            warn!("No plot series defined! Cannot create plot!");
         }
         root.present().unwrap();
     }

@@ -59,7 +59,7 @@ fn main() -> OpmResult<()> {
     let mut ray_prop_vis = RayPropagationVisualizer::new("propagation", None)?;
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
-    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telecope"))?;
+    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope"))?;
     scenery.connect_nodes(i_src, "output_1", i_sd5, "input_1", millimeter!(0.1))?;
     scenery.connect_nodes(i_sd5, "output_1", i_pl1, "input_1", millimeter!(20.0))?;
     scenery.connect_nodes(i_pl1, "output_1", i_sd6, "input_1", millimeter!(67.0))?;

@@ -5,6 +5,7 @@ use crate::{
     lightdata::energy_data_builder::EnergyDataBuilder,
     micrometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    properties::Proptype,
     utils::{f64_to_usize, usize_to_f64},
 };
 use csv::ReaderBuilder;
@@ -506,6 +507,7 @@ impl Spectrum {
     }
 }
 
+
 impl Plottable for Spectrum {
     fn get_plot_series(
         &self,
@@ -554,6 +556,12 @@ impl<'a> IntoIterator for &'a Spectrum {
 impl From<Spectrum> for EnergyDataBuilder {
     fn from(spectrum: Spectrum) -> Self {
         Self::Raw(spectrum)
+    }
+}
+
+impl From<Spectrum> for Proptype {
+    fn from(spectrum: Spectrum) -> Self {
+        Self::Spectrum(spectrum)
     }
 }
 
