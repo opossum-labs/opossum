@@ -99,35 +99,28 @@ fn lens_geometry_onchange(
 pub fn LensEditor(
     hidden: bool,
     node_change: Signal<Option<NodeChange>>,
-    front_curvature_opt: Option<&'static Proptype>,
-    rear_curvature_opt: Option<&'static Proptype>,
-    center_thickness_opt: Option<&'static Proptype>,
-    refractive_index_opt: Option<&'static Proptype>,
+    front_curvature_opt: Option<Proptype>,
+    rear_curvature_opt: Option<Proptype>,
+    center_thickness_opt: Option<Proptype>,
+    refractive_index_opt: Option<Proptype>,
 ) -> Element {
-    let front_curvature = if let Some(Proptype::Length(front_curvature)) =
-        front_curvature_opt
-    {
+    let front_curvature = if let Some(Proptype::Length(front_curvature)) = front_curvature_opt {
         front_curvature
     } else {
         millimeter!(500.)
     };
-    let rear_curvature = if let Some(Proptype::Length(rear_curvature)) =
-        rear_curvature_opt
-    {
+    let rear_curvature = if let Some(Proptype::Length(rear_curvature)) = rear_curvature_opt {
         rear_curvature
     } else {
         millimeter!(-500.)
     };
-    let center_thickness = if let Some(Proptype::Length(center_thickness)) =
-        center_thickness_opt
-    {
+    let center_thickness = if let Some(Proptype::Length(center_thickness)) = center_thickness_opt {
         center_thickness
     } else {
         millimeter!(10.)
     };
-    let refractive_index = if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(
-        ri ,
-    ))) = refractive_index_opt
+    let refractive_index = if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ri))) =
+        refractive_index_opt
     {
         ri.refractive_index()
     } else {
@@ -150,87 +143,5 @@ pub fn LensEditor(
             content_id: "lensCollapse",
             hidden,
         }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Copy)]
-pub struct LensProperties {
-    front_curvature: Length,
-    rear_curvature: Length,
-    center_thickness: Length,
-    refractive_index: f64,
-}
-
-impl LensProperties {
-    fn new(
-        front_curvature: Length,
-        rear_curvature: Length,
-        center_thickness: Length,
-        refractive_index: f64,
-    ) -> Self {
-        Self {
-            front_curvature,
-            rear_curvature,
-            center_thickness,
-            refractive_index,
-        }
-    }
-    fn front_curvature(&self) -> Length {
-        self.front_curvature
-    }
-    fn rear_curvature(&self) -> Length {
-        self.rear_curvature
-    }
-    fn center_thickness(&self) -> Length {
-        self.center_thickness
-    }
-    fn refractive_index(&self) -> f64 {
-        self.refractive_index
-    }
-}
-
-impl Default for LensProperties {
-    fn default() -> Self {
-        Self::new(millimeter!(500.), millimeter!(-500.), millimeter!(10.), 1.5)
-    }
-}
-
-impl From<&NodeAttr> for LensProperties {
-    fn from(node_attr: &NodeAttr) -> Self {
-        let front_curvature = if let Some(Proptype::Length(front_curvature)) =
-            node_attr.get_property("front curvature").ok()
-        {
-            front_curvature.clone()
-        } else {
-            millimeter!(500.)
-        };
-        let rear_curvature = if let Some(Proptype::Length(rear_curvature)) =
-            node_attr.get_property("rear curvature").ok()
-        {
-            rear_curvature.clone()
-        } else {
-            millimeter!(-500.)
-        };
-        let center_thickness = if let Some(Proptype::Length(center_thickness)) =
-            node_attr.get_property("center thickness").ok()
-        {
-            center_thickness.clone()
-        } else {
-            millimeter!(10.)
-        };
-        let refractive_index =
-            if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ri))) =
-                node_attr.get_property("refractive index").ok()
-            {
-                ri.refractive_index()
-            } else {
-                1.5
-            };
-        Self::new(
-            front_curvature,
-            rear_curvature,
-            center_thickness,
-            refractive_index,
-        )
     }
 }

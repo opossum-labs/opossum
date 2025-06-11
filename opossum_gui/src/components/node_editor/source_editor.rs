@@ -378,9 +378,22 @@ impl LightDataBuilderHistory {
 #[component]
 pub fn SourceEditor(
     hidden: bool,
+    light_data_builder_opt: Option<Proptype>,
     light_data_builder_hist: LightDataBuilderHistory,
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
+    let (ld_builder, key) = match light_data_builder_opt {
+        Some(Proptype::LightDataBuilder(Some(ld)))
+            if matches!(ld, LightDataBuilder::Geometric(_)) =>
+        {
+            (ld.clone(), "Rays")
+        }
+        Some(Proptype::LightDataBuilder(Some(ld))) => (ld.clone(), "Energy"),
+        _ => (LightDataBuilder::default(), "Rays"),
+    };
+
+    light_data_builder_hist.replace_or_insert_and_set_current(key, ld_builder);
+
     let light_data_builder_sig = Signal::new(light_data_builder_hist);
 
     use_effect(move || {
