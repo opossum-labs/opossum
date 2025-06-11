@@ -52,7 +52,7 @@ use uom::si::{
 /// The apodization type of an [`Aperture`].
 ///
 /// Each aperture can act as a "hole" or "obstruction"
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ApertureType {
     /// the [`Aperture`] shape acts as a hole. The inner part of the shape is transparent.
     #[default]
@@ -62,7 +62,7 @@ pub enum ApertureType {
 }
 
 /// Different aperture types
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Aperture {
     /// completely transparent aperture. This is the default.
     #[default]
@@ -119,7 +119,7 @@ pub trait Apodize {
     fn apodize(&self, point: &Point2<Length>) -> f64;
 }
 /// Configuration data for a circular aperture.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CircleConfig {
     radius: Length,
     center: Point2<Length>,
@@ -180,7 +180,7 @@ impl Apodize for CircleConfig {
     }
 }
 /// Configuration data for a rectangular aperture.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RectangleConfig {
     width: Length,
     height: Length,
@@ -243,7 +243,7 @@ impl Apodize for RectangleConfig {
     }
 }
 /// Configuration of a polygonal aperture defined by a given set of points.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PolygonConfig {
     points: Vec<Point2<Length>>,
     aperture_type: ApertureType,
@@ -329,7 +329,7 @@ impl Apodize for PolygonConfig {
 }
 
 /// Configuration data for a Gaussian aperture.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GaussianConfig {
     sigma: (Length, Length),
     center: Point2<Length>,
@@ -382,7 +382,7 @@ impl Apodize for GaussianConfig {
     }
 }
 /// Configuration of an aperture stack
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StackConfig {
     apertures: Vec<Aperture>,
     aperture_type: ApertureType,

@@ -55,7 +55,7 @@ thread_local! {
 }
 
 #[non_exhaustive]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 /// The type of the [`Property`](crate::properties::Property).
 pub enum Proptype {
     /// A string property

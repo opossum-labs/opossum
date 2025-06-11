@@ -185,7 +185,7 @@ impl AnalysisRayTrace for RayPropagationVisualizer {
     }
 }
 /// struct that holds the history of the rays' positions for rays of a specific wavelength
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RayPositionHistorySpectrum {
     /// Ray history
     pub history: Vec<MatrixXx3<Length>>,
@@ -305,7 +305,7 @@ impl RayPositionHistorySpectrum {
 }
 
 /// struct that holds the history of the ray positions that is needed for report generation
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RayPositionHistories {
     /// vector of ray positions for each raybundle at a specifc spectral position
     pub rays_pos_history: Vec<RayPositionHistorySpectrum>,

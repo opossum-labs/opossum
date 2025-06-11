@@ -12,7 +12,7 @@ use crate::error::OpossumError;
 use super::{RefractiveIndex, RefractiveIndexType};
 
 /// Sellmeier (1) model for calculation of a refractive index.
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct RefrIndexSellmeier1 {
     k1: f64,
     k2: f64,

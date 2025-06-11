@@ -18,7 +18,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::properties::Proptype;
 
 /// Available models for the calculation of refractive index
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum RefractiveIndexType {
     /// Trivial model returning a wavelength-independant constant
     Const(RefrIndexConst),

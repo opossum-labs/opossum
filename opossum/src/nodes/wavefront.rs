@@ -83,7 +83,7 @@ impl WaveFront {
 }
 /// This [`WaveFrontData`] struct holds a vector of wavefront-error maps.
 /// The vector of [`WaveFrontErrorMap`] is necessary, e.g., to store the wavefront data for each spectral component of a pulse
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct WaveFrontData {
     /// vector of [`WaveFrontErrorMap`]. May contain only a single [`WaveFrontErrorMap`] if only calculated for a single wavelength
     pub wavefront_error_maps: Vec<WaveFrontErrorMap>,

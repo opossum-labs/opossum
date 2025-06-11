@@ -11,7 +11,7 @@ use std::{mem, path::Path};
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a list of value conditions
 /// (such as `GreaterThan`, `NonEmptyString`, etc.)
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(transparent)]
 pub struct Property {
     prop: Proptype,
