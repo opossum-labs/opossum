@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use opossum_backend::{millimeter, Proptype, RefrIndexConst, RefractiveIndexType};
+use opossum_backend::{millimeter, NodeAttr, Proptype, RefrIndexConst, RefractiveIndexType};
 use uom::si::{f64::Length, length::millimeter};
 use crate::components::node_editor::{accordion::{AccordionItem, LabeledInput}, node_editor_component::NodeChange};
 
@@ -93,20 +93,18 @@ fn lens_geometry_onchange(
 
 #[component]
 pub fn LensEditor(
-    hide: bool,
+    hidden: bool,
     node_change: Signal<Option<NodeChange>>,
-    front_curvature: Length,
-    rear_curvature: Length,
-    center_thickness: Length,
-    refractive_index: f64,
+    lens_properties: LensProperties,
+
 ) -> Element {
     let accordion_content = vec![
         rsx! {
-            LensFrontCurvatureInput {front_curvature}
-            LensRearCurvatureInput {rear_curvature}
-            LensCenterThicknessInput{center_thickness}
+            LensFrontCurvatureInput {front_curvature: lens_properties.front_curvature()}
+            LensRearCurvatureInput {rear_curvature: lens_properties.rear_curvature()}
+            LensCenterThicknessInput{center_thickness: lens_properties.center_thickness()}
             //todo: refractiveindex for sellmeier, schott, etc.
-            LensRefractiveIndexInput {refractive_index},
+            LensRefractiveIndexInput {refractive_index: lens_properties.refractive_index()},
     }];
 
     rsx! {
@@ -116,6 +114,80 @@ pub fn LensEditor(
             header_id: "lensHeading",
             parent_id: "accordionNodeConfig",
             content_id: "lensCollapse",
+            hidden
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Copy)]
+pub struct LensProperties{
+    front_curvature: Length,
+    rear_curvature: Length,
+    center_thickness: Length,
+    refractive_index: f64,
+}
+
+impl LensProperties {
+    fn new(
+        front_curvature: Length,
+        rear_curvature: Length,
+        center_thickness: Length,
+        refractive_index: f64,
+    ) -> Self {
+        Self {
+            front_curvature,
+            rear_curvature,
+            center_thickness,
+            refractive_index,
+        }
+    }
+    fn front_curvature(&self) -> Length {
+        self.front_curvature
+    }
+    fn rear_curvature(&self) -> Length {
+        self.rear_curvature
+    }
+    fn center_thickness(&self) -> Length {
+        self.center_thickness
+    }
+    fn refractive_index(&self) -> f64 {
+        self.refractive_index
+    }
+}
+
+impl Default for LensProperties {
+    fn default() -> Self {
+        Self::new(
+            millimeter!(500.),
+            millimeter!(-500.),
+            millimeter!(10.),
+            1.5,
+        )
+    }
+}
+
+impl From<&NodeAttr> for LensProperties{
+    fn from(node_attr: &NodeAttr) -> Self {
+        let front_curvature = if let Some(Proptype::Length(front_curvature)) = node_attr.get_property("front curvature").ok(){
+            front_curvature.clone()}
+            else{
+            millimeter!(500.)
+            };
+        let rear_curvature = if let Some(Proptype::Length(rear_curvature)) = node_attr.get_property("rear curvature").ok(){
+            rear_curvature.clone()}
+            else{
+            millimeter!(-500.)
+            };
+        let center_thickness = if let Some(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness").ok(){
+            center_thickness.clone()}
+            else{
+            millimeter!(10.)
+            };
+        let refractive_index = if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ri))) = node_attr.get_property("refractive index").ok(){
+            ri.refractive_index()
+        } else {
+            1.5
+        };
+        Self::new(front_curvature, rear_curvature, center_thickness, refractive_index)
     }
 }

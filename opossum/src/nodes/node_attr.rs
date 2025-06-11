@@ -10,12 +10,7 @@ use uuid::Uuid;
 
 use super::fluence_detector::Fluence;
 use crate::{
-    J_per_cm2,
-    error::{OpmResult, OpossumError},
-    optic_ports::OpticPorts,
-    optic_scenery_rsc::SceneryResources,
-    properties::{Properties, Proptype},
-    utils::geom_transformation::Isometry,
+    error::{OpmResult, OpossumError}, optic_ports::OpticPorts, optic_scenery_rsc::SceneryResources, properties::{Properties, Proptype}, utils::geom_transformation::Isometry, J_per_cm2
 };
 
 /// Struct for storing common attributes of optical nodes.
@@ -150,6 +145,7 @@ impl NodeAttr {
     pub fn get_property(&self, name: &str) -> OpmResult<&Proptype> {
         self.props.get(name)
     }
+
 
     /// Return the value of a boolean property.
     ///

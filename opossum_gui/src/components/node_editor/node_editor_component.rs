@@ -1,3 +1,4 @@
+use crate::components::node_editor::lens_editor::LensProperties;
 use crate::components::node_editor::{alignment_editor::AlignmentEditor,general_editor::GeneralEditor
 ,lens_editor::LensEditor
 ,source_editor::SourceEditor};
@@ -41,10 +42,19 @@ fn extract_light_data_info(node_attr: &NodeAttr) -> (LightDataBuilder, &'static 
     }
 }
 
+
 #[component]
 pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
     let mut light_data_builder_hist = LightDataBuilderHistory::default();
+    let LensProperties = use_context_provider(|| {
+        Signal::new((
+            millimeter!(500.),
+            millimeter!(-500.),
+            millimeter!(10.),
+            1.5,
+        ))
+    });
     let active_node_opt = node();
     use_effect(move || {
         let node_change_opt = node_change.read().clone();
@@ -209,13 +219,14 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
             light_data_builder_hist.replace_or_insert_and_set_current(key, ld_builder)
         }
 
+
+
         rsx! {
             div {
                 h6 { "Node Configuration" }
                 div {
                     class: "accordion accordion-borderless bg-dark ",
                     id: "accordionNodeConfig",
-
                     GeneralEditor {
                         node_id: node_attr.uuid(),
                         node_type: node_attr.node_type(),
@@ -223,53 +234,14 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                         node_lidt: node_attr.lidt().clone(),
                     }
                     SourceEditor {
-                        hide: node_attr.node_type() != "source",
+                        hidden: node_attr.node_type() != "source",
                         light_data_builder_hist,
                         node_change,
                     }
                     LensEditor {
-                        hide: node_attr.node_type() != "lens",
+                        hidden: node_attr.node_type() != "lens",
                         node_change,
-                        front_curvature: {
-                            if let Some(Proptype::Length(front_curvature)) = node_attr
-                                .get_property("front curvature")
-                                .ok()
-                            {
-                                front_curvature.clone()
-                            } else {
-                                millimeter!(500.)
-                            }
-                        },
-                        rear_curvature: {
-                            if let Some(Proptype::Length(rear_curvature)) = node_attr
-                                .get_property("rear curvature")
-                                .ok()
-                            {
-                                rear_curvature.clone()
-                            } else {
-                                millimeter!(- 500.)
-                            }
-                        },
-                        center_thickness: {
-                            if let Some(Proptype::Length(center_thickness)) = node_attr
-                                .get_property("center thickness")
-                                .ok()
-                            {
-                                center_thickness.clone()
-                            } else {
-                                millimeter!(10.)
-                            }
-                        },
-                        refractive_index: {
-                            if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_ind))) = node_attr
-                                .get_property("refractive index")
-                                .ok()
-                            {
-                                ref_ind.refractive_index().clone()
-                            } else {
-                                1.5
-                            }
-                        },
+                        lens_properties: LensProperties::from(node_attr),
                     }
                     AlignmentEditor { alignment: node_attr.alignment().clone() }
                 }

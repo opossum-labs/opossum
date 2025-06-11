@@ -379,7 +379,7 @@ impl LightDataBuilderHistory {
 
 #[component]
 pub fn SourceEditor(
-    hide: bool,
+    hidden: bool,
     light_data_builder_hist: LightDataBuilderHistory,
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
@@ -410,6 +410,7 @@ pub fn SourceEditor(
             header_id: "sourceHeading",
             parent_id: "accordionNodeConfig",
             content_id: "sourceCollapse",
+            hidden
         }
     }
 }
