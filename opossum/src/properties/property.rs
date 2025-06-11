@@ -11,7 +11,7 @@ use std::{mem, path::Path};
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a list of value conditions
 /// (such as `GreaterThan`, `NonEmptyString`, etc.)
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(transparent)]
 pub struct Property {
     prop: Proptype,
@@ -54,17 +54,13 @@ impl Property {
     /// [`Proptype`] returns an error.
     pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
         match &self.prop {
-            Proptype::SpotDiagram(spot_diagram) => {
-                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
-                spot_diagram.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
-            }
             Proptype::FluenceData(fluence) => {
                 let file_path = report_path.join(Path::new(&format!("{id}.png")));
                 fluence.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
             }
-            Proptype::Spectrometer(spectrometer) => {
+            Proptype::Spectrum(spectrum) => {
                 let file_path = report_path.join(Path::new(&format!("{id}.svg")));
-                spectrometer.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+                spectrum.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::RayPositionHistory(ray_hist) => {
                 let file_path = report_path.join(Path::new(&format!("{id}.svg")));

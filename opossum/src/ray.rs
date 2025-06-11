@@ -29,7 +29,7 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 /// Configuration for splitting a [`Ray`] into multiple parts.
 ///
 /// This enum defines how a ray is split, either by a fixed ratio or by a wavelength-dependent spectrum.

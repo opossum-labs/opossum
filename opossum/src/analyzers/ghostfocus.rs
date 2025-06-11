@@ -281,7 +281,7 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
 }
 
 ///Struct to store the node origin uuid and parent ray bundle Uuid of a ray bundle
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct RaysOrigin {
     parent_rays: Option<Uuid>,
     node_origin: Option<Uuid>,
@@ -298,7 +298,7 @@ impl RaysOrigin {
 }
 
 /// Struct to store the correlation between a ray bundle and its parent ray bundle as well as its node origin
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct RaysNodeCorrelation {
     correlation: HashMap<Uuid, RaysOrigin>,
 }
@@ -324,7 +324,7 @@ impl RaysNodeCorrelation {
 }
 
 /// struct that holds the history of the ray positions that is needed for report generation
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct GhostFocusHistory {
     /// vector of ray positions for each raybundle at a specifc spectral position
     pub rays_pos_history: Vec<Vec<Vec<MatrixXx3<Length>>>>,

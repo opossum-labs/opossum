@@ -26,7 +26,7 @@ use crate::reporting::html_report::HtmlProperty;
 /// props.create("my float", "my floating point value", 3.14.into()).unwrap();
 /// props.set("my float", 2.71.into()).unwrap();
 /// ```
-#[derive(Default, Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
 pub struct Properties {
     props: BTreeMap<String, Property>,

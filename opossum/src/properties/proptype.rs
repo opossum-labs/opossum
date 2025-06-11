@@ -8,15 +8,15 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::{LightData, light_data_builder::LightDataBuilder},
     nodes::{
-        FilterType, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
+        FilterType, Metertype, SpectrometerType, WaveFrontData,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity,
     },
-    optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
+    spectrum::Spectrum,
     surface::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     utils::{
         geom_transformation::Isometry,
@@ -55,7 +55,7 @@ thread_local! {
 }
 
 #[non_exhaustive]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 /// The type of the [`Property`](crate::properties::Property).
 pub enum Proptype {
     /// A string property
@@ -78,14 +78,10 @@ pub enum Proptype {
     Metertype(Metertype),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
-    /// A property for storing [`OpticPorts`].
-    OpticPorts(OpticPorts),
     /// A property for storing an optical [`Aperture`].
     Aperture(Aperture),
     /// A property for storing a [`Spectrum`](crate::spectrum::Spectrum).
-    Spectrometer(Spectrometer),
-    /// This property stores optical [`Rays`](crate::rays::Rays)
-    SpotDiagram(SpotDiagram),
+    Spectrum(Spectrum),
     /// This property stores the fluence information [`FluenceData`]
     FluenceData(FluenceData),
     /// This property stores the fluence estimator strategy [`FluenceEstimator`]
@@ -146,8 +142,7 @@ impl Proptype {
                     template_engine.render("simple", &value.to_string())
                 }
                 Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
-                Self::Spectrometer(_)
-                | Self::SpotDiagram(_)
+                Self::Spectrum(_)
                 | Self::HitMap(_)
                 | Self::RayPositionHistory(_)
                 | Self::GhostFocusHistory(_) => {
@@ -380,12 +375,6 @@ mod test {
                 .to_html("id", "property_name")
                 .unwrap(),
             "Ocean Optics HR2000".to_string()
-        );
-        assert_eq!(
-            Proptype::SpotDiagram(SpotDiagram::default())
-                .to_html("id", "property_name")
-                .unwrap(),
-            "<img src=\"data/id_property_name.svg\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()
         );
         assert_eq!(
             Proptype::WaveFrontData(WaveFrontData::default())
