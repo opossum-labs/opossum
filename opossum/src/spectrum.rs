@@ -534,7 +534,9 @@ impl Plottable for Spectrum {
         plt_params
             .set(&PlotArgs::XLabel("wavelength in nm".into()))?
             .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?
-            .set(&PlotArgs::PlotSize((800, 800)))?;
+            .set(&PlotArgs::PlotSize((1200, 800)))?
+            .set(&PlotArgs::AxisEqual(false))?;
+
         Ok(())
     }
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
@@ -554,6 +556,7 @@ impl From<Spectrum> for EnergyDataBuilder {
         Self::Raw(spectrum)
     }
 }
+
 impl Display for Spectrum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_length = Length::format_args(nanometer, Abbreviation);

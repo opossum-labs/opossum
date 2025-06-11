@@ -17,6 +17,7 @@ use crate::{
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
+    spectrum::Spectrum,
     surface::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     utils::{
         geom_transformation::Isometry,
@@ -81,7 +82,7 @@ pub enum Proptype {
     /// A property for storing an optical [`Aperture`].
     Aperture(Aperture),
     /// A property for storing a [`Spectrum`](crate::spectrum::Spectrum).
-    Spectrometer(Spectrometer),
+    Spectrum(Option<Spectrum>),
     /// This property stores optical [`Rays`](crate::rays::Rays)
     SpotDiagram(SpotDiagram),
     /// This property stores the fluence information [`FluenceData`]
@@ -144,7 +145,7 @@ impl Proptype {
                     template_engine.render("simple", &value.to_string())
                 }
                 Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
-                Self::Spectrometer(_)
+                Self::Spectrum(_)
                 | Self::SpotDiagram(_)
                 | Self::HitMap(_)
                 | Self::RayPositionHistory(_)

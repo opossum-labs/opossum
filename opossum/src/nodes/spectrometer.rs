@@ -20,6 +20,7 @@ use crate::{
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
+    spectrum::Spectrum,
 };
 use std::fmt::{Debug, Display};
 
@@ -48,7 +49,7 @@ impl From<SpectrometerType> for Proptype {
 }
 impl From<Spectrometer> for Proptype {
     fn from(value: Spectrometer) -> Self {
-        Self::Spectrometer(value)
+        Self::Spectrum(value.get_spectrum())
     }
 }
 /// An (ideal) spectrometer
@@ -145,19 +146,13 @@ impl Spectrometer {
             .set_property("spectrometer type", meter_type.into())?;
         Ok(())
     }
-}
-impl OpticNode for Spectrometer {
-    fn set_apodization_warning(&mut self, apodized: bool) {
-        self.apodization_warning = apodized;
-    }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
-    }
-    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
-        let mut props = Properties::default();
-        let data = &self.light_data;
-        if let Some(light_data) = data {
-            let spectrum = match light_data {
+
+    /// Returns the spectrum stored in the lightdata of this [`Spectrometer`].
+    ///
+    /// Returns `None` if no lightdata is available, Some(Spectrum) otherwise .
+    pub fn get_spectrum(&self) -> Option<Spectrum> {
+        if let Some(light_data) = &self.light_data {
+            match light_data {
                 LightData::Energy(s) => Some(s.clone()),
                 LightData::Geometric(r) => r.to_spectrum(&nanometer!(0.2)).ok(),
                 LightData::Fourier => None,
@@ -168,32 +163,47 @@ impl OpticNode for Spectrometer {
                     }
                     all_rays.to_spectrum(&nanometer!(0.2)).ok()
                 }
-            };
-            if spectrum.is_some() {
+            }
+        } else {
+            None
+        }
+    }
+}
+impl OpticNode for Spectrometer {
+    fn set_apodization_warning(&mut self, apodized: bool) {
+        self.apodization_warning = apodized;
+    }
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        self.update_flat_single_surfaces()
+    }
+    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
+        let mut props = Properties::default();
+        if let Some(spectrum) = self.get_spectrum() {
+            props
+                .create("Spectrum", "Output spectrum", self.clone().into())
+                .unwrap();
+            props
+                .create(
+                    "Model",
+                    "Spectrometer model",
+                    self.node_attr
+                        .get_property("spectrometer type")
+                        .unwrap()
+                        .clone(),
+                )
+                .unwrap();
+            if self.apodization_warning {
                 props
-                    .create("Spectrum", "Output spectrum", self.clone().into())
-                    .unwrap();
-                props
-                    .create(
-                        "Model",
-                        "Spectrometer model",
-                        self.node_attr
-                            .get_property("spectrometer type")
-                            .unwrap()
-                            .clone(),
-                    )
-                    .unwrap();
-                if self.apodization_warning {
-                    props
                     .create(
                         "Warning",
                         "warning during analysis",
-                        "Rays have been apodized at input aperture. Results might not be accurate.".into(),
+                        "Rays have been apodized at input aperture. Results might not be accurate."
+                            .into(),
                     )
                     .unwrap();
-                }
             }
         }
+
         Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
@@ -201,6 +211,7 @@ impl OpticNode for Spectrometer {
             props,
         ))
     }
+
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
