@@ -62,9 +62,11 @@ impl Property {
                 let file_path = report_path.join(Path::new(&format!("{id}.png")));
                 fluence.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
             }
-            Proptype::Spectrometer(spectrometer) => {
-                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
-                spectrometer.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+            Proptype::Spectrum(spectrum_opt) => {
+                if let Some(spectrum) = spectrum_opt {
+                    let file_path = report_path.join(Path::new(&format!("{id}.svg")));
+                    spectrum.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+                }
             }
             Proptype::RayPositionHistory(ray_hist) => {
                 let file_path = report_path.join(Path::new(&format!("{id}.svg")));
