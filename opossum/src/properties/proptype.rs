@@ -8,12 +8,11 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::{LightData, light_data_builder::LightDataBuilder},
     nodes::{
-        FilterType, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
+        FilterType, Metertype, SpectrometerType, WaveFrontData,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity,
     },
-    optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
@@ -82,9 +81,7 @@ pub enum Proptype {
     /// A property for storing an optical [`Aperture`].
     Aperture(Aperture),
     /// A property for storing a [`Spectrum`](crate::spectrum::Spectrum).
-    Spectrum(Option<Spectrum>),
-    /// This property stores optical [`Rays`](crate::rays::Rays)
-    SpotDiagram(SpotDiagram),
+    Spectrum(Spectrum),
     /// This property stores the fluence information [`FluenceData`]
     FluenceData(FluenceData),
     /// This property stores the fluence estimator strategy [`FluenceEstimator`]
@@ -146,7 +143,6 @@ impl Proptype {
                 }
                 Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
                 Self::Spectrum(_)
-                | Self::SpotDiagram(_)
                 | Self::HitMap(_)
                 | Self::RayPositionHistory(_)
                 | Self::GhostFocusHistory(_) => {
@@ -379,12 +375,6 @@ mod test {
                 .to_html("id", "property_name")
                 .unwrap(),
             "Ocean Optics HR2000".to_string()
-        );
-        assert_eq!(
-            Proptype::SpotDiagram(SpotDiagram::default())
-                .to_html("id", "property_name")
-                .unwrap(),
-            "<img src=\"data/id_property_name.svg\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()
         );
         assert_eq!(
             Proptype::WaveFrontData(WaveFrontData::default())

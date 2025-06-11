@@ -405,6 +405,7 @@ impl From<HitMap> for Proptype {
         Self::HitMap(value)
     }
 }
+
 impl Plottable for HitMap {
     fn get_plot_series(
         &self,

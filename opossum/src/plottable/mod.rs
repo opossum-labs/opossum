@@ -498,7 +498,7 @@ impl PlotType {
                 Self::config_series_label_2d(&mut chart);
             }
         } else {
-            warn!("No plot series defined! Cannot create plot!!");
+            warn!("No plot series defined! Cannot create plot!");
         }
         root.present().unwrap();
     }

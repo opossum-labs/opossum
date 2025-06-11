@@ -47,11 +47,7 @@ impl From<SpectrometerType> for Proptype {
         Self::SpectrometerType(value)
     }
 }
-impl From<Spectrometer> for Proptype {
-    fn from(value: Spectrometer) -> Self {
-        Self::Spectrum(value.get_spectrum())
-    }
-}
+
 /// An (ideal) spectrometer
 ///
 /// It normally measures / displays the spectrum of the incoming light.
@@ -180,7 +176,7 @@ impl OpticNode for Spectrometer {
         let mut props = Properties::default();
         if let Some(spectrum) = self.get_spectrum() {
             props
-                .create("Spectrum", "Output spectrum", self.clone().into())
+                .create("Spectrum", "Output spectrum", spectrum.into())
                 .unwrap();
             props
                 .create(
@@ -279,37 +275,6 @@ impl AnalysisRayTrace for Spectrometer {
     }
     fn set_light_data(&mut self, ld: LightData) {
         self.light_data = Some(ld);
-    }
-}
-
-impl Plottable for Spectrometer {
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("wavelength in nm".into()))?
-            .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?
-            .set(&PlotArgs::PlotSize((1200, 800)))?
-            .set(&PlotArgs::AxisEqual(false))?;
-
-        Ok(())
-    }
-
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::Line2D(plt_params.clone())
-    }
-
-    fn get_plot_series(
-        &self,
-        plt_type: &mut PlotType,
-        legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let data = &self.light_data;
-        match data {
-            Some(LightData::Geometric(rays)) => rays
-                .to_spectrum(&nanometer!(0.2))?
-                .get_plot_series(plt_type, legend),
-            Some(LightData::Energy(s)) => s.get_plot_series(plt_type, legend),
-            _ => Ok(None),
-        }
     }
 }
 
