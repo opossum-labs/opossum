@@ -1,16 +1,20 @@
 use crate::components::node_editor::lens_editor::LensProperties;
-use crate::components::node_editor::{alignment_editor::AlignmentEditor,general_editor::GeneralEditor
-,lens_editor::LensEditor
-,source_editor::SourceEditor};
+use crate::components::node_editor::{
+    alignment_editor::AlignmentEditor, general_editor::GeneralEditor, lens_editor::LensEditor,
+    source_editor::SourceEditor,
+};
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
 use opossum_backend::{
-    millimeter, Fluence, Isometry, NodeAttr, Proptype,
+    light_data_builder::LightDataBuilder, millimeter, Fluence, Isometry, NodeAttr, Proptype,
     RefractiveIndexType,
-light_data_builder::LightDataBuilder,
 };
 use serde_json::Value;
-use uom::si::{f64::{Angle, RadiantExposure}, {angle::degree, f64::Length, length::meter}, radiant_exposure::joule_per_square_centimeter};
+use uom::si::{
+    f64::{Angle, RadiantExposure},
+    radiant_exposure::joule_per_square_centimeter,
+    {angle::degree, f64::Length, length::meter},
+};
 
 use super::source_editor::LightDataBuilderHistory;
 
@@ -25,9 +29,9 @@ pub enum NodeChange {
     RotationPitch(Angle),
     RotationYaw(Angle),
     Inverted(bool),
-    NodeConst(String), 
+    NodeConst(String),
     Property(String, Value),
-    Isometry(Isometry), 
+    Isometry(Isometry),
 }
 
 fn extract_light_data_info(node_attr: &NodeAttr) -> (LightDataBuilder, &'static str) {
@@ -42,18 +46,12 @@ fn extract_light_data_info(node_attr: &NodeAttr) -> (LightDataBuilder, &'static 
     }
 }
 
-
 #[component]
 pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
     let mut light_data_builder_hist = LightDataBuilderHistory::default();
     let LensProperties = use_context_provider(|| {
-        Signal::new((
-            millimeter!(500.),
-            millimeter!(-500.),
-            millimeter!(10.),
-            1.5,
-        ))
+        Signal::new((millimeter!(500.), millimeter!(-500.), millimeter!(10.), 1.5))
     });
     let active_node_opt = node();
     use_effect(move || {
@@ -218,8 +216,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
             let (ld_builder, key) = extract_light_data_info(&node_attr);
             light_data_builder_hist.replace_or_insert_and_set_current(key, ld_builder)
         }
-
-
 
         rsx! {
             div {

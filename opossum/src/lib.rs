@@ -46,7 +46,7 @@ pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
 use std::{
-    fs::{create_dir, remove_dir_all, File},
+    fs::{File, create_dir, remove_dir_all},
     io::{self, Write},
     path::{Path, PathBuf},
 };

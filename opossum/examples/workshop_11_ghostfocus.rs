@@ -1,25 +1,42 @@
 use opossum::{
-    analyzers::{AnalyzerType, GhostFocusConfig}, coatings::CoatingType, degree, energy_distributions::General2DGaussian, error::OpmResult, joule, lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, RayDataBuilder}}, millimeter, nanometer, nodes::{Lens, NodeGroup, Source, ThinMirror}, optic_node::{Alignable, OpticNode}, optic_ports::PortType, position_distributions::HexagonalTiling, radian, spectral_distribution::LaserLines, utils::geom_transformation::Isometry, J_per_cm2, OpmDocument
+    J_per_cm2, OpmDocument,
+    analyzers::{AnalyzerType, GhostFocusConfig},
+    coatings::CoatingType,
+    degree,
+    energy_distributions::General2DGaussian,
+    error::OpmResult,
+    joule,
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, RayDataBuilder},
+    },
+    millimeter, nanometer,
+    nodes::{Lens, NodeGroup, Source, ThinMirror},
+    optic_node::{Alignable, OpticNode},
+    optic_ports::PortType,
+    position_distributions::HexagonalTiling,
+    radian,
+    spectral_distribution::LaserLines,
+    utils::geom_transformation::Isometry,
 };
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Ghostfocus demo");
-    let light_data_builder = LightDataBuilder::Geometric(
-        RayDataBuilder::Collimated (
-            CollimatedSrc::new (
-         HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
-         General2DGaussian::new(
-            joule!(2.),
-            millimeter!(0., 0.),
-            millimeter!(8., 8.),
-            5.,
-            radian!(0.),
-            false,
-        )?
-        .into(),
-         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-    )));
+    let light_data_builder =
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+            HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
+            General2DGaussian::new(
+                joule!(2.),
+                millimeter!(0., 0.),
+                millimeter!(8., 8.),
+                5.,
+                radian!(0.),
+                false,
+            )?
+            .into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        )));
     let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     src.node_attr_mut().set_lidt(&J_per_cm2!(2.0));

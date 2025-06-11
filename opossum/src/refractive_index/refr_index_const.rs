@@ -50,7 +50,9 @@ impl RefrIndexConst {
 
 impl Default for RefrIndexConst {
     fn default() -> Self {
-        Self{ refractive_index: 1.5 }
+        Self {
+            refractive_index: 1.5,
+        }
     }
 }
 

@@ -9,12 +9,11 @@ pub fn AccordionItem(
     header_id: &'static str,
     parent_id: &'static str,
     content_id: &'static str,
-    #[props(default = false)]  // Default to false for the hidden prop
+    #[props(default = false)] // Default to false for the hidden prop
     hidden: bool,
 ) -> Element {
     rsx! {
-        div { class: "accordion-item bg-dark text-light",
-            hidden, 
+        div { class: "accordion-item bg-dark text-light", hidden,
             h6 { class: "accordion-header", id: header_id,
                 button {
                     class: "accordion-button collapsed bg-dark text-light",

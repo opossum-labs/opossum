@@ -2,9 +2,8 @@
 use std::fmt::Display;
 
 use actix_web::{
-    get,
+    Responder, get,
     web::{self, Json},
-    Responder,
 };
 use opossum::{analyzers::AnalyzerType, reporting::analysis_report::AnalysisReport};
 use serde::{Deserialize, Serialize};

@@ -5,7 +5,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     millimeter,
 };
-use nalgebra::{point, Point3};
+use nalgebra::{Point3, point};
 use num::Zero;
 use rand::Rng;
 use serde::{Deserialize, Serialize};

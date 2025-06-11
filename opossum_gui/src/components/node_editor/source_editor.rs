@@ -1,17 +1,16 @@
 use std::{collections::HashMap, fmt::Display};
 
+use super::node_editor_component::NodeChange;
+use crate::{components::node_editor::accordion::AccordionItem, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
 use opossum_backend::{
     energy_data_builder::EnergyDataBuilder,
     light_data_builder::LightDataBuilder,
     millimeter,
-    ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},Isometry,
-    PosDistType, Proptype,
+    ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},
+    Isometry, PosDistType, Proptype,
 };
 use uom::si::length::millimeter;
-use crate::{components::node_editor::accordion::AccordionItem, OPOSSUM_UI_LOGS};
-use super::node_editor_component::NodeChange;
-
 
 #[derive(Clone, PartialEq)]
 struct PosDistSelection {
@@ -107,7 +106,7 @@ impl TryFrom<LightDataBuilder> for PosDistSelection {
 }
 
 /// A convenience struct representing the current ray type selection in the GUI state.
-/// 
+///
 /// It stores the selected [`RayDataBuilder`] variant and provides boolean flags
 /// to indicate the selected ray type. This allows for easy querying and updating
 /// of the ray type in a user interface context.
@@ -187,9 +186,9 @@ impl TryFrom<LightDataBuilder> for RayTypeSelection {
 }
 
 /// Stores the history of [`LightDataBuilder`] instances keyed by string identifiers.
-/// 
-/// This structure is used to preserve and restore the state of previously selected 
-/// attributes when switching between them in a GUI. This avoids resetting everything 
+///
+/// This structure is used to preserve and restore the state of previously selected
+/// attributes when switching between them in a GUI. This avoids resetting everything
 /// to default values when navigating back and forth between configurations.
 #[derive(Clone, PartialEq)]
 pub struct LightDataBuilderHistory {
@@ -265,7 +264,6 @@ impl LightDataBuilderHistory {
         }
     }
 
-    
     /// Replaces or inserts a [`LightDataBuilder`] and sets it as the current entry.
     pub fn replace_or_insert_and_set_current(
         &mut self,
@@ -410,7 +408,7 @@ pub fn SourceEditor(
             header_id: "sourceHeading",
             parent_id: "accordionNodeConfig",
             content_id: "sourceCollapse",
-            hidden
+            hidden,
         }
     }
 }

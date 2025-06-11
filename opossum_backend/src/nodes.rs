@@ -493,7 +493,7 @@ async fn post_node_property(
                 400,
                 "Opossum",
                 &format!("Failed to deserialize property value: {}", e),
-            ))
+            ));
         }
     };
     let document = data.document.lock().unwrap();
@@ -614,7 +614,6 @@ async fn post_node_alignment_rotation(
         ))
     }
 }
-
 
 /// Delete a node
 ///

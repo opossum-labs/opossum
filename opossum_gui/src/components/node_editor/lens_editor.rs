@@ -1,7 +1,10 @@
+use crate::components::node_editor::{
+    accordion::{AccordionItem, LabeledInput},
+    node_editor_component::NodeChange,
+};
 use dioxus::prelude::*;
 use opossum_backend::{millimeter, NodeAttr, Proptype, RefrIndexConst, RefractiveIndexType};
 use uom::si::{f64::Length, length::millimeter};
-use crate::components::node_editor::{accordion::{AccordionItem, LabeledInput}, node_editor_component::NodeChange};
 
 #[component]
 pub fn LensFrontCurvatureInput(front_curvature: Length) -> Element {
@@ -68,9 +71,10 @@ fn lens_refractive_index_onchange(
             if ref_ind > 1. && ref_ind.is_finite() {
                 signal.set(Some(NodeChange::Property(
                     "refractive index".to_owned(),
-                    serde_json::to_value(Proptype::RefractiveIndex(
-                        RefractiveIndexType::Const(RefrIndexConst::new(ref_ind).unwrap()),
-                    )).unwrap(),
+                    serde_json::to_value(Proptype::RefractiveIndex(RefractiveIndexType::Const(
+                        RefrIndexConst::new(ref_ind).unwrap(),
+                    )))
+                    .unwrap(),
                 )));
             }
         }
@@ -79,7 +83,7 @@ fn lens_refractive_index_onchange(
 
 fn lens_geometry_onchange(
     mut signal: Signal<Option<NodeChange>>,
-        property_string: &'static str
+    property_string: &'static str,
 ) -> Callback<Event<FormData>> {
     use_callback(move |e: Event<FormData>| {
         if let Ok(length) = e.data.value().parse::<f64>() {
@@ -96,10 +100,8 @@ pub fn LensEditor(
     hidden: bool,
     node_change: Signal<Option<NodeChange>>,
     lens_properties: LensProperties,
-
 ) -> Element {
-    let accordion_content = vec![
-        rsx! {
+    let accordion_content = vec![rsx! {
             LensFrontCurvatureInput {front_curvature: lens_properties.front_curvature()}
             LensRearCurvatureInput {rear_curvature: lens_properties.rear_curvature()}
             LensCenterThicknessInput{center_thickness: lens_properties.center_thickness()}
@@ -114,13 +116,13 @@ pub fn LensEditor(
             header_id: "lensHeading",
             parent_id: "accordionNodeConfig",
             content_id: "lensCollapse",
-            hidden
+            hidden,
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Copy)]
-pub struct LensProperties{
+pub struct LensProperties {
     front_curvature: Length,
     rear_curvature: Length,
     center_thickness: Length,
@@ -157,37 +159,46 @@ impl LensProperties {
 
 impl Default for LensProperties {
     fn default() -> Self {
-        Self::new(
-            millimeter!(500.),
-            millimeter!(-500.),
-            millimeter!(10.),
-            1.5,
-        )
+        Self::new(millimeter!(500.), millimeter!(-500.), millimeter!(10.), 1.5)
     }
 }
 
-impl From<&NodeAttr> for LensProperties{
+impl From<&NodeAttr> for LensProperties {
     fn from(node_attr: &NodeAttr) -> Self {
-        let front_curvature = if let Some(Proptype::Length(front_curvature)) = node_attr.get_property("front curvature").ok(){
-            front_curvature.clone()}
-            else{
-            millimeter!(500.)
-            };
-        let rear_curvature = if let Some(Proptype::Length(rear_curvature)) = node_attr.get_property("rear curvature").ok(){
-            rear_curvature.clone()}
-            else{
-            millimeter!(-500.)
-            };
-        let center_thickness = if let Some(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness").ok(){
-            center_thickness.clone()}
-            else{
-            millimeter!(10.)
-            };
-        let refractive_index = if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ri))) = node_attr.get_property("refractive index").ok(){
-            ri.refractive_index()
+        let front_curvature = if let Some(Proptype::Length(front_curvature)) =
+            node_attr.get_property("front curvature").ok()
+        {
+            front_curvature.clone()
         } else {
-            1.5
+            millimeter!(500.)
         };
-        Self::new(front_curvature, rear_curvature, center_thickness, refractive_index)
+        let rear_curvature = if let Some(Proptype::Length(rear_curvature)) =
+            node_attr.get_property("rear curvature").ok()
+        {
+            rear_curvature.clone()
+        } else {
+            millimeter!(-500.)
+        };
+        let center_thickness = if let Some(Proptype::Length(center_thickness)) =
+            node_attr.get_property("center thickness").ok()
+        {
+            center_thickness.clone()
+        } else {
+            millimeter!(10.)
+        };
+        let refractive_index =
+            if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(ri))) =
+                node_attr.get_property("refractive index").ok()
+            {
+                ri.refractive_index()
+            } else {
+                1.5
+            };
+        Self::new(
+            front_curvature,
+            rear_curvature,
+            center_thickness,
+            refractive_index,
+        )
     }
 }
