@@ -99,14 +99,46 @@ fn lens_geometry_onchange(
 pub fn LensEditor(
     hidden: bool,
     node_change: Signal<Option<NodeChange>>,
-    lens_properties: LensProperties,
+    front_curvature_opt: Option<&'static Proptype>,
+    rear_curvature_opt: Option<&'static Proptype>,
+    center_thickness_opt: Option<&'static Proptype>,
+    refractive_index_opt: Option<&'static Proptype>,
 ) -> Element {
+    let front_curvature = if let Some(Proptype::Length(front_curvature)) =
+        front_curvature_opt
+    {
+        front_curvature
+    } else {
+        millimeter!(500.)
+    };
+    let rear_curvature = if let Some(Proptype::Length(rear_curvature)) =
+        rear_curvature_opt
+    {
+        rear_curvature
+    } else {
+        millimeter!(-500.)
+    };
+    let center_thickness = if let Some(Proptype::Length(center_thickness)) =
+        center_thickness_opt
+    {
+        center_thickness
+    } else {
+        millimeter!(10.)
+    };
+    let refractive_index = if let Some(Proptype::RefractiveIndex(RefractiveIndexType::Const(
+        ri ,
+    ))) = refractive_index_opt
+    {
+        ri.refractive_index()
+    } else {
+        1.5
+    };
     let accordion_content = vec![rsx! {
-            LensFrontCurvatureInput {front_curvature: lens_properties.front_curvature()}
-            LensRearCurvatureInput {rear_curvature: lens_properties.rear_curvature()}
-            LensCenterThicknessInput{center_thickness: lens_properties.center_thickness()}
+            LensFrontCurvatureInput {front_curvature}
+            LensRearCurvatureInput {rear_curvature}
+            LensCenterThicknessInput{center_thickness}
             //todo: refractiveindex for sellmeier, schott, etc.
-            LensRefractiveIndexInput {refractive_index: lens_properties.refractive_index()},
+            LensRefractiveIndexInput {refractive_index},
     }];
 
     rsx! {

@@ -237,7 +237,10 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     LensEditor {
                         hidden: node_attr.node_type() != "lens",
                         node_change,
-                        lens_properties: LensProperties::from(node_attr),
+                        front_curvature_opt: node_attr.get_property("front curvature").ok(),
+                        rear_curvature_opt: node_attr.get_property("rear curvature").ok(),
+                        center_thickness_opt: node_attr.get_property("center thickness").ok(),
+                        refractive_index_opt: node_attr.get_property("refractive index").ok(),
                     }
                     AlignmentEditor { alignment: node_attr.alignment().clone() }
                 }
