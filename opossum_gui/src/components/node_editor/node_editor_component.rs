@@ -1,12 +1,13 @@
+use crate::components::node_editor::source_editor::LightDataBuilderHistory;
 use crate::components::node_editor::{
     alignment_editor::AlignmentEditor, general_editor::GeneralEditor, lens_editor::LensEditor,
     source_editor::SourceEditor,
 };
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
+use opossum_backend::light_data_builder::LightDataBuilder;
 use opossum_backend::{Fluence, Isometry};
 use serde_json::Value;
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChange {
@@ -14,7 +15,6 @@ pub enum NodeChange {
     LIDT(Fluence),
     Alignment(Isometry),
     Inverted(bool),
-    NodeConst(String),
     Property(String, Value),
     Isometry(Isometry),
 }
@@ -85,7 +85,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     }
 }
 
-
 fn node_change_api_call_selection(
     node_changed: NodeChange,
     mut active_node: NodeElement,
@@ -93,55 +92,54 @@ fn node_change_api_call_selection(
 ) {
     match node_changed {
         NodeChange::Name(name) => {
-                        spawn(async move {
-                            if let Err(err_str) =
-                                api::update_node_name(&HTTP_API_CLIENT(), active_node.id(), name.clone()).await
-                            {
-                                OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                            } else {
-                                active_node.set_name(name);
-                                node.set(Some(active_node));
-                            }
-                        });
-            }
+            spawn(async move {
+                if let Err(err_str) =
+                    api::update_node_name(&HTTP_API_CLIENT(), active_node.id(), name.clone()).await
+                {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                } else {
+                    active_node.set_name(name);
+                    node.set(Some(active_node));
+                }
+            });
+        }
         NodeChange::LIDT(lidt) => {
-                spawn(async move {
-                    if let Err(err_str) =
-                        api::update_node_lidt(&HTTP_API_CLIENT(), active_node.id(), lidt.clone()).await
-                    {
-                        OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                    };
-                });
-            }
+            spawn(async move {
+                if let Err(err_str) =
+                    api::update_node_lidt(&HTTP_API_CLIENT(), active_node.id(), lidt.clone()).await
+                {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                };
+            });
+        }
         NodeChange::Alignment(iso) => {
             spawn(async move {
                 if let Err(err_str) =
                     api::update_node_alignment(&HTTP_API_CLIENT(), active_node.id(), iso).await
                 {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                } 
+                }
             });
         }
         NodeChange::Property(key, prop) => {
-                spawn(async move {
-                    if let Err(err_str) =
-                        api::update_node_property(&HTTP_API_CLIENT(), active_node.id(), (key, prop))
-                            .await
-                    {
-                        OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                    };
-                });
-            }
+            spawn(async move {
+                if let Err(err_str) =
+                    api::update_node_property(&HTTP_API_CLIENT(), active_node.id(), (key, prop))
+                        .await
+                {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                };
+            });
+        }
         NodeChange::Isometry(iso) => {
-                spawn(async move {
-                    if let Err(err_str) =
-                        api::update_node_isometry(&HTTP_API_CLIENT(), active_node.id(), iso).await
-                    {
-                        OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                    };
-                });
-            }
+            spawn(async move {
+                if let Err(err_str) =
+                    api::update_node_isometry(&HTTP_API_CLIENT(), active_node.id(), iso).await
+                {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                };
+            });
+        }
         NodeChange::Inverted(_) => todo!(),
-        NodeChange::NodeConst(_) => todo!(),
     };
 }

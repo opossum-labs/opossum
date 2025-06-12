@@ -1,7 +1,10 @@
 use std::{collections::HashMap, fmt::Display};
 
 use super::node_editor_component::NodeChange;
-use crate::{components::node_editor::accordion::AccordionItem, OPOSSUM_UI_LOGS};
+use crate::{
+    components::node_editor::accordion::{AccordionItem, LabeledInput, LabeledSelect},
+    OPOSSUM_UI_LOGS,
+};
 use dioxus::prelude::*;
 use opossum_backend::{
     energy_data_builder::EnergyDataBuilder,
@@ -10,6 +13,8 @@ use opossum_backend::{
     ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},
     Isometry, PosDistType, Proptype,
 };
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 use uom::si::length::millimeter;
 
 #[derive(Clone, PartialEq)]
@@ -47,7 +52,7 @@ impl PosDistSelection {
             self.hexagonal,
             self.hexapolar,
             self.fibonacci_rect,
-            self.fibonacci_rect,
+            self.fibonacci_ell,
             self.sobol,
         ) = match pos_dist {
             PosDistType::Random(_) => (true, false, false, false, false, false, false),
@@ -62,22 +67,20 @@ impl PosDistSelection {
         self.pos_dist = pos_dist;
     }
 
-    pub fn get_option_elements(&self) -> Element {
-        rsx! {
-            option { selected: self.rand, value: "Random", "Random" }
-            option { selected: self.grid, value: "Grid", "Grid" }
-            option { selected: self.hexagonal, value: "Hexagonal", "Hexagonal" }
-            option { selected: self.hexapolar, value: "Hexapolar", "Hexapolar" }
-            option {
-                selected: self.fibonacci_rect,
-                value: "Fibonacci, rectangular",
-                "Fibonacci, rectangular"
-            }
-            option { selected: self.fibonacci_ell, value: "Fibonacci, elliptical",
-                "Fibonacci, elliptical"
-            }
-            option { selected: self.sobol, value: "Sobol", "Sobol" }
+    pub fn get_option_elements(&self) -> Vec<(bool, String)> {
+        let mut option_vals = Vec::<(bool, String)>::new();
+        for pos_dist in PosDistType::iter() {
+            option_vals.push(match pos_dist {
+                PosDistType::Random(_) => (self.rand, pos_dist.to_string()),
+                PosDistType::Grid(_) => (self.grid, pos_dist.to_string()),
+                PosDistType::HexagonalTiling(_) => (self.hexagonal, pos_dist.to_string()),
+                PosDistType::Hexapolar(_) => (self.hexapolar, pos_dist.to_string()),
+                PosDistType::FibonacciRectangle(_) => (self.fibonacci_rect, pos_dist.to_string()),
+                PosDistType::FibonacciEllipse(_) => (self.fibonacci_ell, pos_dist.to_string()),
+                PosDistType::Sobol(_) => (self.sobol, pos_dist.to_string()),
+            })
         }
+        option_vals
     }
 }
 
@@ -373,6 +376,51 @@ impl LightDataBuilderHistory {
             };
         }
     }
+
+    pub fn set_current_or_default(&mut self, key: &str) {
+        if !self.set_current(key) {
+            match key {
+                "Rays" => {
+                    let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(
+                        CollimatedSrc::default(),
+                    ));
+                    self.replace_or_insert_and_set_current(key, new_ld_builder);
+                }
+                "Energy" => {
+                    let new_ld_builder = LightDataBuilder::Energy(EnergyDataBuilder::default());
+                    self.replace_or_insert_and_set_current(key, new_ld_builder.clone());
+                }
+                "Collimated" => {
+                    let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(
+                        CollimatedSrc::default(),
+                    ));
+                    self.replace_or_insert("Rays", &new_ld_builder);
+                    self.replace_or_insert_and_set_current(key, new_ld_builder);
+                }
+                "Point Source" => {
+                    let new_ld_builder =
+                        LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::default()));
+                    self.replace_or_insert("Rays", &new_ld_builder);
+                    self.replace_or_insert_and_set_current(key, new_ld_builder);
+                }
+                "Random"
+                | "Grid"
+                | "Hexagonal"
+                | "Hexapolar"
+                | "Fibonacci, rectangular"
+                | "Fibonacci, elliptical"
+                | "Sobol" => {
+                    if let Some(pos_dist_type) = PosDistType::default_from_name(key) {
+                        self.set_pos_dist_type(pos_dist_type);
+                    }
+                }
+
+                _ => OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log(&format!("Unknown source type: {}", key)),
+            }
+        }
+    }
 }
 
 #[component]
@@ -381,21 +429,7 @@ pub fn SourceEditor(
     light_data_builder_opt: Option<Proptype>,
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
-    let mut light_data_builder_hist = LightDataBuilderHistory::default();
-
-    let (ld_builder, key) = match light_data_builder_opt {
-        Some(Proptype::LightDataBuilder(Some(ld)))
-            if matches!(ld, LightDataBuilder::Geometric(_)) =>
-        {
-            (ld.clone(), "Rays")
-        }
-        Some(Proptype::LightDataBuilder(Some(ld))) => (ld.clone(), "Energy"),
-        _ => (LightDataBuilder::default(), "Rays"),
-    };
-
-    light_data_builder_hist.replace_or_insert_and_set_current(key, ld_builder);
-
-    let light_data_builder_sig = Signal::new(light_data_builder_hist);
+    let mut light_data_builder_sig = Signal::new(LightDataBuilderHistory::default());
 
     use_effect(move || {
         node_change.set(Some(NodeChange::Property(
@@ -408,6 +442,17 @@ pub fn SourceEditor(
     });
 
     use_effect(move || node_change.set(Some(NodeChange::Isometry(Isometry::identity()))));
+    use_effect(move || {
+        let (ld_builder, key) = match &light_data_builder_opt {
+        Some(Proptype::LightDataBuilder(Some(ld)))
+            if matches!(ld, LightDataBuilder::Geometric(_)) =>
+        {
+            (ld.clone(), "Rays")
+        }
+        Some(Proptype::LightDataBuilder(Some(ld))) => (ld.clone(), "Energy"),
+        _ => (LightDataBuilder::default(), "Rays"),
+    };light_data_builder_sig.with_mut(|ldb| ldb.replace_or_insert_and_set_current(key, ld_builder))
+});
 
     let accordion_item_content = rsx! {
         SourceLightDataBuilderSelector { light_data_builder_sig }
@@ -450,43 +495,27 @@ pub fn ReferenceLengthEditor(light_data_builder_sig: Signal<LightDataBuilderHist
         light_data_builder_sig.read().get_current_ray_data_builder()
     {
         rsx! {
-            div {
-                class: "form-floating border-start",
-                "data-mdb-input-init": "",
+            LabeledInput {
+                id: "pointsrcRefLength",
+                label: "Reference Length in mm",
+                value: format!("{}", point_src.reference_length().get::<millimeter>()),
+                onchange: move |e: Event<FormData>| {
+                    let mut point_src = point_src.clone();
+                    if let Ok(ref_length) = e.data.parsed::<f64>() {
+                        point_src.set_reference_length(millimeter!(ref_length));
+                        light_data_builder_sig
+                            .with_mut(|ldb| {
+                                if let LightDataBuilder::Geometric(RayDataBuilder::PointSrc(p)) =
+                                    ldb.get_current_mut()
+                                {
+                                    *p = point_src;
+                                }
+                            });
+                    }
+                },
+                r#type: "number",
+                min: "0.0000000001",
                 hidden: is_collimated,
-                input {
-                    class: "form-control bg-dark text-light form-control-sm",
-                    r#type: "number",
-                    min: "0.0000000001",
-                    id: "pointsrcRefLength",
-                    name: "pointsrcRefLength",
-                    placeholder: "Reference length in mm",
-                    value: format!("{}", point_src.reference_length().get::<millimeter>()),
-                    "readonly": false,
-                    onchange: {
-                        let point_src = point_src.clone();
-                        move |e: Event<FormData>| {
-                            let mut point_src = point_src.clone();
-                            if let Ok(ref_length) = e.data.parsed::<f64>() {
-                                point_src.set_reference_length(millimeter!(ref_length));
-                                light_data_builder_sig
-                                    .with_mut(|ldb| {
-                                        if let LightDataBuilder::Geometric(
-                                            RayDataBuilder::PointSrc(p),
-                                        ) = ldb.get_current_mut()
-                                        {
-                                            *p = point_src;
-                                        }
-                                    });
-                            }
-                        }
-                    },
-                }
-                label {
-                    class: "form-label text-secondary",
-                    r#for: "pointsrcRefLength",
-                    "Reference length in mm"
-                }
             }
         }
     } else {
@@ -555,57 +584,17 @@ pub fn SourceLightDataBuilderSelector(
     let (is_rays, _) = light_data_builder_sig.read().is_rays_is_collimated();
 
     rsx! {
-        div { class: "form-floating border-start",
-            select {
-                class: "form-select bg-dark text-light",
-                id: "selectSourceType",
-                "aria-label": "Select source type",
-                onchange: {
-                    move |e: Event<FormData>| {
-                        light_data_builder_sig
-                            .with_mut(|ldb| {
-                                let value = e.value();
-                                if !ldb.set_current(value.as_str()) {
-                                    match value.as_str() {
-                                        "Rays" => {
-                                            let new_ld_builder = LightDataBuilder::Geometric(
-                                                RayDataBuilder::Collimated(CollimatedSrc::default()),
-                                            );
-                                            ldb.replace_or_insert_and_set_current(
-                                                value.as_str(),
-                                                new_ld_builder,
-                                            );
-                                        }
-                                        "Energy" => {
-                                            let new_ld_builder = LightDataBuilder::Energy(
-                                                EnergyDataBuilder::default(),
-                                            );
-                                            ldb.replace_or_insert_and_set_current(
-                                                value.as_str(),
-                                                new_ld_builder.clone(),
-                                            );
-                                        }
-                                        _ => {
-                                            OPOSSUM_UI_LOGS
-                                                .write()
-                                                .add_log(
-                                                    &format!("Unknown source type: {}", value.as_str()),
-                                                )
-                                        }
-                                    };
-                                }
-                            });
-                    }
-                },
-                {
-                    rsx! {
-                        option { selected: !is_rays, value: "Energy", "Energy" }
-                        option { selected: is_rays, value: "Rays", "Rays" }
-                    }
-                }
-            
-            }
-            label { class: "text-secondary", r#for: "selectSourceType", "Source Type" }
+        LabeledSelect {
+            id: "selectSourceType",
+            label: "Source Type",
+            options: vec![(!is_rays, "Energy".to_owned()), (is_rays, "Rays".to_owned())],
+            onchange: move |e: Event<FormData>| {
+                light_data_builder_sig
+                    .with_mut(|ldb| {
+                        let value = e.value();
+                        ldb.set_current_or_default(value.as_str());
+                    });
+            },
         }
     }
 }
@@ -615,48 +604,21 @@ pub fn RayDataBuilderSelector(light_data_builder_sig: Signal<LightDataBuilderHis
     let (show, is_collimated) = light_data_builder_sig.read().is_rays_is_collimated();
 
     rsx! {
-        div { class: "form-floating border-start", hidden: !show,
-            select {
-                class: "form-select bg-dark text-light",
-                id: "selectRaySourceType",
-                "aria-label": "Select ray source type",
-                onchange: {
-                    move |e: Event<FormData>| {
+        LabeledSelect {
+            id: "selectRaySourceType",
+            label: "Rays Type",
+            options: vec![
+                (is_collimated, "Collimated".to_owned()),
+                (!is_collimated, "Point Source".to_owned()),
+            ],
+            hidden: !show,
+            onchange: move |e: Event<FormData>| {
+                light_data_builder_sig
+                    .with_mut(|ldb| {
                         let value = e.value();
-                        light_data_builder_sig
-                            .with_mut(|ldb| {
-                                let val_str = value.as_str();
-                                let new_ld_builder = if !ldb.set_current(val_str) {
-                                    match value.as_str() {
-                                        "Collimated" => {
-                                            LightDataBuilder::Geometric(
-                                                RayDataBuilder::Collimated(CollimatedSrc::default()),
-                                            )
-                                        }
-                                        "Point Source" => {
-                                            LightDataBuilder::Geometric(
-                                                RayDataBuilder::PointSrc(PointSrc::default()),
-                                            )
-                                        }
-                                        _ => {
-                                            OPOSSUM_UI_LOGS
-                                                .write()
-                                                .add_log(&format!("Unknown ray source type: {}", val_str));
-                                            LightDataBuilder::Geometric(RayDataBuilder::default())
-                                        }
-                                    }
-                                } else {
-                                    ldb.get_current().clone()
-                                };
-                                ldb.replace_or_insert("Rays", &new_ld_builder);
-                                ldb.replace_or_insert_and_set_current(val_str, new_ld_builder);
-                            });
-                    }
-                },
-                option { selected: is_collimated, value: "Collimated", "Collimated" }
-                option { selected: !is_collimated, value: "Point Source", "Point Source" }
-            }
-            label { class: "text-secondary", r#for: "selectRaySourceType", "Rays Type" }
+                        ldb.set_current_or_default(value.as_str());
+                    });
+            },
         }
     }
 }
@@ -671,64 +633,18 @@ pub fn RayPositionDistributionSelector(
 
     if let Ok(rpd) = rays_pos_dist {
         rsx! {
-            div { class: "form-floating border-start", hidden: !show,
-                select {
-                    class: "form-select bg-dark text-light",
-                    id: "selectRaysPosDistribution",
-                    onchange: move |e: Event<FormData>| {
-                        let value = e.value();
-                        light_data_builder_sig
-                            .with_mut(|ldb| {
-                                let mut ray_data_builder = ldb.get_current_ray_data_builder();
-                                let val_str = value.as_str();
-                                let new_ld_builder = if !ldb.set_current(val_str) {
-                                    if let (Some(ref mut rdb), Some(pos_dist_type)) = (
-                                        ray_data_builder,
-                                        PosDistType::default_from_name(val_str),
-                                    ) {
-                                        match rdb {
-                                            RayDataBuilder::Collimated(ref mut collimated_src) => {
-                                                collimated_src.set_pos_dist(pos_dist_type);
-                                                ldb.replace_or_insert(
-                                                    "Collimated",
-                                                    &LightDataBuilder::Geometric(rdb.clone()),
-                                                );
-                                            }
-                                            RayDataBuilder::PointSrc(ref mut point_src) => {
-                                                point_src.set_pos_dist(pos_dist_type);
-                                                ldb.replace_or_insert(
-                                                    "Point Source",
-                                                    &LightDataBuilder::Geometric(rdb.clone()),
-                                                );
-                                            }
-                                            RayDataBuilder::Raw(rays) => todo!(),
-                                            RayDataBuilder::Image {
-                                                file_path,
-                                                pixel_size,
-                                                total_energy,
-                                                wave_length,
-                                                cone_angle,
-                                            } => todo!(),
-                                        };
-                                        LightDataBuilder::Geometric(rdb.clone())
-                                    } else {
-                                        LightDataBuilder::Geometric(RayDataBuilder::default())
-                                    }
-                                } else {
-                                    ldb.get_current().clone()
-                                };
-                                ldb.replace_or_insert("Rays", &new_ld_builder);
-                                ldb.replace_or_insert_and_set_current(val_str, new_ld_builder);
-                            })
-                    },
-                    "aria-label": "Select ray position distribution",
-                    {rpd.get_option_elements()}
-                }
-                label {
-                    class: "text-secondary",
-                    r#for: "selectRaysPosDistribution",
-                    "Rays Position Distribution"
-                }
+            LabeledSelect {
+                id: "selectRaysPosDistribution",
+                label: "Rays Position Distribution",
+                options: rpd.get_option_elements(),
+                hidden: !show,
+                onchange: move |e: Event<FormData>| {
+                    light_data_builder_sig
+                        .with_mut(|ldb| {
+                            let value = e.value();
+                            ldb.set_current_or_default(value.as_str());
+                        });
+                },
             }
         }
     } else {

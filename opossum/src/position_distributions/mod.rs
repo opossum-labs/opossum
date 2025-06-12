@@ -20,6 +20,8 @@ use std::fmt::Display;
 
 use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 use uom::si::f64::Length;
 
 mod fibonacci;
@@ -45,7 +47,7 @@ pub trait PositionDistribution {
 }
 
 /// Enum for the different types of position distributions
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnumIter)]
 pub enum PosDistType {
     /// Rectangular, uniform random distribution
     Random(random::Random),

@@ -5178,6 +5178,8 @@ dependencies = [
  "rust-sugiyama",
  "serde",
  "serde_json",
+ "strum",
+ "strum_macros",
  "uom",
  "uuid",
 ]

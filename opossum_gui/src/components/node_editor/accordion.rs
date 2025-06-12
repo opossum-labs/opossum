@@ -63,7 +63,6 @@ pub fn LabeledInput(
             class: "form-floating border-start",
             "data-mdb-input-init": "",
             hidden,
-
             input {
                 class: "form-control bg-dark text-light form-control-sm",
                 id: id.as_str(),
@@ -79,6 +78,33 @@ pub fn LabeledInput(
             }
 
             label { class: "form-label text-secondary", r#for: id, "{label}" }
+        }
+    }
+}
+
+#[component]
+pub fn LabeledSelect(
+    id: String,
+    label: String,
+    options: Vec<(bool, String)>,
+    onchange: Callback<Event<FormData>>,
+    #[props(default = false)] hidden: bool,
+) -> Element {
+    rsx! {
+        div {
+            hidden,
+            class: "form-floating border-start",
+            "data-mdb-input-init": "",
+            select {
+                class: "form-select bg-dark text-light",
+                id: id.as_str(),
+                "aria-label": {label},
+                onchange,
+                for (is_selected , option) in options {
+                    option { selected: is_selected, value: option, {option.clone()} }
+                }
+            }
+            label { class: "text-secondary", r#for: id, "{label}" }
         }
     }
 }

@@ -23,6 +23,8 @@ rust-sugiyama = "0.3"
 ico = "0.4"
 uom = {version="0.37", features = ["serde"] }
 nalgebra = {version = "0.33", features = ["serde-serialize", "rayon"]}
+strum = "0.27.1"
+strum_macros = "0.27.1"
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

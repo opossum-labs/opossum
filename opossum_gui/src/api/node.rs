@@ -185,7 +185,7 @@ pub async fn update_node_lidt(
 }
 
 /// Update the alignment of the node with the given `node_id`.
-/// 
+///
 /// # Errors
 /// This function will return an error if the `node_id` was not found or if the alignment cannot be serialized.
 pub async fn update_node_alignment(

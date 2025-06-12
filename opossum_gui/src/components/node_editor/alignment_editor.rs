@@ -1,9 +1,12 @@
-use crate::{components::node_editor::{
-    accordion::{AccordionItem, LabeledInput},
-    node_editor_component::NodeChange,
-}, OPOSSUM_UI_LOGS};
-use dioxus:: prelude::*;
-use opossum_backend::{millimeter, degree, Isometry, RotationAxis, TranslationAxis};
+use crate::{
+    components::node_editor::{
+        accordion::{AccordionItem, LabeledInput},
+        node_editor_component::NodeChange,
+    },
+    OPOSSUM_UI_LOGS,
+};
+use dioxus::prelude::*;
+use opossum_backend::{degree, millimeter, Isometry, RotationAxis, TranslationAxis};
 use uom::si::{angle::degree, length::millimeter};
 
 #[component]
@@ -47,7 +50,7 @@ pub fn AlignmentEditor(alignment: Option<Isometry>) -> Element {
 }
 
 #[component]
-pub fn NodeAlignmentTranslationInput(iso:  Signal<Isometry>, axis: TranslationAxis) -> Element {
+pub fn NodeAlignmentTranslationInput(iso: Signal<Isometry>, axis: TranslationAxis) -> Element {
     let node_change_signal = use_context::<Signal<Option<NodeChange>>>();
 
     rsx! {
@@ -63,7 +66,7 @@ pub fn NodeAlignmentTranslationInput(iso:  Signal<Isometry>, axis: TranslationAx
 
 fn translation_onchange(
     mut node_change: Signal<Option<NodeChange>>,
-    mut iso_sig:  Signal<Isometry>,
+    mut iso_sig: Signal<Isometry>,
     axis: TranslationAxis,
 ) -> Callback<Event<FormData>> {
     use_callback(move |e: Event<FormData>| {
@@ -77,7 +80,9 @@ fn translation_onchange(
                 node_change.set(Some(NodeChange::Alignment(iso)));
             }
             Err(err_str) => {
-                OPOSSUM_UI_LOGS.write().add_log(format!("Failed to set translation for axis {axis}: {err_str}").as_str());
+                OPOSSUM_UI_LOGS.write().add_log(
+                    format!("Failed to set translation for axis {axis}: {err_str}").as_str(),
+                );
             }
         }
     })
@@ -114,9 +119,10 @@ fn rotation_onchange(
                 node_change.set(Some(NodeChange::Alignment(iso)));
             }
             Err(err_str) => {
-                OPOSSUM_UI_LOGS.write().add_log(format!("Failed to set rotation for axis {axis}: {err_str}").as_str());
+                OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log(format!("Failed to set rotation for axis {axis}: {err_str}").as_str());
             }
         }
     })
 }
-
