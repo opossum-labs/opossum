@@ -14,6 +14,7 @@ pub fn GraphNodeContent(node_name: String, node_type: NodeType, node_body: Eleme
     rsx! {
         div {
             class: "node-header {node_type}",
+            pointer_events: "none",
             style: format!(
                 "width: {NODE_WIDTH}px; height: {HEADER_HEIGHT}px; font-size: {font_size}pt;",
             ),

@@ -234,30 +234,24 @@ impl GraphStore {
         if optic_nodes.is_empty() {
             return Rect::new(Point2D::zero(), Size2D::zero());
         }
-        let node = optic_nodes.iter().next().unwrap().1;
-        let mut min_x = node.pos().x;
-        let mut min_y = node.pos().y;
-        let mut max_x = node.pos().x + NODE_WIDTH;
-        let mut max_y = node.pos().y + HEADER_HEIGHT + node.node_body_height();
-        for node in optic_nodes {
-            let x = node.1.pos().x;
-            let y = node.1.pos().y;
-            if min_x > x {
-                min_x = x;
-            }
-            if min_y > y {
-                min_y = y;
-            }
-            if max_x < x {
-                max_x = x;
-            }
-            if max_y < y {
-                max_y = y;
-            }
+        // Use the first node to initialize the bounding box
+        let first_node = optic_nodes.iter().next().unwrap().1;
+        let mut min_x = first_node.pos().x;
+        let mut min_y = first_node.pos().y;
+        let mut max_x = first_node.pos().x + NODE_WIDTH;
+        let mut max_y = first_node.pos().y + HEADER_HEIGHT + first_node.node_body_height();
+
+        // Iterate over the rest of the nodes to expand the bounding box
+        for node in optic_nodes.iter().skip(1) {
+            let node_pos = node.1.pos();
+            min_x = min_x.min(node_pos.x);
+            min_y = min_y.min(node_pos.y);
+            max_x = max_x.max(node_pos.x + NODE_WIDTH);
+            max_y = max_y.max(node_pos.y + HEADER_HEIGHT + node.1.node_body_height());
         }
         Rect::new(
             Point2D::new(min_x, min_y),
-            Size2D::new(max_x - min_y, max_y - min_y),
+            Size2D::new(max_x - min_x, max_y - min_y),
         )
     }
     // #[must_use]
