@@ -7,8 +7,7 @@ use crate::components::scenery_editor::{
     nodes::Nodes,
 };
 use dioxus::{
-    html::geometry::{euclid::default::Point2D, PixelsSize},
-    prelude::*,
+   html::geometry::{euclid::default::Point2D, PixelsSize}, prelude::*
 };
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode},
@@ -54,7 +53,7 @@ pub fn GraphEditor(
     let mut graph_shift = use_signal(|| Point2D::<f64>::new(0.0, 0.0));
     let mut graph_zoom = use_signal(|| 1.0);
     let mut current_mouse_pos = use_signal(|| (0.0, 0.0));
-
+   
     use_effect(move || {
         let command = command.read();
         if let Some(command) = &*(command) {
@@ -92,16 +91,45 @@ pub fn GraphEditor(
     rsx! {
         div {
             class: "graph-editor",
+            id: "editor",
             draggable: false,
-            onwheel: {
-                move |event: Event<WheelData>| {
-                    let delta = event.delta().strip_units().y;
-                    if delta > 0.0 {
-                        if graph_zoom() < 2.5 {
-                            graph_zoom *= 1.1;
+            onwheel: move |wheel_event| {
+                async move {
+                    let js_code = r#"
+                            const editor = document.getElementById('editor');
+                            if (editor) {
+                                const rect = editor.getBoundingClientRect();
+                                return {left: rect.left, top: rect.top};
+                            }
+                        "#;
+                    if let Ok(editor_rect_json) = document::eval(js_code).await {
+                        if !editor_rect_json.is_null() {
+                            if let (Some(left), Some(top)) = (
+                                editor_rect_json["left"].as_f64(),
+                                editor_rect_json["top"].as_f64(),
+                            ) {
+                                let client_pos = wheel_event.data.client_coordinates();
+                                let mouse_pos = Point2D::new(client_pos.x - left, client_pos.y - top);
+
+                                let current_graph_shift = graph_shift();
+                                let current_graph_zoom = graph_zoom();
+                                let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
+                                let mouse_on_graph_y = (mouse_pos.y - current_graph_shift.y) / current_graph_zoom;
+
+                                let delta = wheel_event.delta().strip_units().y;
+                                let new_graph_zoom = if delta > 0.0 {
+                                    (current_graph_zoom * 1.1).min(2.5)
+                                } else {
+                                    (current_graph_zoom / 1.1).max(0.1)
+                                };
+                                graph_zoom.set(new_graph_zoom);
+                                // Calculate the new shift to keep the mouse position fixed
+                                let new_shift_x = mouse_pos.x - mouse_on_graph_x * new_graph_zoom;
+                                let new_shift_y = mouse_pos.y - mouse_on_graph_y * new_graph_zoom;
+
+                                graph_shift.set(Point2D::new(new_shift_x, new_shift_y));
+                            }
                         }
-                    } else {
-                        graph_zoom /= 1.1
                     }
                 }
             },
@@ -220,6 +248,7 @@ pub fn GraphEditor(
             },
             div {
                 draggable: false,
+                pointer_events: "none",
                 style: format!(
                     "transform-origin: 0 0; transform: translate({}px, {}px) scale({graph_zoom});",
                     graph_shift().x,
