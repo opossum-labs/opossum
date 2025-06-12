@@ -1,8 +1,12 @@
-use crate::components::{
-    logger::logger_component::Logger,
-    menu_bar::menu_bar_component::{MenuBar, MenuSelection},
-    node_editor::NodeEditor,
-    scenery_editor::{graph_editor::NodeEditorCommand, node::NodeElement, GraphEditor},
+use crate::{
+    components::{
+        context_menu::cx_menu::ContextMenu,
+        logger::logger_component::Logger,
+        menu_bar::menu_bar_component::{MenuBar, MenuSelection},
+        node_editor::NodeEditor,
+        scenery_editor::{graph_editor::NodeEditorCommand, node::NodeElement, GraphEditor},
+    },
+    CONTEXT_MENU,
 };
 use dioxus::prelude::*;
 
@@ -11,7 +15,6 @@ pub fn App() -> Element {
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
     let selected_node = use_signal(|| None::<NodeElement>);
-    // let mut main_window = use_signal(|| None::<Rc<MountedData>>);
 
     use_effect(move || {
         let menu_item = menu_item_selected.read();
@@ -53,6 +56,7 @@ pub fn App() -> Element {
         }
     });
     rsx! {
+        ContextMenu {}
         div { class: "container-fluid text-bg-dark",
             div { class: "row",
                 div { class: "col",
