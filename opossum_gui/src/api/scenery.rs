@@ -29,6 +29,14 @@ pub async fn post_add_analyzer(
         .post::<NewAnalyzerInfo, Uuid>("/api/scenery/analyzers", new_analyzer_info)
         .await
 }
+/// Get all available analyzers.
+///
+/// Return a list of all available analyzers.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the returned data cannot be parsed (deserialized) into the correct data type.
 pub async fn get_analyzers(client: &HTTPClient) -> Result<Vec<AnalyzerInfo>, String> {
     client
         .get::<Vec<AnalyzerInfo>>("/api/scenery/analyzers")

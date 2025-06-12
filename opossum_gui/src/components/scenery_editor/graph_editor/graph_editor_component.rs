@@ -7,7 +7,8 @@ use crate::components::scenery_editor::{
     nodes::Nodes,
 };
 use dioxus::{
-   html::geometry::{euclid::default::Point2D, PixelsSize}, prelude::*
+    html::geometry::{euclid::default::Point2D, PixelsSize},
+    prelude::*,
 };
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode},
@@ -54,7 +55,7 @@ pub fn GraphEditor(
     let mut graph_zoom = use_signal(|| 1.0);
     let mut current_mouse_pos = use_signal(|| (0.0, 0.0));
     let mut on_mounted = use_signal(|| None);
-   
+
     use_effect(move || {
         let command = command.read();
         if let Some(command) = &*(command) {
@@ -94,19 +95,21 @@ pub fn GraphEditor(
             class: "graph-editor",
             id: "editor",
             draggable: false,
-            onmounted: move |event| {
-                on_mounted.set(Some(event.data))
-            },
+            onmounted: move |event| { on_mounted.set(Some(event.data)) },
             onwheel: move |wheel_event| {
                 async move {
-                    if let Ok(rect)=on_mounted().unwrap().get_client_rect().await {
+                    if let Ok(rect) = on_mounted().unwrap().get_client_rect().await {
                         let client_pos = wheel_event.data.client_coordinates();
-                        let mouse_pos = Point2D::new(client_pos.x-rect.min_x() , client_pos.y - rect.min_y());
+                        let mouse_pos = Point2D::new(
+                            client_pos.x - rect.min_x(),
+                            client_pos.y - rect.min_y(),
+                        );
                         let current_graph_shift = graph_shift();
                         let current_graph_zoom = graph_zoom();
-                        let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
-                        let mouse_on_graph_y = (mouse_pos.y - current_graph_shift.y) / current_graph_zoom;
-
+                        let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x)
+                            / current_graph_zoom;
+                        let mouse_on_graph_y = (mouse_pos.y - current_graph_shift.y)
+                            / current_graph_zoom;
                         let delta = wheel_event.delta().strip_units().y;
                         let new_graph_zoom = if delta > 0.0 {
                             (current_graph_zoom * 1.1).min(2.5)
@@ -114,10 +117,8 @@ pub fn GraphEditor(
                             (current_graph_zoom / 1.1).max(0.1)
                         };
                         graph_zoom.set(new_graph_zoom);
-                        // Calculate the new shift to keep the mouse position fixed
-                        let new_shift_x = mouse_pos.x - mouse_on_graph_x * new_graph_zoom;
-                        let new_shift_y = mouse_pos.y - mouse_on_graph_y * new_graph_zoom;
-
+                        let new_shift_x = mouse_on_graph_x.mul_add(-new_graph_zoom, mouse_pos.x);
+                        let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
                         graph_shift.set(Point2D::new(new_shift_x, new_shift_y));
                     }
                 }
@@ -229,8 +230,8 @@ pub fn GraphEditor(
                     graph_shift
                         .set(
                             Point2D::new(
-                                view_center_x - center.x * zoom,
-                                view_center_y - center.y * zoom,
+                                center.x.mul_add(-zoom, view_center_x),
+                                center.y.mul_add(-zoom, view_center_y),
                             ),
                         );
                 }
