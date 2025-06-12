@@ -6,7 +6,6 @@ use crate::{
         node_editor::NodeEditor,
         scenery_editor::{graph_editor::NodeEditorCommand, node::NodeElement, GraphEditor},
     },
-    CONTEXT_MENU,
 };
 use dioxus::prelude::*;
 
