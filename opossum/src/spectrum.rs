@@ -507,7 +507,6 @@ impl Spectrum {
     }
 }
 
-
 impl Plottable for Spectrum {
     fn get_plot_series(
         &self,

@@ -63,16 +63,16 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     }
                     SourceEditor {
                         hidden: node_attr.node_type() != "source",
-                        light_data_builder_opt: node_attr.get_property("light data").ok().map(|p| p.clone()),
+                        light_data_builder_opt: node_attr.get_property("light data").cloned().ok(),
                         node_change,
                     }
                     LensEditor {
                         hidden: node_attr.node_type() != "lens",
                         node_change,
-                        front_curvature_opt: node_attr.get_property("front curvature").ok().map(|p| p.clone()),
-                        rear_curvature_opt: node_attr.get_property("rear curvature").ok().map(|p| p.clone()),
-                        center_thickness_opt: node_attr.get_property("center thickness").ok().map(|p| p.clone()),
-                        refractive_index_opt: node_attr.get_property("refractive index").ok().map(|p| p.clone()),
+                        front_curvature_opt: node_attr.get_property("front curvature").cloned().ok(),
+                        rear_curvature_opt: node_attr.get_property("rear curvature").cloned().ok(),
+                        center_thickness_opt: node_attr.get_property("center thickness").cloned().ok(),
+                        refractive_index_opt: node_attr.get_property("refractive index").cloned().ok(),
                     }
                     AlignmentEditor { alignment: *node_attr.alignment() }
                 }

@@ -10,7 +10,9 @@ use crate::{
     radian,
 };
 use approx::relative_eq;
-use nalgebra::{vector, Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation, Translation3, Vector3};
+use nalgebra::{
+    Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation, Translation3, Vector3, vector,
+};
 use num::Zero;
 use serde::{
     Deserialize, Serialize,
@@ -252,7 +254,11 @@ impl Isometry {
     }
     /// Sets a value on the translation axis of this [`Isometry`].
     #[must_use]
-    pub fn set_translation_of_axis(&mut self, axis: TranslationAxis, value: Length) -> OpmResult<()> {
+    pub fn set_translation_of_axis(
+        &mut self,
+        axis: TranslationAxis,
+        value: Length,
+    ) -> OpmResult<()> {
         let mut new_trans = self.translation();
         let rot = self.rotation();
         match axis {
@@ -472,7 +478,6 @@ impl Display for RotationAxis {
         }
     }
 }
-
 
 impl Display for Isometry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
