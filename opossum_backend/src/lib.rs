@@ -15,7 +15,7 @@ pub use opossum::{
     energy_distributions::*,
     joule,
     lightdata::{energy_data_builder, light_data_builder, ray_data_builder},
-    millimeter, nanometer,
+    millimeter, nanometer, degree,
     nodes::{NodeAttr, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
@@ -24,5 +24,5 @@ pub use opossum::{
     refractive_index::*,
     reporting::*,
     spectral_distribution::*,
-    utils::{geom_transformation::Isometry, math_utils::usize_to_f64},
+    utils::{geom_transformation::{Isometry, TranslationAxis, RotationAxis}, math_utils::usize_to_f64},
 };

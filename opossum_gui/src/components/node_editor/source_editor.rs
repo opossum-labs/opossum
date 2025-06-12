@@ -379,9 +379,10 @@ impl LightDataBuilderHistory {
 pub fn SourceEditor(
     hidden: bool,
     light_data_builder_opt: Option<Proptype>,
-    light_data_builder_hist: LightDataBuilderHistory,
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
+    let mut light_data_builder_hist = LightDataBuilderHistory::default();
+
     let (ld_builder, key) = match light_data_builder_opt {
         Some(Proptype::LightDataBuilder(Some(ld)))
             if matches!(ld, LightDataBuilder::Geometric(_)) =>

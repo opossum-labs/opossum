@@ -402,57 +402,38 @@ async fn post_node_lidt(
     }
 }
 
-/// Update the alignment translation of an optical node
+
+/// Update the alignment isometry of an optical node
 #[utoipa::path(tag = "node",
     params(
-        ("uuid" = Uuid, Path, description = "alignment translation of the optical node"),
+        ("uuid" = Uuid, Path, description = "alignment isometry of the optical node"),
     ),
     request_body(content = String,
-        description = "updated alignment translation of node",
+        description = "updated alignment isometry of node",
         content_type = "application/json",
-        example= "(1.56, 0)"
     ),
     responses(
-        (status = OK, description = "Node alignment translation successfully updated"),
+        (status = OK, description = "Node alignment isometry successfully updated"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
-#[post("/alignmenttranslation/{uuid}")]
-async fn post_node_alignment_translation(
+#[post("/alignmentisometry/{uuid}")]
+async fn post_node_alignment_isometry(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    translation_from_gui: web::Json<(Length, usize)>,
+    isometry_from_gui: web::Json<Isometry>,
 ) -> Result<(), ErrorResponse> {
     let uuid: Uuid = path.into_inner();
-    let (translation_from_gui, idx) = translation_from_gui.into_inner();
+    let isometry = isometry_from_gui.into_inner();
+    println!("{:?}", isometry);
     let document = data.document.lock().unwrap();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        let (mut translation, rotation) = if let Some(alignment) = node_ref
+        node_ref
             .optical_ref
             .lock()
             .unwrap()
             .node_attr_mut()
-            .alignment()
-        {
-            (alignment.translation(), alignment.rotation())
-        } else {
-            (Point3::origin(), Point3::origin())
-        };
-        if idx == 0 {
-            translation.x = translation_from_gui;
-        } else if idx == 1 {
-            translation.y = translation_from_gui;
-        } else {
-            translation.z = translation_from_gui;
-        };
-        if let Ok(new_alignment) = Isometry::new(translation, rotation) {
-            node_ref
-                .optical_ref
-                .lock()
-                .unwrap()
-                .node_attr_mut()
-                .set_alignment(new_alignment);
-        }
+            .set_alignment(isometry);
         Ok(())
     } else {
         Err(ErrorResponse::new(
@@ -463,7 +444,7 @@ async fn post_node_alignment_translation(
     }
 }
 
-/// Update the alignment translation of an optical node
+/// Update a property of an optical node
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "Update a single property of the optical node"),
@@ -544,67 +525,6 @@ async fn post_node_isometry(
             .unwrap()
             .node_attr_mut()
             .set_isometry(iso);
-        Ok(())
-    } else {
-        Err(ErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
-    }
-}
-/// Update the alignment rotation of an optical node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "alignment rotation of the optical node"),
-    ),
-    request_body(content = String,
-        description = "updated alignment rotation of node",
-        content_type = "application/json",
-        example= "(1.56, 0)"
-    ),
-    responses(
-        (status = OK, description = "Node alignment rotation successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/alignmentrotation/{uuid}")]
-async fn post_node_alignment_rotation(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    rotation_from_gui: web::Json<(Angle, usize)>,
-) -> Result<(), ErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let (rotation_from_gui, idx) = rotation_from_gui.into_inner();
-    let document = data.document.lock().unwrap();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        let (translation, mut rotation) = if let Some(alignment) = node_ref
-            .optical_ref
-            .lock()
-            .unwrap()
-            .node_attr_mut()
-            .alignment()
-        {
-            (alignment.translation(), alignment.rotation())
-        } else {
-            (Point3::origin(), Point3::origin())
-        };
-
-        if idx == 0 {
-            rotation.x = rotation_from_gui;
-        } else if idx == 1 {
-            rotation.y = rotation_from_gui;
-        } else {
-            rotation.z = rotation_from_gui;
-        };
-        if let Ok(new_alignment) = Isometry::new(translation, rotation) {
-            node_ref
-                .optical_ref
-                .lock()
-                .unwrap()
-                .node_attr_mut()
-                .set_alignment(new_alignment);
-        }
         Ok(())
     } else {
         Err(ErrorResponse::new(
@@ -811,8 +731,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_position);
     cfg.service(post_node_name);
     cfg.service(post_node_lidt);
-    cfg.service(post_node_alignment_translation);
-    cfg.service(post_node_alignment_rotation);
+    cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);
     cfg.service(post_node_isometry);
 

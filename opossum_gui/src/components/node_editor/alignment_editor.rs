@@ -1,55 +1,38 @@
-use crate::components::node_editor::{
-    accordion::AccordionItem,
-    node_editor_component::{NodeChange, NodePropInput},
-};
-use dioxus::{html::geometry::euclid::num::Zero, prelude::*};
-use opossum_backend::Isometry;
-use uom::si::f64::{Angle, Length};
+use crate::{components::node_editor::{
+    accordion::{AccordionItem, LabeledInput},
+    node_editor_component::NodeChange,
+}, OPOSSUM_UI_LOGS};
+use dioxus:: prelude::*;
+use opossum_backend::{millimeter, degree, Isometry, RotationAxis, TranslationAxis};
+use uom::si::{angle::degree, length::millimeter};
 
 #[component]
 pub fn AlignmentEditor(alignment: Option<Isometry>) -> Element {
+    let iso = Signal::new(alignment.unwrap_or(Isometry::identity()));
     let accordion_content = vec![rsx! {
-        NodePropInput {
-            name: "XTranslation".to_string(),
-            placeholder: "X Translation in m".to_string(),
-            node_change: NodeChange::TranslationX(
-                alignment.as_ref().map_or(Length::zero(), |a| a.translation().x),
-            ),
+        NodeAlignmentTranslationInput {
+            iso,
+            axis: TranslationAxis::X,
         }
-        NodePropInput {
-            name: "YTranslation".to_string(),
-            placeholder: "Y Translation in m".to_string(),
-            node_change: NodeChange::TranslationY(
-                alignment.as_ref().map_or(Length::zero(), |a| a.translation().y),
-            ),
+        NodeAlignmentTranslationInput {
+            iso,
+            axis: TranslationAxis::Y,
         }
-        NodePropInput {
-            name: "ZTranslation".to_string(),
-            placeholder: "Z Translation in m".to_string(),
-            node_change: NodeChange::TranslationZ(
-                alignment.as_ref().map_or(Length::zero(), |a| a.translation().z),
-            ),
+        NodeAlignmentTranslationInput {
+            iso,
+            axis: TranslationAxis::Z,
         }
-        NodePropInput {
-            name: "Roll".to_string(),
-            placeholder: "Roll angle in degree".to_string(),
-            node_change: NodeChange::RotationRoll(
-                alignment.as_ref().map_or(Angle::zero(), |a| a.rotation().x),
-            ),
+        NodeAlignmentRotationInput {
+            iso,
+            axis: RotationAxis::Roll,
         }
-        NodePropInput {
-            name: "Pitch".to_string(),
-            placeholder: "Pitch angle in degree".to_string(),
-            node_change: NodeChange::RotationPitch(
-                alignment.as_ref().map_or(Angle::zero(), |a| a.rotation().y),
-            ),
+        NodeAlignmentRotationInput {
+            iso,
+            axis: RotationAxis::Pitch,
         }
-        NodePropInput {
-            name: "Yaw".to_string(),
-            placeholder: "Yaw angle in degree".to_string(),
-            node_change: NodeChange::RotationYaw(
-                alignment.as_ref().map_or(Angle::zero(), |a| a.rotation().z),
-            ),
+        NodeAlignmentRotationInput {
+            iso,
+            axis: RotationAxis::Yaw,
         }
     }];
     rsx! {
@@ -62,3 +45,78 @@ pub fn AlignmentEditor(alignment: Option<Isometry>) -> Element {
         }
     }
 }
+
+#[component]
+pub fn NodeAlignmentTranslationInput(iso:  Signal<Isometry>, axis: TranslationAxis) -> Element {
+    let node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+
+    rsx! {
+        LabeledInput {
+            id: format!("inputNodeTranslation{axis}"),
+            label: format!("{} translation in mm", axis),
+            value: format!("{:.3}", iso.read().translation_of_axis(axis).get::<millimeter>()),
+            r#type: "number",
+            onchange: Some(translation_onchange(node_change_signal, iso, axis)),
+        }
+    }
+}
+
+fn translation_onchange(
+    mut node_change: Signal<Option<NodeChange>>,
+    mut iso_sig:  Signal<Isometry>,
+    axis: TranslationAxis,
+) -> Callback<Event<FormData>> {
+    use_callback(move |e: Event<FormData>| {
+        let Ok(value) = e.data.value().parse::<f64>() else {
+            return;
+        };
+        let mut iso = iso_sig();
+        match iso.set_translation_of_axis(axis, millimeter!(value)) {
+            Ok(()) => {
+                iso_sig.set(iso);
+                node_change.set(Some(NodeChange::Alignment(iso)));
+            }
+            Err(err_str) => {
+                OPOSSUM_UI_LOGS.write().add_log(format!("Failed to set translation for axis {axis}: {err_str}").as_str());
+            }
+        }
+    })
+}
+
+#[component]
+pub fn NodeAlignmentRotationInput(iso: Signal<Isometry>, axis: RotationAxis) -> Element {
+    let node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+
+    rsx! {
+        LabeledInput {
+            id: format!("inputNodeRotation{axis}"),
+            label: format!("{} rotation in degrees", axis),
+            value: format!("{:.3}", iso.read().rotation_of_axis(axis).get::<degree>()),
+            r#type: "number",
+            onchange: Some(rotation_onchange(node_change_signal, iso, axis)),
+        }
+    }
+}
+
+fn rotation_onchange(
+    mut node_change: Signal<Option<NodeChange>>,
+    mut iso_sig: Signal<Isometry>,
+    axis: RotationAxis,
+) -> Callback<Event<FormData>> {
+    use_callback(move |e: Event<FormData>| {
+        let Ok(value) = e.data.value().parse::<f64>() else {
+            return;
+        };
+        let mut iso = iso_sig();
+        match iso.set_rotation_of_axis(axis, degree!(value)) {
+            Ok(()) => {
+                iso_sig.set(iso);
+                node_change.set(Some(NodeChange::Alignment(iso)));
+            }
+            Err(err_str) => {
+                OPOSSUM_UI_LOGS.write().add_log(format!("Failed to set rotation for axis {axis}: {err_str}").as_str());
+            }
+        }
+    })
+}
+

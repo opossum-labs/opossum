@@ -42,8 +42,8 @@ pub fn AccordionItem(
 
 #[component]
 pub fn LabeledInput(
-    id: &'static str,
-    label: &'static str,
+    id: String,
+    label: String,
     value: String,
 
     #[props(default = None)] onchange: Option<Callback<Event<FormData>>>,
@@ -66,8 +66,8 @@ pub fn LabeledInput(
 
             input {
                 class: "form-control bg-dark text-light form-control-sm",
-                id,
-                name: id,
+                id: id.as_str(),
+                name: id.as_str(),
                 placeholder: label,
                 value,
                 readonly: onchange.is_none(),

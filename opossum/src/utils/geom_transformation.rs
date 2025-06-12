@@ -10,7 +10,7 @@ use crate::{
     radian,
 };
 use approx::relative_eq;
-use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3, vector};
+use nalgebra::{vector, Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation, Translation3, Vector3};
 use num::Zero;
 use serde::{
     Deserialize, Serialize,
@@ -23,7 +23,7 @@ use uom::si::{
 };
 
 /// Struct to store the isometric transofmeation matrix and its inverse
-#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Copy)]
 pub struct Isometry {
     transform: Isometry3<f64>,
     #[serde(skip_serializing)]
@@ -240,11 +240,57 @@ impl Isometry {
         let t = self.transform.translation;
         meter!(t.x, t.y, t.z)
     }
+    /// Returns the translation on a specific axis of this [`Isometry`].
+    #[must_use]
+    pub fn translation_of_axis(&self, axis: TranslationAxis) -> Length {
+        let t = self.translation();
+        match axis {
+            TranslationAxis::X => t.x,
+            TranslationAxis::Y => t.y,
+            TranslationAxis::Z => t.z,
+        }
+    }
+    /// Sets a value on the translation axis of this [`Isometry`].
+    #[must_use]
+    pub fn set_translation_of_axis(&mut self, axis: TranslationAxis, value: Length) -> OpmResult<()> {
+        let mut new_trans = self.translation();
+        let rot = self.rotation();
+        match axis {
+            TranslationAxis::X => new_trans.x = value,
+            TranslationAxis::Y => new_trans.y = value,
+            TranslationAxis::Z => new_trans.z = value,
+        }
+        *self = Isometry::new(new_trans, rot)?;
+        Ok(())
+    }
     /// Returns the rotation of this [`Isometry`].
     #[must_use]
     pub fn rotation(&self) -> Point3<Angle> {
         let rot = self.transform.rotation.euler_angles();
         radian!(rot.0, rot.1, rot.2)
+    }
+    /// Returns the rotation angle around a specific axis of this [`Isometry`].
+    #[must_use]
+    pub fn rotation_of_axis(&self, axis: RotationAxis) -> Angle {
+        let r = self.rotation();
+        match axis {
+            RotationAxis::Roll => r.x,
+            RotationAxis::Pitch => r.y,
+            RotationAxis::Yaw => r.z,
+        }
+    }
+    /// Sets a value on the rotation axis of this [`Isometry`].
+    #[must_use]
+    pub fn set_rotation_of_axis(&mut self, axis: RotationAxis, value: Angle) -> OpmResult<()> {
+        let trans = self.translation();
+        let mut new_rot = self.rotation();
+        match axis {
+            RotationAxis::Roll => new_rot.x = value,
+            RotationAxis::Pitch => new_rot.y = value,
+            RotationAxis::Yaw => new_rot.z = value,
+        }
+        *self = Isometry::new(trans, new_rot)?;
+        Ok(())
     }
     /// Transforms a single point by the defined isometry
     /// # Attributes
@@ -384,6 +430,49 @@ impl Isometry {
             .collect::<Vec<Vector3<f64>>>()
     }
 }
+
+/// Define the translation and rotation axes for the [`Isometry`]
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum TranslationAxis {
+    /// The X axis
+    X,
+    /// The Y axis
+    Y,
+    /// The Z axis
+    Z,
+}
+
+/// Define the rotation axes for the [`Isometry`]
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum RotationAxis {
+    /// The Roll axis
+    Roll,
+    /// The Pitch axis
+    Pitch,
+    /// The Yaw axis
+    Yaw,
+}
+
+impl Display for TranslationAxis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TranslationAxis::X => write!(f, "X"),
+            TranslationAxis::Y => write!(f, "Y"),
+            TranslationAxis::Z => write!(f, "Z"),
+        }
+    }
+}
+
+impl Display for RotationAxis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RotationAxis::Roll => write!(f, "Roll"),
+            RotationAxis::Pitch => write!(f, "Pitch"),
+            RotationAxis::Yaw => write!(f, "Yaw"),
+        }
+    }
+}
+
 
 impl Display for Isometry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

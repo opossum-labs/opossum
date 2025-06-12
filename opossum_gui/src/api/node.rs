@@ -184,6 +184,23 @@ pub async fn update_node_lidt(
         .await
 }
 
+/// Update the alignment of the node with the given `node_id`.
+/// 
+/// # Errors
+/// This function will return an error if the `node_id` was not found or if the alignment cannot be serialized.
+pub async fn update_node_alignment(
+    client: &HTTPClient,
+    node_id: Uuid,
+    alignment: Isometry,
+) -> Result<String, String> {
+    client
+        .post::<Isometry, String>(
+            &format!("/api/scenery/alignmentisometry/{}", node_id.as_simple()),
+            alignment,
+        )
+        .await
+}
+
 /// Update the translation alignment of the node with the given `node_id`.
 ///
 /// # Errors
