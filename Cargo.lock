@@ -5170,6 +5170,7 @@ dependencies = [
  "dioxus",
  "dioxus-free-icons",
  "ico",
+ "itertools 0.14.0",
  "nalgebra",
  "opossum_backend",
  "plotly",

@@ -1,11 +1,9 @@
-use crate::components::node_editor::source_editor::LightDataBuilderHistory;
+use crate::components::node_editor::source_editor::SourceEditor;
 use crate::components::node_editor::{
     alignment_editor::AlignmentEditor, general_editor::GeneralEditor, lens_editor::LensEditor,
-    source_editor::SourceEditor,
 };
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
-use opossum_backend::light_data_builder::LightDataBuilder;
 use opossum_backend::{Fluence, Isometry};
 use serde_json::Value;
 

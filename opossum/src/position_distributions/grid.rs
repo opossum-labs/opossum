@@ -62,6 +62,14 @@ impl Grid {
         self.side_length
     }
 
+    pub fn side_length_x(&self) -> Length {
+        self.side_length.0
+    }
+
+    pub fn side_length_y(&self) -> Length {
+        self.side_length.1
+    }
+
     pub fn set_nr_of_points(&mut self, nr_of_points: (usize, usize)) {
         self.nr_of_points = nr_of_points;
     }
