@@ -85,7 +85,7 @@ pub fn GraphEditor(
                 }
                 NodeEditorCommand::SaveFile(path) => {
                     let path = path.to_owned();
-                    spawn(async move { graph_store.save_to_opm_file(&path).await });
+                    spawn(async move { GraphStore::save_to_opm_file(&path).await });
                 }
             }
         }

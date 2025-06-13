@@ -13,5 +13,6 @@ pub use opossum::{
     nodes::NodeAttr,
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
+    utils::math_utils::isize_to_f64,
     utils::math_utils::usize_to_f64,
 };

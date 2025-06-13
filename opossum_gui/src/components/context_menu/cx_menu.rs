@@ -30,7 +30,7 @@ impl CxMenu {
         *self = cx_menu;
     }
     #[must_use]
-    pub fn new(x: f64, y: f64, entries: Vec<String>) -> Option<Self> {
+    pub const fn new(x: f64, y: f64, entries: Vec<String>) -> Option<Self> {
         // MAIN_WINDOW_SIZE.read().as_ref().map(|rect| {
         //     let mut x = x;
         //     let mut y = y;

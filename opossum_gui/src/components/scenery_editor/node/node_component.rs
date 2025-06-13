@@ -91,13 +91,13 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
             },
             oncontextmenu: move |event| {
                 event.prevent_default();
-                println!("oncontext: {:?}", event);
+                println!("oncontext: {event:?}");
                 let cx_menu = CxMenu::new(
                     event.page_coordinates().x,
                     event.page_coordinates().y,
                     vec!["Create reference".to_owned()],
                 );
-                println!("oncontecxt: {:?}", cx_menu);
+                println!("oncontecxt: {cx_menu:?}");
                 let mut ctx = CONTEXT_MENU.write();
                 *ctx = cx_menu;
             },
