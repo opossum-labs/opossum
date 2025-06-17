@@ -152,7 +152,9 @@ pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
 /// Return a list of all available node types.
 ///
 /// Returns a vector of tuples containing the name and the description of all
-/// avialable nodes in OPOSSUM.
+/// available nodes in OPOSSUM.
+/// **Note**: This function does not return he node type `reference` since there is a
+/// separate endpoint for adding reference nodes.
 #[must_use]
 pub fn node_types() -> Vec<(&'static str, &'static str)> {
     vec![
@@ -162,7 +164,6 @@ pub fn node_types() -> Vec<(&'static str, &'static str)> {
         ("group", "group node containing othe nodes or groups"),
         ("ideal filter", "ideal filter"),
         ("reflective grating", "reflective optical grating"),
-        ("reference", "node referencing another node"),
         ("lens", "spherical lens"),
         ("cylindric lens", "cylindric lens"),
         ("source", "light source"),
