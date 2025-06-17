@@ -15,7 +15,7 @@ use dioxus::{
 };
 use opossum_backend::{
     isize_to_f64,
-    nodes::{ConnectInfo, NewNode},
+    nodes::{ConnectInfo, NewNode, NewRefNode},
     scenery::NewAnalyzerInfo,
     usize_to_f64, PortType,
 };
@@ -325,7 +325,22 @@ impl GraphStore {
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
     }
-
+    pub async fn add_optic_reference(&mut self, new_ref_info: NewRefNode) {
+         match api::post_add_ref_node(&HTTP_API_CLIENT(), new_ref_info, Uuid::nil()).await {
+            Ok(node_info) => {
+                let ports = Self::get_ports(node_info.uuid()).await;
+                let new_node = NodeElement::new(
+                    NodeType::Optical(node_info.name().to_string()),
+                    node_info.uuid(),
+                    Point2D::new(100.0, 100.0),
+                    ports,
+                );
+                self.nodes_mut().write().insert(new_node.id(), new_node);
+                self.set_node_active(node_info.uuid());
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+        }
+    }
     pub async fn add_analyzer(&mut self, new_analyzer_info: NewAnalyzerInfo) {
         match api::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer_info.clone()).await {
             Ok(analyzer_id) => {

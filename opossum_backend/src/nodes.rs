@@ -264,7 +264,7 @@ async fn post_subnode(
     drop(node);
     Ok(Json(node_info))
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
 pub struct NewRefNode {
     referring_node: Uuid,
     gui_position: (f64, f64),

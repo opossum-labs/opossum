@@ -1,6 +1,6 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode, NodeInfo},
+    nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     NodeAttr,
 };
 use uuid::Uuid;
@@ -55,6 +55,18 @@ pub async fn post_add_node(
         .post::<NewNode, NodeInfo>(
             &format!("/api/scenery/{}/nodes", group_id.as_simple()),
             new_node_info,
+        )
+        .await
+}
+pub async fn post_add_ref_node(
+    client: &HTTPClient,
+    new_ref_info: NewRefNode,
+    group_id: Uuid,
+) -> Result<NodeInfo, String> {
+    client
+        .post::<NewRefNode, NodeInfo>(
+            &format!("/api/scenery/{}/references", group_id.as_simple()),
+            new_ref_info,
         )
         .await
 }
