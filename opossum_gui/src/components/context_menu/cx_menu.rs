@@ -1,12 +1,17 @@
 use crate::{components::menu_bar::controls::sub_menu_item::MenuItem, CONTEXT_MENU};
 use dioxus::prelude::*;
-use opossum_backend::usize_to_f64;
+use opossum_backend::{nodes::NewRefNode, usize_to_f64};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CxtCommand {
+    AddRefNode(NewRefNode)
+}
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct CxMenu {
     pub x: f64,
     pub y: f64,
-    pub entries: Vec<String>, //, Callback<Event<MouseData>>)>,
+    pub entries: Vec<(String,CxtCommand)>,
 }
 impl CxMenu {
     #[must_use]
@@ -30,7 +35,7 @@ impl CxMenu {
         *self = cx_menu;
     }
     #[must_use]
-    pub const fn new(x: f64, y: f64, entries: Vec<String>) -> Option<Self> {
+    pub const fn new(x: f64, y: f64, entries: Vec<(String, CxtCommand)>) -> Option<Self> {
         // MAIN_WINDOW_SIZE.read().as_ref().map(|rect| {
         //     let mut x = x;
         //     let mut y = y;
@@ -47,7 +52,7 @@ impl CxMenu {
 }
 
 #[component]
-pub fn ContextMenu() -> Element {
+pub fn ContextMenu(command: Signal<Option<CxtCommand>>) -> Element {
     let cx = CONTEXT_MENU();
     if let Some(cx_menu) = cx {
         let (x, y) = (cx_menu.x, cx_menu.y);
@@ -63,8 +68,15 @@ pub fn ContextMenu() -> Element {
                         rsx! {
                             MenuItem {
                                 class: "context-menu-item".to_owned(),
-                                // onclick: Some(*on_element_click),
-                                display: format!("{}", element),
+                                onclick: {
+                                    let element = element.clone();
+                                    move |_| {
+                                        command.set(Some(element.1.clone()));
+                                        let mut cm = CONTEXT_MENU.write();
+                                        *cm = None;
+                                    }
+                                },
+                                display: format!("{}", element.0),
                             }
                         }
                     }
