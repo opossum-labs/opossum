@@ -107,7 +107,7 @@ pub async fn delete_node(client: &HTTPClient, id: Uuid) -> Result<Vec<Uuid>, Str
 /// - the properties cannot be deserialized into the [`NodeAttr`] struct
 pub async fn get_node_properties(client: &HTTPClient, uuid: Uuid) -> Result<NodeAttr, String> {
     client
-        .get::<NodeAttr>(&format!("/api/scenery/{}/properties", uuid.as_simple()))
+        .get_ron::<NodeAttr>(&format!("/api/scenery/{}/properties", uuid.as_simple()))
         .await
 }
 /// Connect two nodes.

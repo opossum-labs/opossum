@@ -1,10 +1,14 @@
 use crate::{app_state::AppState, error::ErrorResponse, utils::update_node_attr};
 use actix_web::{
-    delete, get, patch, post, put,
+    HttpResponse, Responder, delete, get,
+    guard::GuardContext,
+    http::header,
+    patch, post, put,
     web::{self, Json, PathConfig},
 };
 use nalgebra::Point2;
 use opossum::{
+    error::OpossumError,
     meter,
     nodes::{NodeAttr, create_node_ref},
     optic_node::OpticNode,
@@ -72,6 +76,17 @@ impl NodeInfo {
         self.output_ports.clone()
     }
 }
+
+/// helper function for checking the ACCEPT header.
+fn wants_ron_guard(ctx: &GuardContext<'_>) -> bool {
+    if let Some(val) = ctx.head().headers.get(header::ACCEPT) {
+        if let Ok(s) = val.to_str() {
+            return s.contains("application/ron");
+        }
+    }
+    false
+}
+
 /// Get all nodes of a group node
 ///
 /// Return a list of all nodes of a group node specified by its UUID.
@@ -430,27 +445,11 @@ async fn delete_subnode(
     drop(document);
     Ok(web::Json(deleted_nodes))
 }
-/// Get all properties of the specified node
-///
-/// Return all properties (`NodeAttr`) of the node specified by its UUID.
-/// - **Note**: This function only returns `NodeAttr`, even for group nodes.
-///   A possible `graph` structure is omitted.
-/// - **Note**: This function searches the node recursively in the whole scenery.
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
-    ),
-    responses(
-        (status = OK, description = "get all node properties", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[get("/{uuid}/properties")]
-async fn get_properties(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-) -> Result<Json<NodeAttr>, ErrorResponse> {
-    let uuid = path.into_inner();
+// Helper function to contain the core logic
+fn get_node_attr_from_state(
+    uuid: Uuid,
+    data: &web::Data<AppState>,
+) -> Result<NodeAttr, ErrorResponse> {
     let document = data.document.lock().unwrap();
     let node_attr = document
         .scenery()
@@ -460,8 +459,64 @@ async fn get_properties(
         .unwrap()
         .node_attr()
         .clone();
-    drop(document);
-    Ok(web::Json(node_attr))
+    // The lock is dropped automatically when `document` goes out of scope here
+    Ok(node_attr)
+}
+/// Get all properties of the specified node in either JSON or RON format.
+///
+/// Return all properties (`NodeAttr`) of the node specified by its UUID.
+/// The format is determined by the `Accept` header.
+/// Defaults to `application/json` if the header is missing or doesn't specify
+/// `application/ron`.
+///
+/// # Important
+///
+/// Due to the fact that numeric properties can have values such as `nan` or `inf` it is possible to read
+/// the data as RON. The standard JSON format does **not** support encoding of these values. They are simply
+/// returned as `null` values.
+///
+/// - **Note**: This function only returns `NodeAttr`, even for group nodes.
+///   A possible `graph` structure is omitted.
+/// - **Note**: This function searches the node recursively in the whole scenery.
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
+    ),
+    responses(
+        (status = OK, description = "get all node properties", content(("application/json"),("application/ron"))),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/properties", guard = "wants_ron_guard")]
+async fn get_properties_ron(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<impl Responder, ErrorResponse> {
+    let node_attr = get_node_attr_from_state(path.into_inner(), &data)?;
+
+    let body = ron::ser::to_string_pretty(&node_attr, ron::ser::PrettyConfig::new().new_line("\n"))
+        .map_err(|e| OpossumError::Other(format!("RON Serialization Error: {e}")))?;
+
+    Ok(HttpResponse::Ok()
+        .content_type("application/ron")
+        .body(body))
+}
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
+    ),
+    responses(
+        (status = OK, description = "get all node properties", content(("application/json"),("application/ron"))),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/properties")]
+async fn get_properties_json(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<NodeAttr>, ErrorResponse> {
+    let node_attr = get_node_attr_from_state(path.into_inner(), &data)?;
+    Ok(Json(node_attr))
 }
 /// Modify node properties
 ///
@@ -605,7 +660,8 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_subnode);
     cfg.service(post_node_position);
 
-    cfg.service(get_properties);
+    cfg.service(get_properties_ron);
+    cfg.service(get_properties_json);
     cfg.service(patch_properties);
 
     cfg.service(post_connection);
@@ -630,7 +686,7 @@ mod test {
         let app = test::init_service(
             App::new()
                 .app_data(app_state)
-                .service(super::get_properties),
+                .service(super::get_properties_json),
         )
         .await;
         let req = test::TestRequest::get()

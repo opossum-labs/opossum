@@ -1,5 +1,5 @@
 use opossum_backend::error::ErrorResponse;
-use reqwest::{Client, Response};
+use reqwest::{header::ACCEPT, Client, Response};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::json;
 
@@ -162,7 +162,28 @@ impl HTTPClient {
     pub async fn get_raw(&self, route: &str) -> Result<String, String> {
         let res = self.client().get(self.url(route)).send().await;
         if let Ok(response) = res {
-            self.process_response_raw(response).await
+            self.process_response_ron(response).await
+        } else {
+            Err(format!("Error on get request from route: \"{route}\""))
+        }
+    }
+
+    /// Send a GET request to the given route accepting RON data
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the request fails (e.g. the route is not reachable)
+    /// - the response cannot be deserialized into the expected type
+    pub async fn get_ron<R: Serialize + DeserializeOwned>(&self, route: &str) -> Result<R, String> {
+        let res = self
+            .client()
+            .get(self.url(route))
+            .header(ACCEPT, "application/ron")
+            .send()
+            .await;
+        if let Ok(response) = res {
+            self.process_response_ron::<R>(response).await
         } else {
             Err(format!("Error on get request from route: \"{route}\""))
         }
@@ -207,7 +228,7 @@ impl HTTPClient {
     ///
     /// # Panics
     ///
-    /// Panics if .
+    /// Panics if the returned data cannot be parsed as text.
     ///
     /// # Errors
     ///
@@ -215,6 +236,29 @@ impl HTTPClient {
     pub async fn process_response_raw(&self, res: Response) -> Result<String, String> {
         if res.status().is_success() {
             Ok(res.text().await.unwrap())
+        } else {
+            Err("Error deserializing response to ErrorResponse struct!".to_string())
+        }
+    }
+    /// Process the response from the server assuming RON format
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the response cannot be deserialized into the expected type
+    ///
+    /// # Panics
+    ///
+    /// Panics if the returned data cannot be parsed as text (before parsed fon RON into the final data type).
+    pub async fn process_response_ron<R: Serialize + DeserializeOwned>(
+        &self,
+        res: Response,
+    ) -> Result<R, String> {
+        if res.status().is_success() {
+            let text = res.text().await.unwrap();
+            let data: R =
+                ron::from_str(&text).map_err(|e| format!("parsing of data failed: {e}"))?;
+            Ok(data)
         } else {
             Err("Error deserializing response to ErrorResponse struct!".to_string())
         }

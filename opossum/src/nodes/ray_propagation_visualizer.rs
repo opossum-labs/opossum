@@ -52,7 +52,6 @@ pub struct RayPropagationVisualizer {
 }
 unsafe impl Send for RayPropagationVisualizer {}
 impl Default for RayPropagationVisualizer {
-    /// create a spot-diagram monitor.
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("ray propagation");
         node_attr.create_property("view_direction", 
