@@ -6,9 +6,12 @@ use crate::components::scenery_editor::{
     node::NodeElement,
     nodes::Nodes,
 };
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus::{
+    html::geometry::{euclid::default::Point2D, PixelsSize},
+    prelude::*,
+};
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode},
+    nodes::{ConnectInfo, NewNode, NewRefNode},
     AnalyzerType,
 };
 use opossum_backend::{scenery::NewAnalyzerInfo, PortType};
@@ -19,6 +22,7 @@ use uuid::Uuid;
 pub enum NodeEditorCommand {
     DeleteAll,
     AddNode(String),
+    AddNodeRef(NewRefNode),
     AddAnalyzer(AnalyzerType),
     LoadFile(PathBuf),
     SaveFile(PathBuf),
@@ -36,12 +40,13 @@ pub enum DragStatus {
     Node(Uuid),
     Edge(NewEdgeCreationStart),
 }
+
 #[component]
 pub fn GraphEditor(
     command: ReadOnlySignal<Option<NodeEditorCommand>>,
     node_selected: Signal<Option<NodeElement>>,
 ) -> Element {
-    // use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
+    let mut editor_size: Signal<Option<PixelsSize>> = use_signal(|| None);
     let mut graph_store = use_context_provider(GraphStore::default);
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
@@ -50,6 +55,7 @@ pub fn GraphEditor(
     let mut graph_shift = use_signal(|| Point2D::<f64>::new(0.0, 0.0));
     let mut graph_zoom = use_signal(|| 1.0);
     let mut current_mouse_pos = use_signal(|| (0.0, 0.0));
+    let mut on_mounted = use_signal(|| None);
 
     use_effect({
         let mut graph_store = graph_store.clone();
@@ -86,6 +92,12 @@ pub fn GraphEditor(
                             .await;
                     });
                 }
+                NodeEditorCommand::AddNodeRef(new_ref_node) => {
+                    let ref_node_clone = new_ref_node.clone();
+                    spawn(async move {
+                        graph_store.add_optic_reference(ref_node_clone).await;
+                    });
+                }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
                     let new_analyzer_info =
                         NewAnalyzerInfo::new(analyzer_type.clone(), (100.0, 100.0));
@@ -100,7 +112,7 @@ pub fn GraphEditor(
                 }
                 NodeEditorCommand::SaveFile(path) => {
                     let path = path.to_owned();
-                    spawn(async move { graph_store.save_to_opm_file(&path).await });
+                    spawn(async move { GraphStore::save_to_opm_file(&path).await });
                 }
             }
         }
@@ -108,12 +120,35 @@ pub fn GraphEditor(
     rsx! {
         div {
             class: "graph-editor",
+            id: "editor",
             draggable: false,
-            // onmounted: use_on_mounted(),
-            // onresize: use_on_resize(),
-            onwheel: move |event| {
-                let delta = event.delta().strip_units().y;
-                if delta > 0.0 { graph_zoom *= 1.1 } else { graph_zoom /= 1.1 }
+            onmounted: move |event| { on_mounted.set(Some(event.data)) },
+            onwheel: move |wheel_event| {
+                async move {
+                    if let Ok(rect) = on_mounted().unwrap().get_client_rect().await {
+                        let client_pos = wheel_event.data.client_coordinates();
+                        let mouse_pos = Point2D::new(
+                            client_pos.x - rect.min_x(),
+                            client_pos.y - rect.min_y(),
+                        );
+                        let current_graph_shift = graph_shift();
+                        let current_graph_zoom = graph_zoom();
+                        let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x)
+                            / current_graph_zoom;
+                        let mouse_on_graph_y = (mouse_pos.y - current_graph_shift.y)
+                            / current_graph_zoom;
+                        let delta = wheel_event.delta().strip_units().y;
+                        let new_graph_zoom = if delta > 0.0 {
+                            (current_graph_zoom * 1.1).min(2.5)
+                        } else {
+                            (current_graph_zoom / 1.1).max(0.1)
+                        };
+                        graph_zoom.set(new_graph_zoom);
+                        let new_shift_x = mouse_on_graph_x.mul_add(-new_graph_zoom, mouse_pos.x);
+                        let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
+                        graph_shift.set(Point2D::new(new_shift_x, new_shift_y));
+                    }
+                }
             },
             onmousedown: move |event| {
                 current_mouse_pos
@@ -156,6 +191,11 @@ pub fn GraphEditor(
                     _ => {}
                 }
                 editor_status.drag_status.set(DragStatus::None);
+            },
+            onresize: move |event| {
+                if let Ok(size) = event.data().get_content_box_size() {
+                    editor_size.set(Some(size));
+                }
             },
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());
@@ -208,16 +248,28 @@ pub fn GraphEditor(
                     DragStatus::None => {}
                 }
             },
-            ondoubleclick: move |_| {
+            ondoubleclick: move |e| {
+                e.stop_propagation();
                 let bounding_box = graph_store.get_bounding_box();
                 let center = bounding_box.center();
-                graph_shift.set(Point2D::new(-center.x, 250.0 - center.y));
+                if let Some(window_size) = editor_size() {
+                    let zoom = graph_zoom();
+                    let view_center_x = window_size.width / 2.0;
+                    let view_center_y = window_size.height / 2.0;
+                    graph_shift
+                        .set(
+                            Point2D::new(
+                                center.x.mul_add(-zoom, view_center_x),
+                                center.y.mul_add(-zoom, view_center_y),
+                            ),
+                        );
+                }
             },
             div {
-                // class: "zoom-shift-container",
                 draggable: false,
+                pointer_events: "none",
                 style: format!(
-                    "transform: translate({}px, {}px) scale({graph_zoom});",
+                    "transform-origin: 0 0; transform: translate({}px, {}px) scale({graph_zoom});",
                     graph_shift().x,
                     graph_shift().y,
                 ),

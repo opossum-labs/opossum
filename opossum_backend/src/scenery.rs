@@ -17,6 +17,8 @@ use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
+const RON_MEDIA_TYPE: &str = "application/ron";
+
 /// Delete the current scenery and create new (empty) one
 #[utoipa::path(responses((status = 200, description = "scenery deleted and new one sucessfully created")), tag="scenery")]
 #[delete("/")]
@@ -163,12 +165,14 @@ async fn delete_analyzer(
 ///
 /// This function returns the OPM model file as string.
 #[utoipa::path(tag = "scenery", 
-    responses((status = 200, description = "OPM file", body = String))
+    responses((status = 200, description = "OPM file", body = String, content_type=RON_MEDIA_TYPE))
 )]
 #[get("/opmfile")]
-async fn get_opmfile(data: web::Data<AppState>) -> Result<String, ErrorResponse> {
+async fn get_opmfile(data: web::Data<AppState>) -> Result<impl Responder, ErrorResponse> {
     let document = data.document.lock().unwrap();
-    Ok(document.to_opm_file_string()?)
+    Ok(HttpResponse::Ok()
+        .content_type(RON_MEDIA_TYPE)
+        .body(document.to_opm_file_string()?))
 }
 #[utoipa::path(tag = "scenery", request_body(content = String,
     description = "OPM file as string",

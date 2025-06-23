@@ -43,6 +43,7 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
     rsx! {
         div {
             class: "port {port_class}",
+            title: "{port_name}",
             style: format!(
                 "left: {}px; top: {}px; width: {}px; height: {}px;",
                 rel_port_position.x,

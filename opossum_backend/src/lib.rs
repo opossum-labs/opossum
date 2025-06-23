@@ -19,6 +19,7 @@ pub use opossum::{
     nodes::{NodeAttr, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
+    utils::math_utils::isize_to_f64,
     position_distributions::*,
     properties::{Properties, Property, Proptype},
     refractive_index::*,

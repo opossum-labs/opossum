@@ -14,12 +14,13 @@ use dioxus::{
     prelude::*,
 };
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode},
+    isize_to_f64,
+    nodes::{ConnectInfo, NewNode, NewRefNode},
     scenery::NewAnalyzerInfo,
     usize_to_f64, PortType,
 };
 use rust_sugiyama::{configure::RankingType, from_edges};
-use std::{collections::HashMap, fs, path::Path};
+use std::{collections::HashMap, fs, future::Future, path::Path};
 use uuid::Uuid;
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
@@ -28,6 +29,7 @@ pub struct GraphStore {
     edges: Signal<Vec<ConnectInfo>>,
     active_node: Signal<Option<Uuid>>,
 }
+
 impl GraphStore {
     pub async fn load_from_opm_file(&mut self, path: &Path) {
         let opm_string = fs::read_to_string(path);
@@ -103,7 +105,7 @@ impl GraphStore {
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string()),
         }
     }
-    pub async fn save_to_opm_file(&self, path: &Path) {
+    pub async fn save_to_opm_file(path: &Path) {
         match api::get_opm_file(&HTTP_API_CLIENT()).await {
             Ok(opm_string) => {
                 if let Err(err_str) = fs::write(path, opm_string) {
@@ -133,12 +135,19 @@ impl GraphStore {
             node.shift_position(shift);
         }
     }
-    pub async fn sync_node_position(&self, id: Uuid) {
-        if let Some(node_element) = self.nodes()().get(&id) {
-            if let Err(err_str) =
-                api::update_gui_position(&HTTP_API_CLIENT(), id, node_element.pos()).await
-            {
-                OPOSSUM_UI_LOGS.write().add_log(&err_str);
+    pub fn sync_node_position(&self, id: Uuid) -> impl Future<Output = ()> + Send {
+        // 1. Synchronous Part: Access `self` to get an owned copy of the data.
+        // The borrow of `self` is contained entirely within this line.
+        let position_to_sync = self.nodes()().get(&id).map(NodeElement::pos);
+
+        // 2. Asynchronous Part: Return a 'static, Send-able future.
+        // The `async move` block takes ownership of `position_to_sync` and `id`,
+        // breaking any lifetime connection to `&self`.
+        async move {
+            if let Some(pos) = position_to_sync {
+                if let Err(err_str) = api::update_gui_position(&HTTP_API_CLIENT(), id, pos).await {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                }
             }
         }
     }
@@ -240,30 +249,24 @@ impl GraphStore {
         if optic_nodes.is_empty() {
             return Rect::new(Point2D::zero(), Size2D::zero());
         }
-        let node = optic_nodes.iter().next().unwrap().1;
-        let mut min_x = node.pos().x;
-        let mut min_y = node.pos().y;
-        let mut max_x = node.pos().x + NODE_WIDTH;
-        let mut max_y = node.pos().y + HEADER_HEIGHT + node.node_body_height();
-        for node in optic_nodes {
-            let x = node.1.pos().x;
-            let y = node.1.pos().y;
-            if min_x > x {
-                min_x = x;
-            }
-            if min_y > y {
-                min_y = y;
-            }
-            if max_x < x {
-                max_x = x;
-            }
-            if max_y < y {
-                max_y = y;
-            }
+        // Use the first node to initialize the bounding box
+        let first_node = optic_nodes.iter().next().unwrap().1;
+        let mut min_x = first_node.pos().x;
+        let mut min_y = first_node.pos().y;
+        let mut max_x = first_node.pos().x + NODE_WIDTH;
+        let mut max_y = first_node.pos().y + HEADER_HEIGHT + first_node.node_body_height();
+
+        // Iterate over the rest of the nodes to expand the bounding box
+        for node in optic_nodes.iter().skip(1) {
+            let node_pos = node.1.pos();
+            min_x = min_x.min(node_pos.x);
+            min_y = min_y.min(node_pos.y);
+            max_x = max_x.max(node_pos.x + NODE_WIDTH);
+            max_y = max_y.max(node_pos.y + HEADER_HEIGHT + node.1.node_body_height());
         }
         Rect::new(
             Point2D::new(min_x, min_y),
-            Size2D::new(max_x - min_y, max_y - min_y),
+            Size2D::new(max_x - min_x, max_y - min_y),
         )
     }
     // #[must_use]
@@ -289,7 +292,7 @@ impl GraphStore {
     //     }
     //     new_pos
     // }
-    async fn get_ports(&self, node_id: Uuid) -> Ports {
+    async fn get_ports(node_id: Uuid) -> Ports {
         match api::get_node_properties(&HTTP_API_CLIENT(), node_id).await {
             Ok(node_attr) => {
                 let input_ports = node_attr
@@ -319,7 +322,7 @@ impl GraphStore {
     ) {
         match api::post_add_node(&HTTP_API_CLIENT(), new_node_info, Uuid::nil()).await {
             Ok(node_info) => {
-                let ports = self.get_ports(node_info.uuid()).await;
+                let ports = Self::get_ports(node_info.uuid()).await;
                 let new_node = NodeElement::new(
                     node_info.name().to_string(),
                     NodeType::Optical(node_info.node_type().to_string()),
@@ -327,16 +330,33 @@ impl GraphStore {
                     Point2D::new(100.0, 100.0),
                     ports,
                 );
-                self.nodes_mut()
-                    .write()
-                    .insert(new_node.id(), new_node.clone());
+                self.nodes_mut().write().insert(new_node.id(), new_node.clone());
                 self.set_node_active(node_info.uuid());
                 selected_node.set(Some(new_node));
+
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
     }
+     
+    pub async fn add_optic_reference(&mut self, new_ref_info: NewRefNode) {
+        match api::post_add_ref_node(&HTTP_API_CLIENT(), new_ref_info, Uuid::nil()).await {
+            Ok(node_info) => {
+                let ports = Ports::new(node_info.input_ports(), node_info.output_ports());
+                let new_node = NodeElement::new(
+                    node_info.name().to_string(),
+                    NodeType::Optical(node_info.name().to_string()),
 
+                    node_info.uuid(),
+                    Point2D::new(100.0, 100.0),
+                    ports,
+                );
+                self.nodes_mut().write().insert(new_node.id(), new_node);
+                self.set_node_active(node_info.uuid());
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+        }
+    }
     pub async fn add_analyzer(&mut self, new_analyzer_info: NewAnalyzerInfo) {
         match api::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer_info.clone()).await {
             Ok(analyzer_id) => {
@@ -374,8 +394,8 @@ impl GraphStore {
                     let uuid = &reg.get_uuid(u32::try_from(l.0).unwrap()).unwrap();
                     if let Some(node) = nodes.get_mut(uuid) {
                         node.set_pos(Point2D::new(
-                            -1.0 * l.1 .1 as f64,
-                            0.7f64.mul_add(l.1 .0 as f64, height),
+                            -1.0 * isize_to_f64(l.1 .1),
+                            0.7f64.mul_add(isize_to_f64(l.1 .0), height),
                         ));
                     }
                 }
@@ -401,7 +421,6 @@ impl UuidRegistry {
             next_id: 0,
         }
     }
-
     fn register(&mut self, uuid: Uuid) -> u32 {
         if let Some(&id) = self.forward.get(&uuid) {
             return id;

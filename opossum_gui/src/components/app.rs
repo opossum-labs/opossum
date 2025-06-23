@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::{
     api::{self, http_client::HTTPClient},
     components::{
+    context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
         menu_bar::menu_bar_component::{MenuBar, MenuSelection},
         node_editor::NodeEditor,
@@ -40,10 +41,19 @@ pub async fn analyze_setup(path: PathBuf) {
 pub fn App() -> Element {
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
+    let cxt_command = use_signal(|| None::<CxtCommand>);
     let selected_node = use_signal(|| None::<NodeElement>);
     let project_directory = use_signal(|| Path::new("./").to_path_buf());
-    // let mut main_window = use_signal(|| None::<Rc<MountedData>>);
 
+    use_effect(move || {
+        let cxt_command = cxt_command.read();
+        if let Some(cxt_command) = &*(cxt_command) {
+            match cxt_command {
+                CxtCommand::AddRefNode(new_ref_node) => node_editor_command
+                    .set(Some(NodeEditorCommand::AddNodeRef(new_ref_node.clone()))),
+            }
+        }
+    });
     use_effect(move || {
         let menu_item = menu_item_selected.read();
         if let Some(menu_item) = &*(menu_item) {
@@ -87,6 +97,7 @@ pub fn App() -> Element {
         }
     });
     rsx! {
+        ContextMenu { command: cxt_command }
         div { class: "container-fluid text-bg-dark",
             div { class: "row",
                 div { class: "col",

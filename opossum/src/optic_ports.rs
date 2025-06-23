@@ -20,7 +20,6 @@ use crate::{
     aperture::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
-    properties::Proptype,
     surface::optic_surface::OpticSurface,
 };
 use serde::{Deserialize, Serialize};

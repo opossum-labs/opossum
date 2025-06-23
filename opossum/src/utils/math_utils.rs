@@ -18,6 +18,13 @@ pub const fn usize_to_f64(value: usize) -> f64 {
     newval
 }
 
+#[must_use]
+#[inline]
+pub const fn isize_to_f64(value: isize) -> f64 {
+    #[allow(clippy::cast_precision_loss)]
+    let newval = value as f64;
+    newval
+}
 /// Convert a `f64` value to a `usize`.
 ///
 /// This function is used to avoid linter warnings (truncation, sign loss) which
