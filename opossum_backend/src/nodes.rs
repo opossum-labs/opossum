@@ -5,7 +5,10 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum::{
-    meter, nodes::{create_node_ref, NodeAttr}, optic_node::OpticNode, optic_ports::PortType
+    meter,
+    nodes::{NodeAttr, create_node_ref},
+    optic_node::OpticNode,
+    optic_ports::PortType,
 };
 use serde::{Deserialize, Serialize};
 use uom::si::length::meter;
@@ -315,7 +318,7 @@ async fn post_subreference(
 ) -> Result<Json<NodeInfo>, ErrorResponse> {
     let group_uuid = path.into_inner();
     let ref_node_info = ref_node_info.into_inner();
-    
+
     let new_node_ref = create_node_ref("reference")?;
     let mut node = new_node_ref.optical_ref.lock().unwrap();
     let node_attr = node.node_attr_mut();

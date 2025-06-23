@@ -169,8 +169,10 @@ async fn delete_analyzer(
 )]
 #[get("/opmfile")]
 async fn get_opmfile(data: web::Data<AppState>) -> Result<impl Responder, ErrorResponse> {
-    let document = data.document.lock().unwrap(); 
-    Ok(HttpResponse::Ok().content_type(RON_MEDIA_TYPE).body(document.to_opm_file_string()?))
+    let document = data.document.lock().unwrap();
+    Ok(HttpResponse::Ok()
+        .content_type(RON_MEDIA_TYPE)
+        .body(document.to_opm_file_string()?))
 }
 #[utoipa::path(tag = "scenery", request_body(content = String,
     description = "OPM file as string",

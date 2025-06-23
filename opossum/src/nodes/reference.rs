@@ -80,6 +80,10 @@ impl NodeReference {
     /// This functions allows for setting the optical node this [`NodeReference`] refers to. Normally, the [`OpticRef`] is given during the
     /// construction of a [`NodeReference`] using it's `new` function. This function allows for setting / changing after construction (e.g.
     /// during deserialization).
+    ///
+    /// # Panics
+    ///
+    /// This function could theoretically panic if a mutex lock fails.
     pub fn assign_reference(&mut self, node: &OpticRef) {
         self.node_attr_mut()
             .set_property("reference id", Proptype::Uuid(node.uuid()))
