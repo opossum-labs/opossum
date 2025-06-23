@@ -469,6 +469,12 @@ fn get_node_attr_from_state(
 /// Defaults to `application/json` if the header is missing or doesn't specify
 /// `application/ron`.
 ///
+/// # Important
+///
+/// Due to the fact that numeric properties can have values such as `nan` or `inf` it is possible to read
+/// the data as RON. The standard JSON format does **not** support encoding of these values. They are simply
+/// returned as `null` values.
+///
 /// - **Note**: This function only returns `NodeAttr`, even for group nodes.
 ///   A possible `graph` structure is omitted.
 /// - **Note**: This function searches the node recursively in the whole scenery.
