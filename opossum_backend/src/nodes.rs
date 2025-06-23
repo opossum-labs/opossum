@@ -5,9 +5,7 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum::{
-    meter,
-    nodes::{NodeAttr, create_node_ref},
-    optic_ports::PortType,
+    meter, nodes::{create_node_ref, NodeAttr}, optic_node::OpticNode, optic_ports::PortType
 };
 use serde::{Deserialize, Serialize};
 use uom::si::length::meter;
@@ -205,7 +203,7 @@ impl NewNode {
 /// Add a new node to a group node
 ///
 /// This function adds a new optical node to a group node specified by its UUID.
-/// - **Note**: If the `nil` UUID is given (00000000-0000-0000-0000-000000000000), the node is added to the toplevel group.
+/// - **Note**: If the `nil` UUID is given (`00000000-0000-0000-0000-000000000000`), the node is added to the toplevel group.
 /// - The node type as well as the coordinates of the corresponding GUI element must be given.
 #[utoipa::path(tag = "node",
     params(
@@ -315,20 +313,22 @@ async fn post_subreference(
     path: web::Path<Uuid>,
     ref_node_info: web::Json<NewRefNode>,
 ) -> Result<Json<NodeInfo>, ErrorResponse> {
-    let new_ref_node_info = ref_node_info.into_inner();
+    let group_uuid = path.into_inner();
+    let ref_node_info = ref_node_info.into_inner();
+    
     let new_node_ref = create_node_ref("reference")?;
     let mut node = new_node_ref.optical_ref.lock().unwrap();
     let node_attr = node.node_attr_mut();
     node_attr.set_gui_position(Some(Point2::new(
-        new_ref_node_info.gui_position.0,
-        new_ref_node_info.gui_position.1,
+        ref_node_info.gui_position.0,
+        ref_node_info.gui_position.1,
     )));
     let mut document = data.document.lock().unwrap();
-    let group_uuid = path.into_inner();
     let scenery = document.scenery_mut();
-    let referring_node = scenery.node_recursive(new_ref_node_info.referring_node)?;
+    let referring_node = scenery.node_recursive(ref_node_info.referring_node)?;
     let ref_node = node.as_refnode_mut().unwrap();
     ref_node.assign_reference(&referring_node);
+    println!("{:?}", ref_node.node_attr());
     drop(referring_node);
     drop(node);
     let new_node_uuid = if group_uuid.is_nil() {

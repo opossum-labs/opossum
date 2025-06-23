@@ -4,14 +4,14 @@ use opossum_backend::{nodes::NewRefNode, usize_to_f64};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CxtCommand {
-    AddRefNode(NewRefNode)
+    AddRefNode(NewRefNode),
 }
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct CxMenu {
     pub x: f64,
     pub y: f64,
-    pub entries: Vec<(String,CxtCommand)>,
+    pub entries: Vec<(String, CxtCommand)>,
 }
 impl CxMenu {
     #[must_use]

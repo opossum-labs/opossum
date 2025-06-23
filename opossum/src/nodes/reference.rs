@@ -81,6 +81,14 @@ impl NodeReference {
     /// construction of a [`NodeReference`] using it's `new` function. This function allows for setting / changing after construction (e.g.
     /// during deserialization).
     pub fn assign_reference(&mut self, node: &OpticRef) {
+        self.node_attr_mut()
+            .set_property("reference id", Proptype::Uuid(node.uuid()))
+            .unwrap();
+        let ref_name = format!(
+            "ref ({})",
+            node.optical_ref.lock().expect("Mutex lock failed").name()
+        );
+        self.node_attr.set_name(&ref_name);
         self.reference = Some(Arc::downgrade(&node.optical_ref));
     }
 }

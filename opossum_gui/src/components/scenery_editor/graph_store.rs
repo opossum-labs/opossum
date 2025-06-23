@@ -326,7 +326,7 @@ impl GraphStore {
         }
     }
     pub async fn add_optic_reference(&mut self, new_ref_info: NewRefNode) {
-         match api::post_add_ref_node(&HTTP_API_CLIENT(), new_ref_info, Uuid::nil()).await {
+        match api::post_add_ref_node(&HTTP_API_CLIENT(), new_ref_info, Uuid::nil()).await {
             Ok(node_info) => {
                 let ports = Self::get_ports(node_info.uuid()).await;
                 let new_node = NodeElement::new(

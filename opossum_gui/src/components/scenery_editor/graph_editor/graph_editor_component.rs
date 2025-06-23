@@ -73,7 +73,7 @@ pub fn GraphEditor(
                     });
                 }
                 NodeEditorCommand::AddNodeRef(new_ref_node) => {
-                    let ref_node_clone=new_ref_node.clone();
+                    let ref_node_clone = new_ref_node.clone();
                     spawn(async move {
                         graph_store.add_optic_reference(ref_node_clone).await;
                     });
