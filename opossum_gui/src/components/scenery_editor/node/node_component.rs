@@ -1,13 +1,17 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
 use super::NodeType;
+use crate::components::context_menu::cx_menu::CxMenu;
+use crate::components::context_menu::cx_menu::CxtCommand;
 use crate::components::scenery_editor::{
     graph_editor::graph_editor_component::{DragStatus, EditorState},
     graph_store::GraphStore,
     node::graph_node_components::GraphNodeContent,
     ports::ports_component::NodePorts,
 };
+use crate::CONTEXT_MENU;
 use dioxus::prelude::*;
+use opossum_backend::nodes::NewRefNode;
 const NODE_BEAMSPLITTER: Asset = asset!("./assets/icons/node_beamsplitter.svg");
 const NODE_CYLINDRIC_LENS: Asset = asset!("./assets/icons/node_cylindric_lens.svg");
 const NODE_ENERGY_METER: Asset = asset!("./assets/icons/node_energymeter.svg");
@@ -86,6 +90,25 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                     spawn(async move { graph_store.delete_node(id).await });
                 }
                 event.stop_propagation();
+            },
+            oncontextmenu: {
+                move |event: Event<MouseData>| {
+                    event.prevent_default();
+                    let new_ref_node = NewRefNode::new(
+                        id,
+                        (event.page_coordinates().x, event.page_coordinates().y),
+                    );
+                    let cx_menu = CxMenu::new(
+                        event.page_coordinates().x,
+                        event.page_coordinates().y,
+                        vec![
+                            ("Create reference".to_owned(), CxtCommand::AddRefNode(new_ref_node)),
+                        ],
+                    );
+                    println!("oncontecxt: {cx_menu:?}");
+                    let mut ctx = CONTEXT_MENU.write();
+                    *ctx = cx_menu;
+                }
             },
             GraphNodeContent {
                 node_name: node.name(),

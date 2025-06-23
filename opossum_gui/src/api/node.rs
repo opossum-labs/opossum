@@ -1,6 +1,6 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode, NodeInfo},
+    nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     NodeAttr,
 };
 use uuid::Uuid;
@@ -43,8 +43,9 @@ pub async fn get_connections(
 /// # Errors
 ///
 /// This function will return an error if
-/// - the provided [`NodeType`] cannot be serialized
+/// - the provided [`NewNode`] cannot be serialized
 /// - the request fails (e.g. the node type is not valid)
+/// - the `group_id` does not exist
 /// - the response cannot be deserialized into the [`NodeInfo`] struct
 pub async fn post_add_node(
     client: &HTTPClient,
@@ -55,6 +56,27 @@ pub async fn post_add_node(
         .post::<NewNode, NodeInfo>(
             &format!("/api/scenery/{}/nodes", group_id.as_simple()),
             new_node_info,
+        )
+        .await
+}
+/// Send a request to add a reference node to the scenery.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the provided [`NewRefNode`] cannot be serialized
+/// - the provided [`Uuid`] of the node to be referred to does not exist
+/// - the `group_id` does not exist
+/// - the response cannot be deserialized into the [`NodeInfo`] struct
+pub async fn post_add_ref_node(
+    client: &HTTPClient,
+    new_ref_info: NewRefNode,
+    group_id: Uuid,
+) -> Result<NodeInfo, String> {
+    client
+        .post::<NewRefNode, NodeInfo>(
+            &format!("/api/scenery/{}/references", group_id.as_simple()),
+            new_ref_info,
         )
         .await
 }

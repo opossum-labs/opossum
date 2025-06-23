@@ -13,7 +13,6 @@ use crate::{
         ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity,
     },
-    optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},

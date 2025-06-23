@@ -11,7 +11,7 @@ use dioxus::{
     prelude::*,
 };
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode},
+    nodes::{ConnectInfo, NewNode, NewRefNode},
     AnalyzerType,
 };
 use opossum_backend::{scenery::NewAnalyzerInfo, PortType};
@@ -22,6 +22,7 @@ use uuid::Uuid;
 pub enum NodeEditorCommand {
     DeleteAll,
     AddNode(String),
+    AddNodeRef(NewRefNode),
     AddAnalyzer(AnalyzerType),
     LoadFile(PathBuf),
     SaveFile(PathBuf),
@@ -71,6 +72,12 @@ pub fn GraphEditor(
                         graph_store.add_optic_node(new_node_info).await;
                     });
                 }
+                NodeEditorCommand::AddNodeRef(new_ref_node) => {
+                    let ref_node_clone = new_ref_node.clone();
+                    spawn(async move {
+                        graph_store.add_optic_reference(ref_node_clone).await;
+                    });
+                }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
                     let new_analyzer_info =
                         NewAnalyzerInfo::new(analyzer_type.clone(), (100.0, 100.0));
@@ -85,7 +92,7 @@ pub fn GraphEditor(
                 }
                 NodeEditorCommand::SaveFile(path) => {
                     let path = path.to_owned();
-                    spawn(async move { graph_store.save_to_opm_file(&path).await });
+                    spawn(async move { GraphStore::save_to_opm_file(&path).await });
                 }
             }
         }

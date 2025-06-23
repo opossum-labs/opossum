@@ -7,6 +7,7 @@ use nalgebra::Point2;
 use opossum::{
     meter,
     nodes::{NodeAttr, create_node_ref},
+    optic_node::OpticNode,
     optic_ports::PortType,
 };
 use serde::{Deserialize, Serialize};
@@ -205,7 +206,7 @@ impl NewNode {
 /// Add a new node to a group node
 ///
 /// This function adds a new optical node to a group node specified by its UUID.
-/// - **Note**: If the `nil` UUID is given (00000000-0000-0000-0000-000000000000), the node is added to the toplevel group.
+/// - **Note**: If the `nil` UUID is given (`00000000-0000-0000-0000-000000000000`), the node is added to the toplevel group.
 /// - The node type as well as the coordinates of the corresponding GUI element must be given.
 #[utoipa::path(tag = "node",
     params(
@@ -244,6 +245,100 @@ async fn post_subnode(
     } else {
         scenery
             .node_recursive(uuid)?
+            .optical_ref
+            .lock()
+            .unwrap()
+            .as_group_mut()?
+            .add_node_ref(new_node_ref.clone())?
+    };
+    drop(document);
+    let node = new_node_ref.optical_ref.lock().unwrap();
+    let gui_position = node.gui_position().map(|position| (position.x, position.y));
+    let node_info = NodeInfo {
+        uuid: new_node_uuid,
+        name: node.name(),
+        node_type: node.node_type(),
+        input_ports: node.ports().names(&PortType::Input),
+        output_ports: node.ports().names(&PortType::Output),
+        gui_position,
+    };
+    drop(node);
+    Ok(Json(node_info))
+}
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq)]
+pub struct NewRefNode {
+    referring_node: Uuid,
+    gui_position: (f64, f64),
+}
+impl NewRefNode {
+    #[must_use]
+    pub const fn new(referring_node: Uuid, gui_position: (f64, f64)) -> Self {
+        Self {
+            referring_node,
+            gui_position,
+        }
+    }
+}
+/// Add a new reference node to a group node
+///
+/// Adds a new reference node to the specified group node, identified by its UUID (provided in the path).
+/// The reference node will refer to another node, specified by its UUID in the request body.
+///
+/// - **Note**: If the `nil` UUID (`00000000-0000-0000-0000-000000000000`) is provided as the group UUID, the reference node is added to the toplevel group.
+/// - The UUID of the node to be referenced, as well as the coordinates of the corresponding GUI element, must be provided.
+/// - The function returns information about the newly created reference node.
+///
+/// # Parameters
+/// - `uuid`: UUID of the group node to which the reference node will be added (provided in the path).
+/// - `referring_node`: UUID of the node to be referenced (provided in the request body).
+///
+/// # Returns
+/// - On success: Information about the newly created reference node.
+/// - On error: An error response if the UUID is not found or the target is not a group
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the group node"),
+    ),
+    request_body(content = NewRefNode,
+        description = "UUID of the node to be referred to and GUI position of the optical node to be created",
+        content_type = "application/json",
+        example ="{\"referring_node\": \"3fa85f64-5717-4562-b3fc-2c963f66afa6\", \"gui_position\": [0.0,0.0]}"
+    ),
+    responses(
+        (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found, no group node", content_type="application/json")
+    )
+)]
+#[post("/{uuid}/references")]
+#[allow(clippy::significant_drop_tightening)]
+async fn post_subreference(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    ref_node_info: web::Json<NewRefNode>,
+) -> Result<Json<NodeInfo>, ErrorResponse> {
+    let group_uuid = path.into_inner();
+    let ref_node_info = ref_node_info.into_inner();
+
+    let new_node_ref = create_node_ref("reference")?;
+    let mut node = new_node_ref.optical_ref.lock().unwrap();
+    let node_attr = node.node_attr_mut();
+    node_attr.set_gui_position(Some(Point2::new(
+        ref_node_info.gui_position.0,
+        ref_node_info.gui_position.1,
+    )));
+    let mut document = data.document.lock().unwrap();
+    let scenery = document.scenery_mut();
+    let referring_node = scenery.node_recursive(ref_node_info.referring_node)?;
+    let ref_node = node.as_refnode_mut().unwrap();
+    ref_node.assign_reference(&referring_node);
+    println!("{:?}", ref_node.node_attr());
+    drop(referring_node);
+    drop(node);
+    let new_node_uuid = if group_uuid.is_nil() {
+        scenery.add_node_ref(new_node_ref.clone())?
+    } else {
+        scenery
+            .node_recursive(group_uuid)?
             .optical_ref
             .lock()
             .unwrap()
@@ -506,6 +601,7 @@ async fn update_distance(
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_subnodes);
     cfg.service(post_subnode);
+    cfg.service(post_subreference);
     cfg.service(delete_subnode);
     cfg.service(post_node_position);
 
