@@ -5170,6 +5170,7 @@ dependencies = [
  "chrono",
  "dioxus",
  "dioxus-free-icons",
+ "futures-util",
  "ico",
  "opossum_backend",
  "plotly",

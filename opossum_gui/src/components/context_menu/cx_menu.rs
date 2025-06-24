@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{components::menu_bar::controls::sub_menu_item::MenuItem, CONTEXT_MENU};
 use dioxus::prelude::*;
 use opossum_backend::{nodes::NewRefNode, usize_to_f64};

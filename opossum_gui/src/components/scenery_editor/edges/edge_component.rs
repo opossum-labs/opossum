@@ -1,11 +1,15 @@
-use crate::components::scenery_editor::{edges::define_bezier_path, graph_store::GraphStore};
+use crate::components::scenery_editor::{
+    edges::define_bezier_path,
+    graph_store::{GraphStore, GraphStoreAction},
+};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{nodes::ConnectInfo, PortType};
 
 #[component]
 pub fn EdgeComponent(edge: ConnectInfo) -> Element {
-    let mut graph_store = use_context::<GraphStore>();
-    let optic_nodes = graph_store.nodes();
+    let graph_store = use_context::<Signal<GraphStore>>();
+    let graph_processor = use_context::<Coroutine<GraphStoreAction>>();
+    let optic_nodes = graph_store().nodes();
     let mut start_position = use_signal(|| Point2D::new(0.0, 0.0));
     let mut end_position = use_signal(|| Point2D::new(0.0, 0.0));
 
@@ -38,7 +42,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 move |event: Event<KeyboardData>| {
                     let edge = edge.clone();
                     if event.data().key() == Key::Delete {
-                        spawn(async move { graph_store.delete_edge(edge).await });
+                        graph_processor.send(GraphStoreAction::DeleteEdge(edge));
                     }
                     event.stop_propagation();
                 }
@@ -66,7 +70,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                         if let Ok(new_distance) = event.data.parsed::<f64>() {
                             edge.set_distance(new_distance);
                             let edge = edge.clone();
-                            spawn(async move { graph_store.update_edge(&edge).await });
+                            graph_processor.send(GraphStoreAction::UpdateEdge(edge));
                         }
                     }
                 },
