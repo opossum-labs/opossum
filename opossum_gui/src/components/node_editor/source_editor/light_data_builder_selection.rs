@@ -1,10 +1,7 @@
 use crate::{components::node_editor::accordion::LabeledSelect, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
 use opossum_backend::{
-    energy_data_builder::EnergyDataBuilder,
-    light_data_builder::LightDataBuilder,
-    ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},
-    PosDistType,
+    energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder}, EnergyDistType, PosDistType
 };
 use std::collections::HashMap;
 
@@ -197,6 +194,48 @@ impl LightDataBuilderHistory {
         }
     }
 
+    /// Sets a new [`EnergyDistType`] for the currently selected ray source,
+    /// if it supports energy distributions (`Collimated` or `PointSrc`).
+    ///
+    /// The updated builder is saved under multiple keys:
+    /// - `"Rays"` and the specific ray type (e.g., `"Collimated"`)
+    /// - the stringified `EnergyDistType` (used as the new current key)
+    ///
+    /// Unsupported types are logged.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_energy_dist` - The new energy distribution type to assign.
+    pub fn set_energy_dist_type(&mut self, new_energy_dist: EnergyDistType) {
+        if let Some(rdb) = &mut self.get_current_ray_data_builder() {
+            let energy_dist_string = format!("{new_energy_dist}");
+            match rdb {
+                RayDataBuilder::Collimated(collimated_src) => {
+                    collimated_src.set_energy_dist(new_energy_dist);
+                    let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(
+                        collimated_src.clone(),
+                    ));
+                    self.replace_or_insert("Collimated", &new_ld_builder);
+                    self.replace_or_insert("Rays", &new_ld_builder);
+                    self.replace_or_insert_and_set_current(&energy_dist_string, new_ld_builder);
+                }
+                RayDataBuilder::PointSrc(point_src) => {
+                    point_src.set_energy_dist(new_energy_dist);
+                    let new_ld_builder =
+                        LightDataBuilder::Geometric(RayDataBuilder::PointSrc(point_src.clone()));
+                    self.replace_or_insert("Point Source", &new_ld_builder);
+                    self.replace_or_insert("Rays", &new_ld_builder);
+                    self.replace_or_insert_and_set_current(&energy_dist_string, new_ld_builder);
+                }
+                _ => {
+                    OPOSSUM_UI_LOGS.write().add_log(&format!(
+                        "set_pos_dist_type: Unsupported RayDataBuilder type: {rdb}"
+                    ));
+                }
+            };
+        }
+    }
+
     pub fn set_current_or_default(&mut self, key: &str) {
         if !self.set_current(key) {
             match key {
@@ -232,6 +271,11 @@ impl LightDataBuilderHistory {
                 | "Sobol" => {
                     if let Some(pos_dist_type) = PosDistType::default_from_name(key) {
                         self.set_pos_dist_type(pos_dist_type);
+                    }
+                }
+                "Uniform" | "Generalized Gaussian" => {
+                    if let Some(energy_dist_type) = EnergyDistType::default_from_name(key) {
+                        self.set_energy_dist_type(energy_dist_type);
                     }
                 }
 

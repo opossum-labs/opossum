@@ -1,8 +1,11 @@
 //! Module for handling energy distributions
 pub mod general_gaussian;
 pub mod uniform;
+use std::fmt::Display;
+
 pub use general_gaussian::General2DGaussian;
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 pub use uniform::UniformDist;
 
 use crate::joule;
@@ -43,7 +46,7 @@ impl Default for EnergyDistType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
 pub enum EnergyDistType {
     Uniform(UniformDist),
     General2DGaussian(general_gaussian::General2DGaussian),
@@ -66,4 +69,23 @@ impl EnergyDistType {
             }
         };
     }
+
+    pub fn default_from_name(name: &str) -> Option<Self> {
+        match name {
+            "Uniform" => Some(UniformDist::default().into()),
+            "Generalized Gaussian" => Some(General2DGaussian::default().into()),
+            _ => None,
+        }
+    }
 }
+
+impl Display for EnergyDistType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dist_string = match self {
+            Self::Uniform(_) => "Uniform",
+            Self::General2DGaussian(_) => "Generalized Gaussian"            
+        };
+        write!(f, "{dist_string}")
+    }
+}
+

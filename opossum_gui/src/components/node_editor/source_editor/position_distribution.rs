@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::components::node_editor::{
     accordion::{AccordionItem, LabeledInput, LabeledSelect},
-    source_editor::LightDataBuilderHistory,
+    source_editor::{DistInput, LightDataBuilderHistory, RowedDistInputs},
 };
 use dioxus::prelude::*;
 use itertools::Itertools;
@@ -13,7 +13,7 @@ use strum::IntoEnumIterator;
 use uom::si::length::millimeter;
 
 #[derive(Clone, PartialEq)]
-pub enum PosDistParam {
+pub enum DistParam {
     Rings,
     Radius,
     CenterX,
@@ -24,25 +24,25 @@ pub enum PosDistParam {
     PointsY,
 }
 
-impl PosDistParam {
+impl DistParam {
     pub fn input_label(&self) -> String {
         match self {
-            PosDistParam::Rings => "Number of Rings".to_string(),
-            PosDistParam::Radius => "Radius in mm".to_string(),
-            PosDistParam::CenterX => "Center X in mm".to_string(),
-            PosDistParam::CenterY => "Center Y in mm".to_string(),
-            PosDistParam::LengthX => "Length X in mm".to_string(),
-            PosDistParam::LengthY => "Length Y in mm".to_string(),
-            PosDistParam::PointsX => "#Points X".to_string(),
-            PosDistParam::PointsY => "#Points Y".to_string(),
+            DistParam::Rings => "Number of Rings".to_string(),
+            DistParam::Radius => "Radius in mm".to_string(),
+            DistParam::CenterX => "Center X in mm".to_string(),
+            DistParam::CenterY => "Center Y in mm".to_string(),
+            DistParam::LengthX => "Length X in mm".to_string(),
+            DistParam::LengthY => "Length Y in mm".to_string(),
+            DistParam::PointsX => "#Points X".to_string(),
+            DistParam::PointsY => "#Points Y".to_string(),
         }
     }
 
     pub fn min_value(&self) -> &'static str {
         match self {
-            PosDistParam::Rings | PosDistParam::PointsX | PosDistParam::PointsY => "1",
-            PosDistParam::Radius | PosDistParam::LengthX | PosDistParam::LengthY => "1e-9",
-            PosDistParam::CenterX | PosDistParam::CenterY => "-1e9",
+            DistParam::Rings | DistParam::PointsX | DistParam::PointsY => "1",
+            DistParam::Radius | DistParam::LengthX | DistParam::LengthY => "1e-9",
+            DistParam::CenterX | DistParam::CenterY => "-1e9",
         }
     }
     pub fn step_value(&self) -> &'static str {
@@ -50,121 +50,72 @@ impl PosDistParam {
     }
 }
 
-impl Display for PosDistParam {
+impl Display for DistParam {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let param = match self {
-            PosDistParam::Rings => "Rings",
-            PosDistParam::Radius => "Radius",
-            PosDistParam::CenterX => "CenterX",
-            PosDistParam::CenterY => "CenterY",
-            PosDistParam::LengthX => "LengthX",
-            PosDistParam::LengthY => "lengthY",
-            PosDistParam::PointsX => "PointsX",
-            PosDistParam::PointsY => "PointsY",
+            DistParam::Rings => "Rings",
+            DistParam::Radius => "Radius",
+            DistParam::CenterX => "CenterX",
+            DistParam::CenterY => "CenterY",
+            DistParam::LengthX => "LengthX",
+            DistParam::LengthY => "lengthY",
+            DistParam::PointsX => "PointsX",
+            DistParam::PointsY => "PointsY",
         };
         write!(f, "{param}")
     }
 }
 
-fn get_input_params(pos_dist_type: PosDistType) -> Vec<(PosDistParam, String)> {
-    match pos_dist_type {
+fn get_pos_dist_input_params(pos_dist_type: PosDistType, light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Vec<DistInput> {
+    
+    let mut dist_inputs :Vec<DistInput> = match pos_dist_type {
         PosDistType::Random(random) => vec![
-            (
-                PosDistParam::LengthX,
-                format!("{}", random.side_length_x().get::<millimeter>()),
-            ),
-            (
-                PosDistParam::LengthY,
-                format!("{}", random.side_length_y().get::<millimeter>()),
-            ),
-            (PosDistParam::PointsX, format!("{}", random.nr_of_points())),
+            DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", random.side_length_x().get::<millimeter>())),
+            DistInput::new(DistParam::LengthY, &pos_dist_type, None, format!("{}", random.side_length_y().get::<millimeter>())),
+            DistInput::new(DistParam::PointsX, &pos_dist_type, None, format!("{}", random.nr_of_points())),
         ],
         PosDistType::Grid(grid) => vec![
-            (
-                PosDistParam::LengthX,
-                format!("{}", grid.side_length().0.get::<millimeter>()),
-            ),
-            (
-                PosDistParam::LengthY,
-                format!("{}", grid.side_length().1.get::<millimeter>()),
-            ),
-            (PosDistParam::PointsX, format!("{}", grid.nr_of_points().0)),
-            (PosDistParam::PointsY, format!("{}", grid.nr_of_points().1)),
+            DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", grid.side_length().0.get::<millimeter>())),
+            DistInput::new(DistParam::LengthY, &pos_dist_type, None, format!("{}", grid.side_length().1.get::<millimeter>())),
+            DistInput::new(DistParam::PointsX, &pos_dist_type, None, format!("{}", grid.nr_of_points().0)),
+            DistInput::new(DistParam::PointsY, &pos_dist_type, None, format!("{}", grid.nr_of_points().1)),
         ],
         PosDistType::HexagonalTiling(hexagonal_tiling) => vec![
-            (
-                PosDistParam::Rings,
-                format!("{}", hexagonal_tiling.nr_of_hex_along_radius()),
-            ),
-            (
-                PosDistParam::Radius,
-                format!("{}", hexagonal_tiling.radius().get::<millimeter>()),
-            ),
-            (
-                PosDistParam::CenterX,
-                format!("{}", hexagonal_tiling.center().x.get::<millimeter>()),
-            ),
-            (
-                PosDistParam::CenterY,
-                format!("{}", hexagonal_tiling.center().y.get::<millimeter>()),
-            ),
+            DistInput::new(DistParam::Rings, &pos_dist_type, None, format!("{}", hexagonal_tiling.nr_of_hex_along_radius())),
+            DistInput::new(DistParam::Radius, &pos_dist_type, None, format!("{}", hexagonal_tiling.radius().get::<millimeter>())),
+            DistInput::new(DistParam::CenterX, &pos_dist_type, None, format!("{}", hexagonal_tiling.center().x.get::<millimeter>())),
+            DistInput::new(DistParam::CenterY, &pos_dist_type, None, format!("{}", hexagonal_tiling.center().y.get::<millimeter>())),
         ],
         PosDistType::Hexapolar(hexapolar) => vec![
-            (PosDistParam::Rings, format!("{}", hexapolar.nr_of_rings())),
-            (
-                PosDistParam::Radius,
-                format!("{}", hexapolar.radius().get::<millimeter>()),
-            ),
+            DistInput::new(DistParam::Rings, &pos_dist_type, None, format!("{}", hexapolar.nr_of_rings())),
+            DistInput::new(DistParam::Radius, &pos_dist_type, None, format!("{}", hexapolar.radius().get::<millimeter>())),
         ],
         PosDistType::FibonacciRectangle(fibonacci_rectangle) => vec![
-            (
-                PosDistParam::LengthX,
-                format!(
-                    "{}",
-                    fibonacci_rectangle.side_length_x().get::<millimeter>()
-                ),
-            ),
-            (
-                PosDistParam::LengthY,
-                format!(
-                    "{}",
-                    fibonacci_rectangle.side_length_y().get::<millimeter>()
-                ),
-            ),
-            (
-                PosDistParam::PointsX,
-                format!("{}", fibonacci_rectangle.nr_of_points()),
-            ),
+            DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", fibonacci_rectangle.side_length_x().get::<millimeter>())),
+            DistInput::new(DistParam::LengthY, &pos_dist_type, None, format!("{}", fibonacci_rectangle.side_length_y().get::<millimeter>())),
+            DistInput::new(DistParam::PointsX, &pos_dist_type, None, format!("{}", fibonacci_rectangle.nr_of_points())),
         ],
         PosDistType::FibonacciEllipse(fibonacci_ellipse) => vec![
-            (
-                PosDistParam::LengthX,
-                format!("{}", fibonacci_ellipse.radius_x().get::<millimeter>()),
-            ),
-            (
-                PosDistParam::LengthY,
-                format!("{}", fibonacci_ellipse.radius_y().get::<millimeter>()),
-            ),
-            (
-                PosDistParam::PointsX,
-                format!("{}", fibonacci_ellipse.nr_of_points()),
-            ),
+            DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", fibonacci_ellipse.radius_x().get::<millimeter>())),
+            DistInput::new(DistParam::LengthY, &pos_dist_type, None, format!("{}", fibonacci_ellipse.radius_y().get::<millimeter>())),
+            DistInput::new(DistParam::PointsX, &pos_dist_type, None, format!("{}", fibonacci_ellipse.nr_of_points())),
         ],
         PosDistType::Sobol(sobol_dist) => vec![
-            (
-                PosDistParam::LengthX,
-                format!("{}", sobol_dist.side_length_x().get::<millimeter>()),
-            ),
-            (
-                PosDistParam::LengthY,
-                format!("{}", sobol_dist.side_length_y().get::<millimeter>()),
-            ),
-            (
-                PosDistParam::PointsX,
-                format!("{}", sobol_dist.nr_of_points()),
-            ),
+            DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", sobol_dist.side_length_x().get::<millimeter>())),
+            DistInput::new(DistParam::LengthY, &pos_dist_type, None, format!("{}", sobol_dist.side_length_y().get::<millimeter>())),
+            DistInput::new(DistParam::PointsX, &pos_dist_type, None, format!("{}", sobol_dist.nr_of_points())),
         ],
-    }
+    };
+
+    for (dist_input) in &mut dist_inputs{
+        dist_input.callback_opt = use_on_pos_dist_input_change(
+                                        pos_dist_type,
+                                        dist_input.dist_param.clone(),
+                                        light_data_builder_sig.clone(),
+                                    );
+    }   
+
+    dist_inputs
 }
 
 #[component]
@@ -209,7 +160,7 @@ pub fn RayDistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHist
             {
                 if let Some(pos_dist_type) = rays_pos_dist {
                     rsx! {
-                        NodePosDistInput { pos_dist_type, light_data_builder_sig }
+                        NodePosDistInputs { pos_dist_type, light_data_builder_sig }
                     }
                 } else {
                     rsx! {}
@@ -220,81 +171,13 @@ pub fn RayDistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHist
 }
 
 #[component]
-pub fn NodePosDistInput(
+pub fn NodePosDistInputs(
     pos_dist_type: PosDistType,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
-    let pos_dist_params = get_input_params(pos_dist_type);
-    rsx! {
-        for chunk in pos_dist_params.iter().chunks(2) {
-            {
-                let inputs: Vec<&(PosDistParam, String)> = chunk
-                    .collect::<Vec<&(PosDistParam, String)>>();
-                if inputs.len() == 2 {
-                    let (param1, value1) = &inputs[0];
-                    let (param2, value2) = &inputs[1];
-                    let id1 = format!("node{pos_dist_type}{param1}Input");
-                    let id2 = format!("node{pos_dist_type}{param2}Input");
-                    let label1 = param1.input_label();
-                    let label2 = param2.input_label();
-                    rsx! {
-                        div { class: "row gy-1 gx-2",
-                            div { class: "col-sm",
-                                LabeledInput {
-                                    id: id1,
-                                    label: label1,
-                                    value: value1.clone(),
-                                    step: Some(param1.step_value()),
-                                    min: Some(param1.min_value()),
-                                    onchange: use_on_pos_dist_input_change(
-                                        pos_dist_type.clone(),
-                                        param1.clone(),
-                                        light_data_builder_sig.clone(),
-                                    ),
-                                    r#type: "number",
-                                }
-                            }
-                            div { class: "col-sm",
-                                LabeledInput {
-                                    id: id2,
-                                    label: label2,
-                                    value: value2.clone(),
-                                    step: Some(param2.step_value()),
-                                    min: Some(param2.min_value()),
-                                    onchange: use_on_pos_dist_input_change(
-                                        pos_dist_type.clone(),
-                                        param2.clone(),
-                                        light_data_builder_sig.clone(),
-                                    ),
-                                    r#type: "number",
-                                }
-                            }
-                        }
-                    }
-                } else if inputs.len() == 1 {
-                    let (param, value) = &inputs[0];
-                    let id = format!("node{pos_dist_type}{param}Input");
-                    let label = param.input_label();
-                    rsx! {
-                        LabeledInput {
-                            id,
-                            label,
-                            value: value.clone(),
-                            step: Some(param.step_value()),
-                            min: Some(param.min_value()),
-                            onchange: use_on_pos_dist_input_change(
-                                pos_dist_type.clone(),
-                                param.clone(),
-                                light_data_builder_sig.clone(),
-                            ),
-                            r#type: "number",
-                        }
-                    }
-                } else {
-                    rsx! {}
-                }
-            }
-        }
+    let dist_params = get_pos_dist_input_params(pos_dist_type, light_data_builder_sig);
+    rsx!{
+        RowedDistInputs {dist_params}
     }
 }
 
@@ -320,7 +203,7 @@ pub fn PositionDistributionEditor(
 
 fn use_on_pos_dist_input_change(
     mut pos_dist_type: PosDistType,
-    param: PosDistParam,
+    param: DistParam,
     mut light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Option<Callback<Event<FormData>>> {
     Some(use_callback(move |e: Event<FormData>| {
@@ -328,46 +211,46 @@ fn use_on_pos_dist_input_change(
         if let Ok(value) = value.parse::<f64>() {
             match &mut pos_dist_type {
                 PosDistType::Random(random) => match param {
-                    PosDistParam::LengthX => random.set_side_length_x(millimeter!(value)),
-                    PosDistParam::LengthY => random.set_side_length_y(millimeter!(value)),
-                    PosDistParam::PointsX => random.set_nr_of_points(value as usize),
+                    DistParam::LengthX => random.set_side_length_x(millimeter!(value)),
+                    DistParam::LengthY => random.set_side_length_y(millimeter!(value)),
+                    DistParam::PointsX => random.set_nr_of_points(value as usize),
                     _ => {}
                 },
                 PosDistType::Grid(grid) => match param {
-                    PosDistParam::LengthX => grid.set_side_length_x(millimeter!(value)),
-                    PosDistParam::LengthY => grid.set_side_length_y(millimeter!(value)),
-                    PosDistParam::PointsX => grid.set_nr_of_points_x(value as usize),
-                    PosDistParam::PointsY => grid.set_nr_of_points_y(value as usize),
+                    DistParam::LengthX => grid.set_side_length_x(millimeter!(value)),
+                    DistParam::LengthY => grid.set_side_length_y(millimeter!(value)),
+                    DistParam::PointsX => grid.set_nr_of_points_x(value as usize),
+                    DistParam::PointsY => grid.set_nr_of_points_y(value as usize),
                     _ => {}
                 },
                 PosDistType::HexagonalTiling(hexagonal_tiling) => match param {
-                    PosDistParam::Rings => hexagonal_tiling.set_nr_of_hex_along_radius(value as u8),
-                    PosDistParam::Radius => hexagonal_tiling.set_radius(millimeter!(value)),
-                    PosDistParam::CenterX => hexagonal_tiling.set_center_x(millimeter!(value)),
-                    PosDistParam::CenterY => hexagonal_tiling.set_center_y(millimeter!(value)),
+                    DistParam::Rings => hexagonal_tiling.set_nr_of_hex_along_radius(value as u8),
+                    DistParam::Radius => hexagonal_tiling.set_radius(millimeter!(value)),
+                    DistParam::CenterX => hexagonal_tiling.set_center_x(millimeter!(value)),
+                    DistParam::CenterY => hexagonal_tiling.set_center_y(millimeter!(value)),
                     _ => {}
                 },
                 PosDistType::Hexapolar(hexapolar) => match param {
-                    PosDistParam::Rings => hexapolar.set_nr_of_rings(value as u8),
-                    PosDistParam::Radius => hexapolar.set_radius(millimeter!(value)),
+                    DistParam::Rings => hexapolar.set_nr_of_rings(value as u8),
+                    DistParam::Radius => hexapolar.set_radius(millimeter!(value)),
                     _ => {}
                 },
                 PosDistType::FibonacciRectangle(rect) => match param {
-                    PosDistParam::LengthX => rect.set_side_length_x(millimeter!(value)),
-                    PosDistParam::LengthY => rect.set_side_length_y(millimeter!(value)),
-                    PosDistParam::PointsX => rect.set_nr_of_points(value as usize),
+                    DistParam::LengthX => rect.set_side_length_x(millimeter!(value)),
+                    DistParam::LengthY => rect.set_side_length_y(millimeter!(value)),
+                    DistParam::PointsX => rect.set_nr_of_points(value as usize),
                     _ => {}
                 },
                 PosDistType::FibonacciEllipse(ellipse) => match param {
-                    PosDistParam::LengthX => ellipse.set_radius_x(millimeter!(value)),
-                    PosDistParam::LengthY => ellipse.set_radius_y(millimeter!(value)),
-                    PosDistParam::PointsX => ellipse.set_nr_of_points(value as usize),
+                    DistParam::LengthX => ellipse.set_radius_x(millimeter!(value)),
+                    DistParam::LengthY => ellipse.set_radius_y(millimeter!(value)),
+                    DistParam::PointsX => ellipse.set_nr_of_points(value as usize),
                     _ => {}
                 },
                 PosDistType::Sobol(sobol_dist) => match param {
-                    PosDistParam::PointsX => sobol_dist.set_nr_of_points(value as usize),
-                    PosDistParam::LengthX => sobol_dist.set_side_length_x(millimeter!(value)),
-                    PosDistParam::LengthY => sobol_dist.set_side_length_y(millimeter!(value)),
+                    DistParam::PointsX => sobol_dist.set_nr_of_points(value as usize),
+                    DistParam::LengthX => sobol_dist.set_side_length_x(millimeter!(value)),
+                    DistParam::LengthY => sobol_dist.set_side_length_y(millimeter!(value)),
                     _ => {}
                 },
             }
