@@ -162,7 +162,7 @@ impl HTTPClient {
     pub async fn get_raw(&self, route: &str) -> Result<String, String> {
         let res = self.client().get(self.url(route)).send().await;
         if let Ok(response) = res {
-            self.process_response_ron(response).await
+            self.process_response_raw(response).await
         } else {
             Err(format!("Error on get request from route: \"{route}\""))
         }

@@ -98,9 +98,9 @@ impl EdgeCreation {
 }
 #[component]
 pub fn EdgesComponent() -> Element {
-    let graph_store = use_context::<GraphStore>();
+    let graph_store = use_context::<Signal<GraphStore>>();
     rsx! {
-        for edge in graph_store.edges()() {
+        for edge in graph_store().edges()() {
             EdgeComponent { edge }
         }
     }

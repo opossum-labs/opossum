@@ -2,7 +2,7 @@ use crate::components::scenery_editor::{
     edges::edges_component::{
         EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
     },
-    graph_store::GraphStore,
+    graph_store::{graph_processor, GraphStore, GraphStoreAction},
     node::NodeElement,
     nodes::Nodes,
 };
@@ -17,7 +17,6 @@ use opossum_backend::{
 use opossum_backend::{scenery::NewAnalyzerInfo, PortType};
 use std::path::PathBuf;
 use uuid::Uuid;
-
 #[derive(Debug)]
 pub enum NodeEditorCommand {
     DeleteAll,
@@ -46,8 +45,8 @@ pub fn GraphEditor(
     command: ReadOnlySignal<Option<NodeEditorCommand>>,
     node_selected: Signal<Option<NodeElement>>,
 ) -> Element {
+    let graph_store: Signal<GraphStore> = use_signal(GraphStore::default);
     let mut editor_size: Signal<Option<PixelsSize>> = use_signal(|| None);
-    let mut graph_store = use_context_provider(GraphStore::default);
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
         edge_in_creation: Signal::new(None),
@@ -57,42 +56,38 @@ pub fn GraphEditor(
     let mut current_mouse_pos = use_signal(|| (0.0, 0.0));
     let mut on_mounted = use_signal(|| None);
 
+    let graph_processor: Coroutine<GraphStoreAction> = graph_processor(&graph_store);
+    use_context_provider(|| graph_store);
+    use_context_provider(|| graph_processor);
+
     use_effect(move || {
         let command = command.read();
         if let Some(command) = &*(command) {
             match command {
                 NodeEditorCommand::DeleteAll => {
-                    spawn(async move {
-                        graph_store.delete_all_nodes().await;
-                    });
+                    graph_processor.send(GraphStoreAction::DeleteScenery);
                 }
                 NodeEditorCommand::AddNode(node_type) => {
                     let new_node_info = NewNode::new(node_type.to_owned(), (100.0, 100.0));
-                    spawn(async move {
-                        graph_store.add_optic_node(new_node_info).await;
-                    });
+                    graph_processor.send(GraphStoreAction::AddOpticNode(new_node_info));
                 }
                 NodeEditorCommand::AddNodeRef(new_ref_node) => {
                     let ref_node_clone = new_ref_node.clone();
-                    spawn(async move {
-                        graph_store.add_optic_reference(ref_node_clone).await;
-                    });
+                    graph_processor.send(GraphStoreAction::AddOpticReference(ref_node_clone));
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
                     let new_analyzer_info =
                         NewAnalyzerInfo::new(analyzer_type.clone(), (100.0, 100.0));
-                    spawn(async move { graph_store.add_analyzer(new_analyzer_info).await });
+                    graph_processor.send(GraphStoreAction::AddAnalyzer(new_analyzer_info));
                 }
                 NodeEditorCommand::AutoLayout => {
-                    spawn(async move { graph_store.optimize_layout().await });
+                    graph_processor.send(GraphStoreAction::OptimizeLayout);
                 }
                 NodeEditorCommand::LoadFile(path) => {
-                    let path = path.to_owned();
-                    spawn(async move { graph_store.load_from_opm_file(&path).await });
+                    graph_processor.send(GraphStoreAction::LoadFromFile(path.to_owned()));
                 }
                 NodeEditorCommand::SaveFile(path) => {
-                    let path = path.to_owned();
-                    spawn(async move { GraphStore::save_to_opm_file(&path).await });
+                    graph_processor.send(GraphStoreAction::SaveToFile(path.to_owned()));
                 }
             }
         }
@@ -139,9 +134,7 @@ pub fn GraphEditor(
                 let drag_status = editor_status.drag_status.read().clone();
                 match drag_status {
                     DragStatus::Node(uuid) => {
-                        spawn(async move {
-                            graph_store.sync_node_position(uuid).await;
-                        });
+                        graph_processor.send(GraphStoreAction::SyncNodePosition(uuid));
                     }
                     DragStatus::Edge(_) => {
                         let edge_in_creation = editor_status.edge_in_creation.read().clone();
@@ -159,9 +152,7 @@ pub fn GraphEditor(
                                     end_port.port_name.clone(),
                                     0.0,
                                 );
-                                spawn(async move {
-                                    graph_store.add_edge(new_edge).await;
-                                });
+                                graph_processor.send(GraphStoreAction::AddEdge(new_edge));
                             }
                             editor_status.edge_in_creation.set(None);
                         }
@@ -192,7 +183,7 @@ pub fn GraphEditor(
                             );
                     }
                     DragStatus::Node(id) => {
-                        graph_store
+                        graph_store()
                             .shift_node_position(
                                 id,
                                 Point2D::new(
@@ -228,7 +219,7 @@ pub fn GraphEditor(
             },
             ondoubleclick: move |e| {
                 e.stop_propagation();
-                let bounding_box = graph_store.get_bounding_box();
+                let bounding_box = graph_store().get_bounding_box();
                 let center = bounding_box.center();
                 if let Some(window_size) = editor_size() {
                     let zoom = graph_zoom();
