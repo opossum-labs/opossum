@@ -230,6 +230,7 @@ impl UuidRegistry {
         self.backward.get(&id).copied()
     }
 }
+#[allow(clippy::too_many_lines)]
 pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStoreAction> {
     let mut graph_store = *graph_store;
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
