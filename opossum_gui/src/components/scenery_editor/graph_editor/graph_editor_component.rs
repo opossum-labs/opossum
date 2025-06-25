@@ -2,7 +2,7 @@ use crate::components::scenery_editor::{
     edges::edges_component::{
         EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
     },
-    graph_store::{graph_processor, GraphStore, GraphStoreAction},
+    graph_store::{use_graph_processor, GraphStore, GraphStoreAction},
     node::NodeElement,
     nodes::Nodes,
 };
@@ -56,10 +56,17 @@ pub fn GraphEditor(
     let mut current_mouse_pos = use_signal(|| (0.0, 0.0));
     let mut on_mounted = use_signal(|| None);
 
-    let graph_processor: Coroutine<GraphStoreAction> = graph_processor(&graph_store);
+    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(&graph_store);
     use_context_provider(|| graph_store);
     use_context_provider(|| graph_processor);
 
+    let view_port_center = use_memo(move || {
+        let size = editor_size();
+        size.map_or_else(
+            || Point2D::new(0.0, 0.0),
+            |size| Point2D::new(size.width / 2.0, size.height / 2.0),
+        )
+    });
     use_effect(move || {
         let command = command.read();
         if let Some(command) = &*(command) {
@@ -68,7 +75,14 @@ pub fn GraphEditor(
                     graph_processor.send(GraphStoreAction::DeleteScenery);
                 }
                 NodeEditorCommand::AddNode(node_type) => {
-                    let new_node_info = NewNode::new(node_type.to_owned(), (100.0, 100.0));
+                    // calculate center of viewport (in graph coordinates)
+                    let zoom = *(graph_zoom.peek());
+                    let shift = graph_shift.peek();
+                    let element_position = (
+                        (view_port_center.peek().x - shift.x) / zoom,
+                        (view_port_center.peek().y - shift.y) / zoom,
+                    );
+                    let new_node_info = NewNode::new(node_type.to_owned(), element_position);
                     graph_processor.send(GraphStoreAction::AddOpticNode(new_node_info));
                 }
                 NodeEditorCommand::AddNodeRef(new_ref_node) => {
