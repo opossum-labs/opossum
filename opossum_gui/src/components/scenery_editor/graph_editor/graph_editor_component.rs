@@ -68,8 +68,7 @@ pub fn GraphEditor(
         )
     });
     use_effect(move || {
-        let command = command.read();
-        if let Some(command) = &*(command) {
+        if let Some(command) = command.read().as_ref() {
             match command {
                 NodeEditorCommand::DeleteAll => {
                     graph_processor.send(GraphStoreAction::DeleteScenery);
@@ -151,24 +150,26 @@ pub fn GraphEditor(
                         graph_processor.send(GraphStoreAction::SyncNodePosition(uuid));
                     }
                     DragStatus::Edge(_) => {
-                        let edge_in_creation = editor_status.edge_in_creation.read().clone();
-                        if let Some(edge_in_creation) = edge_in_creation {
-                            if edge_in_creation.is_valid() {
-                                let mut start_port = edge_in_creation.start_port();
-                                let mut end_port = edge_in_creation.end_port().unwrap();
-                                if start_port.port_type == PortType::Input {
-                                    (start_port, end_port) = (end_port, start_port);
-                                }
+                        if let Some(edge) = editor_status.edge_in_creation.write().take() {
+                            if edge.is_valid() {
+                                let (start_port, end_port) = if edge.start_port().port_type
+                                    == PortType::Output
+                                {
+                                    (edge.start_port(), edge.end_port().unwrap())
+                                } else {
+                                    (edge.end_port().unwrap(), edge.start_port())
+                                };
+                                let start_port = start_port.clone();
+                                let end_port = end_port.clone();
                                 let new_edge = ConnectInfo::new(
                                     start_port.node_id,
-                                    start_port.port_name.clone(),
+                                    start_port.port_name,
                                     end_port.node_id,
-                                    end_port.port_name.clone(),
+                                    end_port.port_name,
                                     0.0,
                                 );
                                 graph_processor.send(GraphStoreAction::AddEdge(new_edge));
                             }
-                            editor_status.edge_in_creation.set(None);
                         }
                     }
                     _ => {}
@@ -207,26 +208,24 @@ pub fn GraphEditor(
                             );
                     }
                     DragStatus::Edge(edge_creation_start) => {
-                        let edge_in_creation = editor_status.edge_in_creation.read().clone();
-                        if edge_in_creation.is_none() {
-                            let edge_creation = EdgeCreation::new(
-                                edge_creation_start.src_node,
-                                edge_creation_start.src_port.clone(),
-                                edge_creation_start.src_port_type.clone(),
-                                edge_creation_start.start_pos,
-                            );
-                            editor_status.edge_in_creation.set(Some(edge_creation));
-                        } else {
-                            let mut edge_in_creation = edge_in_creation.unwrap();
-                            edge_in_creation
-                                .shift_end(
-                                    Point2D::new(
-                                        rel_shift_x as f64 / graph_zoom(),
-                                        rel_shift_y as f64 / graph_zoom(),
-                                    ),
-                                );
-                            editor_status.edge_in_creation.set(Some(edge_in_creation));
-                        }
+                        let shift = Point2D::new(
+                            rel_shift_x as f64 / graph_zoom(),
+                            rel_shift_y as f64 / graph_zoom(),
+                        );
+                        editor_status
+                            .edge_in_creation
+                            .with_mut(|edge_option| {
+                                let edge = edge_option
+                                    .get_or_insert_with(|| {
+                                        EdgeCreation::new(
+                                            edge_creation_start.src_node,
+                                            edge_creation_start.src_port.clone(),
+                                            edge_creation_start.src_port_type.clone(),
+                                            edge_creation_start.start_pos,
+                                        )
+                                    });
+                                edge.shift_end(shift);
+                            });
                     }
                     DragStatus::None => {}
                 }
