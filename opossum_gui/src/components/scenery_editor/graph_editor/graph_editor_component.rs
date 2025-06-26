@@ -56,7 +56,7 @@ pub fn GraphEditor(
     let mut current_mouse_pos = use_signal(|| (0.0, 0.0));
     let mut on_mounted = use_signal(|| None);
 
-    let graph_processor: Coroutine<GraphStoreAction> = graph_processor(&graph_store);
+    let graph_processor: Coroutine<GraphStoreAction> = graph_processor(&graph_store, node_selected);
     use_context_provider(|| graph_store);
     use_context_provider(|| graph_processor);
 
@@ -129,8 +129,9 @@ pub fn GraphEditor(
                 current_mouse_pos
                     .set((event.client_coordinates().x, event.client_coordinates().y));
                 editor_status.drag_status.set(DragStatus::Graph);
-                node_selected.set(None);
                 graph_store().set_active_node_none();
+                node_selected.set(None);
+
             },
             onmouseup: move |_| {
                 let drag_status = editor_status.drag_status.read().clone();

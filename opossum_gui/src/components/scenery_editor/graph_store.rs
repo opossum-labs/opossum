@@ -400,7 +400,7 @@ impl UuidRegistry {
     }
 }
 #[allow(clippy::too_many_lines)]
-pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStoreAction> {
+pub fn graph_processor(graph_store: &Signal<GraphStore>, mut node_selected: Signal<Option<NodeElement>>,) -> Coroutine<GraphStoreAction> {
     let mut graph_store = *graph_store;
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         async move {
@@ -502,6 +502,7 @@ pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStore
                                                     });
                                                 });
                                             }
+                                            node_selected.set(None);
                                         }
                                         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                                     }
@@ -510,6 +511,7 @@ pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStore
                                     match api::delete_analyzer(&HTTP_API_CLIENT(), node_id).await {
                                         Ok(_) => {
                                             graph_store().nodes_mut().write().remove(&node_id);
+                                            node_selected.set(None);
                                         }
                                         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                                     }
@@ -529,8 +531,9 @@ pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStore
                                     ports,
                                 );
                                 let id = node_element.id();
-                                graph_store.write().nodes.write().insert(id, node_element);
+                                graph_store.write().nodes.write().insert(id, node_element.clone());
                                 graph_store.write().set_node_active(id);
+                                node_selected.set(Some(node_element));
                             }
                             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                         }
@@ -572,7 +575,8 @@ pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStore
                                     .write()
                                     .nodes
                                     .write()
-                                    .insert(analyzer_id, node_element);
+                                    .insert(analyzer_id, node_element.clone());
+                                node_selected.set(Some(node_element));
                             }
                             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                         }
