@@ -1,11 +1,48 @@
 use crate::components::node_editor::{
-    accordion::{AccordionItem, LabeledSelect}, source_editor::LightDataBuilderHistory,
+    accordion::{AccordionItem, LabeledSelect}, source_editor::{DistInput, DistParam, LightDataBuilderHistory, RowedDistInputs},
 };
 use dioxus::prelude::*;
-use opossum_backend::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder, EnergyDistType};
+use opossum_backend::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder, EnergyDistType, joule, millimeter, degree};
 use strum_macros::EnumIter;
 use strum::IntoEnumIterator;
+use uom::si::{angle::degree, energy::joule, length::millimeter};
 
+
+
+#[component]
+pub fn RayEnergyDistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Element {
+    let (show, _) = light_data_builder_sig.read().is_rays_is_collimated();
+    let rays_energy_dist = light_data_builder_sig
+        .read()
+        .get_current_energy_dist_type()
+        .clone();
+
+    rsx! {
+        div { hidden: !show,
+            {
+                if let Some(energy_dist_type) = rays_energy_dist {
+                    rsx! {
+                        NodeEnergyDistInputs { energy_dist_type, light_data_builder_sig }
+                    }
+                } else {
+                    rsx! {}
+                }
+            }
+        }
+    }
+}
+
+
+#[component]
+pub fn NodeEnergyDistInputs(
+    energy_dist_type: EnergyDistType,
+    light_data_builder_sig: Signal<LightDataBuilderHistory>,
+) -> Element {
+    let dist_params = get_energy_dist_input_params(energy_dist_type, light_data_builder_sig);
+    rsx!{
+        RowedDistInputs {dist_params}
+    }
+}
 
 #[component]
 pub fn EnergyDistributionEditor(
@@ -13,6 +50,7 @@ pub fn EnergyDistributionEditor(
 ) -> Element {
     let accordion_item_content = rsx! {
         RayEnergyDistributionSelector { light_data_builder_sig }
+        RayEnergyDistributionEditor{ light_data_builder_sig }
     };
 
     rsx! {
@@ -124,4 +162,71 @@ impl EnergyDistSelection {
         }
         option_vals
     }
+}
+
+
+
+fn get_energy_dist_input_params(energy_dist_type: EnergyDistType, light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Vec<DistInput> {    
+    let mut dist_inputs :Vec<DistInput> = match energy_dist_type {
+        EnergyDistType::Uniform(uniform) => vec![
+            DistInput::new(DistParam::Energy, &energy_dist_type, None, format!("{}", uniform.energy().get::<joule>())),
+            
+        ],
+        EnergyDistType::General2DGaussian(gaussian) => vec![
+        DistInput::new(DistParam::CenterX, &energy_dist_type, None, format!("{}", gaussian.center().x.get::<millimeter>())),
+        DistInput::new(DistParam::CenterY, &energy_dist_type, None, format!("{}", gaussian.center().x.get::<millimeter>())),
+        DistInput::new(DistParam::LengthX, &energy_dist_type, None, format!("{}", gaussian.sigma().x.get::<millimeter>())),
+        DistInput::new(DistParam::LengthY, &energy_dist_type, None, format!("{}", gaussian.sigma().y.get::<millimeter>())),
+        DistInput::new(DistParam::Energy, &energy_dist_type, None, format!("{}", gaussian.energy().get::<joule>())),
+        DistInput::new(DistParam::Angle, &energy_dist_type, None, format!("{}", gaussian.theta().get::<degree>())),
+        DistInput::new(DistParam::Power, &energy_dist_type, None, format!("{}", gaussian.power())),
+        DistInput::new(DistParam::Rectangular, &energy_dist_type, None, format!("{}", gaussian.rectangular())),
+        ]
+    };
+
+    for (dist_input) in &mut dist_inputs{
+        dist_input.callback_opt = use_on_energy_dist_input_change(
+                                        energy_dist_type,
+                                        dist_input.dist_param.clone(),
+                                        light_data_builder_sig.clone(),
+                                    );
+    }   
+
+    dist_inputs
+}
+
+
+fn use_on_energy_dist_input_change(
+    mut energy_dist_type: EnergyDistType,
+    param: DistParam,
+    mut light_data_builder_sig: Signal<LightDataBuilderHistory>,
+) -> Option<Callback<Event<FormData>>> {
+    Some(use_callback(move |e: Event<FormData>| {
+        let value = e.value();
+        if let Ok(value) = value.parse::<f64>() {
+            println!("{value}");
+            match &mut energy_dist_type {
+                EnergyDistType::Uniform(uniform) => match param {
+                    DistParam::Energy => uniform.set_energy(joule!(value)).expect("negative energy!"),
+                    _ => {}
+                },
+                EnergyDistType::General2DGaussian(gaussian) => match param {
+                    DistParam::CenterX => gaussian.set_center_x(millimeter!(value)),
+                    DistParam::CenterY => gaussian.set_center_y(millimeter!(value)),
+                    DistParam::LengthX => gaussian.set_sigma_x(millimeter!(value)),
+                    DistParam::LengthY => gaussian.set_sigma_y(millimeter!(value)),
+                    DistParam::Energy => gaussian.set_energy(joule!(value)).expect("negative energy!"),
+                    DistParam::Angle => gaussian.set_theta(degree!(value)),
+                    DistParam::Power => gaussian.set_power(value),
+                    DistParam::Rectangular => println!("test"),
+                    // DistParam::LengthX => gaussian.set_side_length_x(millimeter!(value)),
+                    // DistParam::LengthY => gaussian.set_side_length_y(millimeter!(value)),
+                    // DistParam::PointsX => gaussian.set_nr_of_points_x(value as usize),
+                    // DistParam::PointsY => gaussian.set_nr_of_points_y(value as usize),
+                    _ => {}
+                },
+            }
+            // light_data_builder_sig.with_mut(|ldb| ldb.set_pos_dist_type(energy_dist_type))
+        }
+    }))
 }

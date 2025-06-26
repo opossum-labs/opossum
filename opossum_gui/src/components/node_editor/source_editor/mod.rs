@@ -20,34 +20,26 @@ use super::node_editor_component::NodeChange;
 use dioxus::prelude::*;
 
 #[component]
-pub fn SourceEditor(
-    hidden: bool,
-    light_data_builder_opt: Option<Proptype>,
-    node_change: Signal<Option<NodeChange>>,
+pub fn LightDataEditor(
+    light_data_builder_opt: Option<LightDataBuilder>,
+    prop_type_opt: Signal<Option<Proptype>>
 ) -> Element {
     let mut light_data_builder_sig = Signal::new(LightDataBuilderHistory::default());
 
     use_effect(move || {
-        if !hidden{
-            node_change.set(Some(NodeChange::Property(
-                "light data".to_owned(),
-                serde_json::to_value(Proptype::LightDataBuilder(Some(
-                    light_data_builder_sig.read().get_current().clone(),
-                )))
-                .unwrap(),
-            )))
-        }
-    });
+        prop_type_opt.set(Some(Proptype::LightDataBuilder(Some(
+                light_data_builder_sig.read().get_current().clone(),
+            ))))}
+        );
 
-    use_effect(move || node_change.set(Some(NodeChange::Isometry(Isometry::identity()))));
     use_effect(move || {
         let (ld_builder, key) = match &light_data_builder_opt {
-            Some(Proptype::LightDataBuilder(Some(ld)))
+            Some(ld)
                 if matches!(ld, LightDataBuilder::Geometric(_)) =>
             {
                 (ld.clone(), "Rays")
             }
-            Some(Proptype::LightDataBuilder(Some(ld))) => (ld.clone(), "Energy"),
+            Some(ld) => (ld.clone(), "Energy"),
             _ => (LightDataBuilder::default(), "Rays"),
         };
         light_data_builder_sig
@@ -61,13 +53,16 @@ pub fn SourceEditor(
         DistributionEditor { light_data_builder_sig }
     };
     rsx! {
-        AccordionItem {
-            elements: vec![accordion_item_content],
-            header: "Light Source",
-            header_id: "sourceHeading",
-            parent_id: "accordionNodeConfig",
-            content_id: "sourceCollapse",
-            hidden,
+        div {
+            class: "accordion accordion-borderless bg-dark ",
+            id: "accordionLightDataConfig",
+            AccordionItem {
+                elements: vec![accordion_item_content],
+                header: "Light Definition",
+                header_id: "sourceHeading",
+                parent_id: "accordionLightDataConfig",
+                content_id: "sourceCollapse",
+            }
         }
     }
 }
@@ -90,16 +85,62 @@ pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory
 
 #[component]
 pub fn DistLabeledInput(dist_input: DistInput) -> Element{
-    rsx!{
-        LabeledInput {
-                id: dist_input.id,
-                label: dist_input.dist_param.input_label(),
+    if dist_input.dist_param == DistParam::Rectangular{
+        let label = dist_input.dist_param.input_label();
+
+// div {
+//             class: "form-floating border-start",
+//             "data-mdb-input-init": "",
+//             hidden,
+//             input {
+//                 class: "form-control bg-dark text-light form-control-sm",
+//                 id: id.as_str(),
+//                 name: id.as_str(),
+//                 placeholder: label,
+//                 value,
+//                 readonly: onchange.is_none(),
+//                 r#type,
+//                 step: step.unwrap_or_default(),
+//                 min: min.unwrap_or_default(),
+//                 max: max.unwrap_or_default(),
+//                 onchange: onchange.unwrap_or_default(),
+//             }
+
+//             label { class: "form-label text-secondary", r#for: id, "{label}" }
+//         }
+
+        rsx! {
+        div {
+            class: "form-floating-checkbox border-start",
+            "data-mdb-input-init": "",
+            label { class: "text-secondary", r#for: dist_input.id.clone(), "{label}" }
+            br{}
+            input {
+                class: "form-check-input text-light",
+                id: dist_input.id.as_str(),
+                name: dist_input.id.as_str(),
                 value: dist_input.value,
-                step: Some(dist_input.dist_param.step_value()),
-                min: Some(dist_input.dist_param.min_value()),
-                onchange: dist_input.callback_opt,
-                r#type: "number",
+                r#type: "checkbox",
+                role: "switch",
+                checked: false,
+                onchange: dist_input.callback_opt.unwrap_or_default(),
             }
+
+        }
+    }
+    }
+    else{
+        rsx!{
+            LabeledInput {
+                    id: dist_input.id,
+                    label: dist_input.dist_param.input_label(),
+                    value: dist_input.value,
+                    step: dist_input.dist_param.step_value(),
+                    min: dist_input.dist_param.min_value(),
+                    onchange: dist_input.callback_opt,
+                    r#type: "number",
+                }
+        }
     }
 
 }
@@ -145,6 +186,6 @@ pub struct DistInput{
 
 impl DistInput{
     pub fn new(dist_param: DistParam, dist_type: &impl Display, callback_opt: Option<Callback<Event<FormData>>>, value: String) -> Self{
-        Self { value, id: format!("node{dist_type}{dist_param}Input"), dist_param: DistParam::LengthX, callback_opt }
+        Self { value, id: format!("node{dist_type}{dist_param}Input"), dist_param, callback_opt }
     }
 }

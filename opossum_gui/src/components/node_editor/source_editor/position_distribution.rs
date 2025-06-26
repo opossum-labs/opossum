@@ -22,7 +22,18 @@ pub enum DistParam {
     LengthY,
     PointsX,
     PointsY,
+    Energy,
+    Angle,
+    Power,
+    Rectangular,
 }
+
+// total_energy: Energy,
+//     mu_xy: Point2<Length>,
+//     sigma_xy: Point2<Length>,
+//     power: f64,
+//     theta: Angle,
+//     rectangular: bool,
 
 impl DistParam {
     pub fn input_label(&self) -> String {
@@ -35,18 +46,27 @@ impl DistParam {
             DistParam::LengthY => "Length Y in mm".to_string(),
             DistParam::PointsX => "#Points X".to_string(),
             DistParam::PointsY => "#Points Y".to_string(),
+            DistParam::Energy => "Energy in J".to_string(),
+            DistParam::Angle => "Angle in degree".to_string(),
+            DistParam::Power => "Power".to_string(),
+            DistParam::Rectangular => "Rectangular".to_string()
         }
     }
 
-    pub fn min_value(&self) -> &'static str {
+    pub fn min_value(&self) -> Option<&'static str> {
         match self {
-            DistParam::Rings | DistParam::PointsX | DistParam::PointsY => "1",
-            DistParam::Radius | DistParam::LengthX | DistParam::LengthY => "1e-9",
-            DistParam::CenterX | DistParam::CenterY => "-1e9",
+            DistParam::Rings | DistParam::PointsX | DistParam::PointsY => Some("1"),
+            DistParam::Radius | DistParam::LengthX | DistParam::LengthY| DistParam::Angle | DistParam::Power => Some("1e-9"),
+            DistParam::CenterX | DistParam::CenterY => Some("-1e9"),
+            DistParam::Energy => Some("0."),
+            _ => None
         }
     }
-    pub fn step_value(&self) -> &'static str {
-        "1"
+    pub fn step_value(&self) -> Option<&'static str> {
+         match self {
+            DistParam::Rectangular => None,
+         _ => Some("1")
+         }
     }
 }
 
@@ -61,13 +81,16 @@ impl Display for DistParam {
             DistParam::LengthY => "lengthY",
             DistParam::PointsX => "PointsX",
             DistParam::PointsY => "PointsY",
+            DistParam::Energy => "Energy",
+            DistParam::Angle => "Angle",
+            DistParam::Power => "Power",
+            DistParam::Rectangular => "Rectangular",
         };
         write!(f, "{param}")
     }
 }
 
-fn get_pos_dist_input_params(pos_dist_type: PosDistType, light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Vec<DistInput> {
-    
+fn get_pos_dist_input_params(pos_dist_type: PosDistType, light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Vec<DistInput> {    
     let mut dist_inputs :Vec<DistInput> = match pos_dist_type {
         PosDistType::Random(random) => vec![
             DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", random.side_length_x().get::<millimeter>())),
@@ -148,7 +171,7 @@ pub fn RayPositionDistributionSelector(
 }
 
 #[component]
-pub fn RayDistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Element {
+pub fn RayPosDistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Element {
     let (show, _) = light_data_builder_sig.read().is_rays_is_collimated();
     let rays_pos_dist = light_data_builder_sig
         .read()
@@ -187,7 +210,7 @@ pub fn PositionDistributionEditor(
 ) -> Element {
     let accordion_item_content = rsx! {
         RayPositionDistributionSelector { light_data_builder_sig }
-        RayDistributionEditor { light_data_builder_sig }
+        RayPosDistributionEditor { light_data_builder_sig }
     };
 
     rsx! {

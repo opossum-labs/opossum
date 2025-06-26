@@ -141,7 +141,6 @@ pub fn LensEditor(
             header_id: "lensHeading",
             parent_id: "accordionNodeConfig",
             content_id: "lensCollapse",
-            hidden,
         }
     }
 }

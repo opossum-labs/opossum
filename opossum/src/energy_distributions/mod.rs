@@ -46,7 +46,7 @@ impl Default for EnergyDistType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Copy)]
 pub enum EnergyDistType {
     Uniform(UniformDist),
     General2DGaussian(general_gaussian::General2DGaussian),

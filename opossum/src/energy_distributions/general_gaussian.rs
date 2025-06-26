@@ -17,7 +17,7 @@ use uom::si::{
     f64::{Angle, Energy, Length},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub struct General2DGaussian {
     total_energy: Energy,
     mu_xy: Point2<Length>,
@@ -99,6 +99,54 @@ impl General2DGaussian {
         }
         self.total_energy = energy;
         Ok(())
+    }
+
+    pub fn energy(&self) -> Energy{
+        self.total_energy
+    } 
+
+    pub fn center(&self) -> Point2<Length>{
+        self.mu_xy
+    } 
+
+    pub fn set_center_x(&mut self, x: Length){
+        self.mu_xy.x = x
+    }
+
+    pub fn set_center_y(&mut self, y: Length){
+        self.mu_xy.y = y
+    }
+
+    pub fn sigma(&self) -> Point2<Length>{
+        self.sigma_xy
+    } 
+
+    pub fn set_sigma_x(&mut self, x: Length){
+        self.sigma_xy.x = x
+    }
+
+    pub fn set_sigma_y(&mut self, y: Length){
+        self.sigma_xy.y = y
+    }
+    pub fn power(&self) -> f64{
+        self.power
+    } 
+    pub fn set_power(&mut self, power: f64){
+        self.power = power
+    }
+
+    pub fn theta(&self) -> Angle{
+        self.theta
+    } 
+    pub fn set_theta(&mut self, angle: Angle){
+        self.theta = angle
+    }
+
+    pub fn rectangular(&self) -> bool{
+        self.rectangular
+    } 
+    pub fn set_rectangular(&mut self, rectangular: bool){
+        self.rectangular = rectangular
     }
 }
 

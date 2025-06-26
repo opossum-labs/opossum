@@ -11,7 +11,7 @@ use uom::si::{
 
 use super::EnergyDistribution;
 use crate::error::{OpmResult, OpossumError};
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub struct UniformDist {
     total_energy: Energy,
 }
@@ -41,6 +41,10 @@ impl UniformDist {
         }
         self.total_energy = energy;
         Ok(())
+    }
+
+    pub fn energy(&self) -> Energy{
+        self.total_energy
     }
 }
 

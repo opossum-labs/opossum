@@ -152,6 +152,33 @@ impl LightDataBuilderHistory {
         }
     }
 
+    /// Returns the [`EnergyDistType`] from the currently selected ray source,
+    /// if it supports energy distributions.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(EnergyDistType)` for `Collimated` or `PointSrc` ray types.
+    /// - `None` for `Raw`, `Image`, or non-geometric light sources.
+    pub fn get_current_energy_dist_type(&self) -> Option<EnergyDistType> {
+        match self.get_current() {
+            LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
+                RayDataBuilder::Collimated(collimated_src) => {
+                    Some(collimated_src.energy_dist().clone())
+                }
+                RayDataBuilder::PointSrc(point_src) => Some(point_src.energy_dist().clone()),
+                RayDataBuilder::Raw(rays) => None,
+                RayDataBuilder::Image {
+                    file_path,
+                    pixel_size,
+                    total_energy,
+                    wave_length,
+                    cone_angle,
+                } => None,
+            },
+            _ => None,
+        }
+    }
+
     /// Sets a new [`PosDistType`] for the currently selected ray source,
     /// if it supports positional distributions (`Collimated` or `PointSrc`).
     ///

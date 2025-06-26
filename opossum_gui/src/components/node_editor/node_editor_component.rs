@@ -1,4 +1,5 @@
-use crate::components::node_editor::source_editor::SourceEditor;
+use crate::components::node_editor::property_editor::PropertiesEditor;
+use crate::components::node_editor::source_editor::LightDataEditor;
 use crate::components::node_editor::{
     alignment_editor::AlignmentEditor, general_editor::GeneralEditor, lens_editor::LensEditor,
 };
@@ -59,19 +60,15 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                         node_name: node_attr.name(),
                         node_lidt: node_attr.lidt().clone(),
                     }
-                    SourceEditor {
-                        hidden: node_attr.node_type() != "source",
-                        light_data_builder_opt: node_attr.get_property("light data").cloned().ok(),
-                        node_change,
-                    }
-                    LensEditor {
-                        hidden: node_attr.node_type() != "lens",
-                        node_change,
-                        front_curvature_opt: node_attr.get_property("front curvature").cloned().ok(),
-                        rear_curvature_opt: node_attr.get_property("rear curvature").cloned().ok(),
-                        center_thickness_opt: node_attr.get_property("center thickness").cloned().ok(),
-                        refractive_index_opt: node_attr.get_property("refractive index").cloned().ok(),
-                    }
+                    PropertiesEditor{node_properties: node_attr.properties().clone(), node_change}
+                    // LensEditor {
+                    //     hidden: node_attr.node_type() != "lens",
+                    //     node_change,
+                    //     front_curvature_opt: node_attr.get_property("front curvature").cloned().ok(),
+                    //     rear_curvature_opt: node_attr.get_property("rear curvature").cloned().ok(),
+                    //     center_thickness_opt: node_attr.get_property("center thickness").cloned().ok(),
+                    //     refractive_index_opt: node_attr.get_property("refractive index").cloned().ok(),
+                    // }
                     AlignmentEditor { alignment: *node_attr.alignment() }
                 }
             }
