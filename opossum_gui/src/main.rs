@@ -16,18 +16,20 @@ fn read_icon() -> Option<Icon> {
     let icon_bytes: &[u8] = include_bytes!("../../opossum/logo/Logo_square.ico");
     let mut reader = Cursor::new(icon_bytes);
     let icon_dir = ico::IconDir::read(&mut reader).unwrap();
-    if let Some(entry) = icon_dir.entries().iter().next() {
-        let width = entry.width();
-        let height = entry.height();
-        if let Ok(image) = entry.decode() {
-            let data = image.rgba_data();
-            Icon::from_rgba(data.into(), width, height).ok()
-        } else {
-            None
-        }
-    } else {
-        None
-    }
+    icon_dir.entries().iter().next().map_or_else(
+        || None,
+        |entry| {
+            let width = entry.width();
+            let height = entry.height();
+            entry.decode().map_or_else(
+                |_| None,
+                |image| {
+                    let data = image.rgba_data();
+                    Icon::from_rgba(data.into(), width, height).ok()
+                },
+            )
+        },
+    )
 }
 fn main() {
     #[cfg(feature = "desktop")]

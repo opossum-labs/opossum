@@ -42,6 +42,7 @@ pub fn App() -> Element {
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
+    let cxt_command = use_signal(|| None::<CxtCommand>);
     let selected_node = use_signal(|| None::<NodeElement>);
     let project_directory = use_signal(|| Path::new("./").to_path_buf());
 

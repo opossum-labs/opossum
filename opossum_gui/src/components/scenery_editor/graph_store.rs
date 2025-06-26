@@ -13,6 +13,7 @@ use dioxus::{
     },
     prelude::*,
 };
+use futures_util::StreamExt;
 use opossum_backend::{
     isize_to_f64,
     nodes::{ConnectInfo, NewNode, NewRefNode},
@@ -20,7 +21,11 @@ use opossum_backend::{
     usize_to_f64, PortType,
 };
 use rust_sugiyama::{configure::RankingType, from_edges};
-use std::{collections::HashMap, fs, future::Future, path::Path};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};
 use uuid::Uuid;
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
@@ -30,6 +35,20 @@ pub struct GraphStore {
     active_node: Signal<Option<Uuid>>,
 }
 
+pub enum GraphStoreAction {
+    LoadFromFile(PathBuf),
+    SaveToFile(PathBuf),
+    AddOpticNode(NewNode),
+    AddOpticReference(NewRefNode),
+    AddAnalyzer(NewAnalyzerInfo),
+    SyncNodePosition(Uuid),
+    AddEdge(ConnectInfo),
+    UpdateEdge(ConnectInfo),
+    DeleteEdge(ConnectInfo),
+    DeleteNode(Uuid),
+    DeleteScenery,
+    OptimizeLayout,
+}
 impl GraphStore {
     pub async fn load_from_opm_file(&mut self, path: &Path) {
         let opm_string = fs::read_to_string(path);
@@ -133,22 +152,6 @@ impl GraphStore {
     pub fn shift_node_position(&mut self, node_id: &Uuid, shift: Point2D<f64>) {
         if let Some(node) = self.nodes_mut().write().get_mut(node_id) {
             node.shift_position(shift);
-        }
-    }
-    pub fn sync_node_position(&self, id: Uuid) -> impl Future<Output = ()> + Send {
-        // 1. Synchronous Part: Access `self` to get an owned copy of the data.
-        // The borrow of `self` is contained entirely within this line.
-        let position_to_sync = self.nodes()().get(&id).map(NodeElement::pos);
-
-        // 2. Asynchronous Part: Return a 'static, Send-able future.
-        // The `async move` block takes ownership of `position_to_sync` and `id`,
-        // breaking any lifetime connection to `&self`.
-        async move {
-            if let Some(pos) = position_to_sync {
-                if let Err(err_str) = api::update_gui_position(&HTTP_API_CLIENT(), id, pos).await {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                }
-            }
         }
     }
     #[must_use]
@@ -292,122 +295,83 @@ impl GraphStore {
     //     }
     //     new_pos
     // }
-    async fn get_ports(node_id: Uuid) -> Ports {
-        match api::get_node_properties(&HTTP_API_CLIENT(), node_id).await {
-            Ok(node_attr) => {
-                let input_ports = node_attr
-                    .ports()
-                    .ports(&PortType::Input)
-                    .keys()
-                    .cloned()
-                    .collect::<Vec<String>>();
-                let output_ports = node_attr
-                    .ports()
-                    .ports(&PortType::Output)
-                    .keys()
-                    .cloned()
-                    .collect::<Vec<String>>();
-                Ports::new(input_ports, output_ports)
-            }
-            Err(err_str) => {
-                OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                Ports::default()
-            }
-        }
-    }
-    pub async fn add_optic_node(
-        &mut self,
-        new_node_info: NewNode,
-        mut selected_node: Signal<Option<NodeElement>>,
-    ) {
-        match api::post_add_node(&HTTP_API_CLIENT(), new_node_info, Uuid::nil()).await {
-            Ok(node_info) => {
-                let ports = Self::get_ports(node_info.uuid()).await;
-                let new_node = NodeElement::new(
-                    node_info.name().to_string(),
-                    NodeType::Optical(node_info.node_type().to_string()),
-                    node_info.uuid(),
-                    Point2D::new(100.0, 100.0),
-                    ports,
-                );
-                self.nodes_mut().write().insert(new_node.id(), new_node.clone());
-                self.set_node_active(node_info.uuid());
-                selected_node.set(Some(new_node));
+}
 
+pub async fn save_to_opm_file(path: &Path) {
+    match api::get_opm_file(&HTTP_API_CLIENT()).await {
+        Ok(opm_string) => {
+            if let Err(err_str) = fs::write(path, opm_string) {
+                OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
             }
-            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
+        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
     }
-     
-    pub async fn add_optic_reference(&mut self, new_ref_info: NewRefNode) {
-        match api::post_add_ref_node(&HTTP_API_CLIENT(), new_ref_info, Uuid::nil()).await {
-            Ok(node_info) => {
-                let ports = Ports::new(node_info.input_ports(), node_info.output_ports());
-                let new_node = NodeElement::new(
-                    node_info.name().to_string(),
-                    NodeType::Optical(node_info.name().to_string()),
-
-                    node_info.uuid(),
-                    Point2D::new(100.0, 100.0),
-                    ports,
-                );
-                self.nodes_mut().write().insert(new_node.id(), new_node);
-                self.set_node_active(node_info.uuid());
-            }
-            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+}
+async fn get_ports(node_id: Uuid) -> Ports {
+    match api::get_node_properties(&HTTP_API_CLIENT(), node_id).await {
+        Ok(node_attr) => {
+            let input_ports = node_attr
+                .ports()
+                .ports(&PortType::Input)
+                .keys()
+                .cloned()
+                .collect::<Vec<String>>();
+            let output_ports = node_attr
+                .ports()
+                .ports(&PortType::Output)
+                .keys()
+                .cloned()
+                .collect::<Vec<String>>();
+            Ports::new(input_ports, output_ports)
         }
-    }
-    pub async fn add_analyzer(&mut self, new_analyzer_info: NewAnalyzerInfo) {
-        match api::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer_info.clone()).await {
-            Ok(analyzer_id) => {
-                let new_node = NodeElement::new(
-                    format!("{}", new_analyzer_info.analyzer_type.clone()),
-                    NodeType::Analyzer(new_analyzer_info.analyzer_type.clone()),
-                    analyzer_id,
-                    Point2D::new(
-                        new_analyzer_info.clone().gui_position.0,
-                        new_analyzer_info.gui_position.1,
-                    ),
-                    Ports::new(vec![], vec![]),
-                );
-                self.nodes_mut().write().insert(analyzer_id, new_node);
-            }
-            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-        }
-    }
-    pub async fn optimize_layout(&mut self) {
-        let mut reg = UuidRegistry::new();
-        let mut edges_u32: Vec<(u32, u32)> = Vec::new();
-        for edge in self.edges().read_unchecked().iter() {
-            let src = reg.register(edge.src_uuid());
-            let target = reg.register(edge.target_uuid());
-            edges_u32.push((src, target));
-        }
-        let layouts = from_edges(&edges_u32)
-            .vertex_spacing(250)
-            .layering_type(RankingType::Original)
-            .build();
-        self.nodes.with_mut(|nodes| {
-            let mut height = 0f64;
-            for (layout, group_height, _) in layouts {
-                for l in layout {
-                    let uuid = &reg.get_uuid(u32::try_from(l.0).unwrap()).unwrap();
-                    if let Some(node) = nodes.get_mut(uuid) {
-                        node.set_pos(Point2D::new(
-                            -1.0 * isize_to_f64(l.1 .1),
-                            0.7f64.mul_add(isize_to_f64(l.1 .0), height),
-                        ));
-                    }
-                }
-                height += usize_to_f64(group_height) * 250.0;
-            }
-        });
-        // sync with backend
-        for node in self.nodes().read().clone().into_keys() {
-            self.sync_node_position(node).await;
+        Err(err_str) => {
+            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+            Ports::default()
         }
     }
 }
+pub async fn optimize_layout_and_sync(
+    edges: Vec<ConnectInfo>,
+) -> Result<HashMap<Uuid, Point2D<f64>>, String> {
+    let mut reg = UuidRegistry::new();
+    let edges_u32: Vec<(u32, u32)> = edges
+        .iter()
+        .map(|edge| {
+            let src = reg.register(edge.src_uuid());
+            let target = reg.register(edge.target_uuid());
+            (src, target)
+        })
+        .collect();
+
+    let layouts = from_edges(&edges_u32)
+        .vertex_spacing(250)
+        .layering_type(RankingType::Original)
+        .build();
+
+    let mut new_positions = HashMap::new();
+    let mut height = 0f64;
+    for (layout, group_height, _) in layouts {
+        for l in layout {
+            if let Some(uuid) = reg.get_uuid(u32::try_from(l.0).unwrap()) {
+                let pos = Point2D::new(
+                    -1.0 * isize_to_f64(l.1 .1),
+                    0.7f64.mul_add(isize_to_f64(l.1 .0), height),
+                );
+                new_positions.insert(uuid, pos);
+            }
+        }
+        height += usize_to_f64(group_height) * 250.0;
+    }
+    for (id, pos) in &new_positions {
+        if let Err(err_str) = api::update_gui_position(&HTTP_API_CLIENT(), *id, *pos).await {
+            // If any API call fails, log it and return an error for the whole operation.
+            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+            return Err(format!("Failed to sync position for node {id}"));
+        }
+    }
+    Ok(new_positions)
+}
+
 struct UuidRegistry {
     forward: HashMap<Uuid, u32>,
     backward: HashMap<u32, Uuid>,
@@ -434,4 +398,235 @@ impl UuidRegistry {
     fn get_uuid(&self, id: u32) -> Option<Uuid> {
         self.backward.get(&id).copied()
     }
+}
+#[allow(clippy::too_many_lines)]
+pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStoreAction> {
+    let mut graph_store = *graph_store;
+    use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
+        async move {
+            // This loop runs forever in the background, waiting for actions.
+            while let Some(action) = rx.next().await {
+                match action {
+                    GraphStoreAction::LoadFromFile(path) => {
+                        let opm_string = match fs::read_to_string(path) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                OPOSSUM_UI_LOGS.write().add_log(&e.to_string());
+                                continue;
+                            }
+                        };
+                        if api::post_opm_file(&HTTP_API_CLIENT(), opm_string)
+                            .await
+                            .is_err()
+                        {
+                            continue;
+                        }
+                        // Clear existing state
+                        graph_store.write().nodes.set(HashMap::new());
+                        graph_store.write().edges.set(Vec::new());
+                        graph_store.write().active_node.set(None);
+                        // Load new state
+                        if let Ok(nodes) = api::get_nodes(&HTTP_API_CLIENT(), Uuid::nil()).await {
+                            let node_elements = nodes.into_iter().map(|node| {
+                                let position = node
+                                    .gui_position()
+                                    .map_or_else(Point2D::zero, |(x, y)| Point2D::new(x, y));
+                                NodeElement::new(
+                                    NodeType::Optical(node.node_type().to_string()),
+                                    node.uuid(),
+                                    position,
+                                    Ports::new(node.input_ports(), node.output_ports()),
+                                )
+                            });
+                            graph_store
+                                .write()
+                                .nodes
+                                .write()
+                                .extend(node_elements.map(|ne| (ne.id(), ne)));
+                        }
+                        if let Ok(analyzers) = api::get_analyzers(&HTTP_API_CLIENT()).await {
+                            let analyzer_elements = analyzers.into_iter().map(|analyzer| {
+                                let position = analyzer
+                                    .gui_position()
+                                    .map_or_else(Point2D::zero, |p| Point2D::new(p.x, p.y));
+                                NodeElement::new(
+                                    NodeType::Analyzer(analyzer.analyzer_type().clone()),
+                                    analyzer.id(),
+                                    position,
+                                    Ports::default(),
+                                )
+                            });
+                            graph_store
+                                .write()
+                                .nodes
+                                .write()
+                                .extend(analyzer_elements.map(|ne| (ne.id(), ne)));
+                        }
+                        if let Ok(connections) =
+                            api::get_connections(&HTTP_API_CLIENT(), Uuid::nil()).await
+                        {
+                            graph_store.write().edges.set(connections);
+                        }
+                    }
+                    GraphStoreAction::SaveToFile(path) => save_to_opm_file(&path).await,
+                    GraphStoreAction::SyncNodePosition(node_id) => {
+                        if let Some(pos) = graph_store
+                            .read()
+                            .nodes()
+                            .read()
+                            .get(&node_id)
+                            .map(NodeElement::pos)
+                        {
+                            if let Err(e) =
+                                api::update_gui_position(&HTTP_API_CLIENT(), node_id, pos).await
+                            {
+                                OPOSSUM_UI_LOGS.write().add_log(&e);
+                            }
+                        }
+                    }
+                    GraphStoreAction::DeleteNode(node_id) => {
+                        let nodes = graph_store().nodes()();
+                        if let Some(node_element) = nodes.get(&node_id) {
+                            match node_element.node_type() {
+                                NodeType::Optical(_) => {
+                                    match api::delete_node(&HTTP_API_CLIENT(), node_id).await {
+                                        Ok(deleted_ids) => {
+                                            for node_id in deleted_ids {
+                                                graph_store().nodes_mut().write().remove(&node_id);
+                                                graph_store().edges.with_mut(|edges| {
+                                                    edges.retain_mut(|e| {
+                                                        e.src_uuid() != node_id
+                                                            && e.target_uuid() != node_id
+                                                    });
+                                                });
+                                            }
+                                        }
+                                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                                    }
+                                }
+                                NodeType::Analyzer(_) => {
+                                    match api::delete_analyzer(&HTTP_API_CLIENT(), node_id).await {
+                                        Ok(_) => {
+                                            graph_store().nodes_mut().write().remove(&node_id);
+                                        }
+                                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    GraphStoreAction::AddOpticNode(new_node) => {
+                        match api::post_add_node(&HTTP_API_CLIENT(), new_node, Uuid::nil()).await {
+                            Ok(node_info) => {
+                                let ports = get_ports(node_info.uuid()).await;
+                                let node_element = NodeElement::new(
+                                    NodeType::Optical(node_info.name().to_string()),
+                                    node_info.uuid(),
+                                    Point2D::new(100.0, 100.0),
+                                    ports,
+                                );
+                                let id = node_element.id();
+                                graph_store.write().nodes.write().insert(id, node_element);
+                                graph_store.write().set_node_active(id);
+                            }
+                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                        }
+                    }
+                    GraphStoreAction::AddOpticReference(new_ref_node) => {
+                        match api::post_add_ref_node(&HTTP_API_CLIENT(), new_ref_node, Uuid::nil())
+                            .await
+                        {
+                            Ok(node_info) => {
+                                let ports =
+                                    Ports::new(node_info.input_ports(), node_info.output_ports());
+                                let node_element = NodeElement::new(
+                                    NodeType::Optical(node_info.name().to_string()),
+                                    node_info.uuid(),
+                                    Point2D::new(100.0, 100.0),
+                                    ports,
+                                );
+                                let id = node_element.id();
+                                graph_store.write().nodes.write().insert(id, node_element);
+                                graph_store.write().set_node_active(id);
+                            }
+                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                        }
+                    }
+                    GraphStoreAction::AddAnalyzer(new_analyzer) => {
+                        match api::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer.clone()).await
+                        {
+                            Ok(analyzer_id) => {
+                                let (x, y) = new_analyzer.gui_position;
+                                let node_element = NodeElement::new(
+                                    NodeType::Analyzer(new_analyzer.analyzer_type),
+                                    analyzer_id,
+                                    Point2D::new(x, y),
+                                    Ports::default(),
+                                );
+                                graph_store
+                                    .write()
+                                    .nodes
+                                    .write()
+                                    .insert(analyzer_id, node_element);
+                            }
+                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                        }
+                    }
+                    GraphStoreAction::AddEdge(edge) => {
+                        match api::post_add_connection(&HTTP_API_CLIENT(), edge.clone()).await {
+                            Ok(_) => {
+                                graph_store().edges_mut().write().push(edge);
+                            }
+                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                        }
+                    }
+                    GraphStoreAction::UpdateEdge(edge) => {
+                        if api::update_distance(&HTTP_API_CLIENT(), edge.clone())
+                            .await
+                            .is_ok()
+                        {
+                            if let Some(e) =
+                                graph_store.write().edges.write().iter_mut().find(|e| {
+                                    e.src_uuid() == edge.src_uuid()
+                                        && e.target_uuid() == edge.target_uuid()
+                                })
+                            {
+                                *e = edge;
+                            }
+                        }
+                    }
+                    GraphStoreAction::DeleteEdge(edge) => {
+                        if api::delete_connection(&HTTP_API_CLIENT(), edge.clone())
+                            .await
+                            .is_ok()
+                        {
+                            graph_store.write().edges.write().retain(|e| e != &edge);
+                        }
+                    }
+                    GraphStoreAction::DeleteScenery => {
+                        match api::delete_scenery(&HTTP_API_CLIENT()).await {
+                            Ok(_) => {
+                                let mut store = graph_store.write();
+                                store.nodes.write().clear();
+                                store.edges.write().clear();
+                            }
+                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                        }
+                    }
+                    GraphStoreAction::OptimizeLayout => {
+                        let edges = graph_store.read().edges().read().clone();
+                        if let Ok(new_positions) = optimize_layout_and_sync(edges).await {
+                            let mut store = graph_store.write();
+                            let mut nodes = store.nodes.write();
+                            for (id, pos) in new_positions {
+                                if let Some(node) = nodes.get_mut(&id) {
+                                    node.set_pos(pos);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    })
 }

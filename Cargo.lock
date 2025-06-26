@@ -5181,6 +5181,7 @@ dependencies = [
  "chrono",
  "dioxus",
  "dioxus-free-icons",
+ "futures-util",
  "ico",
  "itertools 0.14.0",
  "nalgebra",
