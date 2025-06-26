@@ -107,7 +107,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                             ("Create reference".to_owned(), CxtCommand::AddRefNode(new_ref_node)),
                         ],
                     );
-                    println!("oncontecxt: {cx_menu:?}");
+                    println!("oncontext: {cx_menu:?}");
                     let mut ctx = CONTEXT_MENU.write();
                     *ctx = cx_menu;
                 }

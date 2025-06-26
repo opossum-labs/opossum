@@ -1,17 +1,16 @@
 use crate::components::node_editor::{
-    accordion::{AccordionItem, LabeledInput},
+    accordion::{AccordionItem, LabeledInput, LabeledSelect},
     node_editor_component::NodeChange, source_editor::LightDataEditor,
 };
 use dioxus::prelude::*;
-use opossum_backend::{millimeter, Properties, Property, Proptype, RefrIndexConst, RefractiveIndexType};
-use uom::si::{f64::Length, length::millimeter};
+use opossum_backend::{millimeter, nanometer, Properties, Property, Proptype, RefrIndexConst, RefractiveIndexType};
+use uom::si::{f64::Length, length::{millimeter, nanometer}};
 use inflector::Inflector;
 
 #[component]
 pub fn PropertiesEditor(node_properties: Properties, node_change: Signal<Option<NodeChange>>) -> Element{
     let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
     for (property_key, property) in node_properties.iter(){
-        println!("prop desc: {}, prop desc: {}", property.description(), property_key);
         editor_inputs.push(rsx!{PropertyEditor{prop_type: property.prop().clone(), property_key: property_key.clone(), node_change }});
     }
     rsx! {
@@ -31,18 +30,17 @@ pub fn PropertyEditor(
     property_key: String, 
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
-    let prop_type_opt = Signal::new(None::<Proptype>);
+    let prop_type_sig = Signal::new(prop_type.clone());
 
     use_effect({
         let property_key = property_key.clone();
         move || {
-        if let Some(prop_type) = prop_type_opt(){
             node_change.set(Some(NodeChange::Property(
                 property_key.clone(),
-                serde_json::to_value(prop_type)
+                serde_json::to_value(prop_type_sig.read().clone())
                 .unwrap(),
             )))
-        }
+        
     }});
 
     match prop_type{
@@ -68,10 +66,13 @@ pub fn PropertyEditor(
         Proptype::Fluence(quantity) => {println!("not yet implemented"); rsx!{}},
         Proptype::WfLambda(_, quantity) => {println!("not yet implemented"); rsx!{}},
         Proptype::Length(quantity) => rsx!{LengthEditor{length: quantity,
-    prop_type,
-    property_key, 
-    prop_type_opt}},
-        Proptype::LengthOption(quantity) => {println!("not yet implemented"); rsx!{}},
+            prop_type,
+            property_key, 
+            prop_type_sig}},
+        Proptype::LengthOption(quantity) => rsx!{AlignmentWavelengthEditor{length_option: quantity,
+            prop_type,
+            property_key, 
+            prop_type_sig}},
         Proptype::Energy(quantity) => {println!("not yet implemented"); rsx!{}},
         Proptype::Angle(quantity) => {println!("not yet implemented"); rsx!{}},
         Proptype::RefractiveIndex(refractive_index_type) => {println!("not yet implemented"); rsx!{}},
@@ -81,7 +82,7 @@ pub fn PropertyEditor(
         Proptype::Vec2(matrix) => {println!("not yet implemented"); rsx!{}},
         Proptype::LightDataBuilder(light_data_builder) => rsx!{
             LightDataEditor {
-                        light_data_builder_opt: light_data_builder, prop_type_opt
+                        light_data_builder_opt: light_data_builder, prop_type_sig
                         }},
         _ => {println!("not yet implemented"); rsx!{}},
     }
@@ -93,7 +94,7 @@ pub fn LengthEditor(
     length: Length,
     prop_type: Proptype,
     property_key: String, 
-    prop_type_opt: Signal<Option<Proptype>>
+    prop_type_sig: Signal<Proptype>
 ) -> Element{
 
     rsx!{
@@ -102,17 +103,72 @@ pub fn LengthEditor(
             label: format!("{} in mm", property_key.to_sentence_case()),
             value: format!("{}", length.get::<millimeter>()),
             r#type: "number",
-            onchange: Some(use_on_length_input_change(prop_type_opt)),
+            onchange: Some(use_on_length_input_change(prop_type_sig)),
         }
     }
 }
 
 fn use_on_length_input_change(
-    mut signal: Signal<Option<Proptype>>,
+    mut signal: Signal<Proptype>,
 ) -> Callback<Event<FormData>> {
     use_callback(move |e: Event<FormData>| {
         if let Ok(length) = e.data.value().parse::<f64>() {
-            signal.set(Some(Proptype::Length(millimeter!(length))));
+            signal.set(Proptype::Length(millimeter!(length)));
         }
     })
+}
+
+
+
+#[component]
+pub fn AlignmentWavelengthEditor(
+    length_option: Option<Length>,
+    prop_type: Proptype,
+    property_key: String, 
+    prop_type_sig: Signal<Proptype>
+) -> Element{
+    let mut alignment_select = Signal::new(nanometer!(1054.));
+
+    rsx!{
+        LabeledSelect {
+            id: format!("lengthProperty{property_key}").to_camel_case(),
+            label: format!("{}", property_key.to_sentence_case()),
+            options: vec![
+                (length_option.is_none(), "As in light definition".to_owned()),
+                (length_option.is_some(), "Choose specific".to_owned()),
+            ],
+            onchange: move |_: Event<FormData>| {
+                if length_option.is_none(){
+                    prop_type_sig.set(Proptype::LengthOption(Some(alignment_select().clone())));
+                }
+                else{
+                    prop_type_sig.set(Proptype::LengthOption(None));
+                }
+            },
+        }
+        {
+            if let Proptype::LengthOption(Some(length)) = &*prop_type_sig.read(){
+                rsx!{
+                    LabeledInput {
+                        id: format!("lengthOptionProperty{property_key}").to_camel_case(),
+                        label: format!("{} in nm", property_key.to_sentence_case()),
+                        value: format!("{}", length.get::<nanometer>()),
+                        r#type: "number",
+                        onchange: Some(use_callback(move |e: Event<FormData>| {
+                            if let Ok(length) = e.data.value().parse::<f64>() {
+                                prop_type_sig.set(Proptype::LengthOption(Some(nanometer!(length))));
+                                alignment_select.set(nanometer!(length));
+                            }
+                        })),
+                    }
+                }
+            }
+            else{
+                rsx!{}
+            }
+        }
+
+
+        
+    }
 }

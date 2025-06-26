@@ -22,14 +22,14 @@ use dioxus::prelude::*;
 #[component]
 pub fn LightDataEditor(
     light_data_builder_opt: Option<LightDataBuilder>,
-    prop_type_opt: Signal<Option<Proptype>>
+    prop_type_sig: Signal<Proptype>
 ) -> Element {
     let mut light_data_builder_sig = Signal::new(LightDataBuilderHistory::default());
 
     use_effect(move || {
-        prop_type_opt.set(Some(Proptype::LightDataBuilder(Some(
+        prop_type_sig.set(Proptype::LightDataBuilder(Some(
                 light_data_builder_sig.read().get_current().clone(),
-            ))))}
+            )))}
         );
 
     use_effect(move || {
@@ -87,28 +87,6 @@ pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory
 pub fn DistLabeledInput(dist_input: DistInput) -> Element{
     if dist_input.dist_param == DistParam::Rectangular{
         let label = dist_input.dist_param.input_label();
-
-// div {
-//             class: "form-floating border-start",
-//             "data-mdb-input-init": "",
-//             hidden,
-//             input {
-//                 class: "form-control bg-dark text-light form-control-sm",
-//                 id: id.as_str(),
-//                 name: id.as_str(),
-//                 placeholder: label,
-//                 value,
-//                 readonly: onchange.is_none(),
-//                 r#type,
-//                 step: step.unwrap_or_default(),
-//                 min: min.unwrap_or_default(),
-//                 max: max.unwrap_or_default(),
-//                 onchange: onchange.unwrap_or_default(),
-//             }
-
-//             label { class: "form-label text-secondary", r#for: id, "{label}" }
-//         }
-
         rsx! {
         div {
             class: "form-floating-checkbox border-start",
@@ -119,10 +97,10 @@ pub fn DistLabeledInput(dist_input: DistInput) -> Element{
                 class: "form-check-input text-light",
                 id: dist_input.id.as_str(),
                 name: dist_input.id.as_str(),
-                value: dist_input.value,
+                value: dist_input.value.clone(),
                 r#type: "checkbox",
                 role: "switch",
-                checked: false,
+                checked: dist_input.value.parse::<bool>().unwrap_or_default(),
                 onchange: dist_input.callback_opt.unwrap_or_default(),
             }
 
