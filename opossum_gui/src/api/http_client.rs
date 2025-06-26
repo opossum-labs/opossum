@@ -189,27 +189,6 @@ impl HTTPClient {
         }
     }
 
-    /// Send a GET request to the given route accepting RON data
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the request fails (e.g. the route is not reachable)
-    /// - the response cannot be deserialized into the expected type
-    pub async fn get_ron<R: Serialize + DeserializeOwned>(&self, route: &str) -> Result<R, String> {
-        let res = self
-            .client()
-            .get(self.url(route))
-            .header(ACCEPT, "application/ron")
-            .send()
-            .await;
-        if let Ok(response) = res {
-            self.process_response_ron::<R>(response).await
-        } else {
-            Err(format!("Error on get request from route: \"{route}\""))
-        }
-    }
-
     /// Process the response from the server.
     ///
     /// # Errors

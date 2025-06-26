@@ -130,7 +130,7 @@ pub fn GraphEditor(
                     .set((event.client_coordinates().x, event.client_coordinates().y));
                 editor_status.drag_status.set(DragStatus::Graph);
                 node_selected.set(None);
-                graph_store.set_active_node_none();
+                graph_store().set_active_node_none();
             },
             onmouseup: move |_| {
                 let drag_status = editor_status.drag_status.read().clone();

@@ -432,6 +432,7 @@ pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStore
                                     .gui_position()
                                     .map_or_else(Point2D::zero, |(x, y)| Point2D::new(x, y));
                                 NodeElement::new(
+                                    node.name().to_string(),
                                     NodeType::Optical(node.node_type().to_string()),
                                     node.uuid(),
                                     position,
@@ -450,6 +451,7 @@ pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStore
                                     .gui_position()
                                     .map_or_else(Point2D::zero, |p| Point2D::new(p.x, p.y));
                                 NodeElement::new(
+                                    format!("{}", analyzer.analyzer_type()),
                                     NodeType::Analyzer(analyzer.analyzer_type().clone()),
                                     analyzer.id(),
                                     position,
@@ -520,7 +522,8 @@ pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStore
                             Ok(node_info) => {
                                 let ports = get_ports(node_info.uuid()).await;
                                 let node_element = NodeElement::new(
-                                    NodeType::Optical(node_info.name().to_string()),
+                                    node_info.name().to_string(),
+                                    NodeType::Optical(node_info.node_type().to_string()),
                                     node_info.uuid(),
                                     Point2D::new(100.0, 100.0),
                                     ports,
@@ -540,7 +543,8 @@ pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStore
                                 let ports =
                                     Ports::new(node_info.input_ports(), node_info.output_ports());
                                 let node_element = NodeElement::new(
-                                    NodeType::Optical(node_info.name().to_string()),
+                                    node_info.name().to_string(),
+                                    NodeType::Optical(node_info.node_type().to_string()),
                                     node_info.uuid(),
                                     Point2D::new(100.0, 100.0),
                                     ports,
@@ -558,6 +562,7 @@ pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStore
                             Ok(analyzer_id) => {
                                 let (x, y) = new_analyzer.gui_position;
                                 let node_element = NodeElement::new(
+                                    format!("{}", new_analyzer.analyzer_type),
                                     NodeType::Analyzer(new_analyzer.analyzer_type),
                                     analyzer_id,
                                     Point2D::new(x, y),
