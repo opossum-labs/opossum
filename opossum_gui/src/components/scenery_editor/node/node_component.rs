@@ -83,6 +83,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                                 src: node_icon.unwrap(),
                                 width: "50px",
                                 style: "display: block; margin: auto;",
+                                draggable: false
                             }
                         }
                         NodePorts { node: node.clone() }
