@@ -1,11 +1,28 @@
-use dioxus::html::geometry::euclid::default::Point2D;
+use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{usize_to_f64, AnalyzerType, PortType};
 use uuid::Uuid;
 mod graph_node_components;
 pub mod node_component;
+use super::ports::ports_component::Ports;
 pub use node_component::Node;
 
-use super::ports::ports_component::Ports;
+const NODE_BEAMSPLITTER: Asset = asset!("./assets/icons/node_beamsplitter.svg");
+const NODE_CYLINDRIC_LENS: Asset = asset!("./assets/icons/node_cylindric_lens.svg");
+const NODE_ENERGY_METER: Asset = asset!("./assets/icons/node_energymeter.svg");
+const NODE_FILTER: Asset = asset!("./assets/icons/node_filter.svg");
+const NODE_FLUENCE: Asset = asset!("./assets/icons/node_fluence.svg");
+const NODE_GRATING: Asset = asset!("./assets/icons/node_grating.svg");
+const NODE_GROUP: Asset = asset!("./assets/icons/node_group.svg");
+const NODE_LENS: Asset = asset!("./assets/icons/node_lens.svg");
+const NODE_MIRROR: Asset = asset!("./assets/icons/node_mirror.svg");
+const NODE_PARABOLA: Asset = asset!("./assets/icons/node_parabola.svg");
+const NODE_PARAXIAL: Asset = asset!("./assets/icons/node_paraxial.svg");
+const NODE_PROPAGATION: Asset = asset!("./assets/icons/node_propagation.svg");
+const NODE_SOURCE: Asset = asset!("./assets/icons/node_source.svg");
+const NODE_SPECTROMETER: Asset = asset!("./assets/icons/node_spectrometer.svg");
+const NODE_SPOTDIAGRAM: Asset = asset!("./assets/icons/node_spotdiagram.svg");
+const NODE_UNKNOWN: Asset = asset!("./assets/icons/node_unknown.svg");
+const NODE_WEDGE: Asset = asset!("./assets/icons/node_wedge.svg");
 
 // Constants for node dimensions and port positions
 const GOLDEN_RATIO: f64 = 1.618_033_988_7;
@@ -33,6 +50,35 @@ pub enum NodeType {
 impl Default for NodeType {
     fn default() -> Self {
         Self::Optical(String::new())
+    }
+}
+impl NodeType {
+    fn icon(&self) -> Option<Asset> {
+        match self {
+            Self::Optical(node_type) => match node_type.as_str() {
+                // "dummy" => Some(NODE_UNKNOWN),
+                "beam splitter" => Some(NODE_BEAMSPLITTER),
+                "energy meter" => Some(NODE_ENERGY_METER),
+                "group" => Some(NODE_GROUP),
+                "ideal filter" => Some(NODE_FILTER),
+                "reflective grating" => Some(NODE_GRATING),
+                // "reference" => Some(NODE_UNKNOWN),
+                "lens" => Some(NODE_LENS),
+                "cylindric lens" => Some(NODE_CYLINDRIC_LENS),
+                "source" => Some(NODE_SOURCE),
+                "spectrometer" => Some(NODE_SPECTROMETER),
+                "spot diagram" => Some(NODE_SPOTDIAGRAM),
+                // "wavefront monitor" => Some(NODE_UNKNOWN),
+                "paraxial surface" => Some(NODE_PARAXIAL),
+                "ray propagation" => Some(NODE_PROPAGATION),
+                "fluence detector" => Some(NODE_FLUENCE),
+                "wedge" => Some(NODE_WEDGE),
+                "mirror" => Some(NODE_MIRROR),
+                "parabolic mirror" => Some(NODE_PARABOLA),
+                _ => Some(NODE_UNKNOWN),
+            },
+            Self::Analyzer(_) => None,
+        }
     }
 }
 #[derive(Clone, PartialEq, Default)]

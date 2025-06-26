@@ -65,8 +65,8 @@ impl GraphStore {
     pub const fn nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
         &mut self.nodes
     }
-    pub fn shift_node_position(&mut self, node_id: &Uuid, shift: Point2D<f64>) {
-        if let Some(node) = self.nodes_mut().write().get_mut(node_id) {
+    pub fn shift_node_position(&mut self, node_id: Uuid, shift: Point2D<f64>) {
+        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
             node.shift_position(shift);
         }
     }
