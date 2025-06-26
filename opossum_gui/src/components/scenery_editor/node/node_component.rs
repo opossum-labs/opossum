@@ -1,6 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
-use super::NodeType;
 use crate::components::context_menu::cx_menu::CxMenu;
 use crate::components::context_menu::cx_menu::CxtCommand;
 use crate::components::scenery_editor::graph_store::GraphStoreAction;
@@ -13,23 +12,6 @@ use crate::components::scenery_editor::{
 use crate::CONTEXT_MENU;
 use dioxus::prelude::*;
 use opossum_backend::nodes::NewRefNode;
-const NODE_BEAMSPLITTER: Asset = asset!("./assets/icons/node_beamsplitter.svg");
-const NODE_CYLINDRIC_LENS: Asset = asset!("./assets/icons/node_cylindric_lens.svg");
-const NODE_ENERGY_METER: Asset = asset!("./assets/icons/node_energymeter.svg");
-const NODE_FILTER: Asset = asset!("./assets/icons/node_filter.svg");
-const NODE_FLUENCE: Asset = asset!("./assets/icons/node_fluence.svg");
-const NODE_GRATING: Asset = asset!("./assets/icons/node_grating.svg");
-const NODE_GROUP: Asset = asset!("./assets/icons/node_group.svg");
-const NODE_LENS: Asset = asset!("./assets/icons/node_lens.svg");
-const NODE_MIRROR: Asset = asset!("./assets/icons/node_mirror.svg");
-const NODE_PARABOLA: Asset = asset!("./assets/icons/node_parabola.svg");
-const NODE_PARAXIAL: Asset = asset!("./assets/icons/node_paraxial.svg");
-const NODE_PROPAGATION: Asset = asset!("./assets/icons/node_propagation.svg");
-const NODE_SOURCE: Asset = asset!("./assets/icons/node_source.svg");
-const NODE_SPECTROMETER: Asset = asset!("./assets/icons/node_spectrometer.svg");
-const NODE_SPOTDIAGRAM: Asset = asset!("./assets/icons/node_spotdiagram.svg");
-const NODE_UNKNOWN: Asset = asset!("./assets/icons/node_unknown.svg");
-const NODE_WEDGE: Asset = asset!("./assets/icons/node_wedge.svg");
 
 #[component]
 pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> Element {
@@ -47,31 +29,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
     });
     let id = node.id();
     let z_index = node.z_index();
-    let node_icon = match node.node_type.clone() {
-        NodeType::Optical(node_type) => match node_type.as_str() {
-            // "dummy" => Some(NODE_UNKNOWN),
-            "beam splitter" => Some(NODE_BEAMSPLITTER),
-            "energy meter" => Some(NODE_ENERGY_METER),
-            "group" => Some(NODE_GROUP),
-            "ideal filter" => Some(NODE_FILTER),
-            "reflective grating" => Some(NODE_GRATING),
-            // "reference" => Some(NODE_UNKNOWN),
-            "lens" => Some(NODE_LENS),
-            "cylindric lens" => Some(NODE_CYLINDRIC_LENS),
-            "source" => Some(NODE_SOURCE),
-            "spectrometer" => Some(NODE_SPECTROMETER),
-            "spot diagram" => Some(NODE_SPOTDIAGRAM),
-            // "wavefront monitor" => Some(NODE_UNKNOWN),
-            "paraxial surface" => Some(NODE_PARAXIAL),
-            "ray propagation" => Some(NODE_PROPAGATION),
-            "fluence detector" => Some(NODE_FLUENCE),
-            "wedge" => Some(NODE_WEDGE),
-            "mirror" => Some(NODE_MIRROR),
-            "parabolic mirror" => Some(NODE_PARABOLA),
-            _ => Some(NODE_UNKNOWN),
-        },
-        NodeType::Analyzer(_) => None,
-    };
+    let node_icon = node.node_type.icon();
     rsx! {
         div {
             tabindex: 0, // necessary to allow to receive keyboard focus

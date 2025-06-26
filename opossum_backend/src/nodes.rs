@@ -217,7 +217,6 @@ impl NewNode {
         }
     }
 }
-
 /// Add a new node to a group node
 ///
 /// This function adds a new optical node to a group node specified by its UUID.

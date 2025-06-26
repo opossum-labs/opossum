@@ -65,8 +65,8 @@ impl GraphStore {
     pub const fn nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
         &mut self.nodes
     }
-    pub fn shift_node_position(&mut self, node_id: &Uuid, shift: Point2D<f64>) {
-        if let Some(node) = self.nodes_mut().write().get_mut(node_id) {
+    pub fn shift_node_position(&mut self, node_id: Uuid, shift: Point2D<f64>) {
+        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
             node.shift_position(shift);
         }
     }
@@ -231,7 +231,7 @@ impl UuidRegistry {
     }
 }
 #[allow(clippy::too_many_lines)]
-pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStoreAction> {
+pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStoreAction> {
     let mut graph_store = *graph_store;
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         async move {
@@ -349,11 +349,13 @@ pub fn graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStore
                     GraphStoreAction::AddOpticNode(new_node) => {
                         match api::post_add_node(&HTTP_API_CLIENT(), new_node, Uuid::nil()).await {
                             Ok(node_info) => {
+                                let gui_position =
+                                    node_info.gui_position().unwrap_or((100.0, 100.0));
                                 let ports = get_ports(node_info.uuid()).await;
                                 let node_element = NodeElement::new(
                                     NodeType::Optical(node_info.name().to_string()),
                                     node_info.uuid(),
-                                    Point2D::new(100.0, 100.0),
+                                    Point2D::new(gui_position.0, gui_position.1),
                                     ports,
                                 );
                                 let id = node_element.id();
