@@ -28,7 +28,15 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
         }
     });
     let id = node.id();
-    let z_index = node.z_index();
+    let z_index = if let Some(active_node_id) = active_node_id {
+        if active_node_id == node.id {
+            9999
+        } else {
+            node.z_index()
+        }
+    } else {
+        node.z_index()
+    };
     let node_icon = node.node_type.icon();
     rsx! {
         div {
@@ -83,7 +91,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                                 src: node_icon.unwrap(),
                                 width: "50px",
                                 style: "display: block; margin: auto;",
-                                draggable: false
+                                draggable: false,
                             }
                         }
                         NodePorts { node: node.clone() }
@@ -93,16 +101,3 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
         }
     }
 }
-// #[must_use]
-// fn use_node_context_menu(node_id: Uuid) -> Callback<Event<MouseData>> {
-//     use_callback(move |evt: Event<MouseData>| {
-//         println!("Node context menu clicked");
-//         evt.prevent_default();
-//         let mut cx_menu = CONTEXT_MENU.write();
-//         *cx_menu = CxMenu::new(
-//             evt.page_coordinates().x,
-//             evt.page_coordinates().y,
-//             vec![("Delete node".to_owned(), use_delete_node(node_id))],
-//         );
-//     })
-// }
