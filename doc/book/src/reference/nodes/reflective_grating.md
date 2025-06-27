@@ -2,6 +2,8 @@
 
 ![Grating icon](../images/icons/node_grating.svg)
 
+## Analysis
+
 ## Ports
 
 `input_1`

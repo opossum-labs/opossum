@@ -4,6 +4,8 @@
 
 This node represents an ideal absorptive filter. Hence it has no geometric thickness or material properties. This element only changes the energy of the incoming light. The geometry of single rays remains unchanged.
 
+## Analysis
+
 ## Ports
 
 `input_1`

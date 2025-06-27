@@ -2,6 +2,10 @@
 
 ![dummy icon](../images/icons/node_unknown.svg)
 
+## Analysis
+
+The incoming light data is simply passed unmodified through the node. However, possible apodization due to input or output port apertures might occur.
+
 ## Ports
 
 `input_1`
