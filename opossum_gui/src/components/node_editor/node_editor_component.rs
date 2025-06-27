@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::components::scenery_editor::node::NodeElement;
+use crate::components::scenery_editor::NodeElement;
 
 #[component]
 pub fn NodeEditor(node: ReadOnlySignal<Option<NodeElement>>) -> Element {

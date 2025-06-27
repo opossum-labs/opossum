@@ -1,9 +1,10 @@
 use super::{
-    node::{NodeElement, NodeType, HEADER_HEIGHT, NODE_WIDTH},
+    node::{NodeElement, NodeType},
     ports::ports_component::Ports,
 };
 use crate::{
     api::{self},
+    components::scenery_editor::constants::{HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERTEX_SPACING, SUGIYAMA_VERT_PATH_FACTOR},
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::{
@@ -172,7 +173,7 @@ pub async fn optimize_layout_and_sync(
         .collect();
 
     let layouts = from_edges(&edges_u32)
-        .vertex_spacing(250)
+        .vertex_spacing(SUGIYAMA_VERTEX_SPACING)
         .layering_type(RankingType::Original)
         .build();
 
@@ -183,12 +184,12 @@ pub async fn optimize_layout_and_sync(
             if let Some(uuid) = reg.get_uuid(u32::try_from(l.0).unwrap()) {
                 let pos = Point2D::new(
                     -1.0 * isize_to_f64(l.1 .1),
-                    0.7f64.mul_add(isize_to_f64(l.1 .0), height),
+                    SUGIYAMA_VERT_PATH_FACTOR.mul_add(isize_to_f64(l.1 .0), height),
                 );
                 new_positions.insert(uuid, pos);
             }
         }
-        height += usize_to_f64(group_height) * 250.0;
+        height += usize_to_f64(group_height * SUGIYAMA_VERTEX_SPACING);
     }
     for (id, pos) in &new_positions {
         if let Err(err_str) = api::update_gui_position(&HTTP_API_CLIENT(), *id, *pos).await {

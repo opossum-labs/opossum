@@ -1,8 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
-    edges::{define_bezier_path, edge_component::EdgeComponent},
-    graph_editor::graph_editor_component::EditorState,
-    graph_store::GraphStore,
+    constants::EDGE_BEZIER_OFFSET, edges::{define_bezier_path, edge_component::EdgeComponent}, graph_editor::graph_editor_component::EditorState, graph_store::GraphStore
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::PortType;
@@ -54,24 +52,12 @@ impl EdgeCreation {
             end_port: None,
             start,
             end: start,
-            bezier_offset: 50. * connection_factor,
+            bezier_offset: EDGE_BEZIER_OFFSET * connection_factor,
         }
-    }
-    #[must_use]
-    pub const fn start(&self) -> Point2D<f64> {
-        self.start
-    }
-    #[must_use]
-    pub const fn end(&self) -> Point2D<f64> {
-        self.end
     }
     pub fn shift_end(&mut self, shift: Point2D<f64>) {
         self.end.x += shift.x;
         self.end.y += shift.y;
-    }
-    #[must_use]
-    pub const fn bezier_offset(&self) -> f64 {
-        self.bezier_offset
     }
     pub fn set_end_port(&mut self, end_port: Option<EdgePort>) {
         self.end_port = end_port;
@@ -112,7 +98,7 @@ pub fn EdgeCreationComponent() -> Element {
     edge_in_creation.clone().map_or_else(
         || rsx! {},
         |edge| {
-            let new_path = define_bezier_path(edge.start(), edge.end(), edge.bezier_offset());
+            let new_path = define_bezier_path(edge.start, edge.end, edge.bezier_offset);
             rsx! {
                 path {
                     d: new_path,

@@ -1,4 +1,5 @@
 use crate::components::scenery_editor::{
+    constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
     edges::edges_component::EdgeCreation,
     graph_editor::graph_editor_component::{DragStatus, EditorState, ShiftZoom},
     graph_store::{GraphStore, GraphStoreAction},
@@ -25,9 +26,9 @@ pub fn use_zoom(
                 let mouse_on_graph_y = (mouse_pos.y - current_graph_shift.y) / current_graph_zoom;
                 let delta = wheel_event.delta().strip_units().y;
                 let new_graph_zoom = if delta > 0.0 {
-                    (current_graph_zoom * 1.1).min(2.5)
+                    (current_graph_zoom * ZOOM_SENSITIVITY).min(MAX_ZOOM)
                 } else {
-                    (current_graph_zoom / 1.1).max(0.1)
+                    (current_graph_zoom / ZOOM_SENSITIVITY).max(MIN_ZOOM)
                 };
                 let new_shift_x = mouse_on_graph_x.mul_add(-new_graph_zoom, mouse_pos.x);
                 let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
@@ -90,6 +91,8 @@ pub fn use_drag(
             event.client_coordinates().x,
             event.client_coordinates().y,
         ));
+        let graph_shift =
+            Point2D::new(rel_shift_x / current_sz.zoom, rel_shift_y / current_sz.zoom);
         match drag_status {
             DragStatus::Graph => {
                 let shift = current_sz.shift;
@@ -99,14 +102,9 @@ pub fn use_drag(
                 ));
             }
             DragStatus::Node(id) => {
-                graph_store().shift_node_position(
-                    id,
-                    Point2D::new(rel_shift_x / current_sz.zoom, rel_shift_y / current_sz.zoom),
-                );
+                graph_store().shift_node_position(id, graph_shift);
             }
             DragStatus::Edge(edge_creation_start) => {
-                let shift =
-                    Point2D::new(rel_shift_x / current_sz.zoom, rel_shift_y / current_sz.zoom);
                 editor_status.edge_in_creation.with_mut(|edge_option| {
                     let edge = edge_option.get_or_insert_with(|| {
                         EdgeCreation::new(
@@ -116,7 +114,7 @@ pub fn use_drag(
                             edge_creation_start.start_pos,
                         )
                     });
-                    edge.shift_end(shift);
+                    edge.shift_end(graph_shift);
                 });
             }
             DragStatus::None => {}
@@ -135,21 +133,24 @@ pub fn use_drag_end(
             }
             DragStatus::Edge(_) => {
                 if let Some(edge) = editor_status.edge_in_creation.write().take() {
-                    if let (Some(end_port), start_port) = (edge.end_port(), edge.start_port()) {
-                        let (start_port, end_port) = if start_port.port_type == PortType::Output {
-                            (start_port, end_port)
-                        } else {
-                            (end_port, start_port)
-                        };
+                    if edge.is_valid() {
+                        if let (Some(end_port), start_port) = (edge.end_port(), edge.start_port()) {
+                            let (start_port, end_port) = if start_port.port_type == PortType::Output
+                            {
+                                (start_port, end_port)
+                            } else {
+                                (end_port, start_port)
+                            };
 
-                        let new_edge = ConnectInfo::new(
-                            start_port.node_id,
-                            start_port.port_name.clone(),
-                            end_port.node_id,
-                            end_port.port_name.clone(),
-                            0.0,
-                        );
-                        graph_processor.send(GraphStoreAction::AddEdge(new_edge));
+                            let new_edge = ConnectInfo::new(
+                                start_port.node_id,
+                                start_port.port_name.clone(),
+                                end_port.node_id,
+                                end_port.port_name.clone(),
+                                0.0,
+                            );
+                            graph_processor.send(GraphStoreAction::AddEdge(new_edge));
+                        }
                     }
                 }
             }

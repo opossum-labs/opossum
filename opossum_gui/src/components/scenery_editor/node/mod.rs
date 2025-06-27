@@ -3,6 +3,8 @@ use opossum_backend::{usize_to_f64, AnalyzerType, PortType};
 use uuid::Uuid;
 mod graph_node_components;
 pub mod node_component;
+use crate::components::scenery_editor::constants::{HEADER_HEIGHT, NODE_WIDTH, PORT_VER_SPACING};
+
 use super::ports::ports_component::Ports;
 pub use node_component::Node;
 
@@ -26,21 +28,12 @@ const NODE_WEDGE: Asset = asset!("./assets/icons/node_wedge.svg");
 
 // Constants for node dimensions and port positions
 const GOLDEN_RATIO: f64 = 1.618_033_988_7;
-// The node width is fixed, but the height is dynamic
-// depending on the number of ports
-pub const NODE_WIDTH: f64 = 130.0;
-// The header height is fixed
-pub const HEADER_HEIGHT: f64 = 30.0;
 // The minimum node body height is fixed such that the overall node height (header + body) corresponds to
 // to the golden ratio
 pub const MIN_NODE_BODY_HEIGHT: f64 = NODE_WIDTH / GOLDEN_RATIO - HEADER_HEIGHT;
 // Nodes with only one port will be vertically centered
 // in the node body, so we need to add some padding
 pub const PORT_VER_PADDING: f64 = MIN_NODE_BODY_HEIGHT / 2.0;
-// The vertical spacing between ports is fixed
-pub const PORT_VER_SPACING: f64 = 16.0;
-pub const PORT_HEIGHT: f64 = 12.0;
-pub const PORT_WIDTH: f64 = 12.0;
 
 #[derive(Clone, PartialEq)]
 pub enum NodeType {
