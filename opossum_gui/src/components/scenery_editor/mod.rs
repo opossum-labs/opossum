@@ -1,9 +1,12 @@
-pub mod graph_editor;
+mod graph_editor;
 
 mod edges;
 mod graph_store;
-pub mod node;
+mod node;
 mod nodes;
 mod ports;
+mod constants;
 
 pub use graph_editor::GraphEditor;
+pub use graph_editor::NodeEditorCommand;
+pub use node::NodeElement;

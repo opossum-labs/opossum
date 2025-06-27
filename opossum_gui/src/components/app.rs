@@ -3,7 +3,7 @@ use crate::components::{
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
     node_editor::NodeEditor,
-    scenery_editor::{graph_editor::NodeEditorCommand, node::NodeElement, GraphEditor},
+    scenery_editor::{NodeEditorCommand, NodeElement, GraphEditor},
 };
 use dioxus::prelude::*;
 

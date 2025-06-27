@@ -1,4 +1,5 @@
 use crate::components::scenery_editor::{
+    constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
     edges::define_bezier_path,
     graph_store::{GraphStore, GraphStoreAction},
 };
@@ -9,29 +10,41 @@ use opossum_backend::{nodes::ConnectInfo, PortType};
 pub fn EdgeComponent(edge: ConnectInfo) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_processor = use_context::<Coroutine<GraphStoreAction>>();
-    let optic_nodes = graph_store().nodes();
-    let mut start_position = use_signal(|| Point2D::new(0.0, 0.0));
-    let mut end_position = use_signal(|| Point2D::new(0.0, 0.0));
 
-    use_effect({
+    // Memoize the start and end positions. This will only re-read the node
+    // positions and re-calculate when the `edge` prop itself changes.
+    // Dioxus's signal system will ensure this only triggers a re-render if
+    // the underlying node data that `abs_port_position` depends on has changed.
+    let start_position = use_memo({
         let edge = edge.clone();
         move || {
-            let optic_nodes = optic_nodes();
-            let src_node = optic_nodes.get(&edge.src_uuid()).unwrap();
-            let target_node = optic_nodes.get(&edge.target_uuid()).unwrap();
-            start_position.set(src_node.abs_port_position(&PortType::Output, edge.src_port()));
-            end_position.set(target_node.abs_port_position(&PortType::Input, edge.target_port()));
+            graph_store
+                .read()
+                .nodes()
+                .read()
+                .get(&edge.src_uuid())
+                .map(|n| n.abs_port_position(&PortType::Output, edge.src_port()))
+                .unwrap_or_default()
         }
     });
 
-    let new_path = define_bezier_path(start_position(), end_position(), 50.0);
+    let end_position = use_memo({
+        let edge = edge.clone();
+        move || {
+            graph_store
+                .read()
+                .nodes()
+                .read()
+                .get(&edge.target_uuid())
+                .map(|n| n.abs_port_position(&PortType::Input, edge.target_port()))
+                .unwrap_or_default()
+        }
+    });
 
-    let distance_field_height = 25.0;
-    let distance_field_width = 60.0;
-
+    let new_path = define_bezier_path(start_position(), end_position(), EDGE_BEZIER_OFFSET);
     let distance_field_position = Point2D::new(
-        f64::midpoint(start_position().x, end_position().x) - distance_field_width / 2.0,
-        f64::midpoint(start_position().y, end_position().y) - distance_field_height / 2.0,
+        f64::midpoint(start_position().x, end_position().x) - EDGE_DISTANCE_FIELD_WIDTH / 2.0,
+        f64::midpoint(start_position().y, end_position().y) - EDGE_DISTANCE_FIELD_HEIGHT / 2.0,
     );
     rsx! {
         path {
@@ -40,9 +53,8 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
             onkeydown: {
                 let edge = edge.clone();
                 move |event: Event<KeyboardData>| {
-                    let edge = edge.clone();
                     if event.data().key() == Key::Delete {
-                        graph_processor.send(GraphStoreAction::DeleteEdge(edge));
+                        graph_processor.send(GraphStoreAction::DeleteEdge(edge.clone()));
                     }
                     event.stop_propagation();
                 }
@@ -54,14 +66,14 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
         foreignObject {
             x: distance_field_position.x,
             y: distance_field_position.y,
-            width: distance_field_width + 50.0,
-            height: distance_field_height + 10.0,
+            width: EDGE_DISTANCE_FIELD_WIDTH + 50.0,
+            height: EDGE_DISTANCE_FIELD_HEIGHT + 10.0,
             input {
                 class: "form-control",
                 style: format!(
                     "text-align: right; width: {}pt; height: {}pt",
-                    distance_field_width,
-                    distance_field_height,
+                    EDGE_DISTANCE_FIELD_WIDTH,
+                    EDGE_DISTANCE_FIELD_HEIGHT,
                 ),
                 r#type: "number",
                 value: edge.distance(),
@@ -81,35 +93,3 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
         }
     }
 }
-// #[must_use]
-// pub fn use_edge_context_menu(conn_info: ConnectInfo) -> Callback<Event<MouseData>> {
-//     use_callback(move |evt: Event<MouseData>| {
-//         evt.prevent_default();
-//         let mut cx_menu = CONTEXT_MENU.write();
-//         *cx_menu = CxMenu::new(
-//             evt.page_coordinates().x,
-//             evt.page_coordinates().y,
-//             vec![(
-//                 "Delete connection".to_owned(),
-//                 use_delete_edge(conn_info.clone()),
-//             )],
-//         );
-//     })
-// }
-// #[must_use]
-// pub fn use_delete_edge(conn_info: ConnectInfo) -> Callback<Event<MouseData>> {
-//     use_callback(move |_: Event<MouseData>| {
-//         let conn_info = conn_info.clone();
-//         spawn(async move {
-//             match api::delete_connection(&HTTP_API_CLIENT(), conn_info).await {
-//                 Ok(conn_info) => {
-//                     EDGES.write().remove_edge(&conn_info);
-//                     OPOSSUM_UI_LOGS
-//                         .write()
-//                         .add_log("Removed edge successfully!");
-//                 }
-//                 Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-//             }
-//         });
-//     })
-// }

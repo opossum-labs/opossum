@@ -1,9 +1,10 @@
 use super::{
-    node::{NodeElement, NodeType, HEADER_HEIGHT, NODE_WIDTH},
+    node::{NodeElement, NodeType},
     ports::ports_component::Ports,
 };
 use crate::{
     api::{self},
+    components::scenery_editor::constants::{HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERTEX_SPACING, SUGIYAMA_VERT_PATH_FACTOR},
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::{
@@ -103,29 +104,26 @@ impl GraphStore {
             Size2D::new(max_x - min_x, max_y - min_y),
         )
     }
-    // #[must_use]
-    // pub fn find_position(&self) -> Point2D<f64> {
-    //     let size = Point2D::new(130., 130. / 1.618_033_988_7);
-    //     let mut new_pos = Point2D::new(size.x, size.x);
-    //     let phi = 1. / 1.618_033_988_7;
-    //     loop {
-    //         let mut position_found = true;
-    //         for node in self.optic_nodes().read().iter() {
-    //             if (node.1.pos().x - new_pos.x).abs() < 10.
-    //                 && (node.1.pos().y - new_pos.y).abs() < 10.
-    //             {
-    //                 position_found = false;
-    //                 new_pos.x += size.x * f64::powi(phi, 3);
-    //                 new_pos.y += size.y * f64::powi(phi, 3);
-    //                 break;
-    //             }
-    //         }
-    //         if position_found {
-    //             break;
-    //         }
-    //     }
-    //     new_pos
-    // }
+    pub fn clear(&mut self) {
+        self.nodes.set(HashMap::new());
+        self.edges.set(Vec::new());
+        self.active_node.set(None);
+    }
+    pub fn renumber_z_levels(&mut self) {
+        let mut node_elements: Vec<(Uuid, usize)> = self
+            .nodes
+            .read()
+            .iter()
+            .map(|n| (n.1.id(), n.1.z_index()))
+            .collect();
+        node_elements.sort_by(|e_1, e_2| e_1.1.cmp(&e_2.1));
+        let mut nodes = self.nodes.write();
+        for element in node_elements.iter().enumerate() {
+            if let Some(node) = nodes.get_mut(&element.1 .0) {
+                node.set_z_index(element.0);
+            }
+        }
+    }
 }
 
 pub async fn save_to_opm_file(path: &Path) {
@@ -175,7 +173,7 @@ pub async fn optimize_layout_and_sync(
         .collect();
 
     let layouts = from_edges(&edges_u32)
-        .vertex_spacing(250)
+        .vertex_spacing(SUGIYAMA_VERTEX_SPACING)
         .layering_type(RankingType::Original)
         .build();
 
@@ -186,12 +184,12 @@ pub async fn optimize_layout_and_sync(
             if let Some(uuid) = reg.get_uuid(u32::try_from(l.0).unwrap()) {
                 let pos = Point2D::new(
                     -1.0 * isize_to_f64(l.1 .1),
-                    0.7f64.mul_add(isize_to_f64(l.1 .0), height),
+                    SUGIYAMA_VERT_PATH_FACTOR.mul_add(isize_to_f64(l.1 .0), height),
                 );
                 new_positions.insert(uuid, pos);
             }
         }
-        height += usize_to_f64(group_height) * 250.0;
+        height += usize_to_f64(group_height * SUGIYAMA_VERTEX_SPACING);
     }
     for (id, pos) in &new_positions {
         if let Err(err_str) = api::update_gui_position(&HTTP_API_CLIENT(), *id, *pos).await {
@@ -252,10 +250,8 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                         {
                             continue;
                         }
-                        // Clear existing state
-                        graph_store.write().nodes.set(HashMap::new());
-                        graph_store.write().edges.set(Vec::new());
-                        graph_store.write().active_node.set(None);
+                        // Clear existing store
+                        graph_store.write().clear();
                         // Load new state
                         if let Ok(nodes) = api::get_nodes(&HTTP_API_CLIENT(), Uuid::nil()).await {
                             let node_elements = nodes.into_iter().map(|node| {
@@ -324,6 +320,7 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                                         Ok(deleted_ids) => {
                                             for node_id in deleted_ids {
                                                 graph_store().nodes_mut().write().remove(&node_id);
+                                                graph_store().renumber_z_levels();
                                                 graph_store().edges.with_mut(|edges| {
                                                     edges.retain_mut(|e| {
                                                         e.src_uuid() != node_id
@@ -352,13 +349,15 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                                 let gui_position =
                                     node_info.gui_position().unwrap_or((100.0, 100.0));
                                 let ports = get_ports(node_info.uuid()).await;
-                                let node_element = NodeElement::new(
+                                let mut node_element = NodeElement::new(
                                     NodeType::Optical(node_info.name().to_string()),
                                     node_info.uuid(),
                                     Point2D::new(gui_position.0, gui_position.1),
                                     ports,
                                 );
                                 let id = node_element.id();
+                                let nr_of_nodes = graph_store.read().nodes().read().len();
+                                node_element.set_z_index(nr_of_nodes + 1);
                                 graph_store.write().nodes.write().insert(id, node_element);
                                 graph_store.write().set_node_active(id);
                             }
@@ -372,13 +371,15 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                             Ok(node_info) => {
                                 let ports =
                                     Ports::new(node_info.input_ports(), node_info.output_ports());
-                                let node_element = NodeElement::new(
+                                let mut node_element = NodeElement::new(
                                     NodeType::Optical(node_info.name().to_string()),
                                     node_info.uuid(),
                                     Point2D::new(100.0, 100.0),
                                     ports,
                                 );
                                 let id = node_element.id();
+                                let nr_of_nodes = graph_store.read().nodes().read().len();
+                                node_element.set_z_index(nr_of_nodes + 1);
                                 graph_store.write().nodes.write().insert(id, node_element);
                                 graph_store.write().set_node_active(id);
                             }
@@ -390,12 +391,14 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                         {
                             Ok(analyzer_id) => {
                                 let (x, y) = new_analyzer.gui_position;
-                                let node_element = NodeElement::new(
+                                let mut node_element = NodeElement::new(
                                     NodeType::Analyzer(new_analyzer.analyzer_type),
                                     analyzer_id,
                                     Point2D::new(x, y),
                                     Ports::default(),
                                 );
+                                let nr_of_nodes = graph_store.read().nodes().read().len();
+                                node_element.set_z_index(nr_of_nodes + 1);
                                 graph_store
                                     .write()
                                     .nodes
@@ -439,9 +442,7 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                     GraphStoreAction::DeleteScenery => {
                         match api::delete_scenery(&HTTP_API_CLIENT()).await {
                             Ok(_) => {
-                                let mut store = graph_store.write();
-                                store.nodes.write().clear();
-                                store.edges.write().clear();
+                                graph_store.write().clear();
                             }
                             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                         }
