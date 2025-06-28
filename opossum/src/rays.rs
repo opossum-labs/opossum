@@ -2553,7 +2553,7 @@ mod test {
         .unwrap();
 
         let mut s = OpticSurface::default();
-        s.set_isometry(&Isometry::new_along_z(millimeter!(10.0)).unwrap());
+        s.set_isometry(Isometry::new_along_z(millimeter!(10.0)).unwrap());
         rays.refract_on_surface(
             &mut s,
             Some(&refr_index_vaccuum()),

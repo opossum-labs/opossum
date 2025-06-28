@@ -6,7 +6,7 @@ use dioxus_free_icons::{
 };
 use opossum_backend::AnalyzerType;
 use rfd::FileDialog;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::components::menu_bar::{
     edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},

@@ -101,51 +101,51 @@ impl General2DGaussian {
         Ok(())
     }
 
-    pub fn energy(&self) -> Energy{
+    pub fn energy(&self) -> Energy {
         self.total_energy
-    } 
+    }
 
-    pub fn center(&self) -> Point2<Length>{
+    pub fn center(&self) -> Point2<Length> {
         self.mu_xy
-    } 
+    }
 
-    pub fn set_center_x(&mut self, x: Length){
+    pub fn set_center_x(&mut self, x: Length) {
         self.mu_xy.x = x
     }
 
-    pub fn set_center_y(&mut self, y: Length){
+    pub fn set_center_y(&mut self, y: Length) {
         self.mu_xy.y = y
     }
 
-    pub fn sigma(&self) -> Point2<Length>{
+    pub fn sigma(&self) -> Point2<Length> {
         self.sigma_xy
-    } 
+    }
 
-    pub fn set_sigma_x(&mut self, x: Length){
+    pub fn set_sigma_x(&mut self, x: Length) {
         self.sigma_xy.x = x
     }
 
-    pub fn set_sigma_y(&mut self, y: Length){
+    pub fn set_sigma_y(&mut self, y: Length) {
         self.sigma_xy.y = y
     }
-    pub fn power(&self) -> f64{
+    pub fn power(&self) -> f64 {
         self.power
-    } 
-    pub fn set_power(&mut self, power: f64){
+    }
+    pub fn set_power(&mut self, power: f64) {
         self.power = power
     }
 
-    pub fn theta(&self) -> Angle{
+    pub fn theta(&self) -> Angle {
         self.theta
-    } 
-    pub fn set_theta(&mut self, angle: Angle){
+    }
+    pub fn set_theta(&mut self, angle: Angle) {
         self.theta = angle
     }
 
-    pub fn rectangular(&self) -> bool{
+    pub fn rectangular(&self) -> bool {
         self.rectangular
-    } 
-    pub fn set_rectangular(&mut self, rectangular: bool){
+    }
+    pub fn set_rectangular(&mut self, rectangular: bool) {
         self.rectangular = rectangular
     }
 }

@@ -10,9 +10,7 @@ use crate::{
     radian,
 };
 use approx::relative_eq;
-use nalgebra::{
-    Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation, Translation3, Vector3, vector,
-};
+use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3, vector};
 use num::Zero;
 use serde::{
     Deserialize, Serialize,
@@ -252,8 +250,30 @@ impl Isometry {
             TranslationAxis::Z => t.z,
         }
     }
-    /// Sets a value on the translation axis of this [`Isometry`].
-    #[must_use]
+    /// Sets a new value along the specified translation axis (`X`, `Y`, or `Z`) of this [`Isometry`].
+    ///
+    /// This function modifies the translation component of the isometry while preserving its current rotation.
+    /// It then reconstructs the isometry with the updated translation and original rotation.
+    ///
+    /// # Parameters
+    ///
+    /// * `axis` - The axis along which the translation should be modified. Must be one of [`TranslationAxis::X`], [`TranslationAxis::Y`], or [`TranslationAxis::Z`].
+    /// * `value` - The new [`Length`] value to set along the specified axis.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the isometry was successfully updated.
+    /// * `Err(OpossumError)` if reconstruction of the isometry fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `Self::new` fails due to constraints within the isometry construction logic.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// isometry.set_translation_of_axis(TranslationAxis::Y, Length::new::<meter>(5.0))?;
+    /// ```
     pub fn set_translation_of_axis(
         &mut self,
         axis: TranslationAxis,
@@ -266,7 +286,7 @@ impl Isometry {
             TranslationAxis::Y => new_trans.y = value,
             TranslationAxis::Z => new_trans.z = value,
         }
-        *self = Isometry::new(new_trans, rot)?;
+        *self = Self::new(new_trans, rot)?;
         Ok(())
     }
     /// Returns the rotation of this [`Isometry`].
@@ -286,7 +306,6 @@ impl Isometry {
         }
     }
     /// Sets a value on the rotation axis of this [`Isometry`].
-    #[must_use]
     pub fn set_rotation_of_axis(&mut self, axis: RotationAxis, value: Angle) -> OpmResult<()> {
         let trans = self.translation();
         let mut new_rot = self.rotation();
@@ -295,7 +314,7 @@ impl Isometry {
             RotationAxis::Pitch => new_rot.y = value,
             RotationAxis::Yaw => new_rot.z = value,
         }
-        *self = Isometry::new(trans, new_rot)?;
+        *self = Self::new(trans, new_rot)?;
         Ok(())
     }
     /// Transforms a single point by the defined isometry
@@ -438,7 +457,7 @@ impl Isometry {
 }
 
 /// Define the translation and rotation axes for the [`Isometry`]
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum TranslationAxis {
     /// The X axis
     X,
@@ -449,7 +468,7 @@ pub enum TranslationAxis {
 }
 
 /// Define the rotation axes for the [`Isometry`]
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum RotationAxis {
     /// The Roll axis
     Roll,
@@ -462,9 +481,9 @@ pub enum RotationAxis {
 impl Display for TranslationAxis {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TranslationAxis::X => write!(f, "X"),
-            TranslationAxis::Y => write!(f, "Y"),
-            TranslationAxis::Z => write!(f, "Z"),
+            Self::X => write!(f, "X"),
+            Self::Y => write!(f, "Y"),
+            Self::Z => write!(f, "Z"),
         }
     }
 }
@@ -472,9 +491,9 @@ impl Display for TranslationAxis {
 impl Display for RotationAxis {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RotationAxis::Roll => write!(f, "Roll"),
-            RotationAxis::Pitch => write!(f, "Pitch"),
-            RotationAxis::Yaw => write!(f, "Yaw"),
+            Self::Roll => write!(f, "Roll"),
+            Self::Pitch => write!(f, "Pitch"),
+            Self::Yaw => write!(f, "Yaw"),
         }
     }
 }

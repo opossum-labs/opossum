@@ -126,13 +126,13 @@ impl GeoSurface for Cylinder {
             normal_vector,
         ))
     }
-    fn set_isometry(&mut self, isometry: &Isometry) {
+    fn set_isometry(&mut self, isometry: Isometry) {
         let anchor_isometry = Isometry::new(
             Point3::new(Length::zero(), Length::zero(), self.radius),
             radian!(0., 0., 0.),
         )
         .unwrap();
-        self.isometry = isometry.clone().append(&anchor_isometry);
+        self.isometry = isometry.append(&anchor_isometry);
     }
     fn isometry(&self) -> &Isometry {
         &self.isometry

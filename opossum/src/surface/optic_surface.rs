@@ -146,7 +146,7 @@ impl OpticSurface {
     /// # Panics
     ///
     /// This function might theoretically panic if locking of an internal mutex fails.
-    pub fn set_isometry(&self, iso: &Isometry) {
+    pub fn set_isometry(&self, iso: Isometry) {
         self.geo_surface
             .0
             .lock()

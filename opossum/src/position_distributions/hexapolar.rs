@@ -37,18 +37,46 @@ impl Hexapolar {
         })
     }
 
+    /// Returns the radius of the hexapolar distribution.
+    ///
+    /// # Returns
+    ///
+    /// The radius as a `Length`.
     pub fn radius(&self) -> Length {
         self.radius
     }
 
+    /// Returns the number of rings in the hexapolar distribution.
+    ///
+    /// # Returns
+    ///
+    /// The number of rings as a `u8`.
     pub fn nr_of_rings(&self) -> u8 {
         self.nr_of_rings
     }
 
+    /// Sets the radius of the hexapolar distribution.
+    ///
+    /// # Parameters
+    ///
+    /// * `radius` - The new radius as a `Length`.
+    ///
+    /// # Side Effects
+    ///
+    /// Updates the current radius.
     pub fn set_radius(&mut self, radius: Length) {
         self.radius = radius;
     }
 
+    /// Sets the number of rings in the hexapolar distribution.
+    ///
+    /// # Parameters
+    ///
+    /// * `nr_of_rings` - The new number of rings as a `u8`.
+    ///
+    /// # Side Effects
+    ///
+    /// Updates the current number of rings.
     pub fn set_nr_of_rings(&mut self, nr_of_rings: u8) {
         self.nr_of_rings = nr_of_rings;
     }

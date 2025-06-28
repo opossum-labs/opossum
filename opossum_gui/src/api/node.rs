@@ -1,7 +1,7 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
-    Fluence, Isometry, NodeAttr, Proptype,
+    Fluence, Isometry, NodeAttr,
 };
 use serde_json::Value;
 use uom::si::f64::{Angle, Length};

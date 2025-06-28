@@ -49,33 +49,94 @@ impl HexagonalTiling {
             center,
         })
     }
+    /// Returns the radius of the hexagonal tiling distribution.
+    ///
+    /// # Returns
+    ///
+    /// The radius as a `Length`.
     pub fn radius(&self) -> Length {
         self.radius
     }
 
+    /// Returns the number of hexagons along the radius.
+    ///
+    /// # Returns
+    ///
+    /// The number of hexagons as a `u8`.
     pub fn nr_of_hex_along_radius(&self) -> u8 {
         self.nr_of_hex_along_radius
     }
 
+    /// Returns the center point of the hexagonal tiling.
+    ///
+    /// # Returns
+    ///
+    /// The center as a `Point2<Length>`.
     pub fn center(&self) -> Point2<Length> {
         self.center
     }
 
+    /// Sets the radius of the hexagonal tiling distribution.
+    ///
+    /// # Parameters
+    ///
+    /// * `radius` - The new radius as a `Length`.
+    ///
+    /// # Side Effects
+    ///
+    /// Updates the current radius.
     pub fn set_radius(&mut self, radius: Length) {
         self.radius = radius;
     }
 
+    /// Sets the number of hexagons along the radius.
+    ///
+    /// # Parameters
+    ///
+    /// * `nr_of_hex_along_radius` - The new number of hexagons as a `u8`.
+    ///
+    /// # Side Effects
+    ///
+    /// Updates the current number of hexagons.
     pub fn set_nr_of_hex_along_radius(&mut self, nr_of_hex_along_radius: u8) {
         self.nr_of_hex_along_radius = nr_of_hex_along_radius;
     }
 
+    /// Sets the center point of the hexagonal tiling.
+    ///
+    /// # Parameters
+    ///
+    /// * `center` - The new center as a `Point2<Length>`.
+    ///
+    /// # Side Effects
+    ///
+    /// Updates the current center point.
     pub fn set_center(&mut self, center: Point2<Length>) {
         self.center = center;
     }
 
+    /// Sets the X coordinate of the center point.
+    ///
+    /// # Parameters
+    ///
+    /// * `center_x` - The new X coordinate as a `Length`.
+    ///
+    /// # Side Effects
+    ///
+    /// Updates the X coordinate of the center.
     pub fn set_center_x(&mut self, center_x: Length) {
         self.center.x = center_x;
     }
+
+    /// Sets the Y coordinate of the center point.
+    ///
+    /// # Parameters
+    ///
+    /// * `center_y` - The new Y coordinate as a `Length`.
+    ///
+    /// # Side Effects
+    ///
+    /// Updates the Y coordinate of the center.
     pub fn set_center_y(&mut self, center_y: Length) {
         self.center.y = center_y;
     }

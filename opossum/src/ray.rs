@@ -1214,7 +1214,7 @@ mod test {
         )
         .unwrap();
         let mut s = OpticSurface::default();
-        s.set_isometry(&isometry);
+        s.set_isometry(isometry);
         s.set_coating(CoatingType::ConstantR { reflectivity });
         assert!(
             ray.refract_on_surface(
@@ -1304,7 +1304,7 @@ mod test {
         )
         .unwrap();
         let mut s = OpticSurface::default();
-        s.set_isometry(&isometry);
+        s.set_isometry(isometry);
         ray.refract_on_surface(&mut s, None, Uuid::new_v4(), &MissedSurfaceStrategy::Stop)
             .unwrap();
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
@@ -1329,7 +1329,7 @@ mod test {
         )
         .unwrap();
         let mut s = OpticSurface::default();
-        s.set_isometry(&isometry);
+        s.set_isometry(isometry);
         ray.refract_on_surface(
             &mut s,
             Some(1.5),
@@ -1358,7 +1358,7 @@ mod test {
         )
         .unwrap();
         let mut s = OpticSurface::default();
-        s.set_isometry(&isometry);
+        s.set_isometry(isometry);
         assert!(
             ray.refract_on_surface(
                 &mut s,
@@ -1440,7 +1440,7 @@ mod test {
         )
         .unwrap();
         let mut s = OpticSurface::default();
-        s.set_isometry(&isometry);
+        s.set_isometry(isometry);
         let reflected = ray
             .refract_on_surface(
                 &mut s,

@@ -16,7 +16,6 @@ use crate::{
     nanometer,
     optic_node::OpticNode,
     optic_ports::PortType,
-    plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,

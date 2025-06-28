@@ -307,7 +307,7 @@ pub trait OpticNode: Dottable {
             let () = node_attr_mut.set_isometry(iso);
         }
         if let Some(alignment) = node_attributes.alignment() {
-            node_attr_mut.set_alignment(alignment.clone());
+            node_attr_mut.set_alignment(*alignment);
         }
         node_attr_mut.set_name(&node_attributes.name());
         node_attr_mut.set_inverted(node_attributes.inverted());
@@ -355,10 +355,10 @@ pub trait OpticNode: Dottable {
     /// The effective input isometry is the base isometry modified by the local alignment isometry (if any).
     fn effective_node_iso(&self) -> Option<Isometry> {
         self.isometry().as_ref().and_then(|iso| {
-            self.node_attr().alignment().as_ref().map_or_else(
-                || Some(iso.clone()),
-                |local_iso| Some(iso.append(local_iso)),
-            )
+            self.node_attr()
+                .alignment()
+                .as_ref()
+                .map_or_else(|| Some(*iso), |local_iso| Some(iso.append(local_iso)))
         })
     }
     /// Return the effective input isometry of an [`OpticSurface`].

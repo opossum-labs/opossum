@@ -6,7 +6,7 @@ use actix_web::{
     patch, post, put,
     web::{self, Json, PathConfig},
 };
-use nalgebra::{Point2, Point3};
+use nalgebra::Point2;
 use opossum::{
     error::OpossumError,
     meter,
@@ -18,10 +18,7 @@ use opossum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use uom::si::{
-    f64::{Angle, Length},
-    length::meter,
-};
+use uom::si::length::meter;
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -454,7 +451,7 @@ async fn post_node_name(
 ) -> Result<(), ErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let name = name.into_inner();
-    let mut document = data.document.lock().unwrap();
+    let document = data.document.lock().unwrap();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
@@ -511,7 +508,6 @@ async fn post_node_lidt(
         ))
     }
 }
-
 
 /// Update the alignment isometry of an optical node
 #[utoipa::path(tag = "node",

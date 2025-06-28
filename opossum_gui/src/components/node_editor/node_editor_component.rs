@@ -1,7 +1,6 @@
 use crate::components::node_editor::property_editor::PropertiesEditor;
-use crate::components::node_editor::source_editor::LightDataEditor;
 use crate::components::node_editor::{
-    alignment_editor::AlignmentEditor, general_editor::GeneralEditor, lens_editor::LensEditor,
+    alignment_editor::AlignmentEditor, general_editor::GeneralEditor,
 };
 use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
@@ -25,7 +24,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     let active_node_opt = node();
     use_effect(move || {
         let node_change_opt = node_change.read().clone();
-        let node = node.clone();
         if let (Some(node_changed), Some(active_node)) = (node_change_opt, active_node_opt.clone())
         {
             node_change_api_call_selection(node_changed, active_node, node);
@@ -58,9 +56,12 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                         node_id: node_attr.uuid(),
                         node_type: node_attr.node_type(),
                         node_name: node_attr.name(),
-                        node_lidt: node_attr.lidt().clone(),
+                        node_lidt: *node_attr.lidt(),
                     }
-                    PropertiesEditor{node_properties: node_attr.properties().clone(), node_change}
+                    PropertiesEditor {
+                        node_properties: node_attr.properties().clone(),
+                        node_change,
+                    }
                     // LensEditor {
                     //     hidden: node_attr.node_type() != "lens",
                     //     node_change,
@@ -101,7 +102,7 @@ fn node_change_api_call_selection(
         NodeChange::LIDT(lidt) => {
             spawn(async move {
                 if let Err(err_str) =
-                    api::update_node_lidt(&HTTP_API_CLIENT(), active_node.id(), lidt.clone()).await
+                    api::update_node_lidt(&HTTP_API_CLIENT(), active_node.id(), lidt).await
                 {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                 };

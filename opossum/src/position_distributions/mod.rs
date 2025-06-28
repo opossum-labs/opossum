@@ -100,6 +100,42 @@ impl PosDistType {
         }
     }
 
+    /// Creates a default position distribution based on a given name.
+    ///
+    /// This function matches a human-readable distribution name to a corresponding default
+    /// implementation of a `PosDistType` variant. It returns `None` if the name does not match
+    /// any known distribution type.
+    ///
+    /// # Parameters
+    ///
+    /// * `name` - A string slice representing the name of the desired distribution. Valid values include:
+    ///     - `"Random"`
+    ///     - `"Grid"`
+    ///     - `"Hexagonal"`
+    ///     - `"Hexapolar"`
+    ///     - `"Fibonacci, rectangular"`
+    ///     - `"Fibonacci, elliptical"`
+    ///     - `"Sobol"`
+    ///
+    /// # Returns
+    ///
+    /// * `Some(PosDistType)` containing the default distribution instance, if the name matches.
+    /// * `None` if the name is not recognized.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use opossum::position_distributions::{Grid, PosDistType};
+    /// let dist = PosDistType::default_from_name("Grid");
+    /// assert!(dist.is_some());
+    /// if let Some(grid) = dist{
+    ///     assert_eq!(grid, Grid::default().into())
+    /// }
+    /// ```
+    ///
+    /// # Notes
+    ///
+    /// The returned distributions are created using their respective `Default` implementations.
     pub fn default_from_name(name: &str) -> Option<Self> {
         match name {
             "Random" => Some(Random::default().into()),

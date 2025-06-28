@@ -54,38 +54,117 @@ impl Grid {
         })
     }
 
+    /// Returns the number of points along the X and Y axes.
+    ///
+    /// # Returns
+    ///
+    /// A tuple `(usize, usize)` where the first element is the number of points in the X direction
+    /// and the second element is the number of points in the Y direction.
     pub fn nr_of_points(&self) -> (usize, usize) {
         self.nr_of_points
     }
 
+    /// Returns the side lengths along the X and Y axes.
+    ///
+    /// # Returns
+    ///
+    /// A tuple `(Length, Length)` representing the lengths in the X and Y directions.
     pub fn side_length(&self) -> (Length, Length) {
         self.side_length
     }
 
+    /// Returns the side length along the X axis.
+    ///
+    /// # Returns
+    ///
+    /// The length in the X direction of type `Length`.
     pub fn side_length_x(&self) -> Length {
         self.side_length.0
     }
 
+    /// Returns the side length along the Y axis.
+    ///
+    /// # Returns
+    ///
+    /// The length in the Y direction of type `Length`.
     pub fn side_length_y(&self) -> Length {
         self.side_length.1
     }
 
+    /// Sets the number of points along the X and Y axes.
+    ///
+    /// # Parameters
+    ///
+    /// * `nr_of_points` - A tuple `(usize, usize)` specifying the new number of points in X and Y directions.
+    ///
+    /// # Side Effects
+    ///
+    /// Overwrites the current number of points.
     pub fn set_nr_of_points(&mut self, nr_of_points: (usize, usize)) {
         self.nr_of_points = nr_of_points;
     }
+
+    /// Sets the number of points along the X axis.
+    ///
+    /// # Parameters
+    ///
+    /// * `nr_of_points_x` - The new number of points in the X direction.
+    ///
+    /// # Side Effects
+    ///
+    /// Overwrites the current X direction points count.
     pub fn set_nr_of_points_x(&mut self, nr_of_points_x: usize) {
         self.nr_of_points.0 = nr_of_points_x;
     }
+
+    /// Sets the number of points along the Y axis.
+    ///
+    /// # Parameters
+    ///
+    /// * `nr_of_points_y` - The new number of points in the Y direction.
+    ///
+    /// # Side Effects
+    ///
+    /// Overwrites the current Y direction points count.
     pub fn set_nr_of_points_y(&mut self, nr_of_points_y: usize) {
         self.nr_of_points.1 = nr_of_points_y;
     }
 
+    /// Sets the side lengths along the X and Y axes.
+    ///
+    /// # Parameters
+    ///
+    /// * `side_length` - A tuple `(Length, Length)` specifying the new side lengths for X and Y directions.
+    ///
+    /// # Side Effects
+    ///
+    /// Overwrites the current side lengths.
     pub fn set_side_length(&mut self, side_length: (Length, Length)) {
         self.side_length = side_length;
     }
+
+    /// Sets the side length along the X axis.
+    ///
+    /// # Parameters
+    ///
+    /// * `side_length_x` - The new side length in the X direction.
+    ///
+    /// # Side Effects
+    ///
+    /// Overwrites the current side length in the X direction.
     pub fn set_side_length_x(&mut self, side_length_x: Length) {
         self.side_length.0 = side_length_x;
     }
+
+    /// Sets the side length along the Y axis.
+    ///
+    /// # Parameters
+    ///
+    /// * `side_length_y` - The new side length in the Y direction.
+    ///
+    /// # Side Effects
+    ///
+    /// Overwrites the current side length in the Y direction.
     pub fn set_side_length_y(&mut self, side_length_y: Length) {
         self.side_length.1 = side_length_y;
     }

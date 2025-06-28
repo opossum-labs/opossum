@@ -4,7 +4,6 @@
 //! This builder allows easier serialization / deserialization in OPM files.
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use uom::si::f64::Energy;
 
 use super::{LightData, energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder};
 use crate::{error::OpmResult, properties::Proptype};
@@ -37,15 +36,6 @@ impl LightDataBuilder {
             Self::Energy(e) => e.build(),
             Self::Geometric(r) => r.build(),
             Self::Fourier => Ok(LightData::Fourier),
-        }
-    }
-
-    pub fn set_energy(&mut self, energy: Energy) {
-        match self {
-            Self::Geometric(r) => {
-                r.set_energy(energy);
-            }
-            _ => todo!(),
         }
     }
 }

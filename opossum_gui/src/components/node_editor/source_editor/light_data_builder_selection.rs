@@ -1,7 +1,10 @@
 use crate::{components::node_editor::accordion::LabeledSelect, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
 use opossum_backend::{
-    energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder}, EnergyDistType, PosDistType, SpecDistType
+    energy_data_builder::EnergyDataBuilder,
+    light_data_builder::LightDataBuilder,
+    ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},
+    EnergyDistType, PosDistType, SpecDistType,
 };
 use std::collections::HashMap;
 
@@ -18,14 +21,6 @@ pub struct LightDataBuilderHistory {
     current: String,
 }
 impl LightDataBuilderHistory {
-    /// Creates a default history with a single entry for `"Rays"` using the default [`RayDataBuilder`].
-    pub fn default() -> Self {
-        let current = "Rays".to_owned();
-        let ld_builder = LightDataBuilder::Geometric(RayDataBuilder::default());
-        let mut hist = HashMap::<String, LightDataBuilder>::new();
-        hist.insert(current.clone(), ld_builder);
-        Self { hist, current }
-    }
     /// Returns a reference to the currently active [`LightDataBuilder`].
     pub fn get_current(&self) -> &LightDataBuilder {
         self.hist.get(&self.current).unwrap()
@@ -46,7 +41,7 @@ impl LightDataBuilderHistory {
     /// Returns `true` if the key exists and the current selection was updated,
     /// otherwise returns `false`.
     pub fn set_current(&mut self, key: &str) -> bool {
-        if let Some(_) = self.hist.get(key) {
+        if self.hist.contains_key(key) {
             self.current = key.to_owned();
             true
         } else {
@@ -135,18 +130,10 @@ impl LightDataBuilderHistory {
     pub fn get_current_pos_dist_type(&self) -> Option<PosDistType> {
         match self.get_current() {
             LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
-                RayDataBuilder::Collimated(collimated_src) => {
-                    Some(collimated_src.pos_dist().clone())
-                }
-                RayDataBuilder::PointSrc(point_src) => Some(point_src.pos_dist().clone()),
-                RayDataBuilder::Raw(rays) => None,
-                RayDataBuilder::Image {
-                    file_path,
-                    pixel_size,
-                    total_energy,
-                    wave_length,
-                    cone_angle,
-                } => None,
+                RayDataBuilder::Collimated(collimated_src) => Some(*collimated_src.pos_dist()),
+                RayDataBuilder::PointSrc(point_src) => Some(*point_src.pos_dist()),
+                RayDataBuilder::Raw(_rays) => None,
+                RayDataBuilder::Image { .. } => None,
             },
             _ => None,
         }
@@ -162,18 +149,10 @@ impl LightDataBuilderHistory {
     pub fn get_current_energy_dist_type(&self) -> Option<EnergyDistType> {
         match self.get_current() {
             LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
-                RayDataBuilder::Collimated(collimated_src) => {
-                    Some(collimated_src.energy_dist().clone())
-                }
-                RayDataBuilder::PointSrc(point_src) => Some(point_src.energy_dist().clone()),
-                RayDataBuilder::Raw(rays) => None,
-                RayDataBuilder::Image {
-                    file_path,
-                    pixel_size,
-                    total_energy,
-                    wave_length,
-                    cone_angle,
-                } => None,
+                RayDataBuilder::Collimated(collimated_src) => Some(*collimated_src.energy_dist()),
+                RayDataBuilder::PointSrc(point_src) => Some(*point_src.energy_dist()),
+                RayDataBuilder::Raw(_rays) => None,
+                RayDataBuilder::Image { .. } => None,
             },
             _ => None,
         }
@@ -193,14 +172,8 @@ impl LightDataBuilderHistory {
                     Some(collimated_src.spect_dist().clone())
                 }
                 RayDataBuilder::PointSrc(point_src) => Some(point_src.spect_dist().clone()),
-                RayDataBuilder::Raw(rays) => None,
-                RayDataBuilder::Image {
-                    file_path,
-                    pixel_size,
-                    total_energy,
-                    wave_length,
-                    cone_angle,
-                } => None,
+                RayDataBuilder::Raw(_rays) => None,
+                RayDataBuilder::Image { .. } => None,
             },
             _ => None,
         }
@@ -381,12 +354,21 @@ impl LightDataBuilderHistory {
                     }
                 }
 
-
                 _ => OPOSSUM_UI_LOGS
                     .write()
                     .add_log(&format!("Unknown source type: {}", key)),
             }
         }
+    }
+}
+impl Default for LightDataBuilderHistory {
+    /// Creates a default history with a single entry for `"Rays"` using the default [`RayDataBuilder`].
+    fn default() -> Self {
+        let current = "Rays".to_owned();
+        let ld_builder = LightDataBuilder::Geometric(RayDataBuilder::default());
+        let mut hist = HashMap::<String, LightDataBuilder>::new();
+        hist.insert(current.clone(), ld_builder);
+        Self { hist, current }
     }
 }
 

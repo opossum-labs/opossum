@@ -58,21 +58,68 @@ impl SobolDist {
             side_length_y,
         })
     }
+    /// Returns the number of points in the Sobol distribution.
+    ///
+    /// # Returns
+    ///
+    /// The number of points as a `usize`.
     pub fn nr_of_points(&self) -> usize {
         self.nr_of_points
     }
+
+    /// Returns the side length along the X axis.
+    ///
+    /// # Returns
+    ///
+    /// The side length in the X direction of type `Length`.
     pub fn side_length_x(&self) -> Length {
         self.side_length_x
     }
+
+    /// Returns the side length along the Y axis.
+    ///
+    /// # Returns
+    ///
+    /// The side length in the Y direction of type `Length`.
     pub fn side_length_y(&self) -> Length {
         self.side_length_y
     }
+
+    /// Sets the number of points in the Sobol distribution.
+    ///
+    /// # Parameters
+    ///
+    /// * `nr_of_points` - The new number of points as a `usize`.
+    ///
+    /// # Side Effects
+    ///
+    /// Overwrites the current number of points.
     pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
         self.nr_of_points = nr_of_points;
     }
+
+    /// Sets the side length along the X axis.
+    ///
+    /// # Parameters
+    ///
+    /// * `side_length_x` - The new side length in the X direction.
+    ///
+    /// # Side Effects
+    ///
+    /// Overwrites the current side length in the X direction.
     pub fn set_side_length_x(&mut self, side_length_x: Length) {
         self.side_length_x = side_length_x;
     }
+
+    /// Sets the side length along the Y axis.
+    ///
+    /// # Parameters
+    ///
+    /// * `side_length_y` - The new side length in the Y direction.
+    ///
+    /// # Side Effects
+    ///
+    /// Overwrites the current side length in the Y direction.
     pub fn set_side_length_y(&mut self, side_length_y: Length) {
         self.side_length_y = side_length_y;
     }

@@ -25,7 +25,6 @@ use crate::{
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
-    surface::hit_map::HitMap,
     utils::{
         geom_transformation::Isometry,
         unit_format::{

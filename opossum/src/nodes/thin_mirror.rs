@@ -143,7 +143,7 @@ impl OpticNode for ThinMirror {
         self.update_surface(
             &"input_1".to_string(),
             geosurface.clone(),
-            anchor_point_iso.clone(),
+            anchor_point_iso,
             &PortType::Input,
         )?;
         self.update_surface(

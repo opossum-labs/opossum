@@ -43,7 +43,7 @@ impl UniformDist {
         Ok(())
     }
 
-    pub fn energy(&self) -> Energy{
+    pub fn energy(&self) -> Energy {
         self.total_energy
     }
 }

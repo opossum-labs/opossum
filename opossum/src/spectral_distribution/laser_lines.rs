@@ -55,11 +55,53 @@ impl LaserLines {
         Ok(Self { lines })
     }
 
-    pub fn new_empty() -> Self{
-        Self{lines: Vec::<(Length, f64)>::new()}
+    /// Creates a new, empty [`LaserLines`] distribution.
+    ///
+    /// This initializes the internal storage without any spectral lines.
+    ///
+    /// # Returns
+    /// A new instance of [`LaserLines`] with an empty set of wavelength–intensity pairs.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let laser = LaserLines::new_empty();
+    /// assert!(laser.lines().is_empty());
+    /// ```
+    pub fn new_empty() -> Self {
+        Self {
+            lines: Vec::<(Length, f64)>::new(),
+        }
     }
 
-    pub fn add_lines(&mut self, lines: Vec<(Length, f64)>) -> OpmResult<()>{
+    /// Adds a list of laser lines to the [`LaserLines`] distribution.
+    ///
+    /// Each laser line is a tuple containing a [`Length`] representing the wavelength,
+    /// and a `f64` representing the intensity.
+    ///
+    /// # Parameters
+    /// * `lines` – A vector of `(Length, f64)` tuples, each representing a spectral line.
+    ///
+    /// # Returns
+    /// * `Ok(())` if all lines are valid and added successfully.
+    /// * `Err(OpossumError)` if validation fails.
+    ///
+    /// # Errors
+    /// This method returns an error if:
+    /// - The input list is empty.
+    /// - Any wavelength is negative or not finite.
+    /// - Any intensity is negative or not finite.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut laser = LaserLines::new_empty();
+    /// laser.add_lines(vec![
+    ///     (Length::new::<nanometer>(532.0), 1.0),
+    ///     (Length::new::<nanometer>(635.0), 0.5),
+    /// ])?;
+    /// ```
+    pub fn add_lines(&mut self, lines: Vec<(Length, f64)>) -> OpmResult<()> {
         // Check if the lines are non-empty and contain valid data
         if lines.is_empty() {
             return Err(OpossumError::Other("Laser lines cannot be empty".into()));
@@ -76,14 +118,30 @@ impl LaserLines {
                 ));
             }
         }
-        for line in lines{
+        for line in lines {
             self.lines.push(line);
         }
         Ok(())
     }
 
-    pub fn lines(&self) -> &Vec<(Length, f64)>{
-       &self.lines
+    /// Returns an immutable reference to the list of laser lines stored in this [`LaserLines`] instance.
+    ///
+    /// Each line is represented as a tuple `(Length, f64)`, where the `Length` is the wavelength and
+    /// `f64` is the corresponding intensity.
+    ///
+    /// # Returns
+    /// A reference to the vector of spectral lines.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let laser = LaserLines::new_empty();
+    /// let lines = laser.lines();
+    /// assert_eq!(lines.len(), 0);
+    /// ```
+    #[must_use]
+    pub fn lines(&self) -> &Vec<(Length, f64)> {
+        &self.lines
     }
 }
 
@@ -109,7 +167,9 @@ impl SpectralDistribution for LaserLines {
                 "Sum of intensities cannot be zero".into(),
             ));
         }
-        let lines: Vec<(Length, f64)> = self.lines.clone()
+        let lines: Vec<(Length, f64)> = self
+            .lines
+            .clone()
             .into_iter()
             .map(|(wavelength, intensity)| (wavelength, intensity / sum_intensity))
             .collect();

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 pub use uniform::UniformDist;
 
-use crate::joule;
+use crate::{error::OpmResult, joule};
 use kahan::KahanSummator;
 use nalgebra::Point2;
 use uom::si::f64::{Energy, Length};
@@ -61,13 +61,14 @@ impl EnergyDistType {
         }
     }
 
-    pub fn set_energy(&mut self, energy: Energy) {
+    pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
         match self {
-            EnergyDistType::Uniform(uniform_dist) => uniform_dist.set_energy(energy),
+            EnergyDistType::Uniform(uniform_dist) => uniform_dist.set_energy(energy)?,
             EnergyDistType::General2DGaussian(general2_dgaussian) => {
-                general2_dgaussian.set_energy(energy)
+                general2_dgaussian.set_energy(energy)?
             }
         };
+        Ok(())
     }
 
     pub fn default_from_name(name: &str) -> Option<Self> {
@@ -83,9 +84,8 @@ impl Display for EnergyDistType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let dist_string = match self {
             Self::Uniform(_) => "Uniform",
-            Self::General2DGaussian(_) => "Generalized Gaussian"            
+            Self::General2DGaussian(_) => "Generalized Gaussian",
         };
         write!(f, "{dist_string}")
     }
 }
-

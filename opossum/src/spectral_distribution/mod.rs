@@ -3,8 +3,8 @@ use std::fmt::Display;
 
 use crate::error::OpmResult;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::Length;
 use strum::EnumIter;
+use uom::si::f64::Length;
 
 pub mod gaussian;
 pub mod laser_lines;
@@ -36,6 +36,7 @@ impl SpecDistType {
         }
     }
 
+    #[must_use]
     pub fn default_from_name(name: &str) -> Option<Self> {
         match name {
             "Laser Lines" => Some(LaserLines::new_empty().into()),
@@ -55,7 +56,7 @@ impl Display for SpecDistType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let dist_string = match self {
             Self::LaserLines(_) => "Laser Lines",
-            Self::Gaussian(_) => "Gaussian"            
+            Self::Gaussian(_) => "Gaussian",
         };
         write!(f, "{dist_string}")
     }

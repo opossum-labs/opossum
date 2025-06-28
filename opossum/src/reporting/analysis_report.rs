@@ -15,7 +15,6 @@ use crate::{
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 #[derive(Serialize, Debug, Clone, Deserialize)]
 /// Structure for storing data being integrated in an analysis report.

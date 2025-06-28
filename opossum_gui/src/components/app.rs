@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use crate::{
-    api::{self, http_client::HTTPClient},
+    api,
     components::{
-    context_menu::cx_menu::{ContextMenu, CxtCommand},
+        context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
         menu_bar::menu_bar_component::{MenuBar, MenuSelection},
         node_editor::NodeEditor,
@@ -17,20 +17,18 @@ use opossum_backend::{create_data_dir, create_report_and_data_files};
 pub async fn analyze_setup(path: PathBuf) {
     match api::analyze(&HTTP_API_CLIENT()).await {
         Ok(reports) => {
-            create_data_dir(&path).unwrap_or({
+            if create_data_dir(&path).is_err() {
                 OPOSSUM_UI_LOGS
                     .write()
                     .add_log("Error while creating report-data directory");
-                ()
-            });
+            };
             // create_dot_file(&opossum_args.report_directory, document.scenery())?;
             for report in reports.iter().enumerate() {
-                create_report_and_data_files(&path, report.1, report.0).unwrap_or({
+                if create_report_and_data_files(&path, report.1, report.0).is_err() {
                     OPOSSUM_UI_LOGS
                         .write()
                         .add_log("Error while creating report and data files");
-                    ()
-                });
+                };
             }
         }
         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
@@ -41,7 +39,6 @@ pub async fn analyze_setup(path: PathBuf) {
 pub fn App() -> Element {
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
-    let cxt_command = use_signal(|| None::<CxtCommand>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
     let selected_node = use_signal(|| None::<NodeElement>);
     let project_directory = use_signal(|| Path::new("./").to_path_buf());

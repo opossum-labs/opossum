@@ -1,17 +1,30 @@
 use crate::components::node_editor::{
     accordion::{AccordionItem, LabeledInput, LabeledSelect},
-    node_editor_component::NodeChange, source_editor::LightDataEditor,
+    node_editor_component::NodeChange,
+    source_editor::LightDataEditor,
 };
 use dioxus::prelude::*;
-use opossum_backend::{millimeter, nanometer, Properties, Property, Proptype, RefrIndexConst, RefractiveIndexType};
-use uom::si::{f64::Length, length::{millimeter, nanometer}};
 use inflector::Inflector;
+use opossum_backend::{millimeter, nanometer, Properties, Proptype};
+use uom::si::{
+    f64::Length,
+    length::{millimeter, nanometer},
+};
 
 #[component]
-pub fn PropertiesEditor(node_properties: Properties, node_change: Signal<Option<NodeChange>>) -> Element{
+pub fn PropertiesEditor(
+    node_properties: Properties,
+    node_change: Signal<Option<NodeChange>>,
+) -> Element {
     let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
-    for (property_key, property) in node_properties.iter(){
-        editor_inputs.push(rsx!{PropertyEditor{prop_type: property.prop().clone(), property_key: property_key.clone(), node_change }});
+    for (property_key, property) in node_properties.iter() {
+        editor_inputs.push(rsx! {
+            PropertyEditor {
+                prop_type: property.prop().clone(),
+                property_key: property_key.clone(),
+                node_change,
+            }
+        });
     }
     rsx! {
         AccordionItem {
@@ -27,7 +40,7 @@ pub fn PropertiesEditor(node_properties: Properties, node_change: Signal<Option<
 #[component]
 pub fn PropertyEditor(
     prop_type: Proptype,
-    property_key: String, 
+    property_key: String,
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
     let prop_type_sig = Signal::new(prop_type.clone());
@@ -37,67 +50,158 @@ pub fn PropertyEditor(
         move || {
             node_change.set(Some(NodeChange::Property(
                 property_key.clone(),
-                serde_json::to_value(prop_type_sig.read().clone())
-                .unwrap(),
+                serde_json::to_value(prop_type_sig.read().clone()).unwrap(),
             )))
-        
-    }});
+        }
+    });
 
-    match prop_type{
-        Proptype::String(_) => {println!("not yet implemented"); rsx!{}},
-        Proptype::I32(_) => {println!("not yet implemented"); rsx!{}},
-        Proptype::F64(_) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Bool(_) => {println!("not yet implemented"); rsx!{}},
-        Proptype::LightData(light_data) => {println!("not yet implemented"); rsx!{}},
-        Proptype::FilterType(filter_type) => {println!("not yet implemented"); rsx!{}},
-        Proptype::SplitterType(splitting_config) => {println!("not yet implemented"); rsx!{}},
-        Proptype::SpectrometerType(spectrometer_type) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Metertype(metertype) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Uuid(uuid) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Aperture(aperture) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Spectrum(spectrum) => {println!("not yet implemented"); rsx!{}},
-        Proptype::FluenceData(fluence_data) => {println!("not yet implemented"); rsx!{}},
-        Proptype::FluenceEstimator(fluence_estimator) => {println!("not yet implemented"); rsx!{}},
-        Proptype::WaveFrontData(wave_front_data) => {println!("not yet implemented"); rsx!{}},
-        Proptype::RayPositionHistory(ray_position_histories) => {println!("not yet implemented"); rsx!{}},
-        Proptype::GhostFocusHistory(ghost_focus_history) => {println!("not yet implemented"); rsx!{}},
-        Proptype::NodeReport(node_report) => {println!("not yet implemented"); rsx!{}},
-        Proptype::LinearDensity(quantity) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Fluence(quantity) => {println!("not yet implemented"); rsx!{}},
-        Proptype::WfLambda(_, quantity) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Length(quantity) => rsx!{LengthEditor{length: quantity,
-            prop_type,
-            property_key, 
-            prop_type_sig}},
-        Proptype::LengthOption(quantity) => rsx!{AlignmentWavelengthEditor{length_option: quantity,
-            prop_type,
-            property_key, 
-            prop_type_sig}},
-        Proptype::Energy(quantity) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Angle(quantity) => {println!("not yet implemented"); rsx!{}},
-        Proptype::RefractiveIndex(refractive_index_type) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Isometry(isometry) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Vec3(matrix) => {println!("not yet implemented"); rsx!{}},
-        Proptype::HitMap(hit_map) => {println!("not yet implemented"); rsx!{}},
-        Proptype::Vec2(matrix) => {println!("not yet implemented"); rsx!{}},
-        Proptype::LightDataBuilder(light_data_builder) => rsx!{
-            LightDataEditor {
-                        light_data_builder_opt: light_data_builder, prop_type_sig
-                        }},
-        _ => {println!("not yet implemented"); rsx!{}},
+    match prop_type {
+        Proptype::String(_) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::I32(_) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::F64(_) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Bool(_) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::LightData(_light_data) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::FilterType(_filter_type) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::SplitterType(_splitting_config) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::SpectrometerType(_spectrometer_type) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Metertype(_metertype) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Uuid(_uuid) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Aperture(_aperture) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Spectrum(_spectrum) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::FluenceData(_fluence_data) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::FluenceEstimator(_fluence_estimator) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::WaveFrontData(_wave_front_data) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::RayPositionHistory(_ray_position_histories) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::GhostFocusHistory(_ghost_focus_history) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::NodeReport(_node_report) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::LinearDensity(_quantity) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Fluence(_quantity) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::WfLambda(_, _quantity) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Length(quantity) => rsx! {
+            LengthEditor {
+                length: quantity,
+                prop_type,
+                property_key,
+                prop_type_sig,
+            }
+        },
+        Proptype::LengthOption(quantity) => rsx! {
+            AlignmentWavelengthEditor {
+                length_option: quantity,
+                prop_type,
+                property_key,
+                prop_type_sig,
+            }
+        },
+        Proptype::Energy(_quantity) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Angle(_quantity) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::RefractiveIndex(_refractive_index_type) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Isometry(_isometry) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Vec3(_matrix) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::HitMap(_hit_map) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::Vec2(_matrix) => {
+            println!("not yet implemented");
+            rsx! {}
+        }
+        Proptype::LightDataBuilder(light_data_builder) => rsx! {
+            LightDataEditor { light_data_builder_opt: light_data_builder, prop_type_sig }
+        },
+        _ => {
+            println!("not yet implemented");
+            rsx! {}
+        }
     }
 }
-
 
 #[component]
 pub fn LengthEditor(
     length: Length,
     prop_type: Proptype,
-    property_key: String, 
-    prop_type_sig: Signal<Proptype>
-) -> Element{
-
-    rsx!{
+    property_key: String,
+    prop_type_sig: Signal<Proptype>,
+) -> Element {
+    rsx! {
         LabeledInput {
             id: format!("lengthProperty{property_key}").to_camel_case(),
             label: format!("{} in mm", property_key.to_sentence_case()),
@@ -108,9 +212,7 @@ pub fn LengthEditor(
     }
 }
 
-fn use_on_length_input_change(
-    mut signal: Signal<Proptype>,
-) -> Callback<Event<FormData>> {
+fn use_on_length_input_change(mut signal: Signal<Proptype>) -> Callback<Event<FormData>> {
     use_callback(move |e: Event<FormData>| {
         if let Ok(length) = e.data.value().parse::<f64>() {
             signal.set(Proptype::Length(millimeter!(length)));
@@ -118,18 +220,16 @@ fn use_on_length_input_change(
     })
 }
 
-
-
 #[component]
 pub fn AlignmentWavelengthEditor(
     length_option: Option<Length>,
     prop_type: Proptype,
-    property_key: String, 
-    prop_type_sig: Signal<Proptype>
-) -> Element{
+    property_key: String,
+    prop_type_sig: Signal<Proptype>,
+) -> Element {
     let mut alignment_select = Signal::new(nanometer!(1054.));
 
-    rsx!{
+    rsx! {
         LabeledSelect {
             id: format!("lengthProperty{property_key}").to_camel_case(),
             label: format!("{}", property_key.to_sentence_case()),
@@ -138,37 +238,34 @@ pub fn AlignmentWavelengthEditor(
                 (length_option.is_some(), "Choose specific".to_owned()),
             ],
             onchange: move |_: Event<FormData>| {
-                if length_option.is_none(){
-                    prop_type_sig.set(Proptype::LengthOption(Some(alignment_select().clone())));
-                }
-                else{
+                if length_option.is_none() {
+                    prop_type_sig.set(Proptype::LengthOption(Some(alignment_select())));
+                } else {
                     prop_type_sig.set(Proptype::LengthOption(None));
                 }
             },
         }
         {
-            if let Proptype::LengthOption(Some(length)) = &*prop_type_sig.read(){
-                rsx!{
+            if let Proptype::LengthOption(Some(length)) = &*prop_type_sig.read() {
+                rsx! {
                     LabeledInput {
                         id: format!("lengthOptionProperty{property_key}").to_camel_case(),
                         label: format!("{} in nm", property_key.to_sentence_case()),
                         value: format!("{}", length.get::<nanometer>()),
                         r#type: "number",
-                        onchange: Some(use_callback(move |e: Event<FormData>| {
-                            if let Ok(length) = e.data.value().parse::<f64>() {
-                                prop_type_sig.set(Proptype::LengthOption(Some(nanometer!(length))));
-                                alignment_select.set(nanometer!(length));
-                            }
-                        })),
+                        onchange: Some(
+                            use_callback(move |e: Event<FormData>| {
+                                if let Ok(length) = e.data.value().parse::<f64>() {
+                                    prop_type_sig.set(Proptype::LengthOption(Some(nanometer!(length))));
+                                    alignment_select.set(nanometer!(length));
+                                }
+                            }),
+                        ),
                     }
                 }
-            }
-            else{
-                rsx!{}
+            } else {
+                rsx! {}
             }
         }
-
-
-        
     }
 }

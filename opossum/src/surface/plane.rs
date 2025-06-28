@@ -55,8 +55,8 @@ impl GeoSurface for Plane {
             Vector3::new(0.0, 0.0, -1.0 * trans_dir.z.signum()),
         ))
     }
-    fn set_isometry(&mut self, isometry: &Isometry) {
-        self.isometry = isometry.clone();
+    fn set_isometry(&mut self, isometry: Isometry) {
+        self.isometry = isometry;
     }
     fn isometry(&self) -> &Isometry {
         &self.isometry
@@ -108,7 +108,7 @@ mod test {
     fn set_isometry() {
         let mut p = Plane::default();
         let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
-        p.set_isometry(&iso);
+        p.set_isometry(iso);
         let t = p.isometry.translation_vec();
         assert_eq!(t.x, millimeter!(0.0));
         assert_eq!(t.y, millimeter!(0.0));

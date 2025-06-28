@@ -151,7 +151,7 @@ impl OpticNode for CylindricLens {
         };
         let (front_geosurface, anchor_point_iso_front) = if front_curvature.is_infinite() {
             (
-                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso.clone())))),
+                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso)))),
                 Isometry::identity(),
             )
         } else {

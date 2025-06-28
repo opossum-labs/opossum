@@ -389,18 +389,18 @@ impl OpticNode for ParabolicMirror {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let anchor_point_iso = self.calc_off_axis_isometry()?;
         let total_iso = node_iso.append(&anchor_point_iso);
-        let parabola = Parabola::new(-1. * self.calc_parent_focal_length()?, &total_iso)?;
+        let parabola = Parabola::new(-1. * self.calc_parent_focal_length()?, total_iso)?;
         let para_geo_surface = GeoSurfaceRef(Arc::new(Mutex::new(parabola)));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
             optic_surf.set_geo_surface(para_geo_surface.clone());
-            optic_surf.set_anchor_point_iso(anchor_point_iso.clone());
+            optic_surf.set_anchor_point_iso(anchor_point_iso);
         } else {
             let mut optic_surf = OpticSurface::default();
             optic_surf.set_geo_surface(para_geo_surface.clone());
-            optic_surf.set_anchor_point_iso(anchor_point_iso.clone());
+            optic_surf.set_anchor_point_iso(anchor_point_iso);
             self.ports_mut()
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf)?;
         }

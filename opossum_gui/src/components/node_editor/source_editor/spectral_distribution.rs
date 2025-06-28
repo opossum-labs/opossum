@@ -1,22 +1,28 @@
-use crate::{components::node_editor::{
-    accordion::{AccordionItem, LabeledSelect}, source_editor::{DistInput, DistParam, LightDataBuilderHistory, RowedDistInputs},
-}, OPOSSUM_UI_LOGS};
+use crate::{
+    components::node_editor::{
+        accordion::{AccordionItem, LabeledSelect},
+        source_editor::{DistInput, DistParam, LightDataBuilderHistory, RowedDistInputs},
+    },
+    OPOSSUM_UI_LOGS,
+};
 use dioxus::prelude::*;
-use opossum_backend::{degree, joule, light_data_builder::LightDataBuilder, millimeter, nanometer, ray_data_builder::RayDataBuilder, EnergyDistType, LaserLines, SpecDistType};
-use strum_macros::EnumIter;
+use opossum_backend::{
+    light_data_builder::LightDataBuilder, nanometer, ray_data_builder::RayDataBuilder, SpecDistType,
+};
 use strum::IntoEnumIterator;
-use uom::si::{angle::degree, energy::joule, length::{millimeter, nanometer}};
-
+use uom::si::length::nanometer;
 
 #[component]
-pub fn RaySpectralDistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Element {
+pub fn RaySpectralDistributionEditor(
+    light_data_builder_sig: Signal<LightDataBuilderHistory>,
+) -> Element {
     let (show, _) = light_data_builder_sig.read().is_rays_is_collimated();
     let rays_spectral_dist = light_data_builder_sig
         .read()
         .get_current_spectral_dist_type()
         .clone();
 
-    if show{
+    if show {
         rsx! {
             div { hidden: !show,
                 {
@@ -30,88 +36,105 @@ pub fn RaySpectralDistributionEditor(light_data_builder_sig: Signal<LightDataBui
                 }
             }
         }
-    }
-    else{
-        rsx!{}
+    } else {
+        rsx! {}
     }
 }
-
 
 #[component]
 pub fn NodeSpectralDistInputs(
     spectral_dist_type: SpecDistType,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
-    let dist_params = get_spectral_dist_input_params(spectral_dist_type.clone(), light_data_builder_sig);
-    match spectral_dist_type{
-        SpecDistType::Gaussian(_) => rsx!{
-        RowedDistInputs {dist_params:dist_params.clone()}
-    },
-        SpecDistType::LaserLines(laser_lines) => {
-            
-            rsx!{
-                
-                form{
-                    onsubmit: {
-                    let dist_params = dist_params.clone();
-                    move |e: Event<FormData>| {
-                        
-                    let values = e.data().values();
-                    let wvl_opt = values.get(&dist_params[0].id);
-                    let rel_int_opt = values.get(&dist_params[1].id);
-                    if let (Some(wvl_val), Some(rel_int_val)) = (wvl_opt, rel_int_opt)
-                    {
-                        if let (Ok(wvl), Ok(rel_int)) = (wvl_val.as_value().parse::<f64>(), rel_int_val.as_value().parse::<f64>()){
-                            let mut laser_lines = laser_lines.clone();
-                            if laser_lines.add_lines(vec![(nanometer!(wvl), rel_int)]).is_ok(){
-                                light_data_builder_sig.with_mut(|ldb| ldb.set_spectral_dist_type(SpecDistType::LaserLines(laser_lines)))
-                            }
-                        }
-                        else{
-                            OPOSSUM_UI_LOGS.write().add_log(format!("Could not parse laser line inputs! Wavelength: {:?}. Relative Intensity: {:?}", wvl_opt, rel_int_opt).as_str());
-                        }
-                    }
-                    else{
-                        OPOSSUM_UI_LOGS.write().add_log(format!("Wrong input inputs for adding laser line! Wavelength: {:?}. Relative Intensity: {:?}", wvl_opt, rel_int_opt).as_str());
-                    }
-                }},
-                RowedDistInputs {dist_params: dist_params.clone()}
-                input { class:" border-start btn", r#type: "submit", id: "laserlinesubmit", value:"Add laser line" }
-                ul { class: "list-group border-start", id:"laserLineList",
-                    for (i, line) in laser_lines.lines().iter().enumerate(){
-                        {
-                            
-                            let class = if i%2 == 0{
-                                "list-group-item d-grid text-secondary"
-                            }
-                            else{
-                                "list-group-item d-grid text-secondary list-group-item-dark"
-                            };
-                            rsx!{
-                            li {
-                                class,
-                                span {
-                                    {format!("λ: {:.3} nm", line.0.get::<nanometer>())}
-                                }
-                                span {
-                                    {format!("Int: {:.3}", line.1)}
-                                }
-                                    
-                                a {
-                                    class: "text-danger ms-auto",
-                                    onclick: move |_| println!("deleted"),
-                                    role: "button",
-                                    "🗑︎"
-                                }
-                                }
-                        }
-                    }
-                        }
-                }
-            }}
+    let dist_params =
+        get_spectral_dist_input_params(spectral_dist_type.clone(), light_data_builder_sig);
+    match spectral_dist_type {
+        SpecDistType::Gaussian(_) => rsx! {
+            RowedDistInputs { dist_params: dist_params.clone() }
         },
+        SpecDistType::LaserLines(laser_lines) => {
+            rsx! {
+                form {
+                    onsubmit: {
+                        let dist_params = dist_params.clone();
+                        move |e: Event<FormData>| {
+                            let values = e.data().values();
+                            let wvl_opt = values.get(&dist_params[0].id);
+                            let rel_int_opt = values.get(&dist_params[1].id);
+                            if let (Some(wvl_val), Some(rel_int_val)) = (wvl_opt, rel_int_opt) {
+                                if let (Ok(wvl), Ok(rel_int)) = (
+                                    wvl_val.as_value().parse::<f64>(),
+                                    rel_int_val.as_value().parse::<f64>(),
+                                ) {
+                                    let mut laser_lines = laser_lines.clone();
+                                    if laser_lines.add_lines(vec![(nanometer!(wvl), rel_int)]).is_ok() {
+                                        light_data_builder_sig
+                                            .with_mut(|ldb| {
+                                                ldb.set_spectral_dist_type(
+                                                    SpecDistType::LaserLines(laser_lines),
+                                                )
+                                            })
+                                    }
+                                } else {
+                                    OPOSSUM_UI_LOGS
+                                        .write()
+                                        .add_log(
+                                            format!(
+                                                "Could not parse laser line inputs! Wavelength: {:?}. Relative Intensity: {:?}",
+                                                wvl_opt,
+                                                rel_int_opt,
+                                            )
+                                                .as_str(),
+                                        );
+                                }
+                            } else {
+                                OPOSSUM_UI_LOGS
+                                    .write()
+                                    .add_log(
+                                        format!(
+                                            "Wrong input inputs for adding laser line! Wavelength: {:?}. Relative Intensity: {:?}",
+                                            wvl_opt,
+                                            rel_int_opt,
+                                        )
+                                            .as_str(),
+                                    );
+                            }
+                        }
+                    },
+                    RowedDistInputs { dist_params: dist_params.clone() }
+                    input {
+                        class: " border-start btn",
+                        r#type: "submit",
+                        id: "laserlinesubmit",
+                        value: "Add laser line",
+                    }
+                    ul { class: "list-group border-start", id: "laserLineList",
+                        for (i , line) in laser_lines.lines().iter().enumerate() {
+                            {
+                                let class = if i % 2 == 0 {
+                                    "list-group-item d-grid text-secondary"
+                                } else {
+                                    "list-group-item d-grid text-secondary list-group-item-dark"
+                                };
+                                rsx! {
+                                    li { class,
+                                        span { {format!("λ: {:.3} nm", line.0.get::<nanometer>())} }
+                                        span { {format!("Int: {:.3}", line.1)} }
+                                        a {
+                                            class: "text-danger ms-auto",
+                                            onclick: move |_| println!("deleted"),
+                                            role: "button",
+                                            "🗑︎"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
-    
 }
 
 #[component]
@@ -120,7 +143,7 @@ pub fn SpectralDistributionEditor(
 ) -> Element {
     let accordion_item_content = rsx! {
         RaySpectralDistributionSelector { light_data_builder_sig }
-        RaySpectralDistributionEditor{ light_data_builder_sig }
+        RaySpectralDistributionEditor { light_data_builder_sig }
     };
 
     rsx! {
@@ -163,8 +186,6 @@ pub fn RaySpectralDistributionSelector(
     }
 }
 
-
-
 impl TryFrom<LightDataBuilder> for SpecDistSelection {
     type Error = String;
 
@@ -174,22 +195,16 @@ impl TryFrom<LightDataBuilder> for SpecDistSelection {
                 RayDataBuilder::Collimated(collimated_src) => {
                     Ok(Self::new(collimated_src.spect_dist().clone()))
                 }
-                RayDataBuilder::PointSrc(point_src) => Ok(Self::new(point_src.spect_dist().clone())),
-                RayDataBuilder::Raw(rays) => Err("not used yet".to_owned()),
-                RayDataBuilder::Image {
-                    file_path,
-                    pixel_size,
-                    total_energy,
-                    wave_length,
-                    cone_angle,
-                } => Err("not used yet".to_owned()),
+                RayDataBuilder::PointSrc(point_src) => {
+                    Ok(Self::new(point_src.spect_dist().clone()))
+                }
+                RayDataBuilder::Raw(_rays) => Err("not used yet".to_owned()),
+                RayDataBuilder::Image { .. } => Err("not used yet".to_owned()),
             },
             _ => Err("Wrong Lightdatabuilder type!".to_owned()),
         }
     }
 }
-
-
 
 #[derive(Clone, PartialEq)]
 struct SpecDistSelection {
@@ -210,12 +225,9 @@ impl SpecDistSelection {
         select
     }
     pub fn set_dist(&mut self, spectral_dist: SpecDistType) {
-        (
-            self.laser_lines,
-            self.gaussian
-        ) = match spectral_dist {
+        (self.laser_lines, self.gaussian) = match spectral_dist {
             SpecDistType::LaserLines(_) => (true, false),
-            SpecDistType::Gaussian(_) =>   (false, true),
+            SpecDistType::Gaussian(_) => (false, true),
         };
 
         self.spectral_dist = spectral_dist;
@@ -233,36 +245,75 @@ impl SpecDistSelection {
     }
 }
 
-
-
-fn get_spectral_dist_input_params(spectral_dist_type: SpecDistType, light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Vec<DistInput> {    
-    let mut dist_inputs :Vec<DistInput> = match spectral_dist_type {
+fn get_spectral_dist_input_params(
+    spectral_dist_type: SpecDistType,
+    light_data_builder_sig: Signal<LightDataBuilderHistory>,
+) -> Vec<DistInput> {
+    let mut dist_inputs: Vec<DistInput> = match spectral_dist_type {
         SpecDistType::LaserLines(_) => vec![
-            DistInput::new(DistParam::WaveLength, &spectral_dist_type.clone(), None, format!("1054.")),
-            DistInput::new(DistParam::RelIntensity, &spectral_dist_type.clone(), None, format!("1.")),
+            DistInput::new(
+                DistParam::WaveLength,
+                &spectral_dist_type.clone(),
+                None,
+                "1054.".to_string(),
+            ),
+            DistInput::new(
+                DistParam::RelIntensity,
+                &spectral_dist_type.clone(),
+                None,
+                "1.".to_string(),
+            ),
         ],
         SpecDistType::Gaussian(gaussian) => vec![
-        DistInput::new(DistParam::PointsX, &spectral_dist_type.clone(), None, format!("{}", gaussian.num_points())),
-        DistInput::new(DistParam::CenterX,&spectral_dist_type.clone(), None, format!("{}", gaussian.mu().get::<nanometer>())),
-        DistInput::new(DistParam::WaveLengthStart,&spectral_dist_type.clone(), None, format!("{}", gaussian.wvl_start().get::<nanometer>())),
-        DistInput::new(DistParam::WaveLengthEnd,&spectral_dist_type.clone(), None, format!("{}", gaussian.wvl_end().get::<nanometer>())),
-        DistInput::new(DistParam::Power,&spectral_dist_type.clone(), None, format!("{}", gaussian.power())),
-        DistInput::new(DistParam::FWHM,&spectral_dist_type.clone(), None, format!("{}", gaussian.fwhm().get::<nanometer>())),
+            DistInput::new(
+                DistParam::PointsX,
+                &spectral_dist_type.clone(),
+                None,
+                format!("{}", gaussian.num_points()),
+            ),
+            DistInput::new(
+                DistParam::CenterX,
+                &spectral_dist_type.clone(),
+                None,
+                format!("{}", gaussian.mu().get::<nanometer>()),
+            ),
+            DistInput::new(
+                DistParam::WaveLengthStart,
+                &spectral_dist_type.clone(),
+                None,
+                format!("{}", gaussian.wvl_start().get::<nanometer>()),
+            ),
+            DistInput::new(
+                DistParam::WaveLengthEnd,
+                &spectral_dist_type.clone(),
+                None,
+                format!("{}", gaussian.wvl_end().get::<nanometer>()),
+            ),
+            DistInput::new(
+                DistParam::Power,
+                &spectral_dist_type.clone(),
+                None,
+                format!("{}", gaussian.power()),
+            ),
+            DistInput::new(
+                DistParam::FWHM,
+                &spectral_dist_type.clone(),
+                None,
+                format!("{}", gaussian.fwhm().get::<nanometer>()),
+            ),
         ],
-        _ => vec![]
     };
 
-    for (dist_input) in &mut dist_inputs{
+    for dist_input in &mut dist_inputs {
         dist_input.callback_opt = use_on_spectral_dist_input_change(
-                                        spectral_dist_type.clone(),
-                                        dist_input.dist_param.clone(),
-                                        light_data_builder_sig.clone(),
-                                    );
-    }   
+            spectral_dist_type.clone(),
+            dist_input.dist_param,
+            light_data_builder_sig,
+        );
+    }
 
     dist_inputs
 }
-
 
 fn use_on_spectral_dist_input_change(
     spectral_dist_type: SpecDistType,
@@ -270,31 +321,25 @@ fn use_on_spectral_dist_input_change(
     mut light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Option<Callback<Event<FormData>>> {
     match spectral_dist_type {
-        SpecDistType::Gaussian(gaussian) => {
-            Some(use_callback(move |e: Event<FormData>| {
-                let mut gaussian = gaussian.clone();
-                if let Ok(value) = e.value().parse::<f64>() {
-                    match param {
-                        DistParam::CenterX => gaussian.set_mu(nanometer!(value)),
-                        DistParam::WaveLengthStart => gaussian.set_wvl_start(nanometer!(value)),
-                        DistParam::WaveLengthEnd => gaussian.set_wvl_end(nanometer!(value)),
-                        DistParam::Power   => gaussian.set_power(value),
-                        DistParam::FWHM   => gaussian.set_fwhm(nanometer!(value)),
-                        _ => {}
-                    }                   
+        SpecDistType::Gaussian(gaussian) => Some(use_callback(move |e: Event<FormData>| {
+            let mut gaussian = gaussian;
+            if let Ok(value) = e.value().parse::<f64>() {
+                match param {
+                    DistParam::CenterX => gaussian.set_mu(nanometer!(value)),
+                    DistParam::WaveLengthStart => gaussian.set_wvl_start(nanometer!(value)),
+                    DistParam::WaveLengthEnd => gaussian.set_wvl_end(nanometer!(value)),
+                    DistParam::Power => gaussian.set_power(value),
+                    DistParam::FWHM => gaussian.set_fwhm(nanometer!(value)),
+                    _ => {}
                 }
-                else if let Ok(value) = e.value().parse::<usize>(){
-                    if DistParam::PointsX == param {
-                        gaussian.set_num_points((value));
-                    };                      
-                }
-                light_data_builder_sig.with_mut(|ldb| ldb.set_spectral_dist_type(SpecDistType::Gaussian(gaussian)))
-            }))
-        }
-        SpecDistType::LaserLines(_) => {
-            None
-        }
+            } else if let Ok(value) = e.value().parse::<usize>() {
+                if DistParam::PointsX == param {
+                    gaussian.set_num_points(value);
+                };
+            }
+            light_data_builder_sig
+                .with_mut(|ldb| ldb.set_spectral_dist_type(SpecDistType::Gaussian(gaussian)))
+        })),
+        SpecDistType::LaserLines(_) => None,
     }
-
-    
 }

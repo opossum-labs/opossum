@@ -1,18 +1,17 @@
 use std::fmt::Display;
 
 use crate::components::node_editor::{
-    accordion::{AccordionItem, LabeledInput, LabeledSelect},
+    accordion::{AccordionItem, LabeledSelect},
     source_editor::{DistInput, LightDataBuilderHistory, RowedDistInputs},
 };
 use dioxus::prelude::*;
-use itertools::Itertools;
 use opossum_backend::{
     light_data_builder::LightDataBuilder, millimeter, ray_data_builder::RayDataBuilder, PosDistType,
 };
 use strum::IntoEnumIterator;
 use uom::si::length::millimeter;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Copy)]
 pub enum DistParam {
     Rings,
     Radius,
@@ -30,7 +29,7 @@ pub enum DistParam {
     WaveLengthEnd,
     WaveLength,
     FWHM,
-    RelIntensity
+    RelIntensity,
 }
 
 impl DistParam {
@@ -59,18 +58,25 @@ impl DistParam {
     pub fn min_value(&self) -> Option<&'static str> {
         match self {
             DistParam::Rings | DistParam::PointsX | DistParam::PointsY => Some("1"),
-            DistParam::Radius | DistParam::LengthX | DistParam::LengthY| DistParam::Angle | 
-            DistParam::Power| DistParam::WaveLengthStart| DistParam::WaveLengthEnd | DistParam::FWHM| DistParam::WaveLength=> Some("1e-9"),
+            DistParam::Radius
+            | DistParam::LengthX
+            | DistParam::LengthY
+            | DistParam::Angle
+            | DistParam::Power
+            | DistParam::WaveLengthStart
+            | DistParam::WaveLengthEnd
+            | DistParam::FWHM
+            | DistParam::WaveLength => Some("1e-9"),
             DistParam::CenterX | DistParam::CenterY => Some("-1e9"),
             DistParam::Energy | DistParam::RelIntensity => Some("0."),
-            _ => None
+            _ => None,
         }
     }
     pub fn step_value(&self) -> Option<&'static str> {
-         match self {
+        match self {
             DistParam::Rectangular => None,
-         _ => Some("1")
-         }
+            _ => Some("1"),
+        }
     }
 }
 
@@ -94,59 +100,177 @@ impl Display for DistParam {
             DistParam::WaveLength => "Wavelength",
             DistParam::FWHM => "FWHM",
             DistParam::RelIntensity => "Relativeintensity",
-
         };
         write!(f, "{param}")
     }
 }
 
-fn get_pos_dist_input_params(pos_dist_type: PosDistType, light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Vec<DistInput> {    
-    let mut dist_inputs :Vec<DistInput> = match pos_dist_type {
+fn get_pos_dist_input_params(
+    pos_dist_type: PosDistType,
+    light_data_builder_sig: Signal<LightDataBuilderHistory>,
+) -> Vec<DistInput> {
+    let mut dist_inputs: Vec<DistInput> = match pos_dist_type {
         PosDistType::Random(random) => vec![
-            DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", random.side_length_x().get::<millimeter>())),
-            DistInput::new(DistParam::LengthY, &pos_dist_type, None, format!("{}", random.side_length_y().get::<millimeter>())),
-            DistInput::new(DistParam::PointsX, &pos_dist_type, None, format!("{}", random.nr_of_points())),
+            DistInput::new(
+                DistParam::LengthX,
+                &pos_dist_type,
+                None,
+                format!("{}", random.side_length_x().get::<millimeter>()),
+            ),
+            DistInput::new(
+                DistParam::LengthY,
+                &pos_dist_type,
+                None,
+                format!("{}", random.side_length_y().get::<millimeter>()),
+            ),
+            DistInput::new(
+                DistParam::PointsX,
+                &pos_dist_type,
+                None,
+                format!("{}", random.nr_of_points()),
+            ),
         ],
         PosDistType::Grid(grid) => vec![
-            DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", grid.side_length().0.get::<millimeter>())),
-            DistInput::new(DistParam::LengthY, &pos_dist_type, None, format!("{}", grid.side_length().1.get::<millimeter>())),
-            DistInput::new(DistParam::PointsX, &pos_dist_type, None, format!("{}", grid.nr_of_points().0)),
-            DistInput::new(DistParam::PointsY, &pos_dist_type, None, format!("{}", grid.nr_of_points().1)),
+            DistInput::new(
+                DistParam::LengthX,
+                &pos_dist_type,
+                None,
+                format!("{}", grid.side_length().0.get::<millimeter>()),
+            ),
+            DistInput::new(
+                DistParam::LengthY,
+                &pos_dist_type,
+                None,
+                format!("{}", grid.side_length().1.get::<millimeter>()),
+            ),
+            DistInput::new(
+                DistParam::PointsX,
+                &pos_dist_type,
+                None,
+                format!("{}", grid.nr_of_points().0),
+            ),
+            DistInput::new(
+                DistParam::PointsY,
+                &pos_dist_type,
+                None,
+                format!("{}", grid.nr_of_points().1),
+            ),
         ],
         PosDistType::HexagonalTiling(hexagonal_tiling) => vec![
-            DistInput::new(DistParam::Rings, &pos_dist_type, None, format!("{}", hexagonal_tiling.nr_of_hex_along_radius())),
-            DistInput::new(DistParam::Radius, &pos_dist_type, None, format!("{}", hexagonal_tiling.radius().get::<millimeter>())),
-            DistInput::new(DistParam::CenterX, &pos_dist_type, None, format!("{}", hexagonal_tiling.center().x.get::<millimeter>())),
-            DistInput::new(DistParam::CenterY, &pos_dist_type, None, format!("{}", hexagonal_tiling.center().y.get::<millimeter>())),
+            DistInput::new(
+                DistParam::Rings,
+                &pos_dist_type,
+                None,
+                format!("{}", hexagonal_tiling.nr_of_hex_along_radius()),
+            ),
+            DistInput::new(
+                DistParam::Radius,
+                &pos_dist_type,
+                None,
+                format!("{}", hexagonal_tiling.radius().get::<millimeter>()),
+            ),
+            DistInput::new(
+                DistParam::CenterX,
+                &pos_dist_type,
+                None,
+                format!("{}", hexagonal_tiling.center().x.get::<millimeter>()),
+            ),
+            DistInput::new(
+                DistParam::CenterY,
+                &pos_dist_type,
+                None,
+                format!("{}", hexagonal_tiling.center().y.get::<millimeter>()),
+            ),
         ],
         PosDistType::Hexapolar(hexapolar) => vec![
-            DistInput::new(DistParam::Rings, &pos_dist_type, None, format!("{}", hexapolar.nr_of_rings())),
-            DistInput::new(DistParam::Radius, &pos_dist_type, None, format!("{}", hexapolar.radius().get::<millimeter>())),
+            DistInput::new(
+                DistParam::Rings,
+                &pos_dist_type,
+                None,
+                format!("{}", hexapolar.nr_of_rings()),
+            ),
+            DistInput::new(
+                DistParam::Radius,
+                &pos_dist_type,
+                None,
+                format!("{}", hexapolar.radius().get::<millimeter>()),
+            ),
         ],
         PosDistType::FibonacciRectangle(fibonacci_rectangle) => vec![
-            DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", fibonacci_rectangle.side_length_x().get::<millimeter>())),
-            DistInput::new(DistParam::LengthY, &pos_dist_type, None, format!("{}", fibonacci_rectangle.side_length_y().get::<millimeter>())),
-            DistInput::new(DistParam::PointsX, &pos_dist_type, None, format!("{}", fibonacci_rectangle.nr_of_points())),
+            DistInput::new(
+                DistParam::LengthX,
+                &pos_dist_type,
+                None,
+                format!(
+                    "{}",
+                    fibonacci_rectangle.side_length_x().get::<millimeter>()
+                ),
+            ),
+            DistInput::new(
+                DistParam::LengthY,
+                &pos_dist_type,
+                None,
+                format!(
+                    "{}",
+                    fibonacci_rectangle.side_length_y().get::<millimeter>()
+                ),
+            ),
+            DistInput::new(
+                DistParam::PointsX,
+                &pos_dist_type,
+                None,
+                format!("{}", fibonacci_rectangle.nr_of_points()),
+            ),
         ],
         PosDistType::FibonacciEllipse(fibonacci_ellipse) => vec![
-            DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", fibonacci_ellipse.radius_x().get::<millimeter>())),
-            DistInput::new(DistParam::LengthY, &pos_dist_type, None, format!("{}", fibonacci_ellipse.radius_y().get::<millimeter>())),
-            DistInput::new(DistParam::PointsX, &pos_dist_type, None, format!("{}", fibonacci_ellipse.nr_of_points())),
+            DistInput::new(
+                DistParam::LengthX,
+                &pos_dist_type,
+                None,
+                format!("{}", fibonacci_ellipse.radius_x().get::<millimeter>()),
+            ),
+            DistInput::new(
+                DistParam::LengthY,
+                &pos_dist_type,
+                None,
+                format!("{}", fibonacci_ellipse.radius_y().get::<millimeter>()),
+            ),
+            DistInput::new(
+                DistParam::PointsX,
+                &pos_dist_type,
+                None,
+                format!("{}", fibonacci_ellipse.nr_of_points()),
+            ),
         ],
         PosDistType::Sobol(sobol_dist) => vec![
-            DistInput::new(DistParam::LengthX, &pos_dist_type, None, format!("{}", sobol_dist.side_length_x().get::<millimeter>())),
-            DistInput::new(DistParam::LengthY, &pos_dist_type, None, format!("{}", sobol_dist.side_length_y().get::<millimeter>())),
-            DistInput::new(DistParam::PointsX, &pos_dist_type, None, format!("{}", sobol_dist.nr_of_points())),
+            DistInput::new(
+                DistParam::LengthX,
+                &pos_dist_type,
+                None,
+                format!("{}", sobol_dist.side_length_x().get::<millimeter>()),
+            ),
+            DistInput::new(
+                DistParam::LengthY,
+                &pos_dist_type,
+                None,
+                format!("{}", sobol_dist.side_length_y().get::<millimeter>()),
+            ),
+            DistInput::new(
+                DistParam::PointsX,
+                &pos_dist_type,
+                None,
+                format!("{}", sobol_dist.nr_of_points()),
+            ),
         ],
     };
 
-    for (dist_input) in &mut dist_inputs{
+    for dist_input in &mut dist_inputs {
         dist_input.callback_opt = use_on_pos_dist_input_change(
-                                        pos_dist_type,
-                                        dist_input.dist_param.clone(),
-                                        light_data_builder_sig.clone(),
-                                    );
-    }   
+            pos_dist_type,
+            dist_input.dist_param,
+            light_data_builder_sig,
+        );
+    }
 
     dist_inputs
 }
@@ -181,12 +305,11 @@ pub fn RayPositionDistributionSelector(
 }
 
 #[component]
-pub fn RayPosDistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Element {
+pub fn RayPosDistributionEditor(
+    light_data_builder_sig: Signal<LightDataBuilderHistory>,
+) -> Element {
     let (show, _) = light_data_builder_sig.read().is_rays_is_collimated();
-    let rays_pos_dist = light_data_builder_sig
-        .read()
-        .get_current_pos_dist_type()
-        .clone();
+    let rays_pos_dist = light_data_builder_sig.read().get_current_pos_dist_type();
 
     rsx! {
         div { hidden: !show,
@@ -209,8 +332,8 @@ pub fn NodePosDistInputs(
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
     let dist_params = get_pos_dist_input_params(pos_dist_type, light_data_builder_sig);
-    rsx!{
-        RowedDistInputs {dist_params}
+    rsx! {
+        RowedDistInputs { dist_params }
     }
 }
 
@@ -299,17 +422,11 @@ impl TryFrom<LightDataBuilder> for PosDistSelection {
         match value {
             LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
                 RayDataBuilder::Collimated(collimated_src) => {
-                    Ok(Self::new(collimated_src.pos_dist().clone()))
+                    Ok(Self::new(*collimated_src.pos_dist()))
                 }
-                RayDataBuilder::PointSrc(point_src) => Ok(Self::new(point_src.pos_dist().clone())),
-                RayDataBuilder::Raw(rays) => Err("not used yet".to_owned()),
-                RayDataBuilder::Image {
-                    file_path,
-                    pixel_size,
-                    total_energy,
-                    wave_length,
-                    cone_angle,
-                } => Err("not used yet".to_owned()),
+                RayDataBuilder::PointSrc(point_src) => Ok(Self::new(*point_src.pos_dist())),
+                RayDataBuilder::Raw(_rays) => Err("not used yet".to_owned()),
+                RayDataBuilder::Image { .. } => Err("not used yet".to_owned()),
             },
             _ => Err("Wrong Lightdatabuilder type!".to_owned()),
         }
@@ -331,7 +448,7 @@ struct PosDistSelection {
 impl PosDistSelection {
     pub fn new(pos_dist: PosDistType) -> Self {
         let mut select = Self {
-            pos_dist: pos_dist.clone(),
+            pos_dist,
             rand: false,
             grid: false,
             hexagonal: false,

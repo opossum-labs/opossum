@@ -1,6 +1,4 @@
-use dioxus::{html::input::checked, prelude::*};
-
-use crate::components::node_editor::node_editor_component::NodeChange;
+use dioxus::prelude::*;
 
 #[component]
 pub fn AccordionItem(
@@ -98,7 +96,7 @@ pub fn LabeledSelect(
             select {
                 class: "form-select bg-dark text-light",
                 id: id.as_str(),
-                "aria-label": {label},
+                "aria-label": label,
                 onchange,
                 for (is_selected , option) in options {
                     option { selected: is_selected, value: option, {option.clone()} }
