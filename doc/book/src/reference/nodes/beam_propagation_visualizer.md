@@ -14,7 +14,7 @@ Rays of different wavelengths are automatically plotted in different colors for 
 
 ## Analysis
 
-As a detector node, incoming light data is simply passed unmodified through the node. However, possible apodization due to input or output port apertures might occur.
+As a detector node, incoming light data is simply passed unmodified through the node.
 
 - Energy Analysis
 
@@ -22,11 +22,11 @@ As a detector node, incoming light data is simply passed unmodified through the 
 
 - Ray tracing Analysis
 
-    In ray tracing analysis, this node generates a 2D plot as described above.
+    In ray tracing analysis, this node generates a 2D plot as described above. Possible apodization due to input or output port apertures might occur.
 
 - Ghost focus Analysis
 
-    In ghost focus analysis, this node generates a 2D plot as described above.
+    In ghost focus analysis, this node generates a 2D plot as described above. Possible apodization due to input or output port apertures might occur.
 
 ## Ports
 
