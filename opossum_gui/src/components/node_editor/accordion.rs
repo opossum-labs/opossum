@@ -55,6 +55,8 @@ pub fn LabeledInput(
     #[props(optional)] max: Option<&'static str>,
 
     #[props(default = false)] hidden: bool,
+
+    #[props(default = false)] readonly: bool,
 ) -> Element {
     rsx! {
         div {
@@ -67,7 +69,7 @@ pub fn LabeledInput(
                 name: id.as_str(),
                 placeholder: label,
                 value,
-                readonly: onchange.is_none(),
+                readonly,
                 r#type,
                 step: step.unwrap_or_default(),
                 min: min.unwrap_or_default(),

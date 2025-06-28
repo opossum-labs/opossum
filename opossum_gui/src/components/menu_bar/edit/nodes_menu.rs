@@ -1,5 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
+use inflector::Inflector;
 
 use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 
@@ -20,7 +21,7 @@ pub fn NodesMenu(node_selected: Signal<String>) -> Element {
     let node_list = match &*future.read_unchecked() {
         Some(Some(response)) => response
             .iter()
-            .map(|n| format!("{n}"))
+            .map(|n| format!("{n}").to_sentence_case())
             .collect::<Vec<String>>(),
         Some(None) => vec!["error receiving node list from server".to_owned()],
         _ => vec!["loading node list from server".to_owned()],

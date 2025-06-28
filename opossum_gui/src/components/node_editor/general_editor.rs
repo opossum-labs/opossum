@@ -80,6 +80,7 @@ pub fn NodeIDInput(node_id: Uuid) -> Element {
             id: "inputNodeID",
             label: "Node ID",
             value: format!("{node_id}"),
+            readonly:true
         }
     }
 }
@@ -87,6 +88,6 @@ pub fn NodeIDInput(node_id: Uuid) -> Element {
 #[component]
 pub fn NodeTypeInput(node_type: String) -> Element {
     rsx! {
-        LabeledInput { id: "inputNodeType", label: "Node Type", value: node_type }
+        LabeledInput { id: "inputNodeType", label: "Node Type", value: node_type, readonly:true }
     }
 }

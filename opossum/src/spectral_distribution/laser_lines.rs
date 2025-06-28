@@ -46,18 +46,44 @@ impl LaserLines {
                 ));
             }
         }
-        // Normalize the intensities to sum to 1.0
         let sum_intensity: f64 = lines.iter().map(|(_, intensity)| *intensity).sum();
         if sum_intensity == 0.0 {
             return Err(OpossumError::Other(
                 "Sum of intensities cannot be zero".into(),
             ));
         }
-        let lines: Vec<(Length, f64)> = lines
-            .into_iter()
-            .map(|(wavelength, intensity)| (wavelength, intensity / sum_intensity))
-            .collect();
         Ok(Self { lines })
+    }
+
+    pub fn new_empty() -> Self{
+        Self{lines: Vec::<(Length, f64)>::new()}
+    }
+
+    pub fn add_lines(&mut self, lines: Vec<(Length, f64)>) -> OpmResult<()>{
+        // Check if the lines are non-empty and contain valid data
+        if lines.is_empty() {
+            return Err(OpossumError::Other("Laser lines cannot be empty".into()));
+        }
+        for (wavelength, intensity) in &lines {
+            if !wavelength.is_normal() || wavelength.is_sign_negative() {
+                return Err(OpossumError::Other(
+                    "Wavelength must be positive and finite".into(),
+                ));
+            }
+            if !intensity.is_normal() || intensity.is_sign_negative() {
+                return Err(OpossumError::Other(
+                    "Intensity must be positive and finite".into(),
+                ));
+            }
+        }
+        for line in lines{
+            self.lines.push(line);
+        }
+        Ok(())
+    }
+
+    pub fn lines(&self) -> &Vec<(Length, f64)>{
+       &self.lines
     }
 }
 
@@ -76,7 +102,18 @@ impl SpectralDistribution for LaserLines {
     ///
     /// A vector of tuples containing the wavelength and intensity of each laser line.
     fn generate(&self) -> OpmResult<Vec<(Length, f64)>> {
-        Ok(self.lines.clone())
+        // Normalize the intensities to sum to 1.0
+        let sum_intensity: f64 = self.lines.iter().map(|(_, intensity)| *intensity).sum();
+        if sum_intensity == 0.0 {
+            return Err(OpossumError::Other(
+                "Sum of intensities cannot be zero".into(),
+            ));
+        }
+        let lines: Vec<(Length, f64)> = self.lines.clone()
+            .into_iter()
+            .map(|(wavelength, intensity)| (wavelength, intensity / sum_intensity))
+            .collect();
+        Ok(lines)
     }
 }
 impl From<LaserLines> for super::SpecDistType {

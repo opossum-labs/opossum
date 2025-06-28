@@ -68,7 +68,7 @@ pub fn GraphEditor(
                     graph_processor.send(GraphStoreAction::DeleteScenery);
                 }
                 NodeEditorCommand::AddNode(node_type) => {
-                    let new_node_info = NewNode::new(node_type.to_owned(), (100.0, 100.0));
+                    let new_node_info = NewNode::new(node_type.to_lowercase(), (100.0, 100.0));
                     graph_processor.send(GraphStoreAction::AddOpticNode(new_node_info));
                 }
                 NodeEditorCommand::AddNodeRef(new_ref_node) => {

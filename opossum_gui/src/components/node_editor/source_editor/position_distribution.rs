@@ -26,14 +26,12 @@ pub enum DistParam {
     Angle,
     Power,
     Rectangular,
+    WaveLengthStart,
+    WaveLengthEnd,
+    WaveLength,
+    FWHM,
+    RelIntensity
 }
-
-// total_energy: Energy,
-//     mu_xy: Point2<Length>,
-//     sigma_xy: Point2<Length>,
-//     power: f64,
-//     theta: Angle,
-//     rectangular: bool,
 
 impl DistParam {
     pub fn input_label(&self) -> String {
@@ -49,16 +47,22 @@ impl DistParam {
             DistParam::Energy => "Energy in J".to_string(),
             DistParam::Angle => "Angle in degree".to_string(),
             DistParam::Power => "Power".to_string(),
-            DistParam::Rectangular => "Rectangular".to_string()
+            DistParam::Rectangular => "Rectangular".to_string(),
+            DistParam::WaveLengthStart => "Start λ in nm".to_string(),
+            DistParam::WaveLengthEnd => "End λ in nm".to_string(),
+            DistParam::WaveLength => "λ in nm".to_string(),
+            DistParam::FWHM => "FWHM in nm".to_string(),
+            DistParam::RelIntensity => "Rel. intensity".to_string(),
         }
     }
 
     pub fn min_value(&self) -> Option<&'static str> {
         match self {
             DistParam::Rings | DistParam::PointsX | DistParam::PointsY => Some("1"),
-            DistParam::Radius | DistParam::LengthX | DistParam::LengthY| DistParam::Angle | DistParam::Power => Some("1e-9"),
+            DistParam::Radius | DistParam::LengthX | DistParam::LengthY| DistParam::Angle | 
+            DistParam::Power| DistParam::WaveLengthStart| DistParam::WaveLengthEnd | DistParam::FWHM| DistParam::WaveLength=> Some("1e-9"),
             DistParam::CenterX | DistParam::CenterY => Some("-1e9"),
-            DistParam::Energy => Some("0."),
+            DistParam::Energy | DistParam::RelIntensity => Some("0."),
             _ => None
         }
     }
@@ -78,13 +82,19 @@ impl Display for DistParam {
             DistParam::CenterX => "CenterX",
             DistParam::CenterY => "CenterY",
             DistParam::LengthX => "LengthX",
-            DistParam::LengthY => "lengthY",
+            DistParam::LengthY => "LengthY",
             DistParam::PointsX => "PointsX",
             DistParam::PointsY => "PointsY",
             DistParam::Energy => "Energy",
             DistParam::Angle => "Angle",
             DistParam::Power => "Power",
             DistParam::Rectangular => "Rectangular",
+            DistParam::WaveLengthStart => "StartWavelength",
+            DistParam::WaveLengthEnd => "EndWavelength",
+            DistParam::WaveLength => "Wavelength",
+            DistParam::FWHM => "FWHM",
+            DistParam::RelIntensity => "Relativeintensity",
+
         };
         write!(f, "{param}")
     }

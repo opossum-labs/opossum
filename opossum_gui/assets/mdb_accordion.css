@@ -94,3 +94,32 @@ input[type=number] {
   width: 1rem;
   height: 1rem;
 }
+
+#laserlinesubmit{
+    background-color:rgb(70, 70, 70) !important;
+    width: 100%;
+    color:white;
+    border-radius: 0;
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+}
+#laserlinesubmit:hover{
+      background-color:rgb(105, 104, 104) !important;
+}
+
+#laserLineList{
+  border-radius: 0;
+  border: none;
+  max-height: 100px;
+  overflow: auto;
+}
+#laserLineList >li {
+  margin: 0 0.5rem;
+  border: none;
+  border-bottom: 1px solid gray;
+  padding: 0.25rem 0.25rem 0rem 0.25rem;
+  font-size: small;
+  grid-template-columns: 110px auto auto; 
+  column-gap: 0.1rem;
+}
+

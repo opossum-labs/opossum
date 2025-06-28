@@ -1,7 +1,7 @@
 use crate::{components::node_editor::accordion::LabeledSelect, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
 use opossum_backend::{
-    energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder}, EnergyDistType, PosDistType
+    energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder}, EnergyDistType, PosDistType, SpecDistType
 };
 use std::collections::HashMap;
 
@@ -179,6 +179,33 @@ impl LightDataBuilderHistory {
         }
     }
 
+    /// Returns the [`SpecDistType`] from the currently selected ray source,
+    /// if it supports spectral distributions.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(SpecDistType)` for `Collimated` or `PointSrc` ray types.
+    /// - `None` for `Raw`, `Image`, or non-geometric light sources.
+    pub fn get_current_spectral_dist_type(&self) -> Option<SpecDistType> {
+        match self.get_current() {
+            LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
+                RayDataBuilder::Collimated(collimated_src) => {
+                    Some(collimated_src.spect_dist().clone())
+                }
+                RayDataBuilder::PointSrc(point_src) => Some(point_src.spect_dist().clone()),
+                RayDataBuilder::Raw(rays) => None,
+                RayDataBuilder::Image {
+                    file_path,
+                    pixel_size,
+                    total_energy,
+                    wave_length,
+                    cone_angle,
+                } => None,
+            },
+            _ => None,
+        }
+    }
+
     /// Sets a new [`PosDistType`] for the currently selected ray source,
     /// if it supports positional distributions (`Collimated` or `PointSrc`).
     ///
@@ -263,6 +290,48 @@ impl LightDataBuilderHistory {
         }
     }
 
+    /// Sets a new [`SpecDistType`] for the currently selected ray source,
+    /// if it supports spectral distributions (`Collimated` or `PointSrc`).
+    ///
+    /// The updated builder is saved under multiple keys:
+    /// - `"Rays"` and the specific ray type (e.g., `"Collimated"`)
+    /// - the stringified `SpecDistType` (used as the new current key)
+    ///
+    /// Unsupported types are logged.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_spectral_dist` - The new spectral distribution type to assign.
+    pub fn set_spectral_dist_type(&mut self, new_spectral_dist: SpecDistType) {
+        if let Some(rdb) = &mut self.get_current_ray_data_builder() {
+            let spectral_dist_string = format!("{new_spectral_dist}");
+            match rdb {
+                RayDataBuilder::Collimated(collimated_src) => {
+                    collimated_src.set_spect_dist(new_spectral_dist);
+                    let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(
+                        collimated_src.clone(),
+                    ));
+                    self.replace_or_insert("Collimated", &new_ld_builder);
+                    self.replace_or_insert("Rays", &new_ld_builder);
+                    self.replace_or_insert_and_set_current(&spectral_dist_string, new_ld_builder);
+                }
+                RayDataBuilder::PointSrc(point_src) => {
+                    point_src.set_spect_dist(new_spectral_dist);
+                    let new_ld_builder =
+                        LightDataBuilder::Geometric(RayDataBuilder::PointSrc(point_src.clone()));
+                    self.replace_or_insert("Point Source", &new_ld_builder);
+                    self.replace_or_insert("Rays", &new_ld_builder);
+                    self.replace_or_insert_and_set_current(&spectral_dist_string, new_ld_builder);
+                }
+                _ => {
+                    OPOSSUM_UI_LOGS.write().add_log(&format!(
+                        "set_pos_dist_type: Unsupported RayDataBuilder type: {rdb}"
+                    ));
+                }
+            };
+        }
+    }
+
     pub fn set_current_or_default(&mut self, key: &str) {
         if !self.set_current(key) {
             match key {
@@ -305,6 +374,13 @@ impl LightDataBuilderHistory {
                         self.set_energy_dist_type(energy_dist_type);
                     }
                 }
+
+                "Laser Lines" | "Gaussian" => {
+                    if let Some(spectral_dist_type) = SpecDistType::default_from_name(key) {
+                        self.set_spectral_dist_type(spectral_dist_type);
+                    }
+                }
+
 
                 _ => OPOSSUM_UI_LOGS
                     .write()

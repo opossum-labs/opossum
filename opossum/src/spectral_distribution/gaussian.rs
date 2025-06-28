@@ -9,7 +9,7 @@ use crate::{meter, nanometer};
 use itertools::Itertools;
 use kahan::KahanSummator;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Copy)]
 pub struct Gaussian {
     wvl_range: (Length, Length),
     num_points: usize,
@@ -72,6 +72,54 @@ impl Gaussian {
             fwhm,
             power,
         })
+    }
+
+    pub fn wvl_start(&self) -> Length{
+        self.wvl_range.0
+    }
+
+    pub fn set_wvl_start(&mut self, start: Length){
+        self.wvl_range.0 = start
+    }
+
+    pub fn wvl_end(&self) -> Length{
+        self.wvl_range.1
+    }
+
+    pub fn set_wvl_end(&mut self, end: Length){
+        self.wvl_range.1 = end
+    }
+
+    pub fn num_points(&self) -> usize{
+        self.num_points
+    }
+
+    pub fn set_num_points(&mut self, num_points: usize){
+        self.num_points = num_points
+    }
+
+    pub fn fwhm(&self) -> Length{
+        self.fwhm
+    }
+
+    pub fn set_fwhm(&mut self, fwhm: Length){
+        self.fwhm = fwhm
+    }
+
+    pub fn mu(&self) -> Length{
+        self.mu
+    }
+
+    pub fn set_mu(&mut self, mu: Length){
+        self.mu = mu
+    }
+
+    pub fn power(&self) -> f64{
+        self.power
+    }
+
+    pub fn set_power(&mut self, power: f64){
+        self.power = power
     }
 }
 
