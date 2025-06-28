@@ -109,7 +109,7 @@ pub fn NodeSpectralDistInputs(
                         value: "Add laser line",
                     }
                     ul { class: "list-group border-start", id: "laserLineList",
-                        for (i , line) in laser_lines.lines().iter().enumerate() {
+                        for (i , line) in laser_lines.clone().lines().iter().enumerate() {
                             {
                                 let class = if i % 2 == 0 {
                                     "list-group-item d-grid text-secondary"
@@ -122,7 +122,15 @@ pub fn NodeSpectralDistInputs(
                                         span { {format!("Int: {:.3}", line.1)} }
                                         a {
                                             class: "text-danger ms-auto",
-                                            onclick: move |_| println!("deleted"),
+                                            onclick: {
+                                                let laser_lines = laser_lines.clone();
+                                                move |_| {
+                                                let mut laser_lines = laser_lines.clone();
+                                                println!("deleting line {i}");
+                                                laser_lines.delete_line(i);
+                                                light_data_builder_sig.with_mut(|ldb| ldb.set_spectral_dist_type(SpecDistType::LaserLines(laser_lines)));
+                                                
+                                            }},
                                             role: "button",
                                             "🗑︎"
                                         }

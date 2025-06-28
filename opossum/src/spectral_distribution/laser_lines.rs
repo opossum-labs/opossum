@@ -143,6 +143,12 @@ impl LaserLines {
     pub fn lines(&self) -> &Vec<(Length, f64)> {
         &self.lines
     }
+
+    pub fn delete_line(&mut self, index:usize){
+        if index < self.lines.len(){
+            self.lines.remove(index);
+        }
+    }
 }
 
 impl Default for LaserLines {
