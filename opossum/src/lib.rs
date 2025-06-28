@@ -63,7 +63,7 @@ use crate::{
 /// Creates a fresh `data/` subdirectory in the given report directory.
 ///
 /// If a `data/` folder already exists, it is deleted first.
-/// 
+///
 /// # Parameters
 ///
 /// * `report_directory` - Path to the root directory where the `data/` folder should be created.
@@ -132,7 +132,6 @@ pub fn create_report_and_data_files(
     Ok(())
 }
 
-
 /// Constructs a `PathBuf` from a directory, a filename (without extension), and a file extension.
 ///
 /// # Parameters
@@ -144,13 +143,13 @@ pub fn create_report_and_data_files(
 /// # Returns
 ///
 /// A `PathBuf` representing the full file path with the specified extension.
+#[must_use]
 pub fn create_f_path(path: &Path, f_name: &str, f_ext: &str) -> PathBuf {
     let mut f_path = path.to_path_buf();
     f_path.push(f_name);
     f_path.set_extension(f_ext);
     f_path
 }
-
 
 /// Creates a new file at a path constructed from directory, filename, and extension,
 /// and logs the operation with a user-defined description.
@@ -184,7 +183,6 @@ pub fn create_dot_or_report_file_instance(
     File::create(f_path)
         .map_err(|e| OpossumError::Other(format!("{f_name} file creation failed: {e}")))
 }
-
 
 /// Return the version information of the currently built OPOSSUM executable.
 ///

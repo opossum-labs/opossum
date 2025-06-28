@@ -112,7 +112,7 @@ impl OpticNode for SpotDiagram {
             if let Some(hit_map) = self
                 .ports()
                 .get_optic_surface(&"input_1".to_owned())
-                .map(|o| o.hit_map())
+                .map(super::super::surface::optic_surface::OpticSurface::hit_map)
             {
                 props
                     .create("Spot diagram", "2D spot diagram", hit_map.clone().into())

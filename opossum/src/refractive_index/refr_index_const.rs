@@ -38,12 +38,13 @@ impl RefrIndexConst {
     }
 
     /// Get the refractive index value.
-    pub fn refractive_index(&self) -> f64 {
+    #[must_use]
+    pub const fn refractive_index(&self) -> f64 {
         self.refractive_index
     }
 
     /// Set the refractive index value.
-    pub fn set_refractive_index(&mut self, ref_ind: f64) {
+    pub const fn set_refractive_index(&mut self, ref_ind: f64) {
         self.refractive_index = ref_ind;
     }
 }
@@ -61,7 +62,7 @@ impl RefractiveIndex for RefrIndexConst {
         Ok(self.refractive_index)
     }
     fn to_enum(&self) -> super::RefractiveIndexType {
-        RefractiveIndexType::Const(self.clone())
+        RefractiveIndexType::Const(*self)
     }
 }
 impl From<RefrIndexConst> for RefractiveIndexType {

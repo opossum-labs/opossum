@@ -145,9 +145,11 @@ impl Spectrometer {
     /// Returns the spectrum stored in the lightdata of this [`Spectrometer`].
     ///
     /// Returns `None` if no lightdata is available, Some(Spectrum) otherwise .
+    #[must_use]
     pub fn get_spectrum(&self) -> Option<Spectrum> {
-        if let Some(light_data) = &self.light_data {
-            match light_data {
+        self.light_data
+            .as_ref()
+            .and_then(|light_data| match light_data {
                 LightData::Energy(s) => Some(s.clone()),
                 LightData::Geometric(r) => r.to_spectrum(&nanometer!(0.2)).ok(),
                 LightData::Fourier => None,
@@ -158,10 +160,7 @@ impl Spectrometer {
                     }
                     all_rays.to_spectrum(&nanometer!(0.2)).ok()
                 }
-            }
-        } else {
-            None
-        }
+            })
     }
 }
 impl OpticNode for Spectrometer {

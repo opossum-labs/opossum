@@ -531,7 +531,6 @@ async fn post_node_alignment_isometry(
 ) -> Result<(), ErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let isometry = isometry_from_gui.into_inner();
-    println!("{:?}", isometry);
     let document = data.document.lock().unwrap();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
@@ -579,7 +578,7 @@ async fn post_node_property(
             return Err(ErrorResponse::new(
                 400,
                 "Opossum",
-                &format!("Failed to deserialize property value: {}", e),
+                &format!("Failed to deserialize property value: {e}"),
             ));
         }
     };

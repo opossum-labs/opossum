@@ -171,7 +171,7 @@ impl NodeAttr {
     }
     /// Returns a reference to the isometry of this [`NodeAttr`].
     #[must_use]
-    pub fn isometry(&self) -> Option<Isometry> {
+    pub const fn isometry(&self) -> Option<Isometry> {
         self.isometry
     }
     /// Returns the local alignment isometry of a node (if any).

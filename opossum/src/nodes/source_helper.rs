@@ -7,7 +7,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::{
         light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},
+        ray_data_builder::{CollimatedSrcDist, PointSrc, RayDataBuilder},
     },
     millimeter, nanometer,
     optic_node::OpticNode,
@@ -34,7 +34,7 @@ pub fn round_collimated_ray_source(
     nr_of_rings: u8,
 ) -> OpmResult<Source> {
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrcDist::new(
             Hexapolar::new(radius, nr_of_rings)?.into(),
             UniformDist::new(energy)?.into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
@@ -60,7 +60,7 @@ pub fn collimated_line_ray_source(
     nr_of_points_y: usize,
 ) -> OpmResult<Source> {
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrcDist::new(
             Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?.into(),
             UniformDist::new(energy)?.into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),

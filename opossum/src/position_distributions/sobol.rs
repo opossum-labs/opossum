@@ -63,7 +63,8 @@ impl SobolDist {
     /// # Returns
     ///
     /// The number of points as a `usize`.
-    pub fn nr_of_points(&self) -> usize {
+    #[must_use]
+    pub const fn nr_of_points(&self) -> usize {
         self.nr_of_points
     }
 
@@ -72,6 +73,7 @@ impl SobolDist {
     /// # Returns
     ///
     /// The side length in the X direction of type `Length`.
+    #[must_use]
     pub fn side_length_x(&self) -> Length {
         self.side_length_x
     }
@@ -81,6 +83,7 @@ impl SobolDist {
     /// # Returns
     ///
     /// The side length in the Y direction of type `Length`.
+    #[must_use]
     pub fn side_length_y(&self) -> Length {
         self.side_length_y
     }
@@ -94,7 +97,7 @@ impl SobolDist {
     /// # Side Effects
     ///
     /// Overwrites the current number of points.
-    pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
+    pub const fn set_nr_of_points(&mut self, nr_of_points: usize) {
         self.nr_of_points = nr_of_points;
     }
 

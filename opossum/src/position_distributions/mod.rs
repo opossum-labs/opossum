@@ -136,6 +136,7 @@ impl PosDistType {
     /// # Notes
     ///
     /// The returned distributions are created using their respective `Default` implementations.
+    #[must_use]
     pub fn default_from_name(name: &str) -> Option<Self> {
         match name {
             "Random" => Some(Random::default().into()),

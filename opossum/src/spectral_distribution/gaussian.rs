@@ -74,52 +74,112 @@ impl Gaussian {
         })
     }
 
-    pub fn wvl_start(&self) -> Length {
+    /// Returns the start wavelength of the distribution range.
+    ///
+    /// This corresponds to the lower bound of the wavelength interval.
+    ///
+    /// # Returns
+    /// A [`Length`] value representing the start of the wavelength range.
+    #[must_use]
+    pub const fn wvl_start(&self) -> Length {
         self.wvl_range.0
     }
 
+    /// Sets the start wavelength of the distribution range.
+    ///
+    /// # Parameters
+    /// - `start`: A [`Length`] representing the new lower bound of the wavelength range.
     pub fn set_wvl_start(&mut self, start: Length) {
-        self.wvl_range.0 = start
+        self.wvl_range.0 = start;
     }
 
-    pub fn wvl_end(&self) -> Length {
+    /// Returns the end wavelength of the distribution range.
+    ///
+    /// This corresponds to the upper bound of the wavelength interval.
+    ///
+    /// # Returns
+    /// A [`Length`] value representing the end of the wavelength range.
+    #[must_use]
+    pub const fn wvl_end(&self) -> Length {
         self.wvl_range.1
     }
 
+    /// Sets the end wavelength of the distribution range.
+    ///
+    /// # Parameters
+    /// - `end`: A [`Length`] representing the new upper bound of the wavelength range.
     pub fn set_wvl_end(&mut self, end: Length) {
-        self.wvl_range.1 = end
+        self.wvl_range.1 = end;
     }
 
-    pub fn num_points(&self) -> usize {
+    /// Returns the number of discrete wavelength points used in the distribution.
+    ///
+    /// # Returns
+    /// A `usize` indicating how many spectral samples are generated.
+    #[must_use]
+    pub const fn num_points(&self) -> usize {
         self.num_points
     }
 
-    pub fn set_num_points(&mut self, num_points: usize) {
-        self.num_points = num_points
+    /// Sets the number of discrete wavelength points in the distribution.
+    ///
+    /// # Parameters
+    /// - `num_points`: The number of spectral samples to generate.
+    pub const fn set_num_points(&mut self, num_points: usize) {
+        self.num_points = num_points;
     }
 
-    pub fn fwhm(&self) -> Length {
+    /// Returns the full width at half maximum (FWHM) of the Gaussian distribution.
+    ///
+    /// This controls the width of the spectral peak.
+    ///
+    /// # Returns
+    /// A [`Length`] value representing the FWHM.
+    #[must_use]
+    pub const fn fwhm(&self) -> Length {
         self.fwhm
     }
 
+    /// Sets the full width at half maximum (FWHM) of the Gaussian distribution.
+    ///
+    /// # Parameters
+    /// - `fwhm`: A [`Length`] specifying the width of the spectral peak.
     pub fn set_fwhm(&mut self, fwhm: Length) {
-        self.fwhm = fwhm
+        self.fwhm = fwhm;
     }
 
-    pub fn mu(&self) -> Length {
+    /// Returns the mean (center wavelength) of the Gaussian distribution.
+    ///
+    /// # Returns
+    /// A [`Length`] value representing the center wavelength (`μ`).
+    #[must_use]
+    pub const fn mu(&self) -> Length {
         self.mu
     }
 
+    /// Sets the mean (center wavelength) of the Gaussian distribution.
+    ///
+    /// # Parameters
+    /// - `mu`: A [`Length`] representing the new center wavelength.
     pub fn set_mu(&mut self, mu: Length) {
-        self.mu = mu
+        self.mu = mu;
     }
 
-    pub fn power(&self) -> f64 {
+    /// Returns the total power of the spectral distribution.
+    ///
+    /// # Returns
+    /// A `f64` value representing the power (intensity scaling factor).
+    #[must_use]
+    pub const fn power(&self) -> f64 {
         self.power
     }
 
-    pub fn set_power(&mut self, power: f64) {
-        self.power = power
+    /// Sets the total power of the spectral distribution.
+    ///
+    /// # Parameters
+    /// - `power`: A `f64` value representing the new power level.
+    pub const fn set_power(&mut self, power: f64) {
+        self.power = power;
     }
 }
 

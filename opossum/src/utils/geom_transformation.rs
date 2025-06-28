@@ -306,6 +306,31 @@ impl Isometry {
         }
     }
     /// Sets a value on the rotation axis of this [`Isometry`].
+    ///
+    /// This method updates the internal rotation vector by setting the rotation angle
+    /// along a specified [`RotationAxis`] (Roll, Pitch, or Yaw). The transformation is
+    /// then reconstructed using the original translation and the updated rotation.
+    ///
+    /// # Parameters
+    /// - `axis`: The rotation axis to update (see [`RotationAxis`]).
+    /// - `value`: The new angle value to set for the specified axis.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the new rotation was successfully applied.
+    /// - `Err(OpossumError)` if the reconstruction of the [`Isometry`] fails.
+    ///
+    /// # Errors
+    /// If [`Isometry::new`] fails (e.g., due to invalid transformation parameters), the error is wrapped in [`OpossumError`] and returned.
+    ///
+    /// # Examples
+    /// ```
+    /// let mut iso = Isometry::default();
+    /// iso.set_rotation_of_axis(RotationAxis::Yaw, Angle::from_degrees(90.0))?;
+    /// assert_eq!(iso.rotation().z, Angle::from_degrees(90.0));
+    /// ```
+    ///
+    /// [`RotationAxis`]: crate::RotationAxis
+    /// [`Isometry`]: crate::Isometry
     pub fn set_rotation_of_axis(&mut self, axis: RotationAxis, value: Angle) -> OpmResult<()> {
         let trans = self.translation();
         let mut new_rot = self.rotation();

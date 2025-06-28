@@ -11,7 +11,7 @@ use opossum::{
     joule,
     lightdata::{
         light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrc, RayDataBuilder},
+        ray_data_builder::{CollimatedSrcDist, RayDataBuilder},
     },
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
@@ -35,7 +35,7 @@ pub fn main() -> OpmResult<()> {
     )?;
     let mut scenery = NodeGroup::default();
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrcDist::new(
             Hexapolar::new(millimeter!(10.), 10)?.into(),
             UniformDist::new(joule!(1.))?.into(),
             Gaussian::new(

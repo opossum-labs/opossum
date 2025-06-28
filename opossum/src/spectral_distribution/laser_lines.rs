@@ -68,6 +68,7 @@ impl LaserLines {
     /// let laser = LaserLines::new_empty();
     /// assert!(laser.lines().is_empty());
     /// ```
+    #[must_use]
     pub fn new_empty() -> Self {
         Self {
             lines: Vec::<(Length, f64)>::new(),
@@ -144,8 +145,8 @@ impl LaserLines {
         &self.lines
     }
 
-    pub fn delete_line(&mut self, index:usize){
-        if index < self.lines.len(){
+    pub fn delete_line(&mut self, index: usize) {
+        if index < self.lines.len() {
             self.lines.remove(index);
         }
     }

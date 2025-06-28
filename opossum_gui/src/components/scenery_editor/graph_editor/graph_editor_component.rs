@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
     edges::edges_component::{
         EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,

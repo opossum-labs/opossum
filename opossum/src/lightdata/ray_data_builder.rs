@@ -21,7 +21,7 @@ pub enum RayDataBuilder {
     /// Raw [`Rays`] data.
     Raw(Rays),
     /// Collimated [`Rays`] data with a given [`PosDistType`], [`EnergyDistType`], and [`SpecDistType`].
-    Collimated(CollimatedSrc),
+    Collimated(CollimatedSrcDist),
     /// Point source [`Rays`] data with a given [`PosDistType`], [`EnergyDistType`], and [`SpecDistType`].
     /// All rays start on the optical axis and are emitted within a cone. The cone is defined by the
     /// position distribution **after the rays have propagated the given reference length**.
@@ -41,112 +41,116 @@ pub enum RayDataBuilder {
         cone_angle: Angle,
     },
 }
-/// Represents a collimated source for ray tracing,
+/// Represents a collimated source, holding he distributions of the rays for ray tracing,
 /// storing distributions related to position, energy, and spectrum.
 ///
 /// # Fields
 ///
-/// * `pos_dist` - Position distribution (`PosDistType`) describing spatial distribution.
-/// * `energy_dist` - Energy distribution (`EnergyDistType`) describing energy values of the rays.
-/// * `spect_dist` - Spectral distribution (`SpecDistType`) defining wavelength properties.
+/// * `pos` - Position distribution (`PosDistType`) describing spatial distribution.
+/// * `energy` - Energy distribution (`EnergyDistType`) describing energy values of the rays.
+/// * `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CollimatedSrc {
-    pos_dist: PosDistType,
-    energy_dist: EnergyDistType,
-    spect_dist: SpecDistType,
+pub struct CollimatedSrcDist {
+    pos: PosDistType,
+    energy: EnergyDistType,
+    spect: SpecDistType,
 }
 
-impl CollimatedSrc {
+impl CollimatedSrcDist {
     /// Creates a new `CollimatedSrc` with specified position, energy, and spectral distributions.
     ///
     /// # Parameters
     ///
-    /// * `pos_dist` - Position distribution.
-    /// * `energy_dist` - Energy distribution.
-    /// * `spect_dist` - Spectral distribution.
+    /// * `pos` - Position distribution.
+    /// * `energy` - Energy distribution.
+    /// * `spect` - Spectral distribution.
     ///
     /// # Returns
     ///
     /// A new instance of `CollimatedSrc`.
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         pos_dist: PosDistType,
         energy_dist: EnergyDistType,
         spect_dist: SpecDistType,
     ) -> Self {
         Self {
-            pos_dist,
-            energy_dist,
-            spect_dist,
+            pos: pos_dist,
+            energy: energy_dist,
+            spect: spect_dist,
         }
     }
 
     /// Returns a reference to the position distribution.
-    pub fn pos_dist(&self) -> &PosDistType {
-        &self.pos_dist
+    #[must_use]
+    pub const fn pos_dist(&self) -> &PosDistType {
+        &self.pos
     }
 
     /// Returns a reference to the energy distribution.
-    pub fn energy_dist(&self) -> &EnergyDistType {
-        &self.energy_dist
+    #[must_use]
+    pub const fn energy_dist(&self) -> &EnergyDistType {
+        &self.energy
     }
 
     /// Returns a reference to the spectral distribution.
-    pub fn spect_dist(&self) -> &SpecDistType {
-        &self.spect_dist
+    #[must_use]
+    pub const fn spect_dist(&self) -> &SpecDistType {
+        &self.spect
     }
 
     /// Returns a mutable reference to the position distribution.
-    pub fn pos_dist_mut(&mut self) -> &mut PosDistType {
-        &mut self.pos_dist
+    pub const fn pos_dist_mut(&mut self) -> &mut PosDistType {
+        &mut self.pos
     }
 
     /// Returns a mutable reference to the energy distribution.
-    pub fn energy_dist_mut(&mut self) -> &mut EnergyDistType {
-        &mut self.energy_dist
+    pub const fn energy_dist_mut(&mut self) -> &mut EnergyDistType {
+        &mut self.energy
     }
 
     /// Returns a mutable reference to the spectral distribution.
-    pub fn spect_dist_mut(&mut self) -> &mut SpecDistType {
-        &mut self.spect_dist
+    pub const fn spect_dist_mut(&mut self) -> &mut SpecDistType {
+        &mut self.spect
     }
 
     /// Sets the position distribution.
     ///
     /// # Parameters
     ///
-    /// * `pos_dist` - New position distribution.
+    /// * `pos` - New position distribution.
     ///
     /// # Side Effects
     ///
     /// Overwrites the current position distribution.
-    pub fn set_pos_dist(&mut self, pos_dist: PosDistType) {
-        self.pos_dist = pos_dist;
+    pub const fn set_pos_dist(&mut self, pos_dist: PosDistType) {
+        self.pos = pos_dist;
     }
 
     /// Sets the energy distribution.
     ///
     /// # Parameters
     ///
-    /// * `energy_dist` - New energy distribution.
+    /// * `energy` - New energy distribution.
     ///
     /// # Side Effects
     ///
     /// Overwrites the current energy distribution.
-    pub fn set_energy_dist(&mut self, energy_dist: EnergyDistType) {
-        self.energy_dist = energy_dist;
+    pub const fn set_energy_dist(&mut self, energy_dist: EnergyDistType) {
+        self.energy = energy_dist;
     }
 
     /// Sets the spectral distribution.
     ///
     /// # Parameters
     ///
-    /// * `spect_dist` - New spectral distribution.
+    /// * `spect` - New spectral distribution.
     ///
     /// # Side Effects
     ///
     /// Overwrites the current spectral distribution.
     pub fn set_spect_dist(&mut self, spect_dist: SpecDistType) {
-        self.spect_dist = spect_dist;
+        self.spect = spect_dist;
     }
 }
 
@@ -156,9 +160,9 @@ impl CollimatedSrc {
 ///
 /// # Fields
 ///
-/// * `pos_dist` - Position distribution (`PosDistType`) determining how points are spatially distributed.
-/// * `energy_dist` - Energy distribution (`EnergyDistType`) describing energy values for the rays.
-/// * `spect_dist` - Spectral distribution (`SpecDistType`) defining wavelength properties of the rays.
+/// * `pos` - Position distribution (`PosDistType`) determining how points are spatially distributed.
+/// * `energy` - Energy distribution (`EnergyDistType`) describing energy values for the rays.
+/// * `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties of the rays.
 /// * `reference_length` - A length scale used as a reference in calculations (`Length`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PointSrc {
@@ -173,14 +177,15 @@ impl PointSrc {
     ///
     /// # Parameters
     ///
-    /// * `pos_dist` - Position distribution.
-    /// * `energy_dist` - Energy distribution.
-    /// * `spect_dist` - Spectral distribution.
+    /// * `pos` - Position distribution.
+    /// * `energy` - Energy distribution.
+    /// * `spect` - Spectral distribution.
     /// * `reference_length` - Reference length scale.
     ///
     /// # Returns
     ///
     /// A new instance of `PointSrc`.
+    #[must_use]
     pub fn new(
         pos_dist: PosDistType,
         energy_dist: EnergyDistType,
@@ -196,42 +201,46 @@ impl PointSrc {
     }
 
     /// Returns a reference to the position distribution.
-    pub fn pos_dist(&self) -> &PosDistType {
+    #[must_use]
+    pub const fn pos_dist(&self) -> &PosDistType {
         &self.pos_dist
     }
 
     /// Returns a reference to the energy distribution.
-    pub fn energy_dist(&self) -> &EnergyDistType {
+    #[must_use]
+    pub const fn energy_dist(&self) -> &EnergyDistType {
         &self.energy_dist
     }
 
     /// Returns a reference to the spectral distribution.
-    pub fn spect_dist(&self) -> &SpecDistType {
+    #[must_use]
+    pub const fn spect_dist(&self) -> &SpecDistType {
         &self.spect_dist
     }
 
     /// Returns a reference to the reference length.
-    pub fn reference_length(&self) -> &Length {
+    #[must_use]
+    pub const fn reference_length(&self) -> &Length {
         &self.reference_length
     }
 
     /// Returns a mutable reference to the position distribution.
-    pub fn pos_dist_mut(&mut self) -> &mut PosDistType {
+    pub const fn pos_dist_mut(&mut self) -> &mut PosDistType {
         &mut self.pos_dist
     }
 
     /// Returns a mutable reference to the energy distribution.
-    pub fn energy_dist_mut(&mut self) -> &mut EnergyDistType {
+    pub const fn energy_dist_mut(&mut self) -> &mut EnergyDistType {
         &mut self.energy_dist
     }
 
     /// Returns a mutable reference to the spectral distribution.
-    pub fn spect_dist_mut(&mut self) -> &mut SpecDistType {
+    pub const fn spect_dist_mut(&mut self) -> &mut SpecDistType {
         &mut self.spect_dist
     }
 
     /// Returns a mutable reference to the reference length.
-    pub fn reference_length_mut(&mut self) -> &mut Length {
+    pub const fn reference_length_mut(&mut self) -> &mut Length {
         &mut self.reference_length
     }
 
@@ -239,12 +248,12 @@ impl PointSrc {
     ///
     /// # Parameters
     ///
-    /// * `pos_dist` - New position distribution.
+    /// * `pos` - New position distribution.
     ///
     /// # Side Effects
     ///
     /// Overwrites the current position distribution.
-    pub fn set_pos_dist(&mut self, pos_dist: PosDistType) {
+    pub const fn set_pos_dist(&mut self, pos_dist: PosDistType) {
         self.pos_dist = pos_dist;
     }
 
@@ -252,12 +261,12 @@ impl PointSrc {
     ///
     /// # Parameters
     ///
-    /// * `energy_dist` - New energy distribution.
+    /// * `energy` - New energy distribution.
     ///
     /// # Side Effects
     ///
     /// Overwrites the current energy distribution.
-    pub fn set_energy_dist(&mut self, energy_dist: EnergyDistType) {
+    pub const fn set_energy_dist(&mut self, energy_dist: EnergyDistType) {
         self.energy_dist = energy_dist;
     }
 
@@ -265,7 +274,7 @@ impl PointSrc {
     ///
     /// # Parameters
     ///
-    /// * `spect_dist` - New spectral distribution.
+    /// * `spect` - New spectral distribution.
     ///
     /// # Side Effects
     ///
@@ -301,7 +310,7 @@ impl Default for PointSrc {
 
 impl Default for RayDataBuilder {
     fn default() -> Self {
-        Self::Collimated(CollimatedSrc::default())
+        Self::Collimated(CollimatedSrcDist::default())
     }
 }
 impl RayDataBuilder {

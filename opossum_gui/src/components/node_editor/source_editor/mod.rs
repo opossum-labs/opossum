@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 pub mod energy_distribution;
 pub mod light_data_builder_selection;
 pub mod position_distribution;
@@ -28,7 +29,7 @@ pub fn LightDataEditor(
     use_effect(move || {
         prop_type_sig.set(Proptype::LightDataBuilder(Some(
             light_data_builder_sig.read().get_current().clone(),
-        )))
+        )));
     });
 
     use_effect(move || {
@@ -38,7 +39,7 @@ pub fn LightDataEditor(
             _ => (LightDataBuilder::default(), "Rays"),
         };
         light_data_builder_sig
-            .with_mut(|ldb| ldb.replace_or_insert_and_set_current(key, ld_builder))
+            .with_mut(|ldb| ldb.replace_or_insert_and_set_current(key, ld_builder));
     });
 
     let accordion_item_content = rsx! {

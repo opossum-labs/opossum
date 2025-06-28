@@ -53,6 +53,18 @@ pub enum EnergyDistType {
 }
 
 impl EnergyDistType {
+    /// Returns a reference to the internal energy distribution as a trait object.
+    ///
+    /// This allows polymorphic use of [`EnergyDistType`] through the [`EnergyDistribution`] trait.
+    ///
+    /// # Returns
+    /// A reference to the [`dyn EnergyDistribution`] implementation stored in this enum.
+    ///
+    /// # Examples
+    /// ```
+    /// let energy_dist: EnergyDistType = UniformDist::default().into();
+    /// let dist = energy_dist.generate(); // trait object access
+    /// ```
     #[must_use]
     pub fn generate(&self) -> &dyn EnergyDistribution {
         match self {
@@ -61,16 +73,57 @@ impl EnergyDistType {
         }
     }
 
+    /// Sets the total energy value for the current distribution.
+    ///
+    /// This method delegates to the corresponding `set_energy` method of the active variant.
+    ///
+    /// # Parameters
+    /// - `energy`: The total [`Energy`] to be assigned.
+    ///
+    /// # Returns
+    /// - `Ok(())` on success.
+    /// - `Err(OpossumError)` if the assignment fails internally.
+    ///
+    /// # Errors
+    /// Returns an error if the selected distribution variant rejects the energy value.
+    ///
+    /// # Examples
+    /// ```
+    /// let mut dist = EnergyDistType::default_from_name("Uniform").unwrap();
+    /// dist.set_energy(Energy::from_watts(1.0))?;
+    /// ```
     pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
         match self {
-            EnergyDistType::Uniform(uniform_dist) => uniform_dist.set_energy(energy)?,
-            EnergyDistType::General2DGaussian(general2_dgaussian) => {
-                general2_dgaussian.set_energy(energy)?
+            Self::Uniform(uniform_dist) => uniform_dist.set_energy(energy)?,
+            Self::General2DGaussian(general2_dgaussian) => {
+                general2_dgaussian.set_energy(energy)?;
             }
-        };
+        }
         Ok(())
     }
 
+    /// Creates a default instance of a distribution by name.
+    ///
+    /// This is used to instantiate a predefined energy distribution from a string input,
+    /// e.g., in configuration files or UI selections.
+    ///
+    /// # Parameters
+    /// - `name`: The name of the desired energy distribution.
+    ///
+    /// # Returns
+    /// - `Some(EnergyDistType)` if the name is recognized.
+    /// - `None` if the name is unknown.
+    ///
+    /// # Supported names
+    /// - `"Uniform"` → [`UniformDist::default()`]
+    /// - `"Generalized Gaussian"` → [`General2DGaussian::default()`]
+    ///
+    /// # Examples
+    /// ```
+    /// let dist = EnergyDistType::default_from_name("Generalized Gaussian")
+    ///     .expect("Distribution not found");
+    /// ```
+    #[must_use]
     pub fn default_from_name(name: &str) -> Option<Self> {
         match name {
             "Uniform" => Some(UniformDist::default().into()),

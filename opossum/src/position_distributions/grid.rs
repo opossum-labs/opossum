@@ -60,7 +60,8 @@ impl Grid {
     ///
     /// A tuple `(usize, usize)` where the first element is the number of points in the X direction
     /// and the second element is the number of points in the Y direction.
-    pub fn nr_of_points(&self) -> (usize, usize) {
+    #[must_use]
+    pub const fn nr_of_points(&self) -> (usize, usize) {
         self.nr_of_points
     }
 
@@ -69,6 +70,7 @@ impl Grid {
     /// # Returns
     ///
     /// A tuple `(Length, Length)` representing the lengths in the X and Y directions.
+    #[must_use]
     pub fn side_length(&self) -> (Length, Length) {
         self.side_length
     }
@@ -78,6 +80,7 @@ impl Grid {
     /// # Returns
     ///
     /// The length in the X direction of type `Length`.
+    #[must_use]
     pub fn side_length_x(&self) -> Length {
         self.side_length.0
     }
@@ -87,6 +90,7 @@ impl Grid {
     /// # Returns
     ///
     /// The length in the Y direction of type `Length`.
+    #[must_use]
     pub fn side_length_y(&self) -> Length {
         self.side_length.1
     }
@@ -100,7 +104,7 @@ impl Grid {
     /// # Side Effects
     ///
     /// Overwrites the current number of points.
-    pub fn set_nr_of_points(&mut self, nr_of_points: (usize, usize)) {
+    pub const fn set_nr_of_points(&mut self, nr_of_points: (usize, usize)) {
         self.nr_of_points = nr_of_points;
     }
 
@@ -113,7 +117,7 @@ impl Grid {
     /// # Side Effects
     ///
     /// Overwrites the current X direction points count.
-    pub fn set_nr_of_points_x(&mut self, nr_of_points_x: usize) {
+    pub const fn set_nr_of_points_x(&mut self, nr_of_points_x: usize) {
         self.nr_of_points.0 = nr_of_points_x;
     }
 
@@ -126,7 +130,7 @@ impl Grid {
     /// # Side Effects
     ///
     /// Overwrites the current Y direction points count.
-    pub fn set_nr_of_points_y(&mut self, nr_of_points_y: usize) {
+    pub const fn set_nr_of_points_y(&mut self, nr_of_points_y: usize) {
         self.nr_of_points.1 = nr_of_points_y;
     }
 

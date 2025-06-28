@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use std::fmt::Display;
 
 use crate::components::node_editor::{
@@ -6,7 +7,8 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use opossum_backend::{
-    light_data_builder::LightDataBuilder, millimeter, ray_data_builder::RayDataBuilder, PosDistType,
+    f64_to_usize, light_data_builder::LightDataBuilder, millimeter,
+    ray_data_builder::RayDataBuilder, PosDistType,
 };
 use strum::IntoEnumIterator;
 use uom::si::length::millimeter;
@@ -369,14 +371,14 @@ fn use_on_pos_dist_input_change(
                 PosDistType::Random(random) => match param {
                     DistParam::LengthX => random.set_side_length_x(millimeter!(value)),
                     DistParam::LengthY => random.set_side_length_y(millimeter!(value)),
-                    DistParam::PointsX => random.set_nr_of_points(value as usize),
+                    DistParam::PointsX => random.set_nr_of_points(f64_to_usize(value)),
                     _ => {}
                 },
                 PosDistType::Grid(grid) => match param {
                     DistParam::LengthX => grid.set_side_length_x(millimeter!(value)),
                     DistParam::LengthY => grid.set_side_length_y(millimeter!(value)),
-                    DistParam::PointsX => grid.set_nr_of_points_x(value as usize),
-                    DistParam::PointsY => grid.set_nr_of_points_y(value as usize),
+                    DistParam::PointsX => grid.set_nr_of_points_x(f64_to_usize(value)),
+                    DistParam::PointsY => grid.set_nr_of_points_y(f64_to_usize(value)),
                     _ => {}
                 },
                 PosDistType::HexagonalTiling(hexagonal_tiling) => match param {
@@ -394,17 +396,17 @@ fn use_on_pos_dist_input_change(
                 PosDistType::FibonacciRectangle(rect) => match param {
                     DistParam::LengthX => rect.set_side_length_x(millimeter!(value)),
                     DistParam::LengthY => rect.set_side_length_y(millimeter!(value)),
-                    DistParam::PointsX => rect.set_nr_of_points(value as usize),
+                    DistParam::PointsX => rect.set_nr_of_points(f64_to_usize(value)),
                     _ => {}
                 },
                 PosDistType::FibonacciEllipse(ellipse) => match param {
                     DistParam::LengthX => ellipse.set_radius_x(millimeter!(value)),
                     DistParam::LengthY => ellipse.set_radius_y(millimeter!(value)),
-                    DistParam::PointsX => ellipse.set_nr_of_points(value as usize),
+                    DistParam::PointsX => ellipse.set_nr_of_points(f64_to_usize(value)),
                     _ => {}
                 },
                 PosDistType::Sobol(sobol_dist) => match param {
-                    DistParam::PointsX => sobol_dist.set_nr_of_points(value as usize),
+                    DistParam::PointsX => sobol_dist.set_nr_of_points(f64_to_usize(value)),
                     DistParam::LengthX => sobol_dist.set_side_length_x(millimeter!(value)),
                     DistParam::LengthY => sobol_dist.set_side_length_y(millimeter!(value)),
                     _ => {}
@@ -461,7 +463,7 @@ impl PosDistSelection {
         select.set_dist(pos_dist);
         select
     }
-    pub fn set_dist(&mut self, pos_dist: PosDistType) {
+    pub const fn set_dist(&mut self, pos_dist: PosDistType) {
         (
             self.rand,
             self.grid,
@@ -494,7 +496,7 @@ impl PosDistSelection {
                 PosDistType::FibonacciRectangle(_) => (self.fibonacci_rect, pos_dist.to_string()),
                 PosDistType::FibonacciEllipse(_) => (self.fibonacci_ell, pos_dist.to_string()),
                 PosDistType::Sobol(_) => (self.sobol, pos_dist.to_string()),
-            })
+            });
         }
         option_vals
     }

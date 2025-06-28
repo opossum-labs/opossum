@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
     accordion::{AccordionItem, LabeledInput},
     node_editor_component::NodeChange,

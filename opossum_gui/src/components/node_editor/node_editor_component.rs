@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::property_editor::PropertiesEditor;
 use crate::components::node_editor::{
     alignment_editor::AlignmentEditor, general_editor::GeneralEditor,

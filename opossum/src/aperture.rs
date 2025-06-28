@@ -52,7 +52,7 @@ use uom::si::{
 /// The apodization type of an [`Aperture`].
 ///
 /// Each aperture can act as a "hole" or "obstruction"
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ApertureType {
     /// the [`Aperture`] shape acts as a hole. The inner part of the shape is transparent.
     #[default]

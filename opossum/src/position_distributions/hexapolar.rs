@@ -42,6 +42,7 @@ impl Hexapolar {
     /// # Returns
     ///
     /// The radius as a `Length`.
+    #[must_use]
     pub fn radius(&self) -> Length {
         self.radius
     }
@@ -51,7 +52,8 @@ impl Hexapolar {
     /// # Returns
     ///
     /// The number of rings as a `u8`.
-    pub fn nr_of_rings(&self) -> u8 {
+    #[must_use]
+    pub const fn nr_of_rings(&self) -> u8 {
         self.nr_of_rings
     }
 
@@ -77,7 +79,7 @@ impl Hexapolar {
     /// # Side Effects
     ///
     /// Updates the current number of rings.
-    pub fn set_nr_of_rings(&mut self, nr_of_rings: u8) {
+    pub const fn set_nr_of_rings(&mut self, nr_of_rings: u8) {
         self.nr_of_rings = nr_of_rings;
     }
 }

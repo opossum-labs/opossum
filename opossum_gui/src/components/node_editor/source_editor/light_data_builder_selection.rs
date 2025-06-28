@@ -1,9 +1,10 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{components::node_editor::accordion::LabeledSelect, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
 use opossum_backend::{
     energy_data_builder::EnergyDataBuilder,
     light_data_builder::LightDataBuilder,
-    ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},
+    ray_data_builder::{CollimatedSrcDist, PointSrc, RayDataBuilder},
     EnergyDistType, PosDistType, SpecDistType,
 };
 use std::collections::HashMap;
@@ -310,7 +311,7 @@ impl LightDataBuilderHistory {
             match key {
                 "Rays" => {
                     let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(
-                        CollimatedSrc::default(),
+                        CollimatedSrcDist::default(),
                     ));
                     self.replace_or_insert_and_set_current(key, new_ld_builder);
                 }
@@ -320,7 +321,7 @@ impl LightDataBuilderHistory {
                 }
                 "Collimated" => {
                     let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(
-                        CollimatedSrc::default(),
+                        CollimatedSrcDist::default(),
                     ));
                     self.replace_or_insert("Rays", &new_ld_builder);
                     self.replace_or_insert_and_set_current(key, new_ld_builder);

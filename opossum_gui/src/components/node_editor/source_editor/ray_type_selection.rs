@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 use opossum_backend::{
     light_data_builder::LightDataBuilder, millimeter, ray_data_builder::RayDataBuilder,

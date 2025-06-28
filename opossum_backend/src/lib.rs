@@ -27,6 +27,6 @@ pub use opossum::{
     utils::math_utils::isize_to_f64,
     utils::{
         geom_transformation::{Isometry, RotationAxis, TranslationAxis},
-        math_utils::usize_to_f64,
+        math_utils::{f64_to_usize, usize_to_f64},
     },
 };

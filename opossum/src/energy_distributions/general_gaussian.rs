@@ -91,6 +91,31 @@ impl General2DGaussian {
         })
     }
 
+    /// Sets the total energy of this [`General2DGaussian`] distribution.
+    ///
+    /// This function updates the total energy assigned to the distribution,
+    /// which determines how much energy is spread across the 2D Gaussian profile.
+    ///
+    /// The [`General2DGaussian`] distribution represents a two-dimensional Gaussian
+    /// distribution with parameters like center, width (σ), rotation, and aspect ratio.
+    ///
+    /// # Parameters
+    /// - `energy`: The new total [`Energy`] to assign to the distribution.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the provided energy is valid (positive and finite).
+    /// - `Err(OpossumError)` if the energy is invalid.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The energy is not finite (e.g., NaN or infinite).
+    /// - The energy is zero or negative.
+    ///
+    /// # Example
+    /// ```
+    /// let mut dist = General2DGaussian::default();
+    /// dist.set_energy(Energy::from_joules(1.0))?;
+    /// ```
     pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
         if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
             return Err(OpossumError::Other(
@@ -101,52 +126,120 @@ impl General2DGaussian {
         Ok(())
     }
 
-    pub fn energy(&self) -> Energy {
+    /// Returns the total energy of the distribution.
+    ///
+    /// # Returns
+    /// An [`Energy`] value representing the total integrated energy of the distribution.
+    #[must_use]
+    pub const fn energy(&self) -> Energy {
         self.total_energy
     }
 
-    pub fn center(&self) -> Point2<Length> {
+    /// Returns the center of the 2D Gaussian in the x-y plane.
+    ///
+    /// # Returns
+    /// A [`Point2<Length>`] representing the mean (μₓ, μᵧ) of the distribution.
+    #[must_use]
+    pub const fn center(&self) -> Point2<Length> {
         self.mu_xy
     }
 
+    /// Sets the x-coordinate of the center of the 2D Gaussian distribution.
+    ///
+    /// # Parameters
+    /// - `x`: A [`Length`] value for the new μₓ (horizontal center).
     pub fn set_center_x(&mut self, x: Length) {
-        self.mu_xy.x = x
+        self.mu_xy.x = x;
     }
 
+    /// Sets the y-coordinate of the center of the 2D Gaussian distribution.
+    ///
+    /// # Parameters
+    /// - `y`: A [`Length`] value for the new μᵧ (vertical center).
     pub fn set_center_y(&mut self, y: Length) {
-        self.mu_xy.y = y
+        self.mu_xy.y = y;
     }
 
-    pub fn sigma(&self) -> Point2<Length> {
+    /// Returns the standard deviation along the x and y axes.
+    ///
+    /// # Returns
+    /// A [`Point2<Length>`] containing the standard deviations (σₓ, σᵧ).
+    #[must_use]
+    pub const fn sigma(&self) -> Point2<Length> {
         self.sigma_xy
     }
 
+    /// Sets the standard deviation σₓ of the 2D Gaussian distribution.
+    ///
+    /// # Parameters
+    /// - `x`: A [`Length`] value for the horizontal spread.
     pub fn set_sigma_x(&mut self, x: Length) {
-        self.sigma_xy.x = x
+        self.sigma_xy.x = x;
     }
 
+    /// Sets the standard deviation σᵧ of the 2D Gaussian distribution.
+    ///
+    /// # Parameters
+    /// - `y`: A [`Length`] value for the vertical spread.
     pub fn set_sigma_y(&mut self, y: Length) {
-        self.sigma_xy.y = y
+        self.sigma_xy.y = y;
     }
-    pub fn power(&self) -> f64 {
+
+    /// Returns the normalized power scaling factor of the distribution.
+    ///
+    /// This can be used to modulate the intensity without affecting the shape.
+    ///
+    /// # Returns
+    /// A `f64` value representing the power multiplier.
+    #[must_use]
+    pub const fn power(&self) -> f64 {
         self.power
     }
-    pub fn set_power(&mut self, power: f64) {
-        self.power = power
+
+    /// Sets the normalized power scaling factor of the distribution.
+    ///
+    /// # Parameters
+    /// - `power`: A `f64` value for the new intensity multiplier.
+    pub const fn set_power(&mut self, power: f64) {
+        self.power = power;
     }
 
-    pub fn theta(&self) -> Angle {
+    /// Returns the rotation angle θ of the distribution in the x-y plane.
+    ///
+    /// The rotation is measured counterclockwise from the x-axis.
+    ///
+    /// # Returns
+    /// An [`Angle`] representing the orientation of the Gaussian ellipse.
+    #[must_use]
+    pub const fn theta(&self) -> Angle {
         self.theta
     }
+
+    /// Sets the rotation angle θ of the distribution in the x-y plane.
+    ///
+    /// # Parameters
+    /// - `angle`: An [`Angle`] specifying the orientation.
     pub fn set_theta(&mut self, angle: Angle) {
-        self.theta = angle
+        self.theta = angle;
     }
 
-    pub fn rectangular(&self) -> bool {
+    /// Returns whether the distribution has rectangular or elliptical shape.
+    ///
+    /// This affects how the Gaussian profile is shaped.
+    ///
+    /// # Returns
+    /// A `bool` indicating if rectangular mode is active.
+    #[must_use]
+    pub const fn rectangular(&self) -> bool {
         self.rectangular
     }
-    pub fn set_rectangular(&mut self, rectangular: bool) {
-        self.rectangular = rectangular
+
+    /// Enables or disables rectangular shaping for the distribution.
+    ///
+    /// # Parameters
+    /// - `rectangular`: A `bool` indicating whether to use rectangular mode.
+    pub const fn set_rectangular(&mut self, rectangular: bool) {
+        self.rectangular = rectangular;
     }
 }
 

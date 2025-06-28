@@ -57,7 +57,8 @@ impl FibonacciRectangle {
     /// # Returns
     ///
     /// The number of points as a `usize`.
-    pub fn nr_of_points(&self) -> usize {
+    #[must_use]
+    pub const fn nr_of_points(&self) -> usize {
         self.nr_of_rays
     }
 
@@ -66,6 +67,7 @@ impl FibonacciRectangle {
     /// # Returns
     ///
     /// The length of the side in the X direction as a `Length`.
+    #[must_use]
     pub fn side_length_x(&self) -> Length {
         self.side_length_x
     }
@@ -75,6 +77,7 @@ impl FibonacciRectangle {
     /// # Returns
     ///
     /// The length of the side in the Y direction as a `Length`.
+    #[must_use]
     pub fn side_length_y(&self) -> Length {
         self.side_length_y
     }
@@ -88,7 +91,7 @@ impl FibonacciRectangle {
     /// # Side Effects
     ///
     /// Updates the current number of rays.
-    pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
+    pub const fn set_nr_of_points(&mut self, nr_of_points: usize) {
         self.nr_of_rays = nr_of_points;
     }
 
@@ -192,7 +195,8 @@ impl FibonacciEllipse {
     /// # Returns
     ///
     /// The number of points as a `usize`.
-    pub fn nr_of_points(&self) -> usize {
+    #[must_use]
+    pub const fn nr_of_points(&self) -> usize {
         self.nr_of_rays
     }
 
@@ -201,6 +205,7 @@ impl FibonacciEllipse {
     /// # Returns
     ///
     /// The radius in the X direction as a `Length`.
+    #[must_use]
     pub fn radius_x(&self) -> Length {
         self.radius_x
     }
@@ -210,6 +215,7 @@ impl FibonacciEllipse {
     /// # Returns
     ///
     /// The radius in the Y direction as a `Length`.
+    #[must_use]
     pub fn radius_y(&self) -> Length {
         self.radius_y
     }
@@ -223,7 +229,7 @@ impl FibonacciEllipse {
     /// # Side Effects
     ///
     /// Updates the current number of rays.
-    pub fn set_nr_of_points(&mut self, nr_of_points: usize) {
+    pub const fn set_nr_of_points(&mut self, nr_of_points: usize) {
         self.nr_of_rays = nr_of_points;
     }
 
@@ -235,7 +241,7 @@ impl FibonacciEllipse {
     ///
     /// # Side Effects
     ///
-    /// Updates the current radius_x.
+    /// Updates the current `radius_x`.
     pub fn set_radius_x(&mut self, radius_x: Length) {
         self.radius_x = radius_x;
     }
@@ -248,7 +254,7 @@ impl FibonacciEllipse {
     ///
     /// # Side Effects
     ///
-    /// Updates the current radius_y.
+    /// Updates the current `radius_y`.
     pub fn set_radius_y(&mut self, radius_y: Length) {
         self.radius_y = radius_y;
     }

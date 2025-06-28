@@ -54,6 +54,7 @@ impl HexagonalTiling {
     /// # Returns
     ///
     /// The radius as a `Length`.
+    #[must_use]
     pub fn radius(&self) -> Length {
         self.radius
     }
@@ -63,7 +64,8 @@ impl HexagonalTiling {
     /// # Returns
     ///
     /// The number of hexagons as a `u8`.
-    pub fn nr_of_hex_along_radius(&self) -> u8 {
+    #[must_use]
+    pub const fn nr_of_hex_along_radius(&self) -> u8 {
         self.nr_of_hex_along_radius
     }
 
@@ -72,6 +74,7 @@ impl HexagonalTiling {
     /// # Returns
     ///
     /// The center as a `Point2<Length>`.
+    #[must_use]
     pub fn center(&self) -> Point2<Length> {
         self.center
     }
@@ -98,7 +101,7 @@ impl HexagonalTiling {
     /// # Side Effects
     ///
     /// Updates the current number of hexagons.
-    pub fn set_nr_of_hex_along_radius(&mut self, nr_of_hex_along_radius: u8) {
+    pub const fn set_nr_of_hex_along_radius(&mut self, nr_of_hex_along_radius: u8) {
         self.nr_of_hex_along_radius = nr_of_hex_along_radius;
     }
 
