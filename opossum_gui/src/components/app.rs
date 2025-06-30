@@ -1,10 +1,10 @@
-use crate::components::{
+use crate::{components::{
     context_menu::cx_menu::{ContextMenu, CxtCommand},
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
     node_editor::NodeEditor,
-    scenery_editor::{NodeEditorCommand, NodeElement, GraphEditor},
-};
+    scenery_editor::{GraphEditor, NodeEditorCommand, NodeElement},
+}};
 use dioxus::prelude::*;
 
 #[component]
@@ -13,7 +13,7 @@ pub fn App() -> Element {
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
     let selected_node = use_signal(|| None::<NodeElement>);
-
+    
     use_effect(move || {
         let cxt_command = cxt_command.read();
         if let Some(cxt_command) = &*(cxt_command) {

@@ -13,6 +13,7 @@ eula = false
 [dependencies]
 opossum = { path = "../opossum" }
 actix-web = "4"
+parking_lot="0.12.4"
 actix-cors = "0.7.0"
 env_logger = "0.11"
 serde = { version = "1.0", features = ["derive"] }

@@ -5153,6 +5153,7 @@ dependencies = [
  "env_logger",
  "nalgebra",
  "opossum",
+ "parking_lot",
  "ron",
  "serde",
  "serde_json",

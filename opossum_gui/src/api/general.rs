@@ -46,3 +46,10 @@ pub async fn get_node_types(client: &HTTPClient) -> Result<Vec<NodeType>, String
 pub async fn get_analyzer_types(client: &HTTPClient) -> Result<Vec<AnalyzerType>, String> {
     client.get::<Vec<AnalyzerType>>("/api/analyzer_types").await
 }
+
+/// Send a request to shutdown the backend server.
+/// 
+/// This function shuts down the backend server. No further communication is possible after this call.
+pub async fn post_terminate(client: &HTTPClient) {
+    let _=client.client().post("/api/terminate").send().await;
+}

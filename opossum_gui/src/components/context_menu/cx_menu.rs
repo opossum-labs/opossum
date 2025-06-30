@@ -27,14 +27,6 @@ impl CxMenu {
     pub const fn padding() -> f64 {
         2.
     }
-    // #[must_use]
-    // pub const fn entries(&self) -> &Vec<(String, Callback<Event<MouseData>>)> {
-    //     &self.entries
-    // }
-
-    pub fn set(&mut self, cx_menu: Self) {
-        *self = cx_menu;
-    }
     #[must_use]
     pub const fn new(x: f64, y: f64, entries: Vec<(String, CxtCommand)>) -> Option<Self> {
         // MAIN_WINDOW_SIZE.read().as_ref().map(|rect| {
