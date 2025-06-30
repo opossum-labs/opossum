@@ -73,7 +73,6 @@ pub fn EnergyDistributionEditor(
 pub fn RayEnergyDistributionSelector(
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
-    let (show, _) = light_data_builder_sig.read().is_rays_is_collimated();
     let rays_energy_dist =
         EnergyDistSelection::try_from(light_data_builder_sig.read().get_current());
 
@@ -85,7 +84,6 @@ pub fn RayEnergyDistributionSelector(
                     id: "selectRaysEnergyDistribution",
                     label: "Rays Energy Distribution",
                     options: red.get_option_elements(),
-                    hidden: !show,
                     onchange: move |e: Event<FormData>| {
                         light_data_builder_sig
                             .with_mut(|ldb| {

@@ -6,40 +6,30 @@ use std::{fmt::Display, path::PathBuf};
 
 use super::LightData;
 use crate::{
-    energy_distributions::EnergyDistType, error::OpmResult, meter,
-    position_distributions::PosDistType, rays::Rays, spectral_distribution::SpecDistType,
+    degree, energy_distributions::EnergyDistType, error::OpmResult, joule, meter, nanometer, position_distributions::PosDistType, rays::Rays, spectral_distribution::SpecDistType
 };
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 use uom::si::{
     f64::{Angle, Energy, Length},
     length::meter,
 };
 
 /// Builder for the generation of [`LightData::Geometric`].
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
 pub enum RayDataBuilder {
     /// Raw [`Rays`] data.
     Raw(Rays),
     /// Collimated [`Rays`] data with a given [`PosDistType`], [`EnergyDistType`], and [`SpecDistType`].
-    Collimated(CollimatedSrcDist),
+    Collimated(CollimatedSrc),
     /// Point source [`Rays`] data with a given [`PosDistType`], [`EnergyDistType`], and [`SpecDistType`].
     /// All rays start on the optical axis and are emitted within a cone. The cone is defined by the
     /// position distribution **after the rays have propagated the given reference length**.
     PointSrc(PointSrc),
     /// A bundle of rays emitted from a 2D black & white image specified by its file path, the actual (x/y) dimenstions of the image as well as the
     /// total energy.
-    Image {
-        /// path to the image file
-        file_path: PathBuf,
-        /// x & y dimensions of the image
-        pixel_size: Length,
-        /// total energy
-        total_energy: Energy,
-        /// wavelength
-        wave_length: Length,
-        /// cone angle of each point src per pixel
-        cone_angle: Angle,
-    },
+    Image (ImageSrc)      
+    
 }
 /// Represents a collimated source, holding he distributions of the rays for ray tracing,
 /// storing distributions related to position, energy, and spectrum.
@@ -50,13 +40,13 @@ pub enum RayDataBuilder {
 /// * `energy` - Energy distribution (`EnergyDistType`) describing energy values of the rays.
 /// * `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CollimatedSrcDist {
+pub struct CollimatedSrc {
     pos: PosDistType,
     energy: EnergyDistType,
     spect: SpecDistType,
 }
 
-impl CollimatedSrcDist {
+impl CollimatedSrc {
     /// Creates a new `CollimatedSrc` with specified position, energy, and spectral distributions.
     ///
     /// # Parameters
@@ -300,9 +290,158 @@ impl Default for PointSrc {
     }
 }
 
+/// A ray source that emits rays from an image, with a defined cone angle per pixel.
+///
+/// `ImageSrc` is used to simulate image-based light sources in optical setups.
+/// It emits rays from an image plane, where each pixel launches rays within a
+/// defined cone angle. This is particularly useful for visualizing image formation,
+/// focus planes, or blur depending on the optical system.
+///
+/// # Fields
+/// - `file_path`: Path to the input image file.
+/// - `pixel_size`: Size of each pixel on the image plane (usually in millimeters).
+/// - `total_energy`: Total energy emitted by the source.
+/// - `wave_length`: Wavelength of emitted light.
+/// - `cone_angle`: Angular spread of rays emitted from each pixel.
+///
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImageSrc {
+     /// path to the image file
+    file_path: PathBuf,
+    /// x & y dimensions of the image
+    pixel_size: Length,
+    /// total energy
+    total_energy: Energy,
+    /// wavelength
+    wave_length: Length,
+    /// cone angle of each point src per pixel
+    cone_angle: Angle,
+}
+
+impl ImageSrc {
+    /// Creates a new [`ImageSrc`] instance with the given configuration.
+    ///
+    /// # Parameters
+    /// - `file_path`: Path to the source image.
+    /// - `pixel_size`: Physical size of one image pixel.
+    /// - `total_energy`: Total emitted energy.
+    /// - `wave_length`: Wavelength of the emitted light.
+    /// - `cone_angle`: Cone angle (angular divergence) of rays per pixel.
+    ///
+    /// # Returns
+    /// A new [`ImageSrc`] instance.
+    #[must_use]
+    pub fn new(
+        file_path: PathBuf,
+        pixel_size: Length,
+        total_energy: Energy,
+        wave_length: Length,
+        cone_angle: Angle,
+    ) -> Self {
+        Self {
+            file_path,
+            pixel_size,
+            total_energy,
+            wave_length,
+            cone_angle,
+        }
+    }
+
+    /// Returns a reference to the file path of the image source.
+    #[must_use]
+    pub fn file_path(&self) -> &PathBuf {
+        &self.file_path
+    }
+
+    /// Sets a new file path for the image source.
+    ///
+    /// # Parameters
+    /// - `f_path`: New path to the image.
+    pub fn set_file_path(&mut self, f_path: PathBuf) {
+        self.file_path = f_path;
+    }
+
+    /// Returns the pixel size in physical units.
+    #[must_use]
+    pub fn pixel_size(&self) -> Length {
+        self.pixel_size
+    }
+
+    /// Sets the pixel size.
+    ///
+    /// # Parameters
+    /// - `pixel_size`: New physical size of one pixel.
+    pub fn set_pixel_size(&mut self, pixel_size: Length) {
+        self.pixel_size = pixel_size;
+    }
+
+    /// Returns the total energy of the source.
+    #[must_use]
+    pub fn energy(&self) -> Energy {
+        self.total_energy
+    }
+
+    /// Sets the total energy emitted by the source.
+    ///
+    /// # Parameters
+    /// - `energy`: New total energy.
+    pub fn set_energy(&mut self, energy: Energy) {
+        self.total_energy = energy;
+    }
+
+    /// Returns the wavelength of the emitted rays.
+    #[must_use]
+    pub fn wavelength(&self) -> Length {
+        self.wave_length
+    }
+
+    /// Sets the wavelength of the emitted rays.
+    ///
+    /// # Parameters
+    /// - `wavelength`: New wavelength.
+    pub fn set_wavelength(&mut self, wavelength: Length) {
+        self.wave_length = wavelength;
+    }
+
+    /// Returns the cone angle of the rays emitted from each pixel.
+    #[must_use]
+    pub fn cone_angle(&self) -> Angle {
+        self.cone_angle
+    }
+
+    /// Sets the cone angle for the rays emitted from each pixel.
+    ///
+    /// # Parameters
+    /// - `cone_angle`: New angular spread of rays.
+    pub fn set_cone_angle(&mut self, cone_angle: Angle) {
+        self.cone_angle = cone_angle;
+    }
+}
+impl Default for ImageSrc {
+    /// Returns a default [`ImageSrc`] instance with placeholder values:
+    ///
+    /// - `file_path`: Empty [`PathBuf`].
+    /// - `pixel_size`: 1 mm.
+    /// - `total_energy`: 1 joule.
+    /// - `wave_length`: 550 nm.
+    /// - `cone_angle`: 5 degrees.
+    ///
+    /// These defaults are useful as initial placeholders for user interfaces
+    /// or tests, but they should be replaced with actual data for simulations.
+    fn default() -> Self {
+        Self {
+            file_path: PathBuf::new(),
+            pixel_size: nanometer!(5860.),
+            total_energy: joule!(0.1),
+            wave_length: nanometer!(1054.0),
+            cone_angle: degree!(5.0),
+        }
+    }
+}
+
 impl Default for RayDataBuilder {
     fn default() -> Self {
-        Self::Collimated(CollimatedSrcDist::default())
+        Self::Collimated(CollimatedSrc::default())
     }
 }
 impl RayDataBuilder {
@@ -330,18 +469,12 @@ impl RayDataBuilder {
                 )?;
                 Ok(LightData::Geometric(rays))
             }
-            Self::Image {
-                file_path,
-                pixel_size,
-                total_energy,
-                wave_length,
-                cone_angle,
-            } => Ok(LightData::Geometric(Rays::from_image(
-                &file_path,
-                pixel_size,
-                total_energy,
-                wave_length,
-                cone_angle,
+            Self::Image (image_src) => Ok(LightData::Geometric(Rays::from_image(
+                &image_src.file_path,
+                image_src.pixel_size,
+                image_src.total_energy,
+                image_src.wave_length,
+                image_src.cone_angle,
             )?)),
         }
     }
@@ -370,17 +503,11 @@ impl Display for RayDataBuilder {
                     point_src.reference_length().get::<meter>()
                 )
             }
-            Self::Image {
-                file_path,
-                pixel_size,
-                total_energy,
-                wave_length,
-                cone_angle,
-            } => {
+            Self::Image(image_src) => {
                 write!(
                     f,
-                    "Image field({}, {pixel_size:?}, {total_energy:?}, {wave_length:?}, {cone_angle:?}",
-                    file_path.display()
+                    "Image field({}, {:?}, {:?}, {:?}, {:?}",
+                    image_src.file_path.display(), image_src.pixel_size, image_src.total_energy, image_src.wave_length, image_src.cone_angle
                 )
             }
         }

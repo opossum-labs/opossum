@@ -8,7 +8,7 @@ use opossum::{
     joule,
     lightdata::{
         light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrcDist, RayDataBuilder},
+        ray_data_builder::{CollimatedSrc, RayDataBuilder},
     },
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, Source, ThinMirror},
@@ -24,7 +24,7 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Ghostfocus demo");
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrcDist::new(
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
             HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
             General2DGaussian::new(
                 joule!(2.),

@@ -9,6 +9,8 @@ use crate::components::node_editor::{
     accordion::{LabeledInput, LabeledSelect},
     source_editor::{CallbackWrapper, LightDataBuilderHistory},
 };
+use strum::EnumIter;
+use strum::IntoEnumIterator;
 
 /// A convenience struct representing the current ray type selection in the GUI state.
 ///
@@ -72,6 +74,23 @@ impl RayTypeSelection {
 
         self.ray_type = ray_type;
     }
+
+    pub fn get_option_elements(&self) -> Vec<(bool, String)> {
+        let mut option_vals = Vec::<(bool, String)>::new();
+        for ray_type in RayDataBuilder::iter() {
+            match ray_type {
+                RayDataBuilder::Collimated { .. } => {
+                    option_vals.push((self.collimated, "Collimated".to_string()))
+                }
+                RayDataBuilder::PointSrc { .. } => {
+                    option_vals.push((self.point_src, "Point Source".to_string()))
+                }
+                RayDataBuilder::Image { .. } => option_vals.push((self.image, "Image".to_string())),
+                RayDataBuilder::Raw { .. } => {}
+            }
+        }
+        option_vals
+    }
 }
 
 impl TryFrom<LightDataBuilder> for RayTypeSelection {
@@ -129,24 +148,25 @@ pub fn ReferenceLengthEditor(light_data_builder_sig: Signal<LightDataBuilderHist
 
 #[component]
 pub fn RayDataBuilderSelector(light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Element {
-    let (show, is_collimated) = light_data_builder_sig.read().is_rays_is_collimated();
-
-    rsx! {
-        LabeledSelect {
-            id: "selectRaySourceType",
-            label: "Rays Type",
-            options: vec![
-                (is_collimated, "Collimated".to_owned()),
-                (!is_collimated, "Point Source".to_owned()),
-            ],
-            hidden: !show,
-            onchange: move |e: Event<FormData>| {
-                light_data_builder_sig
-                    .with_mut(|ldb| {
-                        let value = e.value();
-                        ldb.set_current_or_default(value.as_str());
-                    });
-            },
-        }
-    }
+    light_data_builder_sig
+        .read()
+        .get_current()
+        .map_or(rsx! {}, |ldb| {
+            RayTypeSelection::try_from(ldb.clone()).map_or(rsx! {}, |rts| {
+                rsx! {
+                    LabeledSelect {
+                        id: "selectRaySourceType",
+                        label: "Rays Type",
+                        options: rts.get_option_elements(),
+                        onchange: move |e: Event<FormData>| {
+                            light_data_builder_sig
+                                .with_mut(|ldb| {
+                                    let value = e.value();
+                                    ldb.set_current_or_default(value.as_str());
+                                });
+                        },
+                    }
+                }
+            })
+        })
 }

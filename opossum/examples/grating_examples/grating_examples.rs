@@ -2,7 +2,7 @@ use nalgebra::Vector3;
 use opossum::OpmDocument;
 use opossum::analyzers::{AnalyzerType, RayTraceConfig};
 use opossum::lightdata::light_data_builder::LightDataBuilder;
-use opossum::lightdata::ray_data_builder::{CollimatedSrcDist, RayDataBuilder};
+use opossum::lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder};
 use opossum::nodes::{NodeGroup, NodeReference, ParaxialSurface, SpotDiagram, ThinMirror};
 use opossum::optic_node::Alignable;
 use opossum::refractive_index::{RefrIndexConst, RefractiveIndex};
@@ -44,7 +44,7 @@ fn main() -> OpmResult<()> {
         nanometer!(300.)..nanometer!(1200.),
     )?;
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrcDist::new(
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(1.), 4)?.into(),
             UniformDist::new(joule!(1.))?.into(),
             Gaussian::new(
@@ -313,7 +313,7 @@ fn main() -> OpmResult<()> {
     )?;
     let mut scenery = NodeGroup::new("telescope");
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrcDist::new(
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(50.), 8)?.into(),
             UniformDist::new(joule!(1.))?.into(),
             Gaussian::new(

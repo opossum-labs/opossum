@@ -344,7 +344,6 @@ fn get_sobol_dist_input_params(
 pub fn RayPositionDistributionSelector(
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
-    let (show, _) = light_data_builder_sig.read().is_rays_is_collimated();
     let rays_pos_dist = PosDistSelection::try_from(light_data_builder_sig.read().get_current());
 
     rays_pos_dist.map_or_else(
@@ -355,7 +354,6 @@ pub fn RayPositionDistributionSelector(
                     id: "selectRaysPosDistribution",
                     label: "Rays Position Distribution",
                     options: rpd.get_option_elements(),
-                    hidden: !show,
                     onchange: move |e: Event<FormData>| {
                         light_data_builder_sig
                             .with_mut(|ldb| {

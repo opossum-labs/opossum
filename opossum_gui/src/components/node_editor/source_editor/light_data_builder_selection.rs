@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use opossum_backend::{
     energy_data_builder::EnergyDataBuilder,
     light_data_builder::LightDataBuilder,
-    ray_data_builder::{CollimatedSrcDist, PointSrc, RayDataBuilder},
+    ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder},
     EnergyDistType, PosDistType, SpecDistType,
 };
 use std::collections::HashMap;
@@ -141,6 +141,23 @@ impl LightDataBuilderHistory {
             Some(LightDataBuilder::Geometric(ray_data_builder)) => match ray_data_builder {
                 RayDataBuilder::Collimated(_) => (true, true),
                 _ => (true, false),
+            },
+            _ => (false, false),
+        }
+    }
+
+    // Checks whether the currently selected builder is of type `Geometric` and whether it is of image type.
+    ///
+    /// # Returns
+    /// A tuple:
+    /// - `is_geometric`: `true` if the builder is geometric.
+    /// - `is_not_image`: `true` if the builder is not of type `Image`.
+    #[must_use]
+    pub fn is_rays_is_not_image(&self) -> (bool, bool) {
+        match self.get_current() {
+            Some(LightDataBuilder::Geometric(ray_data_builder)) => match ray_data_builder {
+                RayDataBuilder::Image(_) => (true, false),
+                _ => (true, true),
             },
             _ => (false, false),
         }
@@ -349,7 +366,7 @@ impl LightDataBuilderHistory {
             match key {
                 "Rays" => {
                     let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(
-                        CollimatedSrcDist::default(),
+                        CollimatedSrc::default(),
                     ));
                     self.replace_or_insert_and_set_current(key, new_ld_builder);
                 }
@@ -359,7 +376,7 @@ impl LightDataBuilderHistory {
                 }
                 "Collimated" => {
                     let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(
-                        CollimatedSrcDist::default(),
+                        CollimatedSrc::default(),
                     ));
                     self.replace_or_insert("Rays", &new_ld_builder);
                     self.replace_or_insert_and_set_current(key, new_ld_builder);
@@ -367,6 +384,12 @@ impl LightDataBuilderHistory {
                 "Point Source" => {
                     let new_ld_builder =
                         LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::default()));
+                    self.replace_or_insert("Rays", &new_ld_builder);
+                    self.replace_or_insert_and_set_current(key, new_ld_builder);
+                }
+                "Image" => {
+                    let new_ld_builder =
+                        LightDataBuilder::Geometric(RayDataBuilder::Image(ImageSrc::default()));
                     self.replace_or_insert("Rays", &new_ld_builder);
                     self.replace_or_insert_and_set_current(key, new_ld_builder);
                 }

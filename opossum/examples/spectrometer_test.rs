@@ -6,7 +6,7 @@ use opossum::{
     joule,
     lightdata::{
         light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrcDist, RayDataBuilder},
+        ray_data_builder::{CollimatedSrc, RayDataBuilder},
     },
     millimeter, nanometer,
     nodes::{NodeGroup, Source, Spectrometer},
@@ -19,7 +19,7 @@ use opossum::{
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Raysource demo");
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrcDist::new(
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(1.0), 3)?.into(),
             UniformDist::new(joule!(1.0))?.into(),
             LaserLines::new(vec![

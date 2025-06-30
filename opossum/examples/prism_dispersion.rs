@@ -10,7 +10,7 @@ use opossum::{
     joule,
     lightdata::{
         light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrcDist, RayDataBuilder},
+        ray_data_builder::{CollimatedSrc, RayDataBuilder},
     },
     millimeter, nanometer,
     nodes::{NodeGroup, RayPropagationVisualizer, Source, SpotDiagram, Wedge},
@@ -38,7 +38,7 @@ fn main() -> OpmResult<()> {
 
     let mut scenery = NodeGroup::default();
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrcDist::new(
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
             Grid::new((Length::zero(), beam_size_y), (1, nr_of_rays))?.into(),
             UniformDist::new(joule!(1.0))?.into(),
             LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 1.0)])?.into(),

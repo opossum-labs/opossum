@@ -88,13 +88,9 @@ pub fn LabeledSelect(
     label: String,
     options: Vec<(bool, String)>,
     onchange: Callback<Event<FormData>>,
-    #[props(default = false)] hidden: bool,
 ) -> Element {
     rsx! {
-        div {
-            hidden,
-            class: "form-floating border-start",
-            "data-mdb-input-init": "",
+        div { class: "form-floating border-start", "data-mdb-input-init": "",
             select {
                 class: "form-select bg-dark text-light",
                 id: id.as_str(),
