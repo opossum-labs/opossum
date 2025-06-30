@@ -67,7 +67,7 @@ pub fn LightDataEditor(
 pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Element {
     let (is_rays, is_not_image) = light_data_builder_sig.read().is_rays_is_not_image();
 
-    if is_rays && is_not_image{
+    if is_rays && is_not_image {
         rsx! {
             div {
                 class: "accordion accordion-borderless bg-dark border-start",
@@ -77,9 +77,8 @@ pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory
                 SpectralDistributionEditor { light_data_builder_sig }
             }
         }
-    }
-    else{
-        rsx!{}
+    } else {
+        rsx! {}
     }
 }
 

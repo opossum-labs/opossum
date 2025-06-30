@@ -6,7 +6,8 @@ use std::{fmt::Display, path::PathBuf};
 
 use super::LightData;
 use crate::{
-    degree, energy_distributions::EnergyDistType, error::OpmResult, joule, meter, nanometer, position_distributions::PosDistType, rays::Rays, spectral_distribution::SpecDistType
+    degree, energy_distributions::EnergyDistType, error::OpmResult, joule, meter, nanometer,
+    position_distributions::PosDistType, rays::Rays, spectral_distribution::SpecDistType,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
@@ -28,8 +29,7 @@ pub enum RayDataBuilder {
     PointSrc(PointSrc),
     /// A bundle of rays emitted from a 2D black & white image specified by its file path, the actual (x/y) dimenstions of the image as well as the
     /// total energy.
-    Image (ImageSrc)      
-    
+    Image(ImageSrc),
 }
 /// Represents a collimated source, holding he distributions of the rays for ray tracing,
 /// storing distributions related to position, energy, and spectrum.
@@ -306,7 +306,7 @@ impl Default for PointSrc {
 ///
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ImageSrc {
-     /// path to the image file
+    /// path to the image file
     file_path: PathBuf,
     /// x & y dimensions of the image
     pixel_size: Length,
@@ -469,7 +469,7 @@ impl RayDataBuilder {
                 )?;
                 Ok(LightData::Geometric(rays))
             }
-            Self::Image (image_src) => Ok(LightData::Geometric(Rays::from_image(
+            Self::Image(image_src) => Ok(LightData::Geometric(Rays::from_image(
                 &image_src.file_path,
                 image_src.pixel_size,
                 image_src.total_energy,
@@ -507,7 +507,11 @@ impl Display for RayDataBuilder {
                 write!(
                     f,
                     "Image field({}, {:?}, {:?}, {:?}, {:?}",
-                    image_src.file_path.display(), image_src.pixel_size, image_src.total_energy, image_src.wave_length, image_src.cone_angle
+                    image_src.file_path.display(),
+                    image_src.pixel_size,
+                    image_src.total_energy,
+                    image_src.wave_length,
+                    image_src.cone_angle
                 )
             }
         }
