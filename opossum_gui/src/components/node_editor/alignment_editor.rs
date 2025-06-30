@@ -3,6 +3,7 @@ use crate::{
     components::node_editor::{
         accordion::{AccordionItem, LabeledInput},
         node_editor_component::NodeChange,
+        source_editor::CallbackWrapper,
     },
     OPOSSUM_UI_LOGS,
 };
@@ -60,7 +61,7 @@ pub fn NodeAlignmentTranslationInput(iso: Signal<Isometry>, axis: TranslationAxi
             label: format!("{} translation in mm", axis),
             value: format!("{:.3}", iso.read().translation_of_axis(axis).get::<millimeter>()),
             r#type: "number",
-            onchange: Some(translation_onchange(node_change_signal, iso, axis)),
+            onchange: translation_onchange(node_change_signal, iso, axis),
         }
     }
 }
@@ -69,8 +70,8 @@ fn translation_onchange(
     mut node_change: Signal<Option<NodeChange>>,
     mut iso_sig: Signal<Isometry>,
     axis: TranslationAxis,
-) -> Callback<Event<FormData>> {
-    use_callback(move |e: Event<FormData>| {
+) -> CallbackWrapper {
+    CallbackWrapper::new(move |e: Event<FormData>| {
         let Ok(value) = e.data.value().parse::<f64>() else {
             return;
         };
@@ -99,7 +100,7 @@ pub fn NodeAlignmentRotationInput(iso: Signal<Isometry>, axis: RotationAxis) -> 
             label: format!("{} rotation in degrees", axis),
             value: format!("{:.3}", iso.read().rotation_of_axis(axis).get::<degree>()),
             r#type: "number",
-            onchange: Some(rotation_onchange(node_change_signal, iso, axis)),
+            onchange: rotation_onchange(node_change_signal, iso, axis),
         }
     }
 }
@@ -108,8 +109,8 @@ fn rotation_onchange(
     mut node_change: Signal<Option<NodeChange>>,
     mut iso_sig: Signal<Isometry>,
     axis: RotationAxis,
-) -> Callback<Event<FormData>> {
-    use_callback(move |e: Event<FormData>| {
+) -> CallbackWrapper {
+    CallbackWrapper::new(move |e: Event<FormData>| {
         let Ok(value) = e.data.value().parse::<f64>() else {
             return;
         };

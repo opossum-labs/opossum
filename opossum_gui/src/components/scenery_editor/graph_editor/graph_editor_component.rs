@@ -3,7 +3,7 @@ use crate::components::scenery_editor::{
     edges::edges_component::{
         EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
     },
-    graph_store::{graph_processor, GraphStore, GraphStoreAction},
+    graph_store::{use_graph_processor, GraphStore, GraphStoreAction},
     node::NodeElement,
     nodes::Nodes,
 };
@@ -57,7 +57,8 @@ pub fn GraphEditor(
     let mut current_mouse_pos = use_signal(|| (0.0, 0.0));
     let mut on_mounted = use_signal(|| None);
 
-    let graph_processor: Coroutine<GraphStoreAction> = graph_processor(&graph_store, node_selected);
+    let graph_processor: Coroutine<GraphStoreAction> =
+        use_graph_processor(&graph_store, node_selected);
     use_context_provider(|| graph_store);
     use_context_provider(|| graph_processor);
 

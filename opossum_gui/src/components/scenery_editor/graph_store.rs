@@ -235,7 +235,7 @@ impl UuidRegistry {
     }
 }
 #[allow(clippy::too_many_lines)]
-pub fn graph_processor(
+pub fn use_graph_processor(
     graph_store: &Signal<GraphStore>,
     mut node_selected: Signal<Option<NodeElement>>,
 ) -> Coroutine<GraphStoreAction> {

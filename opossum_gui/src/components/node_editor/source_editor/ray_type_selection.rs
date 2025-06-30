@@ -7,7 +7,7 @@ use uom::si::length::millimeter;
 
 use crate::components::node_editor::{
     accordion::{LabeledInput, LabeledSelect},
-    source_editor::LightDataBuilderHistory,
+    source_editor::{CallbackWrapper, LightDataBuilderHistory},
 };
 
 /// A convenience struct representing the current ray type selection in the GUI state.
@@ -102,20 +102,21 @@ pub fn ReferenceLengthEditor(light_data_builder_sig: Signal<LightDataBuilderHist
                 id: "pointsrcRefLength",
                 label: "Reference Length in mm",
                 value: format!("{}", point_src.reference_length().get::<millimeter>()),
-                onchange: move |e: Event<FormData>| {
+                onchange: CallbackWrapper::new(move |e: Event<FormData>| {
                     let mut point_src = point_src.clone();
                     if let Ok(ref_length) = e.data.parsed::<f64>() {
                         point_src.set_reference_length(millimeter!(ref_length));
                         light_data_builder_sig
                             .with_mut(|ldb| {
-                                if let Some(LightDataBuilder::Geometric(RayDataBuilder::PointSrc(p))) = ldb
-                                    .get_current_mut()
+                                if let Some(
+                                    LightDataBuilder::Geometric(RayDataBuilder::PointSrc(p)),
+                                ) = ldb.get_current_mut()
                                 {
                                     *p = point_src;
                                 }
                             });
                     }
-                },
+                }),
                 r#type: "number",
                 min: "0.0000000001",
                 hidden: is_collimated,

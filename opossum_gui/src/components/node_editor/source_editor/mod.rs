@@ -5,7 +5,7 @@ pub mod position_distribution;
 pub mod ray_type_selection;
 pub mod spectral_distribution;
 
-use std::fmt::Display;
+use std::{cell::RefCell, fmt::Display, rc::Rc};
 
 pub use energy_distribution::*;
 use itertools::Itertools;
@@ -97,7 +97,7 @@ pub fn DistLabeledInput(dist_input: DistInput) -> Element {
                     r#type: "checkbox",
                     role: "switch",
                     checked: dist_input.value.parse::<bool>().unwrap_or_default(),
-                    onchange: dist_input.callback_opt.unwrap_or_default(),
+                    onchange: move |e| dist_input.callback_opt.call(e),
                 }
 
             }
@@ -146,19 +146,50 @@ pub fn RowedDistInputs(dist_params: Vec<DistInput>) -> Element {
     }
 }
 
+pub struct CallbackWrapper(Rc<RefCell<dyn FnMut(Event<FormData>) + 'static>>);
+
+impl PartialEq for CallbackWrapper {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl CallbackWrapper {
+    pub fn new<F>(f: F) -> Self
+    where
+        F: FnMut(Event<FormData>) + 'static,
+    {
+        Self(Rc::new(RefCell::new(f)))
+    }
+
+    pub fn call(&self, e: Event<FormData>) {
+        (self.0.borrow_mut())(e);
+    }
+    #[must_use]
+    pub fn noop() -> Self {
+        Self::new(|_| {})
+    }
+}
+
+impl Clone for CallbackWrapper {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub struct DistInput {
     pub value: String,
     pub id: String,
     pub dist_param: DistParam,
-    pub callback_opt: Option<Callback<Event<FormData>>>,
+    pub callback_opt: CallbackWrapper,
 }
 
 impl DistInput {
     pub fn new(
         dist_param: DistParam,
         dist_type: &impl Display,
-        callback_opt: Option<Callback<Event<FormData>>>,
+        callback_opt: CallbackWrapper,
         value: String,
     ) -> Self {
         Self {

@@ -1,6 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 
+use crate::components::node_editor::source_editor::CallbackWrapper;
+
 #[component]
 pub fn AccordionItem(
     elements: Vec<Element>,
@@ -42,8 +44,7 @@ pub fn LabeledInput(
     id: String,
     label: String,
     value: String,
-
-    #[props(default = None)] onchange: Option<Callback<Event<FormData>>>,
+    onchange: CallbackWrapper,
 
     #[props(default = "text")] r#type: &'static str,
 
@@ -73,7 +74,7 @@ pub fn LabeledInput(
                 step: step.unwrap_or_default(),
                 min: min.unwrap_or_default(),
                 max: max.unwrap_or_default(),
-                onchange: onchange.unwrap_or_default(),
+                onchange: move |e: Event<FormData>| onchange.call(e),
             }
 
             label { class: "form-label text-secondary", r#for: id, "{label}" }

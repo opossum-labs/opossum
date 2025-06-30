@@ -2,7 +2,7 @@
 use crate::components::node_editor::{
     accordion::{AccordionItem, LabeledInput, LabeledSelect},
     node_editor_component::NodeChange,
-    source_editor::LightDataEditor,
+    source_editor::{CallbackWrapper, LightDataEditor},
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
@@ -208,13 +208,13 @@ pub fn LengthEditor(
             label: format!("{} in mm", property_key.to_sentence_case()),
             value: format!("{}", length.get::<millimeter>()),
             r#type: "number",
-            onchange: Some(use_on_length_input_change(prop_type_sig)),
+            onchange: on_length_input_change(prop_type_sig),
         }
     }
 }
 
-fn use_on_length_input_change(mut signal: Signal<Proptype>) -> Callback<Event<FormData>> {
-    use_callback(move |e: Event<FormData>| {
+fn on_length_input_change(mut signal: Signal<Proptype>) -> CallbackWrapper {
+    CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(length) = e.data.value().parse::<f64>() {
             signal.set(Proptype::Length(millimeter!(length)));
         }
@@ -254,14 +254,12 @@ pub fn AlignmentWavelengthEditor(
                         label: format!("{} in nm", property_key.to_sentence_case()),
                         value: format!("{}", length.get::<nanometer>()),
                         r#type: "number",
-                        onchange: Some(
-                            use_callback(move |e: Event<FormData>| {
-                                if let Ok(length) = e.data.value().parse::<f64>() {
-                                    prop_type_sig.set(Proptype::LengthOption(Some(nanometer!(length))));
-                                    alignment_select.set(nanometer!(length));
-                                }
-                            }),
-                        ),
+                        onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+                            if let Ok(length) = e.data.value().parse::<f64>() {
+                                prop_type_sig.set(Proptype::LengthOption(Some(nanometer!(length))));
+                                alignment_select.set(nanometer!(length));
+                            }
+                        }),
                     }
                 }
             } else {

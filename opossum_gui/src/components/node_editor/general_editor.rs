@@ -2,6 +2,7 @@
 use crate::components::node_editor::{
     accordion::{AccordionItem, LabeledInput},
     node_editor_component::NodeChange,
+    source_editor::CallbackWrapper,
 };
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, J_per_cm2};
@@ -40,14 +41,14 @@ pub fn NodeNameInput(node_name: String) -> Element {
             id: "inputNodeName",
             label: "Node Name",
             value: node_name,
-            onchange: Some(name_onchange(node_change_signal)),
+            onchange: name_onchange(node_change_signal),
         }
     }
 }
 
 #[must_use]
-pub fn name_onchange(mut signal: Signal<Option<NodeChange>>) -> Callback<Event<FormData>> {
-    use_callback(move |e: Event<FormData>| {
+pub fn name_onchange(mut signal: Signal<Option<NodeChange>>) -> CallbackWrapper {
+    CallbackWrapper::new(move |e: Event<FormData>| {
         let Ok(name) = e.data.value().parse::<String>();
         signal.set(Some(NodeChange::Name(name)));
     })
@@ -61,15 +62,15 @@ pub fn NodeLIDTInput(node_lidt: Fluence) -> Element {
             id: "inputNodeLIDT",
             label: "LIDT in J/cm²",
             value: format!("{:.2}", node_lidt.get::<joule_per_square_centimeter>()),
-            onchange: Some(lidt_onchange(node_change_signal)),
+            onchange: lidt_onchange(node_change_signal),
             r#type: "number",
         }
     }
 }
 
 #[must_use]
-pub fn lidt_onchange(mut signal: Signal<Option<NodeChange>>) -> Callback<Event<FormData>> {
-    use_callback(move |e: Event<FormData>| {
+pub fn lidt_onchange(mut signal: Signal<Option<NodeChange>>) -> CallbackWrapper {
+    CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(lidt) = e.data.parsed::<f64>() {
             signal.set(Some(NodeChange::LIDT(J_per_cm2!(lidt))));
         }
@@ -84,6 +85,7 @@ pub fn NodeIDInput(node_id: Uuid) -> Element {
             label: "Node ID",
             value: format!("{node_id}"),
             readonly: true,
+            onchange: CallbackWrapper::noop(),
         }
     }
 }
@@ -96,6 +98,7 @@ pub fn NodeTypeInput(node_type: String) -> Element {
             label: "Node Type",
             value: node_type,
             readonly: true,
+            onchange: CallbackWrapper::noop(),
         }
     }
 }
