@@ -123,3 +123,28 @@ input[type=number] {
   column-gap: 0.1rem;
 }
 
+#imgSrcFileSelection{
+    border: none;
+    border-radius: 0;
+    padding: 0;
+}
+
+#imgSrcFileSelection > input{
+  display:none;
+}
+
+#imgSrcFileSelection > label{
+  padding:0.5rem 0.5rem 0.5rem 0.75rem;
+  margin: 0;
+  width:100%;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  text-transform: none;
+}
+
+#imgSrcFileSelection > label:hover{
+  cursor: pointer;
+  background-color:rgb(70, 70, 70) !important;
+
+}

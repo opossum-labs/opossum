@@ -349,7 +349,7 @@ impl ImageSrc {
 
     /// Returns a reference to the file path of the image source.
     #[must_use]
-    pub fn file_path(&self) -> &PathBuf {
+    pub const fn file_path(&self) -> &PathBuf {
         &self.file_path
     }
 

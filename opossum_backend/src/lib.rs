@@ -15,7 +15,7 @@ pub use opossum::{
     energy_distributions::*,
     joule,
     lightdata::{energy_data_builder, light_data_builder, ray_data_builder},
-    millimeter, nanometer,
+    millimeter, nanometer, micrometer,
     nodes::{NodeAttr, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
     optic_ports::PortType,

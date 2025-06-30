@@ -3,7 +3,7 @@ use crate::{
     components::node_editor::{
         accordion::{AccordionItem, LabeledSelect},
         source_editor::{
-            CallbackWrapper, DistInput, DistParam, LightDataBuilderHistory, RowedDistInputs,
+            CallbackWrapper, DistInput, InputParam, LightDataBuilderHistory, RowedInputs,
         },
     },
     OPOSSUM_UI_LOGS,
@@ -49,15 +49,15 @@ pub fn NodeSpectralDistInputs(
     spectral_dist_type: SpecDistType,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
-    let dist_params = get_spectral_dist_input_params(&spectral_dist_type, light_data_builder_sig);
+    let inputs = get_spectral_dist_input_params(&spectral_dist_type, light_data_builder_sig);
     match spectral_dist_type {
         SpecDistType::Gaussian(_) => rsx! {
-            RowedDistInputs { dist_params }
+            RowedInputs { inputs }
         },
         SpecDistType::LaserLines(laser_lines) => {
             rsx! {
                 LaserLineInput {
-                    dist_params,
+                    inputs,
                     laser_lines,
                     light_data_builder_sig,
                 }
@@ -68,7 +68,7 @@ pub fn NodeSpectralDistInputs(
 
 #[component]
 pub fn LaserLineInput(
-    dist_params: Vec<DistInput>,
+    inputs: Vec<DistInput>,
     laser_lines: LaserLines,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
@@ -77,8 +77,8 @@ pub fn LaserLineInput(
             onsubmit: {
                 move |e: Event<FormData>| {
                     let values = e.data().values();
-                    let wvl_opt = values.get(&dist_params[0].id);
-                    let rel_int_opt = values.get(&dist_params[1].id);
+                    let wvl_opt = values.get(&inputs[0].id);
+                    let rel_int_opt = values.get(&inputs[1].id);
                     if let (Some(wvl_val), Some(rel_int_val)) = (wvl_opt, rel_int_opt) {
                         if let (Ok(wvl), Ok(rel_int)) = (
                             wvl_val.as_value().parse::<f64>(),
@@ -115,7 +115,7 @@ pub fn LaserLineInput(
                     }
                 }
             },
-            RowedDistInputs { dist_params: dist_params.clone() }
+            RowedInputs { inputs: inputs.clone() }
             input {
                 class: " border-start btn",
                 r#type: "submit",
@@ -284,21 +284,21 @@ fn get_spectral_dist_input_params(
         SpecDistType::LaserLines(_) => {
             vec![
                 DistInput::new(
-                    DistParam::WaveLength,
+                    InputParam::WaveLength,
                     spectral_dist_type,
                     on_spectral_dist_input_change(
                         spectral_dist_type,
-                        DistParam::WaveLength,
+                        InputParam::WaveLength,
                         light_data_builder_sig,
                     ),
                     "1054.".to_string(),
                 ),
                 DistInput::new(
-                    DistParam::RelIntensity,
+                    InputParam::RelIntensity,
                     spectral_dist_type,
                     on_spectral_dist_input_change(
                         spectral_dist_type,
-                        DistParam::RelIntensity,
+                        InputParam::RelIntensity,
                         light_data_builder_sig,
                     ),
                     "1.".to_string(),
@@ -307,61 +307,61 @@ fn get_spectral_dist_input_params(
         }
         SpecDistType::Gaussian(gaussian) => vec![
             DistInput::new(
-                DistParam::PointsX,
+                InputParam::PointsX,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
                     spectral_dist_type,
-                    DistParam::PointsX,
+                    InputParam::PointsX,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.num_points()),
             ),
             DistInput::new(
-                DistParam::CenterX,
+                InputParam::CenterX,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
                     spectral_dist_type,
-                    DistParam::CenterX,
+                    InputParam::CenterX,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.mu().get::<nanometer>()),
             ),
             DistInput::new(
-                DistParam::WaveLengthStart,
+                InputParam::WaveLengthStart,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
                     spectral_dist_type,
-                    DistParam::WaveLengthStart,
+                    InputParam::WaveLengthStart,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.wvl_start().get::<nanometer>()),
             ),
             DistInput::new(
-                DistParam::WaveLengthEnd,
+                InputParam::WaveLengthEnd,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
                     spectral_dist_type,
-                    DistParam::WaveLengthEnd,
+                    InputParam::WaveLengthEnd,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.wvl_end().get::<nanometer>()),
             ),
             DistInput::new(
-                DistParam::Power,
+                InputParam::Power,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
                     spectral_dist_type,
-                    DistParam::Power,
+                    InputParam::Power,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.power()),
             ),
             DistInput::new(
-                DistParam::FWHM,
+                InputParam::FWHM,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
                     spectral_dist_type,
-                    DistParam::FWHM,
+                    InputParam::FWHM,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.fwhm().get::<nanometer>()),
@@ -374,23 +374,23 @@ fn get_spectral_dist_input_params(
 
 fn on_spectral_dist_input_change(
     spectral_dist_type: &SpecDistType,
-    param: DistParam,
+    param: InputParam,
     mut light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> CallbackWrapper {
     match *spectral_dist_type {
         SpecDistType::Gaussian(gaussian) => CallbackWrapper::new(move |e: Event<FormData>| {
             let mut gaussian = gaussian;
             if let Ok(value) = e.value().parse::<usize>() {
-                if DistParam::PointsX == param {
+                if InputParam::PointsX == param {
                     gaussian.set_num_points(value);
                 }
             } else if let Ok(value) = e.value().parse::<f64>() {
                 match param {
-                    DistParam::CenterX => gaussian.set_mu(nanometer!(value)),
-                    DistParam::WaveLengthStart => gaussian.set_wvl_start(nanometer!(value)),
-                    DistParam::WaveLengthEnd => gaussian.set_wvl_end(nanometer!(value)),
-                    DistParam::Power => gaussian.set_power(value),
-                    DistParam::FWHM => gaussian.set_fwhm(nanometer!(value)),
+                    InputParam::CenterX => gaussian.set_mu(nanometer!(value)),
+                    InputParam::WaveLengthStart => gaussian.set_wvl_start(nanometer!(value)),
+                    InputParam::WaveLengthEnd => gaussian.set_wvl_end(nanometer!(value)),
+                    InputParam::Power => gaussian.set_power(value),
+                    InputParam::FWHM => gaussian.set_fwhm(nanometer!(value)),
                     _ => {}
                 }
             }

@@ -1,14 +1,14 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 use opossum_backend::{
-    light_data_builder::LightDataBuilder, millimeter, ray_data_builder::RayDataBuilder,
+    light_data_builder::LightDataBuilder, millimeter, nanometer, micrometer, joule, degree, ray_data_builder::{ImageSrc, RayDataBuilder},
 };
-use uom::si::length::millimeter;
+use uom::si::{angle::degree, energy::joule, length::{micrometer, millimeter, nanometer}};
 
-use crate::components::node_editor::{
+use crate::{components::node_editor::{
     accordion::{LabeledInput, LabeledSelect},
-    source_editor::{CallbackWrapper, LightDataBuilderHistory},
-};
+    source_editor::{CallbackWrapper, DistInput, InputParam, LightDataBuilderHistory, RowedInputs},
+}, OPOSSUM_UI_LOGS};
 use strum::EnumIter;
 use strum::IntoEnumIterator;
 
@@ -108,6 +108,97 @@ impl TryFrom<LightDataBuilder> for RayTypeSelection {
             _ => Err("Wrong Lightdatabuilder type!".to_owned()),
         }
     }
+}
+
+
+fn get_image_source_input_params(
+    img_src: ImageSrc,
+    light_data_builder_sig: Signal<LightDataBuilderHistory>,
+) -> Vec<DistInput> {
+    let img_src_string = "imgSource".to_string();
+    vec![
+        DistInput::new(
+            InputParam::PixelSize,
+            &img_src_string,
+            on_img_src_input_change(InputParam::PixelSize, img_src.clone(), light_data_builder_sig),
+            format!("{}", img_src.pixel_size().get::<micrometer>()),
+        ),
+        DistInput::new(
+            InputParam::WaveLength,
+            &img_src_string,
+            on_img_src_input_change(InputParam::WaveLength, img_src.clone(), light_data_builder_sig),
+            format!("{}", img_src.wavelength().get::<nanometer>()),
+        ),
+        DistInput::new(
+            InputParam::ConeAngle,
+            &img_src_string,
+            on_img_src_input_change(InputParam::ConeAngle, img_src.clone(), light_data_builder_sig),
+            format!("{}", img_src.cone_angle().get::<degree>()),
+        ),
+        DistInput::new(
+            InputParam::Energy,
+            &img_src_string,
+            on_img_src_input_change(InputParam::Energy, img_src.clone(), light_data_builder_sig),
+            format!("{}", img_src.energy().get::<joule>()),
+        ),
+        DistInput::new(
+            InputParam::FilePath,
+            &img_src_string,
+            on_img_src_input_change(InputParam::FilePath, img_src.clone(), light_data_builder_sig),
+            format!("{}", img_src.file_path().file_name().map_or("no file selected".to_string(), |f| f.to_str().unwrap_or("no file selected").to_string())),
+        ),
+    ]
+}
+
+fn on_img_src_input_change(input_param: InputParam, mut img_src: ImageSrc, mut light_data_builder_sig: Signal<LightDataBuilderHistory>) -> CallbackWrapper{
+    CallbackWrapper::new(move |e: Event<FormData> |{
+        let value = e.value();
+        e.files();
+
+        if let Ok(value) = value.parse::<f64>(){
+            match input_param{
+                InputParam::Energy => img_src.set_energy(joule!(value)),
+                InputParam::WaveLength => img_src.set_wavelength(nanometer!(value)),
+                InputParam::PixelSize => img_src.set_pixel_size(micrometer!(value)),
+                InputParam::ConeAngle => img_src.set_cone_angle(degree!(value)),
+                _ => {}
+            }
+        }
+        else if input_param == InputParam::FilePath{
+            if let Some(file_engine) = e.files(){
+                let files = file_engine.files();
+                if !files.is_empty(){
+                    img_src.set_file_path((&files[0]).into());
+                }
+            }
+        }
+        else{
+            OPOSSUM_UI_LOGS.write().add_log("Unable to parse passed value, please check input parameters!");
+        }
+        
+        light_data_builder_sig.with_mut(|ldb| {
+            let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Image(img_src.clone()));
+            ldb.replace_or_insert("Rays", &new_ld_builder);
+            ldb.replace_or_insert_and_set_current("Image", new_ld_builder);
+        });
+    })
+}
+
+#[component]
+pub fn ImageSourceEditor(light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Element {
+    light_data_builder_sig.read().get_current_ray_data_builder().map_or(rsx!{}, |rdb| {
+        if let RayDataBuilder::Image(img_src) = rdb {
+            let inputs = get_image_source_input_params(img_src, light_data_builder_sig);
+            rsx!{
+                RowedInputs{
+                    inputs
+                }
+            }
+        }
+        else{
+            rsx!{}
+        }
+    })
 }
 
 #[component]

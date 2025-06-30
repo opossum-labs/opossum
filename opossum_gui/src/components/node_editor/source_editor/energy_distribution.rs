@@ -3,7 +3,7 @@ use crate::{
     components::node_editor::{
         accordion::{AccordionItem, LabeledSelect},
         source_editor::{
-            CallbackWrapper, DistInput, DistParam, LightDataBuilderHistory, RowedDistInputs,
+            CallbackWrapper, DistInput, InputParam, LightDataBuilderHistory, RowedInputs,
         },
     },
     OPOSSUM_UI_LOGS,
@@ -43,9 +43,9 @@ pub fn NodeEnergyDistInputs(
     energy_dist_type: EnergyDistType,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
-    let dist_params = get_energy_dist_input_params(energy_dist_type, light_data_builder_sig);
+    let inputs = get_energy_dist_input_params(energy_dist_type, light_data_builder_sig);
     rsx! {
-        RowedDistInputs { dist_params }
+        RowedInputs { inputs }
     }
 }
 
@@ -160,92 +160,92 @@ fn get_energy_dist_input_params(
 ) -> Vec<DistInput> {
     let dist_inputs: Vec<DistInput> = match energy_dist_type {
         EnergyDistType::Uniform(uniform) => vec![DistInput::new(
-            DistParam::Energy,
+            InputParam::Energy,
             &energy_dist_type,
             on_energy_dist_input_change(
                 energy_dist_type,
-                DistParam::Energy,
+                InputParam::Energy,
                 light_data_builder_sig,
             ),
             format!("{}", uniform.energy().get::<joule>()),
         )],
         EnergyDistType::General2DGaussian(gaussian) => vec![
             DistInput::new(
-                DistParam::CenterX,
+                InputParam::CenterX,
                 &energy_dist_type,
                 on_energy_dist_input_change(
                     energy_dist_type,
-                    DistParam::CenterX,
+                    InputParam::CenterX,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.center().x.get::<millimeter>()),
             ),
             DistInput::new(
-                DistParam::CenterY,
+                InputParam::CenterY,
                 &energy_dist_type,
                 on_energy_dist_input_change(
                     energy_dist_type,
-                    DistParam::CenterY,
+                    InputParam::CenterY,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.center().y.get::<millimeter>()),
             ),
             DistInput::new(
-                DistParam::LengthX,
+                InputParam::LengthX,
                 &energy_dist_type,
                 on_energy_dist_input_change(
                     energy_dist_type,
-                    DistParam::LengthX,
+                    InputParam::LengthX,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.sigma().x.get::<millimeter>()),
             ),
             DistInput::new(
-                DistParam::LengthY,
+                InputParam::LengthY,
                 &energy_dist_type,
                 on_energy_dist_input_change(
                     energy_dist_type,
-                    DistParam::LengthY,
+                    InputParam::LengthY,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.sigma().y.get::<millimeter>()),
             ),
             DistInput::new(
-                DistParam::Energy,
+                InputParam::Energy,
                 &energy_dist_type,
                 on_energy_dist_input_change(
                     energy_dist_type,
-                    DistParam::Energy,
+                    InputParam::Energy,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.energy().get::<joule>()),
             ),
             DistInput::new(
-                DistParam::Angle,
+                InputParam::Angle,
                 &energy_dist_type,
                 on_energy_dist_input_change(
                     energy_dist_type,
-                    DistParam::Angle,
+                    InputParam::Angle,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.theta().get::<degree>()),
             ),
             DistInput::new(
-                DistParam::Power,
+                InputParam::Power,
                 &energy_dist_type,
                 on_energy_dist_input_change(
                     energy_dist_type,
-                    DistParam::Power,
+                    InputParam::Power,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.power()),
             ),
             DistInput::new(
-                DistParam::Rectangular,
+                InputParam::Rectangular,
                 &energy_dist_type,
                 on_energy_dist_input_change(
                     energy_dist_type,
-                    DistParam::Rectangular,
+                    InputParam::Rectangular,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.rectangular()),
@@ -258,7 +258,7 @@ fn get_energy_dist_input_params(
 
 fn on_energy_dist_input_change(
     mut energy_dist_type: EnergyDistType,
-    param: DistParam,
+    param: InputParam,
     mut light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
@@ -266,28 +266,28 @@ fn on_energy_dist_input_change(
         if let Ok(value) = value.parse::<f64>() {
             match &mut energy_dist_type {
                 EnergyDistType::Uniform(uniform) => {
-                    if param == DistParam::Energy {
+                    if param == InputParam::Energy {
                         uniform
                             .set_energy(joule!(value))
                             .unwrap_or_else(|e| OPOSSUM_UI_LOGS.write().add_log(&format!("{e}")));
                     }
                 }
                 EnergyDistType::General2DGaussian(gaussian) => match param {
-                    DistParam::CenterX => gaussian.set_center_x(millimeter!(value)),
-                    DistParam::CenterY => gaussian.set_center_y(millimeter!(value)),
-                    DistParam::LengthX => gaussian.set_sigma_x(millimeter!(value)),
-                    DistParam::LengthY => gaussian.set_sigma_y(millimeter!(value)),
-                    DistParam::Energy => gaussian
+                    InputParam::CenterX => gaussian.set_center_x(millimeter!(value)),
+                    InputParam::CenterY => gaussian.set_center_y(millimeter!(value)),
+                    InputParam::LengthX => gaussian.set_sigma_x(millimeter!(value)),
+                    InputParam::LengthY => gaussian.set_sigma_y(millimeter!(value)),
+                    InputParam::Energy => gaussian
                         .set_energy(joule!(value))
                         .unwrap_or_else(|e| OPOSSUM_UI_LOGS.write().add_log(&format!("{e}"))),
-                    DistParam::Angle => gaussian.set_theta(degree!(value)),
-                    DistParam::Power => gaussian.set_power(value),
+                    InputParam::Angle => gaussian.set_theta(degree!(value)),
+                    InputParam::Power => gaussian.set_power(value),
                     _ => {}
                 },
             }
         } else if let Ok(value) = value.parse::<bool>() {
             if let EnergyDistType::General2DGaussian(gaussian) = &mut energy_dist_type {
-                if param == DistParam::Rectangular {
+                if param == InputParam::Rectangular {
                     gaussian.set_rectangular(value);
                 }
             }

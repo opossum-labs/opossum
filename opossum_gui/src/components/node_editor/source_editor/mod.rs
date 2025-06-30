@@ -47,6 +47,7 @@ pub fn LightDataEditor(
         RayDataBuilderSelector { light_data_builder_sig }
         ReferenceLengthEditor { light_data_builder_sig }
         DistributionEditor { light_data_builder_sig }
+        ImageSourceEditor{light_data_builder_sig}
     };
     rsx! {
         div {
@@ -84,7 +85,7 @@ pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory
 
 #[component]
 pub fn DistLabeledInput(dist_input: DistInput) -> Element {
-    if dist_input.dist_param == DistParam::Rectangular {
+    if dist_input.dist_param == InputParam::Rectangular {
         let label = dist_input.dist_param.input_label();
         rsx! {
             div {
@@ -104,7 +105,26 @@ pub fn DistLabeledInput(dist_input: DistInput) -> Element {
                 }
             }
         }
-    } else {
+    } 
+    else if dist_input.dist_param == InputParam::FilePath {
+        let label = format!("{}: {}", dist_input.dist_param.input_label(), dist_input.value);
+        rsx! {
+            div {
+                id: "imgSrcFileSelection",
+                class: "form-file border-start",
+                "data-mdb-input-init": "",
+                input {
+                    class: "form-input text-light",
+                    id: dist_input.id.as_str(),
+                    r#type: "file",
+                    onchange: move |e| dist_input.callback_opt.call(e),
+                }
+                label { id: "imgSrcFileSelectionLabel", class: "btn bg-dark text-secondary", r#for: dist_input.id.clone(), "{label}" }
+            }
+        }
+    }
+    
+    else {
         rsx! {
             LabeledInput {
                 id: dist_input.id,
@@ -120,9 +140,9 @@ pub fn DistLabeledInput(dist_input: DistInput) -> Element {
 }
 
 #[component]
-pub fn RowedDistInputs(dist_params: Vec<DistInput>) -> Element {
+pub fn RowedInputs(inputs: Vec<DistInput>) -> Element {
     rsx! {
-        for chunk in dist_params.iter().chunks(2) {
+        for chunk in inputs.iter().chunks(2) {
             {
                 let inputs: Vec<&DistInput> = chunk.collect::<Vec<&DistInput>>();
                 if inputs.len() == 2 {
@@ -183,13 +203,13 @@ impl Clone for CallbackWrapper {
 pub struct DistInput {
     pub value: String,
     pub id: String,
-    pub dist_param: DistParam,
+    pub dist_param: InputParam,
     pub callback_opt: CallbackWrapper,
 }
 
 impl DistInput {
     pub fn new(
-        dist_param: DistParam,
+        dist_param: InputParam,
         dist_type: &impl Display,
         callback_opt: CallbackWrapper,
         value: String,
