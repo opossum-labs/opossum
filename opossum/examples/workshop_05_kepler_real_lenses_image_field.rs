@@ -5,7 +5,10 @@ use opossum::{
     degree,
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{ImageSrc, RayDataBuilder},
+    },
     micrometer, millimeter, nanometer,
     nodes::{FluenceDetector, Lens, NodeGroup, Source},
     optic_node::OpticNode,
@@ -18,13 +21,13 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler image field");
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Image {
-        file_path: Path::new("./logo/Logo_square_tiny_grey_inverted.png").to_path_buf(),
-        pixel_size: micrometer!(50.0),
-        total_energy: joule!(1.0),
-        wave_length: nanometer!(1000.0),
-        cone_angle: degree!(1.0),
-    });
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Image(ImageSrc::new(
+        Path::new("./logo/Logo_square_tiny_grey_inverted.png").to_path_buf(),
+        micrometer!(50.0),
+        joule!(1.0),
+        nanometer!(1000.0),
+        degree!(1.0),
+    )));
     let mut src = Source::new("image source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     let i_src = scenery.add_node(src)?;

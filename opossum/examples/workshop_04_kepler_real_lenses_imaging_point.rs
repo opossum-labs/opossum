@@ -1,4 +1,3 @@
-use delaunator::Point;
 use opossum::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},

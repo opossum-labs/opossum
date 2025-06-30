@@ -56,11 +56,7 @@ pub fn NodeSpectralDistInputs(
         },
         SpecDistType::LaserLines(laser_lines) => {
             rsx! {
-                LaserLineInput {
-                    inputs,
-                    laser_lines,
-                    light_data_builder_sig,
-                }
+                LaserLineInput { inputs, laser_lines, light_data_builder_sig }
             }
         }
     }

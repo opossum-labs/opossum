@@ -38,7 +38,7 @@ pub enum InputParam {
     RelIntensity,
     PixelSize,
     FilePath,
-    ConeAngle
+    ConeAngle,
 }
 
 impl InputParam {
@@ -118,7 +118,7 @@ impl Display for InputParam {
             Self::FWHM => "FWHM",
             Self::RelIntensity => "Relativeintensity",
             Self::PixelSize => "PixelSize",
-            Self::FilePath =>  "FilePath",
+            Self::FilePath => "FilePath",
             Self::ConeAngle => "ConeAngle",
         };
         write!(f, "{param}")

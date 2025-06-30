@@ -230,7 +230,7 @@ pub fn AlignmentWavelengthEditor(
 ) -> Element {
     let mut alignment_select = Signal::new(nanometer!(1054.));
     let select_id = format!("lengthProperty{property_key}").to_camel_case();
-    let select_label = format!("{}", property_key.to_sentence_case());
+    let select_label = property_key.to_sentence_case();
 
     if let Proptype::LengthOption(Some(length)) = &*prop_type_sig.read() {
         rsx! {
@@ -266,7 +266,7 @@ pub fn AlignmentWavelengthEditor(
                     (false, "Choose specific".to_owned()),
                 ],
                 onchange: move |_: Event<FormData>| {
-                    prop_type_sig.set(Proptype::LengthOption(Some(alignment_select())))
+                    prop_type_sig.set(Proptype::LengthOption(Some(alignment_select())));
                 },
             }
         }

@@ -47,7 +47,7 @@ pub fn LightDataEditor(
         RayDataBuilderSelector { light_data_builder_sig }
         ReferenceLengthEditor { light_data_builder_sig }
         DistributionEditor { light_data_builder_sig }
-        ImageSourceEditor{light_data_builder_sig}
+        ImageSourceEditor { light_data_builder_sig }
     };
     rsx! {
         div {
@@ -105,9 +105,12 @@ pub fn DistLabeledInput(dist_input: DistInput) -> Element {
                 }
             }
         }
-    } 
-    else if dist_input.dist_param == InputParam::FilePath {
-        let label = format!("{}: {}", dist_input.dist_param.input_label(), dist_input.value);
+    } else if dist_input.dist_param == InputParam::FilePath {
+        let label = format!(
+            "{}: {}",
+            dist_input.dist_param.input_label(),
+            dist_input.value
+        );
         rsx! {
             div {
                 id: "imgSrcFileSelection",
@@ -119,12 +122,15 @@ pub fn DistLabeledInput(dist_input: DistInput) -> Element {
                     r#type: "file",
                     onchange: move |e| dist_input.callback_opt.call(e),
                 }
-                label { id: "imgSrcFileSelectionLabel", class: "btn bg-dark text-secondary", r#for: dist_input.id.clone(), "{label}" }
+                label {
+                    id: "imgSrcFileSelectionLabel",
+                    class: "btn bg-dark text-secondary",
+                    r#for: dist_input.id,
+                    "{label}"
+                }
             }
         }
-    }
-    
-    else {
+    } else {
         rsx! {
             LabeledInput {
                 id: dist_input.id,

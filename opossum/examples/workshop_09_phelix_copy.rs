@@ -14,7 +14,7 @@ use opossum::{
     millimeter, nanometer,
     nodes::{NodeGroup, ParaxialSurface, RayPropagationVisualizer, Source, ThinMirror, Wedge},
     optic_node::{Alignable, OpticNode},
-    position_distributions::{Grid, Hexapolar},
+    position_distributions::Grid,
     properties::Proptype,
     refractive_index::RefrIndexConst,
     spectral_distribution::LaserLines,

@@ -11,9 +11,9 @@ use uom::si::f64::Length;
 pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {
     let mut cb = NodeGroup::new("Treacy compressor");
 
-    let mut grating_1 = ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
+    let grating_1 = ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
         .with_rot_from_littrow(alignment_wvl, degree!(-4.0))?;
-    let mut rot = grating_1
+    let rot = grating_1
         .node_attr()
         .alignment()
         .as_ref()
@@ -34,9 +34,9 @@ pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {
             .with_rot_from_littrow(alignment_wvl, degree!(4.))?,
     )?;
 
-    let mut grating_4 = ReflectiveGrating::new("grating 4", num_per_mm!(1740.), 1)?
+    let grating_4 = ReflectiveGrating::new("grating 4", num_per_mm!(1740.), 1)?
         .to_rot_from_littrow(alignment_wvl, degree!(4.0))?;
-    let mut rot = grating_4
+    let rot = grating_4
         .node_attr()
         .alignment()
         .as_ref()
@@ -53,6 +53,6 @@ pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {
 
     cb.map_input_port(i_g1, "input_1", "input_1")?;
     cb.map_output_port(i_g4, "output_1", "output_1")?;
-    cb.set_expand_view(true);
+    cb.set_expand_view(true)?;
     Ok(cb)
 }
