@@ -12,7 +12,7 @@ use uom::si::{angle::degree, length::millimeter};
 
 #[component]
 pub fn AlignmentEditor(alignment: Option<Isometry>) -> Element {
-    let iso = Signal::new(alignment.unwrap_or(Isometry::identity()));
+    let iso = Signal::new(alignment.unwrap_or_else(Isometry::identity));
     let accordion_content = vec![rsx! {
         NodeAlignmentTranslationInput {
             iso,

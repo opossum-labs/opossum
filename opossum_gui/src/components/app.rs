@@ -21,14 +21,14 @@ pub async fn analyze_setup(path: PathBuf) {
                 OPOSSUM_UI_LOGS
                     .write()
                     .add_log("Error while creating report-data directory");
-            };
+            }
             // create_dot_file(&opossum_args.report_directory, document.scenery())?;
             for report in reports.iter().enumerate() {
                 if create_report_and_data_files(&path, report.1, report.0).is_err() {
                     OPOSSUM_UI_LOGS
                         .write()
                         .add_log("Error while creating report and data files");
-                };
+                }
             }
         }
         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),

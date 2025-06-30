@@ -110,12 +110,6 @@ impl General2DGaussian {
     /// Returns an error if:
     /// - The energy is not finite (e.g., NaN or infinite).
     /// - The energy is zero or negative.
-    ///
-    /// # Example
-    /// ```
-    /// let mut dist = General2DGaussian::default();
-    /// dist.set_energy(Energy::from_joules(1.0))?;
-    /// ```
     pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
         if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
             return Err(OpossumError::Other(

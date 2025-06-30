@@ -33,11 +33,6 @@ impl UniformDist {
     /// Returns an error if:
     /// - `total_energy` is not finite (NaN or infinite).
     /// - `total_energy` is zero or less than zero.
-    ///
-    /// # Example
-    /// ```
-    /// let dist = UniformDist::new(Energy::from_joules(1.0))?;
-    /// ```
     pub fn new(total_energy: Energy) -> OpmResult<Self> {
         if !total_energy.get::<joule>().is_normal()
             || total_energy.get::<joule>().is_sign_negative()
@@ -64,12 +59,6 @@ impl UniformDist {
     /// Returns an error if:
     /// - `energy` is not finite (NaN or infinite).
     /// - `energy` is zero or negative.
-    ///
-    /// # Example
-    /// ```
-    /// let mut dist = UniformDist::new(Energy::from_joules(1.0))?;
-    /// dist.set_energy(Energy::from_joules(2.0))?;
-    /// ```
     pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
         if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
             return Err(OpossumError::Other(
@@ -84,11 +73,6 @@ impl UniformDist {
     ///
     /// # Returns
     /// The current total [`Energy`] value of the distribution.
-    ///
-    /// # Example
-    /// ```
-    /// let energy = dist.energy();
-    /// ```
     #[must_use]
     pub fn energy(&self) -> Energy {
         self.total_energy

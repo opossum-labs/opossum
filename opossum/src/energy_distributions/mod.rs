@@ -59,12 +59,6 @@ impl EnergyDistType {
     ///
     /// # Returns
     /// A reference to the [`dyn EnergyDistribution`] implementation stored in this enum.
-    ///
-    /// # Examples
-    /// ```
-    /// let energy_dist: EnergyDistType = UniformDist::default().into();
-    /// let dist = energy_dist.generate(); // trait object access
-    /// ```
     #[must_use]
     pub fn generate(&self) -> &dyn EnergyDistribution {
         match self {
@@ -87,11 +81,6 @@ impl EnergyDistType {
     /// # Errors
     /// Returns an error if the selected distribution variant rejects the energy value.
     ///
-    /// # Examples
-    /// ```
-    /// let mut dist = EnergyDistType::default_from_name("Uniform").unwrap();
-    /// dist.set_energy(Energy::from_watts(1.0))?;
-    /// ```
     pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
         match self {
             Self::Uniform(uniform_dist) => uniform_dist.set_energy(energy)?,
@@ -117,12 +106,6 @@ impl EnergyDistType {
     /// # Supported names
     /// - `"Uniform"` → [`UniformDist::default()`]
     /// - `"Generalized Gaussian"` → [`General2DGaussian::default()`]
-    ///
-    /// # Examples
-    /// ```
-    /// let dist = EnergyDistType::default_from_name("Generalized Gaussian")
-    ///     .expect("Distribution not found");
-    /// ```
     #[must_use]
     pub fn default_from_name(name: &str) -> Option<Self> {
         match name {

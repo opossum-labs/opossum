@@ -27,9 +27,9 @@ pub fn LightDataEditor(
     let mut light_data_builder_sig = Signal::new(LightDataBuilderHistory::default());
 
     use_effect(move || {
-        prop_type_sig.set(Proptype::LightDataBuilder(Some(
-            light_data_builder_sig.read().get_current().clone(),
-        )));
+        prop_type_sig.set(Proptype::LightDataBuilder(
+            light_data_builder_sig.read().get_current().cloned(),
+        ));
     });
 
     use_effect(move || {

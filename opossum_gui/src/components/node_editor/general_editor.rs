@@ -45,6 +45,7 @@ pub fn NodeNameInput(node_name: String) -> Element {
     }
 }
 
+#[must_use]
 pub fn name_onchange(mut signal: Signal<Option<NodeChange>>) -> Callback<Event<FormData>> {
     use_callback(move |e: Event<FormData>| {
         let Ok(name) = e.data.value().parse::<String>();
@@ -66,6 +67,7 @@ pub fn NodeLIDTInput(node_lidt: Fluence) -> Element {
     }
 }
 
+#[must_use]
 pub fn lidt_onchange(mut signal: Signal<Option<NodeChange>>) -> Callback<Event<FormData>> {
     use_callback(move |e: Event<FormData>| {
         if let Ok(lidt) = e.data.parsed::<f64>() {

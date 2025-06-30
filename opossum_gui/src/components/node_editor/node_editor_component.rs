@@ -138,5 +138,5 @@ fn node_change_api_call_selection(
             });
         }
         NodeChange::Inverted(_) => todo!(),
-    };
+    }
 }

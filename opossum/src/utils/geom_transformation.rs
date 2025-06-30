@@ -268,12 +268,6 @@ impl Isometry {
     /// # Errors
     ///
     /// Returns an error if `Self::new` fails due to constraints within the isometry construction logic.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// isometry.set_translation_of_axis(TranslationAxis::Y, Length::new::<meter>(5.0))?;
-    /// ```
     pub fn set_translation_of_axis(
         &mut self,
         axis: TranslationAxis,
@@ -321,16 +315,6 @@ impl Isometry {
     ///
     /// # Errors
     /// If [`Isometry::new`] fails (e.g., due to invalid transformation parameters), the error is wrapped in [`OpossumError`] and returned.
-    ///
-    /// # Examples
-    /// ```
-    /// let mut iso = Isometry::default();
-    /// iso.set_rotation_of_axis(RotationAxis::Yaw, Angle::from_degrees(90.0))?;
-    /// assert_eq!(iso.rotation().z, Angle::from_degrees(90.0));
-    /// ```
-    ///
-    /// [`RotationAxis`]: crate::RotationAxis
-    /// [`Isometry`]: crate::Isometry
     pub fn set_rotation_of_axis(&mut self, axis: RotationAxis, value: Angle) -> OpmResult<()> {
         let trans = self.translation();
         let mut new_rot = self.rotation();

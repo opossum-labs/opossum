@@ -69,16 +69,8 @@ impl CollimatedSrcDist {
     ///
     /// A new instance of `CollimatedSrc`.
     #[must_use]
-    pub const fn new(
-        pos_dist: PosDistType,
-        energy_dist: EnergyDistType,
-        spect_dist: SpecDistType,
-    ) -> Self {
-        Self {
-            pos: pos_dist,
-            energy: energy_dist,
-            spect: spect_dist,
-        }
+    pub const fn new(pos: PosDistType, energy: EnergyDistType, spect: SpecDistType) -> Self {
+        Self { pos, energy, spect }
     }
 
     /// Returns a reference to the position distribution.

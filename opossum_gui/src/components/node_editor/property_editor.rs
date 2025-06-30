@@ -18,7 +18,7 @@ pub fn PropertiesEditor(
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
     let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
-    for (property_key, property) in node_properties.iter() {
+    for (property_key, property) in &node_properties {
         editor_inputs.push(rsx! {
             PropertyEditor {
                 prop_type: property.prop().clone(),
@@ -52,7 +52,7 @@ pub fn PropertyEditor(
             node_change.set(Some(NodeChange::Property(
                 property_key.clone(),
                 serde_json::to_value(prop_type_sig.read().clone()).unwrap(),
-            )))
+            )));
         }
     });
 

@@ -24,13 +24,9 @@ pub fn RayEnergyDistributionEditor(
     rsx! {
         div { hidden: !show,
             {
-                if let Some(energy_dist_type) = rays_energy_dist {
-                    rsx! {
+                rays_energy_dist.map_or_else(|| rsx! {}, |energy_dist_type| rsx! {
                         NodeEnergyDistInputs { energy_dist_type, light_data_builder_sig }
-                    }
-                } else {
-                    rsx! {}
-                }
+                    })
             }
         }
     }
@@ -73,35 +69,36 @@ pub fn RayEnergyDistributionSelector(
 ) -> Element {
     let (show, _) = light_data_builder_sig.read().is_rays_is_collimated();
     let rays_energy_dist =
-        EnergyDistSelection::try_from(light_data_builder_sig.read().get_current().clone());
+        EnergyDistSelection::try_from(light_data_builder_sig.read().get_current());
 
-    if let Ok(red) = rays_energy_dist {
-        rsx! {
-            LabeledSelect {
-                id: "selectRaysEnergyDistribution",
-                label: "Rays Energy Distribution",
-                options: red.get_option_elements(),
-                hidden: !show,
-                onchange: move |e: Event<FormData>| {
-                    light_data_builder_sig
-                        .with_mut(|ldb| {
-                            let value = e.value();
-                            ldb.set_current_or_default(value.as_str());
-                        });
-                },
+    rays_energy_dist.map_or_else(
+        |_| rsx! {},
+        |red| {
+            rsx! {
+                LabeledSelect {
+                    id: "selectRaysEnergyDistribution",
+                    label: "Rays Energy Distribution",
+                    options: red.get_option_elements(),
+                    hidden: !show,
+                    onchange: move |e: Event<FormData>| {
+                        light_data_builder_sig
+                            .with_mut(|ldb| {
+                                let value = e.value();
+                                ldb.set_current_or_default(value.as_str());
+                            });
+                    },
+                }
             }
-        }
-    } else {
-        rsx! {}
-    }
+        },
+    )
 }
 
-impl TryFrom<LightDataBuilder> for EnergyDistSelection {
+impl TryFrom<Option<&LightDataBuilder>> for EnergyDistSelection {
     type Error = String;
 
-    fn try_from(value: LightDataBuilder) -> Result<Self, Self::Error> {
+    fn try_from(value: Option<&LightDataBuilder>) -> Result<Self, Self::Error> {
         match value {
-            LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
+            Some(LightDataBuilder::Geometric(ray_data_builder)) => match ray_data_builder {
                 RayDataBuilder::Collimated(collimated_src) => {
                     Ok(Self::new(*collimated_src.energy_dist()))
                 }
@@ -122,7 +119,7 @@ struct EnergyDistSelection {
 }
 
 impl EnergyDistSelection {
-    pub fn new(energy_dist: EnergyDistType) -> Self {
+    pub const fn new(energy_dist: EnergyDistType) -> Self {
         let mut select = Self {
             energy_dist,
             uniform: false,
@@ -132,7 +129,7 @@ impl EnergyDistSelection {
         select.set_dist(energy_dist);
         select
     }
-    pub fn set_dist(&mut self, energy_dist: EnergyDistType) {
+    pub const fn set_dist(&mut self, energy_dist: EnergyDistType) {
         (self.uniform, self.gaussian) = match energy_dist {
             EnergyDistType::Uniform(_) => (true, false),
             EnergyDistType::General2DGaussian(_) => (false, true),
@@ -147,7 +144,7 @@ impl EnergyDistSelection {
             option_vals.push(match energy_dist {
                 EnergyDistType::Uniform(_) => (self.uniform, energy_dist.to_string()),
                 EnergyDistType::General2DGaussian(_) => (self.gaussian, energy_dist.to_string()),
-            })
+            });
         }
         option_vals
     }
@@ -217,11 +214,11 @@ fn get_energy_dist_input_params(
     };
 
     for dist_input in &mut dist_inputs {
-        dist_input.callback_opt = use_on_energy_dist_input_change(
+        dist_input.callback_opt = Some(use_on_energy_dist_input_change(
             energy_dist_type,
             dist_input.dist_param,
             light_data_builder_sig,
-        );
+        ));
     }
 
     dist_inputs
@@ -231,8 +228,8 @@ fn use_on_energy_dist_input_change(
     mut energy_dist_type: EnergyDistType,
     param: DistParam,
     mut light_data_builder_sig: Signal<LightDataBuilderHistory>,
-) -> Option<Callback<Event<FormData>>> {
-    Some(use_callback(move |e: Event<FormData>| {
+) -> Callback<Event<FormData>> {
+    use_callback(move |e: Event<FormData>| {
         let value = e.value();
         if let Ok(value) = value.parse::<f64>() {
             match &mut energy_dist_type {
@@ -256,14 +253,17 @@ fn use_on_energy_dist_input_change(
                     _ => {}
                 },
             }
-            light_data_builder_sig.with_mut(|ldb| ldb.set_energy_dist_type(energy_dist_type))
         } else if let Ok(value) = value.parse::<bool>() {
             if let EnergyDistType::General2DGaussian(gaussian) = &mut energy_dist_type {
                 if param == DistParam::Rectangular {
                     gaussian.set_rectangular(value);
                 }
             }
-            light_data_builder_sig.with_mut(|ldb| ldb.set_energy_dist_type(energy_dist_type))
+        } else {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log("Unable to parse passed value, please check input parameters!");
         }
-    }))
+        light_data_builder_sig.with_mut(|ldb| ldb.set_energy_dist_type(energy_dist_type));
+    })
 }

@@ -61,13 +61,6 @@ impl LaserLines {
     ///
     /// # Returns
     /// A new instance of [`LaserLines`] with an empty set of wavelength–intensity pairs.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let laser = LaserLines::new_empty();
-    /// assert!(laser.lines().is_empty());
-    /// ```
     #[must_use]
     pub fn new_empty() -> Self {
         Self {
@@ -92,16 +85,6 @@ impl LaserLines {
     /// - The input list is empty.
     /// - Any wavelength is negative or not finite.
     /// - Any intensity is negative or not finite.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut laser = LaserLines::new_empty();
-    /// laser.add_lines(vec![
-    ///     (Length::new::<nanometer>(532.0), 1.0),
-    ///     (Length::new::<nanometer>(635.0), 0.5),
-    /// ])?;
-    /// ```
     pub fn add_lines(&mut self, lines: Vec<(Length, f64)>) -> OpmResult<()> {
         // Check if the lines are non-empty and contain valid data
         if lines.is_empty() {
@@ -132,14 +115,6 @@ impl LaserLines {
     ///
     /// # Returns
     /// A reference to the vector of spectral lines.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let laser = LaserLines::new_empty();
-    /// let lines = laser.lines();
-    /// assert_eq!(lines.len(), 0);
-    /// ```
     #[must_use]
     pub fn lines(&self) -> &Vec<(Length, f64)> {
         &self.lines

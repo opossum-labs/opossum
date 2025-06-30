@@ -259,7 +259,7 @@ pub async fn update_node_rotation(
 }
 
 /// Update the property of the node with the given `node_id`.
-/// The property value is already passes as a serde_json::Value to avoid implementing PartialEq for every property type.
+/// The property value is already passes as a `serde_json::Value` to avoid implementing `PartialEq` for every property type.
 ///
 /// # Errors
 ///
@@ -276,6 +276,28 @@ pub async fn update_node_property(
         )
         .await
 }
+
+/// Updates the isometry (position and orientation) of a node in the scenery.
+///
+/// This function sends a POST request to the server to update the [`Isometry`] associated
+/// with a specific node identified by its UUID. The server endpoint is:
+/// `/api/scenery/isometry/{node_id}`.
+///
+/// # Parameters
+/// - `client`: An instance of [`HTTPClient`] used to send the request.
+/// - `node_id`: The unique identifier of the node whose isometry is to be updated.
+/// - `iso`: The new [`Isometry`] data to apply to the node.
+///
+/// # Returns
+/// A [`Result`] containing:
+/// - `Ok(String)`: The server's response if the update is successful.
+/// - `Err(String)`: An error message returned from the server or the HTTP client.
+///
+/// # Errors
+/// This function returns an error if:
+/// - The HTTP request fails to reach the server (e.g., network issues).
+/// - The server responds with an error status code (e.g., 4xx or 5xx).
+/// - Serialization of the [`Isometry`] payload fails before sending.
 pub async fn update_node_isometry(
     client: &HTTPClient,
     node_id: Uuid,

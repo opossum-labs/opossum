@@ -47,12 +47,12 @@ pub fn MenuBar(
     // });
     use_effect(move || {
         if let Some(analyzer) = analyzer_selected() {
-            menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer)))
+            menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer)));
         }
     });
     use_effect(move || {
         if !node_selected.read().is_empty() {
-            menu_item_selected.set(Some(MenuSelection::AddNode(node_selected())))
+            menu_item_selected.set(Some(MenuSelection::AddNode(node_selected())));
         }
     });
     rsx! {

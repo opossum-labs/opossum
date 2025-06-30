@@ -45,13 +45,12 @@ pub fn NodeSpectralDistInputs(
     let dist_params = get_spectral_dist_input_params(&spectral_dist_type, light_data_builder_sig);
     match spectral_dist_type {
         SpecDistType::Gaussian(_) => rsx! {
-            RowedDistInputs { dist_params: dist_params.clone() }
+            RowedDistInputs { dist_params: dist_params }
         },
         SpecDistType::LaserLines(laser_lines) => {
             rsx! {
                 form {
                     onsubmit: {
-                        let dist_params = dist_params.clone();
                         move |e: Event<FormData>| {
                             let values = e.data().values();
                             let wvl_opt = values.get(&dist_params[0].id);
@@ -168,7 +167,7 @@ pub fn RaySpectralDistributionSelector(
 ) -> Element {
     let (show, _) = light_data_builder_sig.read().is_rays_is_collimated();
     let rays_spectral_dist =
-        SpecDistSelection::try_from(light_data_builder_sig.read().get_current().clone());
+        SpecDistSelection::try_from(light_data_builder_sig.read().get_current());
 
     rays_spectral_dist.map_or_else(
         |_| rsx! {},
@@ -192,12 +191,12 @@ pub fn RaySpectralDistributionSelector(
     )
 }
 
-impl TryFrom<LightDataBuilder> for SpecDistSelection {
+impl TryFrom<Option<&LightDataBuilder>> for SpecDistSelection {
     type Error = String;
 
-    fn try_from(value: LightDataBuilder) -> Result<Self, Self::Error> {
+    fn try_from(value: Option<&LightDataBuilder>) -> Result<Self, Self::Error> {
         match value {
-            LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
+            Some(LightDataBuilder::Geometric(ray_data_builder)) => match ray_data_builder {
                 RayDataBuilder::Collimated(collimated_src) => {
                     Ok(Self::new(collimated_src.spect_dist().clone()))
                 }

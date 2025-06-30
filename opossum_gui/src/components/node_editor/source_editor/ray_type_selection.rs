@@ -15,6 +15,7 @@ use crate::components::node_editor::{
 /// It stores the selected [`RayDataBuilder`] variant and provides boolean flags
 /// to indicate the selected ray type. This allows for easy querying and updating
 /// of the ray type in a user interface context.
+#[allow(clippy::struct_excessive_bools)]
 struct RayTypeSelection {
     /// The currently selected ray type.
     pub ray_type: RayDataBuilder,
@@ -107,7 +108,7 @@ pub fn ReferenceLengthEditor(light_data_builder_sig: Signal<LightDataBuilderHist
                         point_src.set_reference_length(millimeter!(ref_length));
                         light_data_builder_sig
                             .with_mut(|ldb| {
-                                if let LightDataBuilder::Geometric(RayDataBuilder::PointSrc(p)) = ldb
+                                if let Some(LightDataBuilder::Geometric(RayDataBuilder::PointSrc(p))) = ldb
                                     .get_current_mut()
                                 {
                                     *p = point_src;

@@ -22,56 +22,89 @@ pub struct LightDataBuilderHistory {
     current: String,
 }
 impl LightDataBuilderHistory {
-    /// Returns a reference to the currently active [`LightDataBuilder`].
-    pub fn get_current(&self) -> &LightDataBuilder {
-        self.hist.get(&self.current).unwrap()
+    /// Returns a reference to the currently active [`LightDataBuilder`] configuration.
+    ///
+    /// This allows read-only access to the builder that is currently selected in the history.
+    ///
+    /// # Returns
+    /// - `Some(&LightDataBuilder)` if a valid entry is selected.
+    /// - `None` if the current key does not exist.
+    #[must_use]
+    pub fn get_current(&self) -> Option<&LightDataBuilder> {
+        self.hist.get(&self.current)
     }
 
     /// Returns a mutable reference to the currently active [`LightDataBuilder`].
-    pub fn get_current_mut(&mut self) -> &mut LightDataBuilder {
-        self.hist.get_mut(&self.current).unwrap()
+    ///
+    /// Enables modifying the builder that is currently active in the history.
+    ///
+    /// # Returns
+    /// - `Some(&mut LightDataBuilder)` if the current key exists.
+    /// - `None` if the current key is invalid.
+    pub fn get_current_mut(&mut self) -> Option<&mut LightDataBuilder> {
+        self.hist.get_mut(&self.current)
     }
 
-    /// Returns the key of the currently active entry.
-    pub fn get_current_key(&self) -> &str {
+    /// Returns the key string of the currently selected builder.
+    ///
+    /// # Returns
+    /// A string slice of the current key.
+    #[must_use]
+    pub const fn get_current_key(&self) -> &str {
         self.current.as_str()
     }
 
-    /// Attempts to set the active entry to the given key.
+    /// Sets the current builder selection to the entry with the given key.
     ///
-    /// Returns `true` if the key exists and the current selection was updated,
-    /// otherwise returns `false`.
+    /// # Parameters
+    /// - `key`: The key of the entry to make active.
+    ///
+    /// # Returns
+    /// - `true` if the key exists and selection was updated.
+    /// - `false` if the key does not exist in the history.
     pub fn set_current(&mut self, key: &str) -> bool {
         if self.hist.contains_key(key) {
-            self.current = key.to_owned();
+            key.clone_into(&mut self.current);
             true
         } else {
             false
         }
     }
 
-    /// Returns a reference to the entry associated with the given key, if it exists.
+    /// Returns a reference to the [`LightDataBuilder`] associated with the given key, if present.
+    ///
+    /// # Returns
+    /// - `Some(&LightDataBuilder)` if the key exists.
+    /// - `None` otherwise.
+    #[must_use]
     pub fn get(&self, key: &str) -> Option<&LightDataBuilder> {
         self.hist.get(key)
     }
 
-    /// Inserts a new [`LightDataBuilder`] and sets it as the current selection.
+    /// Inserts a new [`LightDataBuilder`] and sets it as the active one.
     ///
-    /// If an entry with the same key already exists, it will be overwritten.
+    /// If a builder with the same key already exists, it is replaced.
+    ///
+    /// # Parameters
+    /// - `key`: The identifier for the builder.
+    /// - `ld_builder`: The builder to insert.
     pub fn insert_and_set_current(&mut self, key: &str, ld_builder: LightDataBuilder) {
         self.hist.insert(key.to_owned(), ld_builder);
-        self.current = key.to_owned();
+        key.clone_into(&mut self.current);
     }
 
-    /// Inserts a new [`LightDataBuilder`] under the given key.
+    /// Inserts a [`LightDataBuilder`] under a specified key.
     ///
     /// Overwrites the existing entry if the key already exists.
     pub fn insert(&mut self, key: &str, ld_builder: LightDataBuilder) {
         self.hist.insert(key.to_owned(), ld_builder);
     }
 
-    /// Replaces the [`LightDataBuilder`] at the given key if it exists,
-    /// otherwise inserts a new one.
+    /// Replaces an existing [`LightDataBuilder`] under the given key or inserts a new one.
+    ///
+    /// # Parameters
+    /// - `key`: The key to insert or replace at.
+    /// - `new_ld_builder`: The builder to store.
     pub fn replace_or_insert(&mut self, key: &str, new_ld_builder: &LightDataBuilder) {
         if let Some(ld_builder) = self.hist.get_mut(key) {
             *ld_builder = new_ld_builder.clone();
@@ -80,7 +113,9 @@ impl LightDataBuilderHistory {
         }
     }
 
-    /// Replaces or inserts a [`LightDataBuilder`] and sets it as the current entry.
+    /// Replaces or inserts a [`LightDataBuilder`] and sets it as the current selection.
+    ///
+    /// This guarantees that the inserted builder becomes the active one, regardless of whether it was already present.
     pub fn replace_or_insert_and_set_current(
         &mut self,
         key: &str,
@@ -91,16 +126,19 @@ impl LightDataBuilderHistory {
         } else {
             self.insert(key, new_ld_builder);
         }
-        self.current = key.to_owned();
+        key.clone_into(&mut self.current);
     }
 
-    /// Returns a tuple `(is_geometric, is_collimated)` for the current builder.
+    /// Checks whether the currently selected builder is of type `Geometric` and whether it is collimated.
     ///
-    /// - `is_geometric` is `true` if the current builder is a `Geometric` ray source.
-    /// - `is_collimated` is `true` if the source is specifically a `Collimated` one.
+    /// # Returns
+    /// A tuple:
+    /// - `is_geometric`: `true` if the builder is geometric.
+    /// - `is_collimated`: `true` if the builder is of type `Collimated`.
+    #[must_use]
     pub fn is_rays_is_collimated(&self) -> (bool, bool) {
         match self.get_current() {
-            LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
+            Some(LightDataBuilder::Geometric(ray_data_builder)) => match ray_data_builder {
                 RayDataBuilder::Collimated(_) => (true, true),
                 _ => (true, false),
             },
@@ -108,73 +146,73 @@ impl LightDataBuilderHistory {
         }
     }
 
-    /// Returns the [`RayDataBuilder`] from the current [`LightDataBuilder`] if it is of type `Geometric`.
+    /// Returns the [`RayDataBuilder`] from the current builder, if it is of type `Geometric`.
     ///
     /// # Returns
-    ///
-    /// `Some(RayDataBuilder)` if the current builder is of type `LightDataBuilder::Geometric`,  
-    /// otherwise `None`.
+    /// - `Some(RayDataBuilder)` if current is `LightDataBuilder::Geometric`.
+    /// - `None` otherwise.
+    #[must_use]
     pub fn get_current_ray_data_builder(&self) -> Option<RayDataBuilder> {
         match self.get_current() {
-            LightDataBuilder::Geometric(ray_data_builder) => Some(ray_data_builder.clone()),
+            Some(LightDataBuilder::Geometric(ray_data_builder)) => Some(ray_data_builder.clone()),
             _ => None,
         }
     }
 
-    /// Returns the [`PosDistType`] from the currently selected ray source,
-    /// if it supports positional distributions.
+    /// Returns the [`PosDistType`] of the currently selected builder if available.
+    ///
+    /// Only `Collimated` and `PointSrc` ray types support positional distributions.
     ///
     /// # Returns
-    ///
-    /// - `Some(PosDistType)` for `Collimated` or `PointSrc` ray types.
-    /// - `None` for `Raw`, `Image`, or non-geometric light sources.
+    /// - `Some(PosDistType)` if supported.
+    /// - `None` otherwise.
+    #[must_use]
     pub fn get_current_pos_dist_type(&self) -> Option<PosDistType> {
         match self.get_current() {
-            LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
+            Some(LightDataBuilder::Geometric(ray_data_builder)) => match ray_data_builder {
                 RayDataBuilder::Collimated(collimated_src) => Some(*collimated_src.pos_dist()),
                 RayDataBuilder::PointSrc(point_src) => Some(*point_src.pos_dist()),
-                RayDataBuilder::Raw(_rays) => None,
-                RayDataBuilder::Image { .. } => None,
+                _ => None,
             },
             _ => None,
         }
     }
 
-    /// Returns the [`EnergyDistType`] from the currently selected ray source,
-    /// if it supports energy distributions.
+    /// Returns the [`EnergyDistType`] of the current builder, if applicable.
+    ///
+    /// Supported for `Collimated` and `PointSrc` ray types only.
     ///
     /// # Returns
-    ///
-    /// - `Some(EnergyDistType)` for `Collimated` or `PointSrc` ray types.
-    /// - `None` for `Raw`, `Image`, or non-geometric light sources.
+    /// - `Some(EnergyDistType)` if available.
+    /// - `None` otherwise.
+    #[must_use]
     pub fn get_current_energy_dist_type(&self) -> Option<EnergyDistType> {
         match self.get_current() {
-            LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
+            Some(LightDataBuilder::Geometric(ray_data_builder)) => match ray_data_builder {
                 RayDataBuilder::Collimated(collimated_src) => Some(*collimated_src.energy_dist()),
                 RayDataBuilder::PointSrc(point_src) => Some(*point_src.energy_dist()),
-                RayDataBuilder::Raw(_rays) => None,
-                RayDataBuilder::Image { .. } => None,
+                _ => None,
             },
             _ => None,
         }
     }
 
-    /// Returns the [`SpecDistType`] from the currently selected ray source,
-    /// if it supports spectral distributions.
+    /// Returns the [`SpecDistType`] of the current builder, if supported.
+    ///
+    /// Applicable to `Collimated` and `PointSrc` ray types.
     ///
     /// # Returns
-    ///
-    /// - `Some(SpecDistType)` for `Collimated` or `PointSrc` ray types.
-    /// - `None` for `Raw`, `Image`, or non-geometric light sources.
+    /// - `Some(SpecDistType)` if supported.
+    /// - `None` otherwise.
+    #[must_use]
     pub fn get_current_spectral_dist_type(&self) -> Option<SpecDistType> {
         match self.get_current() {
-            LightDataBuilder::Geometric(ray_data_builder) => match ray_data_builder {
+            Some(LightDataBuilder::Geometric(ray_data_builder)) => match ray_data_builder {
                 RayDataBuilder::Collimated(collimated_src) => {
                     Some(collimated_src.spect_dist().clone())
                 }
                 RayDataBuilder::PointSrc(point_src) => Some(point_src.spect_dist().clone()),
-                RayDataBuilder::Raw(_rays) => None,
-                RayDataBuilder::Image { .. } => None,
+                _ => None,
             },
             _ => None,
         }
@@ -218,7 +256,7 @@ impl LightDataBuilderHistory {
                         "set_pos_dist_type: Unsupported RayDataBuilder type: {rdb}"
                     ));
                 }
-            };
+            }
         }
     }
 
@@ -260,7 +298,7 @@ impl LightDataBuilderHistory {
                         "set_pos_dist_type: Unsupported RayDataBuilder type: {rdb}"
                     ));
                 }
-            };
+            }
         }
     }
 
@@ -302,7 +340,7 @@ impl LightDataBuilderHistory {
                         "set_pos_dist_type: Unsupported RayDataBuilder type: {rdb}"
                     ));
                 }
-            };
+            }
         }
     }
 
@@ -317,7 +355,7 @@ impl LightDataBuilderHistory {
                 }
                 "Energy" => {
                     let new_ld_builder = LightDataBuilder::Energy(EnergyDataBuilder::default());
-                    self.replace_or_insert_and_set_current(key, new_ld_builder.clone());
+                    self.replace_or_insert_and_set_current(key, new_ld_builder);
                 }
                 "Collimated" => {
                     let new_ld_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated(
@@ -357,7 +395,7 @@ impl LightDataBuilderHistory {
 
                 _ => OPOSSUM_UI_LOGS
                     .write()
-                    .add_log(&format!("Unknown source type: {}", key)),
+                    .add_log(&format!("Unknown source type: {key}")),
             }
         }
     }
