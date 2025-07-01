@@ -5,6 +5,13 @@ authors = [
     "Udo Eisenbarth <u.eisenbarth@gsi.de>",
     "Yannik Zobus <y.zobus@gsi.de>",
 ]
+description = "Open-source Optics Simulation Software and Unified Modeler"
+repository = "https://github.com/opossum-labs/opossum"
+license = "GPL-3.0"
+keywords = ["laser", "optics", "physics", "simulation"]
+categories = ["science", "simulation"]
+publish = true
+readme = "../README.md"
 edition = "2021"
 
 [dependencies]

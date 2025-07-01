@@ -33,13 +33,15 @@ fn read_icon() -> Option<Icon> {
 fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
+        use std::path::Path;
+
         let window = dioxus::desktop::WindowBuilder::new()
             //.with_decorations(true)
             .with_window_icon(read_icon())
             .with_title("Opossum");
         dioxus::LaunchBuilder::new()
             .with_cfg(
-                dioxus::desktop::Config::new().with_window(window), //.with_menu(None),
+                dioxus::desktop::Config::new().with_window(window).with_data_directory(Path::new("C:/Users/ueisenb/AppData/Local/webview")), //.with_menu(None),
             )
             .launch(app);
     }
