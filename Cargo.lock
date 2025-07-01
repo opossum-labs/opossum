@@ -2303,6 +2303,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "directories"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16f5094c54661b38d03bd7e50df373292118db60b585c08a411c6d840017fe7d"
+dependencies = [
+ "dirs-sys 0.5.0",
+]
+
+[[package]]
 name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5171,6 +5180,7 @@ dependencies = [
  "chrono",
  "dioxus",
  "dioxus-free-icons",
+ "directories 6.0.0",
  "futures-util",
  "ico",
  "opossum_backend",
@@ -5536,7 +5546,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec916f0654966c15100c4a49a1630ab12d2cdcebfb623cdcf3ba63a58b04b24b"
 dependencies = [
  "base64 0.22.1",
- "directories",
+ "directories 5.0.1",
  "dunce",
  "serde",
  "serde_json",

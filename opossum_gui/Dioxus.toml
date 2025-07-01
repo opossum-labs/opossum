@@ -29,10 +29,10 @@ icon_path = "assets/favicon.ico"
 timestamp_url = "http://timestamp.digicert.com"
 tsp = true
 allow_downgrades = true
-webview_install_mode = "Skip"
+#webview_install_mode = "Skip"
 
-# [bundle.windows.webview_install_mode.EmbedBootstrapper]
-# silent = false
+[bundle.windows.webview_install_mode.EmbedBootstrapper]
+silent = false
 
 [bundle.windows.wix]
 language = []

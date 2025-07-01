@@ -33,17 +33,23 @@ fn read_icon() -> Option<Icon> {
 fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
-        use std::path::Path;
+        use directories::ProjectDirs;
 
-        let window = dioxus::desktop::WindowBuilder::new()
-            //.with_decorations(true)
+        let data_dir = if let Some(proj_dirs) = ProjectDirs::from("org", "OpossumLabs", "OpossumGui")
+        {
+            proj_dirs.data_local_dir().to_path_buf()
+        } else {
+            std::env::current_dir().unwrap_or_default()
+        };
+            let window = dioxus::desktop::WindowBuilder::new()
+                //.with_decorations(true)
             .with_window_icon(read_icon())
             .with_title("Opossum");
         dioxus::LaunchBuilder::new()
             .with_cfg(
-                dioxus::desktop::Config::new().with_window(window).with_data_directory(Path::new("C:/Users/ueisenb/AppData/Local/webview")), //.with_menu(None),
+                dioxus::desktop::Config::new().with_window(window).with_data_directory(data_dir), //.with_menu(None),
             )
-            .launch(app);
+            .launch(app);                 
     }
     #[cfg(not(feature = "desktop"))]
     fn launch_app() {

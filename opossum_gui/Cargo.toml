@@ -31,6 +31,7 @@ ron="0.10.1"
 chrono = "0.4.40"
 rust-sugiyama = "0.3"
 ico = "0.4"
+directories = "6.0.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 plotly = { version = "0.12", features = ["kaleido"] }
