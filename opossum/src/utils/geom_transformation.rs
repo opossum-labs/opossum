@@ -16,6 +16,7 @@ use serde::{
     Deserialize, Serialize,
     de::{self, MapAccess, Visitor},
 };
+use strum::EnumIter;
 use uom::si::{
     angle::radian,
     f64::{Angle, Length},
@@ -466,7 +467,7 @@ impl Isometry {
 }
 
 /// Define the translation and rotation axes for the [`Isometry`]
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, EnumIter)]
 pub enum TranslationAxis {
     /// The X axis
     X,
@@ -477,7 +478,7 @@ pub enum TranslationAxis {
 }
 
 /// Define the rotation axes for the [`Isometry`]
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, EnumIter)]
 pub enum RotationAxis {
     /// The Roll axis
     Roll,

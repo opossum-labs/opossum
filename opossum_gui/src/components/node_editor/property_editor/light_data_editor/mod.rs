@@ -5,8 +5,6 @@ pub mod position_distribution;
 pub mod ray_type_selection;
 pub mod spectral_distribution;
 
-use std::{cell::RefCell, fmt::Display, rc::Rc};
-
 pub use energy_distribution::*;
 use itertools::Itertools;
 pub use light_data_builder_selection::*;
@@ -14,8 +12,12 @@ use opossum_backend::{light_data_builder::LightDataBuilder, Proptype};
 pub use position_distribution::*;
 pub use ray_type_selection::*;
 pub use spectral_distribution::*;
+use std::fmt::Display;
 
-use crate::components::node_editor::accordion::{AccordionItem, LabeledInput};
+use crate::components::node_editor::{
+    accordion::{AccordionItem, LabeledInput},
+    CallbackWrapper,
+};
 
 use dioxus::prelude::*;
 
@@ -51,11 +53,11 @@ pub fn LightDataEditor(
     };
     rsx! {
         div {
-            class: "accordion accordion-borderless bg-dark ",
+            class: "accordion accordion-borderless bg-dark border-start",
             id: "accordionLightDataConfig",
             AccordionItem {
                 elements: vec![accordion_item_content],
-                header: "Light Definition",
+                header: "Light definition",
                 header_id: "sourceHeading",
                 parent_id: "accordionLightDataConfig",
                 content_id: "sourceCollapse",
@@ -120,6 +122,7 @@ pub fn DistLabeledInput(dist_input: DistInput) -> Element {
                     class: "form-input text-light",
                     id: dist_input.id.as_str(),
                     r#type: "file",
+                    accept: ".png",
                     onchange: move |e| dist_input.callback_opt.call(e),
                 }
                 label {
@@ -171,37 +174,6 @@ pub fn RowedInputs(inputs: Vec<DistInput>) -> Element {
                 }
             }
         }
-    }
-}
-
-pub struct CallbackWrapper(Rc<RefCell<dyn FnMut(Event<FormData>) + 'static>>);
-
-impl PartialEq for CallbackWrapper {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
-    }
-}
-
-impl CallbackWrapper {
-    pub fn new<F>(f: F) -> Self
-    where
-        F: FnMut(Event<FormData>) + 'static,
-    {
-        Self(Rc::new(RefCell::new(f)))
-    }
-
-    pub fn call(&self, e: Event<FormData>) {
-        (self.0.borrow_mut())(e);
-    }
-    #[must_use]
-    pub fn noop() -> Self {
-        Self::new(|_| {})
-    }
-}
-
-impl Clone for CallbackWrapper {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
     }
 }
 

@@ -2,9 +2,10 @@
 use crate::{
     components::node_editor::{
         accordion::{AccordionItem, LabeledSelect},
-        source_editor::{
-            CallbackWrapper, DistInput, InputParam, LightDataBuilderHistory, RowedInputs,
+        property_editor::light_data_editor::{
+            DistInput, InputParam, LightDataBuilderHistory, RowedInputs,
         },
+        CallbackWrapper,
     },
     OPOSSUM_UI_LOGS,
 };

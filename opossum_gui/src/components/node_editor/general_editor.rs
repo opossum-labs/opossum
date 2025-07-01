@@ -2,7 +2,7 @@
 use crate::components::node_editor::{
     accordion::{AccordionItem, LabeledInput},
     node_editor_component::NodeChange,
-    source_editor::CallbackWrapper,
+    CallbackWrapper,
 };
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, J_per_cm2};

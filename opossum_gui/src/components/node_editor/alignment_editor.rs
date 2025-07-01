@@ -3,7 +3,7 @@ use crate::{
     components::node_editor::{
         accordion::{AccordionItem, LabeledInput},
         node_editor_component::NodeChange,
-        source_editor::CallbackWrapper,
+        CallbackWrapper,
     },
     OPOSSUM_UI_LOGS,
 };

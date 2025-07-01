@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 
-use crate::components::node_editor::source_editor::CallbackWrapper;
+use crate::components::node_editor::CallbackWrapper;
 
 #[component]
 pub fn AccordionItem(
