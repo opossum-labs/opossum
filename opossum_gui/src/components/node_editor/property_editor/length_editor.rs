@@ -1,4 +1,4 @@
-use crate::components::node_editor::{accordion::LabeledInput, CallbackWrapper};
+use crate::components::node_editor::{inputs::input_components::LabeledInput, CallbackWrapper};
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_backend::{millimeter, Proptype};

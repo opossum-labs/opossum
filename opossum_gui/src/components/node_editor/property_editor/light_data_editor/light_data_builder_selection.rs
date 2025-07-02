@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::{components::node_editor::accordion::LabeledSelect, OPOSSUM_UI_LOGS};
+use crate::{components::node_editor::inputs::input_components::LabeledSelect, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
 use opossum_backend::{
     energy_data_builder::EnergyDataBuilder,

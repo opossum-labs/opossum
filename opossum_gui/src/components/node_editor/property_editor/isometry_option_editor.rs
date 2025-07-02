@@ -1,7 +1,6 @@
 use crate::{
     components::node_editor::{
-        accordion::{AccordionItem, LabeledInput},
-        CallbackWrapper,
+        accordion::AccordionItem, inputs::input_components::LabeledInput, CallbackWrapper,
     },
     OPOSSUM_UI_LOGS,
 };

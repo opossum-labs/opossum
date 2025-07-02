@@ -6,17 +6,13 @@ pub mod ray_type_selection;
 pub mod spectral_distribution;
 
 pub use energy_distribution::*;
-use itertools::Itertools;
 pub use light_data_builder_selection::*;
 use opossum_backend::{light_data_builder::LightDataBuilder, Proptype};
 pub use position_distribution::*;
 pub use ray_type_selection::*;
 pub use spectral_distribution::*;
 
-use crate::components::node_editor::{
-    accordion::{AccordionItem, LabeledInput},
-    inputs::{InputData, InputParam},
-};
+use crate::components::node_editor::accordion::AccordionItem;
 
 use dioxus::prelude::*;
 
@@ -81,97 +77,5 @@ pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory
         }
     } else {
         rsx! {}
-    }
-}
-
-#[component]
-pub fn DistLabeledInput(dist_input: InputData) -> Element {
-    if dist_input.dist_param == InputParam::Rectangular {
-        let label = dist_input.dist_param.input_label();
-        rsx! {
-            div {
-                class: "form-floating-checkbox border-start",
-                "data-mdb-input-init": "",
-                label { class: "text-secondary", r#for: dist_input.id.clone(), "{label}" }
-                br {}
-                input {
-                    class: "form-check-input text-light",
-                    id: dist_input.id.as_str(),
-                    name: dist_input.id.as_str(),
-                    value: dist_input.value.clone(),
-                    r#type: "checkbox",
-                    role: "switch",
-                    checked: dist_input.value.parse::<bool>().unwrap_or_default(),
-                    onchange: move |e| dist_input.callback_opt.call(e),
-                }
-            }
-        }
-    } else if dist_input.dist_param == InputParam::FilePath {
-        let label = format!(
-            "{}: {}",
-            dist_input.dist_param.input_label(),
-            dist_input.value
-        );
-        rsx! {
-            div {
-                id: "imgSrcFileSelection",
-                class: "form-file border-start",
-                "data-mdb-input-init": "",
-                input {
-                    class: "form-input text-light",
-                    id: dist_input.id.as_str(),
-                    r#type: "file",
-                    accept: ".png",
-                    onchange: move |e| dist_input.callback_opt.call(e),
-                }
-                label {
-                    id: "imgSrcFileSelectionLabel",
-                    class: "btn bg-dark text-secondary",
-                    r#for: dist_input.id,
-                    "{label}"
-                }
-            }
-        }
-    } else {
-        rsx! {
-            LabeledInput {
-                id: dist_input.id,
-                label: dist_input.dist_param.input_label(),
-                value: dist_input.value,
-                step: dist_input.dist_param.step_value(),
-                min: dist_input.dist_param.min_value(),
-                onchange: dist_input.callback_opt,
-                r#type: "number",
-            }
-        }
-    }
-}
-
-#[component]
-pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
-    rsx! {
-        for chunk in inputs.iter().chunks(2) {
-            {
-                let inputs: Vec<&InputData> = chunk.collect::<Vec<&InputData>>();
-                if inputs.len() == 2 {
-                    rsx! {
-                        div { class: "row gy-1 gx-2",
-                            div { class: "col-sm",
-                                DistLabeledInput { dist_input: inputs[0].clone() }
-                            }
-                            div { class: "col-sm",
-                                DistLabeledInput { dist_input: inputs[1].clone() }
-                            }
-                        }
-                    }
-                } else if inputs.len() == 1 {
-                    rsx! {
-                        DistLabeledInput { dist_input: inputs[0].clone() }
-                    }
-                } else {
-                    rsx! {}
-                }
-            }
-        }
     }
 }

@@ -1,5 +1,5 @@
 use crate::components::node_editor::{
-    accordion::{LabeledInput, LabeledSelect},
+    inputs::input_components::{LabeledInput, LabeledSelect},
     CallbackWrapper,
 };
 use dioxus::prelude::*;

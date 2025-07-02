@@ -1,6 +1,7 @@
-use std::fmt::Display;
+pub mod input_components;
 
 use crate::components::node_editor::CallbackWrapper;
+use std::fmt::Display;
 
 #[derive(Clone, PartialEq, Copy)]
 pub enum InputParam {

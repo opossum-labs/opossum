@@ -1,8 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
-    accordion::{AccordionItem, LabeledInput},
-    node_editor_component::NodeChange,
-    CallbackWrapper,
+    accordion::AccordionItem, inputs::input_components::LabeledInput,
+    node_editor_component::NodeChange, CallbackWrapper,
 };
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, J_per_cm2};
