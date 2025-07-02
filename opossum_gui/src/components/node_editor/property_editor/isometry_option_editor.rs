@@ -1,16 +1,12 @@
 use crate::{
     components::node_editor::{
         accordion::AccordionItem,
-        inputs::{
-            input_components::{LabeledInput, RowedInputs},
-            InputData,
-        },
+        inputs::{input_components::RowedInputs, InputData},
         CallbackWrapper,
     },
     OPOSSUM_UI_LOGS,
 };
 use dioxus::prelude::*;
-use inflector::Inflector;
 use opossum_backend::{
     degree, millimeter, AlignmentAxis, Isometry, Proptype, RotationAxis, TranslationAxis,
 };
@@ -96,7 +92,7 @@ fn get_isometry_option_input_data(
             &id_add_on,
             on_isometry_option_change(iso, prop_type_sig, AlignmentAxis::Rotation(rot_axis)),
             format!("{:.3}", iso.rotation_of_axis(rot_axis).get::<degree>()),
-        ))
+        ));
     }
     alignment_inputs
 }

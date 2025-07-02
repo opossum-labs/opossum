@@ -27,7 +27,7 @@ pub enum NodeEditorCommand {
     LoadFile(PathBuf),
     SaveFile(PathBuf),
     AutoLayout,
-    UpdateActiveNode(Option<NodeElement>)
+    UpdateActiveNode(Option<NodeElement>),
 }
 #[derive(Clone, Copy)]
 pub struct EditorState {
@@ -47,7 +47,7 @@ pub fn GraphEditor(
     command: ReadOnlySignal<Option<NodeEditorCommand>>,
     node_selected: Signal<Option<NodeElement>>,
 ) -> Element {
-    let mut graph_store: Signal<GraphStore> = use_signal(GraphStore::default);
+    let graph_store: Signal<GraphStore> = use_signal(GraphStore::default);
     let mut editor_size: Signal<Option<PixelsSize>> = use_signal(|| None);
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),

@@ -1,8 +1,10 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{
     components::node_editor::{
-        accordion::AccordionItem, inputs::{input_components::{LabeledInput, RowedInputs}, InputData, InputParam},
-        node_editor_component::NodeChange, CallbackWrapper,
+        accordion::AccordionItem,
+        inputs::{input_components::RowedInputs, InputData},
+        node_editor_component::NodeChange,
+        CallbackWrapper,
     },
     OPOSSUM_UI_LOGS,
 };
@@ -14,14 +16,15 @@ use uom::si::{angle::degree, length::millimeter};
 #[component]
 pub fn AlignmentEditor(alignment: Option<Isometry>) -> Element {
     let iso_sig = Signal::new(alignment.unwrap_or_else(Isometry::identity));
-    rsx!{
-        AlignmentInputs{iso_sig}
-    }    
+    rsx! {
+        AlignmentInputs { iso_sig }
+    }
 }
 
 #[component]
-fn AlignmentInputs(iso_sig: Signal<Isometry>) -> Element{
-    let node_change_signal: Signal<Option<NodeChange>> = use_context::<Signal<Option<NodeChange>>>();
+fn AlignmentInputs(iso_sig: Signal<Isometry>) -> Element {
+    let node_change_signal: Signal<Option<NodeChange>> =
+        use_context::<Signal<Option<NodeChange>>>();
     let input_data = get_alignment_input_data(node_change_signal, iso_sig);
 
     let accordion_content = vec![rsx! {
@@ -81,7 +84,11 @@ fn get_alignment_input_data(
         alignment_inputs.push(InputData::new(
             trans_axis.into(),
             &id_add_on,
-            on_isometry_option_change(node_change_signal, iso, AlignmentAxis::Translation(trans_axis)),
+            on_isometry_option_change(
+                node_change_signal,
+                iso,
+                AlignmentAxis::Translation(trans_axis),
+            ),
             format!(
                 "{:.3}",
                 iso.read()
