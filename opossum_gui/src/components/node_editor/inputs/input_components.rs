@@ -9,32 +9,32 @@ use crate::components::node_editor::{
 };
 
 #[component]
-pub fn DistLabeledInput(dist_input: InputData) -> Element {
-    if dist_input.dist_param == InputParam::Rectangular {
-        let label = dist_input.dist_param.input_label();
+pub fn InputParamLabeledInput(input_data: InputData) -> Element {
+    if input_data.dist_param == InputParam::Rectangular {
+        let label = input_data.dist_param.input_label();
         rsx! {
             div {
                 class: "form-floating-checkbox border-start",
                 "data-mdb-input-init": "",
-                label { class: "text-secondary", r#for: dist_input.id.clone(), "{label}" }
+                label { class: "text-secondary", r#for: input_data.id.clone(), "{label}" }
                 br {}
                 input {
                     class: "form-check-input text-light",
-                    id: dist_input.id.as_str(),
-                    name: dist_input.id.as_str(),
-                    value: dist_input.value.clone(),
+                    id: input_data.id.as_str(),
+                    name: input_data.id.as_str(),
+                    value: input_data.value.clone(),
                     r#type: "checkbox",
                     role: "switch",
-                    checked: dist_input.value.parse::<bool>().unwrap_or_default(),
-                    onchange: move |e| dist_input.callback_opt.call(e),
+                    checked: input_data.value.parse::<bool>().unwrap_or_default(),
+                    onchange: move |e| input_data.callback_opt.call(e),
                 }
             }
         }
-    } else if dist_input.dist_param == InputParam::FilePath {
+    } else if input_data.dist_param == InputParam::FilePath {
         let label = format!(
             "{}: {}",
-            dist_input.dist_param.input_label(),
-            dist_input.value
+            input_data.dist_param.input_label(),
+            input_data.value
         );
         rsx! {
             div {
@@ -43,15 +43,15 @@ pub fn DistLabeledInput(dist_input: InputData) -> Element {
                 "data-mdb-input-init": "",
                 input {
                     class: "form-input text-light",
-                    id: dist_input.id.as_str(),
+                    id: input_data.id.as_str(),
                     r#type: "file",
                     accept: ".png",
-                    onchange: move |e| dist_input.callback_opt.call(e),
+                    onchange: move |e| input_data.callback_opt.call(e),
                 }
                 label {
                     id: "imgSrcFileSelectionLabel",
                     class: "btn bg-dark text-secondary",
-                    r#for: dist_input.id,
+                    r#for: input_data.id,
                     "{label}"
                 }
             }
@@ -59,12 +59,12 @@ pub fn DistLabeledInput(dist_input: InputData) -> Element {
     } else {
         rsx! {
             LabeledInput {
-                id: dist_input.id,
-                label: dist_input.dist_param.input_label(),
-                value: dist_input.value,
-                step: dist_input.dist_param.step_value(),
-                min: dist_input.dist_param.min_value(),
-                onchange: dist_input.callback_opt,
+                id: input_data.id,
+                label: input_data.dist_param.input_label(),
+                value: input_data.value,
+                step: input_data.dist_param.step_value(),
+                min: input_data.dist_param.min_value(),
+                onchange: input_data.callback_opt,
                 r#type: "number",
             }
         }
@@ -81,16 +81,16 @@ pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
                     rsx! {
                         div { class: "row gy-1 gx-2",
                             div { class: "col-sm",
-                                DistLabeledInput { dist_input: inputs[0].clone() }
+                                InputParamLabeledInput { input_data: inputs[0].clone() }
                             }
                             div { class: "col-sm",
-                                DistLabeledInput { dist_input: inputs[1].clone() }
+                                InputParamLabeledInput { input_data: inputs[1].clone() }
                             }
                         }
                     }
                 } else if inputs.len() == 1 {
                     rsx! {
-                        DistLabeledInput { dist_input: inputs[0].clone() }
+                        InputParamLabeledInput { input_data: inputs[0].clone() }
                     }
                 } else {
                     rsx! {}

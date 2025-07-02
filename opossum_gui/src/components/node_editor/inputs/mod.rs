@@ -1,9 +1,11 @@
 pub mod input_components;
 
+use opossum_backend::{RotationAxis, TranslationAxis};
+
 use crate::components::node_editor::CallbackWrapper;
 use std::fmt::Display;
 
-#[derive(Clone, PartialEq, Copy)]
+#[derive(Clone, PartialEq, Copy, Eq)]
 pub enum InputParam {
     Rings,
     Radius,
@@ -31,6 +33,26 @@ pub enum InputParam {
     RotationRoll,
     RotationPitch,
     RotationYaw,
+}
+
+impl From<TranslationAxis> for InputParam{
+    fn from(axis: TranslationAxis) -> Self {
+        match axis{
+            TranslationAxis::X => Self::TranslationX,
+            TranslationAxis::Y => Self::TranslationY,
+            TranslationAxis::Z => Self::TranslationZ,
+        }
+    }
+}
+
+impl From<RotationAxis> for InputParam{
+    fn from(axis: RotationAxis) -> Self {
+        match axis{
+            RotationAxis::Roll => Self::RotationRoll,
+            RotationAxis::Pitch => Self::RotationPitch,
+            RotationAxis::Yaw => Self::RotationYaw,
+        }
+    }
 }
 
 impl InputParam {

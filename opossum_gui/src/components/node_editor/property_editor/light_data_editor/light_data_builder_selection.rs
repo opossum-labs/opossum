@@ -45,15 +45,6 @@ impl LightDataBuilderHistory {
         self.hist.get_mut(&self.current)
     }
 
-    /// Returns the key string of the currently selected builder.
-    ///
-    /// # Returns
-    /// A string slice of the current key.
-    #[must_use]
-    pub const fn get_current_key(&self) -> &str {
-        self.current.as_str()
-    }
-
     /// Sets the current builder selection to the entry with the given key.
     ///
     /// # Parameters
@@ -69,28 +60,6 @@ impl LightDataBuilderHistory {
         } else {
             false
         }
-    }
-
-    /// Returns a reference to the [`LightDataBuilder`] associated with the given key, if present.
-    ///
-    /// # Returns
-    /// - `Some(&LightDataBuilder)` if the key exists.
-    /// - `None` otherwise.
-    #[must_use]
-    pub fn get(&self, key: &str) -> Option<&LightDataBuilder> {
-        self.hist.get(key)
-    }
-
-    /// Inserts a new [`LightDataBuilder`] and sets it as the active one.
-    ///
-    /// If a builder with the same key already exists, it is replaced.
-    ///
-    /// # Parameters
-    /// - `key`: The identifier for the builder.
-    /// - `ld_builder`: The builder to insert.
-    pub fn insert_and_set_current(&mut self, key: &str, ld_builder: LightDataBuilder) {
-        self.hist.insert(key.to_owned(), ld_builder);
-        key.clone_into(&mut self.current);
     }
 
     /// Inserts a [`LightDataBuilder`] under a specified key.
