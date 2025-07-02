@@ -26,7 +26,7 @@ pub use opossum::{
     spectral_distribution::*,
     utils::math_utils::isize_to_f64,
     utils::{
-        geom_transformation::{Isometry, RotationAxis, TranslationAxis},
+        geom_transformation::{AlignmentAxis, Isometry, RotationAxis, TranslationAxis},
         math_utils::{f64_to_usize, usize_to_f64},
     },
 };

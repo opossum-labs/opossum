@@ -101,4 +101,3 @@ pub fn NodeTypeInput(node_type: String) -> Element {
         }
     }
 }
-

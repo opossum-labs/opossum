@@ -25,7 +25,7 @@ pub const PORT_VER_SPACING: f64 = 16.0;
 pub const PORT_HEIGHT: f64 = 12.0;
 pub const PORT_WIDTH: f64 = 12.0;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum NodeType {
     Optical(String),
     Analyzer(AnalyzerType),
@@ -35,7 +35,7 @@ impl Default for NodeType {
         Self::Optical(String::new())
     }
 }
-#[derive(Clone, PartialEq, Default)]
+#[derive(Clone, PartialEq, Default, Debug)]
 pub struct NodeElement {
     name: String,
     node_type: NodeType,

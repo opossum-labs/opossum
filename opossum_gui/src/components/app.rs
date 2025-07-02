@@ -52,6 +52,10 @@ pub fn App() -> Element {
             }
         }
     });
+
+    use_effect(move ||{
+        node_editor_command.set(Some(NodeEditorCommand::UpdateActiveNode(selected_node().clone())));        
+    });
     use_effect(move || {
         let menu_item = menu_item_selected.read();
         if let Some(menu_item) = &*(menu_item) {

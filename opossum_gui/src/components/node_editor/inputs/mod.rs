@@ -35,9 +35,9 @@ pub enum InputParam {
     RotationYaw,
 }
 
-impl From<TranslationAxis> for InputParam{
+impl From<TranslationAxis> for InputParam {
     fn from(axis: TranslationAxis) -> Self {
-        match axis{
+        match axis {
             TranslationAxis::X => Self::TranslationX,
             TranslationAxis::Y => Self::TranslationY,
             TranslationAxis::Z => Self::TranslationZ,
@@ -45,9 +45,9 @@ impl From<TranslationAxis> for InputParam{
     }
 }
 
-impl From<RotationAxis> for InputParam{
+impl From<RotationAxis> for InputParam {
     fn from(axis: RotationAxis) -> Self {
-        match axis{
+        match axis {
             RotationAxis::Roll => Self::RotationRoll,
             RotationAxis::Pitch => Self::RotationPitch,
             RotationAxis::Yaw => Self::RotationYaw,

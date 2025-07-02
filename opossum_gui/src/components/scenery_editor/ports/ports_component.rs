@@ -6,7 +6,7 @@ use crate::components::scenery_editor::{
     graph_editor::graph_editor_component::{DragStatus, EditorState},
     node::{NodeElement, PORT_HEIGHT, PORT_WIDTH},
 };
-#[derive(Clone, Eq, PartialEq, Default)]
+#[derive(Clone, Eq, PartialEq, Default, Debug)]
 pub struct Ports {
     input_ports: Vec<String>,
     output_ports: Vec<String>,

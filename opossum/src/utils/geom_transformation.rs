@@ -488,6 +488,24 @@ pub enum RotationAxis {
     Yaw,
 }
 
+/// Define the alignment axes type for the [`Isometry`]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum AlignmentAxis {
+    /// Translation axis
+    Translation(TranslationAxis),
+    /// Rotation Axis
+    Rotation(RotationAxis),
+}
+
+impl Display for AlignmentAxis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Translation(t) => write!(f, "{t}"),
+            Self::Rotation(r) => write!(f, "{r}"),
+        }
+    }
+}
+
 impl Display for TranslationAxis {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

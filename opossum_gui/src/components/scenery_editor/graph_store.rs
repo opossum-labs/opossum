@@ -48,6 +48,7 @@ pub enum GraphStoreAction {
     DeleteNode(Uuid),
     DeleteScenery,
     OptimizeLayout,
+    UpdateActiveNode(Option<NodeElement>)
 }
 impl GraphStore {
     #[must_use]
@@ -130,6 +131,11 @@ impl GraphStore {
     //     }
     //     new_pos
     // }
+    pub fn set_active_node_name(&mut self, new_name: String, id: Uuid){
+        if let Some(node) = self.nodes_mut().write().get_mut(&id){
+            node.set_name(new_name);
+        }
+    }
 }
 
 pub async fn save_to_opm_file(path: &Path) {
@@ -245,6 +251,17 @@ pub fn use_graph_processor(
             // This loop runs forever in the background, waiting for actions.
             while let Some(action) = rx.next().await {
                 match action {
+                    GraphStoreAction::UpdateActiveNode(node) => {
+                        if let Some(node) = node{
+                            graph_store.write().set_node_active(node.id());
+                            if let Some(active_node) = graph_store.write().nodes_mut().write().get_mut(&node.id()){
+                                *active_node = node;
+                            }
+                        }
+                        else{
+                            graph_store.write().set_active_node_none();
+                        }
+                    }
                     GraphStoreAction::LoadFromFile(path) => {
                         let opm_string = match fs::read_to_string(path) {
                             Ok(s) => s,
