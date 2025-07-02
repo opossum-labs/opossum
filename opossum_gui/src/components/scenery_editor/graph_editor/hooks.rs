@@ -2,7 +2,7 @@ use crate::components::scenery_editor::{
     constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
     edges::edges_component::EdgeCreation,
     graph_editor::graph_editor_component::{DragStatus, EditorState, ShiftZoom},
-    graph_store::{GraphStore, GraphStoreAction},
+    graph_store::{GraphStore, GraphStoreAction}, NodeElement,
 };
 use dioxus::{
     html::geometry::{euclid::default::Point2D, PixelsSize},
@@ -45,9 +45,11 @@ pub fn use_center_graph(
     graph_store: Signal<GraphStore>,
     editor_size: Signal<Option<PixelsSize>>,
     mut graph_shift_zoom: Signal<ShiftZoom>,
+    mut node_selected: Signal<Option<NodeElement>>,
 ) -> impl FnMut(MouseEvent) {
     move |mouse_event| {
         mouse_event.stop_propagation();
+        node_selected.set(None);
         let bounding_box = graph_store().get_bounding_box();
         let center = bounding_box.center();
         if let Some(window_size) = editor_size() {
@@ -67,8 +69,10 @@ pub fn use_center_graph(
 pub fn use_drag_start(
     mut editor_status: EditorState,
     mut current_mouse_pos: Signal<Point2D<f64>>,
+    mut node_selected: Signal<Option<NodeElement>>,
 ) -> impl FnMut(MouseEvent) {
     move |event| {
+        node_selected.set(None);
         current_mouse_pos.set(Point2D::new(
             event.client_coordinates().x,
             event.client_coordinates().y,
