@@ -3,7 +3,8 @@ use crate::components::node_editor::property_editor::PropertiesEditor;
 use crate::components::node_editor::{
     alignment_editor::AlignmentEditor, general_editor::GeneralEditor,
 };
-use crate::{api, components::scenery_editor::node::NodeElement, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
+use crate::components::scenery_editor::NodeElement;
+use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, Isometry};
 use serde_json::Value;

@@ -353,6 +353,7 @@ pub fn use_graph_processor(
                                                     });
                                                 });
                                             }
+                                            graph_store().set_active_node_none();
                                             node_selected.set(None);
                                         }
                                         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
@@ -402,7 +403,7 @@ pub fn use_graph_processor(
                             Ok(node_info) => {
                                 let ports =
                                     Ports::new(node_info.input_ports(), node_info.output_ports());
-                                let node_element = NodeElement::new(
+                                let mut node_element = NodeElement::new(
                                     node_info.name().to_string(),
                                     NodeType::Optical(node_info.node_type().to_string()),
                                     node_info.uuid(),
@@ -423,7 +424,7 @@ pub fn use_graph_processor(
                         {
                             Ok(analyzer_id) => {
                                 let (x, y) = new_analyzer.gui_position;
-                                let node_element = NodeElement::new(
+                                let mut node_element = NodeElement::new(
                                     format!("{}", new_analyzer.analyzer_type),
                                     NodeType::Analyzer(new_analyzer.analyzer_type),
                                     analyzer_id,

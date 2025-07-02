@@ -2,10 +2,8 @@
 use std::fmt::Display;
 
 use actix_web::{
-    
-    get, post,
-    web::{self, {self, Json}, HttpResponse, Responder
-},
+    HttpResponse, Responder, get, post,
+    web::{self, Json},
 };
 use opossum::{analyzers::AnalyzerType, reporting::analysis_report::AnalysisReport};
 use serde::{Deserialize, Serialize};
@@ -115,7 +113,7 @@ async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
 async fn get_analyze(
     data: web::Data<AppState>,
 ) -> Result<Json<Vec<AnalysisReport>>, ErrorResponse> {
-    let mut document = data.document.lock().unwrap();
+    let mut document = data.document.lock();
     let reports = document.analyze()?;
     drop(document);
     Ok(Json(reports))

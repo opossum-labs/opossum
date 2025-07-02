@@ -450,7 +450,7 @@ async fn post_node_name(
 ) -> Result<(), ErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let name = name.into_inner();
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
@@ -490,7 +490,7 @@ async fn post_node_lidt(
 ) -> Result<(), ErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let lidt = lidt.into_inner();
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
@@ -530,7 +530,7 @@ async fn post_node_alignment_isometry(
 ) -> Result<(), ErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let isometry = isometry_from_gui.into_inner();
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
@@ -581,7 +581,7 @@ async fn post_node_property(
             ));
         }
     };
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
@@ -621,7 +621,7 @@ async fn post_node_isometry(
 ) -> Result<(), ErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let iso = iso.into_inner();
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref

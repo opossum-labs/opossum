@@ -5,8 +5,8 @@ use crate::components::scenery_editor::{
     },
     graph_editor::hooks::{use_center_graph, use_drag, use_drag_end, use_drag_start, use_zoom},
     graph_store::{use_graph_processor, GraphStore, GraphStoreAction},
-    node::NodeElement,
     nodes::Nodes,
+    NodeElement,
 };
 use dioxus::{
     html::geometry::{euclid::default::Point2D, PixelsSize},

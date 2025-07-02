@@ -74,7 +74,7 @@ impl NodeType {
         }
     }
 }
-#[derive(Clone, PartialEq, Default)]
+#[derive(Clone, PartialEq, Default, Debug)]
 pub struct NodeElement {
     name: String,
     node_type: NodeType,
