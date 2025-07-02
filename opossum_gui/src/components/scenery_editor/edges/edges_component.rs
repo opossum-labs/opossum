@@ -1,6 +1,9 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
-    constants::EDGE_BEZIER_OFFSET, edges::{define_bezier_path, edge_component::EdgeComponent}, graph_editor::graph_editor_component::EditorState, graph_store::GraphStore
+    constants::EDGE_BEZIER_OFFSET,
+    edges::{define_bezier_path, edge_component::EdgeComponent},
+    graph_editor::graph_editor_component::EditorState,
+    graph_store::GraphStore,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::PortType;
