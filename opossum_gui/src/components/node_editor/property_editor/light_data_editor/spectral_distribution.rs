@@ -1,11 +1,9 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{
     components::node_editor::{
-        accordion::{AccordionItem, LabeledSelect},
-        property_editor::light_data_editor::{
-            DistInput, InputParam, LightDataBuilderHistory, RowedInputs,
-        },
-        CallbackWrapper,
+        accordion::{AccordionItem, LabeledSelect}, inputs::InputParam, property_editor::light_data_editor::{
+            DistInput, LightDataBuilderHistory, RowedInputs,
+        }, CallbackWrapper
     },
     OPOSSUM_UI_LOGS,
 };

@@ -14,11 +14,9 @@ use uom::si::{
 
 use crate::{
     components::node_editor::{
-        accordion::{LabeledInput, LabeledSelect},
-        property_editor::light_data_editor::{
-            DistInput, InputParam, LightDataBuilderHistory, RowedInputs,
-        },
-        CallbackWrapper,
+        accordion::{LabeledInput, LabeledSelect}, inputs::InputParam, property_editor::light_data_editor::{
+            DistInput, LightDataBuilderHistory, RowedInputs,
+        }, CallbackWrapper
     },
     OPOSSUM_UI_LOGS,
 };

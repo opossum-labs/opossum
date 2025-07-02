@@ -4,6 +4,7 @@ pub mod general_editor;
 pub mod node_editor_component;
 pub mod property_editor;
 pub use node_editor_component::NodeEditor;
+pub mod inputs;
 
 use dioxus::prelude::*;
 use std::{cell::RefCell, rc::Rc};

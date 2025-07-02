@@ -15,8 +15,7 @@ pub use spectral_distribution::*;
 use std::fmt::Display;
 
 use crate::components::node_editor::{
-    accordion::{AccordionItem, LabeledInput},
-    CallbackWrapper,
+    accordion::{AccordionItem, LabeledInput}, inputs::InputParam, CallbackWrapper
 };
 
 use dioxus::prelude::*;

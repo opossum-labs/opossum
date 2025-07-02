@@ -3,7 +3,7 @@
 mod isometry_option_editor;
 mod length_editor;
 mod length_option_editor;
-pub mod light_data_editor;
+mod light_data_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
