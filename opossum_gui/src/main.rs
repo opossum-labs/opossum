@@ -1,6 +1,6 @@
 #![windows_subsystem = "windows"]
 use dioxus::{desktop::tao::window::Icon, prelude::*};
-use opossum_gui::components::app::App;
+use opossum_gui::App;
 use std::io::Cursor;
 
 const MAIN_CSS: Asset = asset!("./assets/main.css");

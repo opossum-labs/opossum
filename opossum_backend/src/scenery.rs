@@ -23,7 +23,7 @@ const RON_MEDIA_TYPE: &str = "application/ron";
 #[utoipa::path(responses((status = 200, description = "scenery deleted and new one sucessfully created")), tag="scenery")]
 #[delete("/")]
 async fn delete_scenery(data: web::Data<AppState>) -> impl Responder {
-    let mut document = data.document.lock().unwrap();
+    let mut document = data.document.lock();
     *document = OpmDocument::default();
     drop(document);
     HttpResponse::new(StatusCode::OK)
@@ -38,7 +38,7 @@ struct NrOfNodes(usize);
 /// for testing purposes.
 #[get("/nr_of_nodes")]
 async fn nr_of_nodes(data: web::Data<AppState>) -> impl Responder {
-    let nr_of_nodes = data.document.lock().unwrap().scenery().nr_of_nodes();
+    let nr_of_nodes = data.document.lock().scenery().nr_of_nodes();
     web::Json(NrOfNodes(nr_of_nodes))
 }
 #[utoipa::path(tag = "scenery",
@@ -50,7 +50,7 @@ async fn nr_of_nodes(data: web::Data<AppState>) -> impl Responder {
 #[get("/global_conf")]
 #[allow(clippy::significant_drop_tightening)] // no idea, how to fix this ...
 async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     let global_conf = document.global_conf().lock().unwrap().clone();
     web::Json(global_conf)
 }
@@ -69,7 +69,6 @@ async fn post_global_conf(
     let global_conf = new_global_conf.into_inner();
     data.document
         .lock()
-        .unwrap()
         .set_global_conf(global_conf.clone());
     web::Json(global_conf)
 }
@@ -82,7 +81,7 @@ async fn post_global_conf(
 /// analyzer.
 #[get("/analyzers")]
 async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
-    let analyzers = data.document.lock().unwrap().analyzers();
+    let analyzers = data.document.lock().analyzers();
     let analyzers: Vec<AnalyzerInfo> = analyzers
         .values()
         .map(|a| {
@@ -121,7 +120,7 @@ async fn get_analyzer(
     data: web::Data<AppState>,
     id: web::Path<Uuid>,
 ) -> Result<Json<AnalyzerInfo>, ErrorResponse> {
-    let analyzer_info = data.document.lock().unwrap().analyzer(*id)?;
+    let analyzer_info = data.document.lock().analyzer(*id)?;
     Ok(Json(analyzer_info))
 }
 #[utoipa::path(tag = "scenery", request_body(content = NewAnalyzerInfo,
@@ -139,7 +138,7 @@ async fn add_analyzer(
     analyzer: web::Json<NewAnalyzerInfo>,
 ) -> impl Responder {
     let new_analyzer_info = analyzer.into_inner();
-    let uuid = data.document.lock().unwrap().add_analyzer_with_position(
+    let uuid = data.document.lock().add_analyzer_with_position(
         new_analyzer_info.analyzer_type,
         Some(new_analyzer_info.gui_position),
     );
@@ -158,7 +157,7 @@ async fn delete_analyzer(
     index: web::Path<Uuid>,
 ) -> Result<&'static str, ErrorResponse> {
     let index = index.into_inner();
-    data.document.lock().unwrap().remove_analyzer(index)?;
+    data.document.lock().remove_analyzer(index)?;
     Ok("")
 }
 /// Get the OPM file as string
@@ -169,7 +168,7 @@ async fn delete_analyzer(
 )]
 #[get("/opmfile")]
 async fn get_opmfile(data: web::Data<AppState>) -> Result<impl Responder, ErrorResponse> {
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     Ok(HttpResponse::Ok()
         .content_type(RON_MEDIA_TYPE)
         .body(document.to_opm_file_string()?))
@@ -190,7 +189,7 @@ async fn post_opmfile(
     data: web::Data<AppState>,
     opm_file_string: String,
 ) -> Result<&'static str, ErrorResponse> {
-    let mut document = data.document.lock().unwrap();
+    let mut document = data.document.lock();
     *document = OpmDocument::from_string(&opm_file_string)?;
     drop(document);
     Ok("")
@@ -218,7 +217,7 @@ mod test {
     #[actix_web::test]
     async fn nr_of_nodes_delete_scenery() {
         let app_state = Data::new(AppState::default());
-        let mut document = app_state.document.lock().unwrap();
+        let mut document = app_state.document.lock();
         let scenery = document.scenery_mut();
         scenery.add_node(Dummy::default()).unwrap();
         drop(document);

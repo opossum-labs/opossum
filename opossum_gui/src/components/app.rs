@@ -7,7 +7,7 @@ use crate::{
         logger::logger_component::Logger,
         menu_bar::menu_bar_component::{MenuBar, MenuSelection},
         node_editor::NodeEditor,
-        scenery_editor::{graph_editor::NodeEditorCommand, node::NodeElement, GraphEditor},
+        scenery_editor::{GraphEditor, NodeEditorCommand, NodeElement},
     },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };

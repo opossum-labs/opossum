@@ -12,12 +12,12 @@ Besides the usual aperture definitions of the `front` and `back` surfaces, a len
 
     During energy analysis, besides the common behaviour, this element does not alter the incoming the incoming light.
     The output is a copy of the input light. Above mentioned apertures are ignored.
-    
+
 - Ray tracing Analysis
 
     During ray tracing analysis, incoming rays are refracted on the `front`surface according to Snellius' law of refraction.
     Inside the lens the ray propagate within the given medium. On the `rear`surface, the rays are again refracted.
-    
+
 - Ghost focus Analysis
 
     During this analysis, the lens behaves similar to the ray tracing analysis.
@@ -36,14 +36,14 @@ Besides the usual aperture definitions of the `front` and `back` surfaces, a len
 
 - `front curvature`
 
-    Radius of curvature of the `front` surface. This value must not be zero. A positive value denotes a convex surface. 
+    Radius of curvature of the `front` surface. This value must not be zero. A positive value denotes a convex surface.
     The value `infinity` or `-infinity` denotes a flat surface.
 
 - `rear curvature`
 
-    Radius of curvature of the `rear` surface. This value must not be zero. A positive value denotes a concave surface. 
+    Radius of curvature of the `rear` surface. This value must not be zero. A positive value denotes a concave surface.
     The value `infinity` or `-infinity` denotes a flat surface.
-    
+
 - `center thickness`
 
     Thickness of the lens center at its symmetry axis. This value must be positive and finite.

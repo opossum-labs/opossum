@@ -4,6 +4,8 @@
 
 A paraxial surface represents an ideal lens which is free of geometric or chromatic aberrations. During ray analysis, an incoming collimated beam is focussed down to a spot size of zero. During energy analysis, the light is not modified.
 
+## Analysis
+
 ## Ports
 
 `input_1`

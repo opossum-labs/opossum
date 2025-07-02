@@ -2,9 +2,10 @@ use dioxus::prelude::*;
 use opossum_backend::PortType;
 
 use crate::components::scenery_editor::{
+    constants::{PORT_HEIGHT, PORT_WIDTH},
     edges::edges_component::{EdgePort, NewEdgeCreationStart},
     graph_editor::graph_editor_component::{DragStatus, EditorState},
-    node::{NodeElement, PORT_HEIGHT, PORT_WIDTH},
+    node::NodeElement,
 };
 #[derive(Clone, Eq, PartialEq, Default, Debug)]
 pub struct Ports {

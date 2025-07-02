@@ -2,8 +2,10 @@
 use std::fmt::Display;
 
 use actix_web::{
-    Responder, get,
-    web::{self, Json},
+    
+    get, post,
+    web::{self, {self, Json}, HttpResponse, Responder
+},
 };
 use opossum::{analyzers::AnalyzerType, reporting::analysis_report::AnalysisReport};
 use serde::{Deserialize, Serialize};
@@ -91,6 +93,17 @@ async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, ErrorResponse> 
     let analyzer_types = opossum::analyzers::AnalyzerType::analyzer_types();
     Ok(Json(analyzer_types))
 }
+/// Terminate the backend server
+///
+/// This terminates the OPOSSUM backend server. This is a (probably temporary) endpoint which is used to kill the server
+/// when the GUI is closed. It might be removed in the future. **Note**: After sending this call you can no longer communicate as
+/// the server is closed.
+#[utoipa::path(post, responses((status = 204, description = "success")), tag="general")]
+#[post("/terminate")]
+async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
+    data.server_handle.lock().as_ref().unwrap().stop(true).await;
+    HttpResponse::NoContent().finish()
+}
 
 /// Analyze current setup and eturn a vector of analysisreports
 #[utoipa::path(get, responses(
@@ -112,6 +125,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_hello);
     cfg.service(get_node_types);
     cfg.service(get_analyzer_types);
+    cfg.service(post_terminate);
     cfg.service(get_analyze);
 }
 #[cfg(test)]

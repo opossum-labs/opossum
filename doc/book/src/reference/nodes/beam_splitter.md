@@ -2,6 +2,8 @@
 
 ![Beam splitter icon](../images/icons/node_beamsplitter.svg)
 
+## Analysis
+
 ## Ports
 
 ### Inputs

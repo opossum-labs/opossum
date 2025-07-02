@@ -39,22 +39,29 @@ pub fn start() -> Server {
 
     env_logger::init_from_env(Env::default().default_filter_or("info"));
     let app_state = web::Data::new(AppState::default());
-    HttpServer::new(move || {
-        App::new()
-            .into_utoipa_app()
-            .openapi(ApiDocs::openapi())
-            .map(|app| app.wrap(Logger::default()))
-            .map(|app| app.wrap(Cors::permissive())) // change this in production !!!
-            .app_data(app_state.clone())
-            .configure(routes::root_config)
-            .openapi_service(|api| {
-                SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", api)
-            })
-            .service(pages::welcome)
-            .default_service(web::route().to(not_found))
-            .into_app()
+    let srv = HttpServer::new({
+        let app_state = app_state.clone();
+        move || {
+            App::new()
+                .into_utoipa_app()
+                .openapi(ApiDocs::openapi())
+                .map(|app| app.wrap(Logger::default()))
+                .map(|app| app.wrap(Cors::permissive())) // change this in production !!!
+                .app_data(app_state.clone())
+                .configure(routes::root_config)
+                .openapi_service(|api| {
+                    SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", api)
+                })
+                .service(pages::welcome)
+                .default_service(web::route().to(not_found))
+                .into_app()
+        }
     })
     .bind((Ipv4Addr::UNSPECIFIED, 8001))
     .expect("Failed to bind server")
-    .run()
+    .run();
+
+    app_state.register_server_handle(srv.handle());
+
+    srv
 }

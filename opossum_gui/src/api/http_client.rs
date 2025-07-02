@@ -11,17 +11,17 @@ pub struct HTTPClient {
 
 impl Default for HTTPClient {
     fn default() -> Self {
-        Self::new()
+        Self {
+            client: Client::new(),
+            base_url: "http://localhost:8001".to_string(),
+        }
     }
 }
 
 impl HTTPClient {
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-            base_url: "http://localhost:8001".to_string(),
-        }
+        Self::default()
     }
     #[must_use]
     pub const fn client(&self) -> &Client {

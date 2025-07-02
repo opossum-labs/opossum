@@ -109,7 +109,7 @@ async fn get_subnodes(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
 ) -> Result<Json<Vec<NodeInfo>>, ErrorResponse> {
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     let scenery = document.scenery().clone();
     drop(document);
     let uuid = path.into_inner();
@@ -179,7 +179,7 @@ pub async fn get_connections(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
 ) -> Result<Json<Vec<ConnectInfo>>, ErrorResponse> {
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     let scenery = document.scenery().clone();
     drop(document);
     let uuid = path.into_inner();
@@ -220,7 +220,6 @@ impl NewNode {
         }
     }
 }
-
 /// Add a new node to a group node
 ///
 /// This function adds a new optical node to a group node specified by its UUID.
@@ -255,7 +254,7 @@ async fn post_subnode(
         new_node_info.gui_position.1,
     )));
     drop(node);
-    let mut document = data.document.lock().unwrap();
+    let mut document = data.document.lock();
     let uuid = path.into_inner();
     let scenery = document.scenery_mut();
     let new_node_uuid = if uuid.is_nil() {
@@ -344,7 +343,7 @@ async fn post_subreference(
         ref_node_info.gui_position.0,
         ref_node_info.gui_position.1,
     )));
-    let mut document = data.document.lock().unwrap();
+    let mut document = data.document.lock();
     let scenery = document.scenery_mut();
     let referring_node = scenery.node_recursive(ref_node_info.referring_node)?;
     let ref_node = node.as_refnode_mut().unwrap();
@@ -401,7 +400,7 @@ async fn post_node_position(
     let uuid = path.into_inner();
     let position = position.into_inner();
     let position = Point2::new(position.0, position.1);
-    let mut document = data.document.lock().unwrap();
+    let mut document = data.document.lock();
     match document.scenery().node_recursive(uuid) {
         Ok(node_ref) => {
             node_ref
@@ -655,7 +654,7 @@ async fn delete_subnode(
     path: web::Path<Uuid>,
 ) -> Result<Json<Vec<Uuid>>, ErrorResponse> {
     let uuid = path.into_inner();
-    let mut document = data.document.lock().unwrap();
+    let mut document = data.document.lock();
     let scenery = document.scenery_mut();
     let deleted_nodes = scenery.delete_node(uuid)?;
     drop(document);
@@ -666,7 +665,7 @@ fn get_node_attr_from_state(
     uuid: Uuid,
     data: &web::Data<AppState>,
 ) -> Result<NodeAttr, ErrorResponse> {
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     let node_attr = document
         .scenery()
         .node_recursive(uuid)?
@@ -752,7 +751,7 @@ async fn patch_properties(
     updated_props: Json<serde_json::Value>,
 ) -> Result<Json<NodeAttr>, ErrorResponse> {
     let uuid = path.into_inner();
-    let document = data.document.lock().unwrap();
+    let document = data.document.lock();
     let node = document.scenery().node_recursive(uuid)?;
     drop(document);
     let mut optic_ref = node.optical_ref.lock().unwrap();
@@ -827,7 +826,7 @@ async fn post_connection(
     data: web::Data<AppState>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, ErrorResponse> {
-    let mut document = data.document.lock().unwrap();
+    let mut document = data.document.lock();
     let scenery = document.scenery_mut();
     scenery.connect_nodes(
         connect_info.src_uuid,
@@ -846,7 +845,7 @@ async fn delete_connection(
     data: web::Data<AppState>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, ErrorResponse> {
-    let mut document = data.document.lock().unwrap();
+    let mut document = data.document.lock();
     let scenery = document.scenery_mut();
     scenery.disconnect_nodes(connect_info.src_uuid, &connect_info.src_port)?;
     drop(document);
@@ -859,7 +858,7 @@ async fn update_distance(
     data: web::Data<AppState>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, ErrorResponse> {
-    let mut document = data.document.lock().unwrap();
+    let mut document = data.document.lock();
     let scenery = document.scenery_mut();
     scenery.update_connection_distance(
         connect_info.src_uuid,

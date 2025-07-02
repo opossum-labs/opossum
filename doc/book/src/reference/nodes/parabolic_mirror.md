@@ -2,6 +2,8 @@
 
 ![Parabola icon](../images/icons/node_parabola.svg)
 
+## Analysis
+
 ## Ports
 
 `input_1`
