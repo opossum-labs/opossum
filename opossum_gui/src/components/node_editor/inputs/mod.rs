@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use crate::components::node_editor::CallbackWrapper;
 
 #[derive(Clone, PartialEq, Copy)]
 pub enum InputParam {
@@ -79,11 +80,12 @@ impl InputParam {
             | Self::WaveLength
             | Self::ConeAngle
             | Self::PixelSize => Some("1e-9"),
-            Self::CenterX | Self::CenterY 
-            | Self::TranslationX 
-            | Self::TranslationY 
-            | Self::TranslationZ 
-            | Self::RotationRoll 
+            Self::CenterX
+            | Self::CenterY
+            | Self::TranslationX
+            | Self::TranslationY
+            | Self::TranslationZ
+            | Self::RotationRoll
             | Self::RotationPitch
             | Self::RotationYaw => Some("-1e9"),
             Self::Energy | Self::RelIntensity => Some("0."),
@@ -126,9 +128,33 @@ impl Display for InputParam {
             Self::TranslationY => "TransY",
             Self::TranslationZ => "TransZ",
             Self::RotationRoll => "RollAngle",
-            Self::RotationPitch=> "PitchAngle",
-            Self::RotationYaw => "YawAngle"
+            Self::RotationPitch => "PitchAngle",
+            Self::RotationYaw => "YawAngle",
         };
         write!(f, "{param}")
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct InputData {
+    pub value: String,
+    pub id: String,
+    pub dist_param: InputParam,
+    pub callback_opt: CallbackWrapper,
+}
+
+impl InputData {
+    pub fn new(
+        dist_param: InputParam,
+        dist_type: &impl Display,
+        callback_opt: CallbackWrapper,
+        value: String,
+    ) -> Self {
+        Self {
+            value,
+            id: format!("node{dist_type}{dist_param}Input"),
+            dist_param,
+            callback_opt,
+        }
     }
 }

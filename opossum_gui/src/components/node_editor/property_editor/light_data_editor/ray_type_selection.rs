@@ -14,9 +14,10 @@ use uom::si::{
 
 use crate::{
     components::node_editor::{
-        accordion::{LabeledInput, LabeledSelect}, inputs::InputParam, property_editor::light_data_editor::{
-            DistInput, LightDataBuilderHistory, RowedInputs,
-        }, CallbackWrapper
+        accordion::{LabeledInput, LabeledSelect},
+        inputs::{InputData, InputParam},
+        property_editor::light_data_editor::{LightDataBuilderHistory, RowedInputs},
+        CallbackWrapper,
     },
     OPOSSUM_UI_LOGS,
 };
@@ -123,10 +124,10 @@ impl TryFrom<LightDataBuilder> for RayTypeSelection {
 fn get_image_source_input_params(
     img_src: &ImageSrc,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
-) -> Vec<DistInput> {
+) -> Vec<InputData> {
     let img_src_string = "imgSource".to_string();
     vec![
-        DistInput::new(
+        InputData::new(
             InputParam::PixelSize,
             &img_src_string,
             on_img_src_input_change(
@@ -136,7 +137,7 @@ fn get_image_source_input_params(
             ),
             format!("{}", img_src.pixel_size().get::<micrometer>()),
         ),
-        DistInput::new(
+        InputData::new(
             InputParam::WaveLength,
             &img_src_string,
             on_img_src_input_change(
@@ -146,7 +147,7 @@ fn get_image_source_input_params(
             ),
             format!("{}", img_src.wavelength().get::<nanometer>()),
         ),
-        DistInput::new(
+        InputData::new(
             InputParam::ConeAngle,
             &img_src_string,
             on_img_src_input_change(
@@ -156,13 +157,13 @@ fn get_image_source_input_params(
             ),
             format!("{}", img_src.cone_angle().get::<degree>()),
         ),
-        DistInput::new(
+        InputData::new(
             InputParam::Energy,
             &img_src_string,
             on_img_src_input_change(InputParam::Energy, img_src.clone(), light_data_builder_sig),
             format!("{}", img_src.energy().get::<joule>()),
         ),
-        DistInput::new(
+        InputData::new(
             InputParam::FilePath,
             &img_src_string,
             on_img_src_input_change(

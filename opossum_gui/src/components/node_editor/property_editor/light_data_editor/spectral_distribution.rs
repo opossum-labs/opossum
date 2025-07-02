@@ -1,9 +1,10 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{
     components::node_editor::{
-        accordion::{AccordionItem, LabeledSelect}, inputs::InputParam, property_editor::light_data_editor::{
-            DistInput, LightDataBuilderHistory, RowedInputs,
-        }, CallbackWrapper
+        accordion::{AccordionItem, LabeledSelect},
+        inputs::{InputData, InputParam},
+        property_editor::light_data_editor::{LightDataBuilderHistory, RowedInputs},
+        CallbackWrapper,
     },
     OPOSSUM_UI_LOGS,
 };
@@ -48,7 +49,7 @@ pub fn NodeSpectralDistInputs(
     spectral_dist_type: SpecDistType,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
-    let inputs = get_spectral_dist_input_params(&spectral_dist_type, light_data_builder_sig);
+    let inputs = get_spectral_dist_input_data(&spectral_dist_type, light_data_builder_sig);
     match spectral_dist_type {
         SpecDistType::Gaussian(_) => rsx! {
             RowedInputs { inputs }
@@ -63,7 +64,7 @@ pub fn NodeSpectralDistInputs(
 
 #[component]
 pub fn LaserLineInput(
-    inputs: Vec<DistInput>,
+    inputs: Vec<InputData>,
     laser_lines: LaserLines,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
@@ -271,14 +272,14 @@ impl SpecDistSelection {
     }
 }
 
-fn get_spectral_dist_input_params(
+fn get_spectral_dist_input_data(
     spectral_dist_type: &SpecDistType,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
-) -> Vec<DistInput> {
-    let dist_inputs: Vec<DistInput> = match spectral_dist_type {
+) -> Vec<InputData> {
+    let dist_input_data: Vec<InputData> = match spectral_dist_type {
         SpecDistType::LaserLines(_) => {
             vec![
-                DistInput::new(
+                InputData::new(
                     InputParam::WaveLength,
                     spectral_dist_type,
                     on_spectral_dist_input_change(
@@ -288,7 +289,7 @@ fn get_spectral_dist_input_params(
                     ),
                     "1054.".to_string(),
                 ),
-                DistInput::new(
+                InputData::new(
                     InputParam::RelIntensity,
                     spectral_dist_type,
                     on_spectral_dist_input_change(
@@ -301,7 +302,7 @@ fn get_spectral_dist_input_params(
             ]
         }
         SpecDistType::Gaussian(gaussian) => vec![
-            DistInput::new(
+            InputData::new(
                 InputParam::PointsX,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
@@ -311,7 +312,7 @@ fn get_spectral_dist_input_params(
                 ),
                 format!("{}", gaussian.num_points()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::CenterX,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
@@ -321,7 +322,7 @@ fn get_spectral_dist_input_params(
                 ),
                 format!("{}", gaussian.mu().get::<nanometer>()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::WaveLengthStart,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
@@ -331,7 +332,7 @@ fn get_spectral_dist_input_params(
                 ),
                 format!("{}", gaussian.wvl_start().get::<nanometer>()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::WaveLengthEnd,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
@@ -341,7 +342,7 @@ fn get_spectral_dist_input_params(
                 ),
                 format!("{}", gaussian.wvl_end().get::<nanometer>()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::Power,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
@@ -351,7 +352,7 @@ fn get_spectral_dist_input_params(
                 ),
                 format!("{}", gaussian.power()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::FWHM,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
@@ -364,7 +365,7 @@ fn get_spectral_dist_input_params(
         ],
     };
 
-    dist_inputs
+    dist_input_data
 }
 
 fn on_spectral_dist_input_change(

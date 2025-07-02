@@ -2,9 +2,8 @@
 use crate::{
     components::node_editor::{
         accordion::{AccordionItem, LabeledSelect},
-        property_editor::light_data_editor::{
-            DistInput, InputParam, LightDataBuilderHistory, RowedInputs,
-        },
+        inputs::{InputData, InputParam},
+        property_editor::light_data_editor::{LightDataBuilderHistory, RowedInputs},
         CallbackWrapper,
     },
     OPOSSUM_UI_LOGS,
@@ -44,7 +43,7 @@ pub fn NodeEnergyDistInputs(
     energy_dist_type: EnergyDistType,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
 ) -> Element {
-    let inputs = get_energy_dist_input_params(energy_dist_type, light_data_builder_sig);
+    let inputs = get_energy_dist_input_data(energy_dist_type, light_data_builder_sig);
     rsx! {
         RowedInputs { inputs }
     }
@@ -155,12 +154,12 @@ impl EnergyDistSelection {
     }
 }
 
-fn get_energy_dist_input_params(
+fn get_energy_dist_input_data(
     energy_dist_type: EnergyDistType,
     light_data_builder_sig: Signal<LightDataBuilderHistory>,
-) -> Vec<DistInput> {
-    let dist_inputs: Vec<DistInput> = match energy_dist_type {
-        EnergyDistType::Uniform(uniform) => vec![DistInput::new(
+) -> Vec<InputData> {
+    let dist_input_data: Vec<InputData> = match energy_dist_type {
+        EnergyDistType::Uniform(uniform) => vec![InputData::new(
             InputParam::Energy,
             &energy_dist_type,
             on_energy_dist_input_change(
@@ -171,7 +170,7 @@ fn get_energy_dist_input_params(
             format!("{}", uniform.energy().get::<joule>()),
         )],
         EnergyDistType::General2DGaussian(gaussian) => vec![
-            DistInput::new(
+            InputData::new(
                 InputParam::CenterX,
                 &energy_dist_type,
                 on_energy_dist_input_change(
@@ -181,7 +180,7 @@ fn get_energy_dist_input_params(
                 ),
                 format!("{}", gaussian.center().x.get::<millimeter>()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::CenterY,
                 &energy_dist_type,
                 on_energy_dist_input_change(
@@ -191,7 +190,7 @@ fn get_energy_dist_input_params(
                 ),
                 format!("{}", gaussian.center().y.get::<millimeter>()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::LengthX,
                 &energy_dist_type,
                 on_energy_dist_input_change(
@@ -201,7 +200,7 @@ fn get_energy_dist_input_params(
                 ),
                 format!("{}", gaussian.sigma().x.get::<millimeter>()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::LengthY,
                 &energy_dist_type,
                 on_energy_dist_input_change(
@@ -211,7 +210,7 @@ fn get_energy_dist_input_params(
                 ),
                 format!("{}", gaussian.sigma().y.get::<millimeter>()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::Energy,
                 &energy_dist_type,
                 on_energy_dist_input_change(
@@ -221,7 +220,7 @@ fn get_energy_dist_input_params(
                 ),
                 format!("{}", gaussian.energy().get::<joule>()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::Angle,
                 &energy_dist_type,
                 on_energy_dist_input_change(
@@ -231,7 +230,7 @@ fn get_energy_dist_input_params(
                 ),
                 format!("{}", gaussian.theta().get::<degree>()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::Power,
                 &energy_dist_type,
                 on_energy_dist_input_change(
@@ -241,7 +240,7 @@ fn get_energy_dist_input_params(
                 ),
                 format!("{}", gaussian.power()),
             ),
-            DistInput::new(
+            InputData::new(
                 InputParam::Rectangular,
                 &energy_dist_type,
                 on_energy_dist_input_change(
@@ -254,7 +253,7 @@ fn get_energy_dist_input_params(
         ],
     };
 
-    dist_inputs
+    dist_input_data
 }
 
 fn on_energy_dist_input_change(

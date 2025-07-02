@@ -12,10 +12,10 @@ use opossum_backend::{light_data_builder::LightDataBuilder, Proptype};
 pub use position_distribution::*;
 pub use ray_type_selection::*;
 pub use spectral_distribution::*;
-use std::fmt::Display;
 
 use crate::components::node_editor::{
-    accordion::{AccordionItem, LabeledInput}, inputs::InputParam, CallbackWrapper
+    accordion::{AccordionItem, LabeledInput},
+    inputs::{InputData, InputParam},
 };
 
 use dioxus::prelude::*;
@@ -85,7 +85,7 @@ pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory
 }
 
 #[component]
-pub fn DistLabeledInput(dist_input: DistInput) -> Element {
+pub fn DistLabeledInput(dist_input: InputData) -> Element {
     if dist_input.dist_param == InputParam::Rectangular {
         let label = dist_input.dist_param.input_label();
         rsx! {
@@ -148,11 +148,11 @@ pub fn DistLabeledInput(dist_input: DistInput) -> Element {
 }
 
 #[component]
-pub fn RowedInputs(inputs: Vec<DistInput>) -> Element {
+pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
     rsx! {
         for chunk in inputs.iter().chunks(2) {
             {
-                let inputs: Vec<&DistInput> = chunk.collect::<Vec<&DistInput>>();
+                let inputs: Vec<&InputData> = chunk.collect::<Vec<&InputData>>();
                 if inputs.len() == 2 {
                     rsx! {
                         div { class: "row gy-1 gx-2",
@@ -172,30 +172,6 @@ pub fn RowedInputs(inputs: Vec<DistInput>) -> Element {
                     rsx! {}
                 }
             }
-        }
-    }
-}
-
-#[derive(Clone, PartialEq)]
-pub struct DistInput {
-    pub value: String,
-    pub id: String,
-    pub dist_param: InputParam,
-    pub callback_opt: CallbackWrapper,
-}
-
-impl DistInput {
-    pub fn new(
-        dist_param: InputParam,
-        dist_type: &impl Display,
-        callback_opt: CallbackWrapper,
-        value: String,
-    ) -> Self {
-        Self {
-            value,
-            id: format!("node{dist_type}{dist_param}Input"),
-            dist_param,
-            callback_opt,
         }
     }
 }
