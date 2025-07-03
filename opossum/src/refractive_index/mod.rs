@@ -1,6 +1,10 @@
 //! Module for handling the refractive index of an optical material.
 #![warn(missing_docs)]
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
+use strum::IntoEnumIterator;
 use uom::si::f64::Length;
 
 pub mod refr_index_conrady;
@@ -18,7 +22,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::properties::Proptype;
 
 /// Available models for the calculation of refractive index
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, EnumIter)]
 pub enum RefractiveIndexType {
     /// Trivial model returning a wavelength-independant constant
     Const(RefrIndexConst),
@@ -28,6 +32,12 @@ pub enum RefractiveIndexType {
     Schott(RefrIndexSchott),
     /// Conrady model
     Conrady(RefrIndexConrady),
+}
+
+impl Default for RefractiveIndexType {
+    fn default() -> Self {
+        Self::Sellmeier1(RefrIndexSellmeier1::default())
+    }
 }
 
 impl RefractiveIndexType {
@@ -58,11 +68,38 @@ impl RefractiveIndexType {
         }
         Ok(refr_index)
     }
+
+    /// Creates a default instance of a Refractive index type by name.
+    ///
+    /// This is used to instantiate a predefined refractive index type from a string input,
+    /// e.g., in configuration files or UI selections.
+    ///
+    /// # Parameters
+    /// - `name`: The name of the desired refractive index type.
+    ///
+    /// # Returns
+    /// - `Some(RefractiveIndexType)` if the name is recognized.
+    /// - `None` if the name is unknown.
+    #[must_use]
+    pub fn default_from_name(name: &str) -> Option<Self> {
+        Self::iter().find(|ref_ind_type| format!("{ref_ind_type}") == name)
+    }
 }
 
 impl From<RefractiveIndexType> for Proptype {
     fn from(refr: RefractiveIndexType) -> Self {
         Self::RefractiveIndex(refr)
+    }
+}
+
+impl Display for RefractiveIndexType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Const(_) => write!(f, "Constant"),
+            Self::Sellmeier1(_) => write!(f, "Sellmeier equation"),
+            Self::Schott(_) => write!(f, "Schott equation"),
+            Self::Conrady(_) => write!(f, "Conrady equation"),
+        }
     }
 }
 /// All refractive index models must implement this trait.

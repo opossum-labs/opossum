@@ -2,7 +2,8 @@ use crate::components::scenery_editor::{
     constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
     edges::edges_component::EdgeCreation,
     graph_editor::graph_editor_component::{DragStatus, EditorState, ShiftZoom},
-    graph_store::{GraphStore, GraphStoreAction}, NodeElement,
+    graph_store::{GraphStore, GraphStoreAction},
+    NodeElement,
 };
 use dioxus::{
     html::geometry::{euclid::default::Point2D, PixelsSize},

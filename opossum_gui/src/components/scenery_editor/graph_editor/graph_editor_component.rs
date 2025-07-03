@@ -83,7 +83,8 @@ pub fn GraphEditor(
     use_context_provider(|| graph_processor);
 
     let onwheel_handler = use_zoom(graph_shift_zoom, on_mounted);
-    let ondoubleclick_handler = use_center_graph(graph_store, editor_size, graph_shift_zoom, node_selected);
+    let ondoubleclick_handler =
+        use_center_graph(graph_store, editor_size, graph_shift_zoom, node_selected);
     let onmousedown_handler = use_drag_start(editor_status, current_mouse_pos, node_selected);
     let onmousemove_handler = use_drag(
         editor_status,

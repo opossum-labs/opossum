@@ -9,10 +9,11 @@ use dioxus::prelude::*;
 use opossum_backend::{Fluence, Isometry};
 use serde_json::Value;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChange {
     Name(String),
-    LIDT(Fluence),
+    Lidt(Fluence),
     Alignment(Isometry),
     Inverted(bool),
     Property(String, Value),
@@ -93,7 +94,7 @@ fn node_change_api_call_selection(
                 }
             });
         }
-        NodeChange::LIDT(lidt) => {
+        NodeChange::Lidt(lidt) => {
             spawn(async move {
                 if let Err(err_str) =
                     api::update_node_lidt(&HTTP_API_CLIENT(), active_node.id(), lidt).await

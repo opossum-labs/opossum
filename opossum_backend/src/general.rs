@@ -99,7 +99,8 @@ async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, ErrorResponse> 
 #[utoipa::path(post, responses((status = 204, description = "success")), tag="general")]
 #[post("/terminate")]
 async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
-    data.server_handle.lock().as_ref().unwrap().stop(true).await;
+    let server_handle = data.server_handle.lock().clone();
+    server_handle.unwrap().stop(true).await;
     HttpResponse::NoContent().finish()
 }
 

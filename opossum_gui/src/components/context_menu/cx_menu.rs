@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::{components::menu_bar::controls::sub_menu_item::MenuItem, CONTEXT_MENU};
+use crate::{components::context_menu::sub_menu_item::MenuItem, CONTEXT_MENU};
 use dioxus::prelude::*;
-use opossum_backend::{nodes::NewRefNode, usize_to_f64};
+use opossum_backend::nodes::NewRefNode;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CxtCommand {
@@ -15,10 +15,10 @@ pub struct CxMenu {
     pub entries: Vec<(String, CxtCommand)>,
 }
 impl CxMenu {
-    #[must_use]
-    pub const fn height(num_entries: usize) -> f64 {
-        22.4 * usize_to_f64(num_entries) + 2. * Self::padding()
-    }
+    // #[must_use]
+    // pub const fn height(num_entries: usize) -> f64 {
+    //     22.4 * usize_to_f64(num_entries) + 2. * Self::padding()
+    // }
     #[must_use]
     pub const fn width() -> f64 {
         150. + 2. * Self::padding()
@@ -27,6 +27,7 @@ impl CxMenu {
     pub const fn padding() -> f64 {
         2.
     }
+    #[allow(clippy::unnecessary_wraps)]
     #[must_use]
     pub const fn new(x: f64, y: f64, entries: Vec<(String, CxtCommand)>) -> Option<Self> {
         // MAIN_WINDOW_SIZE.read().as_ref().map(|rect| {

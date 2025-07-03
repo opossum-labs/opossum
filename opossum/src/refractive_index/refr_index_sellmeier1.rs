@@ -8,6 +8,7 @@ use uom::si::length::micrometer;
 
 use crate::error::OpmResult;
 use crate::error::OpossumError;
+use crate::nanometer;
 
 use super::{RefractiveIndex, RefractiveIndexType};
 
@@ -22,6 +23,22 @@ pub struct RefrIndexSellmeier1 {
     l3: f64,
     wvl_range: Range<Length>,
 }
+
+impl Default for RefrIndexSellmeier1 {
+    //N-BK7
+    fn default() -> Self {
+        Self {
+            k1: 1.039_612_120,
+            k2: 0.231_792_344,
+            k3: 1.010_469_450,
+            l1: 0.006_000_698_67,
+            l2: 0.020_017_914_4,
+            l3: 103.560_653_0,
+            wvl_range: nanometer!(1000.)..nanometer!(1100.),
+        }
+    }
+}
+
 impl RefrIndexSellmeier1 {
     /// Create a new refractive index model following the Sellmeier (1) equation.
     ///
@@ -72,6 +89,100 @@ impl RefrIndexSellmeier1 {
             l3,
             wvl_range: wavelength_range,
         })
+    }
+    /// Returns the coefficient `k1` of the Sellmeier equation.
+    #[must_use]
+    pub const fn k1(&self) -> f64 {
+        self.k1
+    }
+
+    /// Sets the coefficient `k1` of the Sellmeier equation.
+    pub const fn set_k1(&mut self, value: f64) {
+        self.k1 = value;
+    }
+
+    /// Returns the coefficient `k2` of the Sellmeier equation.
+    #[must_use]
+    pub const fn k2(&self) -> f64 {
+        self.k2
+    }
+
+    /// Sets the coefficient `k2` of the Sellmeier equation.
+    pub const fn set_k2(&mut self, value: f64) {
+        self.k2 = value;
+    }
+
+    /// Returns the coefficient `k3` of the Sellmeier equation.
+    #[must_use]
+    pub const fn k3(&self) -> f64 {
+        self.k3
+    }
+
+    /// Sets the coefficient `k3` of the Sellmeier equation.
+    pub const fn set_k3(&mut self, value: f64) {
+        self.k3 = value;
+    }
+
+    /// Returns the coefficient `l1` (lambda squared denominator term).
+    #[must_use]
+    pub const fn l1(&self) -> f64 {
+        self.l1
+    }
+
+    /// Sets the coefficient `l1` (lambda squared denominator term).
+    pub const fn set_l1(&mut self, value: f64) {
+        self.l1 = value;
+    }
+
+    /// Returns the coefficient `l2` (lambda squared denominator term).
+    #[must_use]
+    pub const fn l2(&self) -> f64 {
+        self.l2
+    }
+
+    /// Sets the coefficient `l2` (lambda squared denominator term).
+    pub const fn set_l2(&mut self, value: f64) {
+        self.l2 = value;
+    }
+
+    /// Returns the coefficient `l3` (lambda squared denominator term).
+    #[must_use]
+    pub const fn l3(&self) -> f64 {
+        self.l3
+    }
+
+    /// Sets the coefficient `l3` (lambda squared denominator term).
+    pub const fn set_l3(&mut self, value: f64) {
+        self.l3 = value;
+    }
+
+    /// Returns the wavelength range (in meters) over which the Sellmeier equation is valid.
+    #[must_use]
+    pub fn wavelength_range(&self) -> &Range<Length> {
+        &self.wvl_range
+    }
+
+    /// Sets the wavelength range (in meters) for which the Sellmeier equation is valid.
+    pub fn set_wavelength_range(&mut self, range: Range<Length>) {
+        self.wvl_range = range;
+    }
+
+    /// Sets the start value of the wavelength range.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - The new start value of the wavelength range (in meters).
+    pub fn set_wavelength_range_start(&mut self, start: Length) {
+        self.wvl_range.start = start;
+    }
+
+    /// Sets the end value of the wavelength range.
+    ///
+    /// # Arguments
+    ///
+    /// * `end` - The new end value of the wavelength range (in meters).
+    pub fn set_wavelength_range_end(&mut self, end: Length) {
+        self.wvl_range.end = end;
     }
 }
 impl RefractiveIndex for RefrIndexSellmeier1 {

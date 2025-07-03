@@ -356,11 +356,11 @@ fn get_spectral_dist_input_data(
                 format!("{}", gaussian.power()),
             ),
             InputData::new(
-                InputParam::FWHM,
+                InputParam::Fwhm,
                 spectral_dist_type,
                 on_spectral_dist_input_change(
                     spectral_dist_type,
-                    InputParam::FWHM,
+                    InputParam::Fwhm,
                     light_data_builder_sig,
                 ),
                 format!("{}", gaussian.fwhm().get::<nanometer>()),
@@ -389,7 +389,7 @@ fn on_spectral_dist_input_change(
                     InputParam::WaveLengthStart => gaussian.set_wvl_start(nanometer!(value)),
                     InputParam::WaveLengthEnd => gaussian.set_wvl_end(nanometer!(value)),
                     InputParam::Power => gaussian.set_power(value),
-                    InputParam::FWHM => gaussian.set_fwhm(nanometer!(value)),
+                    InputParam::Fwhm => gaussian.set_fwhm(nanometer!(value)),
                     _ => {}
                 }
             }

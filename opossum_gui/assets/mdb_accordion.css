@@ -148,3 +148,7 @@ input[type=number] {
   background-color:rgb(70, 70, 70) !important;
 
 }
+
+.accordion-content-wrapper-div{
+    padding: 0rem 0.75rem; 
+}

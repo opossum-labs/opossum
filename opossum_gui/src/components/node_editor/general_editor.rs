@@ -71,7 +71,7 @@ pub fn NodeLIDTInput(node_lidt: Fluence) -> Element {
 pub fn lidt_onchange(mut signal: Signal<Option<NodeChange>>) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(lidt) = e.data.parsed::<f64>() {
-            signal.set(Some(NodeChange::LIDT(J_per_cm2!(lidt))));
+            signal.set(Some(NodeChange::Lidt(J_per_cm2!(lidt))));
         }
     })
 }

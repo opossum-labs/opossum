@@ -4,7 +4,6 @@ use opossum_backend::{
     Fluence, Isometry, NodeAttr,
 };
 use serde_json::Value;
-use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
 use super::http_client::HTTPClient;
@@ -219,41 +218,6 @@ pub async fn update_node_alignment(
         .post::<Isometry, String>(
             &format!("/api/scenery/alignmentisometry/{}", node_id.as_simple()),
             alignment,
-        )
-        .await
-}
-
-/// Update the translation alignment of the node with the given `node_id`.
-///
-/// # Errors
-///
-/// This function will return an error if the `node_id` was not found.
-pub async fn update_node_translation(
-    client: &HTTPClient,
-    node_id: Uuid,
-    translation: (Length, usize),
-) -> Result<String, String> {
-    client
-        .post::<(Length, usize), String>(
-            &format!("/api/scenery/alignmenttranslation/{}", node_id.as_simple()),
-            translation,
-        )
-        .await
-}
-/// Update the rotation alignment of the node with the given `node_id`.
-///
-/// # Errors
-///
-/// This function will return an error if the `node_id` was not found.
-pub async fn update_node_rotation(
-    client: &HTTPClient,
-    node_id: Uuid,
-    rotation: (Angle, usize),
-) -> Result<String, String> {
-    client
-        .post::<(Angle, usize), String>(
-            &format!("/api/scenery/alignmentrotation/{}", node_id.as_simple()),
-            rotation,
         )
         .await
 }

@@ -22,7 +22,7 @@ pub enum InputParam {
     WaveLengthStart,
     WaveLengthEnd,
     WaveLength,
-    FWHM,
+    Fwhm,
     RelIntensity,
     PixelSize,
     FilePath,
@@ -33,6 +33,22 @@ pub enum InputParam {
     RotationRoll,
     RotationPitch,
     RotationYaw,
+    RefractiveIndex,
+    Sellmeierk1,
+    Sellmeierk2,
+    Sellmeierk3,
+    Sellmeierl1,
+    Sellmeierl2,
+    Sellmeierl3,
+    Schott0,
+    Schott1,
+    Schott2,
+    Schott3,
+    Schott4,
+    Schott5,
+    Conrady0,
+    Conrady1,
+    Conrady2,
 }
 
 impl From<TranslationAxis> for InputParam {
@@ -57,7 +73,7 @@ impl From<RotationAxis> for InputParam {
 
 impl InputParam {
     #[must_use]
-    pub fn input_label(&self) -> String {
+    pub fn input_label(self) -> String {
         match self {
             Self::Rings => "Number of Rings".to_string(),
             Self::Radius => "Radius in mm".to_string(),
@@ -74,7 +90,7 @@ impl InputParam {
             Self::WaveLengthStart => "Start λ in nm".to_string(),
             Self::WaveLengthEnd => "End λ in nm".to_string(),
             Self::WaveLength => "λ in nm".to_string(),
-            Self::FWHM => "FWHM in nm".to_string(),
+            Self::Fwhm => "FWHM in nm".to_string(),
             Self::RelIntensity => "Rel. intensity".to_string(),
             Self::PixelSize => "Pixel size in µm".to_string(),
             Self::FilePath => "File".to_string(),
@@ -85,13 +101,26 @@ impl InputParam {
             Self::RotationRoll => "Roll in degrees".to_string(),
             Self::RotationPitch => "Pitch in degrees".to_string(),
             Self::RotationYaw => "Yaw in degrees".to_string(),
+            Self::RefractiveIndex => "Refractive index".to_string(),
+            Self::Sellmeierk1 => "B1".to_string(),
+            Self::Sellmeierk2 => "B2".to_string(),
+            Self::Sellmeierk3 => "B3".to_string(),
+            Self::Sellmeierl1 => "C1".to_string(),
+            Self::Sellmeierl2 => "C2".to_string(),
+            Self::Sellmeierl3 => "C3".to_string(),
+            Self::Schott0 | Self::Conrady0 => "A".to_string(),
+            Self::Schott1 | Self::Conrady1 => "B".to_string(),
+            Self::Schott2 | Self::Conrady2 => "C".to_string(),
+            Self::Schott3 => "D".to_string(),
+            Self::Schott4 => "E".to_string(),
+            Self::Schott5 => "F".to_string(),
         }
     }
 
     #[must_use]
-    pub const fn min_value(&self) -> Option<&'static str> {
+    pub const fn min_value(self) -> Option<&'static str> {
         match self {
-            Self::Rings | Self::PointsX | Self::PointsY => Some("1"),
+            Self::Rings | Self::PointsX | Self::PointsY | Self::RefractiveIndex => Some("1"),
             Self::Radius
             | Self::LengthX
             | Self::LengthY
@@ -99,10 +128,25 @@ impl InputParam {
             | Self::Power
             | Self::WaveLengthStart
             | Self::WaveLengthEnd
-            | Self::FWHM
+            | Self::Fwhm
             | Self::WaveLength
             | Self::ConeAngle
-            | Self::PixelSize => Some("1e-9"),
+            | Self::PixelSize
+            | Self::Sellmeierk1
+            | Self::Sellmeierk2
+            | Self::Sellmeierk3
+            | Self::Sellmeierl1
+            | Self::Sellmeierl2
+            | Self::Sellmeierl3
+            | Self::Schott0
+            | Self::Schott1
+            | Self::Schott2
+            | Self::Schott3
+            | Self::Schott4
+            | Self::Schott5
+            | Self::Conrady0
+            | Self::Conrady1
+            | Self::Conrady2 => Some("1e-9"),
             Self::CenterX
             | Self::CenterY
             | Self::TranslationX
@@ -116,7 +160,7 @@ impl InputParam {
         }
     }
     #[must_use]
-    pub const fn step_value(&self) -> Option<&'static str> {
+    pub const fn step_value(self) -> Option<&'static str> {
         match self {
             Self::Rectangular | Self::FilePath => None,
             _ => Some("1"),
@@ -142,7 +186,7 @@ impl Display for InputParam {
             Self::WaveLengthStart => "StartWavelength",
             Self::WaveLengthEnd => "EndWavelength",
             Self::WaveLength => "Wavelength",
-            Self::FWHM => "FWHM",
+            Self::Fwhm => "FWHM",
             Self::RelIntensity => "Relativeintensity",
             Self::PixelSize => "PixelSize",
             Self::FilePath => "FilePath",
@@ -153,6 +197,22 @@ impl Display for InputParam {
             Self::RotationRoll => "RollAngle",
             Self::RotationPitch => "PitchAngle",
             Self::RotationYaw => "YawAngle",
+            Self::RefractiveIndex => "RefractiveIndex",
+            Self::Sellmeierk1 => "Sellmeierk1",
+            Self::Sellmeierk2 => "Sellmeierk2",
+            Self::Sellmeierk3 => "Sellmeierk3",
+            Self::Sellmeierl1 => "Sellmeierl1",
+            Self::Sellmeierl2 => "Sellmeierl2",
+            Self::Sellmeierl3 => "Sellmeierl3",
+            Self::Schott0 => "Schotta0",
+            Self::Schott1 => "Schotta1",
+            Self::Schott2 => "Schotta2",
+            Self::Schott3 => "Schotta3",
+            Self::Schott4 => "Schotta4",
+            Self::Schott5 => "Schotta5",
+            Self::Conrady0 => "Conrady0",
+            Self::Conrady1 => "Conrady1",
+            Self::Conrady2 => "Conrady2",
         };
         write!(f, "{param}")
     }

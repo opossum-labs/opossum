@@ -4,6 +4,7 @@ mod isometry_option_editor;
 mod length_editor;
 mod length_option_editor;
 mod light_data_editor;
+mod refractive_index_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
@@ -11,6 +12,7 @@ use crate::components::node_editor::{
     property_editor::{
         isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
         length_option_editor::AlignmentWavelengthEditor, light_data_editor::LightDataEditor,
+        refractive_index_editor::RefractiveIndexEditor,
     },
 };
 use dioxus::prelude::*;
@@ -168,8 +170,9 @@ pub fn PropertyEditor(
             rsx! {}
         }
         Proptype::RefractiveIndex(_refractive_index_type) => {
-            println!("RefractiveIndex not yet implemented");
-            rsx! {}
+            rsx! {
+                RefractiveIndexEditor { property_key, prop_type_sig }
+            }
         }
         Proptype::Vec3(_matrix) => {
             println!("Vec3 not yet implemented");

@@ -1,39 +1,37 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::{
-    api,
-    components::{
-        context_menu::cx_menu::{ContextMenu, CxtCommand},
-        logger::logger_component::Logger,
-        menu_bar::menu_bar_component::{MenuBar, MenuSelection},
-        node_editor::NodeEditor,
-        scenery_editor::{GraphEditor, NodeEditorCommand, NodeElement},
-    },
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+use crate::components::{
+    context_menu::cx_menu::{ContextMenu, CxtCommand},
+    logger::logger_component::Logger,
+    menu_bar::menu_bar_component::{MenuBar, MenuSelection},
+    node_editor::NodeEditor,
+    scenery_editor::{GraphEditor, NodeEditorCommand, NodeElement},
 };
 use dioxus::prelude::*;
-use opossum_backend::{create_data_dir, create_report_and_data_files};
+// use crate::{api,HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
+// use std::path::PathBuf;
+// use opossum_backend::{create_data_dir, create_report_and_data_files};
 
-pub async fn analyze_setup(path: PathBuf) {
-    match api::analyze(&HTTP_API_CLIENT()).await {
-        Ok(reports) => {
-            if create_data_dir(&path).is_err() {
-                OPOSSUM_UI_LOGS
-                    .write()
-                    .add_log("Error while creating report-data directory");
-            }
-            // create_dot_file(&opossum_args.report_directory, document.scenery())?;
-            for report in reports.iter().enumerate() {
-                if create_report_and_data_files(&path, report.1, report.0).is_err() {
-                    OPOSSUM_UI_LOGS
-                        .write()
-                        .add_log("Error while creating report and data files");
-                }
-            }
-        }
-        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-    }
-}
+// pub async fn analyze_setup(path: PathBuf) {
+//     match api::analyze(&HTTP_API_CLIENT()).await {
+//         Ok(reports) => {
+//             if create_data_dir(&path).is_err() {
+//                 OPOSSUM_UI_LOGS
+//                     .write()
+//                     .add_log("Error while creating report-data directory");
+//             }
+//             // create_dot_file(&opossum_args.report_directory, document.scenery())?;
+//             for report in reports.iter().enumerate() {
+//                 if create_report_and_data_files(&path, report.1, report.0).is_err() {
+//                     OPOSSUM_UI_LOGS
+//                         .write()
+//                         .add_log("Error while creating report and data files");
+//                 }
+//             }
+//         }
+//         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+//     }
+// }
 
 #[component]
 pub fn App() -> Element {
@@ -91,10 +89,9 @@ pub fn App() -> Element {
                 }
                 MenuSelection::WinClose => {
                     println!("App::Window close selected");
-                }
-                MenuSelection::RunProject => {
-                    spawn(async move { analyze_setup(project_directory()).await });
-                }
+                } // MenuSelection::RunProject => {
+                  //     spawn(async move { analyze_setup(project_directory()).await });
+                  // }
             }
         }
     });

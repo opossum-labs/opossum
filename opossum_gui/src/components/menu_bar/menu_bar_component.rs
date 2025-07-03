@@ -18,7 +18,7 @@ const FAVICON: Asset = asset!("./assets/favicon.ico");
 #[derive(Debug)]
 pub enum MenuSelection {
     NewProject,
-    RunProject,
+    // RunProject,
     OpenProject(PathBuf),
     SaveProject(PathBuf),
     AddNode(String),

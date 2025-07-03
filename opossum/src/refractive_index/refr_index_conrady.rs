@@ -9,6 +9,7 @@ use uom::si::length::micrometer;
 
 use crate::error::OpmResult;
 use crate::error::OpossumError;
+use crate::nanometer;
 
 use super::{RefractiveIndex, RefractiveIndexType};
 
@@ -19,6 +20,18 @@ pub struct RefrIndexConrady {
     a: f64,
     b: f64,
     wvl_range: Range<Length>,
+}
+
+impl Default for RefrIndexConrady {
+    //SiO2
+    fn default() -> Self {
+        Self {
+            n0: 1.427,
+            a: 11.1,
+            b: 5.13e6,
+            wvl_range: nanometer!(1000.)..nanometer!(1100.),
+        }
+    }
 }
 impl RefrIndexConrady {
     /// Create a new refractive index model following the Conrady formula.
@@ -51,6 +64,59 @@ impl RefrIndexConrady {
             b,
             wvl_range: wavelength_range,
         })
+    }
+    /// Returns the constant term `n0` in the Conrady equation.
+    #[must_use]
+    pub const fn n0(&self) -> f64 {
+        self.n0
+    }
+
+    /// Sets the constant term `n0` in the Conrady equation.
+    pub const fn set_n0(&mut self, value: f64) {
+        self.n0 = value;
+    }
+
+    /// Returns the coefficient `a` in the Conrady equation.
+    #[must_use]
+    pub const fn a(&self) -> f64 {
+        self.a
+    }
+
+    /// Sets the coefficient `a` in the Conrady equation.
+    pub const fn set_a(&mut self, value: f64) {
+        self.a = value;
+    }
+
+    /// Returns the coefficient `b` in the Conrady equation.
+    #[must_use]
+    pub const fn b(&self) -> f64 {
+        self.b
+    }
+
+    /// Sets the coefficient `b` in the Conrady equation.
+    pub const fn set_b(&mut self, value: f64) {
+        self.b = value;
+    }
+
+    /// Returns the wavelength range (in meters) over which the Conrady equation is valid.
+    #[must_use]
+    pub fn wavelength_range(&self) -> &Range<Length> {
+        &self.wvl_range
+    }
+
+    /// Sets the full wavelength range (in meters) for which the Conrady equation is valid.
+    pub fn set_wavelength_range(&mut self, range: Range<Length>) {
+        self.wvl_range = range;
+    }
+
+    /// Sets the start of the wavelength range (in meters).
+    pub fn set_wavelength_range_start(&mut self, start: Length) {
+        self.wvl_range.start = start;
+    }
+
+    /// Sets the end of the wavelength range (in meters).
+    pub fn set_wavelength_range_end(&mut self, end: Length) {
+        self.wvl_range.end = end;
     }
 }
 impl RefractiveIndex for RefrIndexConrady {

@@ -8,6 +8,7 @@ use uom::si::length::micrometer;
 
 use crate::error::OpmResult;
 use crate::error::OpossumError;
+use crate::nanometer;
 
 use super::{RefractiveIndex, RefractiveIndexType};
 
@@ -22,6 +23,22 @@ pub struct RefrIndexSchott {
     a5: f64,
     wvl_range: Range<Length>,
 }
+
+impl Default for RefrIndexSchott {
+    //H-ZF52
+    fn default() -> Self {
+        Self {
+            a0: 3.267_600_58E+000,
+            a1: -2.053_845_66E-002,
+            a2: 3.515_076_72E-002,
+            a3: 7.701_513_48E-003,
+            a4: -9.081_398_17E-004,
+            a5: 7.526_495_55E-005,
+            wvl_range: nanometer!(1000.0)..nanometer!(1100.0),
+        }
+    }
+}
+
 impl RefrIndexSchott {
     /// Create a new refractive index model following the Schott equation.
     ///
@@ -67,6 +84,101 @@ impl RefrIndexSchott {
             a5,
             wvl_range: wavelength_range,
         })
+    }
+
+    /// Returns the coefficient `a0` of the Schott equation.
+    #[must_use]
+    pub const fn a0(&self) -> f64 {
+        self.a0
+    }
+
+    /// Sets the coefficient `a0` of the Schott equation.
+    pub const fn set_a0(&mut self, value: f64) {
+        self.a0 = value;
+    }
+
+    /// Returns the coefficient `a1` of the Schott equation.
+    #[must_use]
+    pub const fn a1(&self) -> f64 {
+        self.a1
+    }
+
+    /// Sets the coefficient `a1` of the Schott equation.
+    pub const fn set_a1(&mut self, value: f64) {
+        self.a1 = value;
+    }
+
+    /// Returns the coefficient `a2` of the Schott equation.
+    #[must_use]
+    pub const fn a2(&self) -> f64 {
+        self.a2
+    }
+
+    /// Sets the coefficient `a2` of the Schott equation.
+    pub const fn set_a2(&mut self, value: f64) {
+        self.a2 = value;
+    }
+
+    /// Returns the coefficient `a3` of the Schott equation.
+    #[must_use]
+    pub const fn a3(&self) -> f64 {
+        self.a3
+    }
+
+    /// Sets the coefficient `a3` of the Schott equation.
+    pub const fn set_a3(&mut self, value: f64) {
+        self.a3 = value;
+    }
+
+    /// Returns the coefficient `a4` of the Schott equation.
+    #[must_use]
+    pub const fn a4(&self) -> f64 {
+        self.a4
+    }
+
+    /// Sets the coefficient `a4` of the Schott equation.
+    pub const fn set_a4(&mut self, value: f64) {
+        self.a4 = value;
+    }
+
+    /// Returns the coefficient `a5` of the Schott equation.
+    #[must_use]
+    pub const fn a5(&self) -> f64 {
+        self.a5
+    }
+
+    /// Sets the coefficient `a5` of the Schott equation.
+    pub const fn set_a5(&mut self, value: f64) {
+        self.a5 = value;
+    }
+
+    /// Returns the wavelength range for which the Schott equation is valid.
+    #[must_use]
+    pub fn wavelength_range(&self) -> &Range<Length> {
+        &self.wvl_range
+    }
+
+    /// Sets the full wavelength range for which the Schott equation is valid.
+    pub fn set_wavelength_range(&mut self, range: Range<Length>) {
+        self.wvl_range = range;
+    }
+
+    /// Sets the start value of the wavelength range.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - The new start value of the wavelength range (in meters).
+    pub fn set_wavelength_range_start(&mut self, start: Length) {
+        self.wvl_range.start = start;
+    }
+
+    /// Sets the end value of the wavelength range.
+    ///
+    /// # Arguments
+    ///
+    /// * `end` - The new end value of the wavelength range (in meters).
+    pub fn set_wavelength_range_end(&mut self, end: Length) {
+        self.wvl_range.end = end;
     }
 }
 impl RefractiveIndex for RefrIndexSchott {

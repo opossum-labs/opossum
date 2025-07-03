@@ -24,7 +24,7 @@ impl Logs {
     pub const fn logs(&self) -> Signal<Vec<String>> {
         self.logs
     }
-    pub fn add_log(&mut self, log_msg: &str) {
+    pub fn add_log(&self, log_msg: &str) {
         let dt = chrono::offset::Local::now();
         self.logs().write().push(format!(
             "{:0>2}:{:0>2}:{:0>2} [log]:\t{}",

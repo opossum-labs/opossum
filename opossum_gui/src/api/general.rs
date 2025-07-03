@@ -2,7 +2,6 @@
 
 use super::http_client::HTTPClient;
 use opossum_backend::{
-    analysis_report::AnalysisReport,
     general::{NodeType, VersionInfo},
     AnalyzerType,
 };
@@ -14,6 +13,7 @@ use opossum_backend::{
 /// This function will return an error if
 /// - the request fails (e.g. the base url is not reachable)
 /// - the response cannot be deserialized into a string
+#[allow(dead_code)]
 pub async fn get_api_welcome(client: &HTTPClient) -> Result<String, String> {
     client.get::<String>("/api/").await
 }
@@ -48,15 +48,15 @@ pub async fn get_analyzer_types(client: &HTTPClient) -> Result<Vec<AnalyzerType>
     client.get::<Vec<AnalyzerType>>("/api/analyzer_types").await
 }
 
-/// Send a request to analyze current setup.
-///
-/// # Errors
-///
-/// This function will return an error if
-/// - the response cannot be deserialized into a vector of [`AnalyzerType`] structs.
-pub async fn analyze(client: &HTTPClient) -> Result<Vec<AnalysisReport>, String> {
-    client.get::<Vec<AnalysisReport>>("/api/analyze").await
-}
+// /// Send a request to analyze current setup.
+// ///
+// /// # Errors
+// ///
+// /// This function will return an error if
+// /// - the response cannot be deserialized into a vector of [`AnalyzerType`] structs.
+// // pub async fn analyze(client: &HTTPClient) -> Result<Vec<AnalysisReport>, String> {
+// //     client.get::<Vec<AnalysisReport>>("/api/analyze").await
+// // }
 
 /// Send a request to shutdown the backend server.
 ///
