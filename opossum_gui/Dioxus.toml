@@ -4,22 +4,45 @@ icon = "assets/favicon.ico"
 name = "opossum_gui"
 
 [web.app]
-
 # HTML title tag content
-title = "opossum_gui"
+title = "OPOSSUM"
 
 # include `assets` in web platform
 [desktop.resource]
-
 # Additional CSS style files
-style = ["assets/main.css"]
+style = [] # "assets/main.css"]
 
 [web.resource.dev]
-
-# Javascript code file
-# serve: [dev-server] only
 script = []
 
 [bundle]
-identifier = "opossum"
-publisher= "thrill"
+identifier = "com.opossumlabs.opossum"
+publisher = "OpossumLabs"
+short_description = "Open-source optic simulation system and unified modeler"
+long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
+category = "Utility"
+icon = ["assets/favicon.ico"]
+resources = ["../target/release/opossum_backend.exe"]
+
+[bundle.windows]
+icon_path = "assets/favicon.ico"
+timestamp_url = "http://timestamp.digicert.com"
+tsp = true
+allow_downgrades = true
+
+[bundle.windows.webview_install_mode.EmbedBootstrapper]
+silent = false
+
+[bundle.windows.wix]
+language = []
+fragment_paths = []
+component_group_refs = []
+component_refs = []
+feature_group_refs = []
+feature_refs = []
+merge_refs= []
+skip_webview_install = true
+enable_elevated_update_task= false
+fips_compliant = false
+banner_path = "../opossum/logo/Logo_InstallBanner.png"
+dialog_image_path = "../opossum/logo/Logo_InstallDialog.png"

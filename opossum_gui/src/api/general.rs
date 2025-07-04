@@ -13,6 +13,7 @@ use opossum_backend::{
 /// This function will return an error if
 /// - the request fails (e.g. the base url is not reachable)
 /// - the response cannot be deserialized into a string
+#[allow(dead_code)]
 pub async fn get_api_welcome(client: &HTTPClient) -> Result<String, String> {
     client.get::<String>("/api/").await
 }
@@ -50,6 +51,7 @@ pub async fn get_analyzer_types(client: &HTTPClient) -> Result<Vec<AnalyzerType>
 /// Send a request to shutdown the backend server.
 ///
 /// This function shuts down the backend server. No further communication is possible after this call.
+#[allow(dead_code)]
 pub async fn post_terminate(client: &HTTPClient) {
     let _ = client.client().post("/api/terminate").send().await;
 }

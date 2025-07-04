@@ -10,8 +10,11 @@
 $OriginalProgressPreference = $Global:ProgressPreference
 $Global:ProgressPreference = 'SilentlyContinue'
 
-$backendPath = "C:\Users\ueisenb\AppData\Local\0_gsi_executables\opossum\target\release\opossum_backend.exe"
-$frontendPath = "C:\Users\ueisenb\AppData\Local\0_gsi_executables\opossum\target\dx\opossum_gui\release\windows\app\opossum_gui.exe"
+# $backendPath = "C:\Users\ueisenb\AppData\Local\0_gsi_executables\opossum\target\release\opossum_backend.exe"
+# $frontendPath = "C:\Users\ueisenb\AppData\Local\0_gsi_executables\opossum\target\dx\opossum_gui\release\windows\app\opossum_gui.exe"
+
+$backendPath = ".\opossum_backend.exe"
+$frontendPath = ".\opossum_gui.exe"
 
 # --- Process & Network Configuration ---
 # Find process names from Task Manager > Details tab (e.g., "backend-server")

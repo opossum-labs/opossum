@@ -51,7 +51,7 @@ pub enum GraphStoreAction {
     DeleteNode(Uuid),
     DeleteScenery,
     OptimizeLayout,
-    TerminateBackend,
+    // TerminateBackend,
 }
 impl GraphStore {
     #[must_use]
@@ -462,9 +462,9 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                             }
                         }
                     }
-                    GraphStoreAction::TerminateBackend => {
-                        api::post_terminate(&HTTP_API_CLIENT()).await;
-                    }
+                    // GraphStoreAction::TerminateBackend => {
+                    //     api::post_terminate(&HTTP_API_CLIENT()).await;
+                    // }
                 }
             }
         }
