@@ -67,9 +67,7 @@ async fn post_global_conf(
     new_global_conf: web::Json<SceneryResources>,
 ) -> impl Responder {
     let global_conf = new_global_conf.into_inner();
-    data.document
-        .lock()
-        .set_global_conf(global_conf.clone());
+    data.document.lock().set_global_conf(global_conf.clone());
     web::Json(global_conf)
 }
 #[utoipa::path(tag = "scenery",

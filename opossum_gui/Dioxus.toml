@@ -10,7 +10,7 @@ title = "OPOSSUM"
 # include `assets` in web platform
 [desktop.resource]
 # Additional CSS style files
-style = ["assets/main.css"]
+style = [] # "assets/main.css"]
 
 [web.resource.dev]
 script = []
@@ -19,17 +19,16 @@ script = []
 identifier = "com.opossumlabs.opossum"
 publisher = "OpossumLabs"
 short_description = "Open-source optic simulation system and unified modeler"
-long_description = "An open-source framework for the simulation of optical (laser) systems"
+long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
 category = "Utility"
 icon = ["assets/favicon.ico"]
-resources = ["../target/release/opossum_backend.exe", "../scripts/opossum.ps1", "../scripts/opossum.lnk"]
+resources = ["../target/release/opossum_backend.exe"]
 
 [bundle.windows]
 icon_path = "assets/favicon.ico"
 timestamp_url = "http://timestamp.digicert.com"
 tsp = true
 allow_downgrades = true
-#webview_install_mode = "Skip"
 
 [bundle.windows.webview_install_mode.EmbedBootstrapper]
 silent = false

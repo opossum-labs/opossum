@@ -4,7 +4,9 @@ use super::{
 };
 use crate::{
     api::{self},
-    components::scenery_editor::constants::{HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERTEX_SPACING, SUGIYAMA_VERT_PATH_FACTOR},
+    components::scenery_editor::constants::{
+        HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERTEX_SPACING, SUGIYAMA_VERT_PATH_FACTOR,
+    },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::{
@@ -49,7 +51,7 @@ pub enum GraphStoreAction {
     DeleteNode(Uuid),
     DeleteScenery,
     OptimizeLayout,
-    TerminateBackend
+    // TerminateBackend,
 }
 impl GraphStore {
     #[must_use]
@@ -460,9 +462,9 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                             }
                         }
                     }
-                    GraphStoreAction::TerminateBackend => {
-                        api::post_terminate(&HTTP_API_CLIENT()).await;
-                    }
+                    // GraphStoreAction::TerminateBackend => {
+                    //     api::post_terminate(&HTTP_API_CLIENT()).await;
+                    // }
                 }
             }
         }

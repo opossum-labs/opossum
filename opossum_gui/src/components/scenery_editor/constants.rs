@@ -19,4 +19,4 @@ pub const PORT_WIDTH: f64 = 12.0;
 
 // constants for GraphStore
 pub const SUGIYAMA_VERTEX_SPACING: usize = 250;
-pub const SUGIYAMA_VERT_PATH_FACTOR: f64= 0.7;
+pub const SUGIYAMA_VERT_PATH_FACTOR: f64 = 0.7;
