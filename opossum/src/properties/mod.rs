@@ -1,12 +1,15 @@
 //! Module for handling node properties
 pub mod property;
 pub mod proptype;
+pub mod validator;
+pub mod validators;
 
 use log::warn;
 pub use property::Property;
 pub use proptype::Proptype;
 
 use crate::error::{OpmResult, OpossumError};
+use crate::properties::validator::Validator;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -43,7 +46,23 @@ impl Properties {
                 "property {name} already created",
             )));
         }
-        let new_property = Property::new(value, description.into());
+        let new_property = Property::new(value, description.into(), None)?;
+        self.props.insert(name.into(), new_property);
+        Ok(())
+    }
+    pub fn create_with_validator(
+        &mut self,
+        name: &str,
+        description: &str,
+        validator: Box<dyn Validator>,
+        value: Proptype,
+    ) -> OpmResult<()> {
+        if self.props.contains_key(name) {
+            return Err(OpossumError::Properties(format!(
+                "property {name} already created",
+            )));
+        }
+        let new_property = Property::new(value, description.into(), Some(validator))?;
         self.props.insert(name.into(), new_property);
         Ok(())
     }

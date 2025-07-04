@@ -2,6 +2,7 @@ use super::Proptype;
 use crate::{
     error::{OpmResult, OpossumError},
     plottable::Plottable,
+    properties::validator::Validator,
 };
 use nalgebra::vector;
 use serde::{Deserialize, Serialize};
@@ -17,11 +18,24 @@ pub struct Property {
     prop: Proptype,
     #[serde(skip)]
     description: String,
+    #[serde(skip)]
+    validator: Option<Box<dyn Validator>>,
 }
 impl Property {
     #[must_use]
-    pub const fn new(prop: Proptype, description: String) -> Self {
-        Self { prop, description }
+    pub fn new(
+        prop: Proptype,
+        description: String,
+        validator: Option<Box<dyn Validator>>,
+    ) -> OpmResult<Self> {
+        if let Some(validator) = &validator {
+            validator.validate(&prop)?
+        }
+        Ok(Self {
+            prop,
+            description,
+            validator,
+        })
     }
 
     /// Returns a reference to the actual property value (expressed as [`Proptype`] prop of this [`Property`].
@@ -42,6 +56,9 @@ impl Property {
     pub fn set_value(&mut self, prop: Proptype) -> OpmResult<()> {
         if mem::discriminant(&self.prop) != mem::discriminant(&prop) {
             return Err(OpossumError::Properties("incompatible value types".into()));
+        }
+        if let Some(validator) = &self.validator {
+            validator.validate(&prop)?;
         }
         self.prop = prop;
         Ok(())
@@ -104,15 +121,16 @@ mod test {
         let prop = Property {
             prop: true.into(),
             description: "my description".to_string(),
+            validator: None,
         };
         assert_eq!(prop.description, "my description");
-        // assert_eq!(prop.prop, Proptype::Bool(true));
     }
     #[test]
     fn description() {
         let prop = Property {
             prop: true.into(),
             description: "my description".to_string(),
+            validator: None,
         };
         assert_eq!(prop.description(), "my description");
     }
@@ -121,6 +139,7 @@ mod test {
         let mut prop = Property {
             prop: Proptype::Bool(true),
             description: "".into(),
+            validator: None,
         };
         assert!(prop.set_value(Proptype::Bool(false)).is_ok());
         assert!(prop.set_value(Proptype::F64(3.14)).is_err());
