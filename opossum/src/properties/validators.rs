@@ -12,8 +12,7 @@ impl Validator for F64IsPositive {
                 Ok(())
             } else {
                 Err(OpossumError::Properties(format!(
-                    "Validation failed: value {} must be positive.",
-                    v
+                    "Validation failed: value {v} must be positive."
                 )))
             }
         } else {
@@ -24,6 +23,7 @@ impl Validator for F64IsPositive {
 }
 
 /// Returns a validator that checks if an `f64` value is positive (> 0.0).
+#[must_use]
 pub fn f64_is_positive() -> Box<dyn Validator> {
     Box::new(F64IsPositive)
 }
@@ -52,6 +52,7 @@ impl Validator for F64InRange {
 }
 
 /// Returns a validator that checks if an `f64` value is within a given range (inclusive).
+#[must_use]
 pub fn f64_in_range(min: f64, max: f64) -> Box<dyn Validator> {
     Box::new(F64InRange { min, max })
 }
@@ -62,12 +63,12 @@ pub struct StringIsNotEmpty;
 impl Validator for StringIsNotEmpty {
     fn validate(&self, val: &Proptype) -> OpmResult<()> {
         if let Proptype::String(s) = val {
-            if !s.is_empty() {
-                Ok(())
-            } else {
+            if s.is_empty() {
                 Err(OpossumError::Properties(
                     "Validation failed: string must not be empty.".to_string(),
                 ))
+            } else {
+                Ok(())
             }
         } else {
             Ok(())

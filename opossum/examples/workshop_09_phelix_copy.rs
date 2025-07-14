@@ -1,7 +1,24 @@
 use nalgebra::Vector3;
 use num::Zero;
 use opossum::{
-    analyzers::{AnalyzerType, RayTraceConfig}, degree, energy_distributions::UniformDist, error::OpmResult, joule, lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder}, millimeter, nanometer, nodes::{NodeGroup, NodeReference, ParaxialSurface, RayPropagationVisualizer, Source, ThinMirror, Wedge}, optic_node::{Alignable, OpticNode}, position_distributions::Grid, properties::Proptype, refractive_index::RefrIndexConst, spectral_distribution::LaserLines, utils::geom_transformation::Isometry, OpmDocument
+    OpmDocument,
+    analyzers::{AnalyzerType, RayTraceConfig},
+    degree,
+    energy_distributions::UniformDist,
+    error::OpmResult,
+    joule,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    millimeter, nanometer,
+    nodes::{
+        NodeGroup, NodeReference, ParaxialSurface, RayPropagationVisualizer, Source, ThinMirror,
+        Wedge,
+    },
+    optic_node::{Alignable, OpticNode},
+    position_distributions::Grid,
+    properties::Proptype,
+    refractive_index::RefrIndexConst,
+    spectral_distribution::LaserLines,
+    utils::geom_transformation::Isometry,
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -52,17 +69,17 @@ fn main() -> OpmResult<()> {
     let i_mm3 = scenery.add_node(ThinMirror::new("MM3").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
     let i_mm2 = scenery.add_node(ThinMirror::new("MM2").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
 
-    let mut mm2_r= NodeReference::from_node(&scenery.node(i_mm2)?);
+    let mut mm2_r = NodeReference::from_node(&scenery.node(i_mm2)?);
     mm2_r.set_inverted(true)?;
-    let i_mm2_r=scenery.add_node(mm2_r)?;
+    let i_mm2_r = scenery.add_node(mm2_r)?;
 
-    let mut mm3_r= NodeReference::from_node(&scenery.node(i_mm3)?);
+    let mut mm3_r = NodeReference::from_node(&scenery.node(i_mm3)?);
     mm3_r.set_inverted(true)?;
-    let i_mm3_r=scenery.add_node(mm3_r)?;
+    let i_mm3_r = scenery.add_node(mm3_r)?;
 
-    let mut l2_r= NodeReference::from_node(&scenery.node(i_l2)?);
+    let mut l2_r = NodeReference::from_node(&scenery.node(i_l2)?);
     l2_r.set_inverted(true)?;
-    let i_l2_r=scenery.add_node(l2_r)?;
+    let i_l2_r = scenery.add_node(l2_r)?;
 
     let mut amps = NodeGroup::new("Amps");
 
@@ -71,7 +88,7 @@ fn main() -> OpmResult<()> {
     let i_amp3 = amps.add_node(amp("Amp 3")?)?;
     let i_amp4 = amps.add_node(amp("Amp 4")?)?;
     let i_amp5 = amps.add_node(amp("Amp 5")?)?;
-     let i_amp6 = amps.add_node(amp("Amp 6")?)?;
+    let i_amp6 = amps.add_node(amp("Amp 6")?)?;
 
     amps.connect_nodes(i_amp1, "output", i_amp2, "input", millimeter!(880.0))?;
     amps.connect_nodes(i_amp2, "output", i_amp3, "input", millimeter!(880.0))?;
@@ -85,10 +102,10 @@ fn main() -> OpmResult<()> {
     let mut main_amp = NodeGroup::new("Double-Pass Amps");
 
     let i_amps = main_amp.add_node(amps)?;
-    let i_mm1 = main_amp.add_node(ThinMirror::new("MM1").with_tilt(degree!(0.0,0.5,0.0))?)?;
-    let mut amps_r= NodeReference::from_node(&main_amp.node(i_amps)?);
+    let i_mm1 = main_amp.add_node(ThinMirror::new("MM1").with_tilt(degree!(0.0, 0.5, 0.0))?)?;
+    let mut amps_r = NodeReference::from_node(&main_amp.node(i_amps)?);
     amps_r.set_inverted(true)?;
-    let i_amps_r=main_amp.add_node(amps_r)?;
+    let i_amps_r = main_amp.add_node(amps_r)?;
 
     main_amp.connect_nodes(i_amps, "output", i_mm1, "input_1", millimeter!(1200.0))?;
     main_amp.connect_nodes(i_mm1, "output_1", i_amps_r, "output", millimeter!(1200.0))?;
@@ -98,7 +115,7 @@ fn main() -> OpmResult<()> {
     let i_main_amp = scenery.add_node(main_amp)?;
 
     let lens3 = ParaxialSurface::new("Input lens", millimeter!(7590.0))?;
-    let i_l3=scenery.add_node(lens3)?;
+    let i_l3 = scenery.add_node(lens3)?;
 
     let mut ray_prop_vis = RayPropagationVisualizer::new("propagation", None)?;
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;

@@ -21,14 +21,18 @@ pub struct Property {
     validator: Option<Box<dyn Validator>>,
 }
 impl Property {
-    #[must_use]
+    /// Create a new `Property`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given initial value does not pass the validation.
     pub fn new(
         prop: Proptype,
         description: String,
         validator: Option<Box<dyn Validator>>,
     ) -> OpmResult<Self> {
         if let Some(validator) = &validator {
-            validator.validate(&prop)?
+            validator.validate(&prop)?;
         }
         Ok(Self {
             prop,

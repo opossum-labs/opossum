@@ -18,9 +18,14 @@ impl Clone for Box<dyn Validator> {
         self.dyn_clone()
     }
 }
-/// The main Validator trait. It requires DynClone and Debug.
+/// The main Validator trait. It requires `DynClone` and `Debug`.
 /// It has a single method to perform validation.
 pub trait Validator: DynClone + Debug + Send + Sync {
+    /// Validate a given `Proptype`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the validation was not successful.
     fn validate(&self, prop: &Proptype) -> OpmResult<()>;
 }
 
