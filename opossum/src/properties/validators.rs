@@ -76,8 +76,7 @@ impl Validator for StringIsNotEmpty {
 }
 
 /// Returns a validator that checks if a `String` value is not empty.
+#[must_use]
 pub fn string_not_empty() -> Box<dyn Validator> {
     Box::new(StringIsNotEmpty)
 }
-
-// --- END: MODIFIED CODE ---

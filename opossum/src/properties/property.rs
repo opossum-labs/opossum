@@ -10,8 +10,7 @@ use std::{mem, path::Path};
 
 /// (optical) Property
 ///
-/// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a list of value conditions
-/// (such as `GreaterThan`, `NonEmptyString`, etc.)
+/// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a validator.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
 pub struct Property {
@@ -116,14 +115,31 @@ impl Property {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::properties::validators::f64_is_positive;
     #[test]
-    fn new() {
+    fn prop_struct() {
         let prop = Property {
             prop: true.into(),
             description: "my description".to_string(),
             validator: None,
         };
         assert_eq!(prop.description, "my description");
+    }
+    #[test]
+    fn new() {
+        let prop = Property::new(true.into(), "my description".into(), None);
+        assert!(prop.is_ok());
+    }
+    #[test]
+    fn new_with_validator() {
+        let prop = Property::new(1.0.into(), "my description".into(), Some(f64_is_positive()));
+        assert!(prop.is_ok());
+        let prop = Property::new(
+            (-0.1).into(),
+            "my description".into(),
+            Some(f64_is_positive()),
+        );
+        assert!(prop.is_err());
     }
     #[test]
     fn description() {

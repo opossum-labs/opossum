@@ -50,6 +50,16 @@ impl Properties {
         self.props.insert(name.into(), new_property);
         Ok(())
     }
+    /// Create a new property with the given name and a given value validator
+    ///
+    /// This function is similar to the `create` function but allows to set a validator. The given value
+    /// is already checked against the validator before the actual creation.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OpossumError`] if
+    /// - a property with the same name was already created before.
+    /// - if the validation of the initial given value fails
     pub fn create_with_validator(
         &mut self,
         name: &str,
