@@ -6,7 +6,11 @@ use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     aperture::Aperture,
     error::{OpmResult, OpossumError},
-    lightdata::{LightData, light_data_builder::LightDataBuilder},
+    lightdata::{
+        LightData,
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder},
+    },
     nodes::{
         FilterType, Metertype, SpectrometerType, WaveFrontData,
         fluence_detector::{Fluence, fluence_data::FluenceData},
@@ -245,6 +249,31 @@ impl From<Vector2<f64>> for Proptype {
         Self::Vec2(value)
     }
 }
+
+impl From<CollimatedSrc> for Proptype {
+    fn from(val: CollimatedSrc) -> Self {
+        Self::LightDataBuilder(Some(LightDataBuilder::Geometric(
+            RayDataBuilder::Collimated(val),
+        )))
+    }
+}
+
+impl From<PointSrc> for Proptype {
+    fn from(val: PointSrc) -> Self {
+        Self::LightDataBuilder(Some(LightDataBuilder::Geometric(RayDataBuilder::PointSrc(
+            val,
+        ))))
+    }
+}
+
+impl From<ImageSrc> for Proptype {
+    fn from(val: ImageSrc) -> Self {
+        Self::LightDataBuilder(Some(LightDataBuilder::Geometric(RayDataBuilder::Image(
+            val,
+        ))))
+    }
+}
+
 /// Generate a string suffix for an ordinal number
 #[must_use]
 pub fn count_str(i: usize) -> String {

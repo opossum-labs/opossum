@@ -4,7 +4,6 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
-use strum::IntoEnumIterator;
 use uom::si::f64::Length;
 
 pub mod refr_index_conrady;
@@ -20,6 +19,7 @@ pub use refr_index_sellmeier1::RefrIndexSellmeier1;
 
 use crate::error::{OpmResult, OpossumError};
 use crate::properties::Proptype;
+use crate::utils::default_from_name::DefaultFromName;
 
 /// Available models for the calculation of refractive index
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, EnumIter)]
@@ -33,6 +33,8 @@ pub enum RefractiveIndexType {
     /// Conrady model
     Conrady(RefrIndexConrady),
 }
+
+impl DefaultFromName for RefractiveIndexType {}
 
 impl Default for RefractiveIndexType {
     fn default() -> Self {
@@ -67,22 +69,6 @@ impl RefractiveIndexType {
             ));
         }
         Ok(refr_index)
-    }
-
-    /// Creates a default instance of a Refractive index type by name.
-    ///
-    /// This is used to instantiate a predefined refractive index type from a string input,
-    /// e.g., in configuration files or UI selections.
-    ///
-    /// # Parameters
-    /// - `name`: The name of the desired refractive index type.
-    ///
-    /// # Returns
-    /// - `Some(RefractiveIndexType)` if the name is recognized.
-    /// - `None` if the name is unknown.
-    #[must_use]
-    pub fn default_from_name(name: &str) -> Option<Self> {
-        Self::iter().find(|ref_ind_type| format!("{ref_ind_type}") == name)
     }
 }
 

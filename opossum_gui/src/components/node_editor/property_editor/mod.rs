@@ -5,14 +5,18 @@ mod length_editor;
 mod length_option_editor;
 mod light_data_editor;
 mod refractive_index_editor;
+// mod splitter_type_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
     node_editor_component::NodeChange,
     property_editor::{
-        isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
-        length_option_editor::AlignmentWavelengthEditor, light_data_editor::LightDataEditor,
+        isometry_option_editor::IsometryOptionEditor,
+        length_editor::LengthEditor,
+        length_option_editor::AlignmentWavelengthEditor,
+        light_data_editor::LightDataEditor,
         refractive_index_editor::RefractiveIndexEditor,
+        // , splitter_type_editor::SplitterTypeEditor,
     },
 };
 use dioxus::prelude::*;
@@ -50,7 +54,7 @@ pub fn PropertyEditor(
     property_key: String,
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
-    let prop_type_sig = Signal::new(prop_type.clone());
+    let prop_type_sig = use_signal(|| prop_type.clone());
 
     use_effect({
         let property_key = property_key.clone();
@@ -62,7 +66,7 @@ pub fn PropertyEditor(
         }
     });
 
-    match prop_type {
+    match &prop_type {
         Proptype::String(_) => {
             println!("String not yet implemented");
             rsx! {}
@@ -87,10 +91,7 @@ pub fn PropertyEditor(
             println!("FilterType not yet implemented");
             rsx! {}
         }
-        Proptype::SplitterType(_splitting_config) => {
-            println!("Splittertype not yet implemented");
-            rsx! {}
-        }
+        Proptype::SplitterType(_splitting_config) => rsx! {},
         Proptype::SpectrometerType(_spectrometer_type) => {
             println!("spectrometertype not yet implemented");
             rsx! {}
@@ -148,19 +149,24 @@ pub fn PropertyEditor(
             rsx! {}
         }
         Proptype::Length(quantity) => rsx! {
-            LengthEditor { length: quantity, property_key, prop_type_sig }
+            LengthEditor {
+                length: *quantity,
+                property_key,
+                prop_type_sig,
+            }
         },
         Proptype::LightDataBuilder(light_data_builder) => rsx! {
-            LightDataEditor { light_data_builder_opt: light_data_builder, prop_type_sig }
+            LightDataEditor {
+                light_data_builder_sig: Signal::new(light_data_builder.clone().unwrap_or_default()),
+                prop_type_sig,
+            }
         },
         Proptype::LengthOption(_) => rsx! {
             AlignmentWavelengthEditor { property_key, prop_type_sig }
         },
-        Proptype::Isometry(_) => {
-            rsx! {
-                IsometryOptionEditor { property_key, prop_type_sig }
-            }
-        }
+        Proptype::Isometry(_) => rsx! {
+            IsometryOptionEditor { property_key, prop_type_sig }
+        },
         Proptype::Energy(_quantity) => {
             println!("Energy not yet implemented");
             rsx! {}
@@ -169,11 +175,13 @@ pub fn PropertyEditor(
             println!("Angle not yet implemented");
             rsx! {}
         }
-        Proptype::RefractiveIndex(_refractive_index_type) => {
-            rsx! {
-                RefractiveIndexEditor { property_key, prop_type_sig }
+        Proptype::RefractiveIndex(refractive_index_type) => rsx! {
+            RefractiveIndexEditor {
+                property_key,
+                prop_type_sig,
+                ref_ind_sig: Signal::new(refractive_index_type.clone()),
             }
-        }
+        },
         Proptype::Vec3(_matrix) => {
             println!("Vec3 not yet implemented");
             rsx! {}

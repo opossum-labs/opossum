@@ -22,6 +22,7 @@ const NODE_PARAXIAL: Asset = asset!("./assets/icons/node_paraxial.svg");
 const NODE_PROPAGATION: Asset = asset!("./assets/icons/node_propagation.svg");
 const NODE_SOURCE: Asset = asset!("./assets/icons/node_source.svg");
 const NODE_SPECTROMETER: Asset = asset!("./assets/icons/node_spectrometer.svg");
+const NODE_WAVEFRONT: Asset = asset!("./assets/icons/node_wavefront.svg");
 const NODE_SPOTDIAGRAM: Asset = asset!("./assets/icons/node_spotdiagram.svg");
 const NODE_UNKNOWN: Asset = asset!("./assets/icons/node_unknown.svg");
 const NODE_WEDGE: Asset = asset!("./assets/icons/node_wedge.svg");
@@ -61,7 +62,7 @@ impl NodeType {
                 "source" => Some(NODE_SOURCE),
                 "spectrometer" => Some(NODE_SPECTROMETER),
                 "spot diagram" => Some(NODE_SPOTDIAGRAM),
-                // "wavefront monitor" => Some(NODE_UNKNOWN),
+                "wavefront monitor" => Some(NODE_WAVEFRONT),
                 "paraxial surface" => Some(NODE_PARAXIAL),
                 "ray propagation" => Some(NODE_PROPAGATION),
                 "fluence detector" => Some(NODE_FLUENCE),

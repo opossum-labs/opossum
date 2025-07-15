@@ -130,7 +130,7 @@ impl LaserLines {
 impl Default for LaserLines {
     fn default() -> Self {
         Self {
-            lines: vec![(nanometer!(1000.), 1.)],
+            lines: vec![(nanometer!(1054.), 1.)],
         }
     }
 }

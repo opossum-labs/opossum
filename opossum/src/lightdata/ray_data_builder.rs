@@ -8,6 +8,7 @@ use super::LightData;
 use crate::{
     degree, energy_distributions::EnergyDistType, error::OpmResult, joule, meter, nanometer,
     position_distributions::PosDistType, rays::Rays, spectral_distribution::SpecDistType,
+    utils::default_from_name::DefaultFromName,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
@@ -17,7 +18,7 @@ use uom::si::{
 };
 
 /// Builder for the generation of [`LightData::Geometric`].
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter)]
 pub enum RayDataBuilder {
     /// Raw [`Rays`] data.
     Raw(Rays),
@@ -31,6 +32,9 @@ pub enum RayDataBuilder {
     /// total energy.
     Image(ImageSrc),
 }
+
+impl DefaultFromName for RayDataBuilder {}
+
 /// Represents a collimated source, holding he distributions of the rays for ray tracing,
 /// storing distributions related to position, energy, and spectrum.
 ///
@@ -417,6 +421,7 @@ impl ImageSrc {
         self.cone_angle = cone_angle;
     }
 }
+
 impl Default for ImageSrc {
     /// Returns a default [`ImageSrc`] instance with placeholder values:
     ///
@@ -478,9 +483,61 @@ impl RayDataBuilder {
             )?)),
         }
     }
+
+    /// Set the position distribution type for the ray source.
+    ///
+    /// This function sets the [`PosDistType`] on either a collimated or point source variant
+    /// of the builder. It has no effect if the builder is in another variant (e.g., `Raw` or `Image`).
+    ///
+    /// # Parameters
+    /// - `pos_dist_type`: The position distribution type to apply.
+    ///
+    pub const fn set_pos_dist(&mut self, pos_dist_type: PosDistType) {
+        match self {
+            Self::Collimated(collimated_src) => {
+                collimated_src.set_pos_dist(pos_dist_type);
+            }
+            Self::PointSrc(point_src) => point_src.set_pos_dist(pos_dist_type),
+            _ => {}
+        }
+    }
+    /// Set the energy distribution type for the ray source.
+    ///
+    /// This function sets the [`EnergyDistType`] on either a collimated or point source variant
+    /// of the builder. It has no effect if the builder is in another variant.
+    ///
+    /// # Parameters
+    /// - `energy_dist_type`: The energy distribution type to apply.
+    ///
+    pub const fn set_energy_dist(&mut self, energy_dist_type: EnergyDistType) {
+        match self {
+            Self::Collimated(collimated_src) => {
+                collimated_src.set_energy_dist(energy_dist_type);
+            }
+            Self::PointSrc(point_src) => point_src.set_energy_dist(energy_dist_type),
+            _ => {}
+        }
+    }
+    /// Set the spectral distribution type for the ray source.
+    ///
+    /// This function sets the [`SpecDistType`] on either a collimated or point source variant
+    /// of the builder. It has no effect if the builder is in another variant.
+    ///
+    /// # Parameters
+    /// - `spect_dist_type`: The spectral distribution type to apply.
+    ///
+    pub fn set_spectral_dist(&mut self, spect_dist_type: SpecDistType) {
+        match self {
+            Self::Collimated(collimated_src) => {
+                collimated_src.set_spect_dist(spect_dist_type);
+            }
+            Self::PointSrc(point_src) => point_src.set_spect_dist(spect_dist_type),
+            _ => {}
+        }
+    }
 }
 
-impl Display for RayDataBuilder {
+impl std::fmt::Debug for RayDataBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Raw(r) => write!(f, "Raw({r})"),
@@ -513,6 +570,23 @@ impl Display for RayDataBuilder {
                     image_src.wave_length,
                     image_src.cone_angle
                 )
+            }
+        }
+    }
+}
+
+impl Display for RayDataBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Raw(r) => write!(f, "Raw({r})"),
+            Self::Collimated(_) => {
+                write!(f, "Collimated",)
+            }
+            Self::PointSrc(_) => {
+                write!(f, "Point source",)
+            }
+            Self::Image(_) => {
+                write!(f, "Image",)
             }
         }
     }

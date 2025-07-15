@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 pub use uniform::UniformDist;
 
-use crate::{error::OpmResult, joule};
+use crate::{error::OpmResult, joule, utils::default_from_name::DefaultFromName};
 use kahan::KahanSummator;
 use nalgebra::Point2;
 use uom::si::f64::{Energy, Length};
@@ -52,6 +52,8 @@ pub enum EnergyDistType {
     General2DGaussian(general_gaussian::General2DGaussian),
 }
 
+impl DefaultFromName for EnergyDistType {}
+
 impl EnergyDistType {
     /// Returns a reference to the internal energy distribution as a trait object.
     ///
@@ -89,30 +91,6 @@ impl EnergyDistType {
             }
         }
         Ok(())
-    }
-
-    /// Creates a default instance of a distribution by name.
-    ///
-    /// This is used to instantiate a predefined energy distribution from a string input,
-    /// e.g., in configuration files or UI selections.
-    ///
-    /// # Parameters
-    /// - `name`: The name of the desired energy distribution.
-    ///
-    /// # Returns
-    /// - `Some(EnergyDistType)` if the name is recognized.
-    /// - `None` if the name is unknown.
-    ///
-    /// # Supported names
-    /// - `"Uniform"` → [`UniformDist::default()`]
-    /// - `"Generalized Gaussian"` → [`General2DGaussian::default()`]
-    #[must_use]
-    pub fn default_from_name(name: &str) -> Option<Self> {
-        match name {
-            "Uniform" => Some(UniformDist::default().into()),
-            "Generalized Gaussian" => Some(General2DGaussian::default().into()),
-            _ => None,
-        }
     }
 }
 

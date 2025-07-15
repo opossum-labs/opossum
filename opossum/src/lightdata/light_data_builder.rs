@@ -4,20 +4,31 @@
 //! This builder allows easier serialization / deserialization in OPM files.
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use strum::EnumIter;
 
 use super::{LightData, energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder};
-use crate::{error::OpmResult, properties::Proptype};
+use crate::{
+    energy_distributions::EnergyDistType,
+    error::OpmResult,
+    lightdata::ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc},
+    position_distributions::PosDistType,
+    properties::Proptype,
+    spectral_distribution::SpecDistType,
+    utils::default_from_name::DefaultFromName,
+};
 
 /// Builder for the generation of [`LightData`].
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
 pub enum LightDataBuilder {
     /// Builder for the generation of [`LightData::Energy`].
     Energy(EnergyDataBuilder),
     /// Builder for the generation of [`LightData::Geometric`].
     Geometric(RayDataBuilder),
-    /// Dummy Fourier
-    Fourier,
+    // /// Dummy Fourier
+    // Fourier,
 }
+
+impl DefaultFromName for LightDataBuilder {}
 
 impl Default for LightDataBuilder {
     fn default() -> Self {
@@ -35,7 +46,77 @@ impl LightDataBuilder {
         match self {
             Self::Energy(e) => e.build(),
             Self::Geometric(r) => r.build(),
-            Self::Fourier => Ok(LightData::Fourier),
+            // Self::Fourier => Ok(LightData::Fourier),
+        }
+    }
+
+    /// Get the position distribution type, if applicable.
+    ///
+    /// Returns the [`PosDistType`] used in the ray-based (geometric) light source,
+    /// if the source variant supports it. This is typically available for
+    /// collimated and point sources only.
+    ///
+    /// Returns `None` if the builder is using an `Energy` source or a geometric
+    /// variant that does not support positional distribution (e.g., `Raw` or `Image`).
+    ///
+    /// # Returns
+    /// - `Some(PosDistType)` if available.
+    /// - `None` otherwise.
+    #[must_use]
+    pub const fn get_position_distribution_type(&self) -> Option<PosDistType> {
+        match self {
+            Self::Energy(_) => None,
+            Self::Geometric(ray_data_builder) => match ray_data_builder {
+                RayDataBuilder::Collimated(collimated_src) => Some(*collimated_src.pos_dist()),
+                RayDataBuilder::PointSrc(point_src) => Some(*point_src.pos_dist()),
+                RayDataBuilder::Raw(_) | RayDataBuilder::Image(_) => None,
+            },
+        }
+    }
+    /// Get the energy distribution type, if applicable.
+    ///
+    /// Returns the [`EnergyDistType`] used in the ray-based (geometric) light source,
+    /// if the source variant supports it. Only collimated and point sources expose this data.
+    ///
+    /// Returns `None` if the builder is using an `Energy` source or an unsupported geometric variant.
+    ///
+    /// # Returns
+    /// - `Some(EnergyDistType)` if available.
+    /// - `None` otherwise.
+    #[must_use]
+    pub const fn get_energy_distribution_type(&self) -> Option<EnergyDistType> {
+        match self {
+            Self::Energy(_) => None,
+            Self::Geometric(ray_data_builder) => match ray_data_builder {
+                RayDataBuilder::Collimated(collimated_src) => Some(*collimated_src.energy_dist()),
+                RayDataBuilder::PointSrc(point_src) => Some(*point_src.energy_dist()),
+                RayDataBuilder::Raw(_) | RayDataBuilder::Image(_) => None,
+            },
+        }
+    }
+
+    /// Get the spectral distribution type, if applicable.
+    ///
+    /// Returns the [`SpecDistType`] used in the ray-based (geometric) light source,
+    /// if the source variant supports it. Available for collimated and point sources.
+    ///
+    /// Returns `None` if the builder is using an `Energy` source or a geometric
+    /// variant without spectral configuration (e.g., `Raw` or `Image`).
+    ///
+    /// # Returns
+    /// - `Some(SpecDistType)` if available.
+    /// - `None` otherwise.
+    #[must_use]
+    pub fn get_spectral_distribution_type(&self) -> Option<SpecDistType> {
+        match self {
+            Self::Energy(_) => None,
+            Self::Geometric(ray_data_builder) => match ray_data_builder {
+                RayDataBuilder::Collimated(collimated_src) => {
+                    Some(collimated_src.spect_dist().clone())
+                }
+                RayDataBuilder::PointSrc(point_src) => Some(point_src.spect_dist().clone()),
+                RayDataBuilder::Raw(_) | RayDataBuilder::Image(_) => None,
+            },
         }
     }
 }
@@ -43,9 +124,9 @@ impl LightDataBuilder {
 impl Display for LightDataBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Energy(e) => write!(f, "Energy({e})"),
-            Self::Geometric(r) => write!(f, "Geometric({r})"),
-            Self::Fourier => write!(f, "Fourier"),
+            Self::Energy(_) => write!(f, "Energy"),
+            Self::Geometric(_) => write!(f, "Rays"),
+            // Self::Fourier => write!(f, "Fourier"),
         }
     }
 }
@@ -54,6 +135,25 @@ impl From<Option<LightDataBuilder>> for Proptype {
         Self::LightDataBuilder(value)
     }
 }
+
+impl From<ImageSrc> for LightDataBuilder {
+    fn from(value: ImageSrc) -> Self {
+        Self::Geometric(RayDataBuilder::Image(value))
+    }
+}
+
+impl From<PointSrc> for LightDataBuilder {
+    fn from(value: PointSrc) -> Self {
+        Self::Geometric(RayDataBuilder::PointSrc(value))
+    }
+}
+
+impl From<CollimatedSrc> for LightDataBuilder {
+    fn from(value: CollimatedSrc) -> Self {
+        Self::Geometric(RayDataBuilder::Collimated(value))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,10 +174,7 @@ mod tests {
             vec![(nanometer!(1000.0), joule!(1.0))],
             nanometer!(1.0),
         ));
-        assert_eq!(
-            format!("{light_data_builder}"),
-            "Energy(LaserLines([(1.0000000000000002e-6 m^1, 1.0 m^2 kg^1 s^-2)], 1.000 nm))"
-        );
+        assert_eq!(format!("{light_data_builder}"), "Energy");
     }
     #[test]
     fn build_light_data() {
@@ -87,9 +184,9 @@ mod tests {
         ));
         let light_data = light_data_builder.build().unwrap();
         assert!(matches!(light_data, LightData::Energy(_)));
-        let light_data_builder = LightDataBuilder::Fourier;
-        let light_data = light_data_builder.build().unwrap();
-        assert!(matches!(light_data, LightData::Fourier));
+        // let light_data_builder = LightDataBuilder::Fourier;
+        // let light_data = light_data_builder.build().unwrap();
+        // assert!(matches!(light_data, LightData::Fourier));
         let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(Rays::default()));
         let light_data = light_data_builder.build().unwrap();
         assert!(matches!(light_data, LightData::Geometric(_)));

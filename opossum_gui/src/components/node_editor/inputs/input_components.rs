@@ -10,8 +10,7 @@ use crate::components::node_editor::{
 
 #[component]
 pub fn InputParamLabeledInput(input_data: InputData) -> Element {
-    if input_data.dist_param == InputParam::Rectangular {
-        let label = input_data.dist_param.input_label();
+    if let InputParam::Bool(label) = input_data.dist_param {
         rsx! {
             div {
                 class: "form-floating-checkbox border-start",
@@ -23,19 +22,14 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                     id: input_data.id.as_str(),
                     name: input_data.id.as_str(),
                     value: input_data.value.clone(),
-                    r#type: "checkbox",
+                    r#type: input_data.dist_param.rtype(),
                     role: "switch",
                     checked: input_data.value.parse::<bool>().unwrap_or_default(),
                     onchange: move |e| input_data.callback_opt.call(e),
                 }
             }
         }
-    } else if input_data.dist_param == InputParam::FilePath {
-        let label = format!(
-            "{}: {}",
-            input_data.dist_param.input_label(),
-            input_data.value
-        );
+    } else if let InputParam::FilePath(label) = input_data.dist_param {
         rsx! {
             div {
                 id: "imgSrcFileSelection",
@@ -44,13 +38,14 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 input {
                     class: "form-input text-light",
                     id: input_data.id.as_str(),
-                    r#type: "file",
+                    r#type: input_data.dist_param.rtype(),
                     accept: ".png",
                     onchange: move |e| input_data.callback_opt.call(e),
                 }
+                a { {input_data.value} }
                 label {
                     id: "imgSrcFileSelectionLabel",
-                    class: "btn bg-dark text-secondary",
+                    class: "text-secondary ",
                     r#for: input_data.id,
                     "{label}"
                 }
@@ -60,12 +55,10 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
         rsx! {
             LabeledInput {
                 id: input_data.id,
-                label: input_data.dist_param.input_label(),
+                label: input_data.dist_param.label(),
                 value: input_data.value,
-                step: input_data.dist_param.step_value(),
-                min: input_data.dist_param.min_value(),
                 onchange: input_data.callback_opt,
-                r#type: "number",
+                r#type: input_data.dist_param.rtype(),
             }
         }
     }

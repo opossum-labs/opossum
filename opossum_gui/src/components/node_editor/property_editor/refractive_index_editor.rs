@@ -1,416 +1,330 @@
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_backend::{
-    nanometer, refr_index_schott::RefrIndexSchott, Proptype, RefrIndexConrady, RefrIndexSellmeier1,
-    RefractiveIndexType,
+    nanometer, refr_index_schott::RefrIndexSchott, DefaultFromName, Proptype, RefrIndexConrady,
+    RefrIndexConst, RefrIndexSellmeier1, RefractiveIndexType,
 };
-use strum::IntoEnumIterator;
+use strum::EnumIter;
 use uom::si::length::nanometer;
 
-use crate::components::node_editor::{
-    inputs::{
-        input_components::{LabeledSelect, RowedInputs},
-        InputData, InputParam,
-    },
-    CallbackWrapper,
+use crate::components::node_editor::inputs::{
+    input_components::{LabeledSelect, RowedInputs},
+    select_options_from_enum_iterator, InputData, InputParam, IntoInputData, IntoInputDataStrings,
 };
 
 #[component]
-pub fn RefractiveIndexEditor(property_key: String, prop_type_sig: Signal<Proptype>) -> Element {
-    if let Proptype::RefractiveIndex(ref_ind_type) = &*prop_type_sig.read() {
-        let select_id = format!("lengthProperty{property_key}").to_camel_case();
-        rsx! {
-            LabeledSelect {
-                id: select_id,
-                label: "Refractive index definition",
-                options: get_refractive_index_options(ref_ind_type),
-                onchange: move |e: Event<FormData>| {
-                    let val = e.value();
-                    if let Some(ref_ind_type) = RefractiveIndexType::default_from_name(val.as_str()) {
-                        prop_type_sig.set(ref_ind_type.into());
-                    }
-                },
-            }
-            div { class: "accordion-content-wrapper-div border-start",
-                RowedInputs { inputs: get_refractive_index_input_data(ref_ind_type, prop_type_sig) }
-            }
+pub fn RefractiveIndexEditor(
+    property_key: String,
+    prop_type_sig: Signal<Proptype>,
+    ref_ind_sig: Signal<RefractiveIndexType>,
+) -> Element {
+    use_effect(move || {
+        prop_type_sig.set(ref_ind_sig.read().clone().into());
+    });
+
+    let select_id = format!("refractiveIndexProperty{property_key}").to_camel_case();
+    rsx! {
+        LabeledSelect {
+            id: select_id,
+            label: "Refractive index definition",
+            options: select_options_from_enum_iterator(
+                &*ref_ind_sig.read(),
+                None,
+            ),
+            onchange: move |e: Event<FormData>| {
+                let val = e.value();
+                if let Some(ref_ind_type) = RefractiveIndexType::default_from_name(
+                    val.as_str(),
+                ) {
+                    ref_ind_sig.set(ref_ind_type);
+                }
+            },
         }
-    } else {
-        rsx! {}
-    }
-}
-
-fn get_refractive_index_options(ref_ind_type: &RefractiveIndexType) -> Vec<(bool, String)> {
-    let mut ref_ind_options = Vec::<(bool, String)>::new();
-
-    for ri_type in RefractiveIndexType::iter() {
-        if std::mem::discriminant(&ri_type) == std::mem::discriminant(ref_ind_type) {
-            ref_ind_options.push((true, format!("{ri_type}")));
-        } else {
-            ref_ind_options.push((false, format!("{ri_type}")));
+        div { class: "accordion-content-wrapper-div border-start",
+            RowedInputs { inputs: get_refractive_index_input_data(&ref_ind_sig.read(), ref_ind_sig) }
         }
     }
-    ref_ind_options
 }
 
-fn get_ref_ind_conrady_input_data(
-    ref_ind_type: &RefractiveIndexType,
-    ref_ind: &RefrIndexConrady,
-    prop_type_sig: Signal<Proptype>,
-) -> Vec<InputData> {
-    vec![
-        InputData::new(
-            InputParam::WaveLengthStart,
-            &"refractiveIndexConradywvl1Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::WaveLengthStart),
-            format!("{}", ref_ind.wavelength_range().start.get::<nanometer>()),
-        ),
-        InputData::new(
-            InputParam::WaveLengthEnd,
-            &"refractiveIndexConradywvl2Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::WaveLengthEnd),
-            format!("{}", ref_ind.wavelength_range().end.get::<nanometer>()),
-        ),
-        InputData::new(
-            InputParam::Conrady0,
-            &"refractiveIndexConradyAInput".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Conrady0),
-            format!("{}", ref_ind.n0()),
-        ),
-        InputData::new(
-            InputParam::Conrady1,
-            &"refractiveIndexConradyBInput".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Conrady1),
-            format!("{}", ref_ind.a()),
-        ),
-        InputData::new(
-            InputParam::Conrady2,
-            &"refractiveIndexConradyICnput".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Conrady2),
-            format!("{}", ref_ind.b()),
-        ),
-    ]
-}
-fn get_ref_ind_schott_input_data(
-    ref_ind_type: &RefractiveIndexType,
-    ref_ind: &RefrIndexSchott,
-    prop_type_sig: Signal<Proptype>,
-) -> Vec<InputData> {
-    vec![
-        InputData::new(
-            InputParam::WaveLengthStart,
-            &"refractiveIndexSchottwvl1Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::WaveLengthStart),
-            format!("{}", ref_ind.wavelength_range().start.get::<nanometer>()),
-        ),
-        InputData::new(
-            InputParam::WaveLengthEnd,
-            &"refractiveIndexSchottwvl2Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::WaveLengthEnd),
-            format!("{}", ref_ind.wavelength_range().end.get::<nanometer>()),
-        ),
-        InputData::new(
-            InputParam::Schott0,
-            &"refractiveIndexSchottAInput".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Schott0),
-            format!("{}", ref_ind.a0()),
-        ),
-        InputData::new(
-            InputParam::Schott1,
-            &"refractiveIndexSchottBInput".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Schott1),
-            format!("{}", ref_ind.a1()),
-        ),
-        InputData::new(
-            InputParam::Schott2,
-            &"refractiveIndexSchottCInput".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Schott2),
-            format!("{}", ref_ind.a2()),
-        ),
-        InputData::new(
-            InputParam::Schott3,
-            &"refractiveIndexSchottDInput".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Schott3),
-            format!("{}", ref_ind.a3()),
-        ),
-        InputData::new(
-            InputParam::Schott4,
-            &"refractiveIndexSchottEInput".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Schott4),
-            format!("{}", ref_ind.a4()),
-        ),
-        InputData::new(
-            InputParam::Schott5,
-            &"refractiveIndexSchottFInput".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Schott5),
-            format!("{}", ref_ind.a5()),
-        ),
-    ]
-}
-fn get_ref_ind_sellmeier_input_data(
-    ref_ind_type: &RefractiveIndexType,
-    ref_ind: &RefrIndexSellmeier1,
-    prop_type_sig: Signal<Proptype>,
-) -> Vec<InputData> {
-    vec![
-        InputData::new(
-            InputParam::WaveLengthStart,
-            &"refractiveIndexSellmeierwvl1Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::WaveLengthStart),
-            format!("{}", ref_ind.wavelength_range().start.get::<nanometer>()),
-        ),
-        InputData::new(
-            InputParam::WaveLengthEnd,
-            &"refractiveIndexSellmeierwvl2Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::WaveLengthEnd),
-            format!("{}", ref_ind.wavelength_range().end.get::<nanometer>()),
-        ),
-        InputData::new(
-            InputParam::Sellmeierk1,
-            &"refractiveIndexSellmeierk1Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Sellmeierk1),
-            format!("{}", ref_ind.k1()),
-        ),
-        InputData::new(
-            InputParam::Sellmeierl1,
-            &"refractiveIndexSellmeierl1Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Sellmeierl1),
-            format!("{}", ref_ind.l1()),
-        ),
-        InputData::new(
-            InputParam::Sellmeierk2,
-            &"refractiveIndexSellmeierk2Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Sellmeierk2),
-            format!("{}", ref_ind.k2()),
-        ),
-        InputData::new(
-            InputParam::Sellmeierl2,
-            &"refractiveIndexSellmeierl2Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Sellmeierl2),
-            format!("{}", ref_ind.l2()),
-        ),
-        InputData::new(
-            InputParam::Sellmeierk3,
-            &"refractiveIndexSellmeierk3Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Sellmeierk3),
-            format!("{}", ref_ind.k3()),
-        ),
-        InputData::new(
-            InputParam::Sellmeierl3,
-            &"refractiveIndexSellmeierl3Input".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::Sellmeierl3),
-            format!("{}", ref_ind.l3()),
-        ),
-    ]
-}
 fn get_refractive_index_input_data(
     ref_ind_type: &RefractiveIndexType,
-    prop_type_sig: Signal<Proptype>,
+    ref_ind_sig: Signal<RefractiveIndexType>,
 ) -> Vec<InputData> {
     match ref_ind_type {
-        RefractiveIndexType::Const(ref_ind) => vec![InputData::new(
-            InputParam::RefractiveIndex,
-            &"refractiveIndexConstInput".to_string(),
-            on_refractive_index_change(ref_ind_type, prop_type_sig, InputParam::RefractiveIndex),
-            format!("{}", ref_ind.refractive_index()),
-        )],
+        RefractiveIndexType::Const(ref_ind) => {
+            ConstRefParam::to_input_data_vec(ref_ind, ref_ind_sig)
+        }
         RefractiveIndexType::Sellmeier1(ref_ind) => {
-            get_ref_ind_sellmeier_input_data(ref_ind_type, ref_ind, prop_type_sig)
+            Sellmeier1Param::to_input_data_vec(ref_ind, ref_ind_sig)
         }
         RefractiveIndexType::Schott(ref_ind) => {
-            get_ref_ind_schott_input_data(ref_ind_type, ref_ind, prop_type_sig)
+            SchottParam::to_input_data_vec(ref_ind, ref_ind_sig)
         }
         RefractiveIndexType::Conrady(ref_ind) => {
-            get_ref_ind_conrady_input_data(ref_ind_type, ref_ind, prop_type_sig)
+            ConradyParam::to_input_data_vec(ref_ind, ref_ind_sig)
         }
     }
 }
 
-fn on_refractive_index_change(
-    ref_ind_type: &RefractiveIndexType,
-    mut prop_type_sig: Signal<Proptype>,
-    input_param: InputParam,
-) -> CallbackWrapper {
-    CallbackWrapper::new({
-        let ref_ind_type: RefractiveIndexType = ref_ind_type.clone();
-        move |e: Event<FormData>| {
-            if let Ok(value) = e.value().parse::<f64>() {
-                match ref_ind_type.clone() {
-                    RefractiveIndexType::Const(mut ref_ind) => {
-                        ref_ind.set_refractive_index(value);
-                        prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Const(
-                            ref_ind,
-                        )));
-                    }
-                    RefractiveIndexType::Sellmeier1(ref_ind) => {
-                        set_ref_ind_sellmeier_callback(input_param, value, ref_ind, prop_type_sig);
-                    }
-                    RefractiveIndexType::Schott(ref_ind) => {
-                        set_ref_ind_schott_callback(input_param, value, ref_ind, prop_type_sig);
-                    }
-                    RefractiveIndexType::Conrady(ref_ind) => {
-                        set_ref_ind_conrady_callback(input_param, value, ref_ind, prop_type_sig);
-                    }
-                }
+#[derive(Clone, Copy, PartialEq, Eq, EnumIter)]
+enum ConstRefParam {
+    RefractiveIndex,
+}
+
+impl From<ConstRefParam> for InputParam {
+    fn from(_: ConstRefParam) -> Self {
+        Self::F64("Refractive Index")
+    }
+}
+
+impl IntoInputDataStrings<RefrIndexConst> for ConstRefParam {
+    fn create_id_string(&self) -> String {
+        "refractiveIndexConstInput".to_string()
+    }
+    fn create_value_string(&self, obj: &RefrIndexConst) -> String {
+        format!("{:.3e}", obj.refractive_index())
+    }
+}
+
+impl IntoInputData<f64, RefrIndexConst, RefractiveIndexType> for ConstRefParam {
+    fn parse_value(&self, e: Event<FormData>) -> Option<f64> {
+        let e_value = e.value();
+        e_value.parse::<f64>().ok()
+    }
+
+    fn setter_from_obj(&self) -> impl FnMut(&mut RefrIndexConst, f64) {
+        move |obj: &mut RefrIndexConst, val: f64| obj.set_refractive_index(val)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, EnumIter)]
+enum ConradyParam {
+    WaveLengthStart,
+    WavelengthEnd,
+    A,
+    B,
+    C,
+}
+
+impl From<ConradyParam> for InputParam {
+    fn from(value: ConradyParam) -> Self {
+        match value {
+            ConradyParam::WaveLengthStart => Self::Length("Start λ in nm"),
+            ConradyParam::WavelengthEnd => Self::Length("End λ in nm"),
+            ConradyParam::A => Self::F64("A"),
+            ConradyParam::B => Self::F64("B"),
+            ConradyParam::C => Self::F64("C"),
+        }
+    }
+}
+
+impl IntoInputDataStrings<RefrIndexConrady> for ConradyParam {
+    fn create_id_string(&self) -> String {
+        let id_str = match self {
+            Self::WaveLengthStart => "WvlStart",
+            Self::WavelengthEnd => "WvlEnd",
+            Self::A => "A",
+            Self::B => "B",
+            Self::C => "C",
+        };
+
+        format!("refractiveIndexConrady{id_str}Input")
+    }
+    fn create_value_string(&self, obj: &RefrIndexConrady) -> String {
+        match self {
+            Self::WaveLengthStart => {
+                format!("{:.3e}", obj.wavelength_range().start.get::<nanometer>())
             }
+            Self::WavelengthEnd => format!("{:.3e}", obj.wavelength_range().end.get::<nanometer>()),
+            Self::A => format!("{:.3e}", obj.n0()),
+            Self::B => format!("{:.3e}", obj.a()),
+            Self::C => format!("{:.3e}", obj.b()),
         }
-    })
-}
-
-fn set_ref_ind_schott_callback(
-    input_param: InputParam,
-    value: f64,
-    mut ref_ind: RefrIndexSchott,
-    mut prop_type_sig: Signal<Proptype>,
-) {
-    match input_param {
-        InputParam::WaveLengthStart => {
-            ref_ind.set_wavelength_range_start(nanometer!(value));
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Schott(
-                ref_ind,
-            )));
-        }
-        InputParam::WaveLengthEnd => {
-            ref_ind.set_wavelength_range_end(nanometer!(value));
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Schott(
-                ref_ind,
-            )));
-        }
-        InputParam::Schott0 => {
-            ref_ind.set_a0(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Schott(
-                ref_ind,
-            )));
-        }
-        InputParam::Schott1 => {
-            ref_ind.set_a1(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Schott(
-                ref_ind,
-            )));
-        }
-        InputParam::Schott2 => {
-            ref_ind.set_a2(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Schott(
-                ref_ind,
-            )));
-        }
-        InputParam::Schott3 => {
-            ref_ind.set_a3(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Schott(
-                ref_ind,
-            )));
-        }
-        InputParam::Schott4 => {
-            ref_ind.set_a4(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Schott(
-                ref_ind,
-            )));
-        }
-        InputParam::Schott5 => {
-            ref_ind.set_a5(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Schott(
-                ref_ind,
-            )));
-        }
-        _ => {}
     }
 }
 
-fn set_ref_ind_conrady_callback(
-    input_param: InputParam,
-    value: f64,
-    mut ref_ind: RefrIndexConrady,
-    mut prop_type_sig: Signal<Proptype>,
-) {
-    match input_param {
-        InputParam::WaveLengthStart => {
-            ref_ind.set_wavelength_range_start(nanometer!(value));
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Conrady(
-                ref_ind,
-            )));
+impl IntoInputData<f64, RefrIndexConrady, RefractiveIndexType> for ConradyParam {
+    fn parse_value(&self, e: Event<FormData>) -> Option<f64> {
+        let e_value = e.value();
+        e_value.parse::<f64>().ok()
+    }
+
+    fn setter_from_obj(&self) -> impl FnMut(&mut RefrIndexConrady, f64) {
+        match self {
+            Self::WaveLengthStart => move |obj: &mut RefrIndexConrady, val: f64| {
+                obj.set_wavelength_range_start(nanometer!(val));
+            },
+            Self::WavelengthEnd => move |obj: &mut RefrIndexConrady, val: f64| {
+                obj.set_wavelength_range_end(nanometer!(val));
+            },
+            Self::A => move |obj: &mut RefrIndexConrady, val: f64| obj.set_n0(val),
+            Self::B => move |obj: &mut RefrIndexConrady, val: f64| obj.set_a(val),
+            Self::C => move |obj: &mut RefrIndexConrady, val: f64| obj.set_b(val),
         }
-        InputParam::WaveLengthEnd => {
-            ref_ind.set_wavelength_range_end(nanometer!(value));
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Conrady(
-                ref_ind,
-            )));
-        }
-        InputParam::Conrady0 => {
-            ref_ind.set_n0(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Conrady(
-                ref_ind,
-            )));
-        }
-        InputParam::Conrady1 => {
-            ref_ind.set_a(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Conrady(
-                ref_ind,
-            )));
-        }
-        InputParam::Conrady2 => {
-            ref_ind.set_b(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Conrady(
-                ref_ind,
-            )));
-        }
-        _ => {}
     }
 }
-fn set_ref_ind_sellmeier_callback(
-    input_param: InputParam,
-    value: f64,
-    mut ref_ind: RefrIndexSellmeier1,
-    mut prop_type_sig: Signal<Proptype>,
-) {
-    match input_param {
-        InputParam::WaveLengthStart => {
-            ref_ind.set_wavelength_range_start(nanometer!(value));
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Sellmeier1(
-                ref_ind,
-            )));
+
+#[derive(Clone, Copy, PartialEq, Eq, EnumIter)]
+enum SchottParam {
+    WaveLengthStart,
+    WavelengthEnd,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+}
+
+impl From<SchottParam> for InputParam {
+    fn from(value: SchottParam) -> Self {
+        match value {
+            SchottParam::WaveLengthStart => Self::Length("Start λ in nm"),
+            SchottParam::WavelengthEnd => Self::Length("End λ in nm"),
+            SchottParam::A => Self::F64("A"),
+            SchottParam::B => Self::F64("B"),
+            SchottParam::C => Self::F64("C"),
+            SchottParam::D => Self::F64("D"),
+            SchottParam::E => Self::F64("E"),
+            SchottParam::F => Self::F64("F"),
         }
-        InputParam::WaveLengthEnd => {
-            ref_ind.set_wavelength_range_end(nanometer!(value));
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Sellmeier1(
-                ref_ind,
-            )));
+    }
+}
+
+impl IntoInputDataStrings<RefrIndexSchott> for SchottParam {
+    fn create_id_string(&self) -> String {
+        let id_str = match self {
+            Self::WaveLengthStart => "WvlStart",
+            Self::WavelengthEnd => "WvlEnd",
+            Self::A => "A",
+            Self::B => "B",
+            Self::C => "C",
+            Self::D => "D",
+            Self::E => "E",
+            Self::F => "F",
+        };
+
+        format!("refractiveIndexSchott{id_str}Input")
+    }
+
+    fn create_value_string(&self, obj: &RefrIndexSchott) -> String {
+        match self {
+            Self::WaveLengthStart => {
+                format!("{:.3e}", obj.wavelength_range().start.get::<nanometer>())
+            }
+            Self::WavelengthEnd => format!("{:.3e}", obj.wavelength_range().end.get::<nanometer>()),
+            Self::A => format!("{:.3e}", obj.a0()),
+            Self::B => format!("{:.3e}", obj.a1()),
+            Self::C => format!("{:.3e}", obj.a2()),
+            Self::D => format!("{:.3e}", obj.a3()),
+            Self::E => format!("{:.3e}", obj.a4()),
+            Self::F => format!("{:.3e}", obj.a5()),
         }
-        InputParam::Sellmeierk1 => {
-            ref_ind.set_k1(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Sellmeier1(
-                ref_ind,
-            )));
+    }
+}
+
+impl IntoInputData<f64, RefrIndexSchott, RefractiveIndexType> for SchottParam {
+    fn parse_value(&self, e: Event<FormData>) -> Option<f64> {
+        let e_value = e.value();
+        e_value.parse::<f64>().ok()
+    }
+
+    fn setter_from_obj(&self) -> impl FnMut(&mut RefrIndexSchott, f64) {
+        match self {
+            Self::WaveLengthStart => move |obj: &mut RefrIndexSchott, val: f64| {
+                obj.set_wavelength_range_start(nanometer!(val));
+            },
+            Self::WavelengthEnd => move |obj: &mut RefrIndexSchott, val: f64| {
+                obj.set_wavelength_range_end(nanometer!(val));
+            },
+            Self::A => move |obj: &mut RefrIndexSchott, val: f64| obj.set_a0(val),
+            Self::B => move |obj: &mut RefrIndexSchott, val: f64| obj.set_a1(val),
+            Self::C => move |obj: &mut RefrIndexSchott, val: f64| obj.set_a2(val),
+            Self::D => move |obj: &mut RefrIndexSchott, val: f64| obj.set_a3(val),
+            Self::E => move |obj: &mut RefrIndexSchott, val: f64| obj.set_a4(val),
+            Self::F => move |obj: &mut RefrIndexSchott, val: f64| obj.set_a5(val),
         }
-        InputParam::Sellmeierk2 => {
-            ref_ind.set_k2(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Sellmeier1(
-                ref_ind,
-            )));
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, EnumIter)]
+enum Sellmeier1Param {
+    WaveLengthStart,
+    WavelengthEnd,
+    K1,
+    K2,
+    K3,
+    L1,
+    L2,
+    L3,
+}
+
+impl From<Sellmeier1Param> for InputParam {
+    fn from(value: Sellmeier1Param) -> Self {
+        match value {
+            Sellmeier1Param::WaveLengthStart => Self::Length("Start λ in nm"),
+            Sellmeier1Param::WavelengthEnd => Self::Length("End λ in nm"),
+            Sellmeier1Param::K1 => Self::F64("K1"),
+            Sellmeier1Param::K2 => Self::F64("K2"),
+            Sellmeier1Param::K3 => Self::F64("K3"),
+            Sellmeier1Param::L1 => Self::F64("L1"),
+            Sellmeier1Param::L2 => Self::F64("L2"),
+            Sellmeier1Param::L3 => Self::F64("L3"),
         }
-        InputParam::Sellmeierk3 => {
-            ref_ind.set_k3(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Sellmeier1(
-                ref_ind,
-            )));
+    }
+}
+
+impl IntoInputDataStrings<RefrIndexSellmeier1> for Sellmeier1Param {
+    fn create_id_string(&self) -> String {
+        let id_str = match self {
+            Self::WaveLengthStart => "WvlStart",
+            Self::WavelengthEnd => "WvlEnd",
+            Self::K1 => "K1",
+            Self::K2 => "K2",
+            Self::K3 => "K3",
+            Self::L1 => "L1",
+            Self::L2 => "L2",
+            Self::L3 => "L3",
+        };
+
+        format!("refractiveIndexSellmeier1{id_str}Input")
+    }
+    fn create_value_string(&self, obj: &RefrIndexSellmeier1) -> String {
+        match self {
+            Self::WaveLengthStart => {
+                format!("{:.3e}", obj.wavelength_range().start.get::<nanometer>())
+            }
+            Self::WavelengthEnd => format!("{:.3e}", obj.wavelength_range().end.get::<nanometer>()),
+            Self::K1 => format!("{:.3e}", obj.k1()),
+            Self::K2 => format!("{:.3e}", obj.k2()),
+            Self::K3 => format!("{:.3e}", obj.k3()),
+            Self::L1 => format!("{:.3e}", obj.l1()),
+            Self::L2 => format!("{:.3e}", obj.l2()),
+            Self::L3 => format!("{:.3e}", obj.l3()),
         }
-        InputParam::Sellmeierl1 => {
-            ref_ind.set_l1(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Sellmeier1(
-                ref_ind,
-            )));
+    }
+}
+
+impl IntoInputData<f64, RefrIndexSellmeier1, RefractiveIndexType> for Sellmeier1Param {
+    fn parse_value(&self, e: Event<FormData>) -> Option<f64> {
+        let e_value = e.value();
+        e_value.parse::<f64>().ok()
+    }
+
+    fn setter_from_obj(&self) -> impl FnMut(&mut RefrIndexSellmeier1, f64) {
+        match self {
+            Self::WaveLengthStart => move |obj: &mut RefrIndexSellmeier1, val: f64| {
+                obj.set_wavelength_range_start(nanometer!(val));
+            },
+            Self::WavelengthEnd => move |obj: &mut RefrIndexSellmeier1, val: f64| {
+                obj.set_wavelength_range_end(nanometer!(val));
+            },
+            Self::K1 => move |obj: &mut RefrIndexSellmeier1, val: f64| obj.set_k1(val),
+            Self::K2 => move |obj: &mut RefrIndexSellmeier1, val: f64| obj.set_k2(val),
+            Self::K3 => move |obj: &mut RefrIndexSellmeier1, val: f64| obj.set_k3(val),
+            Self::L1 => move |obj: &mut RefrIndexSellmeier1, val: f64| obj.set_l1(val),
+            Self::L2 => move |obj: &mut RefrIndexSellmeier1, val: f64| obj.set_l2(val),
+            Self::L3 => move |obj: &mut RefrIndexSellmeier1, val: f64| obj.set_l3(val),
         }
-        InputParam::Sellmeierl2 => {
-            ref_ind.set_l2(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Sellmeier1(
-                ref_ind,
-            )));
-        }
-        InputParam::Sellmeierl3 => {
-            ref_ind.set_l3(value);
-            prop_type_sig.set(Proptype::RefractiveIndex(RefractiveIndexType::Sellmeier1(
-                ref_ind,
-            )));
-        }
-        _ => {}
     }
 }

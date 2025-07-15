@@ -1,7 +1,7 @@
 //! Module for handling spectral distributions
 use std::fmt::Display;
 
-use crate::error::OpmResult;
+use crate::{error::OpmResult, utils::default_from_name::DefaultFromName};
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 use uom::si::f64::Length;
@@ -35,16 +35,8 @@ impl SpecDistType {
             Self::LaserLines(l) => l,
         }
     }
-
-    #[must_use]
-    pub fn default_from_name(name: &str) -> Option<Self> {
-        match name {
-            "Laser Lines" => Some(LaserLines::new_empty().into()),
-            "Gaussian" => Some(Gaussian::default().into()),
-            _ => None,
-        }
-    }
 }
+impl DefaultFromName for SpecDistType {}
 
 impl Default for SpecDistType {
     fn default() -> Self {

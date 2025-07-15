@@ -32,7 +32,7 @@ use uom::{
 ///
 /// This structure handles an array of values over a given wavelength range. Although the interface
 /// is still limited, the structure is prepared for handling also non-equidistant wavelength slots.  
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Spectrum {
     data: Vec<(f64, f64)>, // (wavelength in micrometers, data in 1/micrometers)
 }

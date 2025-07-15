@@ -119,6 +119,7 @@ impl RefrIndexConrady {
         self.wvl_range.end = end;
     }
 }
+
 impl RefractiveIndex for RefrIndexConrady {
     fn get_refractive_index(&self, wavelength: Length) -> OpmResult<f64> {
         if !self.wvl_range.contains(&wavelength) {

@@ -123,27 +123,89 @@ input[type=number] {
   column-gap: 0.1rem;
 }
 
-#imgSrcFileSelection{
-    border: none;
-    border-radius: 0;
-    padding: 0;
+
+/* #imgSrcFileSelection {
+        position: relative;
+  padding: 0.25rem .75rem;
+  
+      }
+
+#imgSrcFileSelection > label {
+  position: absolute;
+  margin-top: 0;
+  font-size: 0.7rem;
+  
 }
 
-#imgSrcFileSelection > input{
+#imgSrcFileSelection > a {
+  position: absolute;
+  padding-bottom: 0rem;    
+  padding-top: 0.9rem;    
+  font-size: 0.85rem;
+}
+
+#imgSrcFileSelection > input {
   display:none;
+} */
+
+
+/* #imgSrcFileSelection {
+    position: relative;
+    padding: 0.25rem 0.75rem;
+    border-left: 2px solid #ccc;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
 }
 
-#imgSrcFileSelection > label{
-  padding:0.5rem 0.5rem 0.5rem 0.75rem;
-  margin: 0;
-  width:100%;
-  text-align: left;
-  border: none;
-  border-radius: 0;
-  text-transform: none;
+#imgSrcFileSelection > label {
+    font-size: 0.7rem;
+} */
+ #imgSrcFileSelection {
+    position: relative;
+    padding: 0.25rem 0.75rem;
+    border-left: 2px solid #ccc;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 
-#imgSrcFileSelection > label:hover{
+#imgSrcFileSelection > label {
+    display: block;
+    width: 100%;
+    height: 2rem;               /* macht die Klickfläche größer */
+    cursor: pointer;
+    position: relative;
+    background: transparent;
+    font-size: 0.7rem;
+    padding: 0;                 /* kein Padding, nur das innere "Text-Label" */
+}
+
+/* Text innerhalb des Labels */
+#imgSrcFileSelection > label::before {
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-size: 0.7rem;
+    color: #888;
+}
+
+#imgSrcFileSelection > a {
+   position:absolute;
+   margin-top:.95rem;
+    font-size: 0.8rem;
+    color: #ddd;
+    word-break: break-all;
+    text-decoration: none;
+}
+
+#imgSrcFileSelection > input {
+    display: none;
+}
+
+
+#imgSrcFileSelection:hover{
   cursor: pointer;
   background-color:rgb(70, 70, 70) !important;
 

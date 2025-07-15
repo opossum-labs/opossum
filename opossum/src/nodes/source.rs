@@ -341,8 +341,9 @@ impl AnalysisGhostFocus for Source {
 mod test {
     use super::*;
     use crate::{
-        nanometer, optic_ports::PortType, position_distributions::Hexapolar,
-        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
+        lightdata::ray_data_builder::RayDataBuilder, nanometer, optic_ports::PortType,
+        position_distributions::Hexapolar, spectrum_helper::create_he_ne_spec,
+        utils::geom_transformation::Isometry,
     };
     use assert_matches::assert_matches;
     use core::f64;
@@ -375,7 +376,10 @@ mod test {
     }
     #[test]
     fn new() {
-        let source = Source::new("test", LightDataBuilder::Fourier);
+        let source = Source::new(
+            "test",
+            LightDataBuilder::Geometric(RayDataBuilder::default()),
+        );
         assert_eq!(source.name(), "test");
     }
     #[test]
@@ -434,10 +438,11 @@ mod test {
         {
             assert!(light_data.is_none());
         }
-        src.set_light_data(LightDataBuilder::Fourier).unwrap();
+        src.set_light_data(LightDataBuilder::Geometric(RayDataBuilder::default()))
+            .unwrap();
         if let Proptype::LightDataBuilder(light_data) = src.properties().get("light data").unwrap()
         {
-            assert_matches!(light_data.clone().unwrap(), LightDataBuilder::Fourier);
+            assert_matches!(light_data.clone().unwrap(), LightDataBuilder::Geometric(_));
         }
     }
     #[test]
@@ -600,8 +605,14 @@ mod test {
     fn debug() {
         assert_eq!(format!("{:?}", Source::default()), "Source: no data");
         assert_eq!(
-            format!("{:?}", Source::new("hallo", LightDataBuilder::Fourier)),
-            "Source: Fourier"
+            format!(
+                "{:?}",
+                Source::new(
+                    "hallo",
+                    LightDataBuilder::Geometric(RayDataBuilder::default())
+                )
+            ),
+            "Source: Rays"
         );
     }
 }

@@ -1,42 +1,33 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-pub mod energy_distribution;
+pub mod energy_distribution_editor;
 pub mod light_data_builder_selection;
-pub mod position_distribution;
+pub mod position_distribution_editor;
 pub mod ray_type_selection;
-pub mod spectral_distribution;
+pub mod spectral_distribution_editor;
 
-pub use energy_distribution::*;
+pub use position_distribution_editor::*;
+pub use ray_type_selection::*;
+pub use spectral_distribution_editor::*;
+
 pub use light_data_builder_selection::*;
 use opossum_backend::{light_data_builder::LightDataBuilder, Proptype};
-pub use position_distribution::*;
-pub use ray_type_selection::*;
-pub use spectral_distribution::*;
 
-use crate::components::node_editor::accordion::AccordionItem;
+use crate::components::node_editor::{
+    accordion::AccordionItem,
+    property_editor::light_data_editor::energy_distribution_editor::EnergyDistributionEditor,
+};
 
 use dioxus::prelude::*;
 
 #[component]
 pub fn LightDataEditor(
-    light_data_builder_opt: Option<LightDataBuilder>,
+    light_data_builder_sig: Signal<LightDataBuilder>,
     prop_type_sig: Signal<Proptype>,
 ) -> Element {
-    let mut light_data_builder_sig = Signal::new(LightDataBuilderHistory::default());
-
     use_effect(move || {
-        prop_type_sig.set(Proptype::LightDataBuilder(
-            light_data_builder_sig.read().get_current().cloned(),
-        ));
-    });
-
-    use_effect(move || {
-        let (ld_builder, key) = match &light_data_builder_opt {
-            Some(ld) if matches!(ld, LightDataBuilder::Geometric(_)) => (ld.clone(), "Rays"),
-            Some(ld) => (ld.clone(), "Energy"),
-            _ => (LightDataBuilder::default(), "Rays"),
-        };
-        light_data_builder_sig
-            .with_mut(|ldb| ldb.replace_or_insert_and_set_current(key, ld_builder));
+        prop_type_sig.set(Proptype::LightDataBuilder(Some(
+            light_data_builder_sig.read().clone(),
+        )));
     });
 
     let accordion_item_content = rsx! {
@@ -62,20 +53,51 @@ pub fn LightDataEditor(
 }
 
 #[component]
-pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilderHistory>) -> Element {
-    let (is_rays, is_not_image) = light_data_builder_sig.read().is_rays_is_not_image();
+pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilder>) -> Element {
+    let pos_dist_type_sig = use_signal(move || {
+        light_data_builder_sig
+            .read()
+            .get_position_distribution_type()
+            .unwrap_or_default()
+    });
+    let energy_dist_type_sig = use_signal(move || {
+        light_data_builder_sig
+            .read()
+            .get_energy_distribution_type()
+            .unwrap_or_default()
+    });
+    let spect_dist_type_sig = use_signal(move || {
+        light_data_builder_sig
+            .read()
+            .get_spectral_distribution_type()
+            .unwrap_or_default()
+    });
 
-    if is_rays && is_not_image {
-        rsx! {
-            div {
-                class: "accordion accordion-borderless bg-dark border-start",
-                id: "accordionSourceDists",
-                PositionDistributionEditor { light_data_builder_sig }
-                EnergyDistributionEditor { light_data_builder_sig }
-                SpectralDistributionEditor { light_data_builder_sig }
-            }
+    use_effect(move || {
+        if let LightDataBuilder::Geometric(rdb) = &mut *light_data_builder_sig.write() {
+            rdb.set_pos_dist(*pos_dist_type_sig.read());
         }
-    } else {
-        rsx! {}
+    });
+
+    use_effect(move || {
+        if let LightDataBuilder::Geometric(rdb) = &mut *light_data_builder_sig.write() {
+            rdb.set_energy_dist(*energy_dist_type_sig.read());
+        }
+    });
+
+    use_effect(move || {
+        if let LightDataBuilder::Geometric(rdb) = &mut *light_data_builder_sig.write() {
+            rdb.set_spectral_dist(spect_dist_type_sig.read().clone());
+        }
+    });
+
+    rsx! {
+        div {
+            class: "accordion accordion-borderless bg-dark border-start",
+            id: "accordionSourceDists",
+            PositionDistributionEditor { pos_dist_type_sig }
+            EnergyDistributionEditor { energy_dist_type_sig }
+            SpectralDistributionEditor { spect_dist_type_sig }
+        }
     }
 }
