@@ -61,6 +61,7 @@ pub async fn get_analyzer_types(client: &HTTPClient) -> Result<Vec<AnalyzerType>
 /// Send a request to shutdown the backend server.
 ///
 /// This function shuts down the backend server. No further communication is possible after this call.
+#[allow(dead_code)]
 pub async fn post_terminate(client: &HTTPClient) {
     let _ = client.client().post("/api/terminate").send().await;
 }

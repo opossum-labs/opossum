@@ -5,6 +5,13 @@ authors = [
     "Udo Eisenbarth <u.eisenbarth@gsi.de>",
     "Yannik Zobus <y.zobus@gsi.de>",
 ]
+description = "Open-source Optics Simulation Software and Unified Modeler"
+repository = "https://github.com/opossum-labs/opossum"
+license = "GPL-3.0"
+keywords = ["laser", "optics", "physics", "simulation"]
+categories = ["science", "simulation"]
+publish = true
+readme = "../README.md"
 edition = "2021"
 
 [dependencies]
@@ -31,6 +38,7 @@ strum_macros = "0.27.1"
 itertools = "0.14.0"
 Inflector = "0.11.4"
 
+directories = "6.0.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 plotly = { version = "0.12", features = ["kaleido"] }
