@@ -55,10 +55,7 @@ pub fn RaySpectralDistributionSelector(spect_dist_type_sig: Signal<SpecDistType>
         LabeledSelect {
             id: "selectRaysSpectralDistribution",
             label: "Rays Spectral Distribution",
-            options: select_options_from_enum_iterator(
-                &*spect_dist_type_sig.read(),
-                None,
-            ),
+            options: select_options_from_enum_iterator(&*spect_dist_type_sig.read(), None),
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(sdt) = SpecDistType::default_from_name(val.as_str()) {

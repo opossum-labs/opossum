@@ -149,15 +149,11 @@ pub fn PropertyEditor(
             rsx! {}
         }
         Proptype::Length(quantity) => rsx! {
-            LengthEditor {
-                length: *quantity,
-                property_key,
-                prop_type_sig,
-            }
+            LengthEditor { length: *quantity, property_key, prop_type_sig }
         },
-        Proptype::LightDataBuilder(light_data_builder) => rsx! {
+        Proptype::LightDataBuilder(light_data_builder_opt) => rsx! {
             LightDataEditor {
-                light_data_builder_sig: Signal::new(light_data_builder.clone().unwrap_or_default()),
+                light_data_builder: light_data_builder_opt.clone().unwrap_or_default(),
                 prop_type_sig,
             }
         },

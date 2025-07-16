@@ -21,9 +21,12 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn LightDataEditor(
-    light_data_builder_sig: Signal<LightDataBuilder>,
+    light_data_builder: LightDataBuilder,
     prop_type_sig: Signal<Proptype>,
 ) -> Element {
+
+    let light_data_builder_sig = use_signal(|| light_data_builder);
+
     use_effect(move || {
         prop_type_sig.set(Proptype::LightDataBuilder(Some(
             light_data_builder_sig.read().clone(),
@@ -37,6 +40,7 @@ pub fn LightDataEditor(
         DistributionEditor { light_data_builder_sig }
         ImageSourceEditor { light_data_builder_sig }
     };
+
     rsx! {
         div {
             class: "accordion accordion-borderless bg-dark border-start",

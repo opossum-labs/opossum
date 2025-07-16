@@ -1,8 +1,7 @@
-use opossum_backend::{RefrIndexConst, RefractiveIndexType};
-use dioxus::prelude::*;
-use strum::EnumIter;
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
-
+use dioxus::prelude::*;
+use opossum_backend::{RefrIndexConst, RefractiveIndexType};
+use strum::EnumIter;
 
 #[derive(Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum ConstRefParam {

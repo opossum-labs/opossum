@@ -11,10 +11,7 @@ pub fn SourceLightDataBuilderSelector(light_data_builder_sig: Signal<LightDataBu
         LabeledSelect {
             id: "selectSourceType",
             label: "Source Type",
-            options: select_options_from_enum_iterator(
-                &*light_data_builder_sig.read(),
-                None,
-            ),
+            options: select_options_from_enum_iterator(&*light_data_builder_sig.read(), None),
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(ldb) = LightDataBuilder::default_from_name(val.as_str()) {

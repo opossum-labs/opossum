@@ -48,10 +48,7 @@ pub fn RayEnergyDistributionSelector(energy_dist_type_sig: Signal<EnergyDistType
         LabeledSelect {
             id: "selectRaysEnergyDistribution",
             label: "Rays Energy Distribution",
-            options: select_options_from_enum_iterator(
-                &*energy_dist_type_sig.read(),
-                None,
-            ),
+            options: select_options_from_enum_iterator(&*energy_dist_type_sig.read(), None),
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(edt) = EnergyDistType::default_from_name(val.as_str()) {

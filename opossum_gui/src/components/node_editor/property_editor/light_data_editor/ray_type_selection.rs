@@ -195,7 +195,10 @@ pub fn RayDataBuilderSelector(light_data_builder_sig: Signal<LightDataBuilder>) 
             LabeledSelect {
                 id: "selectRaySourceType",
                 label: "Rays Type",
-                options: select_options_from_enum_iterator(rdb, Some(&[&RayDataBuilder::Raw(Rays::default())])),
+                options: select_options_from_enum_iterator(
+                    rdb,
+                    Some(&[&RayDataBuilder::Raw(Rays::default())]),
+                ),
                 onchange: move |e: Event<FormData>| {
                     let val = e.value();
                     if let Some(rdb) = RayDataBuilder::default_from_name(val.as_str()) {

@@ -82,9 +82,7 @@ pub fn LaserLineInput(
                                     .unwrap_or_else(|e| {
                                         OPOSSUM_UI_LOGS
                                             .write()
-                                            .add_log(
-                                                format!("Error adding laser line: {e}").as_str(),
-                                            );
+                                            .add_log(format!("Error adding laser line: {e}").as_str());
                                     });
                             }
                         } else {
@@ -116,7 +114,7 @@ pub fn LaserLineInput(
                 id: "laserlinesubmit",
                 value: "Add laser line",
             }
-            LaserLineList { laser_lines: laser_lines, spect_dist_type_sig }
+            LaserLineList { laser_lines, spect_dist_type_sig }
         }
     }
 }

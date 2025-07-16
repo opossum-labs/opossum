@@ -1,10 +1,8 @@
-use opossum_backend::{nanometer, RefrIndexSellmeier1, RefractiveIndexType};
+use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
+use opossum_backend::{nanometer, RefrIndexSellmeier1, RefractiveIndexType};
 use strum::EnumIter;
 use uom::si::length::nanometer;
-use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
-
-
 
 #[derive(Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum Sellmeier1Param {

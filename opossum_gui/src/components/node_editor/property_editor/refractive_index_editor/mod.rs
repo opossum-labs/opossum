@@ -1,18 +1,16 @@
 mod conrady_model_editor;
 mod const_model_editor;
-mod sellmeier1_model_editor;
 mod schott_model_editor;
+mod sellmeier1_model_editor;
 
-use schott_model_editor::SchottParam;
 use conrady_model_editor::ConradyParam;
 use const_model_editor::ConstRefParam;
+use schott_model_editor::SchottParam;
 use sellmeier1_model_editor::Sellmeier1Param;
 
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::{DefaultFromName, Proptype,
- RefractiveIndexType,
-};
+use opossum_backend::{DefaultFromName, Proptype, RefractiveIndexType};
 
 use crate::components::node_editor::inputs::{
     input_components::{LabeledSelect, RowedInputs},
@@ -34,10 +32,7 @@ pub fn RefractiveIndexEditor(
         LabeledSelect {
             id: select_id,
             label: "Refractive index definition",
-            options: select_options_from_enum_iterator(
-                &*ref_ind_sig.read(),
-                None,
-            ),
+            options: select_options_from_enum_iterator(&*ref_ind_sig.read(), None),
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(ref_ind_type) = RefractiveIndexType::default_from_name(

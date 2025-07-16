@@ -51,10 +51,7 @@ pub fn RayPositionDistributionSelector(pos_dist_type_sig: Signal<PosDistType>) -
         LabeledSelect {
             id: "selectRaysPosDistribution",
             label: "Rays Position Distribution",
-            options: select_options_from_enum_iterator(
-                &*pos_dist_type_sig.read(),
-                None,
-            ),
+            options: select_options_from_enum_iterator(&*pos_dist_type_sig.read(), None),
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(pdt) = PosDistType::default_from_name(val.as_str()) {
