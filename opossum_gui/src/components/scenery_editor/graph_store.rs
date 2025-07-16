@@ -493,10 +493,9 @@ pub fn use_graph_processor(
                                 }
                             }
                         }
-                    }
-                    // GraphStoreAction::TerminateBackend => {
-                    //     api::post_terminate(&HTTP_API_CLIENT()).await;
-                    // }
+                    } // GraphStoreAction::TerminateBackend => {
+                      //     api::post_terminate(&HTTP_API_CLIENT()).await;
+                      // }
                 }
             }
         }

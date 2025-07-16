@@ -85,12 +85,10 @@ fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app(backend_handle: ProcessHandle) {
         use directories::ProjectDirs;
-        let data_dir =
-            if let Some(proj_dirs) = ProjectDirs::from("org", "OpossumLabs", "OpossumGui") {
-                proj_dirs.data_local_dir().to_path_buf()
-            } else {
-                std::env::current_dir().unwrap_or_default()
-            };
+        let data_dir = ProjectDirs::from("org", "OpossumLabs", "OpossumGui").map_or_else(
+            || std::env::current_dir().unwrap_or_default(),
+            |proj_dirs| proj_dirs.data_local_dir().to_path_buf(),
+        );
         let window = dioxus::desktop::WindowBuilder::new()
             //.with_decorations(true)
             .with_window_icon(read_icon())
