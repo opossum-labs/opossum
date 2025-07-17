@@ -1,21 +1,16 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-pub mod energy_distribution_editor;
-pub mod light_data_builder_selection;
-pub mod position_distribution_editor;
-pub mod ray_type_selection;
-pub mod spectral_distribution_editor;
 
-pub use position_distribution_editor::*;
-pub use ray_type_selection::*;
-pub use spectral_distribution_editor::*;
-
-pub use light_data_builder_selection::*;
-use opossum_backend::{light_data_builder::LightDataBuilder, Proptype};
+mod energy_source_editor;
+mod light_data_builder_selection;
+mod ray_source_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    property_editor::light_data_editor::energy_distribution_editor::EnergyDistributionEditor,
+    property_editor::light_data_editor::energy_source_editor::EnergySourceEditor,
 };
+use light_data_builder_selection::SourceLightDataBuilderSelector;
+use opossum_backend::{light_data_builder::LightDataBuilder, Proptype};
+use ray_source_editor::RaySourceEditor;
 
 use dioxus::prelude::*;
 
@@ -24,7 +19,6 @@ pub fn LightDataEditor(
     light_data_builder: LightDataBuilder,
     prop_type_sig: Signal<Proptype>,
 ) -> Element {
-
     let light_data_builder_sig = use_signal(|| light_data_builder);
 
     use_effect(move || {
@@ -35,10 +29,8 @@ pub fn LightDataEditor(
 
     let accordion_item_content = rsx! {
         SourceLightDataBuilderSelector { light_data_builder_sig }
-        RayDataBuilderSelector { light_data_builder_sig }
-        ReferenceLengthEditor { light_data_builder_sig }
-        DistributionEditor { light_data_builder_sig }
-        ImageSourceEditor { light_data_builder_sig }
+        RaySourceEditor { light_data_builder_sig }
+        EnergySourceEditor { light_data_builder_sig }
     };
 
     rsx! {
@@ -52,56 +44,6 @@ pub fn LightDataEditor(
                 parent_id: "accordionLightDataConfig",
                 content_id: "sourceCollapse",
             }
-        }
-    }
-}
-
-#[component]
-pub fn DistributionEditor(light_data_builder_sig: Signal<LightDataBuilder>) -> Element {
-    let pos_dist_type_sig = use_signal(move || {
-        light_data_builder_sig
-            .read()
-            .get_position_distribution_type()
-            .unwrap_or_default()
-    });
-    let energy_dist_type_sig = use_signal(move || {
-        light_data_builder_sig
-            .read()
-            .get_energy_distribution_type()
-            .unwrap_or_default()
-    });
-    let spect_dist_type_sig = use_signal(move || {
-        light_data_builder_sig
-            .read()
-            .get_spectral_distribution_type()
-            .unwrap_or_default()
-    });
-
-    use_effect(move || {
-        if let LightDataBuilder::Geometric(rdb) = &mut *light_data_builder_sig.write() {
-            rdb.set_pos_dist(*pos_dist_type_sig.read());
-        }
-    });
-
-    use_effect(move || {
-        if let LightDataBuilder::Geometric(rdb) = &mut *light_data_builder_sig.write() {
-            rdb.set_energy_dist(*energy_dist_type_sig.read());
-        }
-    });
-
-    use_effect(move || {
-        if let LightDataBuilder::Geometric(rdb) = &mut *light_data_builder_sig.write() {
-            rdb.set_spectral_dist(spect_dist_type_sig.read().clone());
-        }
-    });
-
-    rsx! {
-        div {
-            class: "accordion accordion-borderless bg-dark border-start",
-            id: "accordionSourceDists",
-            PositionDistributionEditor { pos_dist_type_sig }
-            EnergyDistributionEditor { energy_dist_type_sig }
-            SpectralDistributionEditor { spect_dist_type_sig }
         }
     }
 }

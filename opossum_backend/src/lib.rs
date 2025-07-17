@@ -14,7 +14,10 @@ pub use opossum::{
     create_data_dir, create_report_and_data_files, degree,
     energy_distributions::*,
     joule,
-    lightdata::{energy_data_builder, light_data_builder, ray_data_builder},
+    lightdata::{
+        energy_data_builder::{self, EnergyLaserLines},
+        light_data_builder, ray_data_builder,
+    },
     micrometer, millimeter, nanometer,
     nodes::{NodeAttr, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
@@ -26,6 +29,7 @@ pub use opossum::{
     refractive_index::*,
     reporting::*,
     spectral_distribution::*,
+    spectrum::Spectrum,
     utils::math_utils::isize_to_f64,
     utils::{
         default_from_name::DefaultFromName,

@@ -9,7 +9,6 @@ use uom::si::length::nanometer;
 
 #[component]
 pub fn AlignmentWavelengthEditor(property_key: String, prop_type_sig: Signal<Proptype>) -> Element {
-    // let mut alignment_select = Signal::new(nanometer!(1054.));
     let select_id = format!("lengthProperty{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
 
@@ -25,10 +24,7 @@ pub fn AlignmentWavelengthEditor(property_key: String, prop_type_sig: Signal<Pro
         LabeledSelect {
             id: select_id,
             label: select_label,
-            options: vec![
-                (!has_length, "As in light definition".to_owned()),
-                (has_length, "Choose specific".to_owned()),
-            ],
+            options: vec![(!has_length, "None".to_owned()), (has_length, "Define".to_owned())],
             onchange: move |_: Event<FormData>| {
                 if has_length {
                     prop_type_sig.set(Proptype::LengthOption(None));

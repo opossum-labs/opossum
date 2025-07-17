@@ -8,11 +8,10 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator, IntoInputData,
     },
-    property_editor::light_data_editor::spectral_distribution_editor::{
-        gaussian_editor::GaussianSpectrumParam, laser_lines_editor::LaserLineInput,
-    },
 };
 use dioxus::prelude::*;
+use gaussian_editor::GaussianSpectrumParam;
+use laser_lines_editor::LaserLineInput;
 use opossum_backend::{DefaultFromName, SpecDistType};
 
 #[component]

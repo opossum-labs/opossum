@@ -29,26 +29,20 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 }
             }
         }
-    } else if let InputParam::FilePath(label) = input_data.dist_param {
+    } else if let InputParam::FilePath(label, file_accept) = input_data.dist_param {
         rsx! {
             div {
-                id: "imgSrcFileSelection",
-                class: "form-file border-start",
+                class: "form-file border-start file-selection-wrapper",
                 "data-mdb-input-init": "",
                 input {
                     class: "form-input text-light",
                     id: input_data.id.as_str(),
                     r#type: input_data.dist_param.rtype(),
-                    accept: ".png",
+                    accept: file_accept,
                     onchange: move |e| input_data.callback_opt.call(e),
                 }
                 a { {input_data.value} }
-                label {
-                    id: "imgSrcFileSelectionLabel",
-                    class: "text-secondary ",
-                    r#for: input_data.id,
-                    "{label}"
-                }
+                label { class: "text-secondary", r#for: input_data.id, "{label}" }
             }
         }
     } else {

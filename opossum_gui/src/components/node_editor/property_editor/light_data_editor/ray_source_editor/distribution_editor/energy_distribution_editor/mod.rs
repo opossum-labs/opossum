@@ -8,12 +8,11 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator, InputData, IntoInputData,
     },
-    property_editor::light_data_editor::energy_distribution_editor::{
-        gaussian_editor::get_general_2d_gaussian_input_params, uniform_editor::UniformParam,
-    },
 };
 use dioxus::prelude::*;
+use gaussian_editor::get_general_2d_gaussian_input_params;
 use opossum_backend::{DefaultFromName, EnergyDistType};
+use uniform_editor::UniformParam;
 
 #[component]
 pub fn RayEnergyDistributionEditor(energy_dist_type_sig: Signal<EnergyDistType>) -> Element {

@@ -33,6 +33,30 @@ pub enum RayDataBuilder {
     Image(ImageSrc),
 }
 
+impl From<ImageSrc> for RayDataBuilder {
+    fn from(value: ImageSrc) -> Self {
+        Self::Image(value)
+    }
+}
+
+impl From<PointSrc> for RayDataBuilder {
+    fn from(value: PointSrc) -> Self {
+        Self::PointSrc(value)
+    }
+}
+
+impl From<CollimatedSrc> for RayDataBuilder {
+    fn from(value: CollimatedSrc) -> Self {
+        Self::Collimated(value)
+    }
+}
+
+impl From<Rays> for RayDataBuilder {
+    fn from(value: Rays) -> Self {
+        Self::Raw(value)
+    }
+}
+
 impl DefaultFromName for RayDataBuilder {}
 
 /// Represents a collimated source, holding he distributions of the rays for ray tracing,
@@ -533,6 +557,62 @@ impl RayDataBuilder {
             }
             Self::PointSrc(point_src) => point_src.set_spect_dist(spect_dist_type),
             _ => {}
+        }
+    }
+
+    /// Get the position distribution type, if applicable.
+    ///
+    /// Returns the [`PosDistType`] used in the ray data builder,
+    /// if the variant supports it. Available for collimated and point sources.
+    ///
+    /// Returns `None` if the builder is a variant without position distribution configuration (e.g., `Raw` or `Image`).
+    ///
+    /// # Returns
+    /// - `Some(PosDistType)` if available.
+    /// - `None` otherwise.
+    #[must_use]
+    pub const fn get_position_distribution_type(&self) -> Option<PosDistType> {
+        match self {
+            Self::Collimated(collimated_src) => Some(*collimated_src.pos_dist()),
+            Self::PointSrc(point_src) => Some(*point_src.pos_dist()),
+            Self::Raw(_) | Self::Image(_) => None,
+        }
+    }
+    /// Get the energy distribution type, if applicable.
+    ///
+    /// Returns the [`EnergyDistType`] used in the ray data builder,
+    /// if the variant supports it. Available for collimated and point sources.
+    ///
+    /// Returns `None` if the builder is a variant without energy distribution configuration (e.g., `Raw` or `Image`).
+    ///
+    /// # Returns
+    /// - `Some(EnergyDistType)` if available.
+    /// - `None` otherwise.
+    #[must_use]
+    pub const fn get_energy_distribution_type(&self) -> Option<EnergyDistType> {
+        match self {
+            Self::Collimated(collimated_src) => Some(*collimated_src.energy_dist()),
+            Self::PointSrc(point_src) => Some(*point_src.energy_dist()),
+            Self::Raw(_) | Self::Image(_) => None,
+        }
+    }
+
+    /// Get the spectral distribution type, if applicable.
+    ///
+    /// Returns the [`SpecDistType`] used in the ray data builder,
+    /// if the variant supports it. Available for collimated and point sources.
+    ///
+    /// Returns `None` if the builder is using a variant without spectral distribution configuration (e.g., `Raw` or `Image`).
+    ///
+    /// # Returns
+    /// - `Some(SpecDistType)` if available.
+    /// - `None` otherwise.
+    #[must_use]
+    pub fn get_spectral_distribution_type(&self) -> Option<SpecDistType> {
+        match self {
+            Self::Collimated(collimated_src) => Some(collimated_src.spect_dist().clone()),
+            Self::PointSrc(point_src) => Some(point_src.spect_dist().clone()),
+            Self::Raw(_) | Self::Image(_) => None,
         }
     }
 }

@@ -8,20 +8,19 @@ mod hexapolar_editor;
 mod random_editor;
 mod sobol_editor;
 
-pub use fibonacci_ellipse_editor::FibonacciEllipseParam;
-pub use fibonacci_rectangle_editor::FibonacciRectParam;
-pub use grid_editor::GridParam;
-pub use random_editor::RandomParam;
-pub use sobol_editor::SobolParam;
+use fibonacci_ellipse_editor::FibonacciEllipseParam;
+use fibonacci_rectangle_editor::FibonacciRectParam;
+use grid_editor::GridParam;
+use hexagonal_editor::get_hexagonal_input_params;
+use hexapolar_editor::get_hexapolar_input_params;
+use random_editor::RandomParam;
+use sobol_editor::SobolParam;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
     inputs::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator, InputData, IntoInputData,
-    },
-    property_editor::light_data_editor::position_distribution_editor::{
-        hexagonal_editor::get_hexagonal_input_params, hexapolar_editor::get_hexapolar_input_params,
     },
 };
 use dioxus::prelude::*;

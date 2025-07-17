@@ -66,11 +66,7 @@ impl LightDataBuilder {
     pub const fn get_position_distribution_type(&self) -> Option<PosDistType> {
         match self {
             Self::Energy(_) => None,
-            Self::Geometric(ray_data_builder) => match ray_data_builder {
-                RayDataBuilder::Collimated(collimated_src) => Some(*collimated_src.pos_dist()),
-                RayDataBuilder::PointSrc(point_src) => Some(*point_src.pos_dist()),
-                RayDataBuilder::Raw(_) | RayDataBuilder::Image(_) => None,
-            },
+            Self::Geometric(ray_data_builder) => ray_data_builder.get_position_distribution_type(),
         }
     }
     /// Get the energy distribution type, if applicable.
@@ -87,11 +83,7 @@ impl LightDataBuilder {
     pub const fn get_energy_distribution_type(&self) -> Option<EnergyDistType> {
         match self {
             Self::Energy(_) => None,
-            Self::Geometric(ray_data_builder) => match ray_data_builder {
-                RayDataBuilder::Collimated(collimated_src) => Some(*collimated_src.energy_dist()),
-                RayDataBuilder::PointSrc(point_src) => Some(*point_src.energy_dist()),
-                RayDataBuilder::Raw(_) | RayDataBuilder::Image(_) => None,
-            },
+            Self::Geometric(ray_data_builder) => ray_data_builder.get_energy_distribution_type(),
         }
     }
 
@@ -110,13 +102,7 @@ impl LightDataBuilder {
     pub fn get_spectral_distribution_type(&self) -> Option<SpecDistType> {
         match self {
             Self::Energy(_) => None,
-            Self::Geometric(ray_data_builder) => match ray_data_builder {
-                RayDataBuilder::Collimated(collimated_src) => {
-                    Some(collimated_src.spect_dist().clone())
-                }
-                RayDataBuilder::PointSrc(point_src) => Some(point_src.spect_dist().clone()),
-                RayDataBuilder::Raw(_) | RayDataBuilder::Image(_) => None,
-            },
+            Self::Geometric(ray_data_builder) => ray_data_builder.get_spectral_distribution_type(),
         }
     }
 }
@@ -157,13 +143,13 @@ impl From<CollimatedSrc> for LightDataBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{joule, nanometer, rays::Rays};
+    use crate::{joule, lightdata::energy_data_builder::EnergyLaserLines, nanometer, rays::Rays};
 
     #[test]
     fn from_light_data_builder_to_proptype() {
         let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-            vec![(nanometer!(1000.0), joule!(1.0))],
-            nanometer!(1.0),
+            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))
+                .unwrap(),
         ));
         let proptype: Proptype = Some(light_data_builder).into();
         assert!(matches!(proptype, Proptype::LightDataBuilder(_)));
@@ -171,16 +157,16 @@ mod tests {
     #[test]
     fn display_light_data_builder() {
         let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-            vec![(nanometer!(1000.0), joule!(1.0))],
-            nanometer!(1.0),
+            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))
+                .unwrap(),
         ));
         assert_eq!(format!("{light_data_builder}"), "Energy");
     }
     #[test]
     fn build_light_data() {
         let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-            vec![(nanometer!(1000.0), joule!(1.0))],
-            nanometer!(1.0),
+            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))
+                .unwrap(),
         ));
         let light_data = light_data_builder.build().unwrap();
         assert!(matches!(light_data, LightData::Energy(_)));

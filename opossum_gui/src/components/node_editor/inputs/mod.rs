@@ -64,7 +64,7 @@ pub enum InputParam {
     Energy(&'static str),
     Angle(&'static str),
     Bool(&'static str),
-    FilePath(&'static str),
+    FilePath(&'static str, &'static str),
 }
 
 impl InputParam {
@@ -78,7 +78,7 @@ impl InputParam {
             | Self::Energy(label)
             | Self::Angle(label)
             | Self::Bool(label)
-            | Self::FilePath(label) => label,
+            | Self::FilePath(label, _) => label,
         }
     }
     #[must_use]
@@ -91,7 +91,7 @@ impl InputParam {
             | Self::Energy(_)
             | Self::Angle(_) => "number",
             Self::Bool(_) => "checkbox",
-            Self::FilePath(_) => "file",
+            Self::FilePath(_, _) => "file",
         }
     }
 
