@@ -176,3 +176,8 @@ input[type=number] {
 .accordion-content-wrapper-div{
     padding: 0rem 0.75rem; 
 }
+
+#noSpecificNodeProperties{
+  padding-left:0.25rem;
+  font-size: small;
+}

@@ -34,8 +34,13 @@ use opossum_backend::{Properties, Proptype};
 pub fn PropertiesEditor(
     node_properties: Properties,
     node_change: Signal<Option<NodeChange>>,
+    empty_prop_elements: Signal<usize>
 ) -> Element {
+    println!("properties editor redrawing");
     let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
+
+
+
     for (property_key, property) in &node_properties {
         editor_inputs.push(rsx! {
             PropertyEditor {
@@ -63,7 +68,6 @@ pub fn PropertyEditor(
     node_change: Signal<Option<NodeChange>>,
 ) -> Element {
     let prop_type_sig = use_signal(|| prop_type.clone());
-
     use_effect({
         let property_key = property_key.clone();
         move || {
@@ -73,6 +77,8 @@ pub fn PropertyEditor(
             )));
         }
     });
+
+
 
     match &prop_type {
         Proptype::String(_) => {
@@ -198,8 +204,11 @@ pub fn PropertyEditor(
             println!("Vec2 not yet implemented");
             rsx! {}
         }
-        _ => rsx! {
-            div { "No additional properties necessary" }
-        },
+        _ => {
+            rsx! {
+            div { id:"noSpecificNodeProperties",
+            class: "text-secondary",
+            "No specific properties available" }
+        }},
     }
 }
