@@ -6,6 +6,7 @@ use actix_web::{
     patch, post, put,
     web::{self, Json, PathConfig},
 };
+use log::info;
 use nalgebra::Point2;
 use opossum::{
     error::OpossumError,
@@ -17,7 +18,6 @@ use opossum::{
     utils::geom_transformation::Isometry,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uom::si::length::meter;
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -245,6 +245,7 @@ async fn post_subnode(
     path: web::Path<Uuid>,
     node_type: web::Json<NewNode>,
 ) -> Result<Json<NodeInfo>, ErrorResponse> {
+    info!("new_node");
     let new_node_info = node_type.into_inner();
     let new_node_ref = create_node_ref(&new_node_info.node_type)?;
     let mut node = new_node_ref.optical_ref.lock().unwrap();
@@ -555,24 +556,24 @@ async fn post_node_alignment_isometry(
     ),
     request_body(content = String,
         description = "updated property of node",
-        content_type = "application/json",
+        content_type = "application/ron",
         example= "(\"key\", \"value\")"
     ),
     responses(
         (status = OK, description = "Node property successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/ron")
     )
 )]
 #[post("/property/{uuid}")]
 async fn post_node_property(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    key_val_pair: web::Json<(String, Value)>,
-) -> Result<(), ErrorResponse> {
+    body: String,
+) -> Result<HttpResponse, ErrorResponse> {
+    info!("started pos_node_property");
     let uuid: Uuid = path.into_inner();
-    let (prop_key, prop_value_serialized) = key_val_pair.into_inner();
-    let prop_value: Proptype = match serde_json::from_value(prop_value_serialized) {
-        Ok(proptype) => proptype,
+    let (prop_key, prop_value): (String, Proptype) = match ron::de::from_str(body.as_str()) {
+        Ok((key, proptype)) => (key, proptype),
         Err(e) => {
             return Err(ErrorResponse::new(
                 400,
@@ -589,7 +590,9 @@ async fn post_node_property(
             .unwrap()
             .node_attr_mut()
             .set_property(prop_key.as_str(), prop_value)?;
-        Ok(())
+        Ok(HttpResponse::Ok()
+            .content_type("application/ron")
+            .body(ron::ser::to_string("").unwrap()))
     } else {
         Err(ErrorResponse::new(
             404,

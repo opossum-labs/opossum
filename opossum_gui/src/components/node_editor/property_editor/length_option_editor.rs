@@ -5,36 +5,37 @@ use crate::components::node_editor::{
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_backend::{nanometer, Proptype};
-use uom::si::length::nanometer;
+use uom::si::{f64::Length, length::nanometer};
 
 #[component]
-pub fn AlignmentWavelengthEditor(property_key: String, prop_type_sig: Signal<Proptype>) -> Element {
-    let select_id = format!("lengthProperty{property_key}").to_camel_case();
+pub fn LengthOptionEditor(
+    length_opt: Option<Length>,
+    property_key: String,
+    prop_type_sig: Signal<Proptype>,
+) -> Element {
+    let select_id = format!("lengthOptionProperty{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
-
-    let (has_length, length_opt) = use_memo(move || {
-        if let Proptype::LengthOption(Some(length)) = &*prop_type_sig.read() {
-            (true, Some(*length))
-        } else {
-            (false, None)
-        }
-    })();
-
+    let mut length_opt_sig = use_signal(|| length_opt);
     rsx! {
         LabeledSelect {
             id: select_id,
             label: select_label,
-            options: vec![(!has_length, "None".to_owned()), (has_length, "Define".to_owned())],
+            options: vec![
+                (length_opt_sig.read().is_none(), "None".to_owned()),
+                (length_opt_sig.read().is_some(), "Define".to_owned()),
+            ],
             onchange: move |_: Event<FormData>| {
-                if has_length {
+                if length_opt_sig.read().is_some() {
                     prop_type_sig.set(Proptype::LengthOption(None));
+                    length_opt_sig.set(None);
                 } else {
                     prop_type_sig.set(Proptype::LengthOption(Some(nanometer!(1054.))));
+                    length_opt_sig.set(Some(nanometer!(1054.)));
                 }
             },
         }
         {
-            length_opt
+            length_opt_sig()
                 .map_or(
                     rsx! {},
                     |length| {

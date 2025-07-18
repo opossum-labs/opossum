@@ -3,6 +3,7 @@ use actix_web::{
     App, HttpResponse, HttpServer, ResponseError, dev::Server, middleware::Logger, web,
 };
 use env_logger::Env;
+use log::info;
 use std::net::Ipv4Addr;
 use utoipa::OpenApi;
 use utoipa_actix_web::AppExt;
@@ -38,6 +39,7 @@ pub fn start() -> Server {
     pub struct ApiDocs;
 
     env_logger::init_from_env(Env::default().default_filter_or("info"));
+    info!("test");
     let app_state = web::Data::new(AppState::default());
     let srv = HttpServer::new({
         let app_state = app_state.clone();

@@ -57,14 +57,14 @@ impl Default for Wedge {
             )
             .unwrap();
         node_attr
+            .create_property("wedge", "wedge angle", Angle::zero().into())
+            .unwrap();
+        node_attr
             .create_property(
                 "refractive index",
                 "refractive index of the lens material",
                 RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()).into(),
             )
-            .unwrap();
-        node_attr
-            .create_property("wedge", "wedge angle", Angle::zero().into())
             .unwrap();
 
         let mut wedge = Self { node_attr };

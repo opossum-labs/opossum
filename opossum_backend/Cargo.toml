@@ -25,3 +25,4 @@ utoipa-actix-web = "0.1"
 utoipa-swagger-ui = { version ="9.0.1", features = ["actix-web", "vendored"] }
 serde_json = { version = "1"}
 nalgebra = { version = "0.33", features = ["serde-serialize"] }
+log = "0.4.27"

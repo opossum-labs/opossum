@@ -31,6 +31,7 @@ pub use opossum::{
     reporting::*,
     spectral_distribution::*,
     spectrum::Spectrum,
+    surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::math_utils::isize_to_f64,
     utils::{
         default_from_name::DefaultFromName,

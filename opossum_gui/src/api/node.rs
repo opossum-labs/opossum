@@ -1,7 +1,7 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
-    Fluence, Isometry, NodeAttr,
+    Fluence, Isometry, NodeAttr, Proptype,
 };
 use serde_json::Value;
 use uuid::Uuid;
@@ -231,10 +231,11 @@ pub async fn update_node_alignment(
 pub async fn update_node_property(
     client: &HTTPClient,
     node_id: Uuid,
-    property_key_val: (String, Value),
+    property_key_val: (String, Proptype),
 ) -> Result<String, String> {
+    println!("sending via ron");
     client
-        .post::<(String, Value), String>(
+        .post_ron::<(String, Proptype), String>(
             &format!("/api/scenery/property/{}", node_id.as_simple()),
             property_key_val,
         )

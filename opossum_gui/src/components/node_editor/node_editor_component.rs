@@ -6,7 +6,7 @@ use crate::components::node_editor::{
 use crate::components::scenery_editor::NodeElement;
 use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
-use opossum_backend::{Fluence, Isometry};
+use opossum_backend::{Fluence, Isometry, Proptype};
 use serde_json::Value;
 
 #[allow(dead_code)]
@@ -16,7 +16,7 @@ pub enum NodeChange {
     Lidt(Fluence),
     Alignment(Isometry),
     Inverted(bool),
-    Property(String, Value),
+    Property(String, Proptype),
     Isometry(Isometry),
 }
 
@@ -64,7 +64,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     PropertiesEditor {
                         node_properties: node_attr.properties().clone(),
                         node_change,
-                        empty_prop_elements: Signal::new(0)
+                        empty_prop_elements: Signal::new(0),
                     }
                     AlignmentEditor { alignment: *node_attr.alignment() }
                 }

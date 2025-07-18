@@ -5205,6 +5205,7 @@ dependencies = [
  "actix-cors",
  "actix-web",
  "env_logger",
+ "log",
  "nalgebra",
  "opossum",
  "parking_lot",

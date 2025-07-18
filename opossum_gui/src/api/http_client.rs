@@ -52,6 +52,41 @@ impl HTTPClient {
             Err(format!("Error on post request on route: \"{route}\""))
         }
     }
+
+    /// Send a POST request to the given route using RON data
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the request fails (e.g. the route is not reachable)
+    /// - the response cannot be serialized into the expected type
+    pub async fn post_ron<
+        B: Serialize + DeserializeOwned + Clone,
+        R: Serialize + DeserializeOwned,
+    >(
+        &self,
+        route: &str,
+        body: B,
+    ) -> Result<R, String> {
+        if let Ok(serialized) = ron::ser::to_string(&body) {
+            println!("{serialized}");
+            let res = self
+                .client()
+                .post(self.url(route))
+                .header("Content-Type", "application/ron")
+                .body(serialized)
+                .send()
+                .await;
+            if let Ok(response) = res {
+                self.process_response_ron::<R>(response).await
+            } else {
+                Err(format!("Error on post request on route: \"{route}\""))
+            }
+        } else {
+            Err(format!("Error serializing body using ron"))
+        }
+    }
+
     /// Send a POST reqeust to the given route with the provided body.
     ///
     /// # Errors
@@ -254,12 +289,14 @@ impl HTTPClient {
         &self,
         res: Response,
     ) -> Result<R, String> {
+        println!("processing_via ron");
         if res.status().is_success() {
             let text = res.text().await.unwrap();
             let data: R =
                 ron::from_str(&text).map_err(|e| format!("parsing of data failed: {e}"))?;
             Ok(data)
         } else {
+            println!("processing_via ron failes");
             Err("Error deserializing response to ErrorResponse struct!".to_string())
         }
     }
