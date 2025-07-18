@@ -1,9 +1,13 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
+mod bool_editor;
+mod f64_editor;
+mod i32_editor;
 mod isometry_option_editor;
 mod length_editor;
 mod length_option_editor;
 mod light_data_editor;
+mod linear_density_editor;
 mod refractive_index_editor;
 // mod splitter_type_editor;
 
@@ -11,12 +15,16 @@ use crate::components::node_editor::{
     accordion::AccordionItem,
     node_editor_component::NodeChange,
     property_editor::{
+        bool_editor::BoolEditor,
+        f64_editor::F64Editor,
+        i32_editor::I32Editor,
         isometry_option_editor::IsometryOptionEditor,
         length_editor::LengthEditor,
         length_option_editor::AlignmentWavelengthEditor,
         light_data_editor::LightDataEditor,
+        // splitter_type_editor::SplitterTypeEditor,
+        linear_density_editor::LinearDensityEditor,
         refractive_index_editor::RefractiveIndexEditor,
-        // , splitter_type_editor::SplitterTypeEditor,
     },
 };
 use dioxus::prelude::*;
@@ -71,18 +79,15 @@ pub fn PropertyEditor(
             println!("String not yet implemented");
             rsx! {}
         }
-        Proptype::I32(_) => {
-            println!("I32 not yet implemented");
-            rsx! {}
-        }
-        Proptype::F64(_) => {
-            println!("F64 not yet implemented");
-            rsx! {}
-        }
-        Proptype::Bool(_) => {
-            println!("Bool not yet implemented");
-            rsx! {}
-        }
+        Proptype::I32(int32) => rsx! {
+            I32Editor { int32: *int32, property_key, prop_type_sig }
+        },
+        Proptype::F64(float64) => rsx! {
+            F64Editor { float64: *float64, property_key, prop_type_sig }
+        },
+        Proptype::Bool(b) => rsx! {
+            BoolEditor { b: *b, property_key, prop_type_sig }
+        },
         Proptype::LightData(_light_data) => {
             println!("Lightdata not yet implemented");
             rsx! {}
@@ -96,10 +101,10 @@ pub fn PropertyEditor(
             println!("spectrometertype not yet implemented");
             rsx! {}
         }
-        Proptype::Metertype(_metertype) => {
-            println!("Metertype not yet implemented");
-            rsx! {}
-        }
+        // Proptype::Metertype(_metertype) => {
+        //     println!("Metertype not yet implemented");
+        //     rsx! {}
+        // }
         Proptype::Uuid(_uuid) => {
             println!("Uuid not yet implemented");
             rsx! {}
@@ -136,10 +141,13 @@ pub fn PropertyEditor(
             println!("NodeReport not yet implemented");
             rsx! {}
         }
-        Proptype::LinearDensity(_quantity) => {
-            println!("LinearDensity not yet implemented");
-            rsx! {}
-        }
+        Proptype::LinearDensity(quantity) => rsx! {
+            LinearDensityEditor {
+                linear_density: *quantity,
+                property_key,
+                prop_type_sig,
+            }
+        },
         Proptype::Fluence(_quantity) => {
             println!("Fluence not yet implemented");
             rsx! {}
@@ -190,9 +198,8 @@ pub fn PropertyEditor(
             println!("Vec2 not yet implemented");
             rsx! {}
         }
-        _ => {
-            println!("not yet implemented");
-            rsx! {}
-        }
+        _ => rsx! {
+            div { "No additional properties necessary" }
+        },
     }
 }

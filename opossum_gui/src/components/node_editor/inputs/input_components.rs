@@ -9,50 +9,86 @@ use crate::components::node_editor::{
 };
 
 #[component]
-pub fn InputParamLabeledInput(input_data: InputData) -> Element {
-    if let InputParam::Bool(label) = input_data.dist_param {
-        rsx! {
-            div {
-                class: "form-floating-checkbox border-start",
-                "data-mdb-input-init": "",
-                label { class: "text-secondary", r#for: input_data.id.clone(), "{label}" }
-                br {}
-                input {
-                    class: "form-check-input text-light",
-                    id: input_data.id.as_str(),
-                    name: input_data.id.as_str(),
-                    value: input_data.value.clone(),
-                    r#type: input_data.dist_param.rtype(),
-                    role: "switch",
-                    checked: input_data.value.parse::<bool>().unwrap_or_default(),
-                    onchange: move |e| input_data.callback_opt.call(e),
-                }
+pub fn LabeledCheckboxInput(
+    id: String,
+    label: String,
+    value: String,
+    onchange: CallbackWrapper,
+
+    #[props(default = false)] readonly: bool,
+) -> Element {
+    rsx! {
+        div {
+            class: "form-floating-checkbox border-start",
+            "data-mdb-input-init": "",
+            label { class: "text-secondary", r#for: id.clone(), "{label}" }
+            br {}
+            input {
+                class: "form-check-input text-light",
+                id: id.clone(),
+                name: id.as_str(),
+                value: value.clone(),
+                r#type: "checkbox",
+                checked: value.parse::<bool>().unwrap_or_default(),
+                onchange: move |e: Event<FormData>| onchange.call(e),
             }
         }
-    } else if let InputParam::FilePath(label, file_accept) = input_data.dist_param {
+    }
+}
+#[component]
+pub fn LabeledFileInput(
+    id: String,
+    label: String,
+    value: String,
+    onchange: CallbackWrapper,
+    accept: String,
+    #[props(default = false)] readonly: bool,
+) -> Element {
+    rsx! {
+        div {
+            class: "form-file border-start file-selection-wrapper",
+            "data-mdb-input-init": "",
+            input {
+                class: "form-input text-light",
+                id: id.clone(),
+                r#type: "file",
+                accept,
+                onchange: move |e| onchange.call(e),
+            }
+            a { {value} }
+            label { class: "text-secondary", r#for: id, "{label}" }
+        }
+    }
+}
+#[component]
+pub fn InputParamLabeledInput(input_data: InputData) -> Element {
+    if let InputParam::Bool(label) = input_data.input_param {
         rsx! {
-            div {
-                class: "form-file border-start file-selection-wrapper",
-                "data-mdb-input-init": "",
-                input {
-                    class: "form-input text-light",
-                    id: input_data.id.as_str(),
-                    r#type: input_data.dist_param.rtype(),
-                    accept: file_accept,
-                    onchange: move |e| input_data.callback_opt.call(e),
-                }
-                a { {input_data.value} }
-                label { class: "text-secondary", r#for: input_data.id, "{label}" }
+            LabeledCheckboxInput {
+                id: input_data.id,
+                label,
+                value: input_data.value,
+                onchange: input_data.callback_opt,
+            }
+        }
+    } else if let InputParam::FilePath(label, accept) = input_data.input_param {
+        rsx! {
+            LabeledFileInput {
+                id: input_data.id,
+                label,
+                value: input_data.value,
+                onchange: input_data.callback_opt,
+                accept,
             }
         }
     } else {
         rsx! {
             LabeledInput {
                 id: input_data.id,
-                label: input_data.dist_param.label(),
+                label: input_data.input_param.label(),
                 value: input_data.value,
                 onchange: input_data.callback_opt,
-                r#type: input_data.dist_param.rtype(),
+                r#type: input_data.input_param.rtype(),
             }
         }
     }
@@ -102,15 +138,10 @@ pub fn LabeledInput(
 
     #[props(optional)] max: Option<&'static str>,
 
-    #[props(default = false)] hidden: bool,
-
     #[props(default = false)] readonly: bool,
 ) -> Element {
     rsx! {
-        div {
-            class: "form-floating border-start",
-            "data-mdb-input-init": "",
-            hidden,
+        div { class: "form-floating border-start", "data-mdb-input-init": "",
             input {
                 class: "form-control bg-dark text-light form-control-sm",
                 id: id.as_str(),

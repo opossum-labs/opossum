@@ -20,6 +20,7 @@ pub use opossum::{
     },
     micrometer, millimeter, nanometer,
     nodes::{NodeAttr, fluence_detector::Fluence},
+    num_per_mm,
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
     position_distributions::*,

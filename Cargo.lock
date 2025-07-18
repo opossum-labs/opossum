@@ -5231,6 +5231,7 @@ dependencies = [
  "ico",
  "itertools 0.14.0",
  "nalgebra",
+ "num",
  "opossum_backend",
  "plotly",
  "reqwest",

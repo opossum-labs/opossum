@@ -144,21 +144,21 @@ pub fn select_options_from_enum_iterator<T: IntoEnumIterator + Display>(
 pub struct InputData {
     pub value: String,
     pub id: String,
-    pub dist_param: InputParam,
+    pub input_param: InputParam,
     pub callback_opt: CallbackWrapper,
 }
 
 impl InputData {
     pub fn new(
-        dist_param: InputParam,
-        dist_type: &impl Display,
+        input_param: InputParam,
+        to_label: &impl Display,
         callback_opt: CallbackWrapper,
         value: String,
     ) -> Self {
         Self {
             value,
-            id: format!("node{dist_type}{}Input", dist_param.id_str()),
-            dist_param,
+            id: format!("node{to_label}{}Input", input_param.id_str()),
+            input_param,
             callback_opt,
         }
     }
