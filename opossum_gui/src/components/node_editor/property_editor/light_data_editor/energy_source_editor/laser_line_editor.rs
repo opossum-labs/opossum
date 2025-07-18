@@ -154,7 +154,10 @@ pub fn EnergyLaserLineEditor(
                 id: "energylaserlinesubmit",
                 value: "Add laser line",
             }
-            LaserLineList { laser_lines: energy_laser_lines, energy_data_builder_sig }
+            LaserLineList {
+                laser_lines: energy_laser_lines,
+                energy_data_builder_sig,
+            }
         }
         InputParamLabeledInput { input_data: spec_res_input }
     }

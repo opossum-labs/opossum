@@ -80,7 +80,7 @@ fn get_isometry_option_input_data(
     for (trans_axis, rot_axis) in TranslationAxis::iter().zip(RotationAxis::iter()) {
         alignment_inputs.push(InputData::new(
             trans_axis.into(),
-            &id_add_on,
+            id_add_on.clone(),
             on_isometry_option_change(iso, prop_type_sig, AlignmentAxis::Translation(trans_axis)),
             format!(
                 "{:.3}",
@@ -89,7 +89,7 @@ fn get_isometry_option_input_data(
         ));
         alignment_inputs.push(InputData::new(
             rot_axis.into(),
-            &id_add_on,
+            id_add_on.clone(),
             on_isometry_option_change(iso, prop_type_sig, AlignmentAxis::Rotation(rot_axis)),
             format!("{:.3}", iso.rotation_of_axis(rot_axis).get::<degree>()),
         ));

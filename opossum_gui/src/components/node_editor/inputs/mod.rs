@@ -35,7 +35,7 @@ where
         let value_str = self.create_value_string(&obj);
         InputData::new(
             Into::<InputParam>::into(*self),
-            &self.create_id_string(),
+                self.create_id_string(),
             self.create_callback(obj, sig),
             value_str,
         )
@@ -53,6 +53,7 @@ where
 pub trait IntoInputDataStrings<D> {
     fn create_value_string(&self, obj: &D) -> String;
     fn create_id_string(&self) -> String;
+
 }
 
 #[derive(Clone, PartialEq, Copy, Eq)]
@@ -97,7 +98,9 @@ impl InputParam {
 
     #[must_use]
     pub fn id_str(self) -> String {
-        self.label().trim().to_string()
+        let mut label = self.label().to_string();
+        label        .retain(|c| !c.is_whitespace());
+        label
     }
 }
 
@@ -151,13 +154,13 @@ pub struct InputData {
 impl InputData {
     pub fn new(
         input_param: InputParam,
-        to_label: &impl Display,
+        id_str_add_on: String,
         callback_opt: CallbackWrapper,
         value: String,
     ) -> Self {
         Self {
             value,
-            id: format!("node{to_label}{}Input", input_param.id_str()),
+            id: format!("{}{}", id_str_add_on, input_param.id_str()),
             input_param,
             callback_opt,
         }

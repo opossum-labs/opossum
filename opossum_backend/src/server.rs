@@ -39,7 +39,6 @@ pub fn start() -> Server {
     pub struct ApiDocs;
 
     env_logger::init_from_env(Env::default().default_filter_or("info"));
-    info!("test");
     let app_state = web::Data::new(AppState::default());
     let srv = HttpServer::new({
         let app_state = app_state.clone();

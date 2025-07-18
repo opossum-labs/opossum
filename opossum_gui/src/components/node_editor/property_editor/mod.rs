@@ -7,6 +7,7 @@ mod fluence_estimator_editor;
 mod i32_editor;
 mod isometry_option_editor;
 mod length_editor;
+mod curvature_editor;
 mod length_option_editor;
 mod light_data_editor;
 mod linear_density_editor;
@@ -29,6 +30,7 @@ use crate::components::node_editor::{
         // splitter_type_editor::SplitterTypeEditor,
         linear_density_editor::LinearDensityEditor,
         refractive_index_editor::RefractiveIndexEditor,
+        curvature_editor::CurvatureEditor
     },
 };
 use dioxus::prelude::*;
@@ -158,6 +160,9 @@ pub fn PropertyEditor(
         }
         Proptype::Length(length) => rsx! {
             LengthEditor { length, property_key, prop_type_sig }
+        },
+        Proptype::Curvature(length) => rsx! {
+            CurvatureEditor { length, property_key, prop_type_sig }
         },
         Proptype::LightDataBuilder(light_data_builder_opt) => rsx! {
             LightDataEditor {

@@ -83,7 +83,7 @@ fn get_alignment_input_data(
     for (trans_axis, rot_axis) in TranslationAxis::iter().zip(RotationAxis::iter()) {
         alignment_inputs.push(InputData::new(
             trans_axis.into(),
-            &id_add_on,
+            id_add_on.clone(),
             on_isometry_option_change(
                 node_change_signal,
                 iso,
@@ -98,7 +98,7 @@ fn get_alignment_input_data(
         ));
         alignment_inputs.push(InputData::new(
             rot_axis.into(),
-            &id_add_on,
+            id_add_on.clone(),
             on_isometry_option_change(node_change_signal, iso, AlignmentAxis::Rotation(rot_axis)),
             format!(
                 "{:.3}",

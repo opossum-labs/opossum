@@ -251,11 +251,11 @@ impl OpticNode for Lens {
             anchor_point_iso_front,
             &PortType::Input,
         )?;
-        let Ok(Proptype::Length(rear_curvature)) = self.node_attr.get_property("rear curvature")
+        let Ok(Proptype::Curvature(rear_curvature)) = self.node_attr.get_property("rear curvature")
         else {
             return Err(OpossumError::Analysis("cannot read rear curvature".into()));
         };
-        let Ok(Proptype::Length(center_thickness)) =
+        let Ok(Proptype::Curvature(center_thickness)) =
             self.node_attr.get_property("center thickness")
         else {
             return Err(OpossumError::Analysis(
@@ -351,18 +351,18 @@ mod test {
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "aqua");
         assert!(node.as_group_mut().is_err());
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("front curvature") else {
+        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(500.0));
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("rear curvature") else {
+        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("rear curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(-500.0));
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("center thickness") else {
+        let Ok(Proptype::Length(ct)) = node.node_attr.get_property("center thickness") else {
             panic!()
         };
-        assert_eq!(*roc, millimeter!(10.0));
+        assert_eq!(*ct, millimeter!(10.0));
         let Ok(Proptype::RefractiveIndex(index)) = node.node_attr.get_property("refractive index")
         else {
             panic!()
@@ -391,18 +391,18 @@ mod test {
         let ref_index = RefrIndexConst::new(2.0).unwrap();
         let node = Lens::new("test", roc, roc, ct, &ref_index).unwrap();
         assert_eq!(node.name(), "test");
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("front curvature") else {
+        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(100.0));
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("rear curvature") else {
+        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("rear curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(100.0));
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("center thickness") else {
+        let Ok(Proptype::Length(ct)) = node.node_attr.get_property("center thickness") else {
             panic!()
         };
-        assert_eq!(*roc, millimeter!(11.0));
+        assert_eq!(*ct, millimeter!(11.0));
         let Ok(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_index_const))) =
             node.node_attr.get_property("refractive index")
         else {

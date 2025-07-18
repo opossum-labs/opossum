@@ -57,7 +57,7 @@ impl Default for ThinMirror {
             .create_property(
                 "curvature",
                 "radius of curvature of the surface",
-                millimeter!(f64::INFINITY).into(),
+                Proptype::Curvature(millimeter!(f64::INFINITY)),
             )
             .unwrap();
 
@@ -106,7 +106,7 @@ impl ThinMirror {
                 "curvature must not be 0.0 or NaN".into(),
             ));
         }
-        self.node_attr.set_property("curvature", curvature.into())?;
+        self.node_attr.set_property("curvature", Proptype::Curvature(curvature))?;
         self.update_surfaces()?;
         Ok(self)
     }
@@ -120,7 +120,7 @@ impl OpticNode for ThinMirror {
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let Ok(Proptype::Length(curvature)) = self.node_attr.get_property("curvature") else {
+        let Ok(Proptype::Curvature(curvature)) = self.node_attr.get_property("curvature") else {
             return Err(OpossumError::Analysis("cannot read curvature".into()));
         };
         let (geosurface, anchor_point_iso) = if curvature.is_infinite() {
@@ -275,7 +275,7 @@ mod test {
         assert_eq!(node.node_type(), "mirror");
         assert_eq!(node.node_color(), "aliceblue");
         assert_eq!(node.inverted(), false);
-        if let Ok(Proptype::Length(r)) = node.properties().get("curvature") {
+        if let Ok(Proptype::Curvature(r)) = node.properties().get("curvature") {
             assert_eq!(r, &millimeter!(f64::INFINITY));
         } else {
             assert!(false, "property curvature was not a length.");
@@ -286,7 +286,7 @@ mod test {
         let m = ThinMirror::new("test");
         assert_eq!(m.name(), "test");
         assert_eq!(m.node_type(), "mirror");
-        if let Ok(Proptype::Length(r)) = m.properties().get("curvature") {
+        if let Ok(Proptype::Curvature(r)) = m.properties().get("curvature") {
             assert_eq!(r, &millimeter!(f64::INFINITY));
         } else {
             assert!(false, "property curvature was not a length.");
@@ -331,7 +331,7 @@ mod test {
         let m = ThinMirror::default()
             .with_curvature(millimeter!(100.0))
             .unwrap();
-        if let Ok(Proptype::Length(r)) = m.properties().get("curvature") {
+        if let Ok(Proptype::Curvature(r)) = m.properties().get("curvature") {
             assert_eq!(r, &millimeter!(100.0));
         } else {
             assert!(false, "property curvature was not a length.");

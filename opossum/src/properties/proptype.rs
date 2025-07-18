@@ -107,6 +107,8 @@ pub enum Proptype {
     WfLambda(f64, Length),
     /// a geometrical length
     Length(Length),
+    /// a curvature
+    Curvature(Length),
     /// an optional length parameter. used, e.g., for the alignment wavelength of the source
     LengthOption(Option<Length>),
     /// an energy value

@@ -245,7 +245,6 @@ async fn post_subnode(
     path: web::Path<Uuid>,
     node_type: web::Json<NewNode>,
 ) -> Result<Json<NodeInfo>, ErrorResponse> {
-    info!("new_node");
     let new_node_info = node_type.into_inner();
     let new_node_ref = create_node_ref(&new_node_info.node_type)?;
     let mut node = new_node_ref.optical_ref.lock().unwrap();
@@ -570,7 +569,6 @@ async fn post_node_property(
     path: web::Path<Uuid>,
     body: String,
 ) -> Result<HttpResponse, ErrorResponse> {
-    info!("started pos_node_property");
     let uuid: Uuid = path.into_inner();
     let (prop_key, prop_value): (String, Proptype) = match ron::de::from_str(body.as_str()) {
         Ok((key, proptype)) => (key, proptype),
