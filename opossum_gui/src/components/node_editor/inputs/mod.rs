@@ -149,6 +149,7 @@ pub struct InputData {
     pub id: String,
     pub input_param: InputParam,
     pub callback_opt: CallbackWrapper,
+    pub readonly: bool
 }
 
 impl InputData {
@@ -163,6 +164,7 @@ impl InputData {
             id: format!("{}{}", id_str_add_on, input_param.id_str()),
             input_param,
             callback_opt,
+            readonly: false
         }
     }
 }

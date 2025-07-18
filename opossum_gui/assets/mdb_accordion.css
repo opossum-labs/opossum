@@ -53,7 +53,7 @@ input[type=number] {
 .form-floating>.form-select:not(:focus):hover{
   cursor: pointer;
 }
-.form-floating>.form-select:not(:focus):hover, .form-floating>.form-control:not(:focus):hover, .accordion-button:hover{
+.form-floating>.form-select:not([focus], [disabled]):hover, .form-floating>.form-control:not([focus], [disabled]):hover, .accordion-button:hover{
   background-color:rgb(70, 70, 70) !important;
   border-radius: 2px;
 }
@@ -69,6 +69,7 @@ input[type=number] {
   inset:0.7rem .375rem;
   background-color: transparent ;
 }
+
 
 .custom-label{
   font-size: 0.7rem; 

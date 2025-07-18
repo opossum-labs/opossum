@@ -57,14 +57,14 @@ impl Default for Lens {
             .create_property(
                 "front curvature",
                 "radius of curvature of front surface",
-                millimeter!(500.0).into(),
+                Proptype::Curvature(millimeter!(500.0)),
             )
             .unwrap();
         node_attr
             .create_property(
                 "rear curvature",
                 "radius of curvature of rear surface",
-                millimeter!(-500.0).into(),
+                Proptype::Curvature(millimeter!(-500.0)),
             )
             .unwrap();
         node_attr
@@ -112,14 +112,14 @@ impl Lens {
             ));
         }
         lens.node_attr
-            .set_property("front curvature", front_curvature.into())?;
+            .set_property("front curvature", Proptype::Curvature(front_curvature))?;
         if rear_curvature.is_zero() || rear_curvature.is_nan() {
             return Err(OpossumError::Other(
                 "rear curvature must not be 0.0 or NaN".into(),
             ));
         }
         lens.node_attr
-            .set_property("rear curvature", rear_curvature.into())?;
+            .set_property("rear curvature", Proptype::Curvature(rear_curvature))?;
         if center_thickness.is_sign_negative() || !center_thickness.is_finite() {
             return Err(OpossumError::Other(
                 "center thickness must be >= 0.0 and finite".into(),
@@ -225,7 +225,7 @@ impl Lens {
 impl OpticNode for Lens {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let Ok(Proptype::Length(front_curvature)) = self.node_attr.get_property("front curvature")
+        let Ok(Proptype::Curvature(front_curvature)) = self.node_attr.get_property("front curvature")
         else {
             return Err(OpossumError::Analysis("cannot read front curvature".into()));
         };
@@ -255,7 +255,7 @@ impl OpticNode for Lens {
         else {
             return Err(OpossumError::Analysis("cannot read rear curvature".into()));
         };
-        let Ok(Proptype::Curvature(center_thickness)) =
+        let Ok(Proptype::Length(center_thickness)) =
             self.node_attr.get_property("center thickness")
         else {
             return Err(OpossumError::Analysis(

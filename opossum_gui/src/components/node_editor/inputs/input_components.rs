@@ -140,6 +140,7 @@ pub fn LabeledInput(
 
     #[props(default = false)] readonly: bool,
 ) -> Element {
+
     rsx! {
         div { class: "form-floating border-start", "data-mdb-input-init": "",
             input {
@@ -149,6 +150,7 @@ pub fn LabeledInput(
                 placeholder: label,
                 value,
                 readonly,
+                disabled:readonly,
                 r#type,
                 step: step.unwrap_or_default(),
                 min: min.unwrap_or_default(),
