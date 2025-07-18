@@ -7,7 +7,6 @@ use crate::components::scenery_editor::NodeElement;
 use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, Isometry, Proptype};
-use serde_json::Value;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]

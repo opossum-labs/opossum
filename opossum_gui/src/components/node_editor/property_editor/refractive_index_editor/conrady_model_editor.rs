@@ -16,11 +16,11 @@ pub enum ConradyParam {
 impl From<ConradyParam> for InputParam {
     fn from(value: ConradyParam) -> Self {
         match value {
-            ConradyParam::WaveLengthStart => Self::Length("Start λ in nm"),
-            ConradyParam::WavelengthEnd => Self::Length("End λ in nm"),
-            ConradyParam::A => Self::F64("A"),
-            ConradyParam::B => Self::F64("B"),
-            ConradyParam::C => Self::F64("C"),
+            ConradyParam::WaveLengthStart => Self::Length("Start λ in nm".into()),
+            ConradyParam::WavelengthEnd => Self::Length("End λ in nm".into()),
+            ConradyParam::A => Self::F64("A".into()),
+            ConradyParam::B => Self::F64("B".into()),
+            ConradyParam::C => Self::F64("C".into()),
         }
     }
 }

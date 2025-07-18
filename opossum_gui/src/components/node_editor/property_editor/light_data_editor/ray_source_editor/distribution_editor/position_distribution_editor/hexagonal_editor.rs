@@ -17,10 +17,10 @@ pub enum HexagonalTilingParam {
 impl From<HexagonalTilingParam> for InputParam {
     fn from(value: HexagonalTilingParam) -> Self {
         match value {
-            HexagonalTilingParam::NrOfHex => Self::U8("Number of hexagons"),
-            HexagonalTilingParam::Radius => Self::Length("Radius in mm"),
-            HexagonalTilingParam::CenterX => Self::Length("Center X in mm"),
-            HexagonalTilingParam::CenterY => Self::Length("Center Y in mm"),
+            HexagonalTilingParam::NrOfHex => Self::U8("Number of hexagons".into()),
+            HexagonalTilingParam::Radius => Self::Length("Radius in mm".into()),
+            HexagonalTilingParam::CenterX => Self::Length("Center X in mm".into()),
+            HexagonalTilingParam::CenterY => Self::Length("Center Y in mm".into()),
         }
     }
 }

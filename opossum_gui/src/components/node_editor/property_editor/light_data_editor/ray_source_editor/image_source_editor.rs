@@ -67,11 +67,11 @@ enum ImageSrcParam {
 impl From<ImageSrcParam> for InputParam {
     fn from(value: ImageSrcParam) -> Self {
         match value {
-            ImageSrcParam::FPath => Self::FilePath("File:", ".png"),
-            ImageSrcParam::PxlSize => Self::F64("Pixel size in µm"),
-            ImageSrcParam::Energy => Self::Energy("Energy in J"),
-            ImageSrcParam::Wavelength => Self::Length("Wavelength in nm"),
-            ImageSrcParam::ConeAngle => Self::Angle("Cone Angle in degrees"),
+            ImageSrcParam::FPath => Self::FilePath("File:".into(), ".png".into()),
+            ImageSrcParam::PxlSize => Self::F64("Pixel size in µm".into()),
+            ImageSrcParam::Energy => Self::Energy("Energy in J".into()),
+            ImageSrcParam::Wavelength => Self::Length("Wavelength in nm".into()),
+            ImageSrcParam::ConeAngle => Self::Angle("Cone Angle in degrees".into()),
         }
     }
 }

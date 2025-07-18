@@ -78,12 +78,12 @@ fn get_alignment_input_data(
     node_change_signal: Signal<Option<NodeChange>>,
     iso: Signal<Isometry>,
 ) -> Vec<InputData> {
-    let id_add_on = "inputNodeAlignment".to_string();
+    let id_add_on = "inputNodeAlignment";
     let mut alignment_inputs = Vec::<InputData>::new();
     for (trans_axis, rot_axis) in TranslationAxis::iter().zip(RotationAxis::iter()) {
         alignment_inputs.push(InputData::new(
             trans_axis.into(),
-            id_add_on.clone(),
+            id_add_on,
             on_isometry_option_change(
                 node_change_signal,
                 iso,
@@ -98,7 +98,7 @@ fn get_alignment_input_data(
         ));
         alignment_inputs.push(InputData::new(
             rot_axis.into(),
-            id_add_on.clone(),
+            id_add_on,
             on_isometry_option_change(node_change_signal, iso, AlignmentAxis::Rotation(rot_axis)),
             format!(
                 "{:.3}",

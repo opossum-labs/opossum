@@ -10,7 +10,7 @@ pub enum ConstRefParam {
 
 impl From<ConstRefParam> for InputParam {
     fn from(_: ConstRefParam) -> Self {
-        Self::F64("Refractive Index")
+        Self::F64("Refractive Index".into())
     }
 }
 

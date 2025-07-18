@@ -18,8 +18,8 @@ pub enum LaserLinesParam {
 impl From<LaserLinesParam> for InputParam {
     fn from(value: LaserLinesParam) -> Self {
         match value {
-            LaserLinesParam::Wavelength => Self::Length("Wavelength in nm"),
-            LaserLinesParam::RelativeIntensity => Self::F64("Relative intensity"),
+            LaserLinesParam::Wavelength => Self::Length("Wavelength in nm".into()),
+            LaserLinesParam::RelativeIntensity => Self::F64("Relative intensity".into()),
         }
     }
 }

@@ -3,7 +3,6 @@ use actix_web::{
     App, HttpResponse, HttpServer, ResponseError, dev::Server, middleware::Logger, web,
 };
 use env_logger::Env;
-use log::info;
 use std::net::Ipv4Addr;
 use utoipa::OpenApi;
 use utoipa_actix_web::AppExt;

@@ -145,7 +145,8 @@ impl CylindricLens {
 impl OpticNode for CylindricLens {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let Ok(Proptype::Curvature(front_curvature)) = self.node_attr.get_property("front curvature")
+        let Ok(Proptype::Curvature(front_curvature)) =
+            self.node_attr.get_property("front curvature")
         else {
             return Err(OpossumError::Analysis("cannot read front curvature".into()));
         };

@@ -17,12 +17,14 @@ pub enum GaussianSpectrumParam {
 impl From<GaussianSpectrumParam> for InputParam {
     fn from(value: GaussianSpectrumParam) -> Self {
         match value {
-            GaussianSpectrumParam::CenterWavelength => Self::Length("Center wavelength in nm"),
-            GaussianSpectrumParam::Fwhm => Self::Length("FWHM in nm"),
-            GaussianSpectrumParam::Power => Self::F64("Power"),
-            GaussianSpectrumParam::WavelengthStart => Self::Length("Start wavelength in nm"),
-            GaussianSpectrumParam::WavelengthEnd => Self::Length("End wavelength in nm"),
-            GaussianSpectrumParam::NumPoints => Self::Usize("Number of points"),
+            GaussianSpectrumParam::CenterWavelength => {
+                Self::Length("Center wavelength in nm".into())
+            }
+            GaussianSpectrumParam::Fwhm => Self::Length("FWHM in nm".into()),
+            GaussianSpectrumParam::Power => Self::F64("Power".into()),
+            GaussianSpectrumParam::WavelengthStart => Self::Length("Start wavelength in nm".into()),
+            GaussianSpectrumParam::WavelengthEnd => Self::Length("End wavelength in nm".into()),
+            GaussianSpectrumParam::NumPoints => Self::Usize("Number of points".into()),
         }
     }
 }

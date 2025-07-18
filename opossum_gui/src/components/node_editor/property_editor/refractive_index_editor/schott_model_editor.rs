@@ -19,14 +19,14 @@ pub enum SchottParam {
 impl From<SchottParam> for InputParam {
     fn from(value: SchottParam) -> Self {
         match value {
-            SchottParam::WaveLengthStart => Self::Length("Start λ in nm"),
-            SchottParam::WavelengthEnd => Self::Length("End λ in nm"),
-            SchottParam::A => Self::F64("A"),
-            SchottParam::B => Self::F64("B"),
-            SchottParam::C => Self::F64("C"),
-            SchottParam::D => Self::F64("D"),
-            SchottParam::E => Self::F64("E"),
-            SchottParam::F => Self::F64("F"),
+            SchottParam::WaveLengthStart => Self::Length("Start λ in nm".into()),
+            SchottParam::WavelengthEnd => Self::Length("End λ in nm".into()),
+            SchottParam::A => Self::F64("A".into()),
+            SchottParam::B => Self::F64("B".into()),
+            SchottParam::C => Self::F64("C".into()),
+            SchottParam::D => Self::F64("D".into()),
+            SchottParam::E => Self::F64("E".into()),
+            SchottParam::F => Self::F64("F".into()),
         }
     }
 }

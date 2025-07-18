@@ -6,7 +6,6 @@ use actix_web::{
     patch, post, put,
     web::{self, Json, PathConfig},
 };
-use log::info;
 use nalgebra::Point2;
 use opossum::{
     error::OpossumError,

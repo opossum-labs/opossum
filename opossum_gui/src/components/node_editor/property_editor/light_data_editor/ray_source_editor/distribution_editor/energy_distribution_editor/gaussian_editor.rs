@@ -24,14 +24,14 @@ pub enum General2DGaussianParam {
 impl From<General2DGaussianParam> for InputParam {
     fn from(value: General2DGaussianParam) -> Self {
         match value {
-            General2DGaussianParam::CenterX => Self::Length("Center X in mm"),
-            General2DGaussianParam::CenterY => Self::Length("Center Y in mm"),
-            General2DGaussianParam::SigmaX => Self::Length("Sigma X in mm"),
-            General2DGaussianParam::SigmaY => Self::Length("Sigma Y in mm"),
-            General2DGaussianParam::Energy => Self::Energy("Energy in J"),
-            General2DGaussianParam::Power => Self::F64("Power"),
-            General2DGaussianParam::Theta => Self::Angle("Theta in degrees"),
-            General2DGaussianParam::Rectangular => Self::Bool("Rectangular"),
+            General2DGaussianParam::CenterX => Self::Length("Center X in mm".into()),
+            General2DGaussianParam::CenterY => Self::Length("Center Y in mm".into()),
+            General2DGaussianParam::SigmaX => Self::Length("Sigma X in mm".into()),
+            General2DGaussianParam::SigmaY => Self::Length("Sigma Y in mm".into()),
+            General2DGaussianParam::Energy => Self::Energy("Energy in J".into()),
+            General2DGaussianParam::Power => Self::F64("Power".into()),
+            General2DGaussianParam::Theta => Self::Angle("Theta in degrees".into()),
+            General2DGaussianParam::Rectangular => Self::Bool("Rectangular".into()),
         }
     }
 }

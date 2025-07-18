@@ -29,7 +29,7 @@ enum EnergySpectrumFromFileParam {
 
 impl From<EnergySpectrumFromFileParam> for InputParam {
     fn from(_: EnergySpectrumFromFileParam) -> Self {
-        Self::FilePath("File:", ".csv")
+        Self::FilePath("File:".into(), ".csv".into())
     }
 }
 

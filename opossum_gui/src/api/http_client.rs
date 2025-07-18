@@ -69,7 +69,6 @@ impl HTTPClient {
         body: B,
     ) -> Result<R, String> {
         if let Ok(serialized) = ron::ser::to_string(&body) {
-            println!("{serialized}");
             let res = self
                 .client()
                 .post(self.url(route))
@@ -83,7 +82,7 @@ impl HTTPClient {
                 Err(format!("Error on post request on route: \"{route}\""))
             }
         } else {
-            Err(format!("Error serializing body using ron"))
+            Err("Error serializing body using ron".to_string())
         }
     }
 
@@ -289,14 +288,12 @@ impl HTTPClient {
         &self,
         res: Response,
     ) -> Result<R, String> {
-        println!("processing_via ron");
         if res.status().is_success() {
             let text = res.text().await.unwrap();
             let data: R =
                 ron::from_str(&text).map_err(|e| format!("parsing of data failed: {e}"))?;
             Ok(data)
         } else {
-            println!("processing_via ron failes");
             Err("Error deserializing response to ErrorResponse struct!".to_string())
         }
     }

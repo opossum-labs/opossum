@@ -2,16 +2,17 @@
 
 mod angle_editor;
 mod bool_editor;
+mod curvature_editor;
 mod f64_editor;
 mod fluence_estimator_editor;
 mod i32_editor;
 mod isometry_option_editor;
 mod length_editor;
-mod curvature_editor;
 mod length_option_editor;
 mod light_data_editor;
 mod linear_density_editor;
 mod refractive_index_editor;
+mod vec2_editor;
 // mod splitter_type_editor;
 
 use crate::components::node_editor::{
@@ -20,6 +21,7 @@ use crate::components::node_editor::{
     property_editor::{
         angle_editor::AngleEditor,
         bool_editor::BoolEditor,
+        curvature_editor::CurvatureEditor,
         f64_editor::F64Editor,
         fluence_estimator_editor::FluenceEstimatorEditor,
         i32_editor::I32Editor,
@@ -30,7 +32,7 @@ use crate::components::node_editor::{
         // splitter_type_editor::SplitterTypeEditor,
         linear_density_editor::LinearDensityEditor,
         refractive_index_editor::RefractiveIndexEditor,
-        curvature_editor::CurvatureEditor
+        vec2_editor::Vec2Editor,
     },
 };
 use dioxus::prelude::*;
@@ -173,7 +175,7 @@ pub fn PropertyEditor(
         Proptype::LengthOption(length_opt) => rsx! {
             LengthOptionEditor { length_opt, property_key, prop_type_sig }
         },
-        Proptype::Isometry(iso_opt) => rsx! {
+        Proptype::Isometry(_) => rsx! {
             IsometryOptionEditor { property_key, prop_type_sig }
         },
         Proptype::Energy(_quantity) => {
@@ -187,7 +189,7 @@ pub fn PropertyEditor(
             RefractiveIndexEditor {
                 property_key,
                 prop_type_sig,
-                ref_ind_sig: Signal::new(refractive_index_type.clone()),
+                ref_ind_sig: Signal::new(refractive_index_type),
             }
         },
         Proptype::Vec3(_matrix) => {
@@ -198,10 +200,9 @@ pub fn PropertyEditor(
             println!("HitMap not yet implemented");
             rsx! {}
         }
-        Proptype::Vec2(_matrix) => {
-            println!("Vec2 not yet implemented");
-            rsx! {}
-        }
+        Proptype::Vec2(vector) => rsx! {
+            Vec2Editor { vector, property_key, prop_type_sig }
+        },
         _ => {
             rsx! {
                 div { id: "noSpecificNodeProperties", class: "text-secondary",

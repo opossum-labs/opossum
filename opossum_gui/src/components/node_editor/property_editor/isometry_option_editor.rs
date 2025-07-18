@@ -75,12 +75,12 @@ fn get_isometry_option_input_data(
     iso: Isometry,
     prop_type_sig: Signal<Proptype>,
 ) -> Vec<InputData> {
-    let id_add_on = "isometryOptionInput".to_string();
+    let id_add_on = "isometryOptionInput";
     let mut alignment_inputs = Vec::<InputData>::new();
     for (trans_axis, rot_axis) in TranslationAxis::iter().zip(RotationAxis::iter()) {
         alignment_inputs.push(InputData::new(
             trans_axis.into(),
-            id_add_on.clone(),
+            id_add_on,
             on_isometry_option_change(iso, prop_type_sig, AlignmentAxis::Translation(trans_axis)),
             format!(
                 "{:.3}",
@@ -89,7 +89,7 @@ fn get_isometry_option_input_data(
         ));
         alignment_inputs.push(InputData::new(
             rot_axis.into(),
-            id_add_on.clone(),
+            id_add_on,
             on_isometry_option_change(iso, prop_type_sig, AlignmentAxis::Rotation(rot_axis)),
             format!("{:.3}", iso.rotation_of_axis(rot_axis).get::<degree>()),
         ));

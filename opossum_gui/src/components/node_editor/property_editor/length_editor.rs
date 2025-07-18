@@ -1,7 +1,4 @@
-use crate::components::node_editor::{
-    inputs::input_components::{LabeledInput, LabeledSelect},
-    CallbackWrapper,
-};
+use crate::components::node_editor::{inputs::input_components::LabeledInput, CallbackWrapper};
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_backend::{millimeter, Proptype};
@@ -13,9 +10,6 @@ pub fn LengthEditor(
     property_key: String,
     prop_type_sig: Signal<Proptype>,
 ) -> Element {
-    let select_id = format!("lengthProperty{property_key}").to_camel_case();
-    let select_label = property_key.to_sentence_case();
-
     rsx! {
         LabeledInput {
             id: format!("lengthProperty{property_key}").to_camel_case(),

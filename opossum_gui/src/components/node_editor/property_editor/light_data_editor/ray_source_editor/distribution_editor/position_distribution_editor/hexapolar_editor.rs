@@ -15,8 +15,8 @@ pub enum HexapolarParam {
 impl From<HexapolarParam> for InputParam {
     fn from(value: HexapolarParam) -> Self {
         match value {
-            HexapolarParam::NrOfRings => Self::U8("Number of rings"),
-            HexapolarParam::Radius => Self::Length("Radius in mm"),
+            HexapolarParam::NrOfRings => Self::U8("Number of rings".into()),
+            HexapolarParam::Radius => Self::Length("Radius in mm".into()),
         }
     }
 }

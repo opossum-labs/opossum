@@ -3,7 +3,6 @@ use opossum_backend::{
     nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     Fluence, Isometry, NodeAttr, Proptype,
 };
-use serde_json::Value;
 use uuid::Uuid;
 
 use super::http_client::HTTPClient;
@@ -233,7 +232,6 @@ pub async fn update_node_property(
     node_id: Uuid,
     property_key_val: (String, Proptype),
 ) -> Result<String, String> {
-    println!("sending via ron");
     client
         .post_ron::<(String, Proptype), String>(
             &format!("/api/scenery/property/{}", node_id.as_simple()),

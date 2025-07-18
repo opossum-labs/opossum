@@ -35,7 +35,7 @@ where
         let value_str = self.create_value_string(&obj);
         InputData::new(
             Into::<InputParam>::into(*self),
-                self.create_id_string(),
+            self.create_id_string().as_str(),
             self.create_callback(obj, sig),
             value_str,
         )
@@ -53,24 +53,23 @@ where
 pub trait IntoInputDataStrings<D> {
     fn create_value_string(&self, obj: &D) -> String;
     fn create_id_string(&self) -> String;
-
 }
 
-#[derive(Clone, PartialEq, Copy, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum InputParam {
-    Usize(&'static str),
-    U8(&'static str),
-    F64(&'static str),
-    Length(&'static str),
-    Energy(&'static str),
-    Angle(&'static str),
-    Bool(&'static str),
-    FilePath(&'static str, &'static str),
+    Usize(String),
+    U8(String),
+    F64(String),
+    Length(String),
+    Energy(String),
+    Angle(String),
+    Bool(String),
+    FilePath(String, String),
 }
 
 impl InputParam {
     #[must_use]
-    pub const fn label(self) -> &'static str {
+    pub fn label(&self) -> String {
         match self {
             Self::Usize(label)
             | Self::U8(label)
@@ -79,11 +78,11 @@ impl InputParam {
             | Self::Energy(label)
             | Self::Angle(label)
             | Self::Bool(label)
-            | Self::FilePath(label, _) => label,
+            | Self::FilePath(label, _) => label.clone(),
         }
     }
     #[must_use]
-    pub const fn rtype(self) -> &'static str {
+    pub const fn rtype(&self) -> &'static str {
         match self {
             Self::Usize(_)
             | Self::U8(_)
@@ -97,9 +96,9 @@ impl InputParam {
     }
 
     #[must_use]
-    pub fn id_str(self) -> String {
-        let mut label = self.label().to_string();
-        label        .retain(|c| !c.is_whitespace());
+    pub fn id_str(&self) -> String {
+        let mut label = self.label();
+        label.retain(|c| !c.is_whitespace());
         label
     }
 }
@@ -107,9 +106,9 @@ impl InputParam {
 impl From<TranslationAxis> for InputParam {
     fn from(axis: TranslationAxis) -> Self {
         match axis {
-            TranslationAxis::X => Self::Length("X translation in mm"),
-            TranslationAxis::Y => Self::Length("Y translation in mm"),
-            TranslationAxis::Z => Self::Length("Z translation in mm"),
+            TranslationAxis::X => Self::Length("X translation in mm".into()),
+            TranslationAxis::Y => Self::Length("Y translation in mm".into()),
+            TranslationAxis::Z => Self::Length("Z translation in mm".into()),
         }
     }
 }
@@ -117,9 +116,9 @@ impl From<TranslationAxis> for InputParam {
 impl From<RotationAxis> for InputParam {
     fn from(axis: RotationAxis) -> Self {
         match axis {
-            RotationAxis::Roll => Self::Angle("Roll in degrees"),
-            RotationAxis::Pitch => Self::Angle("Pitch in degrees"),
-            RotationAxis::Yaw => Self::Angle("Yaw in degrees"),
+            RotationAxis::Roll => Self::Angle("Roll in degrees".into()),
+            RotationAxis::Pitch => Self::Angle("Pitch in degrees".into()),
+            RotationAxis::Yaw => Self::Angle("Yaw in degrees".into()),
         }
     }
 }
@@ -149,13 +148,13 @@ pub struct InputData {
     pub id: String,
     pub input_param: InputParam,
     pub callback_opt: CallbackWrapper,
-    pub readonly: bool
+    pub readonly: bool,
 }
 
 impl InputData {
     pub fn new(
         input_param: InputParam,
-        id_str_add_on: String,
+        id_str_add_on: &str,
         callback_opt: CallbackWrapper,
         value: String,
     ) -> Self {
@@ -164,7 +163,7 @@ impl InputData {
             id: format!("{}{}", id_str_add_on, input_param.id_str()),
             input_param,
             callback_opt,
-            readonly: false
+            readonly: false,
         }
     }
 }

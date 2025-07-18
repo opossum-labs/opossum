@@ -19,14 +19,14 @@ pub enum Sellmeier1Param {
 impl From<Sellmeier1Param> for InputParam {
     fn from(value: Sellmeier1Param) -> Self {
         match value {
-            Sellmeier1Param::WaveLengthStart => Self::Length("Start λ in nm"),
-            Sellmeier1Param::WavelengthEnd => Self::Length("End λ in nm"),
-            Sellmeier1Param::K1 => Self::F64("K1"),
-            Sellmeier1Param::K2 => Self::F64("K2"),
-            Sellmeier1Param::K3 => Self::F64("K3"),
-            Sellmeier1Param::L1 => Self::F64("L1"),
-            Sellmeier1Param::L2 => Self::F64("L2"),
-            Sellmeier1Param::L3 => Self::F64("L3"),
+            Sellmeier1Param::WaveLengthStart => Self::Length("Start λ in nm".into()),
+            Sellmeier1Param::WavelengthEnd => Self::Length("End λ in nm".into()),
+            Sellmeier1Param::K1 => Self::F64("K1".into()),
+            Sellmeier1Param::K2 => Self::F64("K2".into()),
+            Sellmeier1Param::K3 => Self::F64("K3".into()),
+            Sellmeier1Param::L1 => Self::F64("L1".into()),
+            Sellmeier1Param::L2 => Self::F64("L2".into()),
+            Sellmeier1Param::L3 => Self::F64("L3".into()),
         }
     }
 }

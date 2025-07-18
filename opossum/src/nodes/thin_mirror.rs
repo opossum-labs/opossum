@@ -106,7 +106,8 @@ impl ThinMirror {
                 "curvature must not be 0.0 or NaN".into(),
             ));
         }
-        self.node_attr.set_property("curvature", Proptype::Curvature(curvature))?;
+        self.node_attr
+            .set_property("curvature", Proptype::Curvature(curvature))?;
         self.update_surfaces()?;
         Ok(self)
     }

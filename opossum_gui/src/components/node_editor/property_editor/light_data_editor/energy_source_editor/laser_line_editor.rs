@@ -20,9 +20,9 @@ pub enum EnergyLaserLinesParam {
 impl From<EnergyLaserLinesParam> for InputParam {
     fn from(value: EnergyLaserLinesParam) -> Self {
         match value {
-            EnergyLaserLinesParam::Wavelength => Self::Length("Wavelength in nm"),
-            EnergyLaserLinesParam::Energy => Self::Energy("Energy in joule"),
-            EnergyLaserLinesParam::SpectralResolution => Self::Length("Resolution in nm"),
+            EnergyLaserLinesParam::Wavelength => Self::Length("Wavelength in nm".into()),
+            EnergyLaserLinesParam::Energy => Self::Energy("Energy in joule".into()),
+            EnergyLaserLinesParam::SpectralResolution => Self::Length("Resolution in nm".into()),
         }
     }
 }
@@ -154,10 +154,7 @@ pub fn EnergyLaserLineEditor(
                 id: "energylaserlinesubmit",
                 value: "Add laser line",
             }
-            LaserLineList {
-                laser_lines: energy_laser_lines,
-                energy_data_builder_sig,
-            }
+            LaserLineList { laser_lines: energy_laser_lines, energy_data_builder_sig }
         }
         InputParamLabeledInput { input_data: spec_res_input }
     }

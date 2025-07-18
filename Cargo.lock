@@ -5205,7 +5205,6 @@ dependencies = [
  "actix-cors",
  "actix-web",
  "env_logger",
- "log",
  "nalgebra",
  "opossum",
  "parking_lot",
@@ -5224,6 +5223,7 @@ name = "opossum_gui"
 version = "0.1.0"
 dependencies = [
  "Inflector",
+ "approx",
  "chrono",
  "dioxus",
  "dioxus-free-icons",
