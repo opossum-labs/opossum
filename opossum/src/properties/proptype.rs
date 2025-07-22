@@ -34,7 +34,7 @@ use tinytemplate::TinyTemplate;
 use uom::si::{
     Dimension, Quantity, Unit, Units,
     energy::joule,
-    f64::{Energy, Length},
+    f64::{Energy, Length, LinearNumberDensity},
     length::meter,
     radiant_exposure::joule_per_square_centimeter,
 };
@@ -58,7 +58,7 @@ thread_local! {
     });
 }
 
-#[non_exhaustive]
+// #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 /// The type of the [`Property`](crate::properties::Property).
 pub enum Proptype {
@@ -246,6 +246,31 @@ impl From<Angle> for Proptype {
         Self::Angle(value)
     }
 }
+
+impl From<Option<Length>> for Proptype {
+    fn from(value: Option<Length>) -> Self {
+        Self::LengthOption(value)
+    }
+}
+
+impl From<Isometry> for Proptype {
+    fn from(value: Isometry) -> Self {
+        Self::Isometry(Some(value))
+    }
+}
+
+impl From<LinearNumberDensity> for Proptype {
+    fn from(val: LinearNumberDensity) -> Self {
+        Self::LinearDensity(val)
+    }
+}
+
+impl From<FluenceEstimator> for Proptype {
+    fn from(val: FluenceEstimator) -> Self {
+        Self::FluenceEstimator(val)
+    }
+}
+
 impl From<Vector2<f64>> for Proptype {
     fn from(value: Vector2<f64>) -> Self {
         Self::Vec2(value)
@@ -273,6 +298,12 @@ impl From<ImageSrc> for Proptype {
         Self::LightDataBuilder(Some(LightDataBuilder::Geometric(RayDataBuilder::Image(
             val,
         ))))
+    }
+}
+
+impl From<LightDataBuilder> for Proptype {
+    fn from(val: LightDataBuilder) -> Self {
+        Self::LightDataBuilder(Some(val))
     }
 }
 

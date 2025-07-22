@@ -1,21 +1,26 @@
 use crate::components::node_editor::{
     inputs::input_components::{LabeledInput, LabeledSelect},
+    node_editor_component::NodeChange,
+    property_editor::use_set_node_change_property,
     CallbackWrapper,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::{nanometer, Proptype};
+use opossum_backend::nanometer;
 use uom::si::{f64::Length, length::nanometer};
 
 #[component]
 pub fn LengthOptionEditor(
     length_opt: Option<Length>,
     property_key: String,
-    prop_type_sig: Signal<Proptype>,
+    node_change: Signal<Option<NodeChange>>,
 ) -> Element {
+    let mut length_opt_sig = use_signal(|| length_opt);
     let select_id = format!("lengthOptionProperty{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
-    let mut length_opt_sig = use_signal(|| length_opt);
+
+    use_set_node_change_property(&property_key, length_opt, length_opt_sig, node_change);
+
     rsx! {
         LabeledSelect {
             id: select_id,
@@ -26,10 +31,8 @@ pub fn LengthOptionEditor(
             ],
             onchange: move |_: Event<FormData>| {
                 if length_opt_sig.read().is_some() {
-                    prop_type_sig.set(Proptype::LengthOption(None));
                     length_opt_sig.set(None);
                 } else {
-                    prop_type_sig.set(Proptype::LengthOption(Some(nanometer!(1054.))));
                     length_opt_sig.set(Some(nanometer!(1054.)));
                 }
             },
@@ -47,7 +50,7 @@ pub fn LengthOptionEditor(
                                 r#type: "number",
                                 onchange: CallbackWrapper::new(move |e: Event<FormData>| {
                                     if let Ok(length) = e.data.value().parse::<f64>() {
-                                        prop_type_sig.set(Proptype::LengthOption(Some(nanometer!(length))));
+                                        length_opt_sig.set(Some(nanometer!(length)));
                                     }
                                 }),
                             }

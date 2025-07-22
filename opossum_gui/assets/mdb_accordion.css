@@ -79,7 +79,7 @@ input[type=number] {
 
 .form-floating-checkbox {
         position: relative;
-  padding: 0.25rem .75rem;
+  padding: 0.14rem .75rem;
   
       }
 
@@ -178,7 +178,7 @@ input[type=number] {
     padding: 0rem 0.75rem; 
 }
 
-#noSpecificNodeProperties{
+.no-specific-node-properties{
   padding-left:0.25rem;
   font-size: small;
 }

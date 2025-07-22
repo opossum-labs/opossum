@@ -11,28 +11,23 @@ use opossum_backend::{
 use spectrum_from_file_editor::SpectrumFromFileEditor;
 
 #[component]
-pub fn EnergySourceEditor(light_data_builder_sig: Signal<LightDataBuilder>) -> Element {
-    let energy_data_builder_sig = use_signal(|| {
-        if let LightDataBuilder::Energy(edb) = &*light_data_builder_sig.read() {
-            edb.clone()
-        } else {
-            EnergyDataBuilder::default()
-        }
-    });
+pub fn EnergySourceEditor(
+    energy_data_builder: EnergyDataBuilder,
+    light_data_builder_sig: Signal<LightDataBuilder>,
+) -> Element {
+    let energy_data_builder_sig = use_signal(|| energy_data_builder.clone());
 
     use_effect(move || {
-        light_data_builder_sig.set(LightDataBuilder::Energy(
-            energy_data_builder_sig.read().clone(),
-        ));
+        if energy_data_builder != *energy_data_builder_sig.read() {
+            light_data_builder_sig.set(LightDataBuilder::Energy(
+                energy_data_builder_sig.read().clone(),
+            ));
+        }
     });
 
-    if let LightDataBuilder::Energy(_) = &*light_data_builder_sig.read() {
-        rsx! {
-            EnergyDataBuilderSelector { energy_data_builder_sig }
-            EnergyDataEditor { energy_data_builder_sig }
-        }
-    } else {
-        rsx! {}
+    rsx! {
+        EnergyDataBuilderSelector { energy_data_builder_sig }
+        EnergyDataEditor { energy_data_builder_sig }
     }
 }
 

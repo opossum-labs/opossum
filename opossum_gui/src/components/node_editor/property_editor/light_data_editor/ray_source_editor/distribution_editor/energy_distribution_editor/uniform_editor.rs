@@ -24,7 +24,7 @@ impl IntoInputDataStrings<UniformDist> for UniformParam {
     }
 
     fn create_value_string(&self, obj: &UniformDist) -> String {
-        format!("{}", obj.get_total_energy().get::<joule>())
+        format!("{:.3}", obj.get_total_energy().get::<joule>())
     }
 }
 

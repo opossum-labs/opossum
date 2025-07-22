@@ -57,9 +57,9 @@ impl IntoInputDataStrings<General2DGaussian> for General2DGaussianParam {
             Self::CenterY => format!("{:.3e}", obj.center().y.get::<millimeter>()),
             Self::SigmaX => format!("{:.3e}", obj.sigma().x.get::<millimeter>()),
             Self::SigmaY => format!("{:.3e}", obj.sigma().y.get::<millimeter>()),
-            Self::Energy => format!("{}", obj.get_total_energy().get::<joule>()),
+            Self::Energy => format!("{:.3}", obj.get_total_energy().get::<joule>()),
             Self::Power => format!("{}", obj.power()),
-            Self::Theta => format!("{}", obj.theta().get::<degree>()),
+            Self::Theta => format!("{:.3}", obj.theta().get::<degree>()),
             Self::Rectangular => format!("{}", obj.rectangular()),
         }
     }

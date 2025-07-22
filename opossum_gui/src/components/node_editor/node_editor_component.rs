@@ -63,7 +63,6 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                     PropertiesEditor {
                         node_properties: node_attr.properties().clone(),
                         node_change,
-                        empty_prop_elements: Signal::new(0),
                     }
                     AlignmentEditor { alignment: *node_attr.alignment() }
                 }

@@ -2,6 +2,7 @@ use core::f64;
 
 use crate::components::node_editor::{
     inputs::{input_components::RowedInputs, InputData, InputParam},
+    node_editor_component::NodeChange,
     CallbackWrapper,
 };
 use dioxus::prelude::*;
@@ -11,31 +12,41 @@ use uom::si::{f64::Length, length::millimeter};
 
 #[component]
 pub fn CurvatureEditor(
-    length: Length,
+    curvature: Length,
     property_key: String,
-    prop_type_sig: Signal<Proptype>,
+    node_change: Signal<Option<NodeChange>>,
 ) -> Element {
-    let length_sig = use_signal(|| length);
+    let curvature_sig = use_signal(|| curvature);
+
+    use_effect({
+        let property_key = property_key.clone();
+        move || {
+            if curvature != *curvature_sig.read() {
+                node_change.set(Some(NodeChange::Property(
+                    property_key.clone(),
+                    Proptype::Curvature(*curvature_sig.read()),
+                )));
+            }
+        }
+    });
 
     let checkbox_input = InputData::new(
         InputParam::Bool("Curved".into()),
         format!("curvatureSelectProperty{property_key}")
             .to_camel_case()
             .as_str(),
-        on_is_curved_input_change(length_sig),
-        length_sig.read().is_finite().to_string(),
+        on_is_curved_input_change(curvature_sig),
+        curvature_sig.read().is_finite().to_string(),
     );
     let mut curvature_input = InputData::new(
-        InputParam::Length("Curvature in mm".into()),
+        InputParam::Length(format!("{} in mm", property_key.to_sentence_case())),
         format!("curvatureProperty{property_key}")
             .to_camel_case()
             .as_str(),
-        on_length_input_change(length_sig),
-        format!("{:.3}", length_sig.read().get::<millimeter>()),
+        on_length_input_change(curvature_sig),
+        format!("{:.3}", curvature_sig.read().get::<millimeter>()),
     );
-    curvature_input.readonly = length_sig.read().is_infinite();
-
-    use_effect(move || prop_type_sig.set(Proptype::Curvature(*length_sig.read())));
+    curvature_input.readonly = curvature_sig.read().is_infinite();
 
     rsx! {
         RowedInputs { inputs: vec![curvature_input, checkbox_input] }

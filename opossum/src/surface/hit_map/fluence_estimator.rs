@@ -1,6 +1,6 @@
 //! Strategies for fluence estimation
 
-use crate::{properties::Proptype, utils::default_from_name::DefaultFromName};
+use crate::utils::default_from_name::DefaultFromName;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
@@ -30,11 +30,6 @@ impl Display for FluenceEstimator {
     }
 }
 impl DefaultFromName for FluenceEstimator {}
-impl From<FluenceEstimator> for Proptype {
-    fn from(value: FluenceEstimator) -> Self {
-        Self::FluenceEstimator(value)
-    }
-}
 
 #[cfg(test)]
 mod test {

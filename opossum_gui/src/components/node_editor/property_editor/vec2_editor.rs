@@ -2,7 +2,7 @@ use approx::relative_eq;
 use dioxus::prelude::*;
 use inflector::Inflector;
 use nalgebra::Vector2;
-use opossum_backend::{DefaultFromName, Proptype, TranslationAxis};
+use opossum_backend::{DefaultFromName, TranslationAxis};
 use std::fmt::Display;
 use strum::EnumIter;
 
@@ -12,6 +12,8 @@ use crate::{
             input_components::{LabeledSelect, RowedInputs},
             select_options_from_enum_iterator, InputData, InputParam,
         },
+        node_editor_component::NodeChange,
+        property_editor::use_set_node_change_property,
         CallbackWrapper,
     },
     OPOSSUM_UI_LOGS,
@@ -40,14 +42,14 @@ impl DefaultFromName for Vec2Options {}
 pub fn Vec2Editor(
     vector: Vector2<f64>,
     property_key: String,
-    prop_type_sig: Signal<Proptype>,
+    node_change: Signal<Option<NodeChange>>,
 ) -> Element {
-    let select_id = format!("vec2Property{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
     let mut vec_sig = use_signal(|| vector);
+    use_set_node_change_property(&property_key, vector, vec_sig, node_change);
 
     let vec_x_input = InputData::new(
-        InputParam::F64(format!("{} x", property_key.to_sentence_case())),
+        InputParam::F64(format!("{select_label} x")),
         format!("vec2xProperty{property_key}")
             .to_camel_case()
             .as_str(),
@@ -55,7 +57,7 @@ pub fn Vec2Editor(
         format!("{:.3}", vec_sig.read().x),
     );
     let vec_y_input = InputData::new(
-        InputParam::F64(format!("{} y", property_key.to_sentence_case())),
+        InputParam::F64(format!("{select_label} y")),
         format!("vec2yProperty{property_key}")
             .to_camel_case()
             .as_str(),
@@ -75,11 +77,9 @@ pub fn Vec2Editor(
         }
     });
 
-    use_effect(move || prop_type_sig.set(Proptype::Vec2(*vec_sig.read())));
-
     rsx! {
         LabeledSelect {
-            id: select_id,
+            id: format!("vec2Property{property_key}").to_camel_case(),
             label: select_label,
             options: select_options_from_enum_iterator(&vec2_select(), None),
             onchange: move |e: Event<FormData>| {
