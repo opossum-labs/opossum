@@ -52,16 +52,6 @@ pub fn PropertiesEditor(
         {
             editor_inputs.push(editor);
         }
-        // editor_inputs.push(get_editor(property.prop().clone(),property_key.clone(), node_change)
-
-        //     rsx! {
-        //     PropertyEditor {
-        //         prop_type: property.prop().clone(),
-        //         property_key: property_key.clone(),
-        //         node_change,
-        //     }
-        // }
-        // );
     }
     if editor_inputs.is_empty() {
         rsx! {}
@@ -77,102 +67,6 @@ pub fn PropertiesEditor(
         }
     }
 }
-
-// #[component]
-// pub fn PropertyEditor(
-//     prop_type: Proptype,
-//     property_key: String,
-//     node_change: Signal<Option<NodeChange>>,
-// ) -> Element {
-//     let prop_type_sig = use_signal(|| prop_type.clone());
-//     // use_effect({
-//     //     let property_key = property_key.clone();
-//     //     move || {
-//     //         node_change.set(Some(NodeChange::Property(
-//     //             property_key.clone(),
-//     //             prop_type_sig.read().clone(),
-//     //         )));
-//     //     }
-//     // });
-
-//     match prop_type {
-//         Proptype::String(s) => rsx! {
-//             StringEditor { s, property_key, prop_type_sig }
-//         },
-//         Proptype::I32(int32) => rsx! {
-//             I32Editor { int32, property_key, prop_type_sig }
-//         },
-//         Proptype::F64(float64) => rsx! {
-//             F64Editor { float64, property_key, prop_type_sig }
-//         },
-//         Proptype::Bool(b) => rsx! {
-//             BoolEditor { b, property_key, prop_type_sig }
-//         },
-//         Proptype::SplitterType(_splitting_config) => {
-//             println!("splittertype not yet implemented");
-//             rsx! {}
-//         }
-//         Proptype::FilterType(_spectrometer_type) => {
-//             println!("filtertype not yet implemented");
-//             rsx! {}
-//         }
-//         Proptype::FluenceEstimator(fluence_estimator) => rsx! {
-//             FluenceEstimatorEditor { fluence_estimator, property_key, prop_type_sig }
-//         },
-//         Proptype::LinearDensity(linear_density) => rsx! {
-//             LinearDensityEditor { linear_density, property_key, prop_type_sig }
-//         },
-//         Proptype::Length(length) => rsx! {
-//             LengthEditor { length, property_key, node_change }
-//         },
-//         Proptype::Curvature(curvature) => rsx! {
-//             CurvatureEditor { curvature, property_key, prop_type_sig }
-//         },
-//         Proptype::LightDataBuilder(light_data_builder_opt) => rsx! {
-//             LightDataEditor {
-//                 light_data_builder: light_data_builder_opt.unwrap_or_default(),
-//                 property_key,
-//                 node_change,
-//             }
-//         },
-//         Proptype::LengthOption(length_opt) => rsx! {
-//             LengthOptionEditor { length_opt, property_key, prop_type_sig }
-//         },
-//         Proptype::Isometry(_) => rsx! {
-//             IsometryOptionEditor { property_key, prop_type_sig }
-//         },
-//         Proptype::Angle(angle) => rsx! {
-//             AngleEditor { angle, property_key, prop_type_sig }
-//         },
-//         Proptype::RefractiveIndex(refractive_index_type) => rsx! {
-//             RefractiveIndexEditor {
-//                 property_key,
-//                 prop_type_sig,
-//                 ref_ind_sig: Signal::new(refractive_index_type),
-//             }
-//         },
-//         Proptype::Vec2(vector) => rsx! {
-//             Vec2Editor { vector, property_key, prop_type_sig }
-//         },
-//         //not used to change a node property
-//         Proptype::LightData(_)
-//         | Proptype::Uuid(_)
-//         | Proptype::FluenceData(_)
-//         | Proptype::SpectrometerType(_)
-//         | Proptype::WaveFrontData(_)
-//         | Proptype::RayPositionHistory(_)
-//         | Proptype::GhostFocusHistory(_)
-//         | Proptype::NodeReport(_)
-//         | Proptype::Fluence(_)
-//         | Proptype::WfLambda(_, _)
-//         | Proptype::Energy(_)
-//         | Proptype::Vec3(_)
-//         | Proptype::HitMap(_)
-//         | Proptype::Spectrum(_)
-//         | Proptype::Metertype(_)
-//         | Proptype::Aperture(_) => no_additional_props_display(),
-//     }
-// }
 
 fn get_editor(
     prop_type: Proptype,
