@@ -22,7 +22,10 @@ use crate::{
     meter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::Proptype,
+    properties::{
+        Proptype,
+        validators::{and_validator, angle_in_range, numeric_is_finite, numeric_is_not_zero},
+    },
     radian,
     rays::Rays,
     surface::{Parabola, geo_surface::GeoSurfaceRef, optic_surface::OpticSurface},
@@ -54,10 +57,23 @@ impl Default for ParabolicMirror {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("parabolic mirror");
         node_attr
-            .create_property("focal length", "focal length", meter!(1.0).into())
+            .create_property_with_validator(
+                "focal length",
+                "focal length",
+                and_validator(vec![numeric_is_not_zero(), numeric_is_finite()]),
+                meter!(1.0).into(),
+            )
             .unwrap();
         node_attr
-            .create_property("oa angle", "off axis angle", degree!(0.0).into())
+            .create_property_with_validator(
+                "oa angle",
+                "off axis angle",
+                and_validator(vec![
+                    angle_in_range(degree!(-180.0), degree!(180.0), false),
+                    numeric_is_finite(),
+                ]),
+                degree!(0.0).into(),
+            )
             .unwrap();
         node_attr
             .create_property(
@@ -111,14 +127,14 @@ impl ParabolicMirror {
     ///
     /// This function returns an error if the given focal length is zero or not finite.
     pub fn new(name: &str, focal_length: Length, collimating: bool) -> OpmResult<Self> {
-        if !focal_length.is_normal() {
-            return Err(OpossumError::Other(
-                "focal length must not be 0.0 and finite".into(),
-            ));
-        }
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
-        parabola.set_parabola_properties(focal_length, collimating, None, None)?;
+        parabola
+            .node_attr
+            .set_property("focal length", focal_length.into())?;
+        parabola
+            .node_attr
+            .set_property("collimating", collimating.into())?;
         parabola.update_surfaces()?;
         Ok(parabola)
     }
@@ -143,16 +159,20 @@ impl ParabolicMirror {
         collimating: bool,
         oa_angle: Angle,
     ) -> OpmResult<Self> {
-        Self::check_attributes(focal_length, Some(&oa_angle), None)?;
-
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
-        parabola.set_parabola_properties(
-            focal_length,
-            collimating,
-            Some(&oa_angle),
-            Some(&Vector2::new(1., 0.)),
-        )?;
+        parabola
+            .node_attr
+            .set_property("focal length", focal_length.into())?;
+        parabola
+            .node_attr
+            .set_property("collimating", collimating.into())?;
+        parabola
+            .node_attr
+            .set_property("oa angle", oa_angle.into())?;
+        parabola
+            .node_attr
+            .set_property("oa direction", Vector2::new(1., 0.).into())?;
         parabola.update_surfaces()?;
         Ok(parabola)
     }
@@ -176,17 +196,20 @@ impl ParabolicMirror {
         collimating: bool,
         oa_angle: Angle,
     ) -> OpmResult<Self> {
-        Self::check_attributes(focal_length, Some(&oa_angle), None)?;
-
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
-        parabola.set_parabola_properties(
-            focal_length,
-            collimating,
-            Some(&oa_angle),
-            Some(&Vector2::new(0., 1.)),
-        )?;
-
+        parabola
+            .node_attr
+            .set_property("focal length", focal_length.into())?;
+        parabola
+            .node_attr
+            .set_property("collimating", collimating.into())?;
+        parabola
+            .node_attr
+            .set_property("oa angle", oa_angle.into())?;
+        parabola
+            .node_attr
+            .set_property("oa direction", Vector2::new(0., 1.).into())?;
         parabola.update_surfaces()?;
         Ok(parabola)
     }
@@ -213,75 +236,27 @@ impl ParabolicMirror {
         oa_angle: Angle,
         oa_dir: Vector2<f64>,
     ) -> OpmResult<Self> {
-        Self::check_attributes(focal_length, Some(&oa_angle), Some(&oa_dir))?;
-
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
-        parabola.set_parabola_properties(
-            focal_length,
-            collimating,
-            Some(&oa_angle),
-            Some(&oa_dir),
-        )?;
-
-        parabola.update_surfaces()?;
-        Ok(parabola)
-    }
-    /// checks the validity of the provided node attributes of thie parabola
-    fn check_attributes(
-        focal_length: Length,
-        oa_angle_opt: Option<&Angle>,
-        oa_dir_opt: Option<&Vector2<f64>>,
-    ) -> OpmResult<()> {
-        if !focal_length.is_normal() {
+        parabola
+            .node_attr
+            .set_property("focal length", focal_length.into())?;
+        parabola
+            .node_attr
+            .set_property("collimating", collimating.into())?;
+        parabola
+            .node_attr
+            .set_property("oa angle", oa_angle.into())?;
+        if !oa_dir.x.is_finite() || !oa_dir.y.is_finite() || oa_dir.norm() < f64::EPSILON {
             return Err(OpossumError::Other(
-                "focal length must not be 0.0 and finite".into(),
+                "off-axis direction values must be finite and the vector norm non-zero".into(),
             ));
         }
-        if let Some(oa_angle) = oa_angle_opt {
-            if !oa_angle.is_finite() {
-                return Err(OpossumError::Other("off-axis angle and finite".into()));
-            }
-            if oa_angle.value.abs() >= f64::consts::PI {
-                return Err(OpossumError::Other(
-                    "off-axis angle must be smaller than 180°".into(),
-                ));
-            }
-        }
-        if let Some(oa_dir) = oa_dir_opt {
-            if !oa_dir.x.is_finite() || !oa_dir.y.is_finite() || oa_dir.norm() < f64::EPSILON {
-                return Err(OpossumError::Other(
-                    "off-axis direction values must be finite and the vector norm non-zero".into(),
-                ));
-            }
-        }
-        Ok(())
-    }
-    /// sets the properties of this parabola
-    fn set_parabola_properties(
-        &mut self,
-        focal_length: Length,
-        collimating: bool,
-        oa_angle_opt: Option<&Angle>,
-        oa_dir_opt: Option<&Vector2<f64>>,
-    ) -> OpmResult<()> {
-        Self::check_attributes(focal_length, oa_angle_opt, oa_dir_opt)?;
-
-        self.node_attr
-            .set_property("focal length", focal_length.into())?;
-        self.node_attr
-            .set_property("collimating", collimating.into())?;
-
-        if let Some(oa_angle) = oa_angle_opt {
-            self.node_attr
-                .set_property("oa angle", (*oa_angle).into())?;
-        }
-
-        if let Some(oa_dir) = oa_dir_opt {
-            self.node_attr
-                .set_property("oa direction", oa_dir.normalize().into())?;
-        }
-        Ok(())
+        parabola
+            .node_attr
+            .set_property("oa direction", oa_dir.normalize().into())?;
+        parabola.update_surfaces()?;
+        Ok(parabola)
     }
     fn calc_off_axis_isometry(&self) -> OpmResult<Isometry> {
         let (focal_length, oa_angle, oa_dir, collimating) = self.get_parabola_attributes()?;
@@ -846,56 +821,6 @@ mod test {
             )
             .is_err()
         );
-    }
-    #[test]
-    fn set_parabola_properties() {
-        let mut parabola = ParabolicMirror::default();
-
-        assert!(
-            parabola
-                .set_parabola_properties(meter!(10.), true, None, None)
-                .is_ok()
-        );
-        let Proptype::Length(focal_length) =
-            parabola.node_attr.get_property("focal length").unwrap()
-        else {
-            panic!()
-        };
-        assert_relative_eq!(focal_length.value, 10.);
-        let Proptype::Bool(collimate) = parabola.node_attr.get_property("collimating").unwrap()
-        else {
-            panic!()
-        };
-        assert!(collimate);
-
-        let Proptype::Angle(angle) = parabola.node_attr.get_property("oa angle").unwrap() else {
-            panic!()
-        };
-        assert_relative_eq!(angle.value, 0.);
-        let Proptype::Vec2(dir) = parabola.node_attr.get_property("oa direction").unwrap() else {
-            panic!()
-        };
-        assert_relative_eq!(*dir, Vector2::new(1., 0.));
-
-        assert!(
-            parabola
-                .set_parabola_properties(
-                    meter!(10.),
-                    true,
-                    Some(&degree!(45.)),
-                    Some(&Vector2::new(3., 2.))
-                )
-                .is_ok()
-        );
-
-        let Proptype::Angle(angle) = parabola.node_attr.get_property("oa angle").unwrap() else {
-            panic!()
-        };
-        assert_relative_eq!(angle.value, degree!(45.).value);
-        let Proptype::Vec2(dir) = parabola.node_attr.get_property("oa direction").unwrap() else {
-            panic!()
-        };
-        assert_relative_eq!(*dir, Vector2::new(3., 2.).normalize());
     }
     #[test]
     fn calc_off_axis_isometry() {

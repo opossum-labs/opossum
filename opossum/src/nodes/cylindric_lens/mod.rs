@@ -7,14 +7,19 @@ use crate::{
     meter, millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::Proptype,
+    properties::{
+        Proptype,
+        validators::{
+            and_validator, numeric_is_finite, numeric_is_not_nan, numeric_is_not_zero,
+            numeric_is_positive,
+        },
+    },
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
-use num::Zero;
 use opm_macros_lib::OpmNode;
 use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
@@ -55,23 +60,26 @@ impl Default for CylindricLens {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("cylindric lens");
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 "front curvature",
                 "radius of curvature of front surface",
+                and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 millimeter!(500.0).into(),
             )
             .unwrap();
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 "rear curvature",
                 "radius of curvature of rear surface",
+                and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 millimeter!(-500.0).into(),
             )
             .unwrap();
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 "center thickness",
                 "thickness of the lens in the center",
+                and_validator(vec![numeric_is_positive(), numeric_is_finite()]),
                 millimeter!(10.0).into(),
             )
             .unwrap();
@@ -108,32 +116,15 @@ impl CylindricLens {
     ) -> OpmResult<Self> {
         let mut cyl_lens = Self::default();
         cyl_lens.node_attr.set_name(name);
-
-        if front_curvature.is_zero() || front_curvature.is_nan() {
-            return Err(OpossumError::Other(
-                "front curvature must not be 0.0 or NaN".into(),
-            ));
-        }
         cyl_lens
             .node_attr
             .set_property("front curvature", front_curvature.into())?;
-        if rear_curvature.is_zero() || rear_curvature.is_nan() {
-            return Err(OpossumError::Other(
-                "rear curvature must not be 0.0 or NaN".into(),
-            ));
-        }
         cyl_lens
             .node_attr
             .set_property("rear curvature", rear_curvature.into())?;
-        if center_thickness.is_sign_negative() || !center_thickness.is_finite() {
-            return Err(OpossumError::Other(
-                "center thickness must be >= 0.0 and finite".into(),
-            ));
-        }
         cyl_lens
             .node_attr
             .set_property("center thickness", center_thickness.into())?;
-
         cyl_lens
             .node_attr
             .set_property("refractive index", refractive_index.to_enum().into())?;
@@ -252,6 +243,7 @@ mod test {
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
+    use num::Zero;
     #[test]
     fn default() {
         let mut node = CylindricLens::default();
@@ -284,12 +276,14 @@ mod test {
         let ct = millimeter!(11.0);
         let ref_index = RefrIndexConst::new(1.5).unwrap();
 
+        // validate center thickness
         assert!(CylindricLens::new("test", roc, roc, millimeter!(-0.1), &ref_index).is_err());
         assert!(CylindricLens::new("test", roc, roc, millimeter!(f64::NAN), &ref_index).is_err());
         assert!(
             CylindricLens::new("test", roc, roc, millimeter!(f64::INFINITY), &ref_index).is_err()
         );
 
+        // validate rear radius of curvature
         assert!(CylindricLens::new("test", roc, Length::zero(), ct, &ref_index).is_err());
         assert!(CylindricLens::new("test", roc, millimeter!(f64::NAN), ct, &ref_index).is_err());
         assert!(
@@ -299,6 +293,7 @@ mod test {
             CylindricLens::new("test", roc, millimeter!(f64::NEG_INFINITY), ct, &ref_index).is_ok()
         );
 
+        // validate front radius of curvature
         assert!(CylindricLens::new("test", Length::zero(), roc, ct, &ref_index).is_err());
         assert!(CylindricLens::new("test", millimeter!(f64::NAN), roc, ct, &ref_index).is_err());
         assert!(
@@ -307,6 +302,7 @@ mod test {
         assert!(
             CylindricLens::new("test", millimeter!(f64::NEG_INFINITY), roc, ct, &ref_index).is_ok()
         );
+
         let ref_index = RefrIndexConst::new(2.0).unwrap();
         let node = CylindricLens::new("test", roc, roc, ct, &ref_index).unwrap();
         assert_eq!(node.name(), "test");

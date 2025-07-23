@@ -30,7 +30,7 @@ impl Cylinder {
     pub fn new(radius: Length, isometry: Isometry) -> OpmResult<Self> {
         if !radius.is_normal() {
             return Err(OpossumError::Other(
-                "radius of curvature must be!=> 0.0 and finite".into(),
+                "radius of curvature must be != 0.0 and finite".into(),
             ));
         }
         Ok(Self { radius, isometry })

@@ -9,7 +9,10 @@ use opossum::{
     joule,
     lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     millimeter, nanometer,
-    nodes::{NodeGroup, ParaxialSurface, RayPropagationVisualizer, Source, ThinMirror, Wedge},
+    nodes::{
+        NodeGroup, NodeReference, ParaxialSurface, RayPropagationVisualizer, Source, ThinMirror,
+        Wedge,
+    },
     optic_node::{Alignable, OpticNode},
     position_distributions::Grid,
     properties::Proptype,
@@ -66,6 +69,18 @@ fn main() -> OpmResult<()> {
     let i_mm3 = scenery.add_node(ThinMirror::new("MM3").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
     let i_mm2 = scenery.add_node(ThinMirror::new("MM2").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
 
+    let mut mm2_r = NodeReference::from_node(&scenery.node(i_mm2)?);
+    mm2_r.set_inverted(true)?;
+    let i_mm2_r = scenery.add_node(mm2_r)?;
+
+    let mut mm3_r = NodeReference::from_node(&scenery.node(i_mm3)?);
+    mm3_r.set_inverted(true)?;
+    let i_mm3_r = scenery.add_node(mm3_r)?;
+
+    let mut l2_r = NodeReference::from_node(&scenery.node(i_l2)?);
+    l2_r.set_inverted(true)?;
+    let i_l2_r = scenery.add_node(l2_r)?;
+
     let mut amps = NodeGroup::new("Amps");
 
     let i_amp1 = amps.add_node(amp("Amp 1")?)?;
@@ -73,25 +88,34 @@ fn main() -> OpmResult<()> {
     let i_amp3 = amps.add_node(amp("Amp 3")?)?;
     let i_amp4 = amps.add_node(amp("Amp 4")?)?;
     let i_amp5 = amps.add_node(amp("Amp 5")?)?;
+    let i_amp6 = amps.add_node(amp("Amp 6")?)?;
 
     amps.connect_nodes(i_amp1, "output", i_amp2, "input", millimeter!(880.0))?;
     amps.connect_nodes(i_amp2, "output", i_amp3, "input", millimeter!(880.0))?;
     amps.connect_nodes(i_amp3, "output", i_amp4, "input", millimeter!(880.0))?;
     amps.connect_nodes(i_amp4, "output", i_amp5, "input", millimeter!(880.0))?;
+    amps.connect_nodes(i_amp5, "output", i_amp6, "input", millimeter!(880.0))?;
 
     amps.map_input_port(i_amp1, "input", "input")?;
-    amps.map_output_port(i_amp5, "output", "output")?;
+    amps.map_output_port(i_amp6, "output", "output")?;
 
     let mut main_amp = NodeGroup::new("Double-Pass Amps");
 
     let i_amps = main_amp.add_node(amps)?;
-    let i_mm1 = main_amp.add_node(ThinMirror::new("MM1"))?;
+    let i_mm1 = main_amp.add_node(ThinMirror::new("MM1").with_tilt(degree!(0.0, 0.5, 0.0))?)?;
+    let mut amps_r = NodeReference::from_node(&main_amp.node(i_amps)?);
+    amps_r.set_inverted(true)?;
+    let i_amps_r = main_amp.add_node(amps_r)?;
 
     main_amp.connect_nodes(i_amps, "output", i_mm1, "input_1", millimeter!(1200.0))?;
+    main_amp.connect_nodes(i_mm1, "output_1", i_amps_r, "output", millimeter!(1200.0))?;
     main_amp.map_input_port(i_amps, "input", "input")?;
-    main_amp.map_output_port(i_mm1, "output_1", "output")?;
+    main_amp.map_output_port(i_amps_r, "input", "output")?;
 
     let i_main_amp = scenery.add_node(main_amp)?;
+
+    let lens3 = ParaxialSurface::new("Input lens", millimeter!(7590.0))?;
+    let i_l3 = scenery.add_node(lens3)?;
 
     let mut ray_prop_vis = RayPropagationVisualizer::new("propagation", None)?;
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
@@ -103,8 +127,8 @@ fn main() -> OpmResult<()> {
         "output_1",
         i_l_pa_4_input,
         "input_1",
-        millimeter!(1110.0),
-    )?; // original 1310 mm
+        millimeter!(1310.0),
+    )?;
     scenery.connect_nodes(
         i_l_pa_4_input,
         "output_1",
@@ -145,8 +169,8 @@ fn main() -> OpmResult<()> {
         "output_1",
         i_per_oben,
         "input_1",
-        millimeter!(1250.0),
-    )?;
+        millimeter!(1000.0),
+    )?; // originally 1250.0 mm
     scenery.connect_nodes(
         i_per_oben,
         "output_1",
@@ -162,13 +186,18 @@ fn main() -> OpmResult<()> {
         millimeter!(1160.0),
     )?;
     scenery.connect_nodes(i_l1, "output_1", i_m1, "input_1", millimeter!(330.0))?;
-    scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(1120.0))?;
+    scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(870.0))?; // originally 1120.0mm
     scenery.connect_nodes(i_m2, "output_1", i_l2, "input_1", millimeter!(8030.0))?;
     scenery.connect_nodes(i_l2, "output_1", i_mm3, "input_1", millimeter!(800.0))?;
     scenery.connect_nodes(i_mm3, "output_1", i_mm2, "input_1", millimeter!(2200.0))?;
     scenery.connect_nodes(i_mm2, "output_1", i_main_amp, "input", millimeter!(1070.0))?;
 
-    scenery.connect_nodes(i_main_amp, "output", i_sd3, "input_1", millimeter!(0.0))?;
+    scenery.connect_nodes(i_main_amp, "output", i_mm2_r, "output_1", millimeter!(0.0))?;
+    scenery.connect_nodes(i_mm2_r, "input_1", i_mm3_r, "output_1", millimeter!(0.0))?;
+    scenery.connect_nodes(i_mm3_r, "input_1", i_l2_r, "output_1", millimeter!(0.0))?;
+    scenery.connect_nodes(i_l2_r, "input_1", i_l3, "input_1", millimeter!(15180.0))?;
+
+    scenery.connect_nodes(i_l3, "output_1", i_sd3, "input_1", millimeter!(800.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

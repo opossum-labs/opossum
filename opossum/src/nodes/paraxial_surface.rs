@@ -13,12 +13,15 @@ use crate::{
     millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::Proptype,
+    properties::{
+        Proptype,
+        validators::{and_validator, numeric_is_finite, numeric_is_not_zero},
+    },
     rays::Rays,
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
-use uom::{num_traits::Zero, si::f64::Length};
+use uom::si::f64::Length;
 
 use super::node_attr::NodeAttr;
 
@@ -54,7 +57,12 @@ impl Default for ParaxialSurface {
         let mut node_attr = NodeAttr::new("paraxial surface");
 
         node_attr
-            .create_property("focal length", "focal length", millimeter!(10.0).into())
+            .create_property_with_validator(
+                "focal length",
+                "focal length",
+                and_validator(vec![numeric_is_not_zero(), numeric_is_finite()]),
+                millimeter!(10.0).into(),
+            )
             .unwrap();
         let mut ps = Self { node_attr };
         ps.update_surfaces().unwrap();
@@ -68,11 +76,11 @@ impl ParaxialSurface {
     /// This function returns an error if
     ///  - the given `focal_length` is 0.0 or not finite.
     pub fn new(name: &str, focal_length: Length) -> OpmResult<Self> {
-        if focal_length.is_zero() || !focal_length.is_normal() {
-            return Err(OpossumError::Other(
-                "focal length must be != 0.0 and finite".into(),
-            ));
-        }
+        // if focal_length.is_zero() || !focal_length.is_normal() {
+        //     return Err(OpossumError::Other(
+        //         "focal length must be != 0.0 and finite".into(),
+        //     ));
+        // }
         let mut parsurf = Self::default();
         parsurf.node_attr.set_name(name);
         parsurf
