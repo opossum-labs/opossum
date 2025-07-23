@@ -16,12 +16,14 @@ use crate::{
     num_per_mm,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::Proptype,
+    properties::{
+        Proptype,
+        validators::{and_validator, numeric_is_finite, numeric_is_not_zero, numeric_is_positive},
+    },
     radian,
     rays::Rays,
     refractive_index::refr_index_vaccuum,
 };
-use approx::relative_eq;
 use nalgebra::Vector3;
 use num::ToPrimitive;
 use opm_macros_lib::OpmNode;
@@ -59,9 +61,14 @@ impl Default for ReflectiveGrating {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("reflective grating");
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 "line density",
                 "line density in 1/mm of this grating",
+                and_validator(vec![
+                    numeric_is_finite(),
+                    numeric_is_positive(),
+                    numeric_is_not_zero(),
+                ]),
                 Proptype::LinearDensity(num_per_mm!(1740.)),
             )
             .unwrap();
@@ -87,14 +94,6 @@ impl ReflectiveGrating {
     pub fn new(name: &str, line_density: LinearDensity, diffraction_order: i32) -> OpmResult<Self> {
         let mut grating = Self::default();
         grating.node_attr.set_name(name);
-        if !(line_density.value.is_finite()
-            && line_density.value.is_sign_positive()
-            && !relative_eq!(line_density.value, 0.))
-        {
-            return Err(OpossumError::Other(
-                "Only positive finite values are allowed for a grating line density".into(),
-            ));
-        }
         grating
             .node_attr
             .set_property("line density", Proptype::LinearDensity(line_density))?;
@@ -280,8 +279,6 @@ impl OpticNode for ReflectiveGrating {
 
 #[cfg(test)]
 mod test {
-    use core::f64;
-
     use super::*;
     use crate::{
         analyzers::RayTraceConfig, degree, joule, millimeter, nanometer,
@@ -289,6 +286,7 @@ mod test {
         spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
+    use core::f64;
     use nalgebra::vector;
     #[test]
     fn default() {

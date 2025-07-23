@@ -18,8 +18,6 @@ impl Clone for Box<dyn Validator> {
         self.dyn_clone()
     }
 }
-/// The main Validator trait. It requires `DynClone` and `Debug`.
-/// It has a single method to perform validation.
 pub trait Validator: DynClone + Debug + Send + Sync {
     /// Validate a given `Proptype`.
     ///

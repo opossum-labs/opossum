@@ -23,7 +23,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
-    properties::{Properties, Proptype},
+    properties::{Properties, Proptype, validators::numeric_in_range},
     rays::Rays,
     reporting::node_report::NodeReport,
 };
@@ -58,9 +58,14 @@ impl Default for RayPropagationVisualizer {
         "plane to project the ray positions onto, defined by the normal vector. default: y-z plane", 
                 Proptype::Vec3(Vector3::x())).unwrap();
 
-        node_attr.create_property("ray transparency", 
-        "transparency (alpha) value of the ray colors to be plotted. Must be in the interval [0.0,1.0]", 
-                0.4.into()).unwrap();
+        node_attr
+            .create_property_with_validator(
+                "ray transparency",
+                "transparency (alpha) value of the ray colors to be plotted",
+                numeric_in_range(0.0, 1.0),
+                0.4.into(),
+            )
+            .unwrap();
         let mut rpv = Self {
             light_data: None,
             node_attr,

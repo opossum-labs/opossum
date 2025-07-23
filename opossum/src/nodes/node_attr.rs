@@ -14,7 +14,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,
     optic_scenery_rsc::SceneryResources,
-    properties::{Properties, Proptype},
+    properties::{Properties, Proptype, validator::Validator},
     utils::geom_transformation::Isometry,
 };
 
@@ -136,6 +136,21 @@ impl NodeAttr {
         value: Proptype,
     ) -> OpmResult<()> {
         self.props.create(name, description, value)
+    }
+    /// Create a property (with validator) within this [`NodeAttr`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the property already exists or the validation fails with the given initial value.
+    pub fn create_property_with_validator(
+        &mut self,
+        name: &str,
+        description: &str,
+        validator: Box<dyn Validator>,
+        value: Proptype,
+    ) -> OpmResult<()> {
+        self.props
+            .create_with_validator(name, description, validator, value)
     }
     /// Returns a reference to the properties of this [`NodeAttr`].
     #[must_use]

@@ -17,13 +17,15 @@ use crate::{
     meter, millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::Proptype,
+    properties::{
+        Proptype,
+        validators::{and_validator, numeric_is_not_nan, numeric_is_not_zero},
+    },
     radian,
     rays::Rays,
     surface::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
-use num::Zero;
 use opm_macros_lib::OpmNode;
 use uom::si::f64::Length;
 
@@ -54,9 +56,10 @@ impl Default for ThinMirror {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("mirror");
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 "curvature",
                 "radius of curvature of the surface",
+                and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 millimeter!(f64::INFINITY).into(),
             )
             .unwrap();
@@ -101,11 +104,6 @@ impl ThinMirror {
     ///
     /// This function will return an error if the given radius of curvature is zero or not finite.
     pub fn with_curvature(mut self, curvature: Length) -> OpmResult<Self> {
-        if curvature.is_zero() || curvature.is_nan() {
-            return Err(OpossumError::Other(
-                "curvature must not be 0.0 or NaN".into(),
-            ));
-        }
         self.node_attr.set_property("curvature", curvature.into())?;
         self.update_surfaces()?;
         Ok(self)
@@ -268,6 +266,7 @@ mod test {
         utils::geom_transformation::Isometry,
     };
     use nalgebra::vector;
+    use num::Zero;
     #[test]
     fn default() {
         let node = ThinMirror::default();

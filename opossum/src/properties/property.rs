@@ -119,7 +119,7 @@ impl Property {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::properties::validators::f64_is_positive;
+    use crate::properties::validators::numeric_is_positive;
     #[test]
     fn prop_struct() {
         let prop = Property {
@@ -136,12 +136,16 @@ mod test {
     }
     #[test]
     fn new_with_validator() {
-        let prop = Property::new(1.0.into(), "my description".into(), Some(f64_is_positive()));
+        let prop = Property::new(
+            1.0.into(),
+            "my description".into(),
+            Some(numeric_is_positive()),
+        );
         assert!(prop.is_ok());
         let prop = Property::new(
             (-0.1).into(),
             "my description".into(),
-            Some(f64_is_positive()),
+            Some(numeric_is_positive()),
         );
         assert!(prop.is_err());
     }

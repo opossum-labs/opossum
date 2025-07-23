@@ -93,7 +93,9 @@ impl Properties {
             .props
             .get_mut(name) // Get mutable reference
             .ok_or_else(|| OpossumError::Properties(format!("property {name} does not exist")))?;
-        property.set_value(value)?; // set_value would take Proptype by value
+        property.set_value(value).map_err(|e| {
+            OpossumError::Properties(format!("Error setting property `{name}`: {e}"))
+        })?;
         Ok(())
     }
     /// Update [`Properties`] through another [`Properties`] input.
