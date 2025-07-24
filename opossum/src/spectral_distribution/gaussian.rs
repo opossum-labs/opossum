@@ -3,13 +3,13 @@ use uom::si::f64::Length;
 
 use super::SpectralDistribution;
 use crate::error::{OpmResult, OpossumError};
-use crate::meter;
 use crate::utils::griddata::linspace;
 use crate::utils::math_distribution_functions::gaussian;
+use crate::{meter, nanometer};
 use itertools::Itertools;
 use kahan::KahanSummator;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Copy)]
 pub struct Gaussian {
     wvl_range: (Length, Length),
     num_points: usize,
@@ -73,7 +73,128 @@ impl Gaussian {
             power,
         })
     }
+
+    /// Returns the start wavelength of the distribution range.
+    ///
+    /// This corresponds to the lower bound of the wavelength interval.
+    ///
+    /// # Returns
+    /// A [`Length`] value representing the start of the wavelength range.
+    #[must_use]
+    pub const fn wvl_start(&self) -> Length {
+        self.wvl_range.0
+    }
+
+    /// Sets the start wavelength of the distribution range.
+    ///
+    /// # Parameters
+    /// - `start`: A [`Length`] representing the new lower bound of the wavelength range.
+    pub fn set_wvl_start(&mut self, start: Length) {
+        self.wvl_range.0 = start;
+    }
+
+    /// Returns the end wavelength of the distribution range.
+    ///
+    /// This corresponds to the upper bound of the wavelength interval.
+    ///
+    /// # Returns
+    /// A [`Length`] value representing the end of the wavelength range.
+    #[must_use]
+    pub const fn wvl_end(&self) -> Length {
+        self.wvl_range.1
+    }
+
+    /// Sets the end wavelength of the distribution range.
+    ///
+    /// # Parameters
+    /// - `end`: A [`Length`] representing the new upper bound of the wavelength range.
+    pub fn set_wvl_end(&mut self, end: Length) {
+        self.wvl_range.1 = end;
+    }
+
+    /// Returns the number of discrete wavelength points used in the distribution.
+    ///
+    /// # Returns
+    /// A `usize` indicating how many spectral samples are generated.
+    #[must_use]
+    pub const fn num_points(&self) -> usize {
+        self.num_points
+    }
+
+    /// Sets the number of discrete wavelength points in the distribution.
+    ///
+    /// # Parameters
+    /// - `num_points`: The number of spectral samples to generate.
+    pub const fn set_num_points(&mut self, num_points: usize) {
+        self.num_points = num_points;
+    }
+
+    /// Returns the full width at half maximum (FWHM) of the Gaussian distribution.
+    ///
+    /// This controls the width of the spectral peak.
+    ///
+    /// # Returns
+    /// A [`Length`] value representing the FWHM.
+    #[must_use]
+    pub const fn fwhm(&self) -> Length {
+        self.fwhm
+    }
+
+    /// Sets the full width at half maximum (FWHM) of the Gaussian distribution.
+    ///
+    /// # Parameters
+    /// - `fwhm`: A [`Length`] specifying the width of the spectral peak.
+    pub fn set_fwhm(&mut self, fwhm: Length) {
+        self.fwhm = fwhm;
+    }
+
+    /// Returns the mean (center wavelength) of the Gaussian distribution.
+    ///
+    /// # Returns
+    /// A [`Length`] value representing the center wavelength (`μ`).
+    #[must_use]
+    pub const fn mu(&self) -> Length {
+        self.mu
+    }
+
+    /// Sets the mean (center wavelength) of the Gaussian distribution.
+    ///
+    /// # Parameters
+    /// - `mu`: A [`Length`] representing the new center wavelength.
+    pub fn set_mu(&mut self, mu: Length) {
+        self.mu = mu;
+    }
+
+    /// Returns the total power of the spectral distribution.
+    ///
+    /// # Returns
+    /// A `f64` value representing the power (intensity scaling factor).
+    #[must_use]
+    pub const fn power(&self) -> f64 {
+        self.power
+    }
+
+    /// Sets the total power of the spectral distribution.
+    ///
+    /// # Parameters
+    /// - `power`: A `f64` value representing the new power level.
+    pub const fn set_power(&mut self, power: f64) {
+        self.power = power;
+    }
 }
+
+impl Default for Gaussian {
+    fn default() -> Self {
+        Self {
+            wvl_range: (nanometer!(1000.), nanometer!(1100.)),
+            num_points: 50,
+            mu: nanometer!(1054.),
+            fwhm: nanometer!(10.),
+            power: 1.,
+        }
+    }
+}
+
 impl SpectralDistribution for Gaussian {
     fn generate(&self) -> OpmResult<Vec<(Length, f64)>> {
         let wvls = linspace(
@@ -95,6 +216,7 @@ impl SpectralDistribution for Gaussian {
             .collect_vec())
     }
 }
+
 impl From<Gaussian> for super::SpecDistType {
     fn from(g: Gaussian) -> Self {
         Self::Gaussian(g)

@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::{components::menu_bar::controls::sub_menu_item::MenuItem, CONTEXT_MENU};
+use crate::{components::context_menu::sub_menu_item::MenuItem, CONTEXT_MENU};
 use dioxus::prelude::*;
 use opossum_backend::nodes::NewRefNode;
 
@@ -27,6 +27,7 @@ impl CxMenu {
     pub const fn padding() -> f64 {
         2.
     }
+    #[allow(clippy::unnecessary_wraps)]
     #[must_use]
     pub const fn new(x: f64, y: f64, entries: Vec<(String, CxtCommand)>) -> Option<Self> {
         // MAIN_WINDOW_SIZE.read().as_ref().map(|rect| {

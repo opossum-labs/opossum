@@ -1,11 +1,12 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
     edges::edges_component::{
         EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
     },
     graph_editor::hooks::{use_center_graph, use_drag, use_drag_end, use_drag_start, use_zoom},
     graph_store::{use_graph_processor, GraphStore, GraphStoreAction},
-    node::NodeElement,
     nodes::Nodes,
+    NodeElement,
 };
 use dioxus::{
     html::geometry::{euclid::default::Point2D, PixelsSize},
@@ -27,6 +28,7 @@ pub enum NodeEditorCommand {
     LoadFile(PathBuf),
     SaveFile(PathBuf),
     AutoLayout,
+    UpdateActiveNode(Option<NodeElement>),
 }
 #[derive(Clone, Copy)]
 pub struct EditorState {
@@ -75,13 +77,15 @@ pub fn GraphEditor(
     let current_mouse_pos = use_signal(Point2D::default);
     let mut on_mounted: Signal<Option<std::rc::Rc<MountedData>>> = use_signal(|| None);
 
-    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(&graph_store);
+    let graph_processor: Coroutine<GraphStoreAction> =
+        use_graph_processor(&graph_store, node_selected);
     use_context_provider(|| graph_store);
     use_context_provider(|| graph_processor);
 
     let onwheel_handler = use_zoom(graph_shift_zoom, on_mounted);
-    let ondoubleclick_handler = use_center_graph(graph_store, editor_size, graph_shift_zoom);
-    let onmousedown_handler = use_drag_start(editor_status, current_mouse_pos);
+    let ondoubleclick_handler =
+        use_center_graph(graph_store, editor_size, graph_shift_zoom, node_selected);
+    let onmousedown_handler = use_drag_start(editor_status, current_mouse_pos, node_selected);
     let onmousemove_handler = use_drag(
         editor_status,
         current_mouse_pos,
@@ -111,7 +115,7 @@ pub fn GraphEditor(
                         (view_port_center.peek().x - shift.x) / zoom,
                         (view_port_center.peek().y - shift.y) / zoom,
                     );
-                    let new_node_info = NewNode::new(node_type.to_owned(), element_position);
+                    let new_node_info = NewNode::new(node_type.to_lowercase(), element_position);
                     graph_processor.send(GraphStoreAction::AddOpticNode(new_node_info));
                 }
                 NodeEditorCommand::AddNodeRef(new_ref_node) => {
@@ -130,6 +134,9 @@ pub fn GraphEditor(
                 }
                 NodeEditorCommand::SaveFile(path) => {
                     graph_processor.send(GraphStoreAction::SaveToFile(path.to_owned()));
+                }
+                NodeEditorCommand::UpdateActiveNode(node) => {
+                    graph_processor.send(GraphStoreAction::UpdateActiveNode(node.clone()));
                 }
             }
         }

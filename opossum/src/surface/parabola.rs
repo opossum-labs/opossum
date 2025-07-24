@@ -28,7 +28,7 @@ impl Parabola {
     /// # Errors
     ///
     /// This function will return an error if the focal length is 0.0 or not finite.
-    pub fn new(focal_length: Length, isometry: &Isometry) -> OpmResult<Self> {
+    pub fn new(focal_length: Length, isometry: Isometry) -> OpmResult<Self> {
         if !focal_length.is_normal() {
             return Err(OpossumError::Other(
                 "focal length must be != 0.0 and finite".into(),
@@ -36,7 +36,7 @@ impl Parabola {
         }
         Ok(Self {
             focal_length,
-            isometry: isometry.clone(),
+            isometry,
         })
     }
 }
@@ -111,8 +111,8 @@ impl GeoSurface for Parabola {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
-    fn set_isometry(&mut self, isometry: &Isometry) {
-        self.isometry = isometry.clone();
+    fn set_isometry(&mut self, isometry: Isometry) {
+        self.isometry = isometry;
     }
 
     fn name(&self) -> String {
@@ -131,14 +131,14 @@ mod test {
     use nalgebra::vector;
     #[test]
     fn new() {
-        assert!(Parabola::new(meter!(0.0), &Isometry::identity()).is_err());
-        assert!(Parabola::new(meter!(f64::NAN), &Isometry::identity()).is_err());
-        assert!(Parabola::new(meter!(f64::INFINITY), &Isometry::identity()).is_err());
-        assert!(Parabola::new(meter!(f64::NEG_INFINITY), &Isometry::identity()).is_err());
+        assert!(Parabola::new(meter!(0.0), Isometry::identity()).is_err());
+        assert!(Parabola::new(meter!(f64::NAN), Isometry::identity()).is_err());
+        assert!(Parabola::new(meter!(f64::INFINITY), Isometry::identity()).is_err());
+        assert!(Parabola::new(meter!(f64::NEG_INFINITY), Isometry::identity()).is_err());
     }
     #[test]
     fn intersect() {
-        let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
         let ray = Ray::new_collimated(meter!(-1.0, -1.0, -10.0), nanometer!(1000.0), joule!(1.0))
             .unwrap();
         let intersection = parabola.calc_intersect_and_normal_do(&ray).unwrap();
@@ -147,7 +147,7 @@ mod test {
     }
     #[test]
     fn intersect_ray_through_focus_concave() {
-        let parabola = Parabola::new(meter!(-1.0), &Isometry::identity()).unwrap();
+        let parabola = Parabola::new(meter!(-1.0), Isometry::identity()).unwrap();
         let direction = vector![0.0, 1.0, 1. - 0.25];
         let ray = Ray::new(
             meter!(0.0, 0.0, -1.0),
@@ -160,7 +160,7 @@ mod test {
     }
     // #[test]
     // fn intersect_ray_through_focus_convex() {
-    //     let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
+    //     let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
     //     let direction = vector![0.0, 0.05, -1.];
     //     let ray = Ray::new(
     //         meter!(0.0, 0.0, 1.0),
@@ -173,7 +173,7 @@ mod test {
     // }
     #[test]
     fn intersect_ray_through_focus_convex() {
-        let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
         let direction = vector![0.0, 0.5, 2.];
         let ray = Ray::new(
             meter!(0.0, -0.5, -1.0),
@@ -186,7 +186,7 @@ mod test {
     }
     #[test]
     fn intersect_touching() {
-        let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
         let direction = vector![0.0, 1.0, 0.0];
         let ray = Ray::new(
             meter!(0.0, -1.0, 0.0),
@@ -203,7 +203,7 @@ mod test {
     }
     #[test]
     fn intersect_not() {
-        let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
         let direction = vector![0.0, 1.0, 0.0];
         let ray = Ray::new(
             meter!(0.0, -1.0, -1.0),
@@ -226,7 +226,7 @@ mod test {
     }
     #[test]
     fn isometry() {
-        let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
         assert_eq!(
             parabola.isometry(),
             &Isometry::new_along_z(meter!(0.0)).unwrap()
@@ -234,8 +234,8 @@ mod test {
     }
     #[test]
     fn set_isometry() {
-        let mut parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
-        parabola.set_isometry(&Isometry::new_along_z(meter!(0.5)).unwrap());
+        let mut parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
+        parabola.set_isometry(Isometry::new_along_z(meter!(0.5)).unwrap());
         assert_eq!(
             parabola.isometry(),
             &Isometry::new_along_z(meter!(0.5)).unwrap()

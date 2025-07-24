@@ -1,5 +1,8 @@
 //! Circular, hexapolar distribution
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    millimeter,
+};
 
 use super::PositionDistribution;
 use nalgebra::{Point3, point};
@@ -8,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Circular, hexapolar distribution
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct Hexapolar {
     nr_of_rings: u8,
     radius: Length,
@@ -33,7 +36,63 @@ impl Hexapolar {
             radius,
         })
     }
+
+    /// Returns the radius of the hexapolar distribution.
+    ///
+    /// # Returns
+    ///
+    /// The radius as a `Length`.
+    #[must_use]
+    pub fn radius(&self) -> Length {
+        self.radius
+    }
+
+    /// Returns the number of rings in the hexapolar distribution.
+    ///
+    /// # Returns
+    ///
+    /// The number of rings as a `u8`.
+    #[must_use]
+    pub const fn nr_of_rings(&self) -> u8 {
+        self.nr_of_rings
+    }
+
+    /// Sets the radius of the hexapolar distribution.
+    ///
+    /// # Parameters
+    ///
+    /// * `radius` - The new radius as a `Length`.
+    ///
+    /// # Side Effects
+    ///
+    /// Updates the current radius.
+    pub fn set_radius(&mut self, radius: Length) {
+        self.radius = radius;
+    }
+
+    /// Sets the number of rings in the hexapolar distribution.
+    ///
+    /// # Parameters
+    ///
+    /// * `nr_of_rings` - The new number of rings as a `u8`.
+    ///
+    /// # Side Effects
+    ///
+    /// Updates the current number of rings.
+    pub const fn set_nr_of_rings(&mut self, nr_of_rings: u8) {
+        self.nr_of_rings = nr_of_rings;
+    }
 }
+
+impl Default for Hexapolar {
+    fn default() -> Self {
+        Self {
+            nr_of_rings: 7,
+            radius: millimeter!(5.),
+        }
+    }
+}
+
 impl PositionDistribution for Hexapolar {
     fn generate(&self) -> Vec<Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::new();

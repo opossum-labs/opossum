@@ -26,7 +26,7 @@ impl From<FluenceData> for Proptype {
     }
 }
 /// Struct to hold the fluence map information of a beam
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct FluenceData {
     /// peak fluence of the beam
     peak: Fluence,

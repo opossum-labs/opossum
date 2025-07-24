@@ -18,7 +18,7 @@ pub fn refr_index_vaccuum() -> RefractiveIndexType {
     RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap())
 }
 /// Constant refractive index model
-#[derive(Clone, Serialize, Deserialize, Debug, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, Debug, ToSchema, PartialEq, Copy)]
 pub struct RefrIndexConst {
     refractive_index: f64,
 }
@@ -36,6 +36,25 @@ impl RefrIndexConst {
         }
         Ok(Self { refractive_index })
     }
+
+    /// Get the refractive index value.
+    #[must_use]
+    pub const fn refractive_index(&self) -> f64 {
+        self.refractive_index
+    }
+
+    /// Set the refractive index value.
+    pub const fn set_refractive_index(&mut self, ref_ind: f64) {
+        self.refractive_index = ref_ind;
+    }
+}
+
+impl Default for RefrIndexConst {
+    fn default() -> Self {
+        Self {
+            refractive_index: 1.5,
+        }
+    }
 }
 
 impl RefractiveIndex for RefrIndexConst {
@@ -43,7 +62,7 @@ impl RefractiveIndex for RefrIndexConst {
         Ok(self.refractive_index)
     }
     fn to_enum(&self) -> super::RefractiveIndexType {
-        RefractiveIndexType::Const(self.clone())
+        RefractiveIndexType::Const(*self)
     }
 }
 impl From<RefrIndexConst> for RefractiveIndexType {

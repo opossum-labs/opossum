@@ -2,7 +2,7 @@
 pub mod property;
 pub mod proptype;
 pub mod validator;
-pub mod validators;
+// pub mod validators;
 
 use log::warn;
 pub use property::Property;
@@ -29,7 +29,7 @@ use crate::reporting::html_report::HtmlProperty;
 /// props.create("my float", "my floating point value", 3.14.into()).unwrap();
 /// props.set("my float", 2.71.into()).unwrap();
 /// ```
-#[derive(Default, Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
 pub struct Properties {
     props: BTreeMap<String, Property>,
@@ -64,7 +64,8 @@ impl Properties {
         &mut self,
         name: &str,
         description: &str,
-        validator: Box<dyn Validator>,
+        // validator: Box<dyn Validator>,
+        validator: Validator,
         value: Proptype,
     ) -> OpmResult<()> {
         if self.props.contains_key(name) {

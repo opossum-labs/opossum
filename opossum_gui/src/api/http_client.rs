@@ -52,6 +52,40 @@ impl HTTPClient {
             Err(format!("Error on post request on route: \"{route}\""))
         }
     }
+
+    /// Send a POST request to the given route using RON data
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the request fails (e.g. the route is not reachable)
+    /// - the response cannot be serialized into the expected type
+    pub async fn post_ron<
+        B: Serialize + DeserializeOwned + Clone,
+        R: Serialize + DeserializeOwned,
+    >(
+        &self,
+        route: &str,
+        body: B,
+    ) -> Result<R, String> {
+        if let Ok(serialized) = ron::ser::to_string(&body) {
+            let res = self
+                .client()
+                .post(self.url(route))
+                .header("Content-Type", "application/ron")
+                .body(serialized)
+                .send()
+                .await;
+            if let Ok(response) = res {
+                self.process_response_ron::<R>(response).await
+            } else {
+                Err(format!("Error on post request on route: \"{route}\""))
+            }
+        } else {
+            Err("Error serializing body using ron".to_string())
+        }
+    }
+
     /// Send a POST reqeust to the given route with the provided body.
     ///
     /// # Errors
@@ -162,7 +196,7 @@ impl HTTPClient {
     pub async fn get_raw(&self, route: &str) -> Result<String, String> {
         let res = self.client().get(self.url(route)).send().await;
         if let Ok(response) = res {
-            self.process_response_raw(response).await
+            self.process_response_ron(response).await
         } else {
             Err(format!("Error on get request from route: \"{route}\""))
         }

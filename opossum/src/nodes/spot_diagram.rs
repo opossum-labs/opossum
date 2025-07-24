@@ -109,9 +109,15 @@ impl OpticNode for SpotDiagram {
             for ray in rays {
                 transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
             }
-            props
-                .create("Spot diagram", "2D spot diagram", self.clone().into())
-                .unwrap();
+            if let Some(hit_map) = self
+                .ports()
+                .get_optic_surface(&"input_1".to_owned())
+                .map(super::super::surface::optic_surface::OpticSurface::hit_map)
+            {
+                props
+                    .create("Spot diagram", "2D spot diagram", hit_map.clone().into())
+                    .unwrap();
+            }
             if let Some(c) = transformed_rays.energy_weighted_centroid() {
                 props
                     .create(
@@ -217,11 +223,6 @@ impl AnalysisRayTrace for SpotDiagram {
     }
 }
 
-impl From<SpotDiagram> for Proptype {
-    fn from(value: SpotDiagram) -> Self {
-        Self::SpotDiagram(value)
-    }
-}
 impl Plottable for SpotDiagram {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params

@@ -3,7 +3,10 @@ use opossum::{
     analyzers::AnalyzerType,
     error::OpmResult,
     joule,
-    lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
+    lightdata::{
+        energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+        light_data_builder::LightDataBuilder,
+    },
     millimeter, nanometer,
     nodes::{BeamSplitter, NodeGroup, Source, Spectrometer, SpectrometerType},
     ray::SplittingConfig,
@@ -13,14 +16,15 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Multi Path / Multi Source");
-    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        vec![
-            (nanometer!(1000.0), joule!(0.5)),
-            (nanometer!(950.0), joule!(0.3)),
-            (nanometer!(1050.0), joule!(0.2)),
-        ],
-        nanometer!(0.5),
-    ));
+    let light_data_builder =
+        LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+            vec![
+                (nanometer!(1000.0), joule!(0.5)),
+                (nanometer!(950.0), joule!(0.3)),
+                (nanometer!(1050.0), joule!(0.2)),
+            ],
+            nanometer!(0.5),
+        )?));
     let src = Source::new("multi line source", light_data_builder);
     let i_src = scenery.add_node(src)?;
     let i_s1 = scenery.add_node(Spectrometer::new("Source 1", SpectrometerType::Ideal))?;
@@ -50,8 +54,7 @@ fn main() -> OpmResult<()> {
     let i_bs2 = scenery.add_node(bs2)?;
 
     let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        vec![(nanometer!(1020.0), joule!(1.0))],
-        nanometer!(0.5),
+        EnergyLaserLines::new(vec![(nanometer!(1020.0), joule!(1.0))], nanometer!(0.5))?,
     ));
     let src2 = Source::new("source 2", light_data_builder);
     let i_src2 = scenery.add_node(src2)?;

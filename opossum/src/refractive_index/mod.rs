@@ -1,6 +1,9 @@
 //! Module for handling the refractive index of an optical material.
 #![warn(missing_docs)]
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 use uom::si::f64::Length;
 
 pub mod refr_index_conrady;
@@ -16,9 +19,10 @@ pub use refr_index_sellmeier1::RefrIndexSellmeier1;
 
 use crate::error::{OpmResult, OpossumError};
 use crate::properties::Proptype;
+use crate::utils::default_from_name::DefaultFromName;
 
 /// Available models for the calculation of refractive index
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, EnumIter)]
 pub enum RefractiveIndexType {
     /// Trivial model returning a wavelength-independant constant
     Const(RefrIndexConst),
@@ -28,6 +32,14 @@ pub enum RefractiveIndexType {
     Schott(RefrIndexSchott),
     /// Conrady model
     Conrady(RefrIndexConrady),
+}
+
+impl DefaultFromName for RefractiveIndexType {}
+
+impl Default for RefractiveIndexType {
+    fn default() -> Self {
+        Self::Sellmeier1(RefrIndexSellmeier1::default())
+    }
 }
 
 impl RefractiveIndexType {
@@ -63,6 +75,17 @@ impl RefractiveIndexType {
 impl From<RefractiveIndexType> for Proptype {
     fn from(refr: RefractiveIndexType) -> Self {
         Self::RefractiveIndex(refr)
+    }
+}
+
+impl Display for RefractiveIndexType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Const(_) => write!(f, "Constant"),
+            Self::Sellmeier1(_) => write!(f, "Sellmeier equation"),
+            Self::Schott(_) => write!(f, "Schott equation"),
+            Self::Conrady(_) => write!(f, "Conrady equation"),
+        }
     }
 }
 /// All refractive index models must implement this trait.

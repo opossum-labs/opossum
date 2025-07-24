@@ -3,7 +3,9 @@ use opossum_backend::{usize_to_f64, AnalyzerType, PortType};
 use uuid::Uuid;
 mod graph_node_components;
 pub mod node_component;
-use crate::components::scenery_editor::constants::{HEADER_HEIGHT, NODE_WIDTH, PORT_VER_SPACING};
+use crate::components::scenery_editor::constants::{
+    BORDER_WIDTH, HEADER_HEIGHT, NODE_WIDTH, PORT_VER_SPACING,
+};
 
 use super::ports::ports_component::Ports;
 pub use node_component::Node;
@@ -22,6 +24,7 @@ const NODE_PARAXIAL: Asset = asset!("./assets/icons/node_paraxial.svg");
 const NODE_PROPAGATION: Asset = asset!("./assets/icons/node_propagation.svg");
 const NODE_SOURCE: Asset = asset!("./assets/icons/node_source.svg");
 const NODE_SPECTROMETER: Asset = asset!("./assets/icons/node_spectrometer.svg");
+const NODE_WAVEFRONT: Asset = asset!("./assets/icons/node_wavefront.svg");
 const NODE_SPOTDIAGRAM: Asset = asset!("./assets/icons/node_spotdiagram.svg");
 const NODE_UNKNOWN: Asset = asset!("./assets/icons/node_unknown.svg");
 const NODE_WEDGE: Asset = asset!("./assets/icons/node_wedge.svg");
@@ -35,7 +38,7 @@ pub const MIN_NODE_BODY_HEIGHT: f64 = NODE_WIDTH / GOLDEN_RATIO - HEADER_HEIGHT;
 // in the node body, so we need to add some padding
 pub const PORT_VER_PADDING: f64 = MIN_NODE_BODY_HEIGHT / 2.0;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum NodeType {
     Optical(String),
     Analyzer(AnalyzerType),
@@ -61,7 +64,7 @@ impl NodeType {
                 "source" => Some(NODE_SOURCE),
                 "spectrometer" => Some(NODE_SPECTROMETER),
                 "spot diagram" => Some(NODE_SPOTDIAGRAM),
-                // "wavefront monitor" => Some(NODE_UNKNOWN),
+                "wavefront monitor" => Some(NODE_WAVEFRONT),
                 "paraxial surface" => Some(NODE_PARAXIAL),
                 "ray propagation" => Some(NODE_PROPAGATION),
                 "fluence detector" => Some(NODE_FLUENCE),
@@ -74,8 +77,9 @@ impl NodeType {
         }
     }
 }
-#[derive(Clone, PartialEq, Default)]
+#[derive(Clone, PartialEq, Default, Debug)]
 pub struct NodeElement {
+    name: String,
     node_type: NodeType,
     id: Uuid,
     pos: Point2D<f64>,
@@ -85,8 +89,15 @@ pub struct NodeElement {
 
 impl NodeElement {
     #[must_use]
-    pub const fn new(node_type: NodeType, id: Uuid, pos: Point2D<f64>, ports: Ports) -> Self {
+    pub const fn new(
+        name: String,
+        node_type: NodeType,
+        id: Uuid,
+        pos: Point2D<f64>,
+        ports: Ports,
+    ) -> Self {
         Self {
+            name,
             node_type,
             pos,
             id,
@@ -113,7 +124,7 @@ impl NodeElement {
     #[must_use]
     pub fn name(&self) -> String {
         match &self.node_type {
-            NodeType::Optical(name) => name.clone(),
+            NodeType::Optical(_) => self.name.clone(),
             NodeType::Analyzer(analyzer_type) => format!("{analyzer_type}"),
         }
     }
@@ -129,7 +140,7 @@ impl NodeElement {
     pub fn rel_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
         let (x_pos, port_list) = match port_type {
             PortType::Input => (0.0, self.input_ports()),
-            PortType::Output => (NODE_WIDTH, self.output_ports()),
+            PortType::Output => (NODE_WIDTH + BORDER_WIDTH, self.output_ports()),
         };
         let port_index = port_list
             .iter()
@@ -142,8 +153,8 @@ impl NodeElement {
     pub fn abs_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
         let rel_pos = self.rel_port_position(port_type, port_name);
         Point2D::new(
-            self.pos.x + rel_pos.x,
-            self.pos.y + rel_pos.y + HEADER_HEIGHT,
+            self.pos.x + rel_pos.x + BORDER_WIDTH,
+            self.pos.y + rel_pos.y + HEADER_HEIGHT + BORDER_WIDTH / 2.,
         )
     }
     #[must_use]
@@ -165,5 +176,8 @@ impl NodeElement {
     }
     pub const fn set_z_index(&mut self, z_index: usize) {
         self.z_index = z_index;
+    }
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
     }
 }

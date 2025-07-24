@@ -8,9 +8,7 @@ use crate::{
     energy_distributions::EnergyDistribution,
     error::{OpmResult, OpossumError},
     fluence_distributions::FluenceDistribution,
-    joule,
-    lightdata::ray_data_builder::RayDataBuilder,
-    meter, micrometer, millimeter, nanometer,
+    joule, meter, micrometer, millimeter, nanometer,
     nodes::{
         FilterType, WaveFrontData, WaveFrontErrorMap,
         fluence_detector::{Fluence, fluence_data::FluenceData},
@@ -1586,11 +1584,7 @@ impl From<Vec<Ray>> for Rays {
         }
     }
 }
-impl From<Rays> for RayDataBuilder {
-    fn from(value: Rays) -> Self {
-        Self::Raw(value)
-    }
-}
+
 impl<'a> IntoIterator for &'a mut Rays {
     type IntoIter = std::slice::IterMut<'a, Ray>;
     type Item = &'a mut Ray;
@@ -2553,7 +2547,7 @@ mod test {
         .unwrap();
 
         let mut s = OpticSurface::default();
-        s.set_isometry(&Isometry::new_along_z(millimeter!(10.0)).unwrap());
+        s.set_isometry(Isometry::new_along_z(millimeter!(10.0)).unwrap());
         rays.refract_on_surface(
             &mut s,
             Some(&refr_index_vaccuum()),

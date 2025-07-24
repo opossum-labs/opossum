@@ -15,7 +15,10 @@ use opossum::{
     energy_distributions::General2DGaussian,
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, RayDataBuilder},
+    },
     millimeter, nanometer,
     nodes::{
         BeamSplitter, Dummy, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
@@ -68,20 +71,20 @@ fn main() -> OpmResult<()> {
     let a_1inch = Aperture::BinaryCircle(circle_config);
 
     // collimated source
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-        pos_dist: HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0., 0.))?.into(),
-        energy_dist: General2DGaussian::new(
-            joule!(150.0),
-            millimeter!(0., 0.),
-            millimeter!(60.6389113608, 60.6389113608),
-            5.,
-            radian!(0.),
-            false,
-        )?
-        .into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 0.5)])?
+    let light_data_builder =
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+            HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0., 0.))?.into(),
+            General2DGaussian::new(
+                joule!(150.0),
+                millimeter!(0., 0.),
+                millimeter!(60.6389113608, 60.6389113608),
+                5.,
+                radian!(0.),
+                false,
+            )?
             .into(),
-    });
+            LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 0.5)])?.into(),
+        )));
 
     let mut scenery = NodeGroup::new("HHT Sensor");
     let mut src = Source::new("Source", light_data_builder);

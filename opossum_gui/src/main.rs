@@ -14,6 +14,7 @@ const MAIN_CSS: Asset = asset!("./assets/main.css");
 const MDB_CSS: Asset = asset!("./assets/mdb.min.css");
 const MDB_JS: Asset = asset!("./assets/mdb.umd.min.js");
 const MDB_SUB_CSS: Asset = asset!("./assets/mdb_submenu.css");
+const MDB_ACC_CSS: Asset = asset!("./assets/mdb_accordion.css");
 
 fn read_icon() -> Option<Icon> {
     let icon_bytes: &[u8] = include_bytes!("../../opossum/logo/Logo_square.ico");
@@ -84,12 +85,10 @@ fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app(backend_handle: ProcessHandle) {
         use directories::ProjectDirs;
-        let data_dir =
-            if let Some(proj_dirs) = ProjectDirs::from("org", "OpossumLabs", "OpossumGui") {
-                proj_dirs.data_local_dir().to_path_buf()
-            } else {
-                std::env::current_dir().unwrap_or_default()
-            };
+        let data_dir = ProjectDirs::from("org", "OpossumLabs", "OpossumGui").map_or_else(
+            || std::env::current_dir().unwrap_or_default(),
+            |proj_dirs| proj_dirs.data_local_dir().to_path_buf(),
+        );
         let window = dioxus::desktop::WindowBuilder::new()
             //.with_decorations(true)
             .with_window_icon(read_icon())
@@ -132,6 +131,7 @@ fn MainApp() -> Element {
         document::Stylesheet { href: MAIN_CSS }
         document::Stylesheet { href: MDB_CSS }
         document::Stylesheet { href: MDB_SUB_CSS }
+        document::Stylesheet { href: MDB_ACC_CSS }
         document::Script { src: MDB_JS }
         App {}
     }

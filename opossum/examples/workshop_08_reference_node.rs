@@ -5,7 +5,10 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{PointSrc, RayDataBuilder},
+    },
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
     optic_node::{Alignable, OpticNode},
@@ -19,12 +22,12 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
 
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc {
-        pos_dist: Grid::new((millimeter!(0.0), millimeter!(5.0)), (1, 5))?.into(),
-        energy_dist: UniformDist::new(joule!(1.0))?.into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-        reference_length: millimeter!(75.0),
-    });
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
+        Grid::new((millimeter!(0.0), millimeter!(5.0)), (1, 5))?.into(),
+        UniformDist::new(joule!(1.0))?.into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        millimeter!(75.0),
+    )));
     let mut src = Source::new("point ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
 

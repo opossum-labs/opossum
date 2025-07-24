@@ -6,9 +6,13 @@ use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     aperture::Aperture,
     error::{OpmResult, OpossumError},
-    lightdata::{LightData, light_data_builder::LightDataBuilder},
+    lightdata::{
+        LightData,
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder},
+    },
     nodes::{
-        FilterType, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
+        FilterType, Metertype, SpectrometerType, WaveFrontData,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity,
@@ -16,6 +20,7 @@ use crate::{
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
+    spectrum::Spectrum,
     surface::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     utils::{
         geom_transformation::Isometry,
@@ -29,7 +34,7 @@ use tinytemplate::TinyTemplate;
 use uom::si::{
     Dimension, Quantity, Unit, Units,
     energy::joule,
-    f64::{Energy, Length},
+    f64::{Energy, Length, LinearNumberDensity},
     length::meter,
     radiant_exposure::joule_per_square_centimeter,
 };
@@ -53,8 +58,8 @@ thread_local! {
     });
 }
 
-#[non_exhaustive]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+// #[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 /// The type of the [`Property`](crate::properties::Property).
 pub enum Proptype {
     /// A string property
@@ -80,9 +85,7 @@ pub enum Proptype {
     /// A property for storing an optical [`Aperture`].
     Aperture(Aperture),
     /// A property for storing a [`Spectrum`](crate::spectrum::Spectrum).
-    Spectrometer(Spectrometer),
-    /// This property stores optical [`Rays`](crate::rays::Rays)
-    SpotDiagram(SpotDiagram),
+    Spectrum(Spectrum),
     /// This property stores the fluence information [`FluenceData`]
     FluenceData(FluenceData),
     /// This property stores the fluence estimator strategy [`FluenceEstimator`]
@@ -104,6 +107,8 @@ pub enum Proptype {
     WfLambda(f64, Length),
     /// a geometrical length
     Length(Length),
+    /// a curvature
+    Curvature(Length),
     /// an optional length parameter. used, e.g., for the alignment wavelength of the source
     LengthOption(Option<Length>),
     /// an energy value
@@ -143,8 +148,7 @@ impl Proptype {
                     template_engine.render("simple", &value.to_string())
                 }
                 Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
-                Self::Spectrometer(_)
-                | Self::SpotDiagram(_)
+                Self::Spectrum(_)
                 | Self::HitMap(_)
                 | Self::RayPositionHistory(_)
                 | Self::GhostFocusHistory(_) => {
@@ -242,11 +246,67 @@ impl From<Angle> for Proptype {
         Self::Angle(value)
     }
 }
+
+impl From<Option<Length>> for Proptype {
+    fn from(value: Option<Length>) -> Self {
+        Self::LengthOption(value)
+    }
+}
+
+impl From<Isometry> for Proptype {
+    fn from(value: Isometry) -> Self {
+        Self::Isometry(Some(value))
+    }
+}
+
+impl From<LinearNumberDensity> for Proptype {
+    fn from(val: LinearNumberDensity) -> Self {
+        Self::LinearDensity(val)
+    }
+}
+
+impl From<FluenceEstimator> for Proptype {
+    fn from(val: FluenceEstimator) -> Self {
+        Self::FluenceEstimator(val)
+    }
+}
+
 impl From<Vector2<f64>> for Proptype {
     fn from(value: Vector2<f64>) -> Self {
         Self::Vec2(value)
     }
 }
+
+impl From<CollimatedSrc> for Proptype {
+    fn from(val: CollimatedSrc) -> Self {
+        Self::LightDataBuilder(Some(LightDataBuilder::Geometric(
+            RayDataBuilder::Collimated(val),
+        )))
+    }
+}
+
+impl From<PointSrc> for Proptype {
+    fn from(val: PointSrc) -> Self {
+        Self::LightDataBuilder(Some(LightDataBuilder::Geometric(RayDataBuilder::PointSrc(
+            val,
+        ))))
+    }
+}
+
+impl From<ImageSrc> for Proptype {
+    fn from(val: ImageSrc) -> Self {
+        Self::LightDataBuilder(Some(LightDataBuilder::Geometric(RayDataBuilder::Image(
+            val,
+        ))))
+    }
+}
+
+impl From<LightDataBuilder> for Proptype {
+    fn from(val: LightDataBuilder) -> Self {
+        Self::LightDataBuilder(Some(val))
+    }
+}
+
 /// Generate a string suffix for an ordinal number
 #[must_use]
 pub fn count_str(i: usize) -> String {
@@ -377,12 +437,6 @@ mod test {
                 .to_html("id", "property_name")
                 .unwrap(),
             "Ocean Optics HR2000".to_string()
-        );
-        assert_eq!(
-            Proptype::SpotDiagram(SpotDiagram::default())
-                .to_html("id", "property_name")
-                .unwrap(),
-            "<img src=\"data/id_property_name.svg\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()
         );
         assert_eq!(
             Proptype::WaveFrontData(WaveFrontData::default())

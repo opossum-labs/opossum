@@ -40,7 +40,7 @@ use std::{collections::HashMap, ops::Range};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 /// Storage struct for `RaysHitMap` on a surface from a single bounce
 pub struct BouncedHitMap {
     hit_map: HashMap<Uuid, RaysHitMap>,
@@ -78,7 +78,7 @@ impl BouncedHitMap {
 
 /// Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
 /// [`OpticSurface`](crate::surface::optic_surface::OpticSurface).
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HitMap {
     /// Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle
     hit_map: Vec<BouncedHitMap>,
@@ -405,6 +405,7 @@ impl From<HitMap> for Proptype {
         Self::HitMap(value)
     }
 }
+
 impl Plottable for HitMap {
     fn get_plot_series(
         &self,

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::components::{
     context_menu::cx_menu::{ContextMenu, CxtCommand},
     logger::logger_component::Logger,
@@ -6,6 +8,30 @@ use crate::components::{
     scenery_editor::{GraphEditor, NodeEditorCommand, NodeElement},
 };
 use dioxus::prelude::*;
+// use crate::{api,HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
+// use std::path::PathBuf;
+// use opossum_backend::{create_data_dir, create_report_and_data_files};
+
+// pub async fn analyze_setup(path: PathBuf) {
+//     match api::analyze(&HTTP_API_CLIENT()).await {
+//         Ok(reports) => {
+//             if create_data_dir(&path).is_err() {
+//                 OPOSSUM_UI_LOGS
+//                     .write()
+//                     .add_log("Error while creating report-data directory");
+//             }
+//             // create_dot_file(&opossum_args.report_directory, document.scenery())?;
+//             for report in reports.iter().enumerate() {
+//                 if create_report_and_data_files(&path, report.1, report.0).is_err() {
+//                     OPOSSUM_UI_LOGS
+//                         .write()
+//                         .add_log("Error while creating report and data files");
+//                 }
+//             }
+//         }
+//         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+//     }
+// }
 
 #[component]
 pub fn App() -> Element {
@@ -13,6 +39,7 @@ pub fn App() -> Element {
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
     let selected_node = use_signal(|| None::<NodeElement>);
+    let project_directory = use_signal(|| Path::new("./").to_path_buf());
 
     use_effect(move || {
         let cxt_command = cxt_command.read();
@@ -22,6 +49,10 @@ pub fn App() -> Element {
                     .set(Some(NodeEditorCommand::AddNodeRef(new_ref_node.clone()))),
             }
         }
+    });
+
+    use_effect(move || {
+        node_editor_command.set(Some(NodeEditorCommand::UpdateActiveNode(selected_node())));
     });
     use_effect(move || {
         let menu_item = menu_item_selected.read();
@@ -58,7 +89,9 @@ pub fn App() -> Element {
                 }
                 MenuSelection::WinClose => {
                     println!("App::Window close selected");
-                }
+                } // MenuSelection::RunProject => {
+                  //     spawn(async move { analyze_setup(project_directory()).await });
+                  // }
             }
         }
     });
@@ -67,7 +100,7 @@ pub fn App() -> Element {
         div { class: "container-fluid text-bg-dark",
             div { class: "row",
                 div { class: "col",
-                    MenuBar { menu_item_selected }
+                    MenuBar { menu_item_selected, project_directory }
                 }
             }
             div { class: "row main-content-row",

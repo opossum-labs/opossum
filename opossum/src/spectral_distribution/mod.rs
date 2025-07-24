@@ -1,6 +1,9 @@
 //! Module for handling spectral distributions
-use crate::error::OpmResult;
+use std::fmt::Display;
+
+use crate::{error::OpmResult, utils::default_from_name::DefaultFromName};
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 use uom::si::f64::Length;
 
 pub mod gaussian;
@@ -15,7 +18,7 @@ pub trait SpectralDistribution {
     fn generate(&self) -> OpmResult<Vec<(Length, f64)>>;
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
 /// Enum representing different types of spectral distributions
 pub enum SpecDistType {
     Gaussian(gaussian::Gaussian),
@@ -31,5 +34,22 @@ impl SpecDistType {
             Self::Gaussian(g) => g,
             Self::LaserLines(l) => l,
         }
+    }
+}
+impl DefaultFromName for SpecDistType {}
+
+impl Default for SpecDistType {
+    fn default() -> Self {
+        Self::Gaussian(Gaussian::default())
+    }
+}
+
+impl Display for SpecDistType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dist_string = match self {
+            Self::LaserLines(_) => "Laser Lines",
+            Self::Gaussian(_) => "Gaussian",
+        };
+        write!(f, "{dist_string}")
     }
 }

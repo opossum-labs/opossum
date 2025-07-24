@@ -7,6 +7,7 @@ use approx::relative_ne;
 use nalgebra::{MatrixXx3, Point3, Rotation3, Vector3, vector};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
@@ -29,7 +30,7 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
 /// Configuration for splitting a [`Ray`] into multiple parts.
 ///
 /// This enum defines how a ray is split, either by a fixed ratio or by a wavelength-dependent spectrum.
@@ -53,6 +54,15 @@ impl SplittingConfig {
         match self {
             Self::Ratio(r) => (0.0..=1.0).contains(r),
             Self::Spectrum(s) => s.is_transmission_spectrum(),
+        }
+    }
+}
+
+impl Display for SplittingConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ratio(_) => write!(f, "RatioSplit"),
+            Self::Spectrum(_) => write!(f, "SpectrumSplit"),
         }
     }
 }
@@ -1214,7 +1224,7 @@ mod test {
         )
         .unwrap();
         let mut s = OpticSurface::default();
-        s.set_isometry(&isometry);
+        s.set_isometry(isometry);
         s.set_coating(CoatingType::ConstantR { reflectivity });
         assert!(
             ray.refract_on_surface(
@@ -1304,7 +1314,7 @@ mod test {
         )
         .unwrap();
         let mut s = OpticSurface::default();
-        s.set_isometry(&isometry);
+        s.set_isometry(isometry);
         ray.refract_on_surface(&mut s, None, Uuid::new_v4(), &MissedSurfaceStrategy::Stop)
             .unwrap();
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
@@ -1329,7 +1339,7 @@ mod test {
         )
         .unwrap();
         let mut s = OpticSurface::default();
-        s.set_isometry(&isometry);
+        s.set_isometry(isometry);
         ray.refract_on_surface(
             &mut s,
             Some(1.5),
@@ -1358,7 +1368,7 @@ mod test {
         )
         .unwrap();
         let mut s = OpticSurface::default();
-        s.set_isometry(&isometry);
+        s.set_isometry(isometry);
         assert!(
             ray.refract_on_surface(
                 &mut s,
@@ -1440,7 +1450,7 @@ mod test {
         )
         .unwrap();
         let mut s = OpticSurface::default();
-        s.set_isometry(&isometry);
+        s.set_isometry(isometry);
         let reflected = ray
             .refract_on_surface(
                 &mut s,

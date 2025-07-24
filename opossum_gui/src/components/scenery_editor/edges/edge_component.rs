@@ -66,15 +66,11 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
         foreignObject {
             x: distance_field_position.x,
             y: distance_field_position.y,
-            width: EDGE_DISTANCE_FIELD_WIDTH + 50.0,
-            height: EDGE_DISTANCE_FIELD_HEIGHT + 10.0,
+            width: EDGE_DISTANCE_FIELD_WIDTH,
+            height: EDGE_DISTANCE_FIELD_HEIGHT,
             input {
                 class: "form-control",
-                style: format!(
-                    "text-align: right; width: {}pt; height: {}pt",
-                    EDGE_DISTANCE_FIELD_WIDTH,
-                    EDGE_DISTANCE_FIELD_HEIGHT,
-                ),
+                style: "text-align: center; width: 100%; height: 100%",
                 r#type: "number",
                 value: edge.distance(),
                 onchange: {
