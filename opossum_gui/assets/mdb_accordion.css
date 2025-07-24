@@ -182,3 +182,8 @@ input[type=number] {
   padding-left:0.25rem;
   font-size: small;
 }
+
+.form-floating  {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

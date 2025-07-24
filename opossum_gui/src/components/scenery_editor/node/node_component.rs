@@ -2,6 +2,7 @@
 use super::NodeElement;
 use crate::components::context_menu::cx_menu::CxMenu;
 use crate::components::context_menu::cx_menu::CxtCommand;
+use crate::components::scenery_editor::constants::BORDER_WIDTH;
 use crate::components::scenery_editor::graph_store::GraphStoreAction;
 use crate::components::scenery_editor::{
     graph_editor::graph_editor_component::{DragStatus, EditorState},
@@ -43,7 +44,14 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
             tabindex: 0, // necessary to allow to receive keyboard focus
             class: "node {is_active}",
             draggable: false,
-            style: format!("left: {}px; top: {}px; z-index: {z_index};", position.x, position.y),
+            style: format!(
+                "left: {}px; top: {}px; transform: translate({}px, {}px), z-index: {z_index}; border-width:{}px",
+                position.x.trunc(),
+                position.y.trunc(),
+                position.x.fract(),
+                position.y.fract(),
+                BORDER_WIDTH,
+            ),
             onmousedown: move |event: MouseEvent| {
                 editor_status.drag_status.set(DragStatus::Node(id));
                 let previously_selected = graph_store().active_node();
@@ -87,12 +95,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                         draggable: false,
                         style: format!("height: {}px;", node.node_body_height()),
                         if node_icon.is_some() {
-                            img {
-                                src: node_icon.unwrap(),
-                                width: "50px",
-                                style: "display: block; margin: auto;",
-                                draggable: false,
-                            }
+                            img { src: node_icon.unwrap(), draggable: false }
                         }
                         NodePorts { node: node.clone() }
                     }

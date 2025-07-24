@@ -1,4 +1,5 @@
 use super::NodeType;
+use crate::components::scenery_editor::constants::BORDER_WIDTH;
 use crate::components::scenery_editor::node::{HEADER_HEIGHT, NODE_WIDTH};
 use dioxus::prelude::*;
 use opossum_backend::usize_to_f64;
@@ -16,7 +17,7 @@ pub fn GraphNodeContent(node_name: String, node_type: NodeType, node_body: Eleme
             class: "node-header {node_type}",
             pointer_events: "none",
             style: format!(
-                "width: {NODE_WIDTH}px; height: {HEADER_HEIGHT}px; font-size: {font_size}pt;",
+                "width: {NODE_WIDTH}px; height: {HEADER_HEIGHT}px; font-size: {font_size}pt; border-bottom-width:{BORDER_WIDTH}px",
             ),
             {node_name}
         }

@@ -3,7 +3,9 @@ use opossum_backend::{usize_to_f64, AnalyzerType, PortType};
 use uuid::Uuid;
 mod graph_node_components;
 pub mod node_component;
-use crate::components::scenery_editor::constants::{HEADER_HEIGHT, NODE_WIDTH, PORT_VER_SPACING};
+use crate::components::scenery_editor::constants::{
+    BORDER_WIDTH, HEADER_HEIGHT, NODE_WIDTH, PORT_VER_SPACING,
+};
 
 use super::ports::ports_component::Ports;
 pub use node_component::Node;
@@ -138,7 +140,7 @@ impl NodeElement {
     pub fn rel_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
         let (x_pos, port_list) = match port_type {
             PortType::Input => (0.0, self.input_ports()),
-            PortType::Output => (NODE_WIDTH, self.output_ports()),
+            PortType::Output => (NODE_WIDTH + BORDER_WIDTH, self.output_ports()),
         };
         let port_index = port_list
             .iter()
@@ -151,8 +153,8 @@ impl NodeElement {
     pub fn abs_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
         let rel_pos = self.rel_port_position(port_type, port_name);
         Point2D::new(
-            self.pos.x + rel_pos.x,
-            self.pos.y + rel_pos.y + HEADER_HEIGHT,
+            self.pos.x + rel_pos.x + BORDER_WIDTH,
+            self.pos.y + rel_pos.y + HEADER_HEIGHT + BORDER_WIDTH / 2.,
         )
     }
     #[must_use]

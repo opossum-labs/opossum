@@ -100,10 +100,22 @@ body {
 .node-body {
     position: relative;
 }
+.node-body img{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    height: 45px;
+    width: 45px;
+}
 
 .node-header {
     position: relative;
-    border-bottom: 1px solid rgb(120, 120, 120);
+    border-top: 0;
+    border-left: 0;
+    border-right: 0;
+    border-style:  solid ;
+    border-color: rgb(120, 120, 120);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -136,10 +148,11 @@ body {
     position: absolute;
     outline: none;
     /* prevents a white frame if node receives keyboard focus */
-    border: 1px solid rgb(120, 120, 120);
+    border-color: rgb(120, 120, 120);
+    border-style: solid;
     box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3);
     border-radius: 10px 10px 4px 4px;
-    background-color: rgb(39, 39, 39);
+    background-color: rgba(39, 39, 39,1);
     user-select: none;
 }
 
@@ -155,9 +168,9 @@ body {
 .port {
     position: absolute;
     border-radius: 30%;
-    border: 1px solid rgb(120, 120, 120);
+    border-color: rgb(120, 120, 120);
+    border-style: solid;
     cursor: pointer;
-    transform: translate(-50%, -50%);
 }
 
 .port:hover {
@@ -165,11 +178,11 @@ body {
 }
 
 .output-port {
-    background-color: rgba(206, 255, 208);
+    background-color: rgba(206, 255, 208,1);
 }
 
 .input-port {
-    background-color: rgb(197, 216, 255);
+    background-color: rgba(197, 216, 255,1);
 }
 
 .log-container {

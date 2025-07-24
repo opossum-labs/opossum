@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use opossum_backend::PortType;
 
 use crate::components::scenery_editor::{
-    constants::{PORT_HEIGHT, PORT_WIDTH},
+    constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
     edges::edges_component::{EdgePort, NewEdgeCreationStart},
     graph_editor::graph_editor_component::{DragStatus, EditorState},
     node::NodeElement,
@@ -46,11 +46,13 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
             class: "port {port_class}",
             title: "{port_name}",
             style: format!(
-                "left: {}px; top: {}px; width: {}px; height: {}px;",
+                "left: {}px; top: {}px; width: {}px; height: {}px; border-width: {}px; transform: translateX(-50%) translateX({}px) translateY(-50%)",
                 rel_port_position.x,
                 rel_port_position.y,
                 PORT_WIDTH,
                 PORT_HEIGHT,
+                BORDER_WIDTH,
+                -BORDER_WIDTH / 2.,
             ),
             draggable: false,
             onmousedown: {
