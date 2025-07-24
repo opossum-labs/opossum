@@ -23,7 +23,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
-    properties::{Properties, Proptype, validators::numeric_in_range},
+    properties::{Properties, Proptype, validator::Validator},
     rays::Rays,
     reporting::node_report::NodeReport,
 };
@@ -62,7 +62,8 @@ impl Default for RayPropagationVisualizer {
             .create_property_with_validator(
                 "ray transparency",
                 "transparency (alpha) value of the ray colors to be plotted",
-                numeric_in_range(0.0, 1.0),
+                Validator::NumericInRange { min: 0., max: 1. },
+                // numeric_in_range(0.0, 1.0),
                 0.4.into(),
             )
             .unwrap();

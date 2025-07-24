@@ -13,10 +13,7 @@ use crate::{
     millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::{
-        Proptype,
-        validators::{and_validator, numeric_is_finite, numeric_is_not_zero},
-    },
+    properties::{Proptype, validator::Validator},
     rays::Rays,
 };
 use log::warn;
@@ -60,7 +57,10 @@ impl Default for ParaxialSurface {
             .create_property_with_validator(
                 "focal length",
                 "focal length",
-                and_validator(vec![numeric_is_not_zero(), numeric_is_finite()]),
+                Validator::AndValidator {
+                    validators: vec![Validator::NumericIsFinite, Validator::NumericIsNotZero],
+                },
+                // and_validator(vec![numeric_is_not_zero(), numeric_is_finite()]),
                 millimeter!(10.0).into(),
             )
             .unwrap();

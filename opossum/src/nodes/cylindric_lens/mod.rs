@@ -7,13 +7,7 @@ use crate::{
     meter, millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::{
-        Proptype,
-        validators::{
-            and_validator, numeric_is_finite, numeric_is_not_nan, numeric_is_not_zero,
-            numeric_is_positive,
-        },
-    },
+    properties::{Proptype, validator::Validator},
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
@@ -63,7 +57,10 @@ impl Default for CylindricLens {
             .create_property_with_validator(
                 "front curvature",
                 "radius of curvature of front surface",
-                and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
+                Validator::AndValidator {
+                    validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
+                },
+                // and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 Proptype::Curvature(millimeter!(500.0)),
             )
             .unwrap();
@@ -71,7 +68,10 @@ impl Default for CylindricLens {
             .create_property_with_validator(
                 "rear curvature",
                 "radius of curvature of rear surface",
-                and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
+                Validator::AndValidator {
+                    validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
+                },
+                // and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 Proptype::Curvature(millimeter!(-500.0)),
             )
             .unwrap();
@@ -79,7 +79,10 @@ impl Default for CylindricLens {
             .create_property_with_validator(
                 "center thickness",
                 "thickness of the lens in the center",
-                and_validator(vec![numeric_is_positive(), numeric_is_finite()]),
+                Validator::AndValidator {
+                    validators: vec![Validator::NumericIsPositive, Validator::NumericIsFinite],
+                },
+                // and_validator(vec![numeric_is_positive(), numeric_is_finite()]),
                 millimeter!(10.0).into(),
             )
             .unwrap();

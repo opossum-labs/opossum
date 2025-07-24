@@ -2,7 +2,7 @@
 pub mod property;
 pub mod proptype;
 pub mod validator;
-pub mod validators;
+// pub mod validators;
 
 use log::warn;
 pub use property::Property;
@@ -64,7 +64,8 @@ impl Properties {
         &mut self,
         name: &str,
         description: &str,
-        validator: Box<dyn Validator>,
+        // validator: Box<dyn Validator>,
+        validator: Validator,
         value: Proptype,
     ) -> OpmResult<()> {
         if self.props.contains_key(name) {

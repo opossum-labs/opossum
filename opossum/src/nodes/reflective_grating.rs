@@ -16,10 +16,7 @@ use crate::{
     num_per_mm,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::{
-        Proptype,
-        validators::{and_validator, numeric_is_finite, numeric_is_not_zero, numeric_is_positive},
-    },
+    properties::{Proptype, validator::Validator},
     radian,
     rays::Rays,
     refractive_index::refr_index_vaccuum,
@@ -64,11 +61,18 @@ impl Default for ReflectiveGrating {
             .create_property_with_validator(
                 "line density",
                 "line density in 1/mm of this grating",
-                and_validator(vec![
-                    numeric_is_finite(),
-                    numeric_is_positive(),
-                    numeric_is_not_zero(),
-                ]),
+                Validator::AndValidator {
+                    validators: vec![
+                        Validator::NumericIsFinite,
+                        Validator::NumericIsNotZero,
+                        Validator::NumericIsPositive,
+                    ],
+                },
+                // and_validator(vec![
+                //     numeric_is_finite(),
+                //     numeric_is_positive(),
+                //     numeric_is_not_zero(),
+                // ]),
                 Proptype::LinearDensity(num_per_mm!(1740.)),
             )
             .unwrap();

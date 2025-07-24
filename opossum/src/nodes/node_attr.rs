@@ -146,7 +146,8 @@ impl NodeAttr {
         &mut self,
         name: &str,
         description: &str,
-        validator: Box<dyn Validator>,
+        // validator: Box<dyn Validator>,
+        validator: Validator,
         value: Proptype,
     ) -> OpmResult<()> {
         self.props

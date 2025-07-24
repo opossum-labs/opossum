@@ -17,10 +17,7 @@ use crate::{
     meter, millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::{
-        Proptype,
-        validators::{and_validator, numeric_is_not_nan, numeric_is_not_zero},
-    },
+    properties::{Proptype, validator::Validator},
     radian,
     rays::Rays,
     surface::{Plane, Sphere, geo_surface::GeoSurfaceRef},
@@ -59,7 +56,10 @@ impl Default for ThinMirror {
             .create_property_with_validator(
                 "curvature",
                 "radius of curvature of the surface",
-                and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
+                // and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
+                Validator::AndValidator {
+                    validators: vec![Validator::NumericIsNotNaN, Validator::NumericIsNotZero],
+                },
                 Proptype::Curvature(millimeter!(f64::INFINITY)),
             )
             .unwrap();

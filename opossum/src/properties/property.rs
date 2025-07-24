@@ -11,14 +11,15 @@ use std::{mem, path::Path};
 /// (optical) Property
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a validator.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(transparent)]
 pub struct Property {
     prop: Proptype,
     #[serde(skip)]
     description: String,
     #[serde(skip)]
-    validator: Option<Box<dyn Validator>>,
+    validator: Option<Validator>,
+    // validator: Option<Box<dyn Validator>>,
 }
 impl Property {
     /// Create a new `Property`.
@@ -29,7 +30,8 @@ impl Property {
     pub fn new(
         prop: Proptype,
         description: String,
-        validator: Option<Box<dyn Validator>>,
+        // validator: Option<Box<dyn Validator>>,
+        validator: Option<Validator>,
     ) -> OpmResult<Self> {
         if let Some(validator) = &validator {
             validator.validate(&prop)?;
@@ -115,7 +117,6 @@ impl Property {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::properties::validators::numeric_is_positive;
     #[test]
     fn prop_struct() {
         let prop = Property {
@@ -135,13 +136,13 @@ mod test {
         let prop = Property::new(
             1.0.into(),
             "my description".into(),
-            Some(numeric_is_positive()),
+            Some(Validator::NumericIsPositive),
         );
         assert!(prop.is_ok());
         let prop = Property::new(
             (-0.1).into(),
             "my description".into(),
-            Some(numeric_is_positive()),
+            Some(Validator::NumericIsPositive),
         );
         assert!(prop.is_err());
     }
