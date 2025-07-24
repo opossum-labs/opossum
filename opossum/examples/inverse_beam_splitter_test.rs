@@ -4,7 +4,10 @@ use opossum::{
     analyzers::AnalyzerType,
     error::OpmResult,
     joule,
-    lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
+    lightdata::{
+        energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+        light_data_builder::LightDataBuilder,
+    },
     nanometer,
     nodes::{BeamSplitter, EnergyMeter, NodeGroup, Source},
     optic_node::OpticNode,
@@ -16,8 +19,7 @@ use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("inverse beam splitter test");
     let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        vec![(nanometer!(633.0), joule!(1.0))],
-        nanometer!(1.0),
+        EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0))?,
     ));
     let i_s = scenery.add_node(Source::new("Source", light_data_builder))?;
     let mut bs = BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap();

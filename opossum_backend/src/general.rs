@@ -5,7 +5,7 @@ use actix_web::{
     HttpResponse, Responder, get, post,
     web::{self, Json},
 };
-use opossum::analyzers::AnalyzerType;
+use opossum::{analyzers::AnalyzerType, reporting::analysis_report::AnalysisReport};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -99,8 +99,25 @@ async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, ErrorResponse> 
 #[utoipa::path(post, responses((status = 204, description = "success")), tag="general")]
 #[post("/terminate")]
 async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
-    data.server_handle.lock().as_ref().unwrap().stop(true).await;
+    let server_handle = data.server_handle.lock().clone();
+    server_handle.unwrap().stop(true).await;
     HttpResponse::NoContent().finish()
+}
+
+/// Analyze current setup and eturn a vector of analysisreports
+#[utoipa::path(get, responses(
+    (status = OK, description = "success", content_type="application/json"),
+    (status = BAD_REQUEST, body = ErrorResponse, description = "Error during analysis", content_type="application/json")
+
+), tag="general")]
+#[get("/analyze")]
+async fn get_analyze(
+    data: web::Data<AppState>,
+) -> Result<Json<Vec<AnalysisReport>>, ErrorResponse> {
+    let mut document = data.document.lock();
+    let reports = document.analyze()?;
+    drop(document);
+    Ok(Json(reports))
 }
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_version);
@@ -108,6 +125,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_node_types);
     cfg.service(get_analyzer_types);
     cfg.service(post_terminate);
+    cfg.service(get_analyze);
 }
 #[cfg(test)]
 mod test {

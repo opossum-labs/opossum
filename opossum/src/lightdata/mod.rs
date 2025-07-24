@@ -43,7 +43,8 @@ impl Display for LightData {
 #[cfg(test)]
 mod test {
     use crate::{
-        lightdata::light_data_builder::LightDataBuilder, properties::Proptype,
+        lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+        properties::Proptype,
         spectrum_helper::create_visible_spec,
     };
 
@@ -67,7 +68,7 @@ mod test {
     }
     #[test]
     fn from() {
-        let ld = Proptype::from(Some(LightDataBuilder::Fourier));
+        let ld = Proptype::from(Some(LightDataBuilder::Geometric(RayDataBuilder::default())));
         assert_matches!(ld, Proptype::LightDataBuilder(_));
     }
 }

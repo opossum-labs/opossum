@@ -146,7 +146,8 @@ impl NodeAttr {
         &mut self,
         name: &str,
         description: &str,
-        validator: Box<dyn Validator>,
+        // validator: Box<dyn Validator>,
+        validator: Validator,
         value: Proptype,
     ) -> OpmResult<()> {
         self.props
@@ -186,8 +187,8 @@ impl NodeAttr {
     }
     /// Returns a reference to the isometry of this [`NodeAttr`].
     #[must_use]
-    pub fn isometry(&self) -> Option<Isometry> {
-        self.isometry.clone()
+    pub const fn isometry(&self) -> Option<Isometry> {
+        self.isometry
     }
     /// Returns the local alignment isometry of a node (if any).
     #[must_use]

@@ -1,7 +1,7 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
-    NodeAttr,
+    Fluence, Isometry, NodeAttr, Proptype,
 };
 use uuid::Uuid;
 
@@ -164,6 +164,112 @@ pub async fn update_gui_position(
         .post::<(f64, f64), String>(
             &format!("/api/scenery/position/{}", node_id.as_simple()),
             position,
+        )
+        .await
+}
+
+/// Update the name of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_name(
+    client: &HTTPClient,
+    node_id: Uuid,
+    node_name: String,
+) -> Result<String, String> {
+    client
+        .post::<String, String>(
+            &format!("/api/scenery/name/{}", node_id.as_simple()),
+            node_name,
+        )
+        .await
+}
+
+/// Update the lidt of the node with the given `node_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_lidt(
+    client: &HTTPClient,
+    node_id: Uuid,
+    node_lidt: Fluence,
+) -> Result<String, String> {
+    client
+        .post::<Fluence, String>(
+            &format!("/api/scenery/lidt/{}", node_id.as_simple()),
+            node_lidt,
+        )
+        .await
+}
+
+/// Update the alignment of the node with the given `node_id`.
+///
+/// # Errors
+/// This function will return an error if the `node_id` was not found or if the alignment cannot be serialized.
+pub async fn update_node_alignment(
+    client: &HTTPClient,
+    node_id: Uuid,
+    alignment: Isometry,
+) -> Result<String, String> {
+    client
+        .post::<Isometry, String>(
+            &format!("/api/scenery/alignmentisometry/{}", node_id.as_simple()),
+            alignment,
+        )
+        .await
+}
+
+/// Update the property of the node with the given `node_id`.
+/// The property value is already passes as a `serde_json::Value` to avoid implementing `PartialEq` for every property type.
+///
+/// # Errors
+///
+/// This function will return an error if the `node_id` was not found.
+pub async fn update_node_property(
+    client: &HTTPClient,
+    node_id: Uuid,
+    property_key_val: (String, Proptype),
+) -> Result<String, String> {
+    client
+        .post_ron::<(String, Proptype), String>(
+            &format!("/api/scenery/property/{}", node_id.as_simple()),
+            property_key_val,
+        )
+        .await
+}
+
+/// Updates the isometry (position and orientation) of a node in the scenery.
+///
+/// This function sends a POST request to the server to update the [`Isometry`] associated
+/// with a specific node identified by its UUID. The server endpoint is:
+/// `/api/scenery/isometry/{node_id}`.
+///
+/// # Parameters
+/// - `client`: An instance of [`HTTPClient`] used to send the request.
+/// - `node_id`: The unique identifier of the node whose isometry is to be updated.
+/// - `iso`: The new [`Isometry`] data to apply to the node.
+///
+/// # Returns
+/// A [`Result`] containing:
+/// - `Ok(String)`: The server's response if the update is successful.
+/// - `Err(String)`: An error message returned from the server or the HTTP client.
+///
+/// # Errors
+/// This function returns an error if:
+/// - The HTTP request fails to reach the server (e.g., network issues).
+/// - The server responds with an error status code (e.g., 4xx or 5xx).
+/// - Serialization of the [`Isometry`] payload fails before sending.
+pub async fn update_node_isometry(
+    client: &HTTPClient,
+    node_id: Uuid,
+    iso: Isometry,
+) -> Result<String, String> {
+    client
+        .post::<Isometry, String>(
+            &format!("/api/scenery/isometry/{}", node_id.as_simple()),
+            iso,
         )
         .await
 }

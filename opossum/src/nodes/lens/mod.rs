@@ -7,13 +7,7 @@ use crate::{
     meter, millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::{
-        Proptype,
-        validators::{
-            and_validator, numeric_is_finite, numeric_is_not_nan, numeric_is_not_zero,
-            numeric_is_positive,
-        },
-    },
+    properties::{Proptype, validator::Validator},
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Plane, Sphere, geo_surface::GeoSurfaceRef},
@@ -62,23 +56,32 @@ impl Default for Lens {
             .create_property_with_validator(
                 "front curvature",
                 "radius of curvature of front surface",
-                and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
-                millimeter!(500.0).into(),
+                Validator::AndValidator {
+                    validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
+                },
+                // and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
+                Proptype::Curvature(millimeter!(500.0)),
             )
             .unwrap();
         node_attr
             .create_property_with_validator(
                 "rear curvature",
                 "radius of curvature of rear surface",
-                and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
-                millimeter!(-500.0).into(),
+                Validator::AndValidator {
+                    validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
+                },
+                // and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
+                Proptype::Curvature(millimeter!(-500.0)),
             )
             .unwrap();
         node_attr
             .create_property_with_validator(
                 "center thickness",
                 "thickness of the lens in the center",
-                and_validator(vec![numeric_is_positive(), numeric_is_finite()]),
+                Validator::AndValidator {
+                    validators: vec![Validator::NumericIsFinite, Validator::NumericIsPositive],
+                },
+                // and_validator(vec![numeric_is_positive(), numeric_is_finite()]),
                 millimeter!(10.0).into(),
             )
             .unwrap();
@@ -114,9 +117,9 @@ impl Lens {
         let mut lens = Self::default();
         lens.node_attr.set_name(name);
         lens.node_attr
-            .set_property("front curvature", front_curvature.into())?;
+            .set_property("front curvature", Proptype::Curvature(front_curvature))?;
         lens.node_attr
-            .set_property("rear curvature", rear_curvature.into())?;
+            .set_property("rear curvature", Proptype::Curvature(rear_curvature))?;
         lens.node_attr
             .set_property("center thickness", center_thickness.into())?;
         lens.node_attr
@@ -216,13 +219,14 @@ impl Lens {
 impl OpticNode for Lens {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let Ok(Proptype::Length(front_curvature)) = self.node_attr.get_property("front curvature")
+        let Ok(Proptype::Curvature(front_curvature)) =
+            self.node_attr.get_property("front curvature")
         else {
             return Err(OpossumError::Analysis("cannot read front curvature".into()));
         };
         let (front_geosurface, anchor_point_iso_front) = if front_curvature.is_infinite() {
             (
-                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso.clone())))),
+                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso)))),
                 Isometry::identity(),
             )
         } else {
@@ -242,7 +246,7 @@ impl OpticNode for Lens {
             anchor_point_iso_front,
             &PortType::Input,
         )?;
-        let Ok(Proptype::Length(rear_curvature)) = self.node_attr.get_property("rear curvature")
+        let Ok(Proptype::Curvature(rear_curvature)) = self.node_attr.get_property("rear curvature")
         else {
             return Err(OpossumError::Analysis("cannot read rear curvature".into()));
         };
@@ -343,18 +347,18 @@ mod test {
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "aqua");
         assert!(node.as_group_mut().is_err());
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("front curvature") else {
+        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(500.0));
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("rear curvature") else {
+        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("rear curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(-500.0));
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("center thickness") else {
+        let Ok(Proptype::Length(ct)) = node.node_attr.get_property("center thickness") else {
             panic!()
         };
-        assert_eq!(*roc, millimeter!(10.0));
+        assert_eq!(*ct, millimeter!(10.0));
         let Ok(Proptype::RefractiveIndex(index)) = node.node_attr.get_property("refractive index")
         else {
             panic!()
@@ -383,18 +387,18 @@ mod test {
         let ref_index = RefrIndexConst::new(2.0).unwrap();
         let node = Lens::new("test", roc, roc, ct, &ref_index).unwrap();
         assert_eq!(node.name(), "test");
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("front curvature") else {
+        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(100.0));
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("rear curvature") else {
+        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("rear curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(100.0));
-        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("center thickness") else {
+        let Ok(Proptype::Length(ct)) = node.node_attr.get_property("center thickness") else {
             panic!()
         };
-        assert_eq!(*roc, millimeter!(11.0));
+        assert_eq!(*ct, millimeter!(11.0));
         let Ok(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_index_const))) =
             node.node_attr.get_property("refractive index")
         else {

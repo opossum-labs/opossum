@@ -5,6 +5,7 @@ use crate::{
     lightdata::energy_data_builder::EnergyDataBuilder,
     micrometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    properties::Proptype,
     utils::{f64_to_usize, usize_to_f64},
 };
 use csv::ReaderBuilder;
@@ -31,7 +32,7 @@ use uom::{
 ///
 /// This structure handles an array of values over a given wavelength range. Although the interface
 /// is still limited, the structure is prepared for handling also non-equidistant wavelength slots.  
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct Spectrum {
     data: Vec<(f64, f64)>, // (wavelength in micrometers, data in 1/micrometers)
 }
@@ -534,7 +535,9 @@ impl Plottable for Spectrum {
         plt_params
             .set(&PlotArgs::XLabel("wavelength in nm".into()))?
             .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?
-            .set(&PlotArgs::PlotSize((800, 800)))?;
+            .set(&PlotArgs::PlotSize((1200, 800)))?
+            .set(&PlotArgs::AxisEqual(false))?;
+
         Ok(())
     }
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
@@ -554,6 +557,13 @@ impl From<Spectrum> for EnergyDataBuilder {
         Self::Raw(spectrum)
     }
 }
+
+impl From<Spectrum> for Proptype {
+    fn from(spectrum: Spectrum) -> Self {
+        Self::Spectrum(spectrum)
+    }
+}
+
 impl Display for Spectrum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_length = Length::format_args(nanometer, Abbreviation);

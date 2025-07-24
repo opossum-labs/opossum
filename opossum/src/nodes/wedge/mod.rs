@@ -7,10 +7,7 @@ use crate::{
     millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::{
-        Proptype,
-        validators::{and_validator, angle_in_range, numeric_is_finite, numeric_is_positive},
-    },
+    properties::{Proptype, validator::Validator},
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
@@ -54,7 +51,10 @@ impl Default for Wedge {
             .create_property_with_validator(
                 "center thickness",
                 "thickness of the lens in the center",
-                and_validator(vec![numeric_is_positive(), numeric_is_finite()]),
+                Validator::AndValidator {
+                    validators: vec![Validator::NumericIsFinite, Validator::NumericIsPositive],
+                },
+                // and_validator(vec![numeric_is_positive(), numeric_is_finite()]),
                 millimeter!(10.0).into(),
             )
             .unwrap();
@@ -69,10 +69,20 @@ impl Default for Wedge {
             .create_property_with_validator(
                 "wedge",
                 "wedge angle",
-                and_validator(vec![
-                    angle_in_range(degree!(-90.0), degree!(90.0), true),
-                    numeric_is_finite(),
-                ]),
+                Validator::AndValidator {
+                    validators: vec![
+                        Validator::AngleInRange {
+                            min: degree!(-90.),
+                            max: degree!(90.),
+                            inclusive: true,
+                        },
+                        Validator::NumericIsFinite,
+                    ],
+                },
+                // and_validator(vec![
+                //     angle_in_range(degree!(-90.0), degree!(90.0), true),
+                //     numeric_is_finite(),
+                // ]),
                 Angle::zero().into(),
             )
             .unwrap();
@@ -115,7 +125,7 @@ impl OpticNode for Wedge {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
 
-        let front_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso.clone()))));
+        let front_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
 
         self.update_surface(
             &"input_1".to_string(),

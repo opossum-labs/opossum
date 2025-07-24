@@ -5,7 +5,10 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, RayDataBuilder},
+    },
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, RayPropagationVisualizer, Source, SpotDiagram, WaveFront},
     optic_node::OpticNode,
@@ -19,11 +22,12 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler wavefront aberrations");
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
-        pos_dist: Hexapolar::new(millimeter!(24.0), 8)?.into(),
-        energy_dist: UniformDist::new(joule!(1.0))?.into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-    });
+    let light_data_builder =
+        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+            Hexapolar::new(millimeter!(24.0), 8)?.into(),
+            UniformDist::new(joule!(1.0))?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        )));
     let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     let i_src = scenery.add_node(src)?;
@@ -59,7 +63,7 @@ fn main() -> OpmResult<()> {
     let mut ray_prop_vis = RayPropagationVisualizer::new("propagation", None)?;
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
-    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telecope"))?;
+    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope"))?;
     scenery.connect_nodes(i_src, "output_1", i_sd5, "input_1", millimeter!(0.1))?;
     scenery.connect_nodes(i_sd5, "output_1", i_pl1, "input_1", millimeter!(20.0))?;
     scenery.connect_nodes(i_pl1, "output_1", i_sd6, "input_1", millimeter!(67.0))?;

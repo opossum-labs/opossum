@@ -1,11 +1,14 @@
 //! Module for handling energy distributions
 pub mod general_gaussian;
 pub mod uniform;
+use std::fmt::Display;
+
 pub use general_gaussian::General2DGaussian;
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 pub use uniform::UniformDist;
 
-use crate::joule;
+use crate::{error::OpmResult, joule, utils::default_from_name::DefaultFromName};
 use kahan::KahanSummator;
 use nalgebra::Point2;
 use uom::si::f64::{Energy, Length};
@@ -37,18 +40,66 @@ pub trait EnergyDistribution {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+impl Default for EnergyDistType {
+    fn default() -> Self {
+        Self::Uniform(UniformDist::default())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Copy)]
 pub enum EnergyDistType {
     Uniform(UniformDist),
     General2DGaussian(general_gaussian::General2DGaussian),
 }
 
+impl DefaultFromName for EnergyDistType {}
+
 impl EnergyDistType {
+    /// Returns a reference to the internal energy distribution as a trait object.
+    ///
+    /// This allows polymorphic use of [`EnergyDistType`] through the [`EnergyDistribution`] trait.
+    ///
+    /// # Returns
+    /// A reference to the [`dyn EnergyDistribution`] implementation stored in this enum.
     #[must_use]
     pub fn generate(&self) -> &dyn EnergyDistribution {
         match self {
             Self::Uniform(dist) => dist,
             Self::General2DGaussian(dist) => dist,
         }
+    }
+
+    /// Sets the total energy value for the current distribution.
+    ///
+    /// This method delegates to the corresponding `set_energy` method of the active variant.
+    ///
+    /// # Parameters
+    /// - `energy`: The total [`Energy`] to be assigned.
+    ///
+    /// # Returns
+    /// - `Ok(())` on success.
+    /// - `Err(OpossumError)` if the assignment fails internally.
+    ///
+    /// # Errors
+    /// Returns an error if the selected distribution variant rejects the energy value.
+    ///
+    pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
+        match self {
+            Self::Uniform(uniform_dist) => uniform_dist.set_energy(energy)?,
+            Self::General2DGaussian(general2_dgaussian) => {
+                general2_dgaussian.set_energy(energy)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Display for EnergyDistType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dist_string = match self {
+            Self::Uniform(_) => "Uniform",
+            Self::General2DGaussian(_) => "Generalized Gaussian",
+        };
+        write!(f, "{dist_string}")
     }
 }

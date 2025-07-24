@@ -351,7 +351,7 @@ pub trait Dottable {
 #[cfg(test)]
 mod test {
     use crate::{
-        lightdata::light_data_builder::LightDataBuilder,
+        lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
         nodes::{BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, Source},
         ray::SplittingConfig,
     };
@@ -400,7 +400,10 @@ mod test {
 
         let mut scenery = NodeGroup::default();
         let i_s = scenery
-            .add_node(Source::new("Source", LightDataBuilder::Fourier))
+            .add_node(Source::new(
+                "Source",
+                LightDataBuilder::Geometric(RayDataBuilder::default()),
+            ))
             .unwrap();
         let bs = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
         // bs.node_attr_mut().set_name("Beam splitter");

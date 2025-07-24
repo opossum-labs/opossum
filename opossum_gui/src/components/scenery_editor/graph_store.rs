@@ -37,7 +37,7 @@ pub struct GraphStore {
     edges: Signal<Vec<ConnectInfo>>,
     active_node: Signal<Option<Uuid>>,
 }
-
+#[allow(dead_code)]
 pub enum GraphStoreAction {
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),
@@ -52,6 +52,7 @@ pub enum GraphStoreAction {
     DeleteScenery,
     OptimizeLayout,
     // TerminateBackend,
+    UpdateActiveNode(Option<NodeElement>),
 }
 impl GraphStore {
     #[must_use]
@@ -81,6 +82,10 @@ impl GraphStore {
     pub fn set_node_active(&mut self, id: Uuid) {
         let mut active_node = self.active_node.write();
         *active_node = Some(id);
+    }
+    pub fn set_active_node_none(&mut self) {
+        let mut active_node = self.active_node.write();
+        *active_node = None;
     }
     pub fn get_bounding_box(&self) -> Rect<f64> {
         let optic_nodes = self.nodes()();
@@ -232,13 +237,28 @@ impl UuidRegistry {
     }
 }
 #[allow(clippy::too_many_lines)]
-pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphStoreAction> {
+pub fn use_graph_processor(
+    graph_store: &Signal<GraphStore>,
+    mut node_selected: Signal<Option<NodeElement>>,
+) -> Coroutine<GraphStoreAction> {
     let mut graph_store = *graph_store;
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         async move {
             // This loop runs forever in the background, waiting for actions.
             while let Some(action) = rx.next().await {
                 match action {
+                    GraphStoreAction::UpdateActiveNode(node) => {
+                        if let Some(node) = node {
+                            graph_store.write().set_node_active(node.id());
+                            if let Some(active_node) =
+                                graph_store.write().nodes_mut().write().get_mut(&node.id())
+                            {
+                                *active_node = node;
+                            }
+                        } else {
+                            graph_store.write().set_active_node_none();
+                        }
+                    }
                     GraphStoreAction::LoadFromFile(path) => {
                         let opm_string = match fs::read_to_string(path) {
                             Ok(s) => s,
@@ -262,6 +282,7 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                                     .gui_position()
                                     .map_or_else(Point2D::zero, |(x, y)| Point2D::new(x, y));
                                 NodeElement::new(
+                                    node.name().to_string(),
                                     NodeType::Optical(node.node_type().to_string()),
                                     node.uuid(),
                                     position,
@@ -280,6 +301,7 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                                     .gui_position()
                                     .map_or_else(Point2D::zero, |p| Point2D::new(p.x, p.y));
                                 NodeElement::new(
+                                    format!("{}", analyzer.analyzer_type()),
                                     NodeType::Analyzer(analyzer.analyzer_type().clone()),
                                     analyzer.id(),
                                     position,
@@ -331,6 +353,8 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                                                     });
                                                 });
                                             }
+                                            graph_store().set_active_node_none();
+                                            node_selected.set(None);
                                         }
                                         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                                     }
@@ -339,6 +363,7 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                                     match api::delete_analyzer(&HTTP_API_CLIENT(), node_id).await {
                                         Ok(_) => {
                                             graph_store().nodes_mut().write().remove(&node_id);
+                                            node_selected.set(None);
                                         }
                                         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                                     }
@@ -352,17 +377,21 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                                 let gui_position =
                                     node_info.gui_position().unwrap_or((100.0, 100.0));
                                 let ports = get_ports(node_info.uuid()).await;
-                                let mut node_element = NodeElement::new(
-                                    NodeType::Optical(node_info.name().to_string()),
+                                let node_element = NodeElement::new(
+                                    node_info.name().to_string(),
+                                    NodeType::Optical(node_info.node_type().to_string()),
                                     node_info.uuid(),
                                     Point2D::new(gui_position.0, gui_position.1),
                                     ports,
                                 );
                                 let id = node_element.id();
-                                let nr_of_nodes = graph_store.read().nodes().read().len();
-                                node_element.set_z_index(nr_of_nodes + 1);
-                                graph_store.write().nodes.write().insert(id, node_element);
+                                graph_store
+                                    .write()
+                                    .nodes
+                                    .write()
+                                    .insert(id, node_element.clone());
                                 graph_store.write().set_node_active(id);
+                                node_selected.set(Some(node_element));
                             }
                             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                         }
@@ -375,7 +404,8 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                                 let ports =
                                     Ports::new(node_info.input_ports(), node_info.output_ports());
                                 let mut node_element = NodeElement::new(
-                                    NodeType::Optical(node_info.name().to_string()),
+                                    node_info.name().to_string(),
+                                    NodeType::Optical(node_info.node_type().to_string()),
                                     node_info.uuid(),
                                     Point2D::new(100.0, 100.0),
                                     ports,
@@ -395,6 +425,7 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                             Ok(analyzer_id) => {
                                 let (x, y) = new_analyzer.gui_position;
                                 let mut node_element = NodeElement::new(
+                                    format!("{}", new_analyzer.analyzer_type),
                                     NodeType::Analyzer(new_analyzer.analyzer_type),
                                     analyzer_id,
                                     Point2D::new(x, y),
@@ -406,7 +437,8 @@ pub fn use_graph_processor(graph_store: &Signal<GraphStore>) -> Coroutine<GraphS
                                     .write()
                                     .nodes
                                     .write()
-                                    .insert(analyzer_id, node_element);
+                                    .insert(analyzer_id, node_element.clone());
+                                node_selected.set(Some(node_element));
                             }
                             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                         }

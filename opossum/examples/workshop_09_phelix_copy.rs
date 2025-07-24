@@ -7,7 +7,10 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{PointSrc, RayDataBuilder},
+    },
     millimeter, nanometer,
     nodes::{
         NodeGroup, NodeReference, ParaxialSurface, RayPropagationVisualizer, Source, ThinMirror,
@@ -26,13 +29,13 @@ use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("PHELIX MainAmp");
 
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc {
-        pos_dist: Grid::new((millimeter!(60.0), Length::zero()), (5, 1))?.into(),
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
+        Grid::new((millimeter!(60.0), Length::zero()), (5, 1))?.into(),
         // pos_dist: Hexapolar::new(millimeter!(30.0), 3)?.into(),
-        energy_dist: UniformDist::new(joule!(1.0))?.into(),
-        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-        reference_length: millimeter!(1000.0),
-    });
+        UniformDist::new(joule!(1.0))?.into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        millimeter!(1000.0),
+    )));
 
     // let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
     //     pos_dist: Grid::new((millimeter!(60.0), Length::zero()), (5, 1))?.into(),

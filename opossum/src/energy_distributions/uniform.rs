@@ -1,5 +1,6 @@
 //! Uniform energy distribution
 
+use crate::joule;
 use nalgebra::Point2;
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -10,18 +11,28 @@ use uom::si::{
 
 use super::EnergyDistribution;
 use crate::error::{OpmResult, OpossumError};
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub struct UniformDist {
     total_energy: Energy,
 }
 
 impl UniformDist {
-    /// Create a new uniform energy-distribution generator [`General2DGaussian`](crate::energy_distributions::General2DGaussian).
-    /// # Attributes
-    /// - `total_energy`: total energy to distribute within the construction points
+    /// Creates a new uniform energy distribution.
+    ///
+    /// The uniform distribution assigns the same energy to all sampling points
+    /// without any spatial weighting.
+    ///
+    /// # Parameters
+    /// - `total_energy`: The total [`Energy`] to distribute across all rays or points.
+    ///
+    /// # Returns
+    /// - `Ok(Self)` if the energy is valid (positive and finite).
+    /// - `Err(OpossumError)` if the energy is non-finite, zero, or negative.
+    ///
     /// # Errors
-    /// This function will return an error if
-    ///   - the energy is non-finite, zero or below zero
+    /// Returns an error if:
+    /// - `total_energy` is not finite (NaN or infinite).
+    /// - `total_energy` is zero or less than zero.
     pub fn new(total_energy: Energy) -> OpmResult<Self> {
         if !total_energy.get::<joule>().is_normal()
             || total_energy.get::<joule>().is_sign_negative()
@@ -32,7 +43,50 @@ impl UniformDist {
         }
         Ok(Self { total_energy })
     }
+
+    /// Sets the total energy of this uniform distribution.
+    ///
+    /// This replaces the previously set energy value with a new one.
+    ///
+    /// # Parameters
+    /// - `energy`: The new [`Energy`] value to set.
+    ///
+    /// # Returns
+    /// - `Ok(())` on success.
+    /// - `Err(OpossumError)` if the energy is invalid.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - `energy` is not finite (NaN or infinite).
+    /// - `energy` is zero or negative.
+    pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
+        if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
+            return Err(OpossumError::Other(
+                "Energy must be greater than zero finite!".into(),
+            ));
+        }
+        self.total_energy = energy;
+        Ok(())
+    }
+
+    /// Returns the total energy stored in this distribution.
+    ///
+    /// # Returns
+    /// The current total [`Energy`] value of the distribution.
+    #[must_use]
+    pub fn energy(&self) -> Energy {
+        self.total_energy
+    }
 }
+
+impl Default for UniformDist {
+    fn default() -> Self {
+        Self {
+            total_energy: joule!(0.1),
+        }
+    }
+}
+
 impl EnergyDistribution for UniformDist {
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy> {
         let input_len = input.len();

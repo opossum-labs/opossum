@@ -16,6 +16,7 @@ use serde::{
     Deserialize, Serialize,
     de::{self, MapAccess, Visitor},
 };
+use strum::EnumIter;
 use uom::si::{
     angle::radian,
     f64::{Angle, Length},
@@ -23,7 +24,7 @@ use uom::si::{
 };
 
 /// Struct to store the isometric transofmeation matrix and its inverse
-#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Copy)]
 pub struct Isometry {
     transform: Isometry3<f64>,
     #[serde(skip_serializing)]
@@ -240,11 +241,91 @@ impl Isometry {
         let t = self.transform.translation;
         meter!(t.x, t.y, t.z)
     }
+    /// Returns the translation on a specific axis of this [`Isometry`].
+    #[must_use]
+    pub fn translation_of_axis(&self, axis: TranslationAxis) -> Length {
+        let t = self.translation();
+        match axis {
+            TranslationAxis::X => t.x,
+            TranslationAxis::Y => t.y,
+            TranslationAxis::Z => t.z,
+        }
+    }
+    /// Sets a new value along the specified translation axis (`X`, `Y`, or `Z`) of this [`Isometry`].
+    ///
+    /// This function modifies the translation component of the isometry while preserving its current rotation.
+    /// It then reconstructs the isometry with the updated translation and original rotation.
+    ///
+    /// # Parameters
+    ///
+    /// * `axis` - The axis along which the translation should be modified. Must be one of [`TranslationAxis::X`], [`TranslationAxis::Y`], or [`TranslationAxis::Z`].
+    /// * `value` - The new [`Length`] value to set along the specified axis.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the isometry was successfully updated.
+    /// * `Err(OpossumError)` if reconstruction of the isometry fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `Self::new` fails due to constraints within the isometry construction logic.
+    pub fn set_translation_of_axis(
+        &mut self,
+        axis: TranslationAxis,
+        value: Length,
+    ) -> OpmResult<()> {
+        let mut new_trans = self.translation();
+        let rot = self.rotation();
+        match axis {
+            TranslationAxis::X => new_trans.x = value,
+            TranslationAxis::Y => new_trans.y = value,
+            TranslationAxis::Z => new_trans.z = value,
+        }
+        *self = Self::new(new_trans, rot)?;
+        Ok(())
+    }
     /// Returns the rotation of this [`Isometry`].
     #[must_use]
     pub fn rotation(&self) -> Point3<Angle> {
         let rot = self.transform.rotation.euler_angles();
         radian!(rot.0, rot.1, rot.2)
+    }
+    /// Returns the rotation angle around a specific axis of this [`Isometry`].
+    #[must_use]
+    pub fn rotation_of_axis(&self, axis: RotationAxis) -> Angle {
+        let r = self.rotation();
+        match axis {
+            RotationAxis::Roll => r.x,
+            RotationAxis::Pitch => r.y,
+            RotationAxis::Yaw => r.z,
+        }
+    }
+    /// Sets a value on the rotation axis of this [`Isometry`].
+    ///
+    /// This method updates the internal rotation vector by setting the rotation angle
+    /// along a specified [`RotationAxis`] (Roll, Pitch, or Yaw). The transformation is
+    /// then reconstructed using the original translation and the updated rotation.
+    ///
+    /// # Parameters
+    /// - `axis`: The rotation axis to update (see [`RotationAxis`]).
+    /// - `value`: The new angle value to set for the specified axis.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the new rotation was successfully applied.
+    /// - `Err(OpossumError)` if the reconstruction of the [`Isometry`] fails.
+    ///
+    /// # Errors
+    /// If [`Isometry::new`] fails (e.g., due to invalid transformation parameters), the error is wrapped in [`OpossumError`] and returned.
+    pub fn set_rotation_of_axis(&mut self, axis: RotationAxis, value: Angle) -> OpmResult<()> {
+        let trans = self.translation();
+        let mut new_rot = self.rotation();
+        match axis {
+            RotationAxis::Roll => new_rot.x = value,
+            RotationAxis::Pitch => new_rot.y = value,
+            RotationAxis::Yaw => new_rot.z = value,
+        }
+        *self = Self::new(trans, new_rot)?;
+        Ok(())
     }
     /// Transforms a single point by the defined isometry
     /// # Attributes
@@ -382,6 +463,66 @@ impl Isometry {
             .iter()
             .map(|p| self.inverse_transform_vector_f64(p))
             .collect::<Vec<Vector3<f64>>>()
+    }
+}
+
+/// Define the translation and rotation axes for the [`Isometry`]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, EnumIter)]
+pub enum TranslationAxis {
+    /// The X axis
+    X,
+    /// The Y axis
+    Y,
+    /// The Z axis
+    Z,
+}
+
+/// Define the rotation axes for the [`Isometry`]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, EnumIter)]
+pub enum RotationAxis {
+    /// The Roll axis
+    Roll,
+    /// The Pitch axis
+    Pitch,
+    /// The Yaw axis
+    Yaw,
+}
+
+/// Define the alignment axes type for the [`Isometry`]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum AlignmentAxis {
+    /// Translation axis
+    Translation(TranslationAxis),
+    /// Rotation Axis
+    Rotation(RotationAxis),
+}
+
+impl Display for AlignmentAxis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Translation(t) => write!(f, "{t}"),
+            Self::Rotation(r) => write!(f, "{r}"),
+        }
+    }
+}
+
+impl Display for TranslationAxis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::X => write!(f, "X"),
+            Self::Y => write!(f, "Y"),
+            Self::Z => write!(f, "Z"),
+        }
+    }
+}
+
+impl Display for RotationAxis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Roll => write!(f, "Roll"),
+            Self::Pitch => write!(f, "Pitch"),
+            Self::Yaw => write!(f, "Yaw"),
+        }
     }
 }
 

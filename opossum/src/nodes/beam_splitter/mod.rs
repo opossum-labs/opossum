@@ -310,7 +310,7 @@ impl OpticNode for BeamSplitter {
             self.update_surface(
                 &(*in_surf_name).to_string(),
                 geosurface.clone(),
-                anchor_point_iso.clone(),
+                anchor_point_iso,
                 &PortType::Input,
             )?;
         }
@@ -318,7 +318,7 @@ impl OpticNode for BeamSplitter {
             self.update_surface(
                 &(*out_surf_name).to_string(),
                 geosurface.clone(),
-                anchor_point_iso.clone(),
+                anchor_point_iso,
                 &PortType::Output,
             )?;
         }

@@ -46,7 +46,10 @@ mod test {
     use crate::{
         analyzers::Analyzer,
         joule,
-        lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
+        lightdata::{
+            energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+            light_data_builder::LightDataBuilder,
+        },
         nanometer,
         nodes::{EnergyMeter, NodeGroup, Source},
     };
@@ -59,8 +62,7 @@ mod test {
     fn create_scene() -> NodeGroup {
         let mut scenery = NodeGroup::default();
         let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-            vec![(nanometer!(633.0), joule!(1.0))],
-            nanometer!(1.0),
+            EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
         ));
         let src = Source::new("source", light_data_builder);
         let i_src = scenery.add_node(src).unwrap();

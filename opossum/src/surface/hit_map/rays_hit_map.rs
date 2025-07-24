@@ -39,7 +39,7 @@ use super::fluence_estimator::FluenceEstimator;
 ///
 /// It stores the position (intersection point) and the energy of a [`Ray`](crate::ray::Ray) that
 /// has hit an [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EnergyHitPoint {
     /// position of the intersection point
     pub position: Point3<Length>,
@@ -82,7 +82,7 @@ impl EnergyHitPoint {
 ///
 /// It stores the position (intersection point) and the energy of a [`Ray`](crate::ray::Ray) that
 /// has hit an [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FluenceHitPoint {
     /// position of the intersection point
     pub position: Point3<Length>,
@@ -122,7 +122,7 @@ impl FluenceHitPoint {
 }
 
 /// Enum to store different types of hit point quantities in a hitmap
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum HitPoints {
     ///Energy hitpoints contain a vec of [`EnergyHitPoint`]
     Energy(Vec<EnergyHitPoint>),
@@ -170,7 +170,7 @@ impl Default for HitPoints {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 ///Storage struct for hitpoints on a surface from a single ray bundle
 pub struct RaysHitMap {
     hit_points: HitPoints,
