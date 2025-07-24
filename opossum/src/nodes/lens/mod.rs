@@ -7,14 +7,19 @@ use crate::{
     meter, millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::Proptype,
+    properties::{
+        Proptype,
+        validators::{
+            and_validator, numeric_is_finite, numeric_is_not_nan, numeric_is_not_zero,
+            numeric_is_positive,
+        },
+    },
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
-use num::Zero;
 use opm_macros_lib::OpmNode;
 use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
@@ -54,23 +59,26 @@ impl Default for Lens {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("lens");
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 "front curvature",
                 "radius of curvature of front surface",
+                and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 Proptype::Curvature(millimeter!(500.0)),
             )
             .unwrap();
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 "rear curvature",
                 "radius of curvature of rear surface",
+                and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 Proptype::Curvature(millimeter!(-500.0)),
             )
             .unwrap();
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 "center thickness",
                 "thickness of the lens in the center",
+                and_validator(vec![numeric_is_positive(), numeric_is_finite()]),
                 millimeter!(10.0).into(),
             )
             .unwrap();
@@ -105,29 +113,12 @@ impl Lens {
     ) -> OpmResult<Self> {
         let mut lens = Self::default();
         lens.node_attr.set_name(name);
-
-        if front_curvature.is_zero() || front_curvature.is_nan() {
-            return Err(OpossumError::Other(
-                "front curvature must not be 0.0 or NaN".into(),
-            ));
-        }
         lens.node_attr
             .set_property("front curvature", Proptype::Curvature(front_curvature))?;
-        if rear_curvature.is_zero() || rear_curvature.is_nan() {
-            return Err(OpossumError::Other(
-                "rear curvature must not be 0.0 or NaN".into(),
-            ));
-        }
         lens.node_attr
             .set_property("rear curvature", Proptype::Curvature(rear_curvature))?;
-        if center_thickness.is_sign_negative() || !center_thickness.is_finite() {
-            return Err(OpossumError::Other(
-                "center thickness must be >= 0.0 and finite".into(),
-            ));
-        }
         lens.node_attr
             .set_property("center thickness", center_thickness.into())?;
-
         lens.node_attr
             .set_property("refractive index", refractive_index.to_enum().into())?;
         lens.update_surfaces()?;
@@ -343,6 +334,7 @@ mod test {
     use approx::assert_relative_eq;
     use core::f64;
     use nalgebra::Vector3;
+    use num::Zero;
 
     #[test]
     fn default() {

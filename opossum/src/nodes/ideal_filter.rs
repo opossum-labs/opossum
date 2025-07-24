@@ -128,7 +128,7 @@ impl IdealFilter {
         if density >= 0.0 {
             self.node_attr.set_property(
                 "filter type",
-                FilterType::Constant(f64::powf(10.0, -1.0 * density)).into(),
+                FilterType::Constant(f64::powf(10.0, -density)).into(),
             )?;
             Ok(())
         } else {
@@ -141,7 +141,7 @@ impl IdealFilter {
     #[must_use]
     pub fn optical_density(&self) -> Option<f64> {
         match self.filter_type() {
-            FilterType::Constant(t) => Some(-1.0 * f64::log10(t)),
+            FilterType::Constant(t) => Some(-f64::log10(t)),
             FilterType::Spectrum(_) => None,
         }
     }

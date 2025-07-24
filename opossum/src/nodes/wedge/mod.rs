@@ -2,11 +2,15 @@ use std::sync::{Arc, Mutex};
 
 use super::NodeAttr;
 use crate::{
+    degree,
     error::{OpmResult, OpossumError},
     millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::Proptype,
+    properties::{
+        Proptype,
+        validators::{and_validator, angle_in_range, numeric_is_finite, numeric_is_positive},
+    },
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
@@ -14,10 +18,7 @@ use crate::{
 use nalgebra::Point3;
 use num::Zero;
 use opm_macros_lib::OpmNode;
-use uom::si::{
-    angle::degree,
-    f64::{Angle, Length},
-};
+use uom::si::f64::{Angle, Length};
 
 mod analysis_energy;
 mod analysis_ghostfocus;
@@ -50,9 +51,10 @@ impl Default for Wedge {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("wedge");
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 "center thickness",
                 "thickness of the lens in the center",
+                and_validator(vec![numeric_is_positive(), numeric_is_finite()]),
                 millimeter!(10.0).into(),
             )
             .unwrap();
@@ -64,6 +66,17 @@ impl Default for Wedge {
                 "refractive index",
                 "refractive index of the lens material",
                 RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()).into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property_with_validator(
+                "wedge",
+                "wedge angle",
+                and_validator(vec![
+                    angle_in_range(degree!(-90.0), degree!(90.0), true),
+                    numeric_is_finite(),
+                ]),
+                Angle::zero().into(),
             )
             .unwrap();
 
@@ -78,7 +91,7 @@ impl Wedge {
     /// # Errors
     ///
     /// This function will return an error if
-    ///   - the center thickness is ngeative or not finite
+    ///   - the center thickness is negative or not finite
     ///   - the wedge angle is outside ]-90°; 90°[ or not finite
     pub fn new(
         name: &str,
@@ -88,11 +101,6 @@ impl Wedge {
     ) -> OpmResult<Self> {
         let mut wedge = Self::default();
         wedge.node_attr.set_name(name);
-        if center_thickness.is_sign_negative() || !center_thickness.is_finite() {
-            return Err(crate::error::OpossumError::Other(
-                "center thickness must be positive and finite".into(),
-            ));
-        }
         wedge
             .node_attr
             .set_property("center thickness", center_thickness.into())?;
@@ -100,14 +108,8 @@ impl Wedge {
         wedge
             .node_attr
             .set_property("refractive index", refractive_index.to_enum().into())?;
-        if !wedge_angle.is_finite() || wedge_angle.get::<degree>().abs() > 90.0 {
-            return Err(crate::error::OpossumError::Other(
-                "wedge angle must be within the interval ]-90 deg; 90 deg[ and finite".into(),
-            ));
-        }
-
-        wedge.update_surfaces()?;
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
+        wedge.update_surfaces()?;
         Ok(wedge)
     }
 }

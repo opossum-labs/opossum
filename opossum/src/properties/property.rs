@@ -2,6 +2,7 @@ use super::Proptype;
 use crate::{
     error::{OpmResult, OpossumError},
     plottable::Plottable,
+    properties::validator::Validator,
 };
 use nalgebra::vector;
 use serde::{Deserialize, Serialize};
@@ -9,19 +10,35 @@ use std::{mem, path::Path};
 
 /// (optical) Property
 ///
-/// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a list of value conditions
-/// (such as `GreaterThan`, `NonEmptyString`, etc.)
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+/// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a validator.
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
 pub struct Property {
     prop: Proptype,
     #[serde(skip)]
     description: String,
+    #[serde(skip)]
+    validator: Option<Box<dyn Validator>>,
 }
 impl Property {
-    #[must_use]
-    pub const fn new(prop: Proptype, description: String) -> Self {
-        Self { prop, description }
+    /// Create a new `Property`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given initial value does not pass the validation.
+    pub fn new(
+        prop: Proptype,
+        description: String,
+        validator: Option<Box<dyn Validator>>,
+    ) -> OpmResult<Self> {
+        if let Some(validator) = &validator {
+            validator.validate(&prop)?;
+        }
+        Ok(Self {
+            prop,
+            description,
+            validator,
+        })
     }
 
     /// Returns a reference to the actual property value (expressed as [`Proptype`] prop of this [`Property`].
@@ -42,6 +59,9 @@ impl Property {
     pub fn set_value(&mut self, prop: Proptype) -> OpmResult<()> {
         if mem::discriminant(&self.prop) != mem::discriminant(&prop) {
             return Err(OpossumError::Properties("incompatible value types".into()));
+        }
+        if let Some(validator) = &self.validator {
+            validator.validate(&prop)?;
         }
         self.prop = prop;
         Ok(())
@@ -95,20 +115,42 @@ impl Property {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::properties::validators::numeric_is_positive;
     #[test]
-    fn new() {
+    fn prop_struct() {
         let prop = Property {
             prop: true.into(),
             description: "my description".to_string(),
+            validator: None,
         };
         assert_eq!(prop.description, "my description");
-        // assert_eq!(prop.prop, Proptype::Bool(true));
+    }
+    #[test]
+    fn new() {
+        let prop = Property::new(true.into(), "my description".into(), None);
+        assert!(prop.is_ok());
+    }
+    #[test]
+    fn new_with_validator() {
+        let prop = Property::new(
+            1.0.into(),
+            "my description".into(),
+            Some(numeric_is_positive()),
+        );
+        assert!(prop.is_ok());
+        let prop = Property::new(
+            (-0.1).into(),
+            "my description".into(),
+            Some(numeric_is_positive()),
+        );
+        assert!(prop.is_err());
     }
     #[test]
     fn description() {
         let prop = Property {
             prop: true.into(),
             description: "my description".to_string(),
+            validator: None,
         };
         assert_eq!(prop.description(), "my description");
     }
@@ -117,6 +159,7 @@ mod test {
         let mut prop = Property {
             prop: Proptype::Bool(true),
             description: "".into(),
+            validator: None,
         };
         assert!(prop.set_value(Proptype::Bool(false)).is_ok());
         assert!(prop.set_value(Proptype::F64(3.14)).is_err());
