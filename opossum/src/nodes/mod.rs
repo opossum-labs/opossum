@@ -22,7 +22,7 @@ mod cylindric_lens;
 mod dummy;
 mod energy_meter;
 pub mod fluence_detector;
-mod ideal_filter;
+pub mod ideal_filter;
 mod lens;
 mod node_attr;
 mod node_group;

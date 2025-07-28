@@ -1,12 +1,7 @@
 #![warn(missing_docs)]
 //! Module for creation and handling of optical spectra
 use crate::{
-    error::{OpmResult, OpossumError},
-    lightdata::energy_data_builder::EnergyDataBuilder,
-    micrometer,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
-    properties::Proptype,
-    utils::{f64_to_usize, usize_to_f64},
+    error::{OpmResult, OpossumError}, lightdata::energy_data_builder::EnergyDataBuilder, micrometer, plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable}, properties::Proptype, spectral_distribution::{Gaussian, LaserLines}, utils::{f64_to_usize, usize_to_f64}
 };
 use csv::ReaderBuilder;
 use kahan::KahanSummator;
@@ -14,12 +9,13 @@ use log::warn;
 use nalgebra::MatrixXx2;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 use std::{
     f64::consts::PI,
     fmt::{Debug, Display},
     fs::File,
     ops::Range,
-    path::Path,
+    path::{Path, PathBuf},
 };
 use uom::num_traits::Zero;
 use uom::si::{f64::Length, length::micrometer, length::nanometer};
@@ -447,7 +443,7 @@ impl Spectrum {
         match filter_type {
             crate::nodes::FilterType::Constant(t) => self.scale_vertical(t)?,
             crate::nodes::FilterType::Spectrum(s2) => {
-                self.filter(s2);
+                self.filter(&s2);
             }
         }
         Ok(())
@@ -544,6 +540,34 @@ impl Plottable for Spectrum {
         PlotType::Histogram2D(plt_params.clone())
     }
 }
+
+// /// Builder for the generation of [`LightData`].
+// #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+// pub enum SpectrumDataBuilder {
+//     Gaussian(Gaussian),
+//     FromFile(PathBuf),
+//     LaserLines(LaserLines),
+//     // SpectralFilter(SpectralFilterBuilder),
+//     // LowPass,
+//     // HighPass,
+// }
+
+
+// impl SpectrumDataBuilder {
+//     /// Create [`LightData`] from the builder definition.
+//     ///
+//     /// # Errors
+//     ///
+//     /// This function will return an error if the concrete implementation of the builder fails.
+//     pub fn build(self) -> OpmResult<Spectrum> {
+//         match self {
+//             Self::Energy(e) => e.build(),
+//             Self::Geometric(r) => r.build(),
+//             // Self::Fourier => Ok(LightData::Fourier),
+//         }
+//     }
+
+// }
 
 impl<'a> IntoIterator for &'a Spectrum {
     type IntoIter = std::slice::Iter<'a, (f64, f64)>;

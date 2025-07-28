@@ -3,18 +3,10 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    OpmDocument,
-    analyzers::AnalyzerType,
-    error::OpmResult,
-    joule,
-    lightdata::{
+    analyzers::AnalyzerType, error::OpmResult, joule, lightdata::{
         energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
         light_data_builder::LightDataBuilder,
-    },
-    nanometer,
-    nodes::{BeamSplitter, Dummy, FilterType, IdealFilter, NodeGroup, Source},
-    ray::SplittingConfig,
-    spectrum_helper::{self, generate_filter_spectrum},
+    }, nanometer, nodes::{ideal_filter::{EdgeFilter, EdgeFilterType, FilterTypeBuilder, SpectralFilterBuilder}, BeamSplitter, Dummy, FilterType, IdealFilter, NodeGroup, Source}, ray::SplittingConfig, spectrum::Spectrum, OpmDocument
 };
 use uom::si::f64::Length;
 
@@ -29,16 +21,13 @@ fn main() -> OpmResult<()> {
     ));
     let i_s2 = scenery.add_node(Source::new("Source 2", light_data_builder))?;
     let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.5)).unwrap())?;
-    let filter_spectrum = generate_filter_spectrum(
-        nanometer!(400.0)..nanometer!(1100.0),
-        nanometer!(1.0),
-        &spectrum_helper::FilterType::LongPassStep {
-            cut_off: nanometer!(700.0),
-        },
-    )?;
+    // let filter_spectrum:Spectrum  = EdgeFilter::new(EdgeFilterType::LongPass, nanometer!(700.0), None, nanometer!(400.0)..nanometer!(1100.0),
+    //     nanometer!(1.))?.into();
+    
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
-        &FilterType::Spectrum(filter_spectrum),
+        &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(EdgeFilter::new(EdgeFilterType::LongPass, nanometer!(700.0), None, nanometer!(400.0)..nanometer!(1100.0),
+        nanometer!(1.))?)),
     )?)?;
     let i_d1 = scenery.add_node(Dummy::default())?;
 

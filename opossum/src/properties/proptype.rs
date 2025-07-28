@@ -7,21 +7,16 @@ use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},
     lightdata::{
-        LightData,
-        light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder},
+        light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder}, LightData
     },
     nodes::{
-        FilterType, Metertype, SpectrometerType, WaveFrontData,
-        fluence_detector::{Fluence, fluence_data::FluenceData},
-        ray_propagation_visualizer::RayPositionHistories,
-        reflective_grating::LinearDensity,
+        fluence_detector::{fluence_data::FluenceData, Fluence}, ideal_filter::FilterTypeBuilder, ray_propagation_visualizer::RayPositionHistories, reflective_grating::LinearDensity, FilterType, Metertype, SpectrometerType, WaveFrontData
     },
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
     spectrum::Spectrum,
-    surface::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
+    surface::hit_map::{fluence_estimator::FluenceEstimator, HitMap},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
@@ -72,8 +67,10 @@ pub enum Proptype {
     Bool(bool),
     /// An optional [`LightData`] property
     LightData(Option<LightData>),
-    /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
-    FilterType(FilterType),
+    // /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
+    // FilterType(FilterType),
+    /// Property for storing a [`FilterTypeBuilder`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
+    FilterTypeBuilder(FilterTypeBuilder),
     /// Property for storing a [`SplittingConfig`] of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
     SplitterType(SplittingConfig),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
@@ -127,6 +124,7 @@ pub enum Proptype {
     Vec2(Vector2<f64>),
     /// [`LightData`] build configuration
     LightDataBuilder(Option<LightDataBuilder>),
+    
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -304,6 +302,12 @@ impl From<ImageSrc> for Proptype {
 impl From<LightDataBuilder> for Proptype {
     fn from(val: LightDataBuilder) -> Self {
         Self::LightDataBuilder(Some(val))
+    }
+}
+
+impl From<FilterTypeBuilder> for Proptype{
+    fn from(val: FilterTypeBuilder) -> Self{
+        Self::FilterTypeBuilder(val)
     }
 }
 

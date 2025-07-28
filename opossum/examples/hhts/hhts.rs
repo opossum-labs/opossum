@@ -9,31 +9,12 @@ use hhts_input::hhts_input;
 
 use num::Zero;
 use opossum::{
-    OpmDocument,
-    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
-    aperture::{Aperture, CircleConfig},
-    energy_distributions::General2DGaussian,
-    error::OpmResult,
-    joule,
-    lightdata::{
+    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig}, aperture::{Aperture, CircleConfig}, energy_distributions::General2DGaussian, error::OpmResult, joule, lightdata::{
         light_data_builder::LightDataBuilder,
         ray_data_builder::{CollimatedSrc, RayDataBuilder},
-    },
-    millimeter, nanometer,
-    nodes::{
-        BeamSplitter, Dummy, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
-        RayPropagationVisualizer, Source, WaveFront,
-    },
-    optic_node::OpticNode,
-    optic_ports::PortType,
-    position_distributions::HexagonalTiling,
-    radian,
-    ray::SplittingConfig,
-    refractive_index::{RefrIndexSellmeier1, refr_index_schott::RefrIndexSchott},
-    spectral_distribution::LaserLines,
-    spectrum::Spectrum,
-    spectrum_helper::generate_filter_spectrum,
-    utils::geom_transformation::Isometry,
+    }, millimeter, nanometer, nodes::{
+        ideal_filter::{EdgeFilter, EdgeFilterType, FilterTypeBuilder, SpectralFilterBuilder}, BeamSplitter, Dummy, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup, RayPropagationVisualizer, Source, WaveFront
+    }, optic_node::OpticNode, optic_ports::PortType, position_distributions::HexagonalTiling, radian, ray::SplittingConfig, refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1}, spectral_distribution::LaserLines, spectrum::Spectrum, utils::geom_transformation::Isometry, OpmDocument
 };
 use uom::si::f64::Length;
 
@@ -158,13 +139,8 @@ fn main() -> OpmResult<()> {
     let mut group_bs = NodeGroup::new("Dichroic beam splitter");
 
     // ideal spectrum
-    let short_pass_spectrum = generate_filter_spectrum(
-        nanometer!(400.0)..nanometer!(2000.0),
-        nanometer!(1.0),
-        &opossum::spectrum_helper::FilterType::ShortPassStep {
-            cut_off: nanometer!(700.0),
-        },
-    )?;
+    let short_pass_spectrum:Spectrum  = EdgeFilter::new(EdgeFilterType::ShortPass, nanometer!(700.0), None, nanometer!(400.0)..nanometer!(2000.0),
+        nanometer!(1.))?.into();
     let short_pass = SplittingConfig::Spectrum(short_pass_spectrum);
 
     // real spectrum (Thorlabs HBSY21)
@@ -173,10 +149,10 @@ fn main() -> OpmResult<()> {
     let bs = group_bs.add_node(BeamSplitter::new("Dichroic BS HBSY21", &short_pass)?)?;
 
     // Long pass filter (1w)
-    let felh1000 = FilterType::Spectrum(Spectrum::from_csv(Path::new(
-        "opossum/examples/hhts/FELH1000_Transmission.csv",
-    ))?);
-    let mut node = IdealFilter::new("1w Longpass filter", &felh1000)?;
+    // let felh1000 = FilterType::Spectrum(Spectrum::from_csv(Path::new(
+    //     "opossum/examples/hhts/FELH1000_Transmission.csv",
+    // ))?);
+    let mut node = IdealFilter::new("1w Longpass filter", &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::FromFile(Path::new("opossum/examples/hhts/FELH1000_Transmission.csv").to_path_buf())))?;
     node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
     let filter_1w = group_bs.add_node(node)?;
     group_bs.connect_nodes(
@@ -188,10 +164,10 @@ fn main() -> OpmResult<()> {
     )?;
 
     // Long pass filter (2w)
-    let fesh0700 = FilterType::Spectrum(Spectrum::from_csv(Path::new(
-        "opossum/examples/hhts/FESH0700_Transmission.csv",
-    ))?);
-    let mut node = IdealFilter::new("2w Shortpass filter", &fesh0700)?;
+    // let fesh0700 = FilterType::Spectrum(Spectrum::from_csv(Path::new(
+    //     "opossum/examples/hhts/FESH0700_Transmission.csv",
+    // ))?);
+    let mut node = IdealFilter::new("2w Shortpass filter", &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::FromFile(Path::new("opossum/examples/hhts/FESH0700_Transmission.csv").to_path_buf())))?;
     node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
     let filter_2w = group_bs.add_node(node)?;
     group_bs.connect_nodes(
