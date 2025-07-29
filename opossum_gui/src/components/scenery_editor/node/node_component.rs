@@ -1,5 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
+use crate::CONTEXT_MENU;
 use crate::components::context_menu::cx_menu::CxMenu;
 use crate::components::context_menu::cx_menu::CxtCommand;
 use crate::components::scenery_editor::constants::BORDER_WIDTH;
@@ -10,7 +11,6 @@ use crate::components::scenery_editor::{
     node::graph_node_components::GraphNodeContent,
     ports::ports_component::NodePorts,
 };
-use crate::CONTEXT_MENU;
 use dioxus::prelude::*;
 use opossum_backend::nodes::NewRefNode;
 

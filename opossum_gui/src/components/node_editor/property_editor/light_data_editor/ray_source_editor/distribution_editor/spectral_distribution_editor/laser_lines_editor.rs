@@ -1,11 +1,11 @@
 use crate::{
-    components::node_editor::inputs::{
-        input_components::RowedInputs, InputParam, IntoInputData, IntoInputDataStrings,
-    },
     OPOSSUM_UI_LOGS,
+    components::node_editor::inputs::{
+        InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
+    },
 };
 use dioxus::prelude::*;
-use opossum_backend::{nanometer, LaserLines, SpecDistType};
+use opossum_backend::{LaserLines, SpecDistType, nanometer};
 use strum::EnumIter;
 use uom::si::length::nanometer;
 

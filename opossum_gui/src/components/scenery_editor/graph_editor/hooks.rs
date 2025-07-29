@@ -1,15 +1,15 @@
 use crate::components::scenery_editor::{
+    NodeElement,
     constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
     edges::edges_component::EdgeCreation,
     graph_editor::graph_editor_component::{DragStatus, EditorState, ShiftZoom},
     graph_store::{GraphStore, GraphStoreAction},
-    NodeElement,
 };
 use dioxus::{
-    html::geometry::{euclid::default::Point2D, PixelsSize},
+    html::geometry::{PixelsSize, euclid::default::Point2D},
     prelude::*,
 };
-use opossum_backend::{nodes::ConnectInfo, PortType};
+use opossum_backend::{PortType, nodes::ConnectInfo};
 
 pub fn use_zoom(
     mut graph_shift_zoom: Signal<ShiftZoom>,

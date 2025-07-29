@@ -1,10 +1,10 @@
 use crate::{
-    components::node_editor::inputs::{InputData, InputParam, IntoInputData, IntoInputDataStrings},
     OPOSSUM_UI_LOGS,
+    components::node_editor::inputs::{InputData, InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
 use opossum_backend::{
-    degree, joule, millimeter, EnergyDistType, EnergyDistribution, General2DGaussian,
+    EnergyDistType, EnergyDistribution, General2DGaussian, degree, joule, millimeter,
 };
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::{angle::degree, energy::joule, length::millimeter};

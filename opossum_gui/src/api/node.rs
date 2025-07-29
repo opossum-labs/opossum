@@ -1,7 +1,7 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     Fluence, Isometry, NodeAttr, Proptype,
+    nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
 };
 use uuid::Uuid;
 

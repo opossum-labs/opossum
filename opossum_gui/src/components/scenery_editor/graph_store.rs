@@ -3,25 +3,25 @@ use super::{
     ports::ports_component::Ports,
 };
 use crate::{
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
     api::{self},
     components::scenery_editor::constants::{
-        HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERTEX_SPACING, SUGIYAMA_VERT_PATH_FACTOR,
+        HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING,
     },
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::{
     html::geometry::euclid::{
-        default::{Point2D, Rect},
         Size2D,
+        default::{Point2D, Rect},
     },
     prelude::*,
 };
 use futures_util::StreamExt;
 use opossum_backend::{
-    isize_to_f64,
+    PortType, isize_to_f64,
     nodes::{ConnectInfo, NewNode, NewRefNode},
     scenery::NewAnalyzerInfo,
-    usize_to_f64, PortType,
+    usize_to_f64,
 };
 use rust_sugiyama::{configure::RankingType, from_edges};
 use std::{
@@ -127,7 +127,7 @@ impl GraphStore {
         node_elements.sort_by(|e_1, e_2| e_1.1.cmp(&e_2.1));
         let mut nodes = self.nodes.write();
         for element in node_elements.iter().enumerate() {
-            if let Some(node) = nodes.get_mut(&element.1 .0) {
+            if let Some(node) = nodes.get_mut(&element.1.0) {
                 node.set_z_index(element.0);
             }
         }
@@ -191,8 +191,8 @@ pub async fn optimize_layout_and_sync(
         for l in layout {
             if let Some(uuid) = reg.get_uuid(u32::try_from(l.0).unwrap()) {
                 let pos = Point2D::new(
-                    -1.0 * isize_to_f64(l.1 .1),
-                    SUGIYAMA_VERT_PATH_FACTOR.mul_add(isize_to_f64(l.1 .0), height),
+                    -1.0 * isize_to_f64(l.1.1),
+                    SUGIYAMA_VERT_PATH_FACTOR.mul_add(isize_to_f64(l.1.0), height),
                 );
                 new_positions.insert(uuid, pos);
             }

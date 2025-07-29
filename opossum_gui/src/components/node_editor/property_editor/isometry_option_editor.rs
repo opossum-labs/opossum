@@ -1,15 +1,15 @@
 use crate::{
+    OPOSSUM_UI_LOGS,
     components::node_editor::{
+        CallbackWrapper,
         accordion::AccordionItem,
-        inputs::{input_components::RowedInputs, InputData},
+        inputs::{InputData, input_components::RowedInputs},
         node_editor_component::NodeChange,
         property_editor::use_set_node_change_property,
-        CallbackWrapper,
     },
-    OPOSSUM_UI_LOGS,
 };
 use dioxus::prelude::*;
-use opossum_backend::{degree, millimeter, AlignmentAxis, Isometry, RotationAxis, TranslationAxis};
+use opossum_backend::{AlignmentAxis, Isometry, RotationAxis, TranslationAxis, degree, millimeter};
 use strum::IntoEnumIterator;
 use uom::si::{angle::degree, length::millimeter};
 

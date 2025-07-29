@@ -7,16 +7,17 @@ use std::fmt::Display;
 use strum::EnumIter;
 
 use crate::{
+    OPOSSUM_UI_LOGS,
     components::node_editor::{
+        CallbackWrapper,
         inputs::{
+            InputData, InputParam,
             input_components::{LabeledSelect, RowedInputs},
-            select_options_from_enum_iterator, InputData, InputParam,
+            select_options_from_enum_iterator,
         },
         node_editor_component::NodeChange,
         property_editor::use_set_node_change_property,
-        CallbackWrapper,
     },
-    OPOSSUM_UI_LOGS,
 };
 
 #[derive(PartialEq, Eq, EnumIter, Clone, Copy)]

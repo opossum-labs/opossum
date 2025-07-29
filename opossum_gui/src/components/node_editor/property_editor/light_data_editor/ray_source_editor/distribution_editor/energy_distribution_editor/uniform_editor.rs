@@ -1,9 +1,9 @@
 use crate::{
-    components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
     OPOSSUM_UI_LOGS,
+    components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
-use opossum_backend::{joule, EnergyDistType, EnergyDistribution, UniformDist};
+use opossum_backend::{EnergyDistType, EnergyDistribution, UniformDist, joule};
 use strum::EnumIter;
 use uom::si::energy::joule;
 

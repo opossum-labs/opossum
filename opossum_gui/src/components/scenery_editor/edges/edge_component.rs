@@ -4,7 +4,7 @@ use crate::components::scenery_editor::{
     graph_store::{GraphStore, GraphStoreAction},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{nodes::ConnectInfo, PortType};
+use opossum_backend::{PortType, nodes::ConnectInfo};
 
 #[component]
 pub fn EdgeComponent(edge: ConnectInfo) -> Element {

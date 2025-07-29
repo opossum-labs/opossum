@@ -1,6 +1,6 @@
 use opossum_backend::error::ErrorResponse;
-use reqwest::{header::ACCEPT, Client, Response};
-use serde::{de::DeserializeOwned, Serialize};
+use reqwest::{Client, Response, header::ACCEPT};
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 
 #[derive(Clone)]
@@ -244,16 +244,19 @@ impl HTTPClient {
                 let json_val = json!("");
                 serde_json::from_value(json_val).map_or_else(|_| Err("Error deserializing default string if no content returns!".to_string()), |deserialized| Ok(deserialized))
             }
-        } else { match res.json::<ErrorResponse>().await { Ok(err_res) => {
-            Err(format!(
-                "Error {}: {} - {}",
-                err_res.status(),
-                err_res.category(),
-                err_res.message()
-            ))
-        } _ => {
-            Err("Error deserializing response to ErrorResponse struct!".to_string())
-        }}}
+        } else {
+            (res.json::<ErrorResponse>().await).map_or_else(
+                |_| Err("Error deserializing response to ErrorResponse struct!".to_string()),
+                |err_res| {
+                    Err(format!(
+                        "Error {}: {} - {}",
+                        err_res.status(),
+                        err_res.category(),
+                        err_res.message()
+                    ))
+                },
+            )
+        }
     }
     /// Process the response of an API call.
     ///

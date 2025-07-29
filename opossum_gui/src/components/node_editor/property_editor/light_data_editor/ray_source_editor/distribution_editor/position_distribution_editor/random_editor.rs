@@ -1,6 +1,6 @@
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
-use opossum_backend::{f64_to_usize, millimeter, PosDistType, Random};
+use opossum_backend::{PosDistType, Random, f64_to_usize, millimeter};
 use strum::EnumIter;
 use uom::si::length::millimeter;
 

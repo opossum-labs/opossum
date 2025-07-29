@@ -1,12 +1,12 @@
 use crate::{
-    components::node_editor::inputs::{
-        input_components::{InputParamLabeledInput, RowedInputs},
-        InputData, InputParam, IntoInputData, IntoInputDataStrings,
-    },
     OPOSSUM_UI_LOGS,
+    components::node_editor::inputs::{
+        InputData, InputParam, IntoInputData, IntoInputDataStrings,
+        input_components::{InputParamLabeledInput, RowedInputs},
+    },
 };
 use dioxus::prelude::*;
-use opossum_backend::{energy_data_builder::EnergyDataBuilder, joule, nanometer, EnergyLaserLines};
+use opossum_backend::{EnergyLaserLines, energy_data_builder::EnergyDataBuilder, joule, nanometer};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::{energy::joule, length::nanometer};
 

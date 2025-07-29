@@ -2,7 +2,7 @@
 use dioxus::prelude::*;
 use inflector::Inflector;
 
-use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
+use crate::{HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api};
 
 #[component]
 pub fn NodesMenu(node_selected: Signal<String>) -> Element {

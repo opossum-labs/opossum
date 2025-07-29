@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::{components::context_menu::sub_menu_item::MenuItem, CONTEXT_MENU};
+use crate::{CONTEXT_MENU, components::context_menu::sub_menu_item::MenuItem};
 use dioxus::prelude::*;
 use opossum_backend::nodes::NewRefNode;
 

@@ -4,7 +4,7 @@ use crate::components::node_editor::{
     alignment_editor::AlignmentEditor, general_editor::GeneralEditor,
 };
 use crate::components::scenery_editor::NodeElement;
-use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
+use crate::{HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, Isometry, Proptype};
 
@@ -47,32 +47,35 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
         }
     });
 
-    match &*resource_future.read_unchecked() { Some(Some(node_attr)) => {
-        rsx! {
-            div {
-                h6 { "Node Configuration" }
+    match &*resource_future.read_unchecked() {
+        Some(Some(node_attr)) => {
+            rsx! {
                 div {
-                    class: "accordion accordion-borderless bg-dark ",
-                    id: "accordionNodeConfig",
-                    GeneralEditor {
-                        node_id: node_attr.uuid(),
-                        node_type: node_attr.node_type(),
-                        node_name: node_attr.name(),
-                        node_lidt: *node_attr.lidt(),
+                    h6 { "Node Configuration" }
+                    div {
+                        class: "accordion accordion-borderless bg-dark ",
+                        id: "accordionNodeConfig",
+                        GeneralEditor {
+                            node_id: node_attr.uuid(),
+                            node_type: node_attr.node_type(),
+                            node_name: node_attr.name(),
+                            node_lidt: *node_attr.lidt(),
+                        }
+                        PropertiesEditor {
+                            node_properties: node_attr.properties().clone(),
+                            node_change,
+                        }
+                        AlignmentEditor { alignment: *node_attr.alignment() }
                     }
-                    PropertiesEditor {
-                        node_properties: node_attr.properties().clone(),
-                        node_change,
-                    }
-                    AlignmentEditor { alignment: *node_attr.alignment() }
                 }
             }
         }
-    } _ => {
-        rsx! {
-            div { "No node selected" }
+        _ => {
+            rsx! {
+                div { "No node selected" }
+            }
         }
-    }}
+    }
 }
 
 fn node_change_api_call_selection(
@@ -83,13 +86,14 @@ fn node_change_api_call_selection(
     match node_changed {
         NodeChange::Name(name) => {
             spawn(async move {
-                match api::update_node_name(&HTTP_API_CLIENT(), active_node.id(), name.clone()).await
-                { Err(err_str) => {
+                if let Err(err_str) =
+                    api::update_node_name(&HTTP_API_CLIENT(), active_node.id(), name.clone()).await
+                {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                } _ => {
+                } else {
                     active_node.set_name(name);
                     node.set(Some(active_node));
-                }}
+                }
             });
         }
         NodeChange::Lidt(lidt) => {
@@ -98,7 +102,7 @@ fn node_change_api_call_selection(
                     api::update_node_lidt(&HTTP_API_CLIENT(), active_node.id(), lidt).await
                 {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                };
+                }
             });
         }
         NodeChange::Alignment(iso) => {
@@ -117,7 +121,7 @@ fn node_change_api_call_selection(
                         .await
                 {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                };
+                }
             });
         }
         NodeChange::Isometry(iso) => {
@@ -126,7 +130,7 @@ fn node_change_api_call_selection(
                     api::update_node_isometry(&HTTP_API_CLIENT(), active_node.id(), iso).await
                 {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                };
+                }
             });
         }
         NodeChange::Inverted(_) => todo!(),

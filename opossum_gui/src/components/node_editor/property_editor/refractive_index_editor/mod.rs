@@ -14,8 +14,9 @@ use opossum_backend::{DefaultFromName, RefractiveIndexType};
 
 use crate::components::node_editor::{
     inputs::{
+        InputData, IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
-        select_options_from_enum_iterator, InputData, IntoInputData,
+        select_options_from_enum_iterator,
     },
     node_editor_component::NodeChange,
     property_editor::use_set_node_change_property,

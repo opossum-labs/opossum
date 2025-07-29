@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::components::node_editor::inputs::{
-    input_components::InputParamLabeledInput, InputParam, IntoInputData, IntoInputDataStrings,
+    InputParam, IntoInputData, IntoInputDataStrings, input_components::InputParamLabeledInput,
 };
 use dioxus::prelude::*;
 use opossum_backend::energy_data_builder::EnergyDataBuilder;

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::components::node_editor::inputs::{
-    input_components::RowedInputs, InputData, InputParam, IntoInputData, IntoInputDataStrings,
+    InputData, InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
 };
 use dioxus::prelude::*;
 use opossum_backend::{
@@ -17,14 +17,17 @@ use uom::si::{
 
 #[component]
 pub fn ImageSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
-    match &*ray_data_builder_sig.read() { RayDataBuilder::Image(img_src) => {
-        let inputs = get_image_source_input_params(img_src, ray_data_builder_sig);
-        rsx! {
-            RowedInputs { inputs }
+    match &*ray_data_builder_sig.read() {
+        RayDataBuilder::Image(img_src) => {
+            let inputs = get_image_source_input_params(img_src, ray_data_builder_sig);
+            rsx! {
+                RowedInputs { inputs }
+            }
         }
-    } _ => {
-        rsx! {}
-    }}
+        _ => {
+            rsx! {}
+        }
+    }
 }
 
 fn get_image_source_input_params(

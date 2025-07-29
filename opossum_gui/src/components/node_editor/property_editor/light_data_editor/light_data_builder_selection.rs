@@ -3,7 +3,7 @@ use crate::components::node_editor::inputs::{
     input_components::LabeledSelect, select_options_from_enum_iterator,
 };
 use dioxus::prelude::*;
-use opossum_backend::{light_data_builder::LightDataBuilder, DefaultFromName};
+use opossum_backend::{DefaultFromName, light_data_builder::LightDataBuilder};
 
 #[component]
 pub fn SourceLightDataBuilderSelector(light_data_builder_sig: Signal<LightDataBuilder>) -> Element {

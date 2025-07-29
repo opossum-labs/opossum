@@ -1,21 +1,21 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
+    NodeElement,
     edges::edges_component::{
         EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
     },
     graph_editor::hooks::{use_center_graph, use_drag, use_drag_end, use_drag_start, use_zoom},
-    graph_store::{use_graph_processor, GraphStore, GraphStoreAction},
+    graph_store::{GraphStore, GraphStoreAction, use_graph_processor},
     nodes::Nodes,
-    NodeElement,
 };
 use dioxus::{
-    html::geometry::{euclid::default::Point2D, PixelsSize},
+    html::geometry::{PixelsSize, euclid::default::Point2D},
     prelude::*,
 };
 use opossum_backend::{
+    AnalyzerType,
     nodes::{NewNode, NewRefNode},
     scenery::NewAnalyzerInfo,
-    AnalyzerType,
 };
 use std::path::PathBuf;
 use uuid::Uuid;

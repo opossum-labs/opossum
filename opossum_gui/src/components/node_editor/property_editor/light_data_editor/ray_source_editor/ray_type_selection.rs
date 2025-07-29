@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
 use dioxus::prelude::*;
-use opossum_backend::{ray_data_builder::RayDataBuilder, DefaultFromName, Rays};
+use opossum_backend::{DefaultFromName, Rays, ray_data_builder::RayDataBuilder};
 
 use crate::components::node_editor::inputs::{
     input_components::LabeledSelect, select_options_from_enum_iterator,

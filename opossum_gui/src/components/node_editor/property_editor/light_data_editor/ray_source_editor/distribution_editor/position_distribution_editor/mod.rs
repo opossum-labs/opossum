@@ -19,8 +19,9 @@ use sobol_editor::SobolParam;
 use crate::components::node_editor::{
     accordion::AccordionItem,
     inputs::{
+        InputData, IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
-        select_options_from_enum_iterator, InputData, IntoInputData,
+        select_options_from_enum_iterator,
     },
 };
 use dioxus::prelude::*;

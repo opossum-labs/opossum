@@ -5,8 +5,9 @@ mod laser_lines_editor;
 use crate::components::node_editor::{
     accordion::AccordionItem,
     inputs::{
+        IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
-        select_options_from_enum_iterator, IntoInputData,
+        select_options_from_enum_iterator,
     },
 };
 use dioxus::prelude::*;

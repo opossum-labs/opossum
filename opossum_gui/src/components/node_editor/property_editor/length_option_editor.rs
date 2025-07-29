@@ -1,8 +1,8 @@
 use crate::components::node_editor::{
+    CallbackWrapper,
     inputs::input_components::{LabeledInput, LabeledSelect},
     node_editor_component::NodeChange,
     property_editor::use_set_node_change_property,
-    CallbackWrapper,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;

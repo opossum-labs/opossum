@@ -1,7 +1,6 @@
 use crate::components::node_editor::{
-    inputs::input_components::LabeledInput,
+    CallbackWrapper, inputs::input_components::LabeledInput,
     property_editor::light_data_editor::ray_source_editor::distribution_editor::DistributionEditor,
-    CallbackWrapper,
 };
 use dioxus::prelude::*;
 use opossum_backend::{
@@ -37,11 +36,14 @@ pub fn ReferenceLengthEditor(
 
 #[component]
 pub fn CollimatedSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
-    match &*ray_data_builder_sig.read() { RayDataBuilder::Collimated(_) => {
-        rsx! {
-            DistributionEditor { ray_data_builder_sig }
+    match &*ray_data_builder_sig.read() {
+        RayDataBuilder::Collimated(_) => {
+            rsx! {
+                DistributionEditor { ray_data_builder_sig }
+            }
         }
-    } _ => {
-        rsx! {}
-    }}
+        _ => {
+            rsx! {}
+        }
+    }
 }

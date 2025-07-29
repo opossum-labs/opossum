@@ -1,8 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 use dioxus_free_icons::{
-    icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
     Icon,
+    icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
 };
 use opossum_backend::AnalyzerType;
 use rfd::FileDialog;

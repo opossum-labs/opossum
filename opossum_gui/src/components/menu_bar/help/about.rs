@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::{api, HTTP_API_CLIENT};
+use crate::{HTTP_API_CLIENT, api};
 use dioxus::prelude::*;
 
 const LOGO: Asset = asset!("./assets/LogoBanner.svg");

@@ -2,7 +2,7 @@ use crate::components::node_editor::inputs::{
     InputData, InputParam, IntoInputData, IntoInputDataStrings,
 };
 use dioxus::prelude::*;
-use opossum_backend::{millimeter, Hexapolar, PosDistType};
+use opossum_backend::{Hexapolar, PosDistType, millimeter};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::length::millimeter;
 

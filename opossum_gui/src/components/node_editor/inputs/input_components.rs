@@ -4,8 +4,8 @@ use dioxus::prelude::*;
 use itertools::Itertools;
 
 use crate::components::node_editor::{
-    inputs::{InputData, InputParam},
     CallbackWrapper,
+    inputs::{InputData, InputParam},
 };
 
 #[component]

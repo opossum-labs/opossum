@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
 use dioxus::prelude::*;
-use opossum_backend::{energy_data_builder::EnergyDataBuilder, DefaultFromName, Spectrum};
+use opossum_backend::{DefaultFromName, Spectrum, energy_data_builder::EnergyDataBuilder};
 
 use crate::components::node_editor::inputs::{
     input_components::LabeledSelect, select_options_from_enum_iterator,

@@ -1,13 +1,13 @@
 use core::f64;
 
 use crate::components::node_editor::{
-    inputs::{input_components::RowedInputs, InputData, InputParam},
-    node_editor_component::NodeChange,
     CallbackWrapper,
+    inputs::{InputData, InputParam, input_components::RowedInputs},
+    node_editor_component::NodeChange,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::{millimeter, Proptype};
+use opossum_backend::{Proptype, millimeter};
 use uom::si::{f64::Length, length::millimeter};
 
 #[component]
