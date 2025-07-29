@@ -47,7 +47,7 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
         }
     });
 
-    if let Some(Some(node_attr)) = &*resource_future.read_unchecked() {
+    match &*resource_future.read_unchecked() { Some(Some(node_attr)) => {
         rsx! {
             div {
                 h6 { "Node Configuration" }
@@ -68,11 +68,11 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                 }
             }
         }
-    } else {
+    } _ => {
         rsx! {
             div { "No node selected" }
         }
-    }
+    }}
 }
 
 fn node_change_api_call_selection(
@@ -83,14 +83,13 @@ fn node_change_api_call_selection(
     match node_changed {
         NodeChange::Name(name) => {
             spawn(async move {
-                if let Err(err_str) =
-                    api::update_node_name(&HTTP_API_CLIENT(), active_node.id(), name.clone()).await
-                {
+                match api::update_node_name(&HTTP_API_CLIENT(), active_node.id(), name.clone()).await
+                { Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                } else {
+                } _ => {
                     active_node.set_name(name);
                     node.set(Some(active_node));
-                }
+                }}
             });
         }
         NodeChange::Lidt(lidt) => {

@@ -244,16 +244,16 @@ impl HTTPClient {
                 let json_val = json!("");
                 serde_json::from_value(json_val).map_or_else(|_| Err("Error deserializing default string if no content returns!".to_string()), |deserialized| Ok(deserialized))
             }
-        } else if let Ok(err_res) = res.json::<ErrorResponse>().await {
+        } else { match res.json::<ErrorResponse>().await { Ok(err_res) => {
             Err(format!(
                 "Error {}: {} - {}",
                 err_res.status(),
                 err_res.category(),
                 err_res.message()
             ))
-        } else {
+        } _ => {
             Err("Error deserializing response to ErrorResponse struct!".to_string())
-        }
+        }}}
     }
     /// Process the response of an API call.
     ///

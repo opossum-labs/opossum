@@ -37,12 +37,12 @@ pub fn ReferenceLengthEditor(
 
 #[component]
 pub fn PointSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
-    if let RayDataBuilder::PointSrc(point_src) = &*ray_data_builder_sig.read() {
+    match &*ray_data_builder_sig.read() { RayDataBuilder::PointSrc(point_src) => {
         rsx! {
             ReferenceLengthEditor { ray_data_builder_sig, point_src: point_src.clone() }
             DistributionEditor { ray_data_builder_sig }
         }
-    } else {
+    } _ => {
         rsx! {}
-    }
+    }}
 }

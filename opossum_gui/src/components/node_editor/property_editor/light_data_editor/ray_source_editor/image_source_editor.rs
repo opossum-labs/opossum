@@ -17,14 +17,14 @@ use uom::si::{
 
 #[component]
 pub fn ImageSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
-    if let RayDataBuilder::Image(img_src) = &*ray_data_builder_sig.read() {
+    match &*ray_data_builder_sig.read() { RayDataBuilder::Image(img_src) => {
         let inputs = get_image_source_input_params(img_src, ray_data_builder_sig);
         rsx! {
             RowedInputs { inputs }
         }
-    } else {
+    } _ => {
         rsx! {}
-    }
+    }}
 }
 
 fn get_image_source_input_params(

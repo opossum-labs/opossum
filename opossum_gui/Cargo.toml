@@ -12,7 +12,7 @@ keywords = ["laser", "optics", "physics", "simulation"]
 categories = ["science", "simulation"]
 publish = true
 readme = "../README.md"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 opossum_backend = { path = "../opossum_backend" }

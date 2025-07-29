@@ -37,11 +37,11 @@ pub fn ReferenceLengthEditor(
 
 #[component]
 pub fn CollimatedSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
-    if let RayDataBuilder::Collimated(_) = &*ray_data_builder_sig.read() {
+    match &*ray_data_builder_sig.read() { RayDataBuilder::Collimated(_) => {
         rsx! {
             DistributionEditor { ray_data_builder_sig }
         }
-    } else {
+    } _ => {
         rsx! {}
-    }
+    }}
 }
