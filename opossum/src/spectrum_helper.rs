@@ -1,11 +1,7 @@
 #![warn(missing_docs)]
 //! helper functions for easier generation of spectra
 
-use crate::{
-    error::OpmResult,
-    nanometer,
-    spectrum::Spectrum,
-};
+use crate::{error::OpmResult, nanometer, spectrum::Spectrum};
 use log::warn;
 
 /// Helper function for generating a visible spectrum.
@@ -56,4 +52,3 @@ pub fn create_nd_glass_spec(energy: f64) -> OpmResult<Spectrum> {
     s.add_lorentzian_peak(nanometer!(1054.0), nanometer!(0.5), energy)?;
     Ok(s)
 }
-

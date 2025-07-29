@@ -1,8 +1,14 @@
 use num::Zero;
 use opossum::{
-    analyzers::{AnalyzerType, RayTraceConfig}, error::OpmResult, joule, millimeter, nodes::{
-        ideal_filter::FilterTypeBuilder, round_collimated_ray_source, BeamSplitter, EnergyMeter, IdealFilter, NodeGroup, ParaxialSurface, SpotDiagram
-    }, ray::SplittingConfig, OpmDocument
+    OpmDocument,
+    analyzers::{AnalyzerType, RayTraceConfig},
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{
+        BeamSplitter, EnergyMeter, IdealFilter, NodeGroup, ParaxialSurface, SpotDiagram,
+        ideal_filter::FilterTypeBuilder, round_collimated_ray_source,
+    },
+    ray::SplittingConfig,
 };
 use std::path::Path;
 use uom::si::f64::Length;

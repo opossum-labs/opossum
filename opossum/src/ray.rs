@@ -893,7 +893,10 @@ impl Display for Ray {
 mod test {
     use super::*;
     use crate::{
-        coatings::CoatingType, degree, joule, millimeter, nanometer, nodes::ideal_filter::{EdgeFilter, EdgeFilterType}, J_per_cm2
+        J_per_cm2,
+        coatings::CoatingType,
+        degree, joule, millimeter, nanometer,
+        nodes::ideal_filter::{EdgeFilter, EdgeFilterType},
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use core::f64;
@@ -1524,7 +1527,15 @@ mod test {
     fn split_by_spectrum() {
         let mut ray =
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1000.0), joule!(1.0)).unwrap();
-        let spectrum: Spectrum = EdgeFilter::new(EdgeFilterType::ShortPass, nanometer!(1000.0), None, nanometer!(500.0)..nanometer!(1500.0), nanometer!(1.0)).unwrap().into();
+        let spectrum: Spectrum = EdgeFilter::new(
+            EdgeFilterType::ShortPass,
+            nanometer!(1000.0),
+            None,
+            nanometer!(500.0)..nanometer!(1500.0),
+            nanometer!(1.0),
+        )
+        .unwrap()
+        .into();
 
         let splitting_config = SplittingConfig::Spectrum(spectrum);
         let split_ray = ray.split(&splitting_config).unwrap();
@@ -1545,7 +1556,15 @@ mod test {
     fn split_by_spectrum_fail() {
         let mut ray =
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1501.0), joule!(1.0)).unwrap();
-        let spectrum: Spectrum = EdgeFilter::new(EdgeFilterType::ShortPass, nanometer!(1000.0), None, nanometer!(500.0)..nanometer!(1500.0), nanometer!(1.0)).unwrap().into();
+        let spectrum: Spectrum = EdgeFilter::new(
+            EdgeFilterType::ShortPass,
+            nanometer!(1000.0),
+            None,
+            nanometer!(500.0)..nanometer!(1500.0),
+            nanometer!(1.0),
+        )
+        .unwrap()
+        .into();
         assert!(ray.split(&SplittingConfig::Spectrum(spectrum)).is_err());
     }
     #[test]

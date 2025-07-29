@@ -1,9 +1,17 @@
 use num::Zero;
 use opossum::{
-    analyzers::AnalyzerType, error::OpmResult, joule, lightdata::{
+    OpmDocument,
+    analyzers::AnalyzerType,
+    error::OpmResult,
+    joule,
+    lightdata::{
         energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
         light_data_builder::LightDataBuilder,
-    }, nanometer, nodes::{ideal_filter::FilterTypeBuilder, EnergyMeter, IdealFilter, NodeGroup, NodeReference, Source}, OpmDocument
+    },
+    nanometer,
+    nodes::{
+        EnergyMeter, IdealFilter, NodeGroup, NodeReference, Source, ideal_filter::FilterTypeBuilder,
+    },
 };
 use std::path::Path;
 use uom::si::f64::Length;

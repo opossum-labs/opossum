@@ -1,7 +1,12 @@
 #![warn(missing_docs)]
 //! Module for creation and handling of optical spectra
 use crate::{
-    error::{OpmResult, OpossumError}, lightdata::energy_data_builder::EnergyDataBuilder, micrometer, plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable}, properties::Proptype, spectral_distribution::{Gaussian, LaserLines}, utils::{f64_to_usize, usize_to_f64}
+    error::{OpmResult, OpossumError},
+    lightdata::energy_data_builder::EnergyDataBuilder,
+    micrometer,
+    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    properties::Proptype,
+    utils::{f64_to_usize, usize_to_f64},
 };
 use csv::ReaderBuilder;
 use kahan::KahanSummator;
@@ -9,13 +14,12 @@ use log::warn;
 use nalgebra::MatrixXx2;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use strum::EnumIter;
 use std::{
     f64::consts::PI,
     fmt::{Debug, Display},
     fs::File,
     ops::Range,
-    path::{Path, PathBuf},
+    path::Path,
 };
 use uom::num_traits::Zero;
 use uom::si::{f64::Length, length::micrometer, length::nanometer};
@@ -95,11 +99,13 @@ impl Spectrum {
             let lambda = record
                 .get(0)
                 .unwrap()
+                .trim()
                 .parse::<f64>()
                 .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
             let data = record
                 .get(1)
                 .unwrap()
+                .trim()
                 .parse::<f64>()
                 .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
             datas.push((lambda * 1.0E-3, data * 0.01)); // (nanometers -> micrometers, percent -> transmisison)
@@ -443,7 +449,7 @@ impl Spectrum {
         match filter_type {
             crate::nodes::FilterType::Constant(t) => self.scale_vertical(t)?,
             crate::nodes::FilterType::Spectrum(s2) => {
-                self.filter(&s2);
+                self.filter(s2);
             }
         }
         Ok(())
@@ -551,7 +557,6 @@ impl Plottable for Spectrum {
 //     // LowPass,
 //     // HighPass,
 // }
-
 
 // impl SpectrumDataBuilder {
 //     /// Create [`LightData`] from the builder definition.

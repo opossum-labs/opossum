@@ -2,6 +2,7 @@ use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
     error::{OpmResult, OpossumError},
+    nodes::ideal_filter::FilterTypeBuilder,
     properties::Proptype,
 };
 use std::fmt::Debug;
@@ -182,6 +183,10 @@ impl Validator {
             Proptype::Length(l) => allowed_range.contains(&l.value),
             Proptype::LinearDensity(d) => allowed_range.contains(&d.value),
             Proptype::WfLambda(l, _) => allowed_range.contains(l),
+            Proptype::FilterTypeBuilder(ftb) => match ftb {
+                FilterTypeBuilder::Constant(c) => allowed_range.contains(c),
+                FilterTypeBuilder::Spectrum(_) => true,
+            },
             _ => true, // Silently ignore if not numeric
         };
         if is_valid {

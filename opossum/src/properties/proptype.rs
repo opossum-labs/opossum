@@ -7,16 +7,22 @@ use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},
     lightdata::{
-        light_data_builder::LightDataBuilder, ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder}, LightData
+        LightData,
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder},
     },
     nodes::{
-        fluence_detector::{fluence_data::FluenceData, Fluence}, ideal_filter::FilterTypeBuilder, ray_propagation_visualizer::RayPositionHistories, reflective_grating::LinearDensity, FilterType, Metertype, SpectrometerType, WaveFrontData
+        Metertype, SpectrometerType, WaveFrontData,
+        fluence_detector::{Fluence, fluence_data::FluenceData},
+        ideal_filter::FilterTypeBuilder,
+        ray_propagation_visualizer::RayPositionHistories,
+        reflective_grating::LinearDensity,
     },
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
     spectrum::Spectrum,
-    surface::hit_map::{fluence_estimator::FluenceEstimator, HitMap},
+    surface::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
@@ -124,7 +130,6 @@ pub enum Proptype {
     Vec2(Vector2<f64>),
     /// [`LightData`] build configuration
     LightDataBuilder(Option<LightDataBuilder>),
-    
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -305,8 +310,8 @@ impl From<LightDataBuilder> for Proptype {
     }
 }
 
-impl From<FilterTypeBuilder> for Proptype{
-    fn from(val: FilterTypeBuilder) -> Self{
+impl From<FilterTypeBuilder> for Proptype {
+    fn from(val: FilterTypeBuilder) -> Self {
         Self::FilterTypeBuilder(val)
     }
 }
