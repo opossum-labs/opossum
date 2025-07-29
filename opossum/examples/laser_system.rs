@@ -6,7 +6,7 @@ use opossum::{
     joule, millimeter,
     nodes::{
         BeamSplitter, EnergyMeter, IdealFilter, NodeGroup, ParaxialSurface, SpotDiagram,
-        round_collimated_ray_source,
+        ideal_filter::FilterTypeBuilder, round_collimated_ray_source,
     },
     ray::SplittingConfig,
 };
@@ -36,7 +36,7 @@ fn main() -> OpmResult<()> {
     // Diagnostic beam line
     let i_f = scenery.add_node(IdealFilter::new(
         "OD1 filter",
-        &opossum::nodes::FilterType::Constant(0.1),
+        &FilterTypeBuilder::Constant(0.1),
     )?)?;
     scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "input_1", Length::zero())?;
 

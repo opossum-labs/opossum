@@ -5,31 +5,40 @@ use opossum::{
     OpmDocument,
     analyzers::AnalyzerType,
     error::OpmResult,
-    joule,
-    lightdata::{
-        energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
-        light_data_builder::LightDataBuilder,
-    },
+    lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
     nanometer,
-    nodes::{BeamSplitter, EnergyMeter, FilterType, IdealFilter, NodeGroup, Source, Spectrometer},
+    nodes::{
+        BeamSplitter, EnergyMeter, IdealFilter, NodeGroup, Source, Spectrometer,
+        ideal_filter::{BandFilter, BandFilterType, FilterTypeBuilder, SpectralFilterBuilder},
+    },
     ray::SplittingConfig,
-    spectrum::Spectrum,
 };
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("filter system demo");
-    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0))?,
+
+    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::Raw(
+        BandFilter::new(
+            BandFilterType::BandPass,
+            nanometer!(630.),
+            nanometer!(50.),
+            Some(nanometer!(5.)),
+            nanometer!(560.)..nanometer!(700.),
+            nanometer!(0.01),
+        )?
+        .into(),
     ));
     let i_s = scenery.add_node(Source::new("Source", light_data_builder))?;
     let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap())?;
-    let filter_spectrum =
-        Spectrum::from_csv(Path::new("./opossum/files_for_testing/spectrum/NE03B.csv"))?;
+
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
-        &FilterType::Spectrum(filter_spectrum),
+        &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::FromFile(
+            Path::new("./opossum/files_for_testing/spectrum/NF633-25.csv").to_path_buf(),
+        )),
     )?)?;
+
     let i_d1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
         opossum::nodes::Metertype::IdealEnergyMeter,

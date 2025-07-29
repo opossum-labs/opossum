@@ -12,8 +12,9 @@ use crate::{
         ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder},
     },
     nodes::{
-        FilterType, Metertype, SpectrometerType, WaveFrontData,
+        Metertype, SpectrometerType, WaveFrontData,
         fluence_detector::{Fluence, fluence_data::FluenceData},
+        ideal_filter::FilterTypeBuilder,
         ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity,
     },
@@ -72,8 +73,10 @@ pub enum Proptype {
     Bool(bool),
     /// An optional [`LightData`] property
     LightData(Option<LightData>),
-    /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
-    FilterType(FilterType),
+    // /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
+    // FilterType(FilterType),
+    /// Property for storing a [`FilterTypeBuilder`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
+    FilterTypeBuilder(FilterTypeBuilder),
     /// Property for storing a [`SplittingConfig`] of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
     SplitterType(SplittingConfig),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
@@ -304,6 +307,12 @@ impl From<ImageSrc> for Proptype {
 impl From<LightDataBuilder> for Proptype {
     fn from(val: LightDataBuilder) -> Self {
         Self::LightDataBuilder(Some(val))
+    }
+}
+
+impl From<FilterTypeBuilder> for Proptype {
+    fn from(val: FilterTypeBuilder) -> Self {
+        Self::FilterTypeBuilder(val)
     }
 }
 

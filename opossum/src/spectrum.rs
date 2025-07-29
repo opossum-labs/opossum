@@ -99,11 +99,13 @@ impl Spectrum {
             let lambda = record
                 .get(0)
                 .unwrap()
+                .trim()
                 .parse::<f64>()
                 .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
             let data = record
                 .get(1)
                 .unwrap()
+                .trim()
                 .parse::<f64>()
                 .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
             datas.push((lambda * 1.0E-3, data * 0.01)); // (nanometers -> micrometers, percent -> transmisison)
@@ -544,6 +546,33 @@ impl Plottable for Spectrum {
         PlotType::Histogram2D(plt_params.clone())
     }
 }
+
+// /// Builder for the generation of [`LightData`].
+// #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+// pub enum SpectrumDataBuilder {
+//     Gaussian(Gaussian),
+//     FromFile(PathBuf),
+//     LaserLines(LaserLines),
+//     // SpectralFilter(SpectralFilterBuilder),
+//     // LowPass,
+//     // HighPass,
+// }
+
+// impl SpectrumDataBuilder {
+//     /// Create [`LightData`] from the builder definition.
+//     ///
+//     /// # Errors
+//     ///
+//     /// This function will return an error if the concrete implementation of the builder fails.
+//     pub fn build(self) -> OpmResult<Spectrum> {
+//         match self {
+//             Self::Energy(e) => e.build(),
+//             Self::Geometric(r) => r.build(),
+//             // Self::Fourier => Ok(LightData::Fourier),
+//         }
+//     }
+
+// }
 
 impl<'a> IntoIterator for &'a Spectrum {
     type IntoIter = std::slice::Iter<'a, (f64, f64)>;

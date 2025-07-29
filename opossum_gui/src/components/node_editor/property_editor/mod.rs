@@ -90,8 +90,8 @@ fn get_editor(
             println!("splittertype not yet implemented");
             Some(rsx! {})
         }
-        Proptype::FilterType(_spectrometer_type) => {
-            println!("filtertype not yet implemented");
+        Proptype::FilterTypeBuilder(_filter_type_builder) => {
+            println!("filtertypebuilder not yet implemented");
             Some(rsx! {})
         }
         Proptype::FluenceEstimator(fluence_estimator) => Some(rsx! {

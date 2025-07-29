@@ -9,7 +9,9 @@ use opossum::{
         light_data_builder::LightDataBuilder,
     },
     nanometer,
-    nodes::{EnergyMeter, IdealFilter, NodeGroup, NodeReference, Source},
+    nodes::{
+        EnergyMeter, IdealFilter, NodeGroup, NodeReference, Source, ideal_filter::FilterTypeBuilder,
+    },
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -22,7 +24,7 @@ fn main() -> OpmResult<()> {
     let src = scenery.add_node(Source::new("source", light_data_builder))?;
     let filt = scenery.add_node(IdealFilter::new(
         "50 % filter",
-        &opossum::nodes::FilterType::Constant(0.5),
+        &FilterTypeBuilder::Constant(0.5),
     )?)?;
     let reference = scenery.add_node(NodeReference::from_node(&scenery.node(filt).unwrap()))?;
     let detector = scenery.add_node(EnergyMeter::default())?;
