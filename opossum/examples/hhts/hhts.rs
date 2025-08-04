@@ -22,14 +22,13 @@ use opossum::{
     millimeter, nanometer,
     nodes::{
         BeamSplitter, Dummy, EnergyMeter, IdealFilter, Lens, Metertype, NodeGroup,
-        RayPropagationVisualizer, Source, WaveFront,
+        RayPropagationVisualizer, Source, SplittingConfigBuilder, WaveFront,
         ideal_filter::{EdgeFilter, EdgeFilterType, FilterTypeBuilder, SpectralFilterBuilder},
     },
     optic_node::OpticNode,
     optic_ports::PortType,
     position_distributions::HexagonalTiling,
     radian,
-    ray::SplittingConfig,
     refractive_index::{RefrIndexSellmeier1, refr_index_schott::RefrIndexSchott},
     spectral_distribution::LaserLines,
     spectrum::Spectrum,
@@ -158,15 +157,15 @@ fn main() -> OpmResult<()> {
     let mut group_bs = NodeGroup::new("Dichroic beam splitter");
 
     // ideal spectrum
-    let short_pass_spectrum: Spectrum = EdgeFilter::new(
+    let short_pass_filter = EdgeFilter::new(
         EdgeFilterType::ShortPass,
         nanometer!(700.0),
         None,
         nanometer!(400.0)..nanometer!(2000.0),
         nanometer!(1.),
-    )?
-    .into();
-    let short_pass = SplittingConfig::Spectrum(short_pass_spectrum);
+    )?;
+    let short_pass =
+        SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(short_pass_filter));
 
     // real spectrum (Thorlabs HBSY21)
     //let hbsyx2 = SplittingConfig::Spectrum(Spectrum::from_csv("opossum/examples/hhts/HBSYx2_Reflectivity_45deg_unpol.csv")?);

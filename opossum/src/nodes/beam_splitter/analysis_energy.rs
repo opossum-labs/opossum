@@ -35,8 +35,11 @@ mod test {
     use approx::{AbsDiffEq, assert_abs_diff_eq};
 
     use crate::{
-        analyzers::energy::AnalysisEnergy, light_result::LightResult, lightdata::LightData,
-        nodes::BeamSplitter, optic_node::OpticNode, ray::SplittingConfig,
+        analyzers::energy::AnalysisEnergy,
+        light_result::LightResult,
+        lightdata::LightData,
+        nodes::{BeamSplitter, SplittingConfig, SplittingConfigBuilder},
+        optic_node::OpticNode,
         spectrum_helper::create_he_ne_spec,
     };
 
@@ -49,7 +52,7 @@ mod test {
     }
     #[test]
     fn analyze_one_input() {
-        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
         let mut input = LightResult::default();
         input.insert(
             "input_1".into(),
@@ -73,7 +76,7 @@ mod test {
     }
     #[test]
     fn analyze_two_input() {
-        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
         let mut input = LightResult::default();
         input.insert(
             "input_1".into(),
@@ -103,7 +106,7 @@ mod test {
     }
     #[test]
     fn analyze_inverse() {
-        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         input.insert(

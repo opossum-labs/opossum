@@ -20,7 +20,7 @@ pub use opossum::{
     },
     micrometer, millimeter, nanometer,
     nodes::{
-        NodeAttr,
+        NodeAttr, SplittingConfig, SplittingConfigBuilder,
         fluence_detector::Fluence,
         ideal_filter::{
             BandFilter, BandFilterType, EdgeFilter, EdgeFilterType, FilterTypeBuilder,
@@ -32,7 +32,6 @@ pub use opossum::{
     optic_ports::PortType,
     position_distributions::*,
     properties::{Properties, Property, Proptype},
-    ray::SplittingConfig,
     rays::Rays,
     refractive_index::*,
     reporting::*,

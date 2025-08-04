@@ -42,6 +42,22 @@ impl Display for FilterTypeBuilder {
         }
     }
 }
+impl FilterTypeBuilder {
+    /// Constructs a [`FilterType`] object from the builder.
+    ///
+    /// # Returns
+    /// - A [`FilterType`] instance corresponding to the variant
+    /// # Errors
+    /// Returns an error if the creation of a spectrum from a .csv fails.
+    pub fn build(&self) -> OpmResult<FilterType> {
+        match self {
+            Self::Constant(c) => Ok(FilterType::Constant(*c)),
+            Self::Spectrum(spectral_filter_builder) => {
+                Ok(FilterType::Spectrum(spectral_filter_builder.build()?))
+            }
+        }
+    }
+}
 
 impl DefaultFromName for FilterTypeBuilder {
     fn default_from_name(name: &str) -> Option<Self> {
@@ -127,14 +143,7 @@ impl IdealFilter {
         if let Proptype::FilterTypeBuilder(filter_type_builder) =
             self.node_attr.get_property("filter type builder")?
         {
-            match filter_type_builder {
-                FilterTypeBuilder::Constant(transmission) => {
-                    Ok(FilterType::Constant(*transmission))
-                }
-                FilterTypeBuilder::Spectrum(spectral_filter_builder) => {
-                    Ok(FilterType::Spectrum(spectral_filter_builder.build()?))
-                }
-            }
+            filter_type_builder.build()
         } else {
             Err(OpossumError::Properties(
                 "Property: `filter type builder` not found".into(),
@@ -1065,12 +1074,16 @@ impl SpectralFilterBuilder {
     ///   - `BandFilter`: Converts the contained `BandFilter` to a spectrum.
     ///   - `FromFile`: Loads a given csv file and converts it to a spectrum
     /// # Errors
-    /// Returns an error if the creation of a spectrum from a .sv fails.
+    /// Returns an error if the creation of a spectrum from a .csv fails.
     pub fn build(&self) -> OpmResult<Spectrum> {
         match self {
             Self::EdgeFilter(edge_filter) => Ok(edge_filter.clone().into()),
             Self::BandFilter(band_filter) => Ok(band_filter.clone().into()),
-            Self::FromFile(p) => Spectrum::from_csv(p),
+            Self::FromFile(p) => {
+                let mut spec = Spectrum::from_csv(p)?;
+                spec.normalize_to_max()?;
+                Ok(spec)
+            }
         }
     }
 

@@ -9,17 +9,113 @@ use crate::{
     analyzers::{AnalyzerType, raytrace::MissedSurfaceStrategy},
     error::{OpmResult, OpossumError},
     lightdata::LightData,
+    nodes::ideal_filter::SpectralFilterBuilder,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::Proptype,
-    ray::SplittingConfig,
+    properties::{Proptype, validator::Validator},
     rays::Rays,
     spectrum::{Spectrum, merge_spectra},
     surface::{Plane, geo_surface::GeoSurfaceRef},
-    utils::geom_transformation::Isometry,
+    utils::{default_from_name::DefaultFromName, geom_transformation::Isometry},
 };
 use opm_macros_lib::OpmNode;
-use std::sync::{Arc, Mutex};
+use serde::{Deserialize, Serialize};
+use std::{
+    fmt::Display,
+    sync::{Arc, Mutex},
+};
+use strum::{EnumIter, IntoEnumIterator};
+
+/// Config data builder for a [`BeamSplitter`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+pub enum SplittingConfigBuilder {
+    /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0
+    FixedRatio(f64),
+    /// splitting based on given transmission spectrum.
+    Spectrum(SpectralFilterBuilder),
+}
+
+impl SplittingConfigBuilder {
+    /// Constructs a [`SplittingConfig`] object from the builder.
+    /// # Errors
+    /// Returns an error if the creation of a spectrum fails.
+    pub fn build(&self) -> OpmResult<SplittingConfig> {
+        match self {
+            Self::FixedRatio(c) => Ok(SplittingConfig::Ratio(*c)),
+            Self::Spectrum(spectral_filter_builder) => {
+                Ok(SplittingConfig::Spectrum(spectral_filter_builder.build()?))
+            }
+        }
+    }
+}
+
+impl Display for SplittingConfigBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::FixedRatio(_) => write!(f, "Fixed Ratio"),
+            Self::Spectrum(_) => write!(f, "Spectral filter"),
+        }
+    }
+}
+
+impl DefaultFromName for SplittingConfigBuilder {
+    fn default_from_name(name: &str) -> Option<Self> {
+        for ftb in Self::iter() {
+            if name == format!("{ftb}") {
+                match ftb {
+                    Self::FixedRatio(_) => {
+                        return Some(Self::FixedRatio(1.0));
+                    }
+                    Self::Spectrum(_) => return Some(ftb),
+                }
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+/// Configuration for splitting a [`Ray`] into multiple parts.
+///
+/// This enum defines how a ray is split, either by a fixed ratio or by a wavelength-dependent spectrum.
+pub enum SplittingConfig {
+    /// Ideal beam splitter with a fixed splitting ratio.
+    ///
+    /// The `f64` value must be in the range (0.0..=1.0), where 1.0 means all energy remains in the initial beam,
+    /// and 0.0 means all energy is transferred to the split beam.
+    Ratio(f64),
+    /// Beam splitter with a wavelength-dependent transmission spectrum.
+    ///
+    /// The [`Spectrum`] must contain values in the range (0.0..=1.0).
+    Spectrum(Spectrum),
+}
+impl SplittingConfig {
+    /// Checks the validity of the [`SplittingConfig`].
+    ///
+    /// Returns `true` if all values in the spectrum or the ratio are within the range (0.0..=1.0).
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        match self {
+            Self::Ratio(r) => (0.0..=1.0).contains(r),
+            Self::Spectrum(s) => s.is_transmission_spectrum(),
+        }
+    }
+}
+
+impl Display for SplittingConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ratio(_) => write!(f, "Fixed Ratio"),
+            Self::Spectrum(_) => write!(f, "Split by Spectrum"),
+        }
+    }
+}
+
+impl From<SplittingConfigBuilder> for Proptype {
+    fn from(config: SplittingConfigBuilder) -> Self {
+        Self::SplittingConfigBuilder(config)
+    }
+}
 
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("lightpink")]
@@ -48,10 +144,11 @@ impl Default for BeamSplitter {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("beam splitter");
         node_attr
-            .create_property(
-                "splitter config",
+            .create_property_with_validator(
+                "splitter config builder",
                 "config data of the beam splitter",
-                SplittingConfig::Ratio(0.5).into(),
+                Validator::NumericInRange { min: 0., max: 1. },
+                SplittingConfigBuilder::FixedRatio(0.5).into(),
             )
             .unwrap();
         let mut bs = Self { node_attr };
@@ -64,51 +161,50 @@ impl BeamSplitter {
     ///
     /// ## Errors
     /// This function returns an [`OpossumError::Other`] if the [`SplittingConfig`] is invalid.
-    pub fn new(name: &str, config: &SplittingConfig) -> OpmResult<Self> {
-        if !config.is_valid() {
-            return Err(OpossumError::Properties(
-                "ratio must be within (0.0..=1.0)".into(),
-            ));
-        }
+    pub fn new(name: &str, config: &SplittingConfigBuilder) -> OpmResult<Self> {
         let mut bs = Self::default();
         bs.node_attr.set_name(name);
         bs.node_attr
-            .set_property("splitter config", config.clone().into())?;
+            .set_property("splitter config builder", config.clone().into())?;
         bs.update_surfaces()?;
         Ok(bs)
     }
     /// Returns the splitting config of this [`BeamSplitter`].
     ///
     /// See [`SplittingConfig`] for further details.
-    /// # Panics
-    /// This functions panics if the specified [`Properties`](crate::properties::Properties), here `ratio`, do not exist or if the property has the wrong data format
-    #[must_use]
-    pub fn splitting_config(&self) -> SplittingConfig {
-        if let Ok(Proptype::SplitterType(config)) = self.node_attr.get_property("splitter config") {
-            return config.clone();
+    /// # Errors
+    /// This functions errors if the specified [`Properties`](crate::properties::Properties), do not exist or if the property has the wrong data format
+    pub fn splitting_config(&self) -> OpmResult<SplittingConfig> {
+        if let Ok(Proptype::SplittingConfigBuilder(config)) =
+            self.node_attr.get_property("splitter config builder")
+        {
+            config.build()
+        } else {
+            Err(OpossumError::Other(
+                "property `splitter config` does not exist or has wrong data format".into(),
+            ))
         }
-        panic!("property `splitter config` does not exist or has wrong data format")
     }
     /// Sets the [`SplittingConfig`] of this [`BeamSplitter`].
     ///
     /// # Errors
     /// This function returns an [`OpossumError::Other`] if the [`SplittingConfig`] is invalid.
-    pub fn set_splitting_config(&mut self, config: &SplittingConfig) -> OpmResult<()> {
+    pub fn set_splitting_config(&mut self, config: &SplittingConfigBuilder) -> OpmResult<()> {
         self.node_attr
-            .set_property("splitter config", config.clone().into())?;
+            .set_property("splitter config builder", config.clone().into())?;
         Ok(())
     }
     fn split_spectrum(
-        &self,
         input: Option<&LightData>,
+        splitting_config: &SplittingConfig,
     ) -> OpmResult<(Option<Spectrum>, Option<Spectrum>)> {
         if let Some(in1) = input {
             match in1 {
                 LightData::Energy(spectrum) => {
-                    match self.splitting_config() {
+                    match splitting_config {
                         SplittingConfig::Ratio(r) => {
                             let mut s = spectrum.clone();
-                            s.scale_vertical(&r)?;
+                            s.scale_vertical(r)?;
                             let out1_spectrum = Some(s);
                             let mut s = spectrum.clone();
                             s.scale_vertical(&(1.0 - r))?;
@@ -117,7 +213,7 @@ impl BeamSplitter {
                         },
                         SplittingConfig::Spectrum(spec) => {
                             let mut s = spectrum.clone();
-                            let split_spectrum=s.split_by_spectrum(&spec);
+                            let split_spectrum=s.split_by_spectrum(spec);
                             let out1_spectrum = Some(s);
                             let out2_spectrum = Some(split_spectrum);
                             Ok((out1_spectrum, out2_spectrum))
@@ -139,8 +235,9 @@ impl BeamSplitter {
         in1: Option<&LightData>,
         in2: Option<&LightData>,
     ) -> OpmResult<(Option<LightData>, Option<LightData>)> {
-        let (out1_1_spectrum, out1_2_spectrum) = self.split_spectrum(in1)?;
-        let (out2_1_spectrum, out2_2_spectrum) = self.split_spectrum(in2)?;
+        let splitting_config = self.splitting_config()?;
+        let (out1_1_spectrum, out1_2_spectrum) = Self::split_spectrum(in1, &splitting_config)?;
+        let (out2_1_spectrum, out2_2_spectrum) = Self::split_spectrum(in2, &splitting_config)?;
 
         let out1_spec = merge_spectra(out1_1_spectrum, out2_2_spectrum);
         let out2_spec = merge_spectra(out1_2_spectrum, out2_1_spectrum);
@@ -169,13 +266,7 @@ impl BeamSplitter {
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
         }
-        let Proptype::SplitterType(splitting_config) =
-            self.node_attr.get_property("splitter config")?.clone()
-        else {
-            return Err(OpossumError::Analysis(
-                "could not read splitter config property".into(),
-            ));
-        };
+        let splitting_config = self.splitting_config()?;
         let refraction_intended = true;
         let missed_surface_strategy = match analyzer_type {
             AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
@@ -332,7 +423,10 @@ mod test {
     #[test]
     fn default() {
         let mut node = BeamSplitter::default();
-        assert!(matches!(node.splitting_config(), SplittingConfig::Ratio(_)));
+        assert!(matches!(
+            node.splitting_config().unwrap(),
+            SplittingConfig::Ratio(_)
+        ));
         assert_eq!(node.name(), "beam splitter");
         assert_eq!(node.node_type(), "beam splitter");
         assert_eq!(node.inverted(), false);
@@ -341,12 +435,12 @@ mod test {
     }
     #[test]
     fn new() {
-        let splitter = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6));
+        let splitter = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6));
         assert!(splitter.is_ok());
         let splitter = splitter.unwrap();
         assert_eq!(splitter.name(), "test");
-        assert!(BeamSplitter::new("test", &SplittingConfig::Ratio(-0.01)).is_err());
-        assert!(BeamSplitter::new("test", &SplittingConfig::Ratio(1.01)).is_err());
+        assert!(BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(-0.01)).is_err());
+        assert!(BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(1.01)).is_err());
     }
     #[test]
     fn inverted() {

@@ -9,10 +9,9 @@ use opossum::{
     },
     millimeter, nanometer,
     nodes::{
-        BeamSplitter, NodeGroup, Source, Spectrometer, SpectrometerType,
+        BeamSplitter, NodeGroup, Source, Spectrometer, SpectrometerType, SplittingConfigBuilder,
         ideal_filter::{EdgeFilter, EdgeFilterType},
     },
-    ray::SplittingConfig,
 };
 use std::path::Path;
 
@@ -31,7 +30,7 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(src)?;
     let i_s1 = scenery.add_node(Spectrometer::new("Source 1", SpectrometerType::Ideal))?;
 
-    let splitting_config_1 = SplittingConfig::Spectrum(
+    let splitting_config_1 = SplittingConfigBuilder::Spectrum(
         EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(980.0),
@@ -48,7 +47,7 @@ fn main() -> OpmResult<()> {
 
     let i_s3 = scenery.add_node(Spectrometer::new("BS1 Output 2", SpectrometerType::Ideal))?;
 
-    let splitting_config_2 = SplittingConfig::Spectrum(
+    let splitting_config_2 = SplittingConfigBuilder::Spectrum(
         EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(1025.0),

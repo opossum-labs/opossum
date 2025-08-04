@@ -3,7 +3,7 @@ use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
     error::{OpmResult, OpossumError},
-    nodes::ideal_filter::FilterTypeBuilder,
+    nodes::{SplittingConfigBuilder, ideal_filter::FilterTypeBuilder},
     properties::Proptype,
 };
 use std::fmt::Debug;
@@ -186,7 +186,11 @@ impl Validator {
             Proptype::WfLambda(l, _) => allowed_range.contains(l),
             Proptype::FilterTypeBuilder(ftb) => match ftb {
                 FilterTypeBuilder::Constant(c) => allowed_range.contains(c),
-                FilterTypeBuilder::Spectrum(_) => true,
+                FilterTypeBuilder::Spectrum(s) => s.build()?.values_are_in_range(min, max),
+            },
+            Proptype::SplittingConfigBuilder(ftb) => match ftb {
+                SplittingConfigBuilder::FixedRatio(c) => allowed_range.contains(c),
+                SplittingConfigBuilder::Spectrum(s) => s.build()?.values_are_in_range(min, max),
             },
             _ => true, // Silently ignore if not numeric
         };

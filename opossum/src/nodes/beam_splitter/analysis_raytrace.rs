@@ -103,9 +103,9 @@ mod test {
         light_result::LightResult,
         lightdata::LightData,
         millimeter, nanometer,
-        nodes::BeamSplitter,
+        nodes::{BeamSplitter, SplittingConfig, SplittingConfigBuilder},
         optic_node::OpticNode,
-        ray::{Ray, SplittingConfig},
+        ray::Ray,
         rays::Rays,
         utils::geom_transformation::Isometry,
     };
@@ -120,7 +120,7 @@ mod test {
     }
     #[test]
     fn analyze_one_input() {
-        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
         node.set_isometry(Isometry::identity()).unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
@@ -147,7 +147,7 @@ mod test {
     }
     #[test]
     fn analyze_two_input() {
-        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
         node.set_isometry(Isometry::identity()).unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
@@ -181,7 +181,7 @@ mod test {
     }
     #[test]
     fn analyze_inverse() {
-        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
         node.set_isometry(Isometry::identity()).unwrap();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();

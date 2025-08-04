@@ -9,9 +9,9 @@ use opossum::{
     nanometer,
     nodes::{
         BeamSplitter, EnergyMeter, IdealFilter, NodeGroup, Source, Spectrometer,
+        SplittingConfigBuilder,
         ideal_filter::{BandFilter, BandFilterType, FilterTypeBuilder, SpectralFilterBuilder},
     },
-    ray::SplittingConfig,
 };
 use uom::si::f64::Length;
 
@@ -30,7 +30,8 @@ fn main() -> OpmResult<()> {
         .into(),
     ));
     let i_s = scenery.add_node(Source::new("Source", light_data_builder))?;
-    let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap())?;
+    let i_bs = scenery
+        .add_node(BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap())?;
 
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",

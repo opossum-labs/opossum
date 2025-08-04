@@ -1,15 +1,24 @@
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::{DefaultFromName, Property, Proptype, SplittingConfig};
+use opossum_backend::{DefaultFromName, Property, SplittingConfigBuilder};
 
-use crate::components::node_editor::{inputs::{input_components::{LabeledSelect, RowedInputs}, select_options_from_enum_iterator, InputData, InputParam}, node_editor_component::NodeChange, property_editor::use_set_node_change_property};
+use crate::components::node_editor::{
+    inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
+    node_editor_component::NodeChange,
+    property_editor::use_set_node_change_property,
+};
 
 #[component]
-pub fn SplitterTypeEditor (splitting_config: SplittingConfig, property_key: String, node_change: Signal<Option<NodeChange>>, property: Property) -> Element{
-    let mut splitting_config_builder_sig = use_signal(|| splitting_config.clone());
+pub fn SplitterTypeEditor(
+    splitting_config_builder: SplittingConfigBuilder,
+    property_key: String,
+    node_change: Signal<Option<NodeChange>>,
+    property: Property,
+) -> Element {
+    let mut splitting_config_builder_sig = use_signal(|| splitting_config_builder.clone());
     use_set_node_change_property(
         &property_key,
-        splitting_config,
+        splitting_config_builder,
         splitting_config_builder_sig,
         node_change,
     );
@@ -21,8 +30,10 @@ pub fn SplitterTypeEditor (splitting_config: SplittingConfig, property_key: Stri
             options: select_options_from_enum_iterator(&*splitting_config_builder_sig.read(), None),
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
-                if let Some(splitting_type) = SplittingConfig::default_from_name(val.as_str()) {
-                    splitting_config_builder_sig.set(splitting_type);
+                if let Some(splitting_config_builder) = SplittingConfigBuilder::default_from_name(
+                    val.as_str(),
+                ) {
+                    splitting_config_builder_sig.set(splitting_config_builder);
                 }
             },
         }
@@ -85,7 +96,6 @@ pub fn SplitterTypeEditor (splitting_config: SplittingConfig, property_key: Stri
 //         }
 //     }
 // }
-
 
 // fn get_splitting_config_input_data(splitting_config: &SplittingConfig, prop_type_sig: Signal<Proptype>,) -> Vec<InputData>{
 //     match splitting_config{

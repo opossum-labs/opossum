@@ -69,7 +69,7 @@ pub fn SpectralFilterTypeEditor(
                 spectral_filter_builder_sig,
             );
             rsx! {
-                InputParamLabeledInput{input_data}
+                InputParamLabeledInput { input_data }
             }
         }
     };

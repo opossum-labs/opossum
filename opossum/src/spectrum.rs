@@ -117,6 +117,26 @@ impl Spectrum {
         }
         Ok(Self { data: datas })
     }
+
+    ///Normalizes a spectrum such that its maximum value corresponds to 1
+    /// # Errors
+    /// This function errors if the maximum value is smaller or equal to zero
+    pub fn normalize_to_max(&mut self) -> OpmResult<()> {
+        let max_value = self
+            .data
+            .iter()
+            .fold(0., |init, (_, val)| if *val > init { *val } else { init });
+        if max_value > 0. {
+            self.data.iter_mut().for_each(|(_, val)| *val /= max_value);
+            Ok(())
+        } else {
+            Err(OpossumError::Other(
+                "Cannot normalize spectrum to its maximum value with a maximum value of zero!"
+                    .into(),
+            ))
+        }
+    }
+
     /// Generate a spectrum from a list of narrow laser lines (center wavelength, Energy) and a spectrum resolution.
     ///
     /// # Errors
@@ -227,12 +247,20 @@ impl Spectrum {
             Err(OpossumError::Spectrum("insertion point not found".into()))
         }
     }
-    /// Check if the [`Spectrum`] could server as a transmission spectrum.
+    /// Check if the [`Spectrum`] could serve as a transmission spectrum.
     ///
     /// This functions checks if all values are in the range (0.0..=1.0)
     #[must_use]
     pub fn is_transmission_spectrum(&self) -> bool {
         self.data.iter().all(|d| (0.0..=1.0).contains(&d.1))
+    }
+
+    /// Check if the [`Spectrum`] values are in a specific range.
+    ///
+    /// This functions checks if all values are in the range (0.0..=1.0)
+    #[must_use]
+    pub fn values_are_in_range(&self, min: f64, max: f64) -> bool {
+        self.data.iter().all(|d| (min..=max).contains(&d.1))
     }
     /// Returns the iterator of this [`Spectrum`].
     pub fn iter(&self) -> std::slice::Iter<'_, (f64, f64)> {

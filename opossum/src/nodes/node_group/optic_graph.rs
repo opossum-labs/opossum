@@ -1231,8 +1231,10 @@ mod test {
     use super::*;
     use crate::{
         millimeter,
-        nodes::{BeamSplitter, Dummy, NodeGroup, NodeReference, Source},
-        ray::SplittingConfig,
+        nodes::{
+            BeamSplitter, Dummy, NodeGroup, NodeReference, Source, SplittingConfig,
+            SplittingConfigBuilder,
+        },
         spectrum_helper::create_he_ne_spec,
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
@@ -1534,7 +1536,8 @@ mod test {
         let mut og = OpticGraph::default();
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(Dummy::default()).unwrap();
-        let sub_node3 = BeamSplitter::new("test", &SplittingConfig::Ratio(0.5)).unwrap();
+        let sub_node3 =
+            BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.5)).unwrap();
         let sn3_i = og.add_node(sub_node3).unwrap();
         og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
@@ -1549,7 +1552,8 @@ mod test {
     fn output_nodes() {
         let mut og = OpticGraph::default();
         let sn1_i = og.add_node(Dummy::default()).unwrap();
-        let sub_node1 = BeamSplitter::new("test", &SplittingConfig::Ratio(0.5)).unwrap();
+        let sub_node1 =
+            BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.5)).unwrap();
         let sn2_i = og.add_node(sub_node1).unwrap();
         let sn3_i = og.add_node(Dummy::default()).unwrap();
         og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
@@ -1658,7 +1662,7 @@ mod test {
         let mut graph = OpticGraph::default();
         let g1_n1 = graph.add_node(Dummy::default()).unwrap();
         let g1_n2 = graph
-            .add_node(BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap())
+            .add_node(BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap())
             .unwrap();
         graph
             .map_port(g1_n2, &PortType::Output, "out1_trans1_refl2", "output_1")
