@@ -19,7 +19,14 @@ pub use opossum::{
         light_data_builder, ray_data_builder,
     },
     micrometer, millimeter, nanometer,
-    nodes::{NodeAttr, fluence_detector::Fluence},
+    nodes::{
+        NodeAttr,
+        fluence_detector::Fluence,
+        ideal_filter::{
+            BandFilter, BandFilterType, EdgeFilter, EdgeFilterType, FilterTypeBuilder,
+            SpectralFilterBuilder,
+        },
+    },
     num_per_mm,
     opm_document::AnalyzerInfo,
     optic_ports::PortType,

@@ -36,3 +36,14 @@ pub fn AccordionItem(
         }
     }
 }
+
+#[component]
+pub fn ElementList(element_list: Vec<Element>) -> Element {
+    rsx! {
+        div { class: "bg-dark",
+            for element in element_list {
+                {element}
+            }
+        }
+    }
+}

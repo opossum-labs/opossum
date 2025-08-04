@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
@@ -43,7 +44,7 @@ use std::fmt::Debug;
 //     }
 // }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Validator {
     NumericIsFinite,
     NumericIsNotNaN,

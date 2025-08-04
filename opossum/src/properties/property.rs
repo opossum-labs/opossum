@@ -12,12 +12,12 @@ use std::{mem, path::Path};
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a validator.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(transparent)]
+// #[serde(transparent)]
 pub struct Property {
     prop: Proptype,
     #[serde(skip)]
     description: String,
-    #[serde(skip)]
+    // #[serde(skip)]
     validator: Option<Validator>,
     // validator: Option<Box<dyn Validator>>,
 }
@@ -67,6 +67,16 @@ impl Property {
         }
         self.prop = prop;
         Ok(())
+    }
+
+    /// Validates the new proptype if a validator is defined
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn validate_proptype(&self, prop: &Proptype) -> OpmResult<()> {
+        self.validator
+            .as_ref()
+            .map_or_else(|| Ok(()), |validator| validator.validate(prop))
     }
     /// Export this [`Property`] to a file at the given `report_path`.
     ///
