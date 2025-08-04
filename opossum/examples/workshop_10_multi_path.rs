@@ -34,6 +34,7 @@ fn main() -> OpmResult<()> {
         EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(980.0),
+            (0.)..(1.),
             None,
             nanometer!(800.0)..nanometer!(1100.0),
             nanometer!(0.5),
@@ -51,6 +52,7 @@ fn main() -> OpmResult<()> {
         EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(1025.0),
+            (0.)..(1.),
             None,
             nanometer!(800.0)..nanometer!(1100.0),
             nanometer!(0.5),

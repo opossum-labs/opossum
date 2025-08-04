@@ -1490,6 +1490,7 @@ mod test {
         let spectrum: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             nanometer!(1000.0),
+            (0.)..(1.),
             None,
             nanometer!(500.0)..nanometer!(1500.0),
             nanometer!(1.0),
@@ -1519,6 +1520,7 @@ mod test {
         let spectrum: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             nanometer!(1000.0),
+            (0.)..(1.),
             None,
             nanometer!(500.0)..nanometer!(1500.0),
             nanometer!(1.0),

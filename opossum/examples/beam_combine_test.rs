@@ -37,6 +37,7 @@ fn main() -> OpmResult<()> {
         &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(700.0),
+            (0.)..(1.),
             None,
             nanometer!(400.0)..nanometer!(1100.0),
             nanometer!(1.),

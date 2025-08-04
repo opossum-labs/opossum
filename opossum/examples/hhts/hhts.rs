@@ -160,6 +160,7 @@ fn main() -> OpmResult<()> {
     let short_pass_filter = EdgeFilter::new(
         EdgeFilterType::ShortPass,
         nanometer!(700.0),
+        (0.)..(1.),
         None,
         nanometer!(400.0)..nanometer!(2000.0),
         nanometer!(1.),

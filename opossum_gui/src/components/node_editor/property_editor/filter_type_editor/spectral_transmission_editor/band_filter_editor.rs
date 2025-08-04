@@ -59,6 +59,8 @@ pub enum BandFilterParam {
     CenterWavelength,
     Width,
     SmoothStepWidth,
+    TransmissionStart,
+    TransmissionEnd,
     RangeStart,
     RangeEnd,
     Resolution,
@@ -73,6 +75,8 @@ impl From<BandFilterParam> for InputParam {
             ),
             BandFilterParam::CenterWavelength => Self::Length("Center λ in nm".to_string()),
             BandFilterParam::Width => Self::Length("FWHM in nm".to_string()),
+            BandFilterParam::TransmissionStart => Self::Length("Minimum transmission".to_string()),
+            BandFilterParam::TransmissionEnd => Self::Length("Maximum transmission".to_string()),
             BandFilterParam::SmoothStepWidth => Self::Length("Smoothing width in nm".to_string()),
             BandFilterParam::RangeStart => Self::Length("Start λ in nm".to_string()),
             BandFilterParam::RangeEnd => Self::Length("End λ in nm".to_string()),
@@ -87,6 +91,8 @@ impl IntoInputDataStrings<BandFilter> for BandFilterParam {
             Self::FilterType(_) => "FilterType",
             Self::CenterWavelength => "CenterWvl",
             Self::Width => "BandWidth",
+            Self::TransmissionStart => "TransmissionStart",
+            Self::TransmissionEnd => "TransmissionEnd",
             Self::SmoothStepWidth => "SmoothingWidth",
             Self::RangeStart => "StartWvl",
             Self::RangeEnd => "EndWvl",
@@ -100,6 +106,8 @@ impl IntoInputDataStrings<BandFilter> for BandFilterParam {
             Self::FilterType(bft) => bft.to_string(),
             Self::CenterWavelength => format!("{:.3}", obj.center_wavelength().get::<nanometer>()),
             Self::Width => format!("{:.3}", obj.width().get::<nanometer>()),
+            Self::TransmissionStart => format!("{:.3}", obj.transmission_range().start),
+            Self::TransmissionEnd => format!("{:.3}", obj.transmission_range().end),
             Self::SmoothStepWidth => format!(
                 "{:.3}",
                 obj.smooth_step_width().map_or(0., |s| s.get::<nanometer>())
@@ -164,6 +172,20 @@ impl IntoInputData<f64, BandFilter, BandFilter> for BandFilterParam {
                     OPOSSUM_UI_LOGS
                         .write()
                         .add_log(&format!("Invalid range-end value: {val}"));
+                });
+            },
+            Self::TransmissionStart => move |obj: &mut BandFilter, val: f64| {
+                obj.set_transmission_range_start(val).unwrap_or_else(|_| {
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log(&format!("Invalid minimum transmission value: {val}"));
+                });
+            },
+            Self::TransmissionEnd => move |obj: &mut BandFilter, val: f64| {
+                obj.set_transmission_range_end(val).unwrap_or_else(|_| {
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log(&format!("Invalid maximum transmission value: {val}"));
                 });
             },
             Self::Resolution => move |obj: &mut BandFilter, val: f64| {

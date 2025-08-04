@@ -59,6 +59,8 @@ pub enum EdgeFilterParam {
     EdgeWavelength,
     SmoothStepWidth,
     Resolution,
+    TransmissionStart,
+    TransmissionEnd,
     RangeStart,
     RangeEnd,
 }
@@ -70,6 +72,8 @@ impl From<EdgeFilterParam> for InputParam {
                 "Edge filter type".to_string(),
                 select_options_from_enum_iterator(&bft, None),
             ),
+            EdgeFilterParam::TransmissionStart => Self::Length("Minimum transmission".to_string()),
+            EdgeFilterParam::TransmissionEnd => Self::Length("Maximum transmission".to_string()),
             EdgeFilterParam::EdgeWavelength => Self::Length("Edge λ in nm".to_string()),
             EdgeFilterParam::SmoothStepWidth => Self::Length("Smoothing width in nm".to_string()),
             EdgeFilterParam::RangeStart => Self::Length("Start λ in nm".to_string()),
@@ -84,6 +88,8 @@ impl IntoInputDataStrings<EdgeFilter> for EdgeFilterParam {
         let id_str = match self {
             Self::FilterType(_) => "FilterType",
             Self::EdgeWavelength => "EdgeWvl",
+            Self::TransmissionStart => "TransmissionStart",
+            Self::TransmissionEnd => "TransmissionEnd",
             Self::SmoothStepWidth => "SmoothingWidth",
             Self::RangeStart => "StartWvl",
             Self::RangeEnd => "EndWvl",
@@ -100,6 +106,8 @@ impl IntoInputDataStrings<EdgeFilter> for EdgeFilterParam {
                 "{:.3}",
                 obj.smooth_step_width().map_or(0., |s| s.get::<nanometer>())
             ),
+             Self::TransmissionStart => format!("{:.3}", obj.transmission_range().start),
+            Self::TransmissionEnd => format!("{:.3}", obj.transmission_range().end),
             Self::RangeStart => format!("{:.3}", obj.range().start.get::<nanometer>()),
             Self::RangeEnd => format!("{:.3}", obj.range().end.get::<nanometer>()),
             Self::Resolution => format!("{:.3}", obj.resolution().get::<nanometer>()),
@@ -141,6 +149,20 @@ impl IntoInputData<f64, EdgeFilter, EdgeFilter> for EdgeFilterParam {
                 }
             },
 
+            Self::TransmissionStart => move |obj: &mut EdgeFilter, val: f64| {
+                obj.set_transmission_range_start(val).unwrap_or_else(|_| {
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log(&format!("Invalid minimum transmission value: {val}"));
+                });
+            },
+            Self::TransmissionEnd => move |obj: &mut EdgeFilter, val: f64| {
+                obj.set_transmission_range_end(val).unwrap_or_else(|_| {
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log(&format!("Invalid maximum transmission value: {val}"));
+                });
+            },
             Self::RangeStart => move |obj: &mut EdgeFilter, val: f64| {
                 obj.set_range_start(nanometer!(val)).unwrap_or_else(|_| {
                     OPOSSUM_UI_LOGS
