@@ -599,8 +599,8 @@ impl EdgeFilter {
     #[must_use]
     pub fn transmission(&self, wavelength: Length) -> f64 {
         let (before_edge_wvl, after_edge_wvl, angle_sign) = match self.edge_filter_type() {
-            EdgeFilterType::LongPass => (0., 1., 1.),
-            EdgeFilterType::ShortPass => (1., 0., -1.),
+            EdgeFilterType::LongPass => (self.transmission_range.start, self.transmission_range.end, 1.),
+            EdgeFilterType::ShortPass => (self.transmission_range.end, self.transmission_range.start, -1.),
         };
 
         self.smooth_step_width().map_or_else(
@@ -625,6 +625,7 @@ impl EdgeFilter {
         after_edge_wvl: f64,
         angle_sign: f64,
     ) -> f64 {
+        let transmission_diff = self.transmission_range.end-self.transmission_range.start;
         let wvl_diff = wavelength - self.edge_wavelength();
         if wvl_diff <= -width / 2.0 {
             before_edge_wvl
@@ -632,7 +633,7 @@ impl EdgeFilter {
             after_edge_wvl
         } else {
             let angle = (std::f64::consts::PI / width * wvl_diff).value;
-            0.5f64.mul_add(angle_sign * angle.sin(), 0.5)
+            (0.5*transmission_diff).mul_add(angle_sign * angle.sin(), 0.5*transmission_diff)
         }
     }
 
@@ -657,8 +658,8 @@ impl From<EdgeFilter> for Spectrum {
             Self::new(edge_filter.range().clone(), edge_filter.resolution()).unwrap();
 
         let (before_edge_wvl, after_edge_wvl, angle_sign) = match edge_filter.edge_filter_type() {
-            EdgeFilterType::LongPass => (0., 1., 1.),
-            EdgeFilterType::ShortPass => (1., 0., -1.),
+            EdgeFilterType::LongPass => (edge_filter.transmission_range().start, edge_filter.transmission_range().end, 1.),
+            EdgeFilterType::ShortPass => (edge_filter.transmission_range().end, edge_filter.transmission_range().start, -1.),
         };
         if let Some(width) = edge_filter.smooth_step_width() {
             spectrum.map_mut(|(lambda, _)| {
@@ -1152,7 +1153,7 @@ impl From<BandFilter> for Spectrum {
             let lower_end   = -half_band + transition;
             let upper_start =  half_band - transition;
             let upper_end   =  half_band + transition;
-            let diff = band_filter.transmission_range().end-band_filter.transmission_range().start;
+            let transmission_diff = band_filter.transmission_range().end-band_filter.transmission_range().start;
             spectrum.map_mut(|(lambda, _)| {
 
 
@@ -1166,11 +1167,11 @@ impl From<BandFilter> for Spectrum {
             } else if wvl_diff > lower_start && wvl_diff < lower_end {
                 // Lower transition
                 let x = (wvl_diff - lower_start) / (2.0*transition);
-                (angle_sign * 0.5*diff).mul_add((std::f64::consts::PI * x).cos(), 0.5*diff)
+                (angle_sign * 0.5*transmission_diff).mul_add((std::f64::consts::PI * x).cos(), 0.5*transmission_diff)
             } else {
                 // Upper transition
                 let x = (upper_end - wvl_diff) / (2.0*transition);
-                (angle_sign * 0.5*diff).mul_add((std::f64::consts::PI * x).cos(), 0.5*diff)
+                (angle_sign * 0.5*transmission_diff).mul_add((std::f64::consts::PI * x).cos(), 0.5*transmission_diff)
             };
             (*lambda, amp)
             });
