@@ -633,7 +633,7 @@ impl EdgeFilter {
             after_edge_wvl
         } else {
             let angle = (std::f64::consts::PI / width * wvl_diff).value;
-            (0.5*transmission_diff).mul_add(angle_sign * angle.sin(), 0.5*transmission_diff)
+            (0.5*transmission_diff).mul_add(angle_sign * angle.sin(), 0.5*transmission_diff+self.transmission_range().start)
         }
     }
 
@@ -1167,11 +1167,11 @@ impl From<BandFilter> for Spectrum {
             } else if wvl_diff > lower_start && wvl_diff < lower_end {
                 // Lower transition
                 let x = (wvl_diff - lower_start) / (2.0*transition);
-                (angle_sign * 0.5*transmission_diff).mul_add((std::f64::consts::PI * x).cos(), 0.5*transmission_diff)
+                (angle_sign * 0.5*transmission_diff).mul_add((std::f64::consts::PI * x).cos(), 0.5*transmission_diff + band_filter.transmission_range().start)
             } else {
                 // Upper transition
                 let x = (upper_end - wvl_diff) / (2.0*transition);
-                (angle_sign * 0.5*transmission_diff).mul_add((std::f64::consts::PI * x).cos(), 0.5*transmission_diff)
+                (angle_sign * 0.5*transmission_diff).mul_add((std::f64::consts::PI * x).cos(), 0.5*transmission_diff + band_filter.transmission_range().start)
             };
             (*lambda, amp)
             });
