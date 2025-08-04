@@ -15,7 +15,7 @@ mod linear_density_editor;
 mod refractive_index_editor;
 mod string_editor;
 mod vec2_editor;
-// mod splitter_type_editor;
+mod splitter_type_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
@@ -32,7 +32,7 @@ use crate::components::node_editor::{
         length_editor::LengthEditor,
         length_option_editor::LengthOptionEditor,
         light_data_editor::LightDataEditor,
-        // splitter_type_editor::SplitterTypeEditor,
+        splitter_type_editor::SplitterTypeEditor,
         linear_density_editor::LinearDensityEditor,
         refractive_index_editor::RefractiveIndexEditor,
         string_editor::StringEditor,
@@ -87,10 +87,14 @@ fn get_editor(
         Proptype::Bool(b) => Some(rsx! {
             BoolEditor { b, property_key, node_change }
         }),
-        Proptype::SplitterType(_splitting_config) => {
-            println!("splittertype not yet implemented");
-            Some(rsx! {})
-        }
+        Proptype::SplitterType(splitting_config) => Some(rsx! {
+            SplitterTypeEditor {
+                splitting_config,
+                property_key,
+                node_change,
+                property,
+            }
+        }),
         Proptype::FilterTypeBuilder(filter_type_builder) => Some(rsx! {
             FilterTypeEditor {
                 filter_type_builder,

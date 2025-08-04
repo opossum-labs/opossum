@@ -19,7 +19,7 @@ use crate::{
     analyzers::raytrace::MissedSurfaceStrategy,
     error::{OpmResult, OpossumError},
     joule, meter,
-    nodes::{FilterType, fluence_detector::Fluence},
+    nodes::{fluence_detector::Fluence, FilterType},
     properties::Proptype,
     rays::{FluenceRays, Rays},
     spectrum::Spectrum,
@@ -27,7 +27,7 @@ use crate::{
         hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
         optic_surface::OpticSurface,
     },
-    utils::geom_transformation::Isometry,
+    utils::{default_from_name::DefaultFromName, geom_transformation::Isometry},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
@@ -61,11 +61,14 @@ impl SplittingConfig {
 impl Display for SplittingConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Ratio(_) => write!(f, "RatioSplit"),
-            Self::Spectrum(_) => write!(f, "SpectrumSplit"),
+            Self::Ratio(_) => write!(f, "Fixed Ratio"),
+            Self::Spectrum(_) => write!(f, "Split by Spectrum"),
         }
     }
 }
+
+impl DefaultFromName for SplittingConfig {}
+
 impl From<SplittingConfig> for Proptype {
     fn from(config: SplittingConfig) -> Self {
         Self::SplitterType(config)

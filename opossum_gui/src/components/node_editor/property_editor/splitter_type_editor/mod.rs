@@ -1,21 +1,28 @@
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::{Proptype, SplittingConfig, DefaultFromName};
+use opossum_backend::{DefaultFromName, Property, Proptype, SplittingConfig};
 
-use crate::components::node_editor::inputs::{input_components::{LabeledSelect, RowedInputs}, select_options_from_enum_iterator, InputData, InputParam};
+use crate::components::node_editor::{inputs::{input_components::{LabeledSelect, RowedInputs}, select_options_from_enum_iterator, InputData, InputParam}, node_editor_component::NodeChange, property_editor::use_set_node_change_property};
 
 #[component]
-pub fn SplitterTypeEditor (splitting_config: SplittingConfig, property_key: String, prop_type_sig: Signal<Proptype> ) -> Element{
+pub fn SplitterTypeEditor (splitting_config: SplittingConfig, property_key: String, node_change: Signal<Option<NodeChange>>, property: Property) -> Element{
+    let mut splitting_config_builder_sig = use_signal(|| splitting_config.clone());
+    use_set_node_change_property(
+        &property_key,
+        splitting_config,
+        splitting_config_builder_sig,
+        node_change,
+    );
     let select_id = format!("splitterTypeProperty{property_key}").to_camel_case();
     rsx! {
         LabeledSelect {
             id: select_id,
             label: "Splitting configuration",
-            options: select_options_from_enum_iterator(&splitting_config, None),
+            options: select_options_from_enum_iterator(&*splitting_config_builder_sig.read(), None),
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(splitting_type) = SplittingConfig::default_from_name(val.as_str()) {
-                    prop_type_sig.set(splitting_type.into());
+                    splitting_config_builder_sig.set(splitting_type);
                 }
             },
         }
