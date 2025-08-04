@@ -61,6 +61,7 @@ pub enum InputParam {
     U8(String),
     F64(String),
     Length(String),
+    Selection(String, Vec<(bool, String)>),
     Energy(String),
     Angle(String),
     Bool(String),
@@ -73,6 +74,7 @@ impl InputParam {
         match self {
             Self::Usize(label)
             | Self::U8(label)
+            | Self::Selection(label, _)
             | Self::F64(label)
             | Self::Length(label)
             | Self::Energy(label)
@@ -92,6 +94,7 @@ impl InputParam {
             | Self::Angle(_) => "number",
             Self::Bool(_) => "checkbox",
             Self::FilePath(_, _) => "file",
+            Self::Selection(_, _) => "select",
         }
     }
 

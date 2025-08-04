@@ -15,6 +15,6 @@ pub trait DefaultFromName: IntoEnumIterator + Display + Clone + PartialEq {
     /// - `None` if the name is unknown.
     #[must_use]
     fn default_from_name(name: &str) -> Option<Self> {
-        Self::iter().find(|ref_ind_type| format!("{ref_ind_type}") == name)
+        Self::iter().find(|enum_variant| format!("{enum_variant}") == name)
     }
 }

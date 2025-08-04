@@ -581,15 +581,18 @@ async fn post_node_property(
     };
     let document = data.document.lock();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
-        node_ref
+        let value = node_ref
             .optical_ref
             .lock()
             .unwrap()
             .node_attr_mut()
-            .set_property(prop_key.as_str(), prop_value)?;
-        Ok(HttpResponse::Ok()
-            .content_type("application/ron")
-            .body(ron::ser::to_string("").unwrap()))
+            .set_property(prop_key.as_str(), prop_value);
+        match value {
+            Ok(()) => Ok(HttpResponse::Ok()
+                .content_type("application/ron")
+                .body(ron::ser::to_string("").unwrap())),
+            Err(e) => Err(ErrorResponse::new(400, "Opossum", e.to_string().as_str())),
+        }
     } else {
         Err(ErrorResponse::new(
             404,

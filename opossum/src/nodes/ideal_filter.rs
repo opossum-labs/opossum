@@ -15,22 +15,48 @@ use crate::{
     properties::{Proptype, validator::Validator},
     rays::Rays,
     spectrum::Spectrum,
+    utils::default_from_name::DefaultFromName,
 };
 use log::warn;
 use num::{Float, Zero};
 use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
-use std::{ops::Range, path::PathBuf};
-use strum::EnumIter;
+use std::{fmt::Display, ops::Range, path::PathBuf, str::FromStr};
+use strum::{EnumIter, IntoEnumIterator};
 use uom::si::{f64::Length, length::micrometer};
 
 /// Config data builder for an [`IdealFilter`].
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
 pub enum FilterTypeBuilder {
     /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0
     Constant(f64),
     /// filter based on given transmission spectrum.
     Spectrum(SpectralFilterBuilder),
+}
+
+impl Display for FilterTypeBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Constant(_) => write!(f, "Constant"),
+            Self::Spectrum(_) => write!(f, "Spectral filter"),
+        }
+    }
+}
+
+impl DefaultFromName for FilterTypeBuilder {
+    fn default_from_name(name: &str) -> Option<Self> {
+        for ftb in Self::iter() {
+            if name == format!("{ftb}") {
+                match ftb {
+                    Self::Constant(_) => {
+                        return Some(Self::Constant(1.0));
+                    }
+                    Self::Spectrum(_) => return Some(ftb),
+                }
+            }
+        }
+        None
+    }
 }
 
 /// Config data for an [`IdealFilter`].
@@ -168,14 +194,26 @@ impl IdealFilter {
 ///
 /// - `LongPass`: Allows wavelengths longer than the specified edge wavelength to pass.
 /// - `ShortPass`: Allows wavelengths shorter than the specified edge wavelength to pass.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, Copy, Default)]
 pub enum EdgeFilterType {
     /// Passes wavelengths longer than the edge wavelength.
     LongPass,
 
     /// Passes wavelengths shorter than the edge wavelength.
+    #[default]
     ShortPass,
 }
+
+impl Display for EdgeFilterType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LongPass => write!(f, "Long pass"),
+            Self::ShortPass => write!(f, "Short pass"),
+        }
+    }
+}
+
+impl DefaultFromName for EdgeFilterType {}
 
 /// Represents an optical edge filter with defined characteristics.
 ///
@@ -215,6 +253,21 @@ impl Default for EdgeFilter {
             range: nanometer!(900.)..nanometer!(1100.),
             resolution: nanometer!(0.2),
         }
+    }
+}
+
+impl FromStr for EdgeFilterType {
+    type Err = OpossumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::default_from_name(s).map_or_else(
+            || {
+                Err(OpossumError::Other(
+                    "Invalid str identifier to create EdgeFilterType from string!".into(),
+                ))
+            },
+            Ok,
+        )
     }
 }
 
@@ -393,6 +446,52 @@ impl EdgeFilter {
         Ok(())
     }
 
+    /// Sets the wavelength range start.
+    ///
+    /// # Parameters
+    /// - `start`: The new start of the wavelength range.
+    ///
+    /// # Errors
+    /// Returns an error if the start is invalid.
+    pub fn set_range_start(&mut self, start: Length) -> OpmResult<()> {
+        if !start.is_normal() || start.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "Wavelength-range start must be positive and finite!".into(),
+            ));
+        }
+        if self.range.end <= start {
+            return Err(OpossumError::Other(
+                "Wavelength-range start smaller than end!".into(),
+            ));
+        }
+
+        self.range.start = start;
+        Ok(())
+    }
+
+    /// Sets the wavelength range end.
+    ///
+    /// # Parameters
+    /// - `end`: The new end of the wavelength range.
+    ///
+    /// # Errors
+    /// Returns an error if the end is invalid.
+    pub fn set_range_end(&mut self, end: Length) -> OpmResult<()> {
+        if !end.is_normal() || end.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "Wavelength-range end must be positive and finite!".into(),
+            ));
+        }
+        if end <= self.range.start {
+            return Err(OpossumError::Other(
+                "Wavelength-range end must be greater than start!".into(),
+            ));
+        }
+
+        self.range.end = end;
+        Ok(())
+    }
+
     /// Calculates the transmission value of the edge filter at a given wavelength.
     ///
     /// # Parameters
@@ -502,14 +601,41 @@ impl From<EdgeFilter> for Spectrum {
 ///
 /// - `BandPass`: Passes a specified wavelength band and attenuates others.
 /// - `Notch`: Filters out a specified wavelength band while passing others.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, Copy, Default)]
 pub enum BandFilterType {
     /// Passes a specified wavelength band.
+    #[default]
     BandPass,
 
     /// filters out a specified wavelength band.
     Notch,
 }
+
+impl Display for BandFilterType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BandPass => write!(f, "Band pass"),
+            Self::Notch => write!(f, "Notch"),
+        }
+    }
+}
+
+impl FromStr for BandFilterType {
+    type Err = OpossumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::default_from_name(s).map_or_else(
+            || {
+                Err(OpossumError::Other(
+                    "Invalid str identifier to create BandFilterType from string!".into(),
+                ))
+            },
+            Ok,
+        )
+    }
+}
+
+impl DefaultFromName for BandFilterType {}
 
 /// Represents a band filter with defined spectral characteristics.
 ///
@@ -709,8 +835,8 @@ impl BandFilter {
     ///
     /// # Errors
     /// Returns an error if the provided value is not positive and finite.
-    pub fn set_smooth_step_width(&mut self, step_width: Option<Length>) -> OpmResult<()> {
-        if let Some(width) = step_width {
+    pub fn set_smooth_step_width(&mut self, mut step_width: Option<Length>) -> OpmResult<()> {
+        if let Some(width) = &mut step_width {
             if !width.is_normal() || width.is_sign_negative() {
                 return Err(OpossumError::Other(
                     "Step width must be positive and finite when provided!".into(),
@@ -775,6 +901,52 @@ impl BandFilter {
             ));
         }
         self.range = range;
+        Ok(())
+    }
+
+    /// Sets the wavelength range start.
+    ///
+    /// # Parameters
+    /// - `start`: The new start of the wavelength range.
+    ///
+    /// # Errors
+    /// Returns an error if the start is invalid.
+    pub fn set_range_start(&mut self, start: Length) -> OpmResult<()> {
+        if !start.is_normal() || start.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "Wavelength-range start must be positive and finite!".into(),
+            ));
+        }
+        if self.range.end <= start {
+            return Err(OpossumError::Other(
+                "Wavelength-range start smaller than end!".into(),
+            ));
+        }
+
+        self.range.start = start;
+        Ok(())
+    }
+
+    /// Sets the wavelength range end.
+    ///
+    /// # Parameters
+    /// - `end`: The new end of the wavelength range.
+    ///
+    /// # Errors
+    /// Returns an error if the end is invalid.
+    pub fn set_range_end(&mut self, end: Length) -> OpmResult<()> {
+        if !end.is_normal() || end.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "Wavelength-range end must be positive and finite!".into(),
+            ));
+        }
+        if end <= self.range.start {
+            return Err(OpossumError::Other(
+                "Wavelength-range end must be greater than start!".into(),
+            ));
+        }
+
+        self.range.end = end;
         Ok(())
     }
 }
@@ -843,7 +1015,7 @@ impl From<BandFilter> for Spectrum {
 /// - An [`EdgeFilter`] instance for edge-type filters.
 /// - A [`BandFilter`] instance for band-pass filters.
 /// - A file path for loading a filter from external data.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
 pub enum SpectralFilterBuilder {
     /// Builds a filter from an [`EdgeFilter`] definition.
     EdgeFilter(EdgeFilter),
@@ -854,6 +1026,24 @@ pub enum SpectralFilterBuilder {
     /// Builds a filter by loading data from a file at the given path.
     FromFile(PathBuf),
 }
+
+impl Default for SpectralFilterBuilder {
+    fn default() -> Self {
+        Self::BandFilter(BandFilter::default())
+    }
+}
+
+impl Display for SpectralFilterBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EdgeFilter(_) => write!(f, "Edge filter"),
+            Self::BandFilter(_) => write!(f, "Band filter"),
+            Self::FromFile(_) => write!(f, "From file "),
+        }
+    }
+}
+
+impl DefaultFromName for SpectralFilterBuilder {}
 
 impl From<BandFilter> for SpectralFilterBuilder {
     fn from(val: BandFilter) -> Self {
@@ -881,6 +1071,16 @@ impl SpectralFilterBuilder {
             Self::EdgeFilter(edge_filter) => Ok(edge_filter.clone().into()),
             Self::BandFilter(band_filter) => Ok(band_filter.clone().into()),
             Self::FromFile(p) => Spectrum::from_csv(p),
+        }
+    }
+
+    /// Returns the File path of this [`SpectralFilterBuilder`], wrapped into an option if the type matches. Returns None otherwise
+    #[must_use]
+    pub fn file_path(&self) -> Option<PathBuf> {
+        if let Self::FromFile(p) = self {
+            Some(p.clone())
+        } else {
+            None
         }
     }
 }

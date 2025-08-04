@@ -4,6 +4,7 @@ mod angle_editor;
 mod bool_editor;
 mod curvature_editor;
 mod f64_editor;
+mod filter_type_editor;
 mod fluence_estimator_editor;
 mod i32_editor;
 mod isometry_option_editor;
@@ -24,6 +25,7 @@ use crate::components::node_editor::{
         bool_editor::BoolEditor,
         curvature_editor::CurvatureEditor,
         f64_editor::F64Editor,
+        filter_type_editor::FilterTypeEditor,
         fluence_estimator_editor::FluenceEstimatorEditor,
         i32_editor::I32Editor,
         isometry_option_editor::IsometryOptionEditor,
@@ -38,7 +40,7 @@ use crate::components::node_editor::{
     },
 };
 use dioxus::prelude::*;
-use opossum_backend::{Properties, Proptype};
+use opossum_backend::{Properties, Property, Proptype};
 
 #[component]
 pub fn PropertiesEditor(
@@ -48,8 +50,7 @@ pub fn PropertiesEditor(
     let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
 
     for (property_key, property) in &node_properties {
-        if let Some(editor) = get_editor(property.prop().clone(), property_key.clone(), node_change)
-        {
+        if let Some(editor) = get_editor(property.clone(), property_key.clone(), node_change) {
             editor_inputs.push(editor);
         }
     }
@@ -69,11 +70,11 @@ pub fn PropertiesEditor(
 }
 
 fn get_editor(
-    prop_type: Proptype,
+    property: Property,
     property_key: String,
     node_change: Signal<Option<NodeChange>>,
 ) -> Option<Element> {
-    match prop_type {
+    match property.prop().clone() {
         Proptype::String(s) => Some(rsx! {
             StringEditor { s, property_key, node_change }
         }),
@@ -90,10 +91,14 @@ fn get_editor(
             println!("splittertype not yet implemented");
             Some(rsx! {})
         }
-        Proptype::FilterTypeBuilder(_filter_type_builder) => {
-            println!("filtertypebuilder not yet implemented");
-            Some(rsx! {})
-        }
+        Proptype::FilterTypeBuilder(filter_type_builder) => Some(rsx! {
+            FilterTypeEditor {
+                filter_type_builder,
+                property_key,
+                node_change,
+                property,
+            }
+        }),
         Proptype::FluenceEstimator(fluence_estimator) => Some(rsx! {
             FluenceEstimatorEditor { fluence_estimator, property_key, node_change }
         }),

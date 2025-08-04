@@ -81,6 +81,15 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 accept,
             }
         }
+    } else if let InputParam::Selection(label, options) = input_data.input_param {
+        rsx! {
+            LabeledSelect {
+                id: input_data.id,
+                label,
+                options,
+                onchange: move |e| input_data.callback_opt.call(e),
+            }
+        }
     } else {
         rsx! {
             LabeledInput {

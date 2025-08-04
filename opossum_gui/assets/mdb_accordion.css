@@ -35,11 +35,11 @@ input[type=number] {
 }
 
 .form-floating>.form-select{
-  max-height:45px;
-  min-height:10px;
+  max-height:40px; 
+  min-height:10px; 
   font-size: 0.8rem;    
   padding-bottom: 0rem;    
-  padding-top: 0.9rem;    
+  padding-top: 0.8rem;    
 }
 .form-floating>.form-control{
   max-height:40px;

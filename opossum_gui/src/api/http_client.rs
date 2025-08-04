@@ -297,7 +297,17 @@ impl HTTPClient {
                 ron::from_str(&text).map_err(|e| format!("parsing of data failed: {e}"))?;
             Ok(data)
         } else {
-            Err("Error deserializing response to ErrorResponse struct!".to_string())
+            (res.json::<ErrorResponse>().await).map_or_else(
+                |_| Err("Error deserializing response to ErrorResponse struct!".to_string()),
+                |err_res| {
+                    Err(format!(
+                        "Error {}: {} - {}",
+                        err_res.status(),
+                        err_res.category(),
+                        err_res.message()
+                    ))
+                },
+            )
         }
     }
 }
