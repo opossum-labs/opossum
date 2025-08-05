@@ -352,8 +352,9 @@ pub trait Dottable {
 mod test {
     use crate::{
         lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
-        nodes::{BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, Source},
-        ray::SplittingConfig,
+        nodes::{
+            BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, Source, SplittingConfigBuilder,
+        },
     };
     use num::Zero;
     use std::{fs::File, io::Read};
@@ -405,7 +406,7 @@ mod test {
                 LightDataBuilder::Geometric(RayDataBuilder::default()),
             ))
             .unwrap();
-        let bs = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
+        let bs = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
         // bs.node_attr_mut().set_name("Beam splitter");
         let i_bs = scenery.add_node(bs).unwrap();
         let i_d1 = scenery

@@ -1,6 +1,6 @@
-use approx::relative_eq;
+use approx::relative_ne;
 use dioxus::prelude::*;
-use opossum_backend::{FilterTypeBuilder, Property, Proptype};
+use opossum_backend::{Property, Proptype};
 
 use crate::{
     OPOSSUM_UI_LOGS,
@@ -8,15 +8,15 @@ use crate::{
 };
 
 #[component]
-pub fn ConstantFilterTypeEditor(
+pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Into<Proptype> + 'static>(
     transmission: f64,
-    filter_type_builder_sig: Signal<FilterTypeBuilder>,
+    builder_sig: Signal<T>,
 ) -> Element {
     let transmission_sig = use_signal(|| transmission);
     let property = use_context::<Property>();
     use_effect(move || {
-        if relative_eq!(transmission, *transmission_sig.read()) {
-            filter_type_builder_sig.set(FilterTypeBuilder::Constant(*transmission_sig.read()));
+        if relative_ne!(transmission, *transmission_sig.read()) {
+            builder_sig.set((*transmission_sig.read()).into());
         }
     });
     rsx! {
@@ -28,21 +28,19 @@ pub fn ConstantFilterTypeEditor(
             step: Some("0.01"),
             min: Some("0."),
             max: Some("1."),
-            onchange: on_transmission_input_change(transmission_sig, property),
+            onchange: on_transmission_input_change::<T>(transmission_sig, property),
         }
     }
 }
 
-pub fn on_transmission_input_change(
+pub fn on_transmission_input_change<T: From<f64> + PartialEq + Into<Proptype> + 'static>(
     mut signal: Signal<f64>,
     property: Property,
 ) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(val) = e.data.value().parse::<f64>() {
             let last_val = *signal.read();
-            match property.validate_proptype(&Proptype::FilterTypeBuilder(
-                FilterTypeBuilder::Constant(val),
-            )) {
+            match property.validate_proptype(&T::from(val).into()) {
                 Ok(()) => signal.set(val),
                 Err(e) => {
                     OPOSSUM_UI_LOGS.write().add_log(format!("{e}").as_str());

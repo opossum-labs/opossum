@@ -1,21 +1,16 @@
 mod constant_transmission_editor;
 mod spectral_transmission_editor;
 
-use dioxus::prelude::*;
-use opossum_backend::{DefaultFromName, FilterTypeBuilder, Property};
-
 use crate::components::node_editor::{
     accordion::ElementList,
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
     node_editor_component::NodeChange,
-    property_editor::{
-        filter_type_editor::{
-            constant_transmission_editor::ConstantFilterTypeEditor,
-            spectral_transmission_editor::SpectralFilterTypeEditor,
-        },
-        use_set_node_change_property,
-    },
+    property_editor::use_set_node_change_property,
 };
+pub use constant_transmission_editor::ConstantFilterTypeEditor;
+use dioxus::prelude::*;
+use opossum_backend::{DefaultFromName, FilterTypeBuilder, Property};
+pub use spectral_transmission_editor::SpectralFilterTypeEditor;
 
 #[component]
 pub fn FilterTypeEditor(
@@ -38,12 +33,15 @@ pub fn FilterTypeEditor(
 
     match &*filter_type_builder_sig.read() {
         FilterTypeBuilder::Constant(transmission) => element_list.push(rsx! {
-            ConstantFilterTypeEditor { transmission: *transmission, filter_type_builder_sig }
+            ConstantFilterTypeEditor {
+                transmission: *transmission,
+                builder_sig: filter_type_builder_sig,
+            }
         }),
         FilterTypeBuilder::Spectrum(spectral_filter_builder) => element_list.push(rsx! {
             SpectralFilterTypeEditor {
                 spectral_filter_builder: spectral_filter_builder.clone(),
-                filter_type_builder_sig,
+                builder_sig: filter_type_builder_sig,
             }
         }),
     }

@@ -7,7 +7,6 @@ use approx::relative_ne;
 use nalgebra::{MatrixXx3, Point3, Rotation3, Vector3, vector};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
-use strum::EnumIter;
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
@@ -19,10 +18,8 @@ use crate::{
     analyzers::raytrace::MissedSurfaceStrategy,
     error::{OpmResult, OpossumError},
     joule, meter,
-    nodes::{FilterType, fluence_detector::Fluence},
-    properties::Proptype,
+    nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
     rays::{FluenceRays, Rays},
-    spectrum::Spectrum,
     surface::{
         hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
         optic_surface::OpticSurface,
@@ -30,47 +27,6 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
-/// Configuration for splitting a [`Ray`] into multiple parts.
-///
-/// This enum defines how a ray is split, either by a fixed ratio or by a wavelength-dependent spectrum.
-pub enum SplittingConfig {
-    /// Ideal beam splitter with a fixed splitting ratio.
-    ///
-    /// The `f64` value must be in the range (0.0..=1.0), where 1.0 means all energy remains in the initial beam,
-    /// and 0.0 means all energy is transferred to the split beam.
-    Ratio(f64),
-    /// Beam splitter with a wavelength-dependent transmission spectrum.
-    ///
-    /// The [`Spectrum`] must contain values in the range (0.0..=1.0).
-    Spectrum(Spectrum),
-}
-impl SplittingConfig {
-    /// Checks the validity of the [`SplittingConfig`].
-    ///
-    /// Returns `true` if all values in the spectrum or the ratio are within the range (0.0..=1.0).
-    #[must_use]
-    pub fn is_valid(&self) -> bool {
-        match self {
-            Self::Ratio(r) => (0.0..=1.0).contains(r),
-            Self::Spectrum(s) => s.is_transmission_spectrum(),
-        }
-    }
-}
-
-impl Display for SplittingConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ratio(_) => write!(f, "RatioSplit"),
-            Self::Spectrum(_) => write!(f, "SpectrumSplit"),
-        }
-    }
-}
-impl From<SplittingConfig> for Proptype {
-    fn from(config: SplittingConfig) -> Self {
-        Self::SplitterType(config)
-    }
-}
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {
@@ -896,7 +852,11 @@ mod test {
         J_per_cm2,
         coatings::CoatingType,
         degree, joule, millimeter, nanometer,
-        nodes::ideal_filter::{EdgeFilter, EdgeFilterType},
+        nodes::{
+            SplittingConfig,
+            ideal_filter::{EdgeFilter, EdgeFilterType},
+        },
+        spectrum::Spectrum,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use core::f64;
@@ -1530,6 +1490,7 @@ mod test {
         let spectrum: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             nanometer!(1000.0),
+            (0.)..(1.),
             None,
             nanometer!(500.0)..nanometer!(1500.0),
             nanometer!(1.0),
@@ -1559,6 +1520,7 @@ mod test {
         let spectrum: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             nanometer!(1000.0),
+            (0.)..(1.),
             None,
             nanometer!(500.0)..nanometer!(1500.0),
             nanometer!(1.0),

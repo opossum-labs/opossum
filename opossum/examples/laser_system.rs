@@ -5,10 +5,9 @@ use opossum::{
     error::OpmResult,
     joule, millimeter,
     nodes::{
-        BeamSplitter, EnergyMeter, IdealFilter, NodeGroup, ParaxialSurface, SpotDiagram,
-        ideal_filter::FilterTypeBuilder, round_collimated_ray_source,
+        BeamSplitter, EnergyMeter, IdealFilter, NodeGroup, ParaxialSurface, SplittingConfigBuilder,
+        SpotDiagram, ideal_filter::FilterTypeBuilder, round_collimated_ray_source,
     },
-    ray::SplittingConfig,
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -20,7 +19,10 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(source)?;
     let i_l1 = scenery.add_node(ParaxialSurface::new("f=100", millimeter!(100.0))?)?;
     let i_l2 = scenery.add_node(ParaxialSurface::new("f=200", millimeter!(200.0))?)?;
-    let i_bs = scenery.add_node(BeamSplitter::new("1% BS", &SplittingConfig::Ratio(0.99))?)?;
+    let i_bs = scenery.add_node(BeamSplitter::new(
+        "1% BS",
+        &SplittingConfigBuilder::FixedRatio(0.99),
+    )?)?;
     let i_e1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
         opossum::nodes::Metertype::IdealEnergyMeter,
@@ -43,7 +45,10 @@ fn main() -> OpmResult<()> {
     // Cam Box
     let mut cam_box = NodeGroup::new("CamBox");
 
-    let i_cb_bs = cam_box.add_node(BeamSplitter::new("50/50 BS", &SplittingConfig::Ratio(0.5))?)?;
+    let i_cb_bs = cam_box.add_node(BeamSplitter::new(
+        "50/50 BS",
+        &SplittingConfigBuilder::FixedRatio(0.5),
+    )?)?;
     let i_cb_l = cam_box.add_node(ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
     let i_cb_sd1 = cam_box.add_node(SpotDiagram::new("Nearfield"))?;
     let i_cb_sd2 = cam_box.add_node(SpotDiagram::new("Farfield"))?;

@@ -7,7 +7,7 @@ use band_filter_editor::BandFilterEditor;
 use edge_filter_editor::EdgeFilterEditor;
 
 use dioxus::prelude::*;
-use opossum_backend::{DefaultFromName, FilterTypeBuilder, SpectralFilterBuilder};
+use opossum_backend::{DefaultFromName, SpectralFilterBuilder};
 use strum::EnumIter;
 
 use crate::components::node_editor::{
@@ -39,17 +39,15 @@ pub fn SpectralFilterTypeSelector(
 }
 
 #[component]
-pub fn SpectralFilterTypeEditor(
+pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + 'static>(
     spectral_filter_builder: SpectralFilterBuilder,
-    filter_type_builder_sig: Signal<FilterTypeBuilder>,
+    builder_sig: Signal<T>,
 ) -> Element {
     let spectral_filter_builder_sig = use_signal(|| spectral_filter_builder.clone());
 
     use_effect(move || {
         if spectral_filter_builder != *spectral_filter_builder_sig.read() {
-            filter_type_builder_sig.set(FilterTypeBuilder::Spectrum(
-                spectral_filter_builder_sig.read().clone(),
-            ));
+            builder_sig.set(spectral_filter_builder_sig.read().clone().into());
         }
     });
 
@@ -69,7 +67,7 @@ pub fn SpectralFilterTypeEditor(
                 spectral_filter_builder_sig,
             );
             rsx! {
-                InputParamLabeledInput{input_data}
+                InputParamLabeledInput { input_data }
             }
         }
     };

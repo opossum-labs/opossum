@@ -13,29 +13,21 @@ mod length_option_editor;
 mod light_data_editor;
 mod linear_density_editor;
 mod refractive_index_editor;
+mod splitter_type_editor;
 mod string_editor;
 mod vec2_editor;
-// mod splitter_type_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
     node_editor_component::NodeChange,
     property_editor::{
-        angle_editor::AngleEditor,
-        bool_editor::BoolEditor,
-        curvature_editor::CurvatureEditor,
-        f64_editor::F64Editor,
-        filter_type_editor::FilterTypeEditor,
-        fluence_estimator_editor::FluenceEstimatorEditor,
-        i32_editor::I32Editor,
-        isometry_option_editor::IsometryOptionEditor,
-        length_editor::LengthEditor,
-        length_option_editor::LengthOptionEditor,
-        light_data_editor::LightDataEditor,
-        // splitter_type_editor::SplitterTypeEditor,
-        linear_density_editor::LinearDensityEditor,
-        refractive_index_editor::RefractiveIndexEditor,
-        string_editor::StringEditor,
+        angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
+        f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
+        fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
+        isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
+        length_option_editor::LengthOptionEditor, light_data_editor::LightDataEditor,
+        linear_density_editor::LinearDensityEditor, refractive_index_editor::RefractiveIndexEditor,
+        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
         vec2_editor::Vec2Editor,
     },
 };
@@ -87,10 +79,14 @@ fn get_editor(
         Proptype::Bool(b) => Some(rsx! {
             BoolEditor { b, property_key, node_change }
         }),
-        Proptype::SplitterType(_splitting_config) => {
-            println!("splittertype not yet implemented");
-            Some(rsx! {})
-        }
+        Proptype::SplittingConfigBuilder(splitting_config_builder) => Some(rsx! {
+            SplitterTypeEditor {
+                splitting_config_builder,
+                property_key,
+                node_change,
+                property,
+            }
+        }),
         Proptype::FilterTypeBuilder(filter_type_builder) => Some(rsx! {
             FilterTypeEditor {
                 filter_type_builder,

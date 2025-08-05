@@ -5,21 +5,20 @@ use opossum::{
     millimeter,
     nodes::{
         BeamSplitter, Dummy, EnergyMeter, IdealFilter, Metertype, NodeGroup,
+        SplittingConfigBuilder,
         ideal_filter::{FilterTypeBuilder, SpectralFilterBuilder},
     },
-    ray::SplittingConfig,
-    spectrum::Spectrum,
 };
 pub fn hhts_input() -> OpmResult<NodeGroup> {
-    let dichroic_mirror = SplittingConfig::Spectrum(Spectrum::from_csv(Path::new(
-        "opossum/examples/hhts/MM15_Transmission.csv",
-    ))?);
+    let dichroic_mirror = SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::FromFile(
+        Path::new("opossum/examples/hhts/MM15_Transmission.csv").to_path_buf(),
+    ));
     let window_filter = FilterTypeBuilder::Spectrum(SpectralFilterBuilder::FromFile(
         Path::new("opossum/examples/hhts/HHTS_W1_Transmission.csv").to_path_buf(),
     ));
-    let double_mirror = SplittingConfig::Spectrum(Spectrum::from_csv(Path::new(
-        "opossum/examples/hhts/HHTS_T1_PM_Transmission.csv",
-    ))?);
+    let double_mirror = SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::FromFile(
+        Path::new("opossum/examples/hhts/HHTS_T1_PM_Transmission.csv").to_path_buf(),
+    ));
     let mut group = NodeGroup::new("HHTS Input");
     let d1 = group.add_node(Dummy::new("d1"))?;
     let mm15 = group.add_node(BeamSplitter::new("MM15", &dichroic_mirror)?)?;

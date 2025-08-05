@@ -12,13 +12,12 @@ use crate::{
         ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder},
     },
     nodes::{
-        Metertype, SpectrometerType, WaveFrontData,
+        Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontData,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ideal_filter::FilterTypeBuilder,
         ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity,
     },
-    ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
     spectrum::Spectrum,
@@ -78,7 +77,7 @@ pub enum Proptype {
     /// Property for storing a [`FilterTypeBuilder`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterTypeBuilder(FilterTypeBuilder),
     /// Property for storing a [`SplittingConfig`] of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
-    SplitterType(SplittingConfig),
+    SplittingConfigBuilder(SplittingConfigBuilder),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.

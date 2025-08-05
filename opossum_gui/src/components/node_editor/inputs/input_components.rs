@@ -149,6 +149,11 @@ pub fn LabeledInput(
 
     #[props(default = false)] readonly: bool,
 ) -> Element {
+    let step = if r#type == "number" && step.is_none() {
+        Some("0.01")
+    } else {
+        step
+    };
     rsx! {
         div { class: "form-floating border-start", "data-mdb-input-init": "",
             input {

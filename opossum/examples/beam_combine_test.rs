@@ -13,10 +13,9 @@ use opossum::{
     },
     nanometer,
     nodes::{
-        BeamSplitter, Dummy, IdealFilter, NodeGroup, Source,
+        BeamSplitter, Dummy, IdealFilter, NodeGroup, Source, SplittingConfigBuilder,
         ideal_filter::{EdgeFilter, EdgeFilterType, FilterTypeBuilder, SpectralFilterBuilder},
     },
-    ray::SplittingConfig,
 };
 use uom::si::f64::Length;
 
@@ -30,13 +29,15 @@ fn main() -> OpmResult<()> {
         EnergyLaserLines::new(vec![(nanometer!(1053.0), joule!(1.0))], nanometer!(1.0))?,
     ));
     let i_s2 = scenery.add_node(Source::new("Source 2", light_data_builder))?;
-    let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.5)).unwrap())?;
+    let i_bs = scenery
+        .add_node(BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5)).unwrap())?;
 
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
         &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(700.0),
+            (0.)..(1.),
             None,
             nanometer!(400.0)..nanometer!(1100.0),
             nanometer!(1.),

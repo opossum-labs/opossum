@@ -9,9 +9,8 @@ use opossum::{
         light_data_builder::LightDataBuilder,
     },
     nanometer,
-    nodes::{BeamSplitter, EnergyMeter, NodeGroup, Source},
+    nodes::{BeamSplitter, EnergyMeter, NodeGroup, Source, SplittingConfigBuilder},
     optic_node::OpticNode,
-    ray::SplittingConfig,
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -22,7 +21,7 @@ fn main() -> OpmResult<()> {
         EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0))?,
     ));
     let i_s = scenery.add_node(Source::new("Source", light_data_builder))?;
-    let mut bs = BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap();
+    let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
     bs.set_inverted(true)?;
     let i_bs = scenery.add_node(bs)?;
     let i_d1 = scenery.add_node(EnergyMeter::new(

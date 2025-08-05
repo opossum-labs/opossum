@@ -18,7 +18,7 @@ use crate::{
     utils::default_from_name::DefaultFromName,
 };
 use log::warn;
-use num::{Float, Zero};
+use num::Zero;
 use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Range, path::PathBuf, str::FromStr};
@@ -39,6 +39,23 @@ impl Display for FilterTypeBuilder {
         match self {
             Self::Constant(_) => write!(f, "Constant"),
             Self::Spectrum(_) => write!(f, "Spectral filter"),
+        }
+    }
+}
+
+impl FilterTypeBuilder {
+    /// Constructs a [`FilterType`] object from the builder.
+    ///
+    /// # Returns
+    /// - A [`FilterType`] instance corresponding to the variant
+    /// # Errors
+    /// Returns an error if the creation of a spectrum from a .csv fails.
+    pub fn build(&self) -> OpmResult<FilterType> {
+        match self {
+            Self::Constant(c) => Ok(FilterType::Constant(*c)),
+            Self::Spectrum(spectral_filter_builder) => {
+                Ok(FilterType::Spectrum(spectral_filter_builder.build()?))
+            }
         }
     }
 }
@@ -127,14 +144,7 @@ impl IdealFilter {
         if let Proptype::FilterTypeBuilder(filter_type_builder) =
             self.node_attr.get_property("filter type builder")?
         {
-            match filter_type_builder {
-                FilterTypeBuilder::Constant(transmission) => {
-                    Ok(FilterType::Constant(*transmission))
-                }
-                FilterTypeBuilder::Spectrum(spectral_filter_builder) => {
-                    Ok(FilterType::Spectrum(spectral_filter_builder.build()?))
-                }
-            }
+            filter_type_builder.build()
         } else {
             Err(OpossumError::Properties(
                 "Property: `filter type builder` not found".into(),
@@ -232,6 +242,8 @@ pub struct EdgeFilter {
     /// The edge wavelength is included in a short-pass and excluded ind the long-pass filter
     edge_wavelength: Length,
 
+    /// Minimum and maximum values of this filters' transmission
+    transmission_range: Range<f64>,
     /// The optional smooth transition width at the edge wavelength.
     ///
     /// If `Some`, this specifies the width of a gradual transition;
@@ -249,6 +261,7 @@ impl Default for EdgeFilter {
         Self {
             filter_type: EdgeFilterType::ShortPass,
             edge_wavelength: nanometer!(1000.),
+            transmission_range: (0.)..1.,
             smooth_step_width: Some(nanometer!(2.)),
             range: nanometer!(900.)..nanometer!(1100.),
             resolution: nanometer!(0.2),
@@ -289,6 +302,7 @@ impl EdgeFilter {
     pub fn new(
         edge_filter_type: EdgeFilterType,
         edge_wavelength: Length,
+        transmission_range: Range<f64>,
         smooth_step_width: Option<Length>,
         range: Range<Length>,
         resolution: Length,
@@ -323,10 +337,20 @@ impl EdgeFilter {
         if !range.contains(&edge_wavelength) {
             warn!("cut-off / cut-on wavelength must be inside the spectrum range");
         }
+        if transmission_range.start > 1. || transmission_range.end.is_sign_negative() {
+            return Err(OpossumError::Other("Transmission minimum of Band-Filter must be positive, smaller than 1. and greater than 0!".into()));
+        }
+        if transmission_range.end > 1.
+            || transmission_range.end.is_sign_negative()
+            || transmission_range.end <= transmission_range.start
+        {
+            return Err(OpossumError::Other("Transmission maximum of Band-Filter must be positive, smaller than 1., greater than 0 and greater than the transmission minimum!".into()));
+        }
 
         Ok(Self {
             filter_type: edge_filter_type,
             edge_wavelength,
+            transmission_range,
             smooth_step_width,
             range,
             resolution,
@@ -492,6 +516,81 @@ impl EdgeFilter {
         Ok(())
     }
 
+    /// Returns the transmission range.
+    ///
+    /// # Returns
+    /// The transmission range as `Range<f64>`.
+    #[must_use]
+    pub fn transmission_range(&self) -> Range<f64> {
+        self.transmission_range.clone()
+    }
+
+    /// Sets the transmission range.
+    ///
+    /// # Parameters
+    /// - `transmission`: The new transmission range.
+    ///
+    /// # Errors
+    /// Returns an error if the range start or end is invalid.
+    pub fn set_transmission_range(&mut self, transmission: Range<f64>) -> OpmResult<()> {
+        if transmission.start > 1. || transmission.end.is_sign_negative() {
+            return Err(OpossumError::Other("Transmission minimum of Band-Filter must be positive, smaller than 1. and greater than 0!".into()));
+        }
+        if transmission.end > 1.
+            || transmission.end.is_sign_negative()
+            || transmission.end <= transmission.start
+        {
+            return Err(OpossumError::Other("Transmission maximum of Band-Filter must be positive, smaller than 1., greater than 0 and greater than the transmission minimum!".into()));
+        }
+        self.transmission_range = transmission;
+        Ok(())
+    }
+    /// Sets the transmission range start.
+    ///
+    /// # Parameters
+    /// - `start`: The new start of the transmission range.
+    ///
+    /// # Errors
+    /// Returns an error if the start is invalid.
+    pub fn set_transmission_range_start(&mut self, start: f64) -> OpmResult<()> {
+        if start > 1. || start.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "transmission-range start must be positive and finite!".into(),
+            ));
+        }
+        if self.transmission_range.end <= start {
+            return Err(OpossumError::Other(
+                "transmission-range start must be smaller than its end!".into(),
+            ));
+        }
+
+        self.transmission_range.start = start;
+        Ok(())
+    }
+
+    /// Sets the wavetransmissionlength range end.
+    ///
+    /// # Parameters
+    /// - `end`: The new end of the transmission range.
+    ///
+    /// # Errors
+    /// Returns an error if the end is invalid.
+    pub fn set_transmission_range_end(&mut self, end: f64) -> OpmResult<()> {
+        if end > 1. || end.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "transmission-range end must be positive and finite!".into(),
+            ));
+        }
+        if end <= self.transmission_range.start {
+            return Err(OpossumError::Other(
+                "transmission-range end must be greater than start!".into(),
+            ));
+        }
+
+        self.transmission_range.end = end;
+        Ok(())
+    }
+
     /// Calculates the transmission value of the edge filter at a given wavelength.
     ///
     /// # Parameters
@@ -507,8 +606,16 @@ impl EdgeFilter {
     #[must_use]
     pub fn transmission(&self, wavelength: Length) -> f64 {
         let (before_edge_wvl, after_edge_wvl, angle_sign) = match self.edge_filter_type() {
-            EdgeFilterType::LongPass => (0., 1., 1.),
-            EdgeFilterType::ShortPass => (1., 0., -1.),
+            EdgeFilterType::LongPass => (
+                self.transmission_range.start,
+                self.transmission_range.end,
+                1.,
+            ),
+            EdgeFilterType::ShortPass => (
+                self.transmission_range.end,
+                self.transmission_range.start,
+                -1.,
+            ),
         };
 
         self.smooth_step_width().map_or_else(
@@ -533,6 +640,7 @@ impl EdgeFilter {
         after_edge_wvl: f64,
         angle_sign: f64,
     ) -> f64 {
+        let transmission_diff = self.transmission_range.end - self.transmission_range.start;
         let wvl_diff = wavelength - self.edge_wavelength();
         if wvl_diff <= -width / 2.0 {
             before_edge_wvl
@@ -540,7 +648,10 @@ impl EdgeFilter {
             after_edge_wvl
         } else {
             let angle = (std::f64::consts::PI / width * wvl_diff).value;
-            0.5f64.mul_add(angle_sign * angle.sin(), 0.5)
+            (0.5 * transmission_diff).mul_add(
+                angle_sign * angle.sin(),
+                0.5f64.mul_add(transmission_diff, self.transmission_range().start),
+            )
         }
     }
 
@@ -565,8 +676,16 @@ impl From<EdgeFilter> for Spectrum {
             Self::new(edge_filter.range().clone(), edge_filter.resolution()).unwrap();
 
         let (before_edge_wvl, after_edge_wvl, angle_sign) = match edge_filter.edge_filter_type() {
-            EdgeFilterType::LongPass => (0., 1., 1.),
-            EdgeFilterType::ShortPass => (1., 0., -1.),
+            EdgeFilterType::LongPass => (
+                edge_filter.transmission_range().start,
+                edge_filter.transmission_range().end,
+                1.,
+            ),
+            EdgeFilterType::ShortPass => (
+                edge_filter.transmission_range().end,
+                edge_filter.transmission_range().start,
+                -1.,
+            ),
         };
         if let Some(width) = edge_filter.smooth_step_width() {
             spectrum.map_mut(|(lambda, _)| {
@@ -653,6 +772,9 @@ pub struct BandFilter {
     /// The full width of the band.
     width: Length,
 
+    /// The minimum and maximum transmission values of the `BandFilter`
+    transmission_range: Range<f64>,
+
     /// Optional smooth transition width at the band edges.
     ///
     /// If `Some`, the filter transitions gradually; if `None`, the transition is sharp.
@@ -671,6 +793,7 @@ impl Default for BandFilter {
             filter_type: BandFilterType::BandPass,
             center_wavelength: nanometer!(1054.),
             width: nanometer!(10.),
+            transmission_range: (0.)..1.,
             smooth_step_width: Some(nanometer!(2.)),
             range: nanometer!(1000.)..nanometer!(1100.),
             resolution: nanometer!(0.1),
@@ -697,6 +820,7 @@ impl BandFilter {
         band_filter_type: BandFilterType,
         center_wavelength: Length,
         width: Length,
+        transmission_range: Range<f64>,
         mut smooth_step_width: Option<Length>,
         range: Range<Length>,
         resolution: Length,
@@ -724,6 +848,15 @@ impl BandFilter {
         if !range.end.is_normal() || range.end.is_sign_negative() || range.end <= range.start {
             return Err(OpossumError::Other("Wavelength-range end of Band-Filter must be positive, finite and larger than its start!".into()));
         }
+        if transmission_range.start > 1. || transmission_range.end.is_sign_negative() {
+            return Err(OpossumError::Other("Transmission minimum of Band-Filter must be positive, smaller than 1. and greater than 0!".into()));
+        }
+        if transmission_range.end > 1.
+            || transmission_range.end.is_sign_negative()
+            || transmission_range.end <= transmission_range.start
+        {
+            return Err(OpossumError::Other("Transmission maximum of Band-Filter must be positive, smaller than 1., greater than 0 and greater than the transmission minimum!".into()));
+        }
         if !range.contains(&center_wavelength) {
             return Err(OpossumError::Other(
                 "cut-off / cut-on wavelength must be inside the spectrum range".into(),
@@ -747,6 +880,7 @@ impl BandFilter {
             filter_type: band_filter_type,
             center_wavelength,
             width,
+            transmission_range,
             smooth_step_width,
             range,
             resolution,
@@ -903,7 +1037,6 @@ impl BandFilter {
         self.range = range;
         Ok(())
     }
-
     /// Sets the wavelength range start.
     ///
     /// # Parameters
@@ -949,6 +1082,81 @@ impl BandFilter {
         self.range.end = end;
         Ok(())
     }
+
+    /// Returns the transmission range.
+    ///
+    /// # Returns
+    /// The transmission range as `Range<f64>`.
+    #[must_use]
+    pub fn transmission_range(&self) -> Range<f64> {
+        self.transmission_range.clone()
+    }
+
+    /// Sets the transmission range.
+    ///
+    /// # Parameters
+    /// - `transmission`: The new transmission range.
+    ///
+    /// # Errors
+    /// Returns an error if the range start or end is invalid.
+    pub fn set_transmission(&mut self, transmission_range: Range<f64>) -> OpmResult<()> {
+        if transmission_range.start > 1. || transmission_range.end.is_sign_negative() {
+            return Err(OpossumError::Other("Transmission minimum of Band-Filter must be positive, smaller than 1. and greater than 0!".into()));
+        }
+        if transmission_range.end > 1.
+            || transmission_range.end.is_sign_negative()
+            || transmission_range.end <= transmission_range.start
+        {
+            return Err(OpossumError::Other("Transmission maximum of Band-Filter must be positive, smaller than 1., greater than 0 and greater than the transmission minimum!".into()));
+        }
+        self.transmission_range = transmission_range;
+        Ok(())
+    }
+    /// Sets the transmission range start.
+    ///
+    /// # Parameters
+    /// - `start`: The new start of the transmission range.
+    ///
+    /// # Errors
+    /// Returns an error if the start is invalid.
+    pub fn set_transmission_range_start(&mut self, start: f64) -> OpmResult<()> {
+        if start > 1. || start.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "transmission-range start must be positive and finite!".into(),
+            ));
+        }
+        if self.transmission_range.end <= start {
+            return Err(OpossumError::Other(
+                "transmission-range start must be smaller than its end!".into(),
+            ));
+        }
+
+        self.transmission_range.start = start;
+        Ok(())
+    }
+
+    /// Sets the wavetransmissionlength range end.
+    ///
+    /// # Parameters
+    /// - `end`: The new end of the transmission range.
+    ///
+    /// # Errors
+    /// Returns an error if the end is invalid.
+    pub fn set_transmission_range_end(&mut self, end: f64) -> OpmResult<()> {
+        if end > 1. || end.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "transmission-range end must be positive and finite!".into(),
+            ));
+        }
+        if end <= self.transmission_range.start {
+            return Err(OpossumError::Other(
+                "transmission-range end must be greater than start!".into(),
+            ));
+        }
+
+        self.transmission_range.end = end;
+        Ok(())
+    }
 }
 
 #[allow(clippy::fallible_impl_from)]
@@ -960,41 +1168,56 @@ impl From<BandFilter> for Spectrum {
         let center_wavelength_in_um = band_filter.center_wavelength().get::<micrometer>();
         let width_in_um = band_filter.width().get::<micrometer>();
         let (in_band, out_of_band, angle_sign) = match band_filter.band_filter_type() {
-            BandFilterType::BandPass => (1., 0., -1.),
-            BandFilterType::Notch => (0., 1., 1.),
+            BandFilterType::BandPass => (
+                band_filter.transmission_range().end,
+                band_filter.transmission_range().start,
+                -1.,
+            ),
+            BandFilterType::Notch => (
+                band_filter.transmission_range().start,
+                band_filter.transmission_range().end,
+                1.,
+            ),
         };
         if let Some(smooth_width) = band_filter.smooth_step_width() {
             let mut smooth_width_in_um = smooth_width.get::<micrometer>();
-            spectrum.map_mut(|(lambda, _)| {
-
-
-            let wvl_diff = *lambda - band_filter.center_wavelength().get::<micrometer>();
-            warn!("Smoothing width is larger than actual filter width! Resetting to maximum smoothing width");
-
-            if smooth_width_in_um > width_in_um{
+            if smooth_width_in_um > width_in_um {
+                warn!(
+                    "Smoothing width is larger than actual filter width! Resetting to maximum smoothing width"
+                );
                 smooth_width_in_um = width_in_um;
             }
             let half_band = width_in_um / 2.0;
             let transition = smooth_width_in_um / 2.0;
             let lower_start = -half_band - transition;
-            let lower_end   = -half_band + transition;
-            let upper_start =  half_band - transition;
-            let upper_end   =  half_band + transition;
+            let lower_end = -half_band + transition;
+            let upper_start = half_band - transition;
+            let upper_end = half_band + transition;
+            let transmission_diff =
+                band_filter.transmission_range().end - band_filter.transmission_range().start;
+            spectrum.map_mut(|(lambda, _)| {
+                let wvl_diff = *lambda - band_filter.center_wavelength().get::<micrometer>();
 
-            let amp = if wvl_diff <= lower_start || wvl_diff >= upper_end {
-                out_of_band
-            } else if wvl_diff >= lower_end && wvl_diff <= upper_start {
-                in_band
-            } else if wvl_diff > lower_start && wvl_diff < lower_end {
-                // Lower transition
-                let x = (wvl_diff - lower_start) / (2.0*transition);
-                (angle_sign * 0.5).mul_add((std::f64::consts::PI * x).cos(), 0.5)
-            } else {
-                // Upper transition
-                let x = (upper_end - wvl_diff) / (2.0*transition);
-                (angle_sign * 0.5).mul_add((std::f64::consts::PI * x).cos(), 0.5)
-            };
-            (*lambda, amp)
+                let amp = if wvl_diff <= lower_start || wvl_diff >= upper_end {
+                    out_of_band
+                } else if wvl_diff >= lower_end && wvl_diff <= upper_start {
+                    in_band
+                } else if wvl_diff > lower_start && wvl_diff < lower_end {
+                    // Lower transition
+                    let x = (wvl_diff - lower_start) / (2.0 * transition);
+                    (angle_sign * 0.5 * transmission_diff).mul_add(
+                        (std::f64::consts::PI * x).cos(),
+                        0.5f64.mul_add(transmission_diff, band_filter.transmission_range().start),
+                    )
+                } else {
+                    // Upper transition
+                    let x = (upper_end - wvl_diff) / (2.0 * transition);
+                    (angle_sign * 0.5 * transmission_diff).mul_add(
+                        (std::f64::consts::PI * x).cos(),
+                        0.5f64.mul_add(transmission_diff, band_filter.transmission_range().start),
+                    )
+                };
+                (*lambda, amp)
             });
         } else {
             spectrum.map_mut(|(lambda, _)| {
@@ -1056,6 +1279,18 @@ impl From<EdgeFilter> for SpectralFilterBuilder {
     }
 }
 
+impl From<SpectralFilterBuilder> for FilterTypeBuilder {
+    fn from(val: SpectralFilterBuilder) -> Self {
+        Self::Spectrum(val)
+    }
+}
+
+impl From<f64> for FilterTypeBuilder {
+    fn from(val: f64) -> Self {
+        Self::Constant(val)
+    }
+}
+
 impl SpectralFilterBuilder {
     /// Constructs a [`Spectrum`] object from the builder.
     ///
@@ -1065,12 +1300,37 @@ impl SpectralFilterBuilder {
     ///   - `BandFilter`: Converts the contained `BandFilter` to a spectrum.
     ///   - `FromFile`: Loads a given csv file and converts it to a spectrum
     /// # Errors
-    /// Returns an error if the creation of a spectrum from a .sv fails.
+    /// Returns an error if the creation of a spectrum from a .csv fails.
     pub fn build(&self) -> OpmResult<Spectrum> {
         match self {
             Self::EdgeFilter(edge_filter) => Ok(edge_filter.clone().into()),
             Self::BandFilter(band_filter) => Ok(band_filter.clone().into()),
-            Self::FromFile(p) => Spectrum::from_csv(p),
+            Self::FromFile(p) => {
+                let spec = Spectrum::from_csv(p)?;
+                Ok(spec)
+            }
+        }
+    }
+
+    /// Check if the [`Spectrum`] values that will be produced by this [`SpectralFilterBuilder`] are in a specific range.
+    ///
+    /// This functions checks if all values are in the range (min..=max)
+    /// # Errors
+    /// This function returns an error if building the spectrum from a file fails
+    pub fn values_are_in_range(&self, min: f64, max: f64) -> OpmResult<bool> {
+        match self {
+            Self::EdgeFilter(edge_filter) => Ok(min <= edge_filter.transmission_range().start
+                && max >= edge_filter.transmission_range().end),
+            Self::BandFilter(band_filter) => Ok(min <= band_filter.transmission_range().start
+                && max >= band_filter.transmission_range().end),
+            Self::FromFile(path_buf) => {
+                if path_buf.as_os_str().is_empty() {
+                    // as of now this can not be checked
+                    Ok(true)
+                } else {
+                    Ok(self.build()?.values_are_in_range(min, max))
+                }
+            }
         }
     }
 
@@ -1365,6 +1625,7 @@ mod test {
             EdgeFilter::new(
                 EdgeFilterType::ShortPass,
                 micrometer!(7.0),
+                (0.)..(1.),
                 None,
                 micrometer!(1.0)..micrometer!(5.0),
                 micrometer!(1.0)
@@ -1378,6 +1639,7 @@ mod test {
         let s: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             micrometer!(3.0),
+            (0.)..(1.),
             None,
             micrometer!(1.0)..micrometer!(5.0),
             micrometer!(1.0),
@@ -1398,6 +1660,7 @@ mod test {
             EdgeFilter::new(
                 EdgeFilterType::LongPass,
                 micrometer!(7.0),
+                (0.)..(1.),
                 None,
                 micrometer!(1.0)..micrometer!(5.0),
                 micrometer!(1.0)
@@ -1411,6 +1674,7 @@ mod test {
         let s: Spectrum = EdgeFilter::new(
             EdgeFilterType::LongPass,
             micrometer!(3.0),
+            (0.)..(1.),
             None,
             micrometer!(1.0)..micrometer!(5.0),
             micrometer!(1.0),
@@ -1431,6 +1695,7 @@ mod test {
             EdgeFilter::new(
                 EdgeFilterType::ShortPass,
                 micrometer!(3.0),
+                (0.)..(1.),
                 Some(Length::zero()),
                 range.clone(),
                 resolution
@@ -1441,6 +1706,7 @@ mod test {
             EdgeFilter::new(
                 EdgeFilterType::ShortPass,
                 micrometer!(3.0),
+                (0.)..(1.),
                 Some(micrometer!(-1.0)),
                 range.clone(),
                 resolution
@@ -1450,6 +1716,7 @@ mod test {
         let s: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             micrometer!(3.0),
+            (0.)..(1.),
             Some(micrometer!(1.0)),
             range.clone(),
             resolution,
