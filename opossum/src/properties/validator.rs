@@ -186,11 +186,11 @@ impl Validator {
             Proptype::WfLambda(l, _) => allowed_range.contains(l),
             Proptype::FilterTypeBuilder(ftb) => match ftb {
                 FilterTypeBuilder::Constant(c) => allowed_range.contains(c),
-                FilterTypeBuilder::Spectrum(s) => s.build()?.values_are_in_range(min, max),
+                FilterTypeBuilder::Spectrum(s) => s.values_are_in_range(min, max)?,
             },
             Proptype::SplittingConfigBuilder(ftb) => match ftb {
                 SplittingConfigBuilder::FixedRatio(c) => allowed_range.contains(c),
-                SplittingConfigBuilder::Spectrum(s) => s.build()?.values_are_in_range(min, max),
+                SplittingConfigBuilder::Spectrum(s) => s.values_are_in_range(min, max)?,
             },
             _ => true, // Silently ignore if not numeric
         };

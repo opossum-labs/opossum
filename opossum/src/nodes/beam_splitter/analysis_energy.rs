@@ -38,7 +38,7 @@ mod test {
         analyzers::energy::AnalysisEnergy,
         light_result::LightResult,
         lightdata::LightData,
-        nodes::{BeamSplitter, SplittingConfig, SplittingConfigBuilder},
+        nodes::{BeamSplitter, SplittingConfigBuilder},
         optic_node::OpticNode,
         spectrum_helper::create_he_ne_spec,
     };

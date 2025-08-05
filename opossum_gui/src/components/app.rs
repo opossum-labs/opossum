@@ -104,7 +104,7 @@ pub fn App() -> Element {
                 }
             }
             div { class: "row main-content-row",
-                div { class: "col-2 sidebar",
+                div { style: "min-width:256px;", class: "col-2 sidebar",
                     NodeEditor { node: selected_node }
                 }
                 div { class: "col px-0 graph-editor-container",

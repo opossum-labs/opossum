@@ -8,7 +8,6 @@ use opossum::{
         SplittingConfigBuilder,
         ideal_filter::{FilterTypeBuilder, SpectralFilterBuilder},
     },
-    spectrum::Spectrum,
 };
 pub fn hhts_input() -> OpmResult<NodeGroup> {
     let dichroic_mirror = SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::FromFile(

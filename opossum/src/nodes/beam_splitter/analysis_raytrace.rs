@@ -103,7 +103,7 @@ mod test {
         light_result::LightResult,
         lightdata::LightData,
         millimeter, nanometer,
-        nodes::{BeamSplitter, SplittingConfig, SplittingConfigBuilder},
+        nodes::{BeamSplitter, SplittingConfigBuilder},
         optic_node::OpticNode,
         ray::Ray,
         rays::Rays,

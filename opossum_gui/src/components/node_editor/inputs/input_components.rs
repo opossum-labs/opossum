@@ -149,10 +149,9 @@ pub fn LabeledInput(
 
     #[props(default = false)] readonly: bool,
 ) -> Element {
-    let step = if r#type == "number" && step.is_none(){
+    let step = if r#type == "number" && step.is_none() {
         Some("0.01")
-    }
-    else{
+    } else {
         step
     };
     rsx! {

@@ -31,7 +31,6 @@ use opossum::{
     radian,
     refractive_index::{RefrIndexSellmeier1, refr_index_schott::RefrIndexSchott},
     spectral_distribution::LaserLines,
-    spectrum::Spectrum,
     utils::geom_transformation::Isometry,
 };
 use uom::si::f64::Length;

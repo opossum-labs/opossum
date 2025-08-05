@@ -353,8 +353,7 @@ mod test {
     use crate::{
         lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
         nodes::{
-            BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, Source, SplittingConfig,
-            SplittingConfigBuilder,
+            BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, Source, SplittingConfigBuilder,
         },
     };
     use num::Zero;

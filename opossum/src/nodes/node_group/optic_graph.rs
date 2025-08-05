@@ -1231,10 +1231,7 @@ mod test {
     use super::*;
     use crate::{
         millimeter,
-        nodes::{
-            BeamSplitter, Dummy, NodeGroup, NodeReference, Source, SplittingConfig,
-            SplittingConfigBuilder,
-        },
+        nodes::{BeamSplitter, Dummy, NodeGroup, NodeReference, Source, SplittingConfigBuilder},
         spectrum_helper::create_he_ne_spec,
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };

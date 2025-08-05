@@ -15,8 +15,8 @@ pub enum GridParam {
 impl From<GridParam> for InputParam {
     fn from(value: GridParam) -> Self {
         match value {
-            GridParam::NrOfPointsX => Self::Usize("Number of points X".into()),
-            GridParam::NrOfPointsY => Self::Usize("Number of points Y".into()),
+            GridParam::NrOfPointsX => Self::Usize("#Points X".into()),
+            GridParam::NrOfPointsY => Self::Usize("#Points Y".into()),
             GridParam::LengthX => Self::Length("Length X in mm".into()),
             GridParam::LengthY => Self::Length("Length Y in mm".into()),
         }

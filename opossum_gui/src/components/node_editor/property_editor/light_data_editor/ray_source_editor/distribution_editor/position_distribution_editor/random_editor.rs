@@ -16,7 +16,7 @@ impl From<RandomParam> for InputParam {
         match value {
             RandomParam::SideLengthX => Self::Length("Length X in mm".into()),
             RandomParam::SideLengthY => Self::Length("Length Y in mm".into()),
-            RandomParam::Points => Self::Usize("Number of points".into()),
+            RandomParam::Points => Self::Usize("#Points".into()),
         }
     }
 }

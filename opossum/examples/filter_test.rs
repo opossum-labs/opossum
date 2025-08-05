@@ -2,9 +2,16 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    analyzers::AnalyzerType, error::OpmResult, lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder}, nanometer, nodes::{
-        ideal_filter::{BandFilter, BandFilterType, FilterTypeBuilder, SpectralFilterBuilder}, BeamSplitter, EnergyMeter, IdealFilter, NodeGroup, Source, Spectrometer, SplittingConfigBuilder
-    }, OpmDocument
+    OpmDocument,
+    analyzers::AnalyzerType,
+    error::OpmResult,
+    lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
+    nanometer,
+    nodes::{
+        BeamSplitter, EnergyMeter, IdealFilter, NodeGroup, Source, Spectrometer,
+        SplittingConfigBuilder,
+        ideal_filter::{BandFilter, BandFilterType, FilterTypeBuilder, SpectralFilterBuilder},
+    },
 };
 use uom::si::f64::Length;
 
@@ -33,7 +40,6 @@ fn main() -> OpmResult<()> {
             Path::new("./opossum/files_for_testing/spectrum/NF633-25.csv").to_path_buf(),
         )),
     )?)?;
-
 
     let i_d1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",

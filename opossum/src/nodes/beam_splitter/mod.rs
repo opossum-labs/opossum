@@ -49,6 +49,17 @@ impl SplittingConfigBuilder {
     }
 }
 
+impl From<SpectralFilterBuilder> for SplittingConfigBuilder {
+    fn from(val: SpectralFilterBuilder) -> Self {
+        Self::Spectrum(val)
+    }
+}
+impl From<f64> for SplittingConfigBuilder {
+    fn from(val: f64) -> Self {
+        Self::FixedRatio(val)
+    }
+}
+
 impl Display for SplittingConfigBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -64,7 +75,7 @@ impl DefaultFromName for SplittingConfigBuilder {
             if name == format!("{ftb}") {
                 match ftb {
                     Self::FixedRatio(_) => {
-                        return Some(Self::FixedRatio(1.0));
+                        return Some(Self::FixedRatio(0.5));
                     }
                     Self::Spectrum(_) => return Some(ftb),
                 }

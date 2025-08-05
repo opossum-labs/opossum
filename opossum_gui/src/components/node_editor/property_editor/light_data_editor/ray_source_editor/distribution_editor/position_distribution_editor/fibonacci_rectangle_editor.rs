@@ -16,7 +16,7 @@ impl From<FibonacciRectParam> for InputParam {
         match value {
             FibonacciRectParam::SideLengthX => Self::Length("Length X in mm".into()),
             FibonacciRectParam::SideLengthY => Self::Length("Length Y in mm".into()),
-            FibonacciRectParam::Points => Self::Usize("Number of points".into()),
+            FibonacciRectParam::Points => Self::Usize("#Points".into()),
         }
     }
 }
