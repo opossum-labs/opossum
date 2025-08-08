@@ -327,6 +327,25 @@ impl Isometry {
         *self = Self::new(trans, new_rot)?;
         Ok(())
     }
+
+    /// Sets the rotation of this [`Isometry`].
+    ///
+    /// This method updates the internal rotation vector by setting the new rotation angles
+    ///
+    /// # Parameters
+    /// - `axes_angle`: The vector containing the rotation along the axes around x,y,z
+    ///
+    /// # Returns
+    /// - `Ok(())` if the new rotation was successfully applied.
+    /// - `Err(OpossumError)` if the reconstruction of the [`Isometry`] fails.
+    ///
+    /// # Errors
+    /// If [`Isometry::new`] fails (e.g., due to invalid transformation parameters), the error is wrapped in [`OpossumError`] and returned.
+    pub fn set_rotation(&mut self, axes_angle: Point3<Angle>) -> OpmResult<()> {
+        let trans = self.translation();
+        *self = Self::new(trans, axes_angle)?;
+        Ok(())
+    }
     /// Transforms a single point by the defined isometry
     /// # Attributes
     /// - `p`: Point3 with Length components

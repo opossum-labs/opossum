@@ -20,6 +20,7 @@ pub fn I32Editor(
             label: format!("{}", property_key.to_sentence_case()),
             value: format!("{}", int32_sig.read()),
             r#type: "number",
+            step: Some("1"),
             onchange: on_i32_input_change(int32_sig),
         }
     }

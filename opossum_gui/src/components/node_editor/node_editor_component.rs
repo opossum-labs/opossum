@@ -6,7 +6,7 @@ use crate::components::node_editor::{
 use crate::components::scenery_editor::NodeElement;
 use crate::{HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_backend::{Fluence, Isometry, Proptype};
+use opossum_backend::{Fluence, Isometry, Properties, Proptype};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
@@ -22,13 +22,13 @@ pub enum NodeChange {
 #[component]
 pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
     let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
-
+    let mut node_properties_sig = use_signal(Properties::default);
     let active_node_opt = node();
     use_effect(move || {
         let node_change_opt = node_change.read().clone();
         if let (Some(node_changed), Some(active_node)) = (node_change_opt, active_node_opt.clone())
         {
-            node_change_api_call_selection(node_changed, active_node, node);
+            node_change_api_call_selection(node_changed, active_node, node, node_properties_sig);
         }
     });
 
@@ -36,7 +36,10 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
         let node = node.read();
         if let Some(node) = &*(node) {
             match api::get_node_properties(&HTTP_API_CLIENT(), node.id()).await {
-                Ok(node_attr) => Some(node_attr),
+                Ok(node_attr) => {
+                    node_properties_sig.set(node_attr.properties().clone());
+                    Some(node_attr)
+                }
                 Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                     None
@@ -61,11 +64,12 @@ pub fn NodeEditor(mut node: Signal<Option<NodeElement>>) -> Element {
                             node_name: node_attr.name(),
                             node_lidt: *node_attr.lidt(),
                         }
-                        PropertiesEditor {
-                            node_properties: node_attr.properties().clone(),
-                            node_change,
+                        PropertiesEditor { node_properties_sig }
+                        AlignmentEditor {
+                            alignment: *node_attr.alignment(),
+                            node_properties_sig,
+                            node_type: node_attr.node_type(),
                         }
-                        AlignmentEditor { alignment: *node_attr.alignment() }
                     }
                 }
             }
@@ -82,6 +86,7 @@ fn node_change_api_call_selection(
     node_changed: NodeChange,
     mut active_node: NodeElement,
     mut node: Signal<Option<NodeElement>>,
+    mut node_properties_sig: Signal<Properties>,
 ) {
     match node_changed {
         NodeChange::Name(name) => {
@@ -116,11 +121,23 @@ fn node_change_api_call_selection(
         }
         NodeChange::Property(key, prop) => {
             spawn(async move {
-                if let Err(err_str) =
-                    api::update_node_property(&HTTP_API_CLIENT(), active_node.id(), (key, prop))
-                        .await
+                if let Err(err_str) = api::update_node_property(
+                    &HTTP_API_CLIENT(),
+                    active_node.id(),
+                    (key.clone(), prop.clone()),
+                )
+                .await
                 {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                } else {
+                    node_properties_sig
+                        .write()
+                        .set(&key, prop)
+                        .unwrap_or_else(|_| {
+                            OPOSSUM_UI_LOGS
+                                .write()
+                                .add_log(&format!("Failed to set property: {key}"));
+                        });
                 }
             });
         }

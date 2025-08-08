@@ -35,13 +35,11 @@ use dioxus::prelude::*;
 use opossum_backend::{Properties, Property, Proptype};
 
 #[component]
-pub fn PropertiesEditor(
-    node_properties: Properties,
-    node_change: Signal<Option<NodeChange>>,
-) -> Element {
+pub fn PropertiesEditor(node_properties_sig: Signal<Properties>) -> Element {
+    let node_change: Signal<Option<NodeChange>> = use_context::<Signal<Option<NodeChange>>>();
     let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
 
-    for (property_key, property) in &node_properties {
+    for (property_key, property) in &*node_properties_sig.read() {
         if let Some(editor) = get_editor(property.clone(), property_key.clone(), node_change) {
             editor_inputs.push(editor);
         }

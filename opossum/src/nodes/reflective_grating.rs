@@ -20,9 +20,9 @@ use crate::{
     radian,
     rays::Rays,
     refractive_index::refr_index_vaccuum,
+    utils::math_utils::i32_to_f64,
 };
 use nalgebra::Vector3;
-use num::ToPrimitive;
 use opm_macros_lib::OpmNode;
 use uom::si::{
     angle::radian,
@@ -110,10 +110,8 @@ impl ReflectiveGrating {
     /// Set the angle of a grating such that the incoming ray has an angle of `angle` to littrow
     /// # Errors
     /// This function errors if
-    /// - the diffraction order cannot be read from te properties
-    /// - the line density cannot be read from te properties
-    /// # Panics
-    /// This function panics if the diffraction order canno be converted to f64.
+    /// - the diffraction order cannot be read from the properties
+    /// - the line density cannot be read from the properties
     pub fn with_rot_from_littrow(self, wavelength: Length, angle: Angle) -> OpmResult<Self> {
         let Ok(Proptype::I32(diffraction_order)) = self.node_attr.get_property("diffraction order")
         else {
@@ -125,18 +123,15 @@ impl ReflectiveGrating {
         else {
             return Err(OpossumError::Analysis("cannot read line density".into()));
         };
-        let littrow = (diffraction_order.to_f64().unwrap() * wavelength.value * line_density.value
-            / 2.)
-            .asin();
+        let littrow =
+            (i32_to_f64(*diffraction_order) * wavelength.value * line_density.value / 2.).asin();
         self.with_tilt(radian!(0., littrow + angle.get::<radian>(), 0.0))
     }
     /// Set the angle of a grating such that the outgoing ray has an angle of `angle` to littrow
     /// # Errors
     /// This function errors if
-    /// - the diffraction order cannot be read from te properties
-    /// - the line density cannot be read from te properties
-    /// # Panics
-    /// This function panics if the diffraction order canno be converted to f64.
+    /// - the diffraction order cannot be read from the properties
+    /// - the line density cannot be read from the properties
     pub fn to_rot_from_littrow(self, wavelength: Length, angle: Angle) -> OpmResult<Self> {
         let Ok(Proptype::I32(diffraction_order)) = self.node_attr.get_property("diffraction order")
         else {
@@ -148,11 +143,10 @@ impl ReflectiveGrating {
         else {
             return Err(OpossumError::Analysis("cannot read line density".into()));
         };
-        let littrow = (diffraction_order.to_f64().unwrap() * wavelength.value * line_density.value
-            / 2.)
-            .asin();
+        let littrow =
+            (i32_to_f64(*diffraction_order) * wavelength.value * line_density.value / 2.).asin();
         let angle_in_rad = angle.get::<radian>();
-        let rot_angle = (diffraction_order.to_f64().unwrap() * wavelength.value)
+        let rot_angle = (i32_to_f64(*diffraction_order) * wavelength.value)
             .mul_add(line_density.value, -(littrow + angle_in_rad).sin())
             .asin();
         self.with_tilt(radian!(0.0, rot_angle, 0.0))
