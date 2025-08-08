@@ -20,6 +20,14 @@ pub const fn usize_to_f64(value: usize) -> f64 {
 
 #[must_use]
 #[inline]
+pub const fn i32_to_f64(value: i32) -> f64 {
+    #[allow(clippy::cast_precision_loss)]
+    let newval = value as f64;
+    newval
+}
+
+#[must_use]
+#[inline]
 pub const fn isize_to_f64(value: isize) -> f64 {
     #[allow(clippy::cast_precision_loss)]
     let newval = value as f64;

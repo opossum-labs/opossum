@@ -32,16 +32,16 @@ pub use opossum::{
     optic_ports::PortType,
     position_distributions::*,
     properties::{Properties, Property, Proptype},
+    radian,
     rays::Rays,
     refractive_index::*,
     reporting::*,
     spectral_distribution::*,
     spectrum::Spectrum,
     surface::hit_map::fluence_estimator::FluenceEstimator,
-    utils::math_utils::isize_to_f64,
     utils::{
         default_from_name::DefaultFromName,
         geom_transformation::{AlignmentAxis, Isometry, RotationAxis, TranslationAxis},
-        math_utils::{f64_to_usize, usize_to_f64},
+        math_utils::{f64_to_usize, i32_to_f64, isize_to_f64, usize_to_f64},
     },
 };
