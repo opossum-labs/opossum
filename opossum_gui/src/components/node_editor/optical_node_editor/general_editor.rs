@@ -16,9 +16,9 @@ pub fn GeneralEditor(
     node_lidt: Fluence,
 ) -> Element {
     let accordion_content = vec![rsx! {
-            NodeIDInput {node_id}
-            NodeTypeInput {node_type}
-            NodeNameInput{node_name}
+            NodeIDInput {node_id, label: "Node ID"},
+            NodeTypeInput {node_type, label: "Node Type"},
+            NodeNameInput {node_name},
             NodeLIDTInput {node_lidt},
     }];
     rsx! {
@@ -77,11 +77,11 @@ pub fn lidt_onchange(mut signal: Signal<Option<NodeChange>>) -> CallbackWrapper 
 }
 
 #[component]
-pub fn NodeIDInput(node_id: Uuid) -> Element {
+pub fn NodeIDInput(node_id: Uuid, label: &'static str) -> Element {
     rsx! {
         LabeledInput {
             id: "inputNodeID",
-            label: "Node ID",
+            label,
             value: format!("{node_id}"),
             readonly: true,
             onchange: CallbackWrapper::noop(),
@@ -90,11 +90,11 @@ pub fn NodeIDInput(node_id: Uuid) -> Element {
 }
 
 #[component]
-pub fn NodeTypeInput(node_type: String) -> Element {
+pub fn NodeTypeInput(node_type: String, label: &'static str) -> Element {
     rsx! {
         LabeledInput {
             id: "inputNodeType",
-            label: "Node Type",
+            label,
             value: node_type,
             readonly: true,
             onchange: CallbackWrapper::noop(),

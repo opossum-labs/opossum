@@ -23,7 +23,6 @@ use utoipa::ToSchema;
 /// Type of analysis to be performed.
 ///
 /// While the individual analyzers are implemented as traits, this enum is necessary for serialization / desrialization.
-#[non_exhaustive]
 #[derive(EnumIter, PartialEq, Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub enum AnalyzerType {
     /// Simple energy flow analysis of an optical spectrum.

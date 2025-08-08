@@ -10,7 +10,7 @@ pub mod utils;
 
 pub use opossum::{
     J_per_cm2,
-    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
+    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig, raytrace::MissedSurfaceStrategy},
     create_data_dir, create_report_and_data_files, degree,
     energy_distributions::*,
     joule,
@@ -30,6 +30,7 @@ pub use opossum::{
     num_per_mm,
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
+    picojoule,
     position_distributions::*,
     properties::{Properties, Property, Proptype},
     radian,

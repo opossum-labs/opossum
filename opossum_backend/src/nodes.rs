@@ -8,6 +8,7 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum::{
+    analyzers::AnalyzerType,
     error::OpossumError,
     meter,
     nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
@@ -942,6 +943,55 @@ async fn update_distance(
     drop(document);
     Ok(connect_info)
 }
+
+/// Update the analyzer config of an analyzer node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "Update an analyzer config of the analyzer node"),
+    ),
+    request_body(content = String,
+        description = "updated config of analyzer",
+        content_type = "application/ron",
+        example= "\"analyzer_type\""
+    ),
+    responses(
+        (status = OK, description = "Analyzer config successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/ron")
+    )
+)]
+#[post("/analyzer/{uuid}")]
+async fn post_analyzer_config(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: String,
+) -> Result<HttpResponse, ErrorResponse> {
+    let uuid: Uuid = path.into_inner();
+    let analyzer_type: AnalyzerType = match ron::de::from_str(body.as_str()) {
+        Ok(analyzer_type) => analyzer_type,
+        Err(e) => {
+            return Err(ErrorResponse::new(
+                400,
+                "Opossum",
+                &format!("Failed to deserialize property value: {e}"),
+            ));
+        }
+    };
+    let mut document = data.document.lock();
+    if let Some(analyzer_info) = document.analyzer_mut(uuid) {
+        analyzer_info.set_analyzer_type(analyzer_type);
+        drop(document);
+    } else {
+        return Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in analyzers",
+        ));
+    }
+    Ok(HttpResponse::Ok()
+        .content_type("application/ron")
+        .body(ron::ser::to_string("").unwrap()))
+}
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_subnodes);
     cfg.service(post_subnode);
@@ -953,6 +1003,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);
     cfg.service(post_node_isometry);
+    cfg.service(post_analyzer_config);
 
     cfg.service(get_properties_ron);
     cfg.service(get_properties_json);

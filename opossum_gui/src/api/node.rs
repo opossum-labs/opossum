@@ -1,6 +1,6 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
-    AnalyzerInfo, Fluence, Isometry, NodeAttr, Proptype,
+    AnalyzerInfo, AnalyzerType, Fluence, Isometry, NodeAttr, Proptype,
     nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
 };
 use uuid::Uuid;
@@ -284,6 +284,37 @@ pub async fn update_node_isometry(
         .post::<Isometry, String>(
             &format!("/api/scenery/isometry/{}", node_id.as_simple()),
             iso,
+        )
+        .await
+}
+
+/// Update the analyzer configuration of an analyzer node.
+/// This function sends a POST request to the server to update the analyzer type
+/// associated with a specific node identified by its UUID. The server endpoint is:
+/// `/api/scenery/analyzer/{node_id}`.
+///
+/// # Parameters
+/// - `client`: An instance of [`HTTPClient`] used to send the request.
+/// - `node_id`: The unique identifier of the node whose analyzer configuration is to be updated.
+/// - `analyzer_type`: The new [`AnalyzerType`] to apply to the node.
+/// # Returns
+/// A [`Result`] containing:
+/// - `Ok(String)`: The server's response if the update is successful.
+/// - `Err(String)`: An error message returned from the server or the HTTP client.
+/// # Errors
+/// This function returns an error if:
+/// - The HTTP request fails to reach the server (e.g., network issues).
+/// - The server responds with an error status code (e.g., 4xx or 5xx).
+/// - Serialization of the [`AnalyzerType`] payload fails before sending.
+pub async fn update_analyzer_config_ron(
+    client: &HTTPClient,
+    node_id: Uuid,
+    analyzer_type: AnalyzerType,
+) -> Result<String, String> {
+    client
+        .post_ron::<AnalyzerType, String>(
+            &format!("/api/scenery/analyzer/{}", node_id.as_simple()),
+            analyzer_type,
         )
         .await
 }

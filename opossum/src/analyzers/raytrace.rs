@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 //! Analyzer for sequential ray tracing
+use std::fmt::Display;
+
 use super::{Analyzer, AnalyzerType};
 use crate::{
     degree,
@@ -14,9 +16,11 @@ use crate::{
     rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::analysis_report::AnalysisReport,
+    utils::default_from_name::DefaultFromName,
 };
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 use uom::si::f64::{Angle, Energy, Length};
 
 //pub type LightResRays = LightDings<Rays>;
@@ -228,7 +232,7 @@ pub trait AnalysisRayTrace: OpticNode {
             self.pass_through_detector_surface(
                 in_port,
                 &mut vec![rays.clone()],
-                &AnalyzerType::RayTrace(config.clone()),
+                &AnalyzerType::RayTrace(*config),
             )?;
             Ok(LightResult::from([(
                 out_port.into(),
@@ -278,7 +282,7 @@ pub trait AnalysisRayTrace: OpticNode {
 }
 
 /// Strategy to use if a [`Ray`](crate::ray::Ray) misses a surface
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize, EnumIter)]
 pub enum MissedSurfaceStrategy {
     /// The [`Ray`](crate::ray::Ray) it is set as invalid and does no longer propagate.
     Stop,
@@ -286,12 +290,21 @@ pub enum MissedSurfaceStrategy {
     /// further through the system.
     Ignore,
 }
+impl DefaultFromName for MissedSurfaceStrategy {}
+impl Display for MissedSurfaceStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stop => write!(f, "Stop"),
+            Self::Ignore => write!(f, "Ignore"),
+        }
+    }
+}
 impl Default for MissedSurfaceStrategy {
     fn default() -> Self {
         Self::Stop
     }
 }
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Copy, Serialize, Deserialize)]
 /// Configuration data for a rays tracing analysis.
 ///
 /// The config contains the following info

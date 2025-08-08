@@ -4,7 +4,7 @@ use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
 use crate::components::scenery_editor::{NodeElement, NodeType};
 use crate::{HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_backend::{Fluence, Isometry, Properties, Proptype};
+use opossum_backend::{AnalyzerType, Fluence, Isometry, Properties, Proptype};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
@@ -15,6 +15,7 @@ pub enum NodeChange {
     Inverted(bool),
     Property(String, Proptype),
     Isometry(Isometry),
+    AnalyzerType(AnalyzerType),
 }
 
 #[component]
@@ -43,10 +44,7 @@ pub fn NodeConfigEditor(mut node_element_sig: Signal<Option<NodeElement>>) -> El
         |active_node| match active_node.node_type() {
             NodeType::Optical(_) => {
                 rsx! {
-                    OpticalNodeEditor {
-                        node_element_sig,
-                        node_properties_sig,
-                    }
+                    OpticalNodeEditor { node_element_sig, node_properties_sig }
                 }
             }
             NodeType::Analyzer(_) => {
@@ -127,5 +125,18 @@ fn node_change_api_call_selection(
             });
         }
         NodeChange::Inverted(_) => todo!(),
+        NodeChange::AnalyzerType(analyzer_type) => {
+            spawn(async move {
+                if let Err(err_str) = api::update_analyzer_config_ron(
+                    &HTTP_API_CLIENT(),
+                    active_node.id(),
+                    analyzer_type,
+                )
+                .await
+                {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                }
+            });
+        }
     }
 }
