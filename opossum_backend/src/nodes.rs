@@ -8,9 +8,11 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum::{
+    analyzers::AnalyzerType,
     error::OpossumError,
     meter,
     nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
+    opm_document::AnalyzerInfo,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
@@ -680,6 +682,22 @@ fn get_node_attr_from_state(
     // The lock is dropped automatically when `document` goes out of scope here
     Ok(node_attr)
 }
+
+// Helper function to contain the core logic
+fn get_node_analyzer_attr_from_state(
+    uuid: Uuid,
+    data: &web::Data<AppState>,
+) -> Result<AnalyzerInfo, ErrorResponse> {
+    let document = data.document.lock().clone();
+    let analyzer_info = document
+        .analyzers()
+        .get(&uuid)
+        .ok_or_else(|| ErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?
+        .clone();
+    // The lock is dropped automatically when `document` goes out of scope here
+    Ok(analyzer_info)
+}
+
 /// Get all properties of the specified node in either JSON or RON format.
 ///
 /// Return all properties (`NodeAttr`) of the node specified by its UUID.
@@ -736,6 +754,60 @@ async fn get_properties_json(
     let node_attr = get_node_attr_from_state(path.into_inner(), &data)?;
     Ok(Json(node_attr))
 }
+/// Get all info of the specified analyzer node in either JSON or RON format.
+///
+/// Return all info (`AnalyzerInfo`) of the analyzer node specified by its UUID.
+/// The format is determined by the `Accept` header.
+/// Defaults to `application/json` if the header is missing or doesn't specify
+/// `application/ron`.
+///
+/// # Important
+///
+/// Due to the fact that numeric properties can have values such as `nan` or `inf` it is possible to read
+/// the data as RON. The standard JSON format does **not** support encoding of these values. They are simply
+/// returned as `null` values.
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the analyzer node"),
+    ),
+    responses(
+        (status = OK, description = "get all analyzer information", content(("application/json"),("application/ron"))),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/analyzer_info", guard = "wants_ron_guard")]
+async fn get_analyzer_info_ron(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<impl Responder, ErrorResponse> {
+    let analyzer_info = get_node_analyzer_attr_from_state(path.into_inner(), &data)?;
+
+    let body =
+        ron::ser::to_string_pretty(&analyzer_info, ron::ser::PrettyConfig::new().new_line("\n"))
+            .map_err(|e| OpossumError::Other(format!("RON Serialization Error: {e}")))?;
+
+    Ok(HttpResponse::Ok()
+        .content_type("application/ron")
+        .body(body))
+}
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the analyzer node"),
+    ),
+    responses(
+        (status = OK, description = "get all analyzer information", content(("application/json"),("application/ron"))),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/analyzer_info")]
+async fn get_analyzer_info_json(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<AnalyzerInfo>, ErrorResponse> {
+    let analyzer_info = get_node_analyzer_attr_from_state(path.into_inner(), &data)?;
+    Ok(Json(analyzer_info))
+}
+
 /// Modify node properties
 ///
 /// Modify the properties (`NodeAttr`) of a node specified by its UUID.
@@ -871,6 +943,55 @@ async fn update_distance(
     drop(document);
     Ok(connect_info)
 }
+
+/// Update the analyzer config of an analyzer node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "Update an analyzer config of the analyzer node"),
+    ),
+    request_body(content = String,
+        description = "updated config of analyzer",
+        content_type = "application/ron",
+        example= "\"analyzer_type\""
+    ),
+    responses(
+        (status = OK, description = "Analyzer config successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/ron")
+    )
+)]
+#[post("/analyzer/{uuid}")]
+async fn post_analyzer_config(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: String,
+) -> Result<HttpResponse, ErrorResponse> {
+    let uuid: Uuid = path.into_inner();
+    let analyzer_type: AnalyzerType = match ron::de::from_str(body.as_str()) {
+        Ok(analyzer_type) => analyzer_type,
+        Err(e) => {
+            return Err(ErrorResponse::new(
+                400,
+                "Opossum",
+                &format!("Failed to deserialize property value: {e}"),
+            ));
+        }
+    };
+    let mut document = data.document.lock();
+    if let Some(analyzer_info) = document.analyzer_mut(uuid) {
+        analyzer_info.set_analyzer_type(analyzer_type);
+        drop(document);
+    } else {
+        return Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in analyzers",
+        ));
+    }
+    Ok(HttpResponse::Ok()
+        .content_type("application/ron")
+        .body(ron::ser::to_string("").unwrap()))
+}
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_subnodes);
     cfg.service(post_subnode);
@@ -882,9 +1003,12 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);
     cfg.service(post_node_isometry);
+    cfg.service(post_analyzer_config);
 
     cfg.service(get_properties_ron);
     cfg.service(get_properties_json);
+    cfg.service(get_analyzer_info_ron);
+    cfg.service(get_analyzer_info_json);
     cfg.service(patch_properties);
 
     cfg.service(post_connection);

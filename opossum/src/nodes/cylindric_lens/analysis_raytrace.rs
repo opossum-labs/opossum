@@ -33,7 +33,7 @@ impl AnalysisRayTrace for CylindricLens {
             in_port,
             &refri,
             &mut rays_bundle,
-            &AnalyzerType::RayTrace(config.clone()),
+            &AnalyzerType::RayTrace(*config),
             self.inverted(),
             refraction_intended,
         )?;
@@ -41,7 +41,7 @@ impl AnalysisRayTrace for CylindricLens {
             out_port,
             &self.ambient_idx(),
             &mut rays_bundle,
-            &AnalyzerType::RayTrace(config.clone()),
+            &AnalyzerType::RayTrace(*config),
             self.inverted(),
             refraction_intended,
         )?;

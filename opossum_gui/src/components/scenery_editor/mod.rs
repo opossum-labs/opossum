@@ -9,4 +9,4 @@ mod ports;
 
 pub use graph_editor::GraphEditor;
 pub use graph_editor::NodeEditorCommand;
-pub use node::NodeElement;
+pub use node::{NodeElement, NodeType};

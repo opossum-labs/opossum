@@ -60,6 +60,10 @@ impl AnalyzerInfo {
     pub const fn analyzer_type(&self) -> &AnalyzerType {
         &self.analyzer_type
     }
+    /// Sets the analyzer type of this [`AnalyzerInfo`].
+    pub const fn set_analyzer_type(&mut self, analyzer_type: AnalyzerType) {
+        self.analyzer_type = analyzer_type;
+    }
     /// Returns the id of this [`AnalyzerInfo`].
     #[must_use]
     pub const fn id(&self) -> Uuid {
@@ -179,6 +183,11 @@ impl OpmDocument {
     pub fn analyzers(&self) -> HashMap<Uuid, AnalyzerInfo> {
         self.analyzers.clone()
     }
+    /// Returns the list of analyzers of this [`OpmDocument`].
+    #[must_use]
+    pub fn analyzer_mut(&mut self, id: Uuid) -> Option<&mut AnalyzerInfo> {
+        self.analyzers.get_mut(&id)
+    }
     /// Return an [`AnalyzerInfo`] with the given [`Uuid`] from this [`OpmDocument`].
     ///
     /// # Errors
@@ -276,8 +285,8 @@ impl OpmDocument {
         for ana in self.analyzers.iter().enumerate() {
             let analyzer: &dyn Analyzer = match ana.1.1.analyzer_type.clone() {
                 AnalyzerType::Energy => &EnergyAnalyzer::default(),
-                AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
-                AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config.clone()),
+                AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config),
+                AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config),
             };
             info!("Analysis #{}", ana.0);
             analyzer.analyze(&mut self.scenery)?;
