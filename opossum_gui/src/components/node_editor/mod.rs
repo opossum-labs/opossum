@@ -1,9 +1,8 @@
 mod accordion;
-pub mod alignment_editor;
-pub mod general_editor;
-pub mod node_editor_component;
-pub mod property_editor;
-pub use node_editor_component::NodeEditor;
+mod analyzer_node_editor;
+pub mod node_config_editor;
+mod optical_node_editor;
+pub use node_config_editor::NodeConfigEditor;
 pub mod inputs;
 
 use dioxus::prelude::*;

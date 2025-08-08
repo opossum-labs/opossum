@@ -1,6 +1,6 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
-    Fluence, Isometry, NodeAttr, Proptype,
+    AnalyzerInfo, Fluence, Isometry, NodeAttr, Proptype,
     nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
 };
 use uuid::Uuid;
@@ -98,7 +98,7 @@ pub async fn delete_node(client: &HTTPClient, id: Uuid) -> Result<Vec<Uuid>, Str
         )
         .await
 }
-/// Get the properties of a node.
+/// Get the properties of an optical node.
 ///
 /// # Errors
 ///
@@ -110,6 +110,20 @@ pub async fn get_node_properties(client: &HTTPClient, uuid: Uuid) -> Result<Node
         .get_ron::<NodeAttr>(&format!("/api/scenery/{}/properties", uuid.as_simple()))
         .await
 }
+
+/// Get the information about an analyzer node.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the provided [`Uuid`] cannot be serialized or found
+/// - the properties cannot be deserialized into the [`AnalyzerInfo`] struct
+pub async fn get_analyzer_info(client: &HTTPClient, uuid: Uuid) -> Result<AnalyzerInfo, String> {
+    client
+        .get_ron::<AnalyzerInfo>(&format!("/api/scenery/{}/analyzer_info", uuid.as_simple()))
+        .await
+}
+
 /// Connect two nodes.
 ///
 /// # Errors

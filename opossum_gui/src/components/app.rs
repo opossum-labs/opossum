@@ -4,7 +4,7 @@ use crate::components::{
     context_menu::cx_menu::{ContextMenu, CxtCommand},
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
-    node_editor::NodeEditor,
+    node_editor::NodeConfigEditor,
     scenery_editor::{GraphEditor, NodeEditorCommand, NodeElement},
 };
 use dioxus::prelude::*;
@@ -105,7 +105,7 @@ pub fn App() -> Element {
             }
             div { class: "row main-content-row",
                 div { style: "min-width:256px;", class: "col-2 sidebar",
-                    NodeEditor { node: selected_node }
+                    NodeConfigEditor { node_element_sig: selected_node }
                 }
                 div { class: "col px-0 graph-editor-container",
                     GraphEditor {
