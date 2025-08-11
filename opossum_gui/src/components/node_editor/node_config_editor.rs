@@ -124,7 +124,15 @@ fn node_change_api_call_selection(
                 }
             });
         }
-        NodeChange::Inverted(_) => todo!(),
+        NodeChange::Inverted(inverted) => {
+            spawn(async move {
+                if let Err(err_str) =
+                    api::update_node_inversion(&HTTP_API_CLIENT(), active_node.id(), inverted).await
+                {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                }
+            });
+        }
         NodeChange::AnalyzerType(analyzer_type) => {
             spawn(async move {
                 if let Err(err_str) = api::update_analyzer_config_ron(

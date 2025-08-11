@@ -1,6 +1,9 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
-    accordion::AccordionItem, inputs::input_components::{LabeledCheckboxInput, LabeledInput}, node_config_editor::NodeChange, CallbackWrapper
+    CallbackWrapper,
+    accordion::AccordionItem,
+    inputs::input_components::{LabeledCheckboxInput, LabeledInput},
+    node_config_editor::NodeChange,
 };
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, J_per_cm2};
@@ -103,7 +106,6 @@ pub fn NodeTypeInput(node_type: String, label: &'static str) -> Element {
     }
 }
 
-
 #[component]
 pub fn NodeInvertedInput(node_inverted: bool, label: &'static str) -> Element {
     let node_change_signal = use_context::<Signal<Option<NodeChange>>>();
@@ -125,7 +127,3 @@ pub fn inverted_onchange(mut signal: Signal<Option<NodeChange>>) -> CallbackWrap
         }
     })
 }
-
-
-
-

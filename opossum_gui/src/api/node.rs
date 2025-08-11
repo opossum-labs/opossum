@@ -288,6 +288,39 @@ pub async fn update_node_isometry(
         .await
 }
 
+/// Update the inversion state of a node.
+/// This function sends a POST request to the server to update whether the node is inverted or not.
+/// The server endpoint is:
+/// `/api/scenery/inversion/{node_id}`.
+///
+/// # Parameters
+/// - `client`: An instance of [`HTTPClient`] used to send the request.
+/// - `node_id`: The unique identifier of the node whose inversion state is to be updated.
+/// - `inverted`: A boolean indicating whether the node should be inverted or not.
+///
+/// # Returns
+/// A [`Result`] containing:
+/// - `Ok(String)`: The server's response if the update is successful.
+/// - `Err(String)`: An error message returned from the server or the HTTP client.
+///
+/// # Errors
+/// This function returns an error if:
+/// - The HTTP request fails to reach the server (e.g., network issues).
+/// - The server responds with an error status code (e.g., 4xx or 5xx).
+/// - Serialization of the boolean payload fails before sending.
+pub async fn update_node_inversion(
+    client: &HTTPClient,
+    node_id: Uuid,
+    inverted: bool,
+) -> Result<String, String> {
+    client
+        .post::<bool, String>(
+            &format!("/api/scenery/inversion/{}", node_id.as_simple()),
+            inverted,
+        )
+        .await
+}
+
 /// Update the analyzer configuration of an analyzer node.
 /// This function sends a POST request to the server to update the analyzer type
 /// associated with a specific node identified by its UUID. The server endpoint is:

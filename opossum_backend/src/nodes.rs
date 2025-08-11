@@ -644,6 +644,46 @@ async fn post_node_isometry(
     }
 }
 
+/// Update the inverted status of an optical node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "inverted status of the optical node"),
+    ),
+    request_body(content = String,
+        description = "updated inverted status of node",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, description = "Node inverted status successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/inversion/{uuid}")]
+async fn post_node_inversion(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    inverted: web::Json<bool>,
+) -> Result<(), ErrorResponse> {
+    let uuid: Uuid = path.into_inner();
+    let inverted = inverted.into_inner();
+    let document = data.document.lock();
+    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+        node_ref
+            .optical_ref
+            .lock()
+            .unwrap()
+            .node_attr_mut()
+            .set_inverted(inverted);
+        Ok(())
+    } else {
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+        ))
+    }
+}
+
 /// Delete a node
 ///
 /// This function deletes a node. It also deletes reference nodes which refer to this node.
@@ -1003,6 +1043,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);
     cfg.service(post_node_isometry);
+    cfg.service(post_node_inversion);
     cfg.service(post_analyzer_config);
 
     cfg.service(get_properties_ron);
