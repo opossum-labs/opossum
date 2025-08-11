@@ -23,7 +23,11 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 .nodes()
                 .read()
                 .get(&edge.src_uuid())
-                .map(|n| n.abs_port_position(&PortType::Output, edge.src_port()))
+                .map(|n| if n.inverted(){
+                 n.abs_port_position(&PortType::Input, edge.src_port(), n.inverted())   
+                } else {
+                    n.abs_port_position(&PortType::Output, edge.src_port(), n.inverted())
+                })
                 .unwrap_or_default()
         }
     });
@@ -36,7 +40,13 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 .nodes()
                 .read()
                 .get(&edge.target_uuid())
-                .map(|n| n.abs_port_position(&PortType::Input, edge.target_port()))
+                .map(|n| 
+                    if n.inverted(){
+                    n.abs_port_position(&PortType::Output, edge.src_port(), n.inverted())   
+                    } else {
+                        n.abs_port_position(&PortType::Input, edge.src_port(), n.inverted())
+                    })
+                    // n.abs_port_position(&PortType::Input, edge.target_port(), n.inverted()))
                 .unwrap_or_default()
         }
     });

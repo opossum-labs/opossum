@@ -81,7 +81,6 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                             ("Create reference".to_owned(), CxtCommand::AddRefNode(new_ref_node)),
                         ],
                     );
-                    println!("oncontext: {cx_menu:?}");
                     let mut ctx = CONTEXT_MENU.write();
                     *ctx = cx_menu;
                 }
@@ -97,7 +96,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                         if node_icon.is_some() {
                             img { src: node_icon.unwrap(), draggable: false }
                         }
-                        NodePorts { node: node.clone() }
+                        NodePorts { node: node.clone(), inverted: node.inverted() }
                     }
                 },
             }

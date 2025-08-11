@@ -144,10 +144,17 @@ impl NodeElement {
         self.pos.y += shift.y;
     }
     #[must_use]
-    pub fn rel_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
-        let (x_pos, port_list) = match port_type {
-            PortType::Input => (0.0, self.input_ports()),
-            PortType::Output => (NODE_WIDTH + BORDER_WIDTH, self.output_ports()),
+    pub fn rel_port_position(&self, port_type: &PortType, port_name: &str, inverted_node: bool) -> Point2D<f64> {
+        let (x_pos, port_list) = if inverted_node{
+            match port_type {
+                PortType::Input => (NODE_WIDTH + BORDER_WIDTH, self.input_ports()),
+                PortType::Output => (0.0, self.output_ports()),
+            }
+        } else {
+            match port_type {
+                PortType::Input => (0.0, self.input_ports()),
+                PortType::Output => (NODE_WIDTH + BORDER_WIDTH, self.output_ports()),
+            }
         };
         let port_index = port_list
             .iter()
@@ -157,8 +164,8 @@ impl NodeElement {
         Point2D::new(x_pos, y_pos)
     }
     #[must_use]
-    pub fn abs_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
-        let rel_pos = self.rel_port_position(port_type, port_name);
+    pub fn abs_port_position(&self, port_type: &PortType, port_name: &str, inverted_node: bool) -> Point2D<f64> {
+        let rel_pos = self.rel_port_position(port_type, port_name,inverted_node);
         Point2D::new(
             self.pos.x + rel_pos.x + BORDER_WIDTH,
             self.pos.y + rel_pos.y + HEADER_HEIGHT + BORDER_WIDTH / 2.,
@@ -186,5 +193,8 @@ impl NodeElement {
     }
     pub fn set_name(&mut self, name: String) {
         self.name = name;
+    }
+    pub fn set_inverted(&mut self, inverted: bool) {
+        self.inverted = inverted;
     }
 }

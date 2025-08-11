@@ -31,10 +31,10 @@ impl Ports {
 }
 
 #[component]
-pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> Element {
+pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType, inverted_node: bool) -> Element {
     let mut editor_status = use_context::<EditorState>();
-    let rel_port_position = node.rel_port_position(&port_type, &port_name);
-    let abs_port_position = node.abs_port_position(&port_type, &port_name);
+    let rel_port_position = node.rel_port_position(&port_type, &port_name, inverted_node);
+    let abs_port_position = node.abs_port_position(&port_type, &port_name, inverted_node);
     let node_id = node.id();
     let port_class = if port_type == PortType::Input {
         "input-port"
@@ -104,13 +104,15 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
 }
 
 #[component]
-pub fn NodePorts(node: NodeElement) -> Element {
-    rsx! {
+pub fn NodePorts(node: NodeElement, inverted: bool) -> Element {
+
+        rsx! {
         for in_port in node.input_ports() {
             NodePort {
                 node: node.clone(),
                 port_name: in_port,
                 port_type: PortType::Input,
+                inverted_node: inverted,
             }
         }
         for out_port in node.output_ports() {
@@ -118,7 +120,10 @@ pub fn NodePorts(node: NodeElement) -> Element {
                 node: node.clone(),
                 port_name: out_port,
                 port_type: PortType::Output,
+                inverted_node: inverted,
             }
         }
     }
+
+    
 }

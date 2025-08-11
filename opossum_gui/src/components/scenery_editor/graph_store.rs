@@ -136,6 +136,7 @@ impl GraphStore {
 
 pub async fn save_to_opm_file(path: &Path) {
     match api::get_opm_file(&HTTP_API_CLIENT()).await {
+        
         Ok(opm_string) => {
             if let Err(err_str) = fs::write(path, opm_string) {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());

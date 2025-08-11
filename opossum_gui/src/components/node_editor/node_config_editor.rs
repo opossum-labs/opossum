@@ -131,6 +131,10 @@ fn node_change_api_call_selection(
                 {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                 }
+                else {
+                    active_node.set_inverted(inverted);
+                    node.set(Some(active_node));
+                }
             });
         }
         NodeChange::AnalyzerType(analyzer_type) => {
