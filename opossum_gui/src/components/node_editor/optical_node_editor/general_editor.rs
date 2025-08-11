@@ -1,7 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
-    CallbackWrapper, accordion::AccordionItem, inputs::input_components::LabeledInput,
-    node_config_editor::NodeChange,
+    accordion::AccordionItem, inputs::input_components::{LabeledCheckboxInput, LabeledInput}, node_config_editor::NodeChange, CallbackWrapper
 };
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, J_per_cm2};
@@ -14,12 +13,14 @@ pub fn GeneralEditor(
     node_type: String,
     node_name: String,
     node_lidt: Fluence,
+    node_inverted: bool,
 ) -> Element {
     let accordion_content = vec![rsx! {
             NodeIDInput {node_id, label: "Node ID"},
             NodeTypeInput {node_type, label: "Node Type"},
             NodeNameInput {node_name},
             NodeLIDTInput {node_lidt},
+            NodeInvertedInput {node_inverted, label: "Invert Node"},
     }];
     rsx! {
         AccordionItem {
@@ -101,3 +102,30 @@ pub fn NodeTypeInput(node_type: String, label: &'static str) -> Element {
         }
     }
 }
+
+
+#[component]
+pub fn NodeInvertedInput(node_inverted: bool, label: &'static str) -> Element {
+    let node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+    rsx! {
+        LabeledCheckboxInput {
+            id: "inputNodeInverted",
+            label,
+            value: node_inverted,
+            onchange: inverted_onchange(node_change_signal),
+        }
+    }
+}
+
+#[must_use]
+pub fn inverted_onchange(mut signal: Signal<Option<NodeChange>>) -> CallbackWrapper {
+    CallbackWrapper::new(move |e: Event<FormData>| {
+        if let Ok(inverted) = e.data.parsed::<bool>() {
+            signal.set(Some(NodeChange::Inverted(inverted)));
+        }
+    })
+}
+
+
+
+

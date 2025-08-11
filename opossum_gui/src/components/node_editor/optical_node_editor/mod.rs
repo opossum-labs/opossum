@@ -47,6 +47,7 @@ pub fn OpticalNodeEditor(
                             node_type: node_attr.node_type(),
                             node_name: node_attr.name(),
                             node_lidt: *node_attr.lidt(),
+                            node_inverted: node_attr.inverted(),
                         }
                         PropertiesEditor { node_properties_sig }
                         AlignmentEditor {
