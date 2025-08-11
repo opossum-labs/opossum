@@ -85,6 +85,7 @@ pub struct NodeElement {
     pos: Point2D<f64>,
     z_index: usize,
     ports: Ports,
+    inverted: bool,
 }
 
 impl NodeElement {
@@ -95,6 +96,7 @@ impl NodeElement {
         id: Uuid,
         pos: Point2D<f64>,
         ports: Ports,
+        inverted: bool,
     ) -> Self {
         Self {
             name,
@@ -103,6 +105,7 @@ impl NodeElement {
             id,
             z_index: 0,
             ports,
+            inverted,
         }
     }
     #[must_use]
@@ -116,6 +119,10 @@ impl NodeElement {
     #[must_use]
     pub const fn z_index(&self) -> usize {
         self.z_index
+    }
+    #[must_use]
+    pub const fn inverted(&self) -> bool {
+        self.inverted
     }
     #[must_use]
     pub const fn pos(&self) -> Point2D<f64> {

@@ -28,6 +28,7 @@ use uuid::Uuid;
 pub struct NodeInfo {
     uuid: Uuid,
     name: String,
+    inverted: bool,
     node_type: String,
     input_ports: Vec<String>,
     output_ports: Vec<String>,
@@ -39,6 +40,7 @@ impl NodeInfo {
     pub const fn new(
         uuid: Uuid,
         name: String,
+        inverted: bool,
         node_type: String,
         input_ports: Vec<String>,
         output_ports: Vec<String>,
@@ -47,6 +49,7 @@ impl NodeInfo {
         Self {
             uuid,
             name,
+            inverted,
             node_type,
             input_ports,
             output_ports,
@@ -58,12 +61,14 @@ impl NodeInfo {
         self.uuid
     }
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
+    pub const fn inverted(&self) -> bool {
+        self.inverted
+    }
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
     pub fn node_type(&self) -> &str {
         &self.node_type
     }
@@ -122,6 +127,7 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
+                let inverted = node.inverted();
                 let input_ports = node.ports().names(&PortType::Input);
                 let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = node.gui_position().map(|position| (position.x, position.y));
@@ -129,6 +135,7 @@ async fn get_subnodes(
                 NodeInfo {
                     uuid: n.uuid(),
                     name,
+                    inverted,
                     node_type,
                     input_ports,
                     output_ports,
@@ -149,6 +156,7 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
+                let inverted = node.inverted();
                 let input_ports = node.ports().names(&PortType::Input);
                 let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = node.gui_position().map(|position| (position.x, position.y));
@@ -157,6 +165,7 @@ async fn get_subnodes(
                     uuid: n.uuid(),
                     name,
                     node_type,
+                    inverted,
                     input_ports,
                     output_ports,
                     gui_position,
@@ -275,6 +284,7 @@ async fn post_subnode(
     let node_info = NodeInfo {
         uuid: new_node_uuid,
         name: node.name(),
+        inverted: node.inverted(),
         node_type: node.node_type(),
         input_ports: node.ports().names(&PortType::Input),
         output_ports: node.ports().names(&PortType::Output),
@@ -369,6 +379,7 @@ async fn post_subreference(
     let node_info = NodeInfo {
         uuid: new_node_uuid,
         name: node.name(),
+        inverted: node.inverted(),
         node_type: node.node_type(),
         input_ports: node.ports().names(&PortType::Input),
         output_ports: node.ports().names(&PortType::Output),

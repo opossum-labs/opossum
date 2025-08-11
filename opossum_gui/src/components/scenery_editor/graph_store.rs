@@ -287,6 +287,7 @@ pub fn use_graph_processor(
                                     node.uuid(),
                                     position,
                                     Ports::new(node.input_ports(), node.output_ports()),
+                                    node.inverted(),
                                 )
                             });
                             graph_store
@@ -306,6 +307,7 @@ pub fn use_graph_processor(
                                     analyzer.id(),
                                     position,
                                     Ports::default(),
+                                    false
                                 )
                             });
                             graph_store
@@ -383,6 +385,7 @@ pub fn use_graph_processor(
                                     node_info.uuid(),
                                     Point2D::new(gui_position.0, gui_position.1),
                                     ports,
+                                    node_info.inverted(),
                                 );
                                 let id = node_element.id();
                                 graph_store
@@ -409,6 +412,7 @@ pub fn use_graph_processor(
                                     node_info.uuid(),
                                     Point2D::new(100.0, 100.0),
                                     ports,
+                                    node_info.inverted(),
                                 );
                                 let id = node_element.id();
                                 let nr_of_nodes = graph_store.read().nodes().read().len();
@@ -430,6 +434,7 @@ pub fn use_graph_processor(
                                     analyzer_id,
                                     Point2D::new(x, y),
                                     Ports::default(),
+                                    false
                                 );
                                 let nr_of_nodes = graph_store.read().nodes().read().len();
                                 node_element.set_z_index(nr_of_nodes + 1);
