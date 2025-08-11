@@ -136,7 +136,6 @@ impl GraphStore {
 
 pub async fn save_to_opm_file(path: &Path) {
     match api::get_opm_file(&HTTP_API_CLIENT()).await {
-        
         Ok(opm_string) => {
             if let Err(err_str) = fs::write(path, opm_string) {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
@@ -308,7 +307,7 @@ pub fn use_graph_processor(
                                     analyzer.id(),
                                     position,
                                     Ports::default(),
-                                    false
+                                    false,
                                 )
                             });
                             graph_store
@@ -435,7 +434,7 @@ pub fn use_graph_processor(
                                     analyzer_id,
                                     Point2D::new(x, y),
                                     Ports::default(),
-                                    false
+                                    false,
                                 );
                                 let nr_of_nodes = graph_store.read().nodes().read().len();
                                 node_element.set_z_index(nr_of_nodes + 1);

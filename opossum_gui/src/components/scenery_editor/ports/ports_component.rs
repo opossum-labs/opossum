@@ -28,19 +28,36 @@ impl Ports {
     pub const fn output_ports(&self) -> &Vec<String> {
         &self.output_ports
     }
+    pub fn invert_ports(&mut self) {
+        let input_buffer = self.input_ports.clone();
+        self.input_ports = self.output_ports.clone();
+        self.output_ports = input_buffer;
+    }
 }
 
 #[component]
-pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType, inverted_node: bool) -> Element {
+pub fn NodePort(
+    node: NodeElement,
+    port_name: String,
+    port_type: PortType,
+    inverted_node: bool,
+) -> Element {
     let mut editor_status = use_context::<EditorState>();
-    let rel_port_position = node.rel_port_position(&port_type, &port_name, inverted_node);
-    let abs_port_position = node.abs_port_position(&port_type, &port_name, inverted_node);
+    let rel_port_position = node.rel_port_position(&port_type, &port_name);
+    let abs_port_position = node.abs_port_position(&port_type, &port_name);
     let node_id = node.id();
-    let port_class = if port_type == PortType::Input {
+    let port_class = if inverted_node {
+        if port_type == PortType::Input {
+            "output-port"
+        } else {
+            "input-port"
+        }
+    } else if port_type == PortType::Input {
         "input-port"
     } else {
         "output-port"
     };
+
     rsx! {
         div {
             class: "port {port_class}",
@@ -105,8 +122,7 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType, inver
 
 #[component]
 pub fn NodePorts(node: NodeElement, inverted: bool) -> Element {
-
-        rsx! {
+    rsx! {
         for in_port in node.input_ports() {
             NodePort {
                 node: node.clone(),
@@ -124,6 +140,4 @@ pub fn NodePorts(node: NodeElement, inverted: bool) -> Element {
             }
         }
     }
-
-    
 }

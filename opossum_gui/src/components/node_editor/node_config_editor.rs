@@ -130,8 +130,7 @@ fn node_change_api_call_selection(
                     api::update_node_inversion(&HTTP_API_CLIENT(), active_node.id(), inverted).await
                 {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                }
-                else {
+                } else {
                     active_node.set_inverted(inverted);
                     node.set(Some(active_node));
                 }

@@ -954,6 +954,7 @@ async fn post_connection(
 ) -> Result<Json<ConnectInfo>, ErrorResponse> {
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
+    println!("server: Adding edge");
     scenery.connect_nodes(
         connect_info.src_uuid,
         &connect_info.src_port,
