@@ -105,7 +105,7 @@ pub fn App() -> Element {
             }
             div { class: "row main-content-row",
                 div { style: "min-width:256px;", class: "col-2 sidebar",
-                    NodeConfigEditor { node_element_sig: selected_node }
+                    NodeConfigEditor { node_element_sig: selected_node, node_editor_command }
                 }
                 div { class: "col px-0 graph-editor-container",
                     GraphEditor {

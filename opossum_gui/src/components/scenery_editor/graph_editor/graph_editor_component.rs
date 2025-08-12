@@ -13,9 +13,7 @@ use dioxus::{
     prelude::*,
 };
 use opossum_backend::{
-    AnalyzerType,
-    nodes::{NewNode, NewRefNode},
-    scenery::NewAnalyzerInfo,
+    nodes::{ConnectInfo, NewNode, NewRefNode}, scenery::NewAnalyzerInfo, AnalyzerType
 };
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -27,6 +25,7 @@ pub enum NodeEditorCommand {
     AddAnalyzer(AnalyzerType),
     LoadFile(PathBuf),
     SaveFile(PathBuf),
+    UpdateEdges(Vec<ConnectInfo>),
     AutoLayout,
     UpdateActiveNode(Option<NodeElement>),
 }
@@ -103,7 +102,12 @@ pub fn GraphEditor(
     });
     use_effect(move || {
         if let Some(command) = command.read().as_ref() {
+            println!("Received command: {:?}", command);
             match command {
+                NodeEditorCommand::UpdateEdges(connect_infos) => {
+                    println!("Updating edges: {:?}", connect_infos);
+                    graph_processor.send(GraphStoreAction::UpdateEdges(connect_infos.clone()));
+                }
                 NodeEditorCommand::DeleteAll => {
                     graph_processor.send(GraphStoreAction::DeleteScenery);
                 }

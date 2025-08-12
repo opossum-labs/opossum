@@ -47,6 +47,7 @@ pub enum GraphStoreAction {
     SyncNodePosition(Uuid),
     AddEdge(ConnectInfo),
     UpdateEdge(ConnectInfo),
+    UpdateEdges(Vec<ConnectInfo>),
     DeleteEdge(ConnectInfo),
     DeleteNode(Uuid),
     DeleteScenery,
@@ -247,6 +248,10 @@ pub fn use_graph_processor(
             // This loop runs forever in the background, waiting for actions.
             while let Some(action) = rx.next().await {
                 match action {
+                    GraphStoreAction::UpdateEdges(connect_infos) => {
+                        println!("Updating edges in store: {:?}", connect_infos);
+                        graph_store.write().edges.set(connect_infos.clone());
+                    }
                     GraphStoreAction::UpdateActiveNode(node) => {
                         if let Some(node) = node {
                             graph_store.write().set_node_active(node.id());

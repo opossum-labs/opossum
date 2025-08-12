@@ -198,7 +198,15 @@ pub async fn get_connections(
         scenery
             .connections()
             .iter()
-            .map(|c| ConnectInfo::new(c.0, c.1.clone(), c.2, c.3.clone(), c.4.get::<meter>()))
+            .map(|c| {
+                ConnectInfo::new(
+                    c.src_id,
+                    c.src_port.clone(),
+                    c.target_id,
+                    c.target_port.clone(),
+                    c.distance.get::<meter>(),
+                )
+            })
             .collect::<Vec<ConnectInfo>>()
     } else {
         // subgroup
@@ -210,7 +218,15 @@ pub async fn get_connections(
             .as_group_mut()?
             .connections()
             .iter()
-            .map(|c| ConnectInfo::new(c.0, c.1.clone(), c.2, c.3.clone(), c.4.get::<meter>()))
+            .map(|c| {
+                ConnectInfo::new(
+                    c.src_id,
+                    c.src_port.clone(),
+                    c.target_id,
+                    c.target_port.clone(),
+                    c.distance.get::<meter>(),
+                )
+            })
             .collect::<Vec<ConnectInfo>>()
     };
     Ok(Json(connect_infos))
@@ -439,7 +455,7 @@ async fn post_node_position(
     }
 }
 
-/// Update the GUI name of an optica node
+/// Update the GUI name of an optical node
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "name of the optical node"),
@@ -674,10 +690,10 @@ async fn post_node_inversion(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     inverted: web::Json<bool>,
-) -> Result<(), ErrorResponse> {
+) -> Result<Json<Vec<ConnectInfo>>, ErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let inverted = inverted.into_inner();
-    let document = data.document.lock();
+    let mut document = data.document.lock();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
@@ -685,7 +701,44 @@ async fn post_node_inversion(
             .unwrap()
             .node_attr_mut()
             .set_inverted(inverted);
-        Ok(())
+        match document
+            .scenery_mut()
+            .graph_mut()
+            .update_connections_of_single_inverted_node(uuid)
+        {
+            Ok(()) => {
+                println!("waslos)");
+                let connect_infos = document
+                    .scenery()
+                    .connections()
+                    .iter()
+                    .map(|c| {
+                        ConnectInfo::new(
+                            c.src_id,
+                            c.src_port.clone(),
+                            c.target_id,
+                            c.target_port.clone(),
+                            c.distance.get::<meter>(),
+                        )
+                    })
+                    .collect::<Vec<ConnectInfo>>();
+                Ok(Json(connect_infos))
+            }
+            Err(e) => return Err(ErrorResponse::new(400, "Opossum", e.to_string().as_str())),
+        }
+
+        // for connection in connections.iter() {
+        //     document.scenery().disconnect_nodes(connection, src_port);
+        //     if connection.0 == uuid {
+        //         // If the node is inverted, we need to invert the source port
+        //         let src_port = connection.1.clone();
+        //         let dst_port = connection.2;
+        //         let distance = connection.4.get::<meter>();
+        //         document
+        //             .scenery_mut()
+        //             .connect_nodes(uuid, src_port, dst_port, distance)?;
+        //     }
+        // }
     } else {
         Err(ErrorResponse::new(
             404,
@@ -887,7 +940,7 @@ async fn patch_properties(
     Ok(web::Json(node_attr.clone()))
 }
 /// Connection Information
-#[derive(ToSchema, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(ToSchema, Clone, PartialEq, Serialize, Deserialize, Debug)]
 pub struct ConnectInfo {
     /// UUID of the source node
     src_uuid: Uuid,

@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
 use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
-use crate::components::scenery_editor::{NodeElement, NodeType};
+use crate::components::scenery_editor::{NodeEditorCommand, NodeElement, NodeType};
 use crate::{HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_backend::{AnalyzerType, Fluence, Isometry, Properties, Proptype};
@@ -19,7 +19,7 @@ pub enum NodeChange {
 }
 
 #[component]
-pub fn NodeConfigEditor(mut node_element_sig: Signal<Option<NodeElement>>) -> Element {
+pub fn NodeConfigEditor(mut node_element_sig: Signal<Option<NodeElement>>, node_editor_command: Signal<Option<NodeEditorCommand>>) -> Element {
     let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
     let node_properties_sig = use_signal(Properties::default);
     let active_node_opt = node_element_sig();
@@ -32,6 +32,7 @@ pub fn NodeConfigEditor(mut node_element_sig: Signal<Option<NodeElement>>) -> El
                 active_node,
                 node_element_sig,
                 node_properties_sig,
+                node_editor_command
             );
         }
     });
@@ -61,6 +62,7 @@ fn node_change_api_call_selection(
     mut active_node: NodeElement,
     mut node: Signal<Option<NodeElement>>,
     mut node_properties_sig: Signal<Properties>,
+    mut node_editor_command: Signal<Option<NodeEditorCommand>>,
 ) {
     match node_changed {
         NodeChange::Name(name) => {
@@ -126,14 +128,30 @@ fn node_change_api_call_selection(
         }
         NodeChange::Inverted(inverted) => {
             spawn(async move {
-                if let Err(err_str) =
-                    api::update_node_inversion(&HTTP_API_CLIENT(), active_node.id(), inverted).await
-                {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                } else {
-                    active_node.set_inverted(inverted);
-                    node.set(Some(active_node));
+                match api::update_node_inversion(&HTTP_API_CLIENT(), active_node.id(), inverted).await{
+                    Ok(connections) => {
+                        println!("Inversion updated: {:?}", connections);
+                        node_editor_command.set(Some(NodeEditorCommand::UpdateEdges(connections.clone())));
+                        // active_node.set_inverted(inverted);
+                        // node.set(Some(active_node));
+                    }
+                    Err(err_str) => {
+                        println!("error: {:?}", err_str);
+                        OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                    }
                 }
+                // if let Ok(connections) =
+                //     api::update_node_inversion(&HTTP_API_CLIENT(), active_node.id(), inverted).await
+                // {
+                //     graph_store.write().edges.set(connections);
+                // }
+                // if let Err(err_str) =
+                //     api::update_node_inversion(&HTTP_API_CLIENT(), active_node.id(), inverted).await
+                // {
+                //     OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                // } else {
+
+                // }
             });
         }
         NodeChange::AnalyzerType(analyzer_type) => {

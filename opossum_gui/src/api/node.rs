@@ -312,9 +312,9 @@ pub async fn update_node_inversion(
     client: &HTTPClient,
     node_id: Uuid,
     inverted: bool,
-) -> Result<String, String> {
+) -> Result<Vec<ConnectInfo>, String> {
     client
-        .post::<bool, String>(
+        .post::<bool, Vec<ConnectInfo>>(
             &format!("/api/scenery/inversion/{}", node_id.as_simple()),
             inverted,
         )
