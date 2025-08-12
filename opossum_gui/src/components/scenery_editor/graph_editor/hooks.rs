@@ -43,11 +43,11 @@ pub fn use_zoom(
 }
 
 pub fn use_center_graph(
-    graph_store: Signal<GraphStore>,
     editor_size: Signal<Option<PixelsSize>>,
     mut graph_shift_zoom: Signal<ShiftZoom>,
     mut node_selected: Signal<Option<NodeElement>>,
 ) -> impl FnMut(MouseEvent) {
+    let graph_store = use_context::<Signal<GraphStore>>();
     move |mouse_event| {
         mouse_event.stop_propagation();
         node_selected.set(None);
@@ -85,8 +85,9 @@ pub fn use_drag(
     mut editor_status: EditorState,
     mut current_mouse_pos: Signal<Point2D<f64>>,
     mut graph_shift_zoom: Signal<ShiftZoom>,
-    graph_store: Signal<GraphStore>,
 ) -> impl FnMut(MouseEvent) {
+    let graph_store = use_context::<Signal<GraphStore>>();
+
     move |event| {
         let current_sz = *graph_shift_zoom.read();
         let drag_status = editor_status.drag_status.read().clone();

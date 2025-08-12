@@ -239,10 +239,9 @@ impl UuidRegistry {
 }
 #[allow(clippy::too_many_lines)]
 pub fn use_graph_processor(
-    graph_store: &Signal<GraphStore>,
     mut node_selected: Signal<Option<NodeElement>>,
 ) -> Coroutine<GraphStoreAction> {
-    let mut graph_store = *graph_store;
+    let mut graph_store = use_context::<Signal<GraphStore>>();
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         async move {
             // This loop runs forever in the background, waiting for actions.
@@ -492,22 +491,25 @@ pub fn use_graph_processor(
                             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                         }
                     }
-                    GraphStoreAction::OptimizeLayout => {
-                        let edges = graph_store.read().edges().read().clone();
-                        if let Ok(new_positions) = optimize_layout_and_sync(edges).await {
-                            let mut store = graph_store.write();
-                            let mut nodes = store.nodes.write();
-                            for (id, pos) in new_positions {
-                                if let Some(node) = nodes.get_mut(&id) {
-                                    node.set_pos(pos);
-                                }
-                            }
-                        }
-                    } // GraphStoreAction::TerminateBackend => {
-                      //     api::post_terminate(&HTTP_API_CLIENT()).await;
-                      // }
+                    GraphStoreAction::OptimizeLayout => process_optimize_layout(graph_store).await,
+                    // GraphStoreAction::TerminateBackend => {
+                    //     api::post_terminate(&HTTP_API_CLIENT()).await;
+                    // }
                 }
             }
         }
     })
+}
+
+async fn process_optimize_layout(mut graph_store: Signal<GraphStore>) {
+    let edges = graph_store.read().edges().read().clone();
+    if let Ok(new_positions) = optimize_layout_and_sync(edges).await {
+        let mut store = graph_store.write();
+        let mut nodes = store.nodes.write();
+        for (id, pos) in new_positions {
+            if let Some(node) = nodes.get_mut(&id) {
+                node.set_pos(pos);
+            }
+        }
+    }
 }

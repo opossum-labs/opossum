@@ -13,7 +13,9 @@ use dioxus::{
     prelude::*,
 };
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode, NewRefNode}, scenery::NewAnalyzerInfo, AnalyzerType
+    AnalyzerType,
+    nodes::{ConnectInfo, NewNode, NewRefNode},
+    scenery::NewAnalyzerInfo,
 };
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -67,6 +69,10 @@ pub fn GraphEditor(
     node_selected: Signal<Option<NodeElement>>,
 ) -> Element {
     let graph_store: Signal<GraphStore> = use_signal(GraphStore::default);
+    use_context_provider(|| graph_store);
+    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(node_selected);
+    use_context_provider(|| graph_processor);
+
     let mut editor_size: Signal<Option<PixelsSize>> = use_signal(|| None);
     let editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
@@ -76,21 +82,10 @@ pub fn GraphEditor(
     let current_mouse_pos = use_signal(Point2D::default);
     let mut on_mounted: Signal<Option<std::rc::Rc<MountedData>>> = use_signal(|| None);
 
-    let graph_processor: Coroutine<GraphStoreAction> =
-        use_graph_processor(&graph_store, node_selected);
-    use_context_provider(|| graph_store);
-    use_context_provider(|| graph_processor);
-
     let onwheel_handler = use_zoom(graph_shift_zoom, on_mounted);
-    let ondoubleclick_handler =
-        use_center_graph(graph_store, editor_size, graph_shift_zoom, node_selected);
+    let ondoubleclick_handler = use_center_graph(editor_size, graph_shift_zoom, node_selected);
     let onmousedown_handler = use_drag_start(editor_status, current_mouse_pos, node_selected);
-    let onmousemove_handler = use_drag(
-        editor_status,
-        current_mouse_pos,
-        graph_shift_zoom,
-        graph_store,
-    );
+    let onmousemove_handler = use_drag(editor_status, current_mouse_pos, graph_shift_zoom);
     let onmouseup_handler = use_drag_end(editor_status, graph_processor);
 
     let view_port_center = use_memo(move || {

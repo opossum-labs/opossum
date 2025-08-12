@@ -19,7 +19,10 @@ pub enum NodeChange {
 }
 
 #[component]
-pub fn NodeConfigEditor(mut node_element_sig: Signal<Option<NodeElement>>, node_editor_command: Signal<Option<NodeEditorCommand>>) -> Element {
+pub fn NodeConfigEditor(
+    mut node_element_sig: Signal<Option<NodeElement>>,
+    node_editor_command: Signal<Option<NodeEditorCommand>>,
+) -> Element {
     let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
     let node_properties_sig = use_signal(Properties::default);
     let active_node_opt = node_element_sig();
@@ -32,7 +35,7 @@ pub fn NodeConfigEditor(mut node_element_sig: Signal<Option<NodeElement>>, node_
                 active_node,
                 node_element_sig,
                 node_properties_sig,
-                node_editor_command
+                node_editor_command,
             );
         }
     });
@@ -128,10 +131,13 @@ fn node_change_api_call_selection(
         }
         NodeChange::Inverted(inverted) => {
             spawn(async move {
-                match api::update_node_inversion(&HTTP_API_CLIENT(), active_node.id(), inverted).await{
+                match api::update_node_inversion(&HTTP_API_CLIENT(), active_node.id(), inverted)
+                    .await
+                {
                     Ok(connections) => {
                         println!("Inversion updated: {:?}", connections);
-                        node_editor_command.set(Some(NodeEditorCommand::UpdateEdges(connections.clone())));
+                        node_editor_command
+                            .set(Some(NodeEditorCommand::UpdateEdges(connections.clone())));
                         // active_node.set_inverted(inverted);
                         // node.set(Some(active_node));
                     }
