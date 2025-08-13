@@ -4,7 +4,7 @@ use crate::{
         CallbackWrapper,
         accordion::AccordionItem,
         inputs::{InputData, input_components::RowedInputs},
-        node_config_editor::NodeChange,
+        node_config_editor::NodeChangeAction,
         optical_node_editor::properties_editor::use_set_node_change_property,
     },
 };
@@ -17,7 +17,7 @@ use uom::si::{angle::degree, length::millimeter};
 pub fn IsometryOptionEditor(
     isometry: Isometry,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Element {
     let isometry_sig = use_signal(|| isometry);
 

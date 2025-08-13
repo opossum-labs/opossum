@@ -1,5 +1,5 @@
 use crate::components::node_editor::{
-    CallbackWrapper, inputs::input_components::LabeledInput, node_config_editor::NodeChange,
+    CallbackWrapper, inputs::input_components::LabeledInput, node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
@@ -11,7 +11,7 @@ use uom::si::{f64::LinearNumberDensity, linear_number_density::per_millimeter};
 pub fn LinearDensityEditor(
     linear_density: LinearNumberDensity,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Element {
     let linear_density_sig = use_signal(|| linear_density);
     use_set_node_change_property(

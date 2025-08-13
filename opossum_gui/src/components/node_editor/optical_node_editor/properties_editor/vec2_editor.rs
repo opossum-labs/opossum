@@ -15,7 +15,7 @@ use crate::{
             input_components::{LabeledSelect, RowedInputs},
             select_options_from_enum_iterator,
         },
-        node_config_editor::NodeChange,
+        node_config_editor::NodeChangeAction,
         optical_node_editor::properties_editor::use_set_node_change_property,
     },
 };
@@ -43,7 +43,7 @@ impl DefaultFromName for Vec2Options {}
 pub fn Vec2Editor(
     vector: Vector2<f64>,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Element {
     let select_label = property_key.to_sentence_case();
     let mut vec_sig = use_signal(|| vector);

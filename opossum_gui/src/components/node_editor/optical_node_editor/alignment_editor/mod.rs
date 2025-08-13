@@ -8,7 +8,7 @@ use crate::{
         CallbackWrapper,
         accordion::AccordionItem,
         inputs::{InputData, input_components::RowedInputs},
-        node_config_editor::NodeChange,
+        node_config_editor::NodeChangeAction,
     },
 };
 use dioxus::prelude::*;
@@ -25,10 +25,10 @@ pub fn AlignmentEditor(
     node_properties_sig: Signal<Properties>,
     node_type: String,
 ) -> Element {
-    let mut node_change_sig = use_context::<Signal<Option<NodeChange>>>();
+    let mut node_change_sig = use_context::<Signal<Option<NodeChangeAction>>>();
     let iso_sig = use_signal(|| alignment.unwrap_or_else(Isometry::identity));
 
-    use_effect(move || node_change_sig.set(Some(NodeChange::Alignment(*iso_sig.read()))));
+    use_effect(move || node_change_sig.set(Some(NodeChangeAction::Alignment(*iso_sig.read()))));
 
     let accordion_content = if node_type == "reflective grating" {
         rsx! {

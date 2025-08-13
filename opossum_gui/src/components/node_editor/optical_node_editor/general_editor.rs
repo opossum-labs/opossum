@@ -3,7 +3,7 @@ use crate::components::node_editor::{
     CallbackWrapper,
     accordion::AccordionItem,
     inputs::input_components::{LabeledCheckboxInput, LabeledInput},
-    node_config_editor::NodeChange,
+    node_config_editor::NodeChangeAction,
 };
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, J_per_cm2};
@@ -38,7 +38,7 @@ pub fn GeneralEditor(
 
 #[component]
 pub fn NodeNameInput(node_name: String) -> Element {
-    let node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+    let node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
     rsx! {
         LabeledInput {
             id: "inputNodeName",
@@ -50,16 +50,16 @@ pub fn NodeNameInput(node_name: String) -> Element {
 }
 
 #[must_use]
-pub fn name_onchange(mut signal: Signal<Option<NodeChange>>) -> CallbackWrapper {
+pub fn name_onchange(mut signal: Signal<Option<NodeChangeAction>>) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         let Ok(name) = e.data.value().parse::<String>();
-        signal.set(Some(NodeChange::Name(name)));
+        signal.set(Some(NodeChangeAction::Name(name)));
     })
 }
 
 #[component]
 pub fn NodeLIDTInput(node_lidt: Fluence) -> Element {
-    let node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+    let node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
     rsx! {
         LabeledInput {
             id: "inputNodeLIDT",
@@ -72,10 +72,10 @@ pub fn NodeLIDTInput(node_lidt: Fluence) -> Element {
 }
 
 #[must_use]
-pub fn lidt_onchange(mut signal: Signal<Option<NodeChange>>) -> CallbackWrapper {
+pub fn lidt_onchange(mut signal: Signal<Option<NodeChangeAction>>) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(lidt) = e.data.parsed::<f64>() {
-            signal.set(Some(NodeChange::Lidt(J_per_cm2!(lidt))));
+            signal.set(Some(NodeChangeAction::Lidt(J_per_cm2!(lidt))));
         }
     })
 }
@@ -108,7 +108,7 @@ pub fn NodeTypeInput(node_type: String, label: &'static str) -> Element {
 
 #[component]
 pub fn NodeInvertedInput(node_inverted: bool, label: &'static str) -> Element {
-    let node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+    let node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
     rsx! {
         LabeledCheckboxInput {
             id: "inputNodeInverted",
@@ -120,10 +120,10 @@ pub fn NodeInvertedInput(node_inverted: bool, label: &'static str) -> Element {
 }
 
 #[must_use]
-pub fn inverted_onchange(mut signal: Signal<Option<NodeChange>>) -> CallbackWrapper {
+pub fn inverted_onchange(mut signal: Signal<Option<NodeChangeAction>>) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(inverted) = e.data.parsed::<bool>() {
-            signal.set(Some(NodeChange::Inverted(inverted)));
+            signal.set(Some(NodeChangeAction::Inverted(inverted)));
         }
     })
 }

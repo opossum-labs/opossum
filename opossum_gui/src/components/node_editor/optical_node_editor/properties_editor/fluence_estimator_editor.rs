@@ -1,6 +1,6 @@
 use crate::components::node_editor::{
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
-    node_config_editor::NodeChange,
+    node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
@@ -11,7 +11,7 @@ use opossum_backend::{DefaultFromName, FluenceEstimator};
 pub fn FluenceEstimatorEditor(
     fluence_estimator: FluenceEstimator,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Element {
     let mut fluence_estimator_sig = use_signal(|| fluence_estimator.clone());
     use_set_node_change_property(

@@ -4,7 +4,7 @@ mod spectral_transmission_editor;
 use crate::components::node_editor::{
     accordion::ElementList,
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
-    node_config_editor::NodeChange,
+    node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 pub use constant_transmission_editor::ConstantFilterTypeEditor;
@@ -16,7 +16,7 @@ pub use spectral_transmission_editor::SpectralFilterTypeEditor;
 pub fn FilterTypeEditor(
     filter_type_builder: FilterTypeBuilder,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
     property: Property,
 ) -> Element {
     use_context_provider(|| property);

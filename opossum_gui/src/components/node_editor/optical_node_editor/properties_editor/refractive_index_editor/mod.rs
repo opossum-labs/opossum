@@ -18,7 +18,7 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
-    node_config_editor::NodeChange,
+    node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 
@@ -26,7 +26,7 @@ use crate::components::node_editor::{
 pub fn RefractiveIndexEditor(
     ref_ind_type: RefractiveIndexType,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Element {
     let mut ref_ind_type_sig = use_signal(|| ref_ind_type.clone());
 

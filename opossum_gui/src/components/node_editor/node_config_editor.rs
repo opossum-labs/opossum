@@ -4,11 +4,12 @@ use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
 use crate::components::scenery_editor::{NodeEditorCommand, NodeElement, NodeType};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
+use futures_util::StreamExt;
 use opossum_backend::{AnalyzerType, Fluence, Isometry, Properties, Proptype};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum NodeChange {
+pub enum NodeChangeAction {
     Name(String),
     Lidt(Fluence),
     Alignment(Isometry),
@@ -23,20 +24,12 @@ pub fn NodeConfigEditor(
     mut node_element_sig: Signal<Option<NodeElement>>,
     node_editor_command: Signal<Option<NodeEditorCommand>>,
 ) -> Element {
-    let node_change = use_context_provider(|| Signal::new(None::<NodeChange>));
+    let node_change = use_context_provider(|| Signal::new(None::<NodeChangeAction>));
     let node_properties_sig = use_signal(Properties::default);
-    let active_node_opt = node_element_sig();
+    let node_config_processor = use_node_config_processor(node_element_sig, node_properties_sig);
     use_effect(move || {
-        let node_change_opt = node_change.read().clone();
-        if let (Some(node_changed), Some(active_node)) = (node_change_opt, active_node_opt.clone())
-        {
-            node_change_api_call_selection(
-                node_changed,
-                active_node,
-                node_element_sig,
-                node_properties_sig,
-                node_editor_command,
-            );
+        if let Some(node_change_action) = node_change() {
+            node_config_processor.send(node_change_action);
         }
     });
     (*node_element_sig.read()).as_ref().map_or_else(
@@ -60,97 +53,104 @@ pub fn NodeConfigEditor(
     )
 }
 
-fn node_change_api_call_selection(
-    node_changed: NodeChange,
-    mut active_node: NodeElement,
-    mut node: Signal<Option<NodeElement>>,
+fn use_node_config_processor(
+    mut node_selected: Signal<Option<NodeElement>>,
     mut node_properties_sig: Signal<Properties>,
-    mut node_editor_command: Signal<Option<NodeEditorCommand>>,
-) {
-    match node_changed {
-        NodeChange::Name(name) => {
-            spawn(async move {
-                if let Err(err_str) = api::update_node_name(active_node.id(), name.clone()).await {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                } else {
-                    active_node.set_name(name);
-                    node.set(Some(active_node));
-                }
-            });
-        }
-        NodeChange::Lidt(lidt) => {
-            spawn(async move {
-                if let Err(err_str) = api::update_node_lidt(active_node.id(), lidt).await {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                }
-            });
-        }
-        NodeChange::Alignment(iso) => {
-            spawn(async move {
-                if let Err(err_str) = api::update_node_alignment(active_node.id(), iso).await {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                }
-            });
-        }
-        NodeChange::Property(key, prop) => {
-            spawn(async move {
-                if let Err(err_str) =
-                    api::update_node_property(active_node.id(), (key.clone(), prop.clone())).await
-                {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                } else {
-                    node_properties_sig
-                        .write()
-                        .set(&key, prop)
-                        .unwrap_or_else(|_| {
-                            OPOSSUM_UI_LOGS
-                                .write()
-                                .add_log(&format!("Failed to set property: {key}"));
-                        });
-                }
-            });
-        }
-        NodeChange::Isometry(iso) => {
-            spawn(async move {
-                if let Err(err_str) = api::update_node_isometry(active_node.id(), iso).await {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                }
-            });
-        }
-        NodeChange::Inverted(inverted) => {
-            spawn(async move {
-                match api::update_node_inversion(active_node.id(), inverted).await {
-                    Ok(connections) => {
-                        node_editor_command.set(Some(NodeEditorCommand::UpdateEdges(connections)));
-                        active_node.set_inverted(inverted);
-                        node.set(Some(active_node));
+) -> Coroutine<NodeChangeAction> {
+    use_coroutine(move |mut rx: UnboundedReceiver<NodeChangeAction>| {
+        async move {
+            // This loop runs forever in the background, waiting for actions.
+            while let Some(action) = rx.next().await {
+                if let Some(active_node) = node_selected() {
+                    match action {
+                        NodeChangeAction::Name(name) => {
+                            spawn(async move {
+                                let mut active_node = active_node.clone();
+                                if let Err(err_str) =
+                                    api::update_node_name(active_node.id(), name.clone()).await
+                                {
+                                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                } else {
+                                    active_node.set_name(name);
+                                    node_selected.set(Some(active_node));
+                                }
+                            });
+                        }
+                        NodeChangeAction::Lidt(lidt) => {
+                            spawn(async move {
+                                if let Err(err_str) =
+                                    api::update_node_lidt(active_node.id(), lidt).await
+                                {
+                                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                }
+                            });
+                        }
+                        NodeChangeAction::Alignment(iso) => {
+                            spawn(async move {
+                                if let Err(err_str) =
+                                    api::update_node_alignment(active_node.id(), iso).await
+                                {
+                                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                }
+                            });
+                        }
+                        NodeChangeAction::Property(key, prop) => {
+                            spawn(async move {
+                                if let Err(err_str) = api::update_node_property(
+                                    active_node.id(),
+                                    (key.clone(), prop.clone()),
+                                )
+                                .await
+                                {
+                                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                } else {
+                                    node_properties_sig.write().set(&key, prop).unwrap_or_else(
+                                        |_| {
+                                            OPOSSUM_UI_LOGS
+                                                .write()
+                                                .add_log(&format!("Failed to set property: {key}"));
+                                        },
+                                    );
+                                }
+                            });
+                        }
+                        NodeChangeAction::Isometry(iso) => {
+                            spawn(async move {
+                                if let Err(err_str) =
+                                    api::update_node_isometry(active_node.id(), iso).await
+                                {
+                                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                }
+                            });
+                        }
+                        NodeChangeAction::Inverted(inverted) => todo!(),
+                        // {
+                        //     spawn(async move {
+                        //         match api::update_node_inversion(active_node.id(), inverted).await {
+                        //             Ok(connections) => {
+                        //                 node_editor_command.set(Some(NodeEditorCommand::UpdateEdges(connections)));
+                        //                 active_node.set_inverted(inverted);
+                        //                 node.set(Some(active_node));
+                        //             }
+                        //             Err(err_str) => {
+                        //                 OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        //             }
+                        //         }
+                        //     });
+                        // }
+                        NodeChangeAction::AnalyzerType(analyzer_type) => {
+                            spawn(async move {
+                                if let Err(err_str) =
+                                    api::update_analyzer_config_ron(active_node.id(), analyzer_type)
+                                        .await
+                                {
+                                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                }
+                            });
+                        }
                     }
-                    Err(err_str) => {
-                        OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                    }
                 }
-                // if let Ok(connections) =
-                //     api::update_node_inversion(active_node.id(), inverted).await
-                // {
-                //     graph_store.write().edges.set(connections);
-                // }
-                // if let Err(err_str) =
-                //     api::update_node_inversion(active_node.id(), inverted).await
-                // {
-                //     OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                // } else {
-
-                // }
-            });
+            }
         }
-        NodeChange::AnalyzerType(analyzer_type) => {
-            spawn(async move {
-                if let Err(err_str) =
-                    api::update_analyzer_config_ron(active_node.id(), analyzer_type).await
-                {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                }
-            });
-        }
-    }
+    })
 }

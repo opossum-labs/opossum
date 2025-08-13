@@ -1,5 +1,5 @@
 use crate::components::node_editor::{
-    CallbackWrapper, inputs::input_components::LabeledInput, node_config_editor::NodeChange,
+    CallbackWrapper, inputs::input_components::LabeledInput, node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
@@ -11,7 +11,7 @@ use uom::si::{f64::Length, length::millimeter};
 pub fn LengthEditor(
     length: Length,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Element {
     let length_sig = use_signal(|| length);
 

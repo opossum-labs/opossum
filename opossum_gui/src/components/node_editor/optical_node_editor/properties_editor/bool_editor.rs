@@ -1,6 +1,6 @@
 use crate::components::node_editor::{
     CallbackWrapper, inputs::input_components::LabeledCheckboxInput,
-    node_config_editor::NodeChange,
+    node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
@@ -10,7 +10,7 @@ use inflector::Inflector;
 pub fn BoolEditor(
     b: bool,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Element {
     let bool_sig = use_signal(|| b);
     use_set_node_change_property(&property_key, b, bool_sig, node_change);

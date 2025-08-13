@@ -3,7 +3,7 @@
 use crate::components::node_editor::CallbackWrapper;
 use crate::components::node_editor::inputs::input_components::{LabeledInput, LabeledSelect};
 use crate::components::node_editor::inputs::select_options_from_enum_iterator;
-use crate::components::node_editor::node_config_editor::NodeChange;
+use crate::components::node_editor::node_config_editor::NodeChangeAction;
 use crate::components::node_editor::optical_node_editor::general_editor::{
     NodeIDInput, NodeTypeInput,
 };
@@ -76,13 +76,13 @@ pub fn AnalyzerNodeEditor(node_element_sig: Signal<Option<NodeElement>>) -> Elem
 #[component]
 pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
     let mut ray_trace_config_sig = use_signal(|| ray_trace_config);
-    let mut node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+    let mut node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
 
     use_effect(move || {
         if ray_trace_config != *ray_trace_config_sig.read() {
-            node_change_signal.set(Some(NodeChange::AnalyzerType(AnalyzerType::RayTrace(
-                *ray_trace_config_sig.read(),
-            ))));
+            node_change_signal.set(Some(NodeChangeAction::AnalyzerType(
+                AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
+            )));
         }
     });
 
@@ -166,13 +166,13 @@ pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
 #[component]
 pub fn GhostFocusEditor(ghost_focus_config: GhostFocusConfig) -> Element {
     let mut ghost_focus_config_sig = use_signal(|| ghost_focus_config.clone());
-    let mut node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+    let mut node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
 
     use_effect(move || {
         if ghost_focus_config != *ghost_focus_config_sig.read() {
-            node_change_signal.set(Some(NodeChange::AnalyzerType(AnalyzerType::GhostFocus(
-                ghost_focus_config_sig.read().clone(),
-            ))));
+            node_change_signal.set(Some(NodeChangeAction::AnalyzerType(
+                AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
+            )));
         }
     });
 

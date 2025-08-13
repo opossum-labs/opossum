@@ -1,7 +1,8 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        CallbackWrapper, inputs::input_components::LabeledInput, node_config_editor::NodeChange,
+        CallbackWrapper, inputs::input_components::LabeledInput,
+        node_config_editor::NodeChangeAction,
         optical_node_editor::properties_editor::use_set_node_change_property,
     },
 };
@@ -13,7 +14,7 @@ use opossum_backend::{Property, Proptype};
 pub fn F64Editor(
     float64: f64,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Element {
     let float64_sig = use_signal(|| float64);
     let property = use_context::<Property>();

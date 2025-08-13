@@ -19,7 +19,7 @@ mod vec2_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    node_config_editor::NodeChange,
+    node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::{
         angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
         f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
@@ -36,7 +36,8 @@ use opossum_backend::{Properties, Property, Proptype};
 
 #[component]
 pub fn PropertiesEditor(node_properties_sig: Signal<Properties>) -> Element {
-    let node_change: Signal<Option<NodeChange>> = use_context::<Signal<Option<NodeChange>>>();
+    let node_change: Signal<Option<NodeChangeAction>> =
+        use_context::<Signal<Option<NodeChangeAction>>>();
     let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
 
     for (property_key, property) in &*node_properties_sig.read() {
@@ -62,7 +63,7 @@ pub fn PropertiesEditor(node_properties_sig: Signal<Properties>) -> Element {
 fn get_editor(
     property: Property,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Option<Element> {
     match property.prop().clone() {
         Proptype::String(s) => Some(rsx! {
@@ -155,13 +156,13 @@ pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone>(
     property_key: &str,
     prop_type_value: T,
     prop_type_value_sig: Signal<T>,
-    mut node_change_sig: Signal<Option<NodeChange>>,
+    mut node_change_sig: Signal<Option<NodeChangeAction>>,
 ) {
     use_effect({
         let property_key = property_key.to_owned();
         move || {
             if prop_type_value != *prop_type_value_sig.read() {
-                node_change_sig.set(Some(NodeChange::Property(
+                node_change_sig.set(Some(NodeChangeAction::Property(
                     property_key.clone(),
                     prop_type_value_sig.read().clone().into(),
                 )));

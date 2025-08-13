@@ -3,7 +3,7 @@ use core::f64;
 use crate::components::node_editor::{
     CallbackWrapper,
     inputs::{InputData, InputParam, input_components::RowedInputs},
-    node_config_editor::NodeChange,
+    node_config_editor::NodeChangeAction,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
@@ -14,7 +14,7 @@ use uom::si::{f64::Length, length::millimeter};
 pub fn CurvatureEditor(
     curvature: Length,
     property_key: String,
-    node_change: Signal<Option<NodeChange>>,
+    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Element {
     let curvature_sig = use_signal(|| curvature);
 
@@ -22,7 +22,7 @@ pub fn CurvatureEditor(
         let property_key = property_key.clone();
         move || {
             if curvature != *curvature_sig.read() {
-                node_change.set(Some(NodeChange::Property(
+                node_change.set(Some(NodeChangeAction::Property(
                     property_key.clone(),
                     Proptype::Curvature(*curvature_sig.read()),
                 )));
