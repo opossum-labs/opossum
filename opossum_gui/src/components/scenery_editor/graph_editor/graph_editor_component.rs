@@ -97,10 +97,8 @@ pub fn GraphEditor(
     });
     use_effect(move || {
         if let Some(command) = command.read().as_ref() {
-            println!("Received command: {:?}", command);
             match command {
                 NodeEditorCommand::UpdateEdges(connect_infos) => {
-                    println!("Updating edges: {:?}", connect_infos);
                     graph_processor.send(GraphStoreAction::UpdateEdges(connect_infos.clone()));
                 }
                 NodeEditorCommand::DeleteAll => {
@@ -118,7 +116,7 @@ pub fn GraphEditor(
                     graph_processor.send(GraphStoreAction::AddOpticNode(new_node_info));
                 }
                 NodeEditorCommand::AddNodeRef(new_ref_node) => {
-                    graph_processor.send(GraphStoreAction::AddOpticReference(new_ref_node.clone()));
+                    graph_processor.send(GraphStoreAction::AddOpticReference(*new_ref_node));
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
                     let new_analyzer_info =

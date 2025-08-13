@@ -2,13 +2,13 @@
 use dioxus::prelude::*;
 use inflector::Inflector;
 
-use crate::{HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api};
+use crate::{OPOSSUM_UI_LOGS, api};
 
 #[component]
 pub fn NodesMenu(node_selected: Signal<String>) -> Element {
     let future = use_resource({
         move || async move {
-            match api::get_node_types(&HTTP_API_CLIENT()).await {
+            match api::get_node_types().await {
                 Ok(node_types) => Some(node_types),
                 Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);

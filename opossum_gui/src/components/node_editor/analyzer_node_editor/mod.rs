@@ -8,7 +8,7 @@ use crate::components::node_editor::optical_node_editor::general_editor::{
     NodeIDInput, NodeTypeInput,
 };
 use crate::components::scenery_editor::NodeElement;
-use crate::{HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api};
+use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_backend::{
     AnalyzerType, DefaultFromName, FluenceEstimator, GhostFocusConfig, MissedSurfaceStrategy,
@@ -21,7 +21,7 @@ pub fn AnalyzerNodeEditor(node_element_sig: Signal<Option<NodeElement>>) -> Elem
     let resource_future = use_resource(move || async move {
         let node = node_element_sig.read();
         if let Some(node) = &*(node) {
-            match api::get_analyzer_info(&HTTP_API_CLIENT(), node.id()).await {
+            match api::get_analyzer_info(node.id()).await {
                 Ok(analyzer_info) => Some(analyzer_info),
                 Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);

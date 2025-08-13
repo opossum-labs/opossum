@@ -131,11 +131,20 @@ pub fn use_drag_end(
     mut editor_status: EditorState,
     graph_processor: Coroutine<GraphStoreAction>,
 ) -> impl FnMut(MouseEvent) {
+    let graph_store = use_context::<Signal<GraphStore>>();
     move |_| {
         let drag_status = editor_status.drag_status.read().clone();
         match drag_status {
             DragStatus::Node(uuid) => {
-                graph_processor.send(GraphStoreAction::SyncNodePosition(uuid));
+                if let Some(pos) = graph_store
+                    .read()
+                    .nodes()
+                    .read()
+                    .get(&uuid)
+                    .map(NodeElement::pos)
+                {
+                    graph_processor.send(GraphStoreAction::SyncNodePosition(uuid, pos));
+                }
             }
             DragStatus::Edge(_) => {
                 if let Some(edge) = editor_status.edge_in_creation.write().take() {

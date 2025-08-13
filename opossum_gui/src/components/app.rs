@@ -45,8 +45,9 @@ pub fn App() -> Element {
         let cxt_command = cxt_command.read();
         if let Some(cxt_command) = &*(cxt_command) {
             match cxt_command {
-                CxtCommand::AddRefNode(new_ref_node) => node_editor_command
-                    .set(Some(NodeEditorCommand::AddNodeRef(new_ref_node.clone()))),
+                CxtCommand::AddRefNode(new_ref_node) => {
+                    node_editor_command.set(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
+                }
             }
         }
     });

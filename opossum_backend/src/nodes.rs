@@ -24,7 +24,7 @@ use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Debug, PartialEq)]
 pub struct NodeInfo {
     uuid: Uuid,
     name: String,
@@ -309,7 +309,7 @@ async fn post_subnode(
     drop(node);
     Ok(Json(node_info))
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
 pub struct NewRefNode {
     referring_node: Uuid,
     gui_position: (f64, f64),
@@ -722,23 +722,11 @@ async fn post_node_inversion(
                         )
                     })
                     .collect::<Vec<ConnectInfo>>();
+                drop(document);
                 Ok(Json(connect_infos))
             }
-            Err(e) => return Err(ErrorResponse::new(400, "Opossum", e.to_string().as_str())),
+            Err(e) => Err(ErrorResponse::new(400, "Opossum", e.to_string().as_str())),
         }
-
-        // for connection in connections.iter() {
-        //     document.scenery().disconnect_nodes(connection, src_port);
-        //     if connection.0 == uuid {
-        //         // If the node is inverted, we need to invert the source port
-        //         let src_port = connection.1.clone();
-        //         let dst_port = connection.2;
-        //         let distance = connection.4.get::<meter>();
-        //         document
-        //             .scenery_mut()
-        //             .connect_nodes(uuid, src_port, dst_port, distance)?;
-        //     }
-        // }
     } else {
         Err(ErrorResponse::new(
             404,

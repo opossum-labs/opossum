@@ -18,7 +18,7 @@ use petgraph::{
     Directed, Direction,
     algo::{connected_components, is_cyclic_directed, toposort},
     graph::{DiGraph, EdgeIndex, Edges, NodeIndex},
-    visit::{EdgeRef, NodeRef},
+    visit::EdgeRef,
 };
 use serde::{
     Deserialize, Serialize,
@@ -367,7 +367,14 @@ impl OpticGraph {
 
     /// Update the connections of a single inverted node.
     ///
-    ///
+    /// This function is used to update the connections of a single inverted node. It removes all
+    /// connections of the node and connects it to the next node in the graph.
+    /// # Arguments
+    /// * `node_id` - The [`Uuid`] of the node to update.
+    /// # Errors
+    /// This function will return an error if the node with the given [`Uuid`] does not exist.
+    /// # Panics
+    /// This function will panic if the mutex lock fails.
     pub fn update_connections_of_single_inverted_node(&mut self, node_id: Uuid) -> OpmResult<()> {
         println!("ahhhh");
         let node_index = self.node_idx_by_uuid(node_id).ok_or_else(|| {
@@ -398,16 +405,45 @@ impl OpticGraph {
         }
 
         if let Some(changed_node) = self.g.node_weight(node_index).cloned() {
-
-            if changed_node.optical_ref.lock().unwrap().ports().ports(&PortType::Output).len() == 1 && outgoing_edges.len() == 1{
-                if let Some(target_node) = self.g.node_weight(outgoing_edges[0].1){
-                    self.connect_nodes(node_id, incoming_edges[0].3.target_port(), target_node.uuid(), outgoing_edges[0].3.target_port(), outgoing_edges[0].3.distance().clone())?;
+            if changed_node
+                .optical_ref
+                .lock()
+                .unwrap()
+                .ports()
+                .ports(&PortType::Output)
+                .len()
+                == 1
+                && outgoing_edges.len() == 1
+            {
+                if let Some(target_node) = self.g.node_weight(outgoing_edges[0].1) {
+                    self.connect_nodes(
+                        node_id,
+                        incoming_edges[0].3.target_port(),
+                        target_node.uuid(),
+                        outgoing_edges[0].3.target_port(),
+                        *outgoing_edges[0].3.distance(),
+                    )?;
                 }
             }
 
-            if changed_node.optical_ref.lock().unwrap().ports().ports(&PortType::Input).len() == 1 && incoming_edges.len() == 1{
-                if let Some(src_node) = self.g.node_weight(incoming_edges[0].2){
-                    self.connect_nodes(src_node.uuid(), incoming_edges[0].3.src_port(), node_id, outgoing_edges[0].3.src_port(), incoming_edges[0].3.distance().clone())?;
+            if changed_node
+                .optical_ref
+                .lock()
+                .unwrap()
+                .ports()
+                .ports(&PortType::Input)
+                .len()
+                == 1
+                && incoming_edges.len() == 1
+            {
+                if let Some(src_node) = self.g.node_weight(incoming_edges[0].2) {
+                    self.connect_nodes(
+                        src_node.uuid(),
+                        incoming_edges[0].3.src_port(),
+                        node_id,
+                        outgoing_edges[0].3.src_port(),
+                        *incoming_edges[0].3.distance(),
+                    )?;
                 }
             }
         }

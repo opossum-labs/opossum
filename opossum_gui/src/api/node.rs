@@ -5,7 +5,7 @@ use opossum_backend::{
 };
 use uuid::Uuid;
 
-use super::http_client::HTTPClient;
+use crate::HTTP_API_CLIENT;
 
 /// Get all nodes in the current scenery
 ///
@@ -14,8 +14,8 @@ use super::http_client::HTTPClient;
 /// This function will return an error if
 /// - the request fails (e.g. the scenery is not valid)
 /// - the response cannot be deserialized into a vector of [`NodeInfo`] structs
-pub async fn get_nodes(client: &HTTPClient, group_id: Uuid) -> Result<Vec<NodeInfo>, String> {
-    client
+pub async fn get_nodes(group_id: Uuid) -> Result<Vec<NodeInfo>, String> {
+    HTTP_API_CLIENT()
         .get::<Vec<NodeInfo>>(&format!("/api/scenery/{}/nodes", group_id.as_simple()))
         .await
 }
@@ -27,11 +27,8 @@ pub async fn get_nodes(client: &HTTPClient, group_id: Uuid) -> Result<Vec<NodeIn
 ///
 /// This function will return an error if
 /// - the given `node_id` is not `Uuid::nil()` and does not correspond to a (sub-)group of the scenery.
-pub async fn get_connections(
-    client: &HTTPClient,
-    group_id: Uuid,
-) -> Result<Vec<ConnectInfo>, String> {
-    client
+pub async fn get_connections(group_id: Uuid) -> Result<Vec<ConnectInfo>, String> {
+    HTTP_API_CLIENT()
         .get::<Vec<ConnectInfo>>(&format!(
             "/api/scenery/{}/connections",
             group_id.as_simple()
@@ -47,12 +44,8 @@ pub async fn get_connections(
 /// - the request fails (e.g. the node type is not valid)
 /// - the `group_id` does not exist
 /// - the response cannot be deserialized into the [`NodeInfo`] struct
-pub async fn post_add_node(
-    client: &HTTPClient,
-    new_node_info: NewNode,
-    group_id: Uuid,
-) -> Result<NodeInfo, String> {
-    client
+pub async fn post_add_node(new_node_info: NewNode, group_id: Uuid) -> Result<NodeInfo, String> {
+    HTTP_API_CLIENT()
         .post::<NewNode, NodeInfo>(
             &format!("/api/scenery/{}/nodes", group_id.as_simple()),
             new_node_info,
@@ -69,11 +62,10 @@ pub async fn post_add_node(
 /// - the `group_id` does not exist
 /// - the response cannot be deserialized into the [`NodeInfo`] struct
 pub async fn post_add_ref_node(
-    client: &HTTPClient,
     new_ref_info: NewRefNode,
     group_id: Uuid,
 ) -> Result<NodeInfo, String> {
-    client
+    HTTP_API_CLIENT()
         .post::<NewRefNode, NodeInfo>(
             &format!("/api/scenery/{}/references", group_id.as_simple()),
             new_ref_info,
@@ -90,8 +82,8 @@ pub async fn post_add_ref_node(
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized or found
 /// - the returned response cannot be deserialized into a vector of [`Uuid`]
-pub async fn delete_node(client: &HTTPClient, id: Uuid) -> Result<Vec<Uuid>, String> {
-    client
+pub async fn delete_node(id: Uuid) -> Result<Vec<Uuid>, String> {
+    HTTP_API_CLIENT()
         .delete::<String, Vec<Uuid>>(
             &format!("/api/scenery/{}/nodes", id.as_simple()),
             String::new(),
@@ -105,8 +97,8 @@ pub async fn delete_node(client: &HTTPClient, id: Uuid) -> Result<Vec<Uuid>, Str
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized or found
 /// - the properties cannot be deserialized into the [`NodeAttr`] struct
-pub async fn get_node_properties(client: &HTTPClient, uuid: Uuid) -> Result<NodeAttr, String> {
-    client
+pub async fn get_node_properties(uuid: Uuid) -> Result<NodeAttr, String> {
+    HTTP_API_CLIENT()
         .get_ron::<NodeAttr>(&format!("/api/scenery/{}/properties", uuid.as_simple()))
         .await
 }
@@ -118,8 +110,8 @@ pub async fn get_node_properties(client: &HTTPClient, uuid: Uuid) -> Result<Node
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized or found
 /// - the properties cannot be deserialized into the [`AnalyzerInfo`] struct
-pub async fn get_analyzer_info(client: &HTTPClient, uuid: Uuid) -> Result<AnalyzerInfo, String> {
-    client
+pub async fn get_analyzer_info(uuid: Uuid) -> Result<AnalyzerInfo, String> {
+    HTTP_API_CLIENT()
         .get_ron::<AnalyzerInfo>(&format!("/api/scenery/{}/analyzer_info", uuid.as_simple()))
         .await
 }
@@ -129,11 +121,8 @@ pub async fn get_analyzer_info(client: &HTTPClient, uuid: Uuid) -> Result<Analyz
 /// # Errors
 ///
 /// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
-pub async fn post_add_connection(
-    client: &HTTPClient,
-    connection: ConnectInfo,
-) -> Result<ConnectInfo, String> {
-    client
+pub async fn post_add_connection(connection: ConnectInfo) -> Result<ConnectInfo, String> {
+    HTTP_API_CLIENT()
         .post::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
         .await
 }
@@ -142,11 +131,8 @@ pub async fn post_add_connection(
 /// # Errors
 ///
 /// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
-pub async fn delete_connection(
-    client: &HTTPClient,
-    connection: ConnectInfo,
-) -> Result<ConnectInfo, String> {
-    client
+pub async fn delete_connection(connection: ConnectInfo) -> Result<ConnectInfo, String> {
+    HTTP_API_CLIENT()
         .delete::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
         .await
 }
@@ -155,11 +141,8 @@ pub async fn delete_connection(
 /// # Errors
 ///
 /// This function will return an error if the connection could not be found.
-pub async fn update_distance(
-    client: &HTTPClient,
-    connection: ConnectInfo,
-) -> Result<ConnectInfo, String> {
-    client
+pub async fn update_distance(connection: ConnectInfo) -> Result<ConnectInfo, String> {
+    HTTP_API_CLIENT()
         .put::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
         .await
 }
@@ -169,12 +152,11 @@ pub async fn update_distance(
 ///
 /// This function will return an error if the `node_id` was not found.
 pub async fn update_gui_position(
-    client: &HTTPClient,
     node_id: Uuid,
     gui_position: Point2D<f64>,
 ) -> Result<String, String> {
     let position = (gui_position.x, gui_position.y);
-    client
+    HTTP_API_CLIENT()
         .post::<(f64, f64), String>(
             &format!("/api/scenery/position/{}", node_id.as_simple()),
             position,
@@ -187,12 +169,8 @@ pub async fn update_gui_position(
 /// # Errors
 ///
 /// This function will return an error if the `node_id` was not found.
-pub async fn update_node_name(
-    client: &HTTPClient,
-    node_id: Uuid,
-    node_name: String,
-) -> Result<String, String> {
-    client
+pub async fn update_node_name(node_id: Uuid, node_name: String) -> Result<String, String> {
+    HTTP_API_CLIENT()
         .post::<String, String>(
             &format!("/api/scenery/name/{}", node_id.as_simple()),
             node_name,
@@ -205,12 +183,8 @@ pub async fn update_node_name(
 /// # Errors
 ///
 /// This function will return an error if the `node_id` was not found.
-pub async fn update_node_lidt(
-    client: &HTTPClient,
-    node_id: Uuid,
-    node_lidt: Fluence,
-) -> Result<String, String> {
-    client
+pub async fn update_node_lidt(node_id: Uuid, node_lidt: Fluence) -> Result<String, String> {
+    HTTP_API_CLIENT()
         .post::<Fluence, String>(
             &format!("/api/scenery/lidt/{}", node_id.as_simple()),
             node_lidt,
@@ -222,12 +196,8 @@ pub async fn update_node_lidt(
 ///
 /// # Errors
 /// This function will return an error if the `node_id` was not found or if the alignment cannot be serialized.
-pub async fn update_node_alignment(
-    client: &HTTPClient,
-    node_id: Uuid,
-    alignment: Isometry,
-) -> Result<String, String> {
-    client
+pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result<String, String> {
+    HTTP_API_CLIENT()
         .post::<Isometry, String>(
             &format!("/api/scenery/alignmentisometry/{}", node_id.as_simple()),
             alignment,
@@ -242,11 +212,10 @@ pub async fn update_node_alignment(
 ///
 /// This function will return an error if the `node_id` was not found.
 pub async fn update_node_property(
-    client: &HTTPClient,
     node_id: Uuid,
     property_key_val: (String, Proptype),
 ) -> Result<String, String> {
-    client
+    HTTP_API_CLIENT()
         .post_ron::<(String, Proptype), String>(
             &format!("/api/scenery/property/{}", node_id.as_simple()),
             property_key_val,
@@ -275,12 +244,8 @@ pub async fn update_node_property(
 /// - The HTTP request fails to reach the server (e.g., network issues).
 /// - The server responds with an error status code (e.g., 4xx or 5xx).
 /// - Serialization of the [`Isometry`] payload fails before sending.
-pub async fn update_node_isometry(
-    client: &HTTPClient,
-    node_id: Uuid,
-    iso: Isometry,
-) -> Result<String, String> {
-    client
+pub async fn update_node_isometry(node_id: Uuid, iso: Isometry) -> Result<String, String> {
+    HTTP_API_CLIENT()
         .post::<Isometry, String>(
             &format!("/api/scenery/isometry/{}", node_id.as_simple()),
             iso,
@@ -309,11 +274,10 @@ pub async fn update_node_isometry(
 /// - The server responds with an error status code (e.g., 4xx or 5xx).
 /// - Serialization of the boolean payload fails before sending.
 pub async fn update_node_inversion(
-    client: &HTTPClient,
     node_id: Uuid,
     inverted: bool,
 ) -> Result<Vec<ConnectInfo>, String> {
-    client
+    HTTP_API_CLIENT()
         .post::<bool, Vec<ConnectInfo>>(
             &format!("/api/scenery/inversion/{}", node_id.as_simple()),
             inverted,
@@ -340,11 +304,10 @@ pub async fn update_node_inversion(
 /// - The server responds with an error status code (e.g., 4xx or 5xx).
 /// - Serialization of the [`AnalyzerType`] payload fails before sending.
 pub async fn update_analyzer_config_ron(
-    client: &HTTPClient,
     node_id: Uuid,
     analyzer_type: AnalyzerType,
 ) -> Result<String, String> {
-    client
+    HTTP_API_CLIENT()
         .post_ron::<AnalyzerType, String>(
             &format!("/api/scenery/analyzer/{}", node_id.as_simple()),
             analyzer_type,

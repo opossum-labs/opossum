@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::{HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api};
+use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_backend::AnalyzerType;
 
@@ -7,7 +7,7 @@ use opossum_backend::AnalyzerType;
 pub fn AnalyzersMenu(analyzer_selected: Signal<Option<AnalyzerType>>) -> Element {
     let future = use_resource({
         move || async move {
-            match api::get_analyzer_types(&HTTP_API_CLIENT()).await {
+            match api::get_analyzer_types().await {
                 Ok(analyzer_types) => Some(analyzer_types),
                 Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
