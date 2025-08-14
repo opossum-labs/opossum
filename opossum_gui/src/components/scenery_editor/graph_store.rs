@@ -5,8 +5,11 @@ use super::{
 use crate::{
     OPOSSUM_UI_LOGS,
     api::{self, run_action, run_action_with_success_check},
-    components::scenery_editor::constants::{
-        HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING,
+    components::scenery_editor::{
+        constants::{
+            HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING,
+        },
+        graph_editor::graph_editor_component::EditorState,
     },
 };
 use dioxus::{
@@ -28,6 +31,12 @@ use std::{collections::HashMap, fs, path::PathBuf};
 use uuid::Uuid;
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
+pub struct GraphState {
+    pub graph_store: Signal<GraphStore>,
+    pub editor_state: Signal<EditorState>,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct GraphStore {
     nodes: Signal<HashMap<Uuid, NodeElement>>,
     edges: Signal<Vec<ConnectInfo>>,
@@ -37,7 +46,7 @@ pub struct GraphStore {
 pub enum GraphStoreAction {
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),
-    AddOpticNode(NewNode),
+    AddOpticNode(String),
     AddOpticReference(NewRefNode),
     AddAnalyzer(NewAnalyzerInfo),
     SyncNodePosition(Uuid, Point2D<f64>),
@@ -313,9 +322,11 @@ impl UuidRegistry {
 }
 pub fn use_graph_processor(
     node_selected: Signal<Option<NodeElement>>,
+    mut graph_state: Signal<GraphState>,
 ) -> Coroutine<GraphStoreAction> {
-    let mut graph_store = use_context::<Signal<GraphStore>>();
     let action_successful = use_signal(|| true);
+    let mut graph_store = graph_state.write().graph_store;
+    let mut editor_state = graph_state.write().editor_state;
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         async move {
             // This loop runs forever in the background, waiting for actions.
@@ -340,7 +351,7 @@ pub fn use_graph_processor(
                         process_delete_node(node_id, graph_store, node_selected);
                     }
                     GraphStoreAction::AddOpticNode(new_node) => {
-                        process_add_optic_node(new_node, graph_store, node_selected);
+                        process_add_optic_node(new_node, graph_store, editor_state, node_selected);
                     }
                     GraphStoreAction::AddOpticReference(new_ref_node) => {
                         process_add_reference_node(new_ref_node, graph_store, node_selected);
@@ -510,12 +521,24 @@ fn process_delete_optical_node(
 }
 
 fn process_add_optic_node(
-    new_node: NewNode,
+    new_node_type_string: String,
     mut graph_store: Signal<GraphStore>,
+    editor_state: Signal<EditorState>,
     mut node_selected: Signal<Option<NodeElement>>,
 ) {
+    // calculate center of viewport (in graph coordinates)
+    let zoom = *editor_state.peek().zoom.peek();
+    let view_port_center = editor_state.peek().get_view_port_center();
+    let shift = *editor_state.peek().shift.peek();
+
+    let element_position = (
+        (view_port_center.x - shift.x) / zoom,
+        (view_port_center.y - shift.y) / zoom,
+    );
+    let new_node_info = NewNode::new(new_node_type_string.to_lowercase(), element_position);
+    println!("{new_node_info:?}");
     run_action(
-        api::post_add_node(new_node, Uuid::nil()),
+        api::post_add_node(new_node_info, Uuid::nil()),
         Some(move |node_info| {
             let node_element = graph_store.write().add_new_optical_node(&node_info);
             node_selected.set(Some(node_element));

@@ -21,23 +21,22 @@ use uom::si::{angle::degree, length::millimeter};
 
 #[component]
 pub fn AlignmentEditor(
-    alignment: Option<Isometry>,
+    alignment_sig: Signal<Isometry>,
     node_properties_sig: Signal<Properties>,
     node_type: String,
 ) -> Element {
     let mut node_change_sig = use_context::<Signal<Option<NodeChangeAction>>>();
-    let iso_sig = use_signal(|| alignment.unwrap_or_else(Isometry::identity));
 
-    use_effect(move || node_change_sig.set(Some(NodeChangeAction::Alignment(*iso_sig.read()))));
+    use_effect(move || node_change_sig.set(Some(NodeChangeAction::Alignment(*alignment_sig.read()))));
 
     let accordion_content = if node_type == "reflective grating" {
         rsx! {
-            GratingAlignmentInputs { iso_sig, node_properties_sig }
+            GratingAlignmentInputs { alignment_sig, node_properties_sig }
         }
     } else {
         rsx! {
-            RotationAlignmentInputs { iso_sig, axes_skip: None }
-            TranslationAlignmentInputs { iso_sig }
+            RotationAlignmentInputs { alignment_sig, axes_skip: None }
+            TranslationAlignmentInputs { alignment_sig }
         }
     };
     rsx! {
@@ -52,8 +51,8 @@ pub fn AlignmentEditor(
 }
 
 #[component]
-fn TranslationAlignmentInputs(iso_sig: Signal<Isometry>) -> Element {
-    let input_data = get_translation_alignment_input_data(*iso_sig.read(), iso_sig);
+fn TranslationAlignmentInputs(alignment_sig: Signal<Isometry>) -> Element {
+    let input_data = get_translation_alignment_input_data(*alignment_sig.read(), alignment_sig);
 
     rsx! {
         RowedInputs { inputs: input_data }
@@ -62,11 +61,11 @@ fn TranslationAlignmentInputs(iso_sig: Signal<Isometry>) -> Element {
 
 #[component]
 fn RotationAlignmentInputs(
-    iso_sig: Signal<Isometry>,
+    alignment_sig: Signal<Isometry>,
     axes_skip: Option<Vec<RotationAxis>>,
 ) -> Element {
     let input_data =
-        get_rotation_alignment_input_data(*iso_sig.read(), iso_sig, axes_skip.as_ref());
+        get_rotation_alignment_input_data(*alignment_sig.read(), alignment_sig, axes_skip.as_ref());
     rsx! {
         RowedInputs { inputs: input_data }
     }

@@ -42,7 +42,7 @@ pub fn NodePort(
     port_type: PortType,
     inverted_node: bool,
 ) -> Element {
-    let mut editor_status = use_context::<EditorState>();
+    let mut editor_status = use_context::<Signal<EditorState>>();
     let rel_port_position = node.rel_port_position(&port_type, &port_name);
     let abs_port_position = node.abs_port_position(&port_type, &port_name);
     let node_id = node.id();
@@ -76,7 +76,7 @@ pub fn NodePort(
                 let port_name = port_name.clone();
                 let port_type = port_type.clone();
                 move |event: MouseEvent| {
-                    editor_status
+                    editor_status.write()
                         .drag_status
                         .set(
                             DragStatus::Edge(NewEdgeCreationStart {
@@ -91,7 +91,7 @@ pub fn NodePort(
             },
             onmouseenter: {
                 move |event: MouseEvent| {
-                    let edge_increation = editor_status.edge_in_creation.read().clone();
+                    let edge_increation = editor_status.read().edge_in_creation.read().clone();
                     if let Some(mut edge_in_creation) = edge_increation {
                         edge_in_creation
                             .set_end_port(
@@ -101,17 +101,17 @@ pub fn NodePort(
                                     port_type: port_type.clone(),
                                 }),
                             );
-                        editor_status.edge_in_creation.set(Some(edge_in_creation));
+                        editor_status.write().edge_in_creation.set(Some(edge_in_creation));
                         event.stop_propagation();
                     }
                 }
             },
             onmouseleave: {
                 move |event: MouseEvent| {
-                    let edge_increation = editor_status.edge_in_creation.read().clone();
+                    let edge_increation = editor_status.read().edge_in_creation.read().clone();
                     if let Some(mut edge_in_creation) = edge_increation {
                         edge_in_creation.set_end_port(None);
-                        editor_status.edge_in_creation.set(Some(edge_in_creation));
+                        editor_status.write().edge_in_creation.set(Some(edge_in_creation));
                         event.stop_propagation();
                     }
                 }

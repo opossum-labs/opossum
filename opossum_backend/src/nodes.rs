@@ -231,7 +231,7 @@ pub async fn get_connections(
     };
     Ok(Json(connect_infos))
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
 pub struct NewNode {
     node_type: String,
     gui_position: (f64, f64),

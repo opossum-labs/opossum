@@ -9,7 +9,7 @@ use opossum_backend::{PortType, nodes::ConnectInfo};
 #[component]
 pub fn EdgeComponent(edge: ConnectInfo) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
-    let graph_processor = use_context::<Coroutine<GraphStoreAction>>();
+    let graph_processor = use_coroutine_handle::<GraphStoreAction>();
 
     // Memoize the start and end positions. This will only re-read the node
     // positions and re-calculate when the `edge` prop itself changes.

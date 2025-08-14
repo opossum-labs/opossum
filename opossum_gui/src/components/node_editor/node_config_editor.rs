@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
 use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
-use crate::components::scenery_editor::{NodeEditorCommand, NodeElement, NodeType};
+use crate::components::scenery_editor::{NodeElement, NodeType};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
@@ -22,14 +22,16 @@ pub enum NodeChangeAction {
 #[component]
 pub fn NodeConfigEditor(
     mut node_element_sig: Signal<Option<NodeElement>>,
-    node_editor_command: Signal<Option<NodeEditorCommand>>,
 ) -> Element {
-    let node_change = use_context_provider(|| Signal::new(None::<NodeChangeAction>));
+    let node_change_sig = use_signal(|| None::<NodeChangeAction>);
+    use_context_provider(|| node_change_sig);
     let node_properties_sig = use_signal(Properties::default);
+
     let node_config_processor = use_node_config_processor(node_element_sig, node_properties_sig);
     use_effect(move || {
-        if let Some(node_change_action) = node_change() {
-            node_config_processor.send(node_change_action);
+        if let Some(node_change_action) = &*node_change_sig.read() {
+            println!("sending to processor");
+            node_config_processor.send(node_change_action.clone());
         }
     });
     (*node_element_sig.read()).as_ref().map_or_else(

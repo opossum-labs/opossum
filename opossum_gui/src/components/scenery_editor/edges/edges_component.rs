@@ -96,9 +96,8 @@ pub fn EdgesComponent() -> Element {
 }
 #[component]
 pub fn EdgeCreationComponent() -> Element {
-    let editor_status = use_context::<EditorState>();
-    let edge_in_creation = &*(editor_status.edge_in_creation.read());
-    edge_in_creation.clone().map_or_else(
+    let editor_status = use_context::<Signal<EditorState>>();
+    editor_status.read().edge_in_creation.read().clone().map_or_else(
         || rsx! {},
         |edge| {
             let new_path = define_bezier_path(edge.start, edge.end, edge.bezier_offset);

@@ -9,19 +9,23 @@ use crate::components::node_editor::optical_node_editor::properties_editor::Prop
 use crate::components::scenery_editor::NodeElement;
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_backend::Properties;
+use opossum_backend::{Isometry, Properties};
 
 #[component]
 pub fn OpticalNodeEditor(
     node_element_sig: Signal<Option<NodeElement>>,
     node_properties_sig: Signal<Properties>,
 ) -> Element {
+    let mut alignment_sig = use_signal(Isometry::identity);
+
     let resource_future = use_resource(move || async move {
         let node = node_element_sig.read();
         if let Some(node) = &*(node) {
             match api::get_node_properties(node.id()).await {
                 Ok(node_attr) => {
                     node_properties_sig.set(node_attr.properties().clone());
+                    println!("{:?}", node_attr.properties().clone());
+                    alignment_sig.set(node_attr.alignment().unwrap_or(Isometry::identity()));
                     Some(node_attr)
                 }
                 Err(err_str) => {
@@ -51,7 +55,7 @@ pub fn OpticalNodeEditor(
                         }
                         PropertiesEditor { node_properties_sig }
                         AlignmentEditor {
-                            alignment: *node_attr.alignment(),
+                            alignment_sig,
                             node_properties_sig,
                             node_type: node_attr.node_type(),
                         }

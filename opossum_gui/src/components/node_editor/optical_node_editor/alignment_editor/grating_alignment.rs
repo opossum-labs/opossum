@@ -24,7 +24,7 @@ use uom::si::{
 
 #[component]
 pub fn GratingAlignmentInputs(
-    iso_sig: Signal<Isometry>,
+    alignment_sig: Signal<Isometry>,
     node_properties_sig: Signal<Properties>,
 ) -> Element {
     let alignment_select_sig = use_signal(|| true);
@@ -42,7 +42,7 @@ pub fn GratingAlignmentInputs(
 
         element_list.push(rsx! {
             LittrowConfigEditor {
-                iso_sig,
+                alignment_sig,
                 diffraction_order: *diffraction_order,
                 line_density: *line_density,
                 wavelength,
@@ -50,13 +50,13 @@ pub fn GratingAlignmentInputs(
             }
         });
         element_list.push(rsx! {
-            RotationAlignmentInputs { iso_sig, axes_skip: Some(vec![RotationAxis::Pitch]) }
-            TranslationAlignmentInputs { iso_sig }
+            RotationAlignmentInputs { alignment_sig, axes_skip: Some(vec![RotationAxis::Pitch]) }
+            TranslationAlignmentInputs { alignment_sig }
         });
     } else {
         element_list.push(rsx! {
-            RotationAlignmentInputs { iso_sig, axes_skip: None }
-            TranslationAlignmentInputs { iso_sig }
+            RotationAlignmentInputs { alignment_sig, axes_skip: None }
+            TranslationAlignmentInputs { alignment_sig }
         });
     }
     rsx! {
@@ -68,7 +68,7 @@ pub fn GratingAlignmentInputs(
 
 #[component]
 pub fn LittrowConfigEditor(
-    iso_sig: Signal<Isometry>,
+    alignment_sig: Signal<Isometry>,
     diffraction_order: i32,
     line_density: LinearNumberDensity,
     wavelength: Length,
@@ -95,7 +95,7 @@ pub fn LittrowConfigEditor(
             reference_wavelength_sig,
             diffraction_order,
             line_density,
-            iso_sig,
+            alignment_sig,
         }
     }
 }
@@ -124,7 +124,7 @@ fn AngleToLittrowComponent(
     reference_wavelength_sig: Signal<Length>,
     diffraction_order: i32,
     line_density: LinearNumberDensity,
-    iso_sig: Signal<Isometry>,
+    alignment_sig: Signal<Isometry>,
 ) -> Element {
     rsx! {
         LabeledInput {
@@ -135,7 +135,7 @@ fn AngleToLittrowComponent(
                 calc_deviation_angle_from_littrow(
                         diffraction_order,
                         line_density,
-                        iso_sig.read().rotation_of_axis(RotationAxis::Pitch),
+                        alignment_sig.read().rotation_of_axis(RotationAxis::Pitch),
                         *reference_wavelength_sig.read(),
                         *incident_angle_sig.read(),
                     )
@@ -152,7 +152,7 @@ fn AngleToLittrowComponent(
                     if !*incident_angle_sig.read() {
                         new_angle = radian!((- new_angle.sin().value + m_g_lambda).asin());
                     }
-                    iso_sig
+                    alignment_sig
                         .write()
                         .set_rotation_of_axis(RotationAxis::Pitch, new_angle)
                         .unwrap_or_else(|e| {

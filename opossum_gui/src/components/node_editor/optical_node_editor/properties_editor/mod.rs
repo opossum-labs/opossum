@@ -36,6 +36,7 @@ use opossum_backend::{Properties, Property, Proptype};
 
 #[component]
 pub fn PropertiesEditor(node_properties_sig: Signal<Properties>) -> Element {
+    println!("new properties editor: {:?}", node_properties_sig.read().clone());
     let node_change: Signal<Option<NodeChangeAction>> =
         use_context::<Signal<Option<NodeChangeAction>>>();
     let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
@@ -65,6 +66,7 @@ fn get_editor(
     property_key: String,
     node_change: Signal<Option<NodeChangeAction>>,
 ) -> Option<Element> {
+    println!("getting editor");
     match property.prop().clone() {
         Proptype::String(s) => Some(rsx! {
             StringEditor { s, property_key, node_change }
@@ -150,6 +152,110 @@ fn get_editor(
         | Proptype::Metertype(_)
         | Proptype::Aperture(_) => None,
     }
+}
+
+#[component]
+pub fn PropertyEditor(    
+    property: Property,
+    property_key: String,
+    node_properties_sig: Signal<Properties>,
+) -> Element {
+    println!("new property editor: {:?}", node_properties_sig.read().clone());
+
+    let node_change: Signal<Option<NodeChangeAction>> =
+        use_context::<Signal<Option<NodeChangeAction>>>();
+    if let Ok(proptype) = node_properties_sig.read().get(property_key.as_str()){
+
+        match proptype.clone() {
+            Proptype::String(s) => rsx! {
+                StringEditor { s, property_key, node_change }
+            },
+            Proptype::I32(int32) => rsx! {
+                I32Editor { int32, property_key, node_change }
+            },
+            Proptype::F64(float64) => rsx! {
+                F64Editor { float64, property_key, node_change }
+            },
+            Proptype::Bool(b) => rsx! {
+                BoolEditor { b, property_key, node_change }
+            },
+            Proptype::SplittingConfigBuilder(splitting_config_builder) => rsx! {
+                SplitterTypeEditor {
+                    splitting_config_builder,
+                    property_key,
+                    node_change,
+                    property,
+                }
+            },
+            Proptype::FilterTypeBuilder(filter_type_builder) => rsx! {
+                FilterTypeEditor {
+                    filter_type_builder,
+                    property_key,
+                    node_change,
+                    property,
+                }
+            },
+            Proptype::FluenceEstimator(fluence_estimator) => rsx! {
+                FluenceEstimatorEditor { fluence_estimator, property_key, node_change }
+            },
+            Proptype::LinearDensity(linear_density) => rsx! {
+                LinearDensityEditor { linear_density, property_key, node_change }
+            },
+            Proptype::Length(length) => rsx! {
+                LengthEditor { length, property_key, node_change }
+            },
+            Proptype::Curvature(curvature) => rsx! {
+                CurvatureEditor { curvature, property_key, node_change }
+            },
+            Proptype::LightDataBuilder(light_data_builder_opt) => rsx! {
+                LightDataEditor {
+                    light_data_builder: light_data_builder_opt.unwrap_or_default(),
+                    property_key,
+                    node_change,
+                }
+            },
+            Proptype::LengthOption(length_opt) => rsx! {
+                LengthOptionEditor { length_opt, property_key, node_change }
+            },
+            Proptype::Isometry(isometry) => rsx! {
+                IsometryOptionEditor {
+                    isometry: isometry.unwrap_or_default(),
+                    property_key,
+                    node_change,
+                }
+            },
+            Proptype::Angle(angle) => rsx! {
+                AngleEditor { angle, property_key, node_change }
+            },
+            Proptype::RefractiveIndex(ref_ind_type) => rsx! {
+                RefractiveIndexEditor { ref_ind_type, property_key, node_change }
+            },
+            Proptype::Vec2(vector) => rsx! {
+                Vec2Editor { vector, property_key, node_change }
+            },
+            //not used to change a node property
+            Proptype::LightData(_)
+            | Proptype::Uuid(_)
+            | Proptype::FluenceData(_)
+            | Proptype::SpectrometerType(_)
+            | Proptype::WaveFrontData(_)
+            | Proptype::RayPositionHistory(_)
+            | Proptype::GhostFocusHistory(_)
+            | Proptype::NodeReport(_)
+            | Proptype::Fluence(_)
+            | Proptype::WfLambda(_, _)
+            | Proptype::Energy(_)
+            | Proptype::Vec3(_)
+            | Proptype::HitMap(_)
+            | Proptype::Spectrum(_)
+            | Proptype::Metertype(_)
+            | Proptype::Aperture(_) => rsx!{},
+        }
+    }
+    else{
+        rsx!{}
+    }
+
 }
 
 pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone>(

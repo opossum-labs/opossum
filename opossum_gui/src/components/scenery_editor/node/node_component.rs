@@ -16,9 +16,9 @@ use opossum_backend::nodes::NewRefNode;
 
 #[component]
 pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> Element {
-    let mut editor_status = use_context::<EditorState>();
+    let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
-    let graph_processor = use_context::<Coroutine<GraphStoreAction>>();
+    let graph_processor = use_coroutine_handle::<GraphStoreAction>();
     let position = node.pos();
     let active_node_id = graph_store().active_node();
     let is_active = active_node_id.map_or("", |active_node_id| {
@@ -53,7 +53,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                 BORDER_WIDTH,
             ),
             onmousedown: move |event: MouseEvent| {
-                editor_status.drag_status.set(DragStatus::Node(id));
+                editor_status.write().drag_status.set(DragStatus::Node(id));
                 let previously_selected = graph_store().active_node();
                 if previously_selected != Some(id) {
                     graph_store().set_node_active(id);
