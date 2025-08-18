@@ -5,10 +5,7 @@ use crate::components::scenery_editor::{
     graph_editor::graph_editor_component::{DragStatus, EditorState},
     graph_store::{GraphStore, GraphStoreAction},
 };
-use dioxus::{
-    html::geometry::euclid::default::Point2D,
-    prelude::*,
-};
+use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{PortType, nodes::ConnectInfo};
 
 pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl FnMut(WheelEvent) {

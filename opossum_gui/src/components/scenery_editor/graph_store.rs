@@ -536,7 +536,6 @@ fn process_add_optic_node(
         (view_port_center.y - shift.y) / zoom,
     );
     let new_node_info = NewNode::new(new_node_type_string.to_lowercase(), element_position);
-    println!("{new_node_info:?}");
     run_action(
         api::post_add_node(new_node_info, Uuid::nil()),
         Some(move |node_info| {

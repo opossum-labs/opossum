@@ -20,20 +20,11 @@ pub enum NodeChangeAction {
 }
 
 #[component]
-pub fn NodeConfigEditor(
-    mut node_element_sig: Signal<Option<NodeElement>>,
-) -> Element {
-    let node_change_sig = use_signal(|| None::<NodeChangeAction>);
-    use_context_provider(|| node_change_sig);
+pub fn NodeConfigEditor(mut node_element_sig: Signal<Option<NodeElement>>) -> Element {
     let node_properties_sig = use_signal(Properties::default);
+    use_context_provider(|| node_properties_sig);
+    use_node_config_processor(node_element_sig, node_properties_sig);
 
-    let node_config_processor = use_node_config_processor(node_element_sig, node_properties_sig);
-    use_effect(move || {
-        if let Some(node_change_action) = &*node_change_sig.read() {
-            println!("sending to processor");
-            node_config_processor.send(node_change_action.clone());
-        }
-    });
     (*node_element_sig.read()).as_ref().map_or_else(
         || {
             rsx! {
@@ -58,7 +49,7 @@ pub fn NodeConfigEditor(
 fn use_node_config_processor(
     mut node_selected: Signal<Option<NodeElement>>,
     mut node_properties_sig: Signal<Properties>,
-) -> Coroutine<NodeChangeAction> {
+) {
     use_coroutine(move |mut rx: UnboundedReceiver<NodeChangeAction>| {
         async move {
             // This loop runs forever in the background, waiting for actions.
@@ -106,6 +97,7 @@ fn use_node_config_processor(
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                                 } else {
+                                    //needed for grating alignment menu
                                     node_properties_sig.write().set(&key, prop).unwrap_or_else(
                                         |_| {
                                             OPOSSUM_UI_LOGS
@@ -154,5 +146,5 @@ fn use_node_config_processor(
                 }
             }
         }
-    })
+    });
 }

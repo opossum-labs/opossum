@@ -76,7 +76,8 @@ pub fn NodePort(
                 let port_name = port_name.clone();
                 let port_type = port_type.clone();
                 move |event: MouseEvent| {
-                    editor_status.write()
+                    editor_status
+                        .write()
                         .drag_status
                         .set(
                             DragStatus::Edge(NewEdgeCreationStart {

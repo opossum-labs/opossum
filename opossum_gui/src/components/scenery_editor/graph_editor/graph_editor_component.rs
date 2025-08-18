@@ -40,9 +40,15 @@ pub struct EditorState {
     pub shift: Signal<Point2D<f64>>,
 }
 
-impl Default for EditorState{
+impl Default for EditorState {
     fn default() -> Self {
-        EditorState { editor_size: Default::default(), drag_status: Default::default(), edge_in_creation: Default::default(), zoom: Signal::new(1.), shift: Default::default() }
+        EditorState {
+            editor_size: Default::default(),
+            drag_status: Default::default(),
+            edge_in_creation: Default::default(),
+            zoom: Signal::new(1.),
+            shift: Default::default(),
+        }
     }
 }
 

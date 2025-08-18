@@ -10,10 +10,8 @@ use opossum_backend::{
 use uom::si::length::millimeter;
 
 #[component]
-pub fn ReferenceLengthEditor(
-    ray_data_builder_sig: Signal<RayDataBuilder>,
-    point_src: PointSrc,
-) -> Element {
+pub fn ReferenceLengthEditor(point_src: PointSrc) -> Element {
+    let mut ray_data_builder_sig = use_context::<Signal<RayDataBuilder>>();
     rsx! {
         LabeledInput {
             id: "pointsrcRefLength",
@@ -34,16 +32,16 @@ pub fn ReferenceLengthEditor(
     }
 }
 
-#[component]
-pub fn CollimatedSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
-    match &*ray_data_builder_sig.read() {
-        RayDataBuilder::Collimated(_) => {
-            rsx! {
-                DistributionEditor { ray_data_builder_sig }
-            }
-        }
-        _ => {
-            rsx! {}
-        }
-    }
-}
+// #[component]
+// pub fn CollimatedSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
+//     match &*ray_data_builder_sig.read() {
+//         RayDataBuilder::Collimated(_) => {
+//             rsx! {
+//                 DistributionEditor { ray_data_builder_sig }
+//             }
+//         }
+//         _ => {
+//             rsx! {}
+//         }
+//     }
+// }

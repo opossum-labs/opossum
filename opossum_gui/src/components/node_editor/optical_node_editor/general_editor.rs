@@ -38,44 +38,44 @@ pub fn GeneralEditor(
 
 #[component]
 pub fn NodeNameInput(node_name: String) -> Element {
-    let node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
+    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
     rsx! {
         LabeledInput {
             id: "inputNodeName",
             label: "Node Name",
             value: node_name,
-            onchange: name_onchange(node_change_signal),
+            onchange: name_onchange(node_config_processor),
         }
     }
 }
 
 #[must_use]
-pub fn name_onchange(mut signal: Signal<Option<NodeChangeAction>>) -> CallbackWrapper {
+pub fn name_onchange(node_config_processor: Coroutine<NodeChangeAction>) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         let Ok(name) = e.data.value().parse::<String>();
-        signal.set(Some(NodeChangeAction::Name(name)));
+        node_config_processor.send(NodeChangeAction::Name(name));
     })
 }
 
 #[component]
 pub fn NodeLIDTInput(node_lidt: Fluence) -> Element {
-    let node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
+    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
     rsx! {
         LabeledInput {
             id: "inputNodeLIDT",
             label: "LIDT in J/cm²",
             value: format!("{:.2}", node_lidt.get::<joule_per_square_centimeter>()),
-            onchange: lidt_onchange(node_change_signal),
+            onchange: lidt_onchange(node_config_processor),
             r#type: "number",
         }
     }
 }
 
 #[must_use]
-pub fn lidt_onchange(mut signal: Signal<Option<NodeChangeAction>>) -> CallbackWrapper {
+pub fn lidt_onchange(node_config_processor: Coroutine<NodeChangeAction>) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(lidt) = e.data.parsed::<f64>() {
-            signal.set(Some(NodeChangeAction::Lidt(J_per_cm2!(lidt))));
+            node_config_processor.send(NodeChangeAction::Lidt(J_per_cm2!(lidt)));
         }
     })
 }
@@ -108,22 +108,22 @@ pub fn NodeTypeInput(node_type: String, label: &'static str) -> Element {
 
 #[component]
 pub fn NodeInvertedInput(node_inverted: bool, label: &'static str) -> Element {
-    let node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
+    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
     rsx! {
         LabeledCheckboxInput {
             id: "inputNodeInverted",
             label,
             value: node_inverted,
-            onchange: inverted_onchange(node_change_signal),
+            onchange: inverted_onchange(node_config_processor),
         }
     }
 }
 
 #[must_use]
-pub fn inverted_onchange(mut signal: Signal<Option<NodeChangeAction>>) -> CallbackWrapper {
+pub fn inverted_onchange(node_config_processor: Coroutine<NodeChangeAction>) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(inverted) = e.data.parsed::<bool>() {
-            signal.set(Some(NodeChangeAction::Inverted(inverted)));
+            node_config_processor.send(NodeChangeAction::Inverted(inverted));
         }
     })
 }

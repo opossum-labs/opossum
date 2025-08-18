@@ -11,15 +11,9 @@ use opossum_backend::{DefaultFromName, FluenceEstimator};
 pub fn FluenceEstimatorEditor(
     fluence_estimator: FluenceEstimator,
     property_key: String,
-    node_change: Signal<Option<NodeChangeAction>>,
 ) -> Element {
     let mut fluence_estimator_sig = use_signal(|| fluence_estimator.clone());
-    use_set_node_change_property(
-        &property_key,
-        fluence_estimator,
-        fluence_estimator_sig,
-        node_change,
-    );
+    use_set_node_change_property(&property_key, fluence_estimator, fluence_estimator_sig);
 
     rsx! {
         LabeledSelect {

@@ -5,9 +5,12 @@ use uom::si::length::nanometer;
 
 use crate::{
     OPOSSUM_UI_LOGS,
-    components::node_editor::inputs::{
-        InputData, InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
-        select_options_from_enum_iterator,
+    components::node_editor::{
+        inputs::{
+            InputData, InputParam, IntoInputData, IntoInputDataStrings,
+            input_components::RowedInputs, select_options_from_enum_iterator,
+        },
+        optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
 
@@ -17,6 +20,7 @@ pub fn BandFilterEditor(
     spectral_filter_builder_sig: Signal<SpectralFilterBuilder>,
 ) -> Element {
     let band_filter_sig = use_signal(|| band_filter.clone());
+    use_update_signal_with_reactive_prop(band_filter.clone(), band_filter_sig);
 
     use_effect({
         let band_filter = band_filter;

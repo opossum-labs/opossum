@@ -6,7 +6,7 @@ use std::fmt::Display;
 use strum::EnumIter;
 
 /// Strategy for fluence estimation
-#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, EnumIter)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, EnumIter, Copy)]
 #[non_exhaustive]
 pub enum FluenceEstimator {
     /// Calculate Voronoi cells of the hit points and use the cell area for calculation of the fluence.

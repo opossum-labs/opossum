@@ -375,7 +375,6 @@ async fn post_subreference(
     let referring_node = scenery.node_recursive(ref_node_info.referring_node)?;
     let ref_node = node.as_refnode_mut().unwrap();
     ref_node.assign_reference(&referring_node);
-    println!("{:?}", ref_node.node_attr());
     drop(referring_node);
     drop(node);
     let new_node_uuid = if group_uuid.is_nil() {
@@ -707,7 +706,6 @@ async fn post_node_inversion(
             .update_connections_of_single_inverted_node(uuid)
         {
             Ok(()) => {
-                println!("waslos)");
                 let connect_infos = document
                     .scenery()
                     .connections()
@@ -995,7 +993,6 @@ async fn post_connection(
 ) -> Result<Json<ConnectInfo>, ErrorResponse> {
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    println!("server: Adding edge");
     scenery.connect_nodes(
         connect_info.src_uuid,
         &connect_info.src_port,

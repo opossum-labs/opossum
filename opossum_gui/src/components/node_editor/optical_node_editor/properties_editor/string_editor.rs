@@ -6,19 +6,15 @@ use dioxus::prelude::*;
 use inflector::Inflector;
 
 #[component]
-pub fn StringEditor(
-    s: String,
-    property_key: String,
-    node_change: Signal<Option<NodeChangeAction>>,
-) -> Element {
+pub fn StringEditor(s: String, property_key: String) -> Element {
     let string_sig = use_signal(|| s.clone());
-    use_set_node_change_property(&property_key, s, string_sig, node_change);
+    use_set_node_change_property(&property_key, s.clone(), string_sig);
 
     rsx! {
         LabeledInput {
             id: format!("stringProperty{property_key}").to_camel_case(),
             label: format!("{}", property_key.to_sentence_case()),
-            value: string_sig.read().clone(),
+            value: s.clone(),
             r#type: "text",
             onchange: on_string_input_change(string_sig),
         }

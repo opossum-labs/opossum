@@ -8,18 +8,9 @@ use opossum_backend::num_per_mm;
 use uom::si::{f64::LinearNumberDensity, linear_number_density::per_millimeter};
 
 #[component]
-pub fn LinearDensityEditor(
-    linear_density: LinearNumberDensity,
-    property_key: String,
-    node_change: Signal<Option<NodeChangeAction>>,
-) -> Element {
+pub fn LinearDensityEditor(linear_density: LinearNumberDensity, property_key: String) -> Element {
     let linear_density_sig = use_signal(|| linear_density);
-    use_set_node_change_property(
-        &property_key,
-        linear_density,
-        linear_density_sig,
-        node_change,
-    );
+    use_set_node_change_property(&property_key, linear_density, linear_density_sig);
     rsx! {
         LabeledInput {
             id: format!("linearDensityProperty{property_key}").to_camel_case(),

@@ -11,21 +11,16 @@ use inflector::Inflector;
 use opossum_backend::{Property, Proptype};
 
 #[component]
-pub fn F64Editor(
-    float64: f64,
-    property_key: String,
-    node_change: Signal<Option<NodeChangeAction>>,
-) -> Element {
+pub fn F64Editor(float64: f64, property_key: String, property: Property) -> Element {
     let float64_sig = use_signal(|| float64);
-    let property = use_context::<Property>();
 
-    use_set_node_change_property(&property_key, float64, float64_sig, node_change);
+    use_set_node_change_property(&property_key, float64, float64_sig);
 
     rsx! {
         LabeledInput {
             id: format!("float64Property{property_key}").to_camel_case(),
             label: format!("{}", property_key.to_sentence_case()),
-            value: format!("{:.3}", float64_sig.read()),
+            value: format!("{:.3}", float64),
             r#type: "number",
             onchange: on_float64_input_change(float64_sig, property),
         }

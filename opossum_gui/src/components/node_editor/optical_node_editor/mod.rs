@@ -16,16 +16,12 @@ pub fn OpticalNodeEditor(
     node_element_sig: Signal<Option<NodeElement>>,
     node_properties_sig: Signal<Properties>,
 ) -> Element {
-    let mut alignment_sig = use_signal(Isometry::identity);
-
     let resource_future = use_resource(move || async move {
         let node = node_element_sig.read();
         if let Some(node) = &*(node) {
             match api::get_node_properties(node.id()).await {
                 Ok(node_attr) => {
                     node_properties_sig.set(node_attr.properties().clone());
-                    println!("{:?}", node_attr.properties().clone());
-                    alignment_sig.set(node_attr.alignment().unwrap_or(Isometry::identity()));
                     Some(node_attr)
                 }
                 Err(err_str) => {
@@ -55,7 +51,7 @@ pub fn OpticalNodeEditor(
                         }
                         PropertiesEditor { node_properties_sig }
                         AlignmentEditor {
-                            alignment_sig,
+                            alignment: node_attr.alignment().unwrap_or(Isometry::identity()),
                             node_properties_sig,
                             node_type: node_attr.node_type(),
                         }

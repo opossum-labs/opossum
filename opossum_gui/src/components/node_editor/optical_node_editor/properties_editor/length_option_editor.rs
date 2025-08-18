@@ -10,24 +10,20 @@ use opossum_backend::nanometer;
 use uom::si::{f64::Length, length::nanometer};
 
 #[component]
-pub fn LengthOptionEditor(
-    length_opt: Option<Length>,
-    property_key: String,
-    node_change: Signal<Option<NodeChangeAction>>,
-) -> Element {
+pub fn LengthOptionEditor(length_opt: Option<Length>, property_key: String) -> Element {
     let mut length_opt_sig = use_signal(|| length_opt);
     let select_id = format!("lengthOptionProperty{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
 
-    use_set_node_change_property(&property_key, length_opt, length_opt_sig, node_change);
+    use_set_node_change_property(&property_key, length_opt, length_opt_sig);
 
     rsx! {
         LabeledSelect {
             id: select_id,
             label: select_label,
             options: vec![
-                (length_opt_sig.read().is_none(), "None".to_owned()),
-                (length_opt_sig.read().is_some(), "Define".to_owned()),
+                (length_opt.is_none(), "None".to_owned()),
+                (length_opt.is_some(), "Define".to_owned()),
             ],
             onchange: move |_: Event<FormData>| {
                 if length_opt_sig.read().is_some() {
@@ -38,7 +34,8 @@ pub fn LengthOptionEditor(
             },
         }
         {
-            length_opt_sig()
+            length_opt_sig
+                .read()
                 .map_or(
                     rsx! {},
                     |length| {

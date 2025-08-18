@@ -6,8 +6,9 @@ use crate::{
     components::node_editor::{
         CallbackWrapper,
         inputs::input_components::{LabeledInput, LabeledSelect},
-        optical_node_editor::alignment_editor::{
-            RotationAlignmentInputs, TranslationAlignmentInputs,
+        optical_node_editor::{
+            alignment_editor::{RotationAlignmentInputs, TranslationAlignmentInputs},
+            properties_editor::use_update_signal_with_reactive_prop,
         },
     },
 };
@@ -34,20 +35,11 @@ pub fn GratingAlignmentInputs(
 
     if let (true, Ok(Proptype::I32(diffraction_order)), Ok(Proptype::LinearDensity(line_density))) = (
         *alignment_select_sig.read(),
-        node_properties_sig.read().get("diffraction order"),
-        node_properties_sig.read().get("line density"),
+        node_properties_sig.read().get("diffraction order").cloned(),
+        node_properties_sig.read().get("line density").cloned(),
     ) {
-        let wavelength = nanometer!(1053.);
-        let incident = true;
-
         element_list.push(rsx! {
-            LittrowConfigEditor {
-                alignment_sig,
-                diffraction_order: *diffraction_order,
-                line_density: *line_density,
-                wavelength,
-                incident,
-            }
+            LittrowConfigEditor { alignment_sig, diffraction_order, line_density }
         });
         element_list.push(rsx! {
             RotationAlignmentInputs { alignment_sig, axes_skip: Some(vec![RotationAxis::Pitch]) }
@@ -71,11 +63,11 @@ pub fn LittrowConfigEditor(
     alignment_sig: Signal<Isometry>,
     diffraction_order: i32,
     line_density: LinearNumberDensity,
-    wavelength: Length,
-    incident: bool,
 ) -> Element {
-    let incident_angle_sig = use_signal(|| incident);
-    let mut reference_wavelength_sig = use_signal(|| wavelength);
+    let incident_angle_sig = use_signal(|| true);
+    let mut reference_wavelength_sig = use_signal(|| nanometer!(1053.));
+    // use_update_signal_with_reactive_prop(incident, incident_angle_sig);
+    // use_update_signal_with_reactive_prop(wavelength, reference_wavelength_sig);
 
     rsx! {
         InOrOutgoingFromLittrowSelector { incident_angle_sig }
@@ -124,7 +116,7 @@ fn AngleToLittrowComponent(
     reference_wavelength_sig: Signal<Length>,
     diffraction_order: i32,
     line_density: LinearNumberDensity,
-    alignment_sig: Signal<Isometry>,
+    mut alignment_sig: Signal<Isometry>,
 ) -> Element {
     rsx! {
         LabeledInput {

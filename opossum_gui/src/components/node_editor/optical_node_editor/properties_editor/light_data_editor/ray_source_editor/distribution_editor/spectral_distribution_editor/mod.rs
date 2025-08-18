@@ -9,15 +9,16 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
+    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
 use gaussian_editor::GaussianSpectrumParam;
 use laser_lines_editor::LaserLineInput;
-use opossum_backend::{DefaultFromName, SpecDistType};
+use opossum_backend::{DefaultFromName, SpecDistType, ray_data_builder::RayDataBuilder};
 
 #[component]
 pub fn RaySpectralDistributionEditor(spect_dist_type_sig: Signal<SpecDistType>) -> Element {
-    match spect_dist_type_sig() {
+    match &*spect_dist_type_sig.read() {
         SpecDistType::Gaussian(g) => {
             rsx! {
                 RowedInputs { inputs: GaussianSpectrumParam::to_input_data_vec(&g, spect_dist_type_sig) }
@@ -25,14 +26,25 @@ pub fn RaySpectralDistributionEditor(spect_dist_type_sig: Signal<SpecDistType>) 
         }
         SpecDistType::LaserLines(laser_lines) => {
             rsx! {
-                LaserLineInput { laser_lines, spect_dist_type_sig }
+                LaserLineInput { laser_lines: laser_lines.clone(), spect_dist_type_sig }
             }
         }
     }
 }
 
 #[component]
-pub fn SpectralDistributionEditor(spect_dist_type_sig: Signal<SpecDistType>) -> Element {
+pub fn SpectralDistributionEditor(spect_dist_type: SpecDistType) -> Element {
+    let mut ray_data_builder_sig = use_context::<Signal<RayDataBuilder>>();
+
+    let spect_dist_type_sig = use_signal(|| spect_dist_type.clone());
+    use_update_signal_with_reactive_prop(spect_dist_type, spect_dist_type_sig);
+
+    use_effect(move || {
+        ray_data_builder_sig
+            .write()
+            .set_spectral_dist(spect_dist_type_sig.read().clone());
+    });
+
     let accordion_item_content = rsx! {
         RaySpectralDistributionSelector { spect_dist_type_sig }
         RaySpectralDistributionEditor { spect_dist_type_sig }

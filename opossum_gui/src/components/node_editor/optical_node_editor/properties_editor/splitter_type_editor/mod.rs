@@ -15,7 +15,6 @@ use crate::components::node_editor::{
 pub fn SplitterTypeEditor(
     splitting_config_builder: SplittingConfigBuilder,
     property_key: String,
-    node_change: Signal<Option<NodeChangeAction>>,
     property: Property,
 ) -> Element {
     use_context_provider(|| property);
@@ -23,9 +22,8 @@ pub fn SplitterTypeEditor(
     let splitting_config_builder_sig = use_signal(|| splitting_config_builder.clone());
     use_set_node_change_property(
         &property_key,
-        splitting_config_builder,
+        splitting_config_builder.clone(),
         splitting_config_builder_sig,
-        node_change,
     );
     let mut element_list = vec![rsx! {
     SplittingConfigSelector {splitting_config_builder_sig}}];

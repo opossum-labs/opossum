@@ -14,14 +14,10 @@ use strum::IntoEnumIterator;
 use uom::si::{angle::degree, length::millimeter};
 
 #[component]
-pub fn IsometryOptionEditor(
-    isometry: Isometry,
-    property_key: String,
-    node_change: Signal<Option<NodeChangeAction>>,
-) -> Element {
+pub fn IsometryOptionEditor(isometry: Isometry, property_key: String) -> Element {
     let isometry_sig = use_signal(|| isometry);
 
-    use_set_node_change_property(&property_key, isometry, isometry_sig, node_change);
+    use_set_node_change_property(&property_key, isometry, isometry_sig);
 
     let input_data = get_isometry_option_input_data(isometry_sig);
 

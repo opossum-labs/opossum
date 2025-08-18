@@ -119,7 +119,6 @@ pub fn App() -> Element {
                     //     (view_port_center.peek().y - shift.y) / zoom,
                     // );
                     // let new_node_info = NewNode::new(node_type.to_lowercase(), element_position);
-                    println!("{node_type_string}");
                     graph_processor.send(GraphStoreAction::AddOpticNode(node_type_string.clone()));
 
                     // node_editor_command

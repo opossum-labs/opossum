@@ -10,12 +10,15 @@ use opossum_backend::{
 };
 use spectrum_from_file_editor::SpectrumFromFileEditor;
 
+use crate::components::node_editor::optical_node_editor::properties_editor::use_update_signal_with_reactive_prop;
+
 #[component]
 pub fn EnergySourceEditor(
     energy_data_builder: EnergyDataBuilder,
     light_data_builder_sig: Signal<LightDataBuilder>,
 ) -> Element {
     let energy_data_builder_sig = use_signal(|| energy_data_builder.clone());
+    use_update_signal_with_reactive_prop(energy_data_builder.clone(), energy_data_builder_sig);
 
     use_effect(move || {
         if energy_data_builder != *energy_data_builder_sig.read() {

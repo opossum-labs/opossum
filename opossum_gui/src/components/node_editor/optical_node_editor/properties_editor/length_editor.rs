@@ -8,14 +8,10 @@ use opossum_backend::millimeter;
 use uom::si::{f64::Length, length::millimeter};
 
 #[component]
-pub fn LengthEditor(
-    length: Length,
-    property_key: String,
-    node_change: Signal<Option<NodeChangeAction>>,
-) -> Element {
+pub fn LengthEditor(length: Length, property_key: String) -> Element {
     let length_sig = use_signal(|| length);
 
-    use_set_node_change_property(&property_key, length, length_sig, node_change);
+    use_set_node_change_property(&property_key, length, length_sig);
 
     rsx! {
         LabeledInput {

@@ -6,19 +6,15 @@ use dioxus::prelude::*;
 use inflector::Inflector;
 
 #[component]
-pub fn I32Editor(
-    int32: i32,
-    property_key: String,
-    node_change: Signal<Option<NodeChangeAction>>,
-) -> Element {
+pub fn I32Editor(int32: i32, property_key: String) -> Element {
     let int32_sig = use_signal(|| int32);
-    use_set_node_change_property(&property_key, int32, int32_sig, node_change);
+    use_set_node_change_property(&property_key, int32, int32_sig);
 
     rsx! {
         LabeledInput {
             id: format!("i32Property{property_key}").to_camel_case(),
             label: format!("{}", property_key.to_sentence_case()),
-            value: format!("{}", int32_sig.read()),
+            value: format!("{}", int32),
             r#type: "number",
             step: Some("1"),
             onchange: on_i32_input_change(int32_sig),
