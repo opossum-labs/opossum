@@ -146,7 +146,6 @@ pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone>(
         let property_key = property_key.to_owned();
         move || {
             if prop_type_value != *prop_type_value_sig.read() {
-                println!("use_set_node_change_property");
                 node_change_handle.send(NodeChangeAction::Property(
                     property_key.clone(),
                     prop_type_value_sig.read().clone().into(),
