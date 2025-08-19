@@ -13,7 +13,6 @@ use opossum::{
     meter,
     nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
-    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     utils::geom_transformation::Isometry,
@@ -24,7 +23,7 @@ use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Debug, PartialEq)]
 pub struct NodeInfo {
     uuid: Uuid,
     name: String,
@@ -231,7 +230,7 @@ pub async fn get_connections(
     };
     Ok(Json(connect_infos))
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
 pub struct NewNode {
     node_type: String,
     gui_position: (f64, f64),
@@ -309,7 +308,7 @@ async fn post_subnode(
     drop(node);
     Ok(Json(node_info))
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
 pub struct NewRefNode {
     referring_node: Uuid,
     gui_position: (f64, f64),
@@ -375,7 +374,6 @@ async fn post_subreference(
     let referring_node = scenery.node_recursive(ref_node_info.referring_node)?;
     let ref_node = node.as_refnode_mut().unwrap();
     ref_node.assign_reference(&referring_node);
-    println!("{:?}", ref_node.node_attr());
     drop(referring_node);
     drop(node);
     let new_node_uuid = if group_uuid.is_nil() {
@@ -707,7 +705,6 @@ async fn post_node_inversion(
             .update_connections_of_single_inverted_node(uuid)
         {
             Ok(()) => {
-                println!("waslos)");
                 let connect_infos = document
                     .scenery()
                     .connections()
@@ -722,23 +719,11 @@ async fn post_node_inversion(
                         )
                     })
                     .collect::<Vec<ConnectInfo>>();
+                drop(document);
                 Ok(Json(connect_infos))
             }
-            Err(e) => return Err(ErrorResponse::new(400, "Opossum", e.to_string().as_str())),
+            Err(e) => Err(ErrorResponse::new(400, "Opossum", e.to_string().as_str())),
         }
-
-        // for connection in connections.iter() {
-        //     document.scenery().disconnect_nodes(connection, src_port);
-        //     if connection.0 == uuid {
-        //         // If the node is inverted, we need to invert the source port
-        //         let src_port = connection.1.clone();
-        //         let dst_port = connection.2;
-        //         let distance = connection.4.get::<meter>();
-        //         document
-        //             .scenery_mut()
-        //             .connect_nodes(uuid, src_port, dst_port, distance)?;
-        //     }
-        // }
     } else {
         Err(ErrorResponse::new(
             404,
@@ -1007,7 +992,6 @@ async fn post_connection(
 ) -> Result<Json<ConnectInfo>, ErrorResponse> {
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    println!("server: Adding edge");
     scenery.connect_nodes(
         connect_info.src_uuid,
         &connect_info.src_port,

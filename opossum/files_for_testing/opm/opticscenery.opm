@@ -8,7 +8,7 @@
                 inputs: {},
                 outputs: {},
             ),
-            uuid: "3af38388-5b23-47c5-a5c0-a438fa45a72a",
+            uuid: "891d00fc-7aa3-4db1-93c3-421816121e37",
             lidt: 10000.0,
             props: {
                 "expand view": (
@@ -50,7 +50,7 @@
                                 ),
                             },
                         ),
-                        uuid: "88219203-3e8b-4d57-8150-f1a8ae0bced5",
+                        uuid: "5af36fb2-eff9-43ed-9465-61605e0ad599",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -86,7 +86,7 @@
                                 ),
                             },
                         ),
-                        uuid: "a7912935-ee38-4674-a895-8aa0a1410d30",
+                        uuid: "1f0d5cda-44b8-4864-beb4-2aebd7bd1d20",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -94,7 +94,13 @@
                 ),
             ],
             edges: [
-                ("88219203-3e8b-4d57-8150-f1a8ae0bced5", "output_1", "a7912935-ee38-4674-a895-8aa0a1410d30", "input_1", 0.0),
+                (
+                    src_id: "5af36fb2-eff9-43ed-9465-61605e0ad599",
+                    src_port: "output_1",
+                    target_id: "1f0d5cda-44b8-4864-beb4-2aebd7bd1d20",
+                    target_port: "input_1",
+                    distance: 0.0,
+                ),
             ],
             input_map: ({}),
             output_map: ({}),
@@ -106,14 +112,14 @@
         )),
     ),
     analyzers: {
-        "1ae083e8-afa1-445f-b608-87cf70c9e9fc": (
+        "4576104e-71f0-4543-b931-9d768d0654fc": (
             analyzer_type: RayTrace((
                 min_energy_per_ray: 0.000000000001,
                 max_number_of_bounces: 1000,
                 max_number_of_refractions: 1000,
                 missed_surface_strategy: Stop,
             )),
-            id: "1ae083e8-afa1-445f-b608-87cf70c9e9fc",
+            id: "4576104e-71f0-4543-b931-9d768d0654fc",
             gui_position: None,
         ),
     },

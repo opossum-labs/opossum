@@ -6,7 +6,6 @@ mod ray_source_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    node_config_editor::NodeChange,
     optical_node_editor::properties_editor::{
         light_data_editor::energy_source_editor::EnergySourceEditor, use_set_node_change_property,
     },
@@ -18,29 +17,26 @@ use ray_source_editor::RaySourceEditor;
 use dioxus::prelude::*;
 
 #[component]
-pub fn LightDataEditor(
-    light_data_builder: LightDataBuilder,
-    property_key: String,
-    node_change: Signal<Option<NodeChange>>,
-) -> Element {
+pub fn LightDataEditor(light_data_builder: LightDataBuilder, property_key: String) -> Element {
     let light_data_builder_sig = use_signal(|| light_data_builder.clone());
 
-    use_set_node_change_property(
-        &property_key,
-        light_data_builder,
-        light_data_builder_sig,
-        node_change,
-    );
+    use_set_node_change_property(&property_key, light_data_builder, light_data_builder_sig);
 
     let mut accordion_item_content = vec![rsx! {
     SourceLightDataBuilderSelector {light_data_builder_sig }}];
 
-    match light_data_builder_sig() {
+    match &*light_data_builder_sig.read() {
         LightDataBuilder::Energy(energy_data_builder) => accordion_item_content.push(rsx! {
-            EnergySourceEditor { energy_data_builder, light_data_builder_sig }
+            EnergySourceEditor {
+                energy_data_builder: energy_data_builder.clone(),
+                light_data_builder_sig,
+            }
         }),
         LightDataBuilder::Geometric(ray_data_builder) => accordion_item_content.push(rsx! {
-            RaySourceEditor { ray_data_builder, light_data_builder_sig }
+            RaySourceEditor {
+                ray_data_builder: ray_data_builder.clone(),
+                light_data_builder_sig,
+            }
         }),
     }
 

@@ -1,5 +1,5 @@
 use crate::components::node_editor::{
-    CallbackWrapper, inputs::input_components::LabeledInput, node_config_editor::NodeChange,
+    CallbackWrapper, inputs::input_components::LabeledInput,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
@@ -8,14 +8,10 @@ use opossum_backend::degree;
 use uom::si::{angle::degree, f64::Angle};
 
 #[component]
-pub fn AngleEditor(
-    angle: Angle,
-    property_key: String,
-    node_change: Signal<Option<NodeChange>>,
-) -> Element {
+pub fn AngleEditor(angle: Angle, property_key: String) -> Element {
     let angle_sig = use_signal(|| angle);
 
-    use_set_node_change_property(&property_key, angle, angle_sig, node_change);
+    use_set_node_change_property(&property_key, angle, angle_sig);
 
     rsx! {
         LabeledInput {

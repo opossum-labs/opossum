@@ -1,5 +1,5 @@
 use crate::components::node_editor::{
-    CallbackWrapper, inputs::input_components::LabeledInput, node_config_editor::NodeChange,
+    CallbackWrapper, inputs::input_components::LabeledInput,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
@@ -8,14 +8,10 @@ use opossum_backend::millimeter;
 use uom::si::{f64::Length, length::millimeter};
 
 #[component]
-pub fn LengthEditor(
-    length: Length,
-    property_key: String,
-    node_change: Signal<Option<NodeChange>>,
-) -> Element {
+pub fn LengthEditor(length: Length, property_key: String) -> Element {
     let length_sig = use_signal(|| length);
 
-    use_set_node_change_property(&property_key, length, length_sig, node_change);
+    use_set_node_change_property(&property_key, length, length_sig);
 
     rsx! {
         LabeledInput {

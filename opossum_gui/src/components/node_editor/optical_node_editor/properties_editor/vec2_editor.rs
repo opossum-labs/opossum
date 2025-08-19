@@ -15,7 +15,6 @@ use crate::{
             input_components::{LabeledSelect, RowedInputs},
             select_options_from_enum_iterator,
         },
-        node_config_editor::NodeChange,
         optical_node_editor::properties_editor::use_set_node_change_property,
     },
 };
@@ -40,14 +39,10 @@ impl Display for Vec2Options {
 impl DefaultFromName for Vec2Options {}
 
 #[component]
-pub fn Vec2Editor(
-    vector: Vector2<f64>,
-    property_key: String,
-    node_change: Signal<Option<NodeChange>>,
-) -> Element {
+pub fn Vec2Editor(vector: Vector2<f64>, property_key: String) -> Element {
     let select_label = property_key.to_sentence_case();
     let mut vec_sig = use_signal(|| vector);
-    use_set_node_change_property(&property_key, vector, vec_sig, node_change);
+    use_set_node_change_property(&property_key, vector, vec_sig);
 
     let vec_x_input = InputData::new(
         InputParam::F64(format!("{select_label} x")),
@@ -66,9 +61,8 @@ pub fn Vec2Editor(
         format!("{:.3}", vec_sig.read().y),
     );
 
-    let vec2_select = use_memo(move || {
-        let normed_vec = vec_sig.read().normalize();
-
+    let vec2_select = use_memo(use_reactive!(|vector| {
+        let normed_vec = vector.normalize();
         if relative_eq!(normed_vec.x, 0.0) {
             Vec2Options::Y
         } else if relative_eq!(normed_vec.y, 0.0) {
@@ -76,7 +70,7 @@ pub fn Vec2Editor(
         } else {
             Vec2Options::Mix
         }
-    });
+    }));
 
     rsx! {
         LabeledSelect {

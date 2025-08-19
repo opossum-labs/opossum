@@ -5,9 +5,12 @@ use uom::si::length::nanometer;
 
 use crate::{
     OPOSSUM_UI_LOGS,
-    components::node_editor::inputs::{
-        InputData, InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
-        select_options_from_enum_iterator,
+    components::node_editor::{
+        inputs::{
+            InputData, InputParam, IntoInputData, IntoInputDataStrings,
+            input_components::RowedInputs, select_options_from_enum_iterator,
+        },
+        optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
 
@@ -17,6 +20,7 @@ pub fn EdgeFilterEditor(
     spectral_filter_builder_sig: Signal<SpectralFilterBuilder>,
 ) -> Element {
     let edge_filter_sig = use_signal(|| edge_filter.clone());
+    use_update_signal_with_reactive_prop(edge_filter.clone(), edge_filter_sig);
 
     use_effect({
         let edge_filter = edge_filter;
