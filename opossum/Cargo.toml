@@ -54,7 +54,7 @@ tempfile="3"
 rand="0.9"
 sobol="1"
 itertools = "0.14"
-nalgebra = {version = "0.33", features = ["serde-serialize", "rayon"]}
+nalgebra = {version = "0.34.0", features = ["serde-serialize", "rayon"]}
 colorous = "1"
 
 delaunator = "1"

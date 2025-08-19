@@ -6,6 +6,7 @@ use crate::components::{
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
     node_editor::NodeConfigEditor,
     scenery_editor::{GraphEditor, NodeEditorCommand, NodeElement},
+    simulation::simulation_window::SimulationWindow,
 };
 use dioxus::prelude::*;
 // use crate::{api,HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
@@ -40,6 +41,7 @@ pub fn App() -> Element {
     let cxt_command = use_signal(|| None::<CxtCommand>);
     let selected_node = use_signal(|| None::<NodeElement>);
     let project_directory = use_signal(|| Path::new("./").to_path_buf());
+    let mut run_simulation = use_signal(|| false);
 
     use_effect(move || {
         let cxt_command = cxt_command.read();
@@ -89,9 +91,11 @@ pub fn App() -> Element {
                 }
                 MenuSelection::WinClose => {
                     println!("App::Window close selected");
-                } // MenuSelection::RunProject => {
-                  //     spawn(async move { analyze_setup(project_directory()).await });
-                  // }
+                }
+                MenuSelection::RunProject => {
+                    println!("Run Project");
+                    run_simulation.set(true);
+                }
             }
         }
     });
@@ -117,6 +121,7 @@ pub fn App() -> Element {
             div { class: "row footer",
                 div { class: "col", Logger {} }
             }
+            SimulationWindow { show_simulation: run_simulation }
         }
     }
 }

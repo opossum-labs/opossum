@@ -124,13 +124,17 @@ pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
                         OPOSSUM_UI_LOGS
                             .write()
                             .add_log("Minimum ray energy must be non-negative.");
-                        ray_trace_config_sig.write().set_min_energy_per_ray(old_value).unwrap_or_else(|err| {
+                        ray_trace_config_sig
+                            .write()
+                            .set_min_energy_per_ray(old_value)
+                            .unwrap_or_else(|err| {
                                 OPOSSUM_UI_LOGS.write().add_log(&err.to_string());
                             });
                     } else {
                         ray_trace_config_sig
                             .write()
-                            .set_min_energy_per_ray(picojoule!(min_ray_energy)).unwrap_or_else(|err| {
+                            .set_min_energy_per_ray(picojoule!(min_ray_energy))
+                            .unwrap_or_else(|err| {
                                 OPOSSUM_UI_LOGS.write().add_log(&err.to_string());
                             });
                     }

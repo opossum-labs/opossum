@@ -18,7 +18,7 @@ const FAVICON: Asset = asset!("./assets/favicon.ico");
 #[derive(Debug)]
 pub enum MenuSelection {
     NewProject,
-    // RunProject,
+    RunProject,
     OpenProject(PathBuf),
     SaveProject(PathBuf),
     AddNode(String),
@@ -123,17 +123,16 @@ pub fn MenuBar(
                                     "Save Project"
                                 }
                             }
-                                                // li {
-                        //     a {
-                        //         class: "dropdown-item",
-                        //         role: "button",
-                        //         onclick: move |_| {
-                        //             menu_item_selected.set(Some(MenuSelection::RunProject));
-
-                        //         },
-                        //         "Run Project"
-                        //     }
-                        // }
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| {
+                                        menu_item_selected.set(Some(MenuSelection::RunProject));
+                                    },
+                                    "Run Project"
+                                }
+                            }
                         }
                     }
                     li { class: "nav-item",
