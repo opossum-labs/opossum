@@ -2,7 +2,6 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         CallbackWrapper, inputs::input_components::LabeledInput,
-        node_config_editor::NodeChangeAction,
         optical_node_editor::properties_editor::use_set_node_change_property,
     },
 };

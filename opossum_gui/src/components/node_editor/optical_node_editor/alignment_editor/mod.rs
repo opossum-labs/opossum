@@ -32,7 +32,7 @@ pub fn AlignmentEditor(
     let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
     use_effect(move || {
         if *alignment_sig.read() != alignment {
-            node_config_processor.send(NodeChangeAction::Alignment(alignment_sig.read().clone()));
+            node_config_processor.send(NodeChangeAction::Alignment(*alignment_sig.read()));
         }
     });
 

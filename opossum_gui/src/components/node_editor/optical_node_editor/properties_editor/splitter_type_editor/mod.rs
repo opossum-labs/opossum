@@ -4,7 +4,6 @@ use opossum_backend::{DefaultFromName, Property, SplittingConfigBuilder};
 use crate::components::node_editor::{
     accordion::ElementList,
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
-    node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::{
         filter_type_editor::{ConstantFilterTypeEditor, SpectralFilterTypeEditor},
         use_set_node_change_property,
@@ -22,7 +21,7 @@ pub fn SplitterTypeEditor(
     let splitting_config_builder_sig = use_signal(|| splitting_config_builder.clone());
     use_set_node_change_property(
         &property_key,
-        splitting_config_builder.clone(),
+        splitting_config_builder,
         splitting_config_builder_sig,
     );
     let mut element_list = vec![rsx! {

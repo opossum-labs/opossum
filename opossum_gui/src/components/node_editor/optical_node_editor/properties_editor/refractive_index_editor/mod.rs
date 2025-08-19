@@ -18,7 +18,6 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
-    node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 
@@ -26,7 +25,7 @@ use crate::components::node_editor::{
 pub fn RefractiveIndexEditor(ref_ind_type: RefractiveIndexType, property_key: String) -> Element {
     let mut ref_ind_type_sig = use_signal(|| ref_ind_type.clone());
 
-    use_set_node_change_property(&property_key, ref_ind_type.clone(), ref_ind_type_sig);
+    use_set_node_change_property(&property_key, ref_ind_type, ref_ind_type_sig);
 
     let select_id = format!("refractiveIndexProperty{property_key}").to_camel_case();
     rsx! {

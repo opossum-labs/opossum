@@ -13,7 +13,6 @@ use opossum::{
     meter,
     nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
-    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     utils::geom_transformation::Isometry,

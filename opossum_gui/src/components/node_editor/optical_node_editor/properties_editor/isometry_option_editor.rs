@@ -4,7 +4,6 @@ use crate::{
         CallbackWrapper,
         accordion::AccordionItem,
         inputs::{InputData, input_components::RowedInputs},
-        node_config_editor::NodeChangeAction,
         optical_node_editor::properties_editor::use_set_node_change_property,
     },
 };

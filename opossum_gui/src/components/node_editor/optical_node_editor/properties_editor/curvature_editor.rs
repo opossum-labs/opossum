@@ -2,10 +2,7 @@ use core::f64;
 
 use crate::components::node_editor::{
     CallbackWrapper,
-    inputs::{
-        InputData, InputParam,
-        input_components::{InputParamLabeledInput, RowedInputs},
-    },
+    inputs::{InputData, InputParam, input_components::InputParamLabeledInput},
     node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
@@ -92,9 +89,9 @@ fn on_is_curved_input_change(mut curvature_sig: Signal<Length>) -> CallbackWrapp
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(is_finite) = e.data.value().parse::<bool>() {
             if is_finite {
-                curvature_sig.set(millimeter!(1000.))
+                curvature_sig.set(millimeter!(1000.));
             } else {
-                curvature_sig.set(millimeter!(f64::INFINITY))
+                curvature_sig.set(millimeter!(f64::INFINITY));
             }
         }
     })

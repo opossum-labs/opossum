@@ -1,6 +1,5 @@
 use crate::components::node_editor::{
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
-    node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
@@ -12,7 +11,7 @@ pub fn FluenceEstimatorEditor(
     fluence_estimator: FluenceEstimator,
     property_key: String,
 ) -> Element {
-    let mut fluence_estimator_sig = use_signal(|| fluence_estimator.clone());
+    let mut fluence_estimator_sig = use_signal(|| fluence_estimator);
     use_set_node_change_property(&property_key, fluence_estimator, fluence_estimator_sig);
 
     rsx! {

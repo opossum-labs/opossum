@@ -1,6 +1,5 @@
 use crate::components::node_editor::{
     CallbackWrapper, inputs::input_components::LabeledCheckboxInput,
-    node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;

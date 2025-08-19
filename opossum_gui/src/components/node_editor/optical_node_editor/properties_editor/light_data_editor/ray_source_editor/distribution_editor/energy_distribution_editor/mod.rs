@@ -27,7 +27,7 @@ pub fn RayEnergyDistributionEditor(energy_dist_type_sig: Signal<EnergyDistType>)
 #[component]
 pub fn EnergyDistributionEditor(energy_dist_type: EnergyDistType) -> Element {
     let mut ray_data_builder_sig = use_context::<Signal<RayDataBuilder>>();
-    let energy_dist_type_sig = use_signal(|| energy_dist_type.clone());
+    let energy_dist_type_sig = use_signal(|| energy_dist_type);
     use_update_signal_with_reactive_prop(energy_dist_type, energy_dist_type_sig);
 
     use_effect(move || {

@@ -71,7 +71,7 @@ pub fn NodePosDistInputs(pos_dist_type_sig: Signal<PosDistType>) -> Element {
 #[component]
 pub fn PositionDistributionEditor(pos_dist_type: PosDistType) -> Element {
     let mut ray_data_builder_sig = use_context::<Signal<RayDataBuilder>>();
-    let pos_dist_type_sig = use_signal(|| pos_dist_type.clone());
+    let pos_dist_type_sig = use_signal(|| pos_dist_type);
     use_update_signal_with_reactive_prop(pos_dist_type, pos_dist_type_sig);
 
     use_effect(move || {

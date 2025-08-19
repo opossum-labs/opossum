@@ -33,7 +33,6 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use opossum_backend::{Properties, Property, Proptype};
-use uuid::Uuid;
 
 #[component]
 pub fn PropertiesEditor(node_properties_sig: Signal<Properties>) -> Element {
@@ -81,11 +80,7 @@ fn get_editor(property: Property, property_key: String) -> Option<Element> {
             }
         }),
         Proptype::FilterTypeBuilder(filter_type_builder) => Some(rsx! {
-            FilterTypeEditor {
-                filter_type_builder,
-                property_key,
-                property,
-            }
+            FilterTypeEditor { filter_type_builder, property_key, property }
         }),
         Proptype::FluenceEstimator(fluence_estimator) => Some(rsx! {
             FluenceEstimatorEditor { fluence_estimator, property_key }
@@ -166,7 +161,6 @@ pub fn use_update_signal_with_reactive_prop<T: PartialEq + Clone>(
     mut prop_signal: Signal<T>,
 ) {
     use_effect({
-        let prop = prop.clone();
         use_reactive!(|(prop,)| {
             if *prop_signal.peek() != prop {
                 prop_signal.set(prop);

@@ -73,8 +73,8 @@ pub fn use_drag_start(
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
-    let mut current_shift = *editor_status().shift.read();
-    let mut current_zoom = *editor_status().zoom.read();
+    let current_shift = *editor_status().shift.read();
+    let current_zoom = *editor_status().zoom.read();
 
     move |event| {
         // let current_sz = *graph_shift_zoom.read();

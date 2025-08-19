@@ -5,11 +5,8 @@ mod image_source_editor;
 mod point_source_editor;
 mod ray_type_selection;
 
-// use collimated_source_editor::CollimatedSourceEditor;
 use dioxus::prelude::*;
-use image_source_editor::ImageSourceEditor;
 use opossum_backend::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder};
-// use point_source_editor::PointSourceEditor;
 use ray_type_selection::RayDataBuilderSelector;
 
 use crate::components::node_editor::{
@@ -63,16 +60,9 @@ pub fn RaySourceEditor(
                 RowedInputs { inputs }
             });
         }
-    };
+    }
 
     rsx! {
         ElementList { element_list }
     }
-
-    // rsx! {
-    //     RayDataBuilderSelector { ray_data_builder_sig }
-    //     PointSourceEditor { ray_data_builder_sig }
-    //     CollimatedSourceEditor { ray_data_builder_sig }
-    //     ImageSourceEditor { ray_data_builder_sig }
-    // }
 }

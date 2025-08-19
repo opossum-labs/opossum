@@ -326,7 +326,7 @@ pub fn use_graph_processor(
 ) -> Coroutine<GraphStoreAction> {
     let action_successful = use_signal(|| true);
     let mut graph_store = graph_state.write().graph_store;
-    let mut editor_state = graph_state.write().editor_state;
+    let editor_state = graph_state.write().editor_state;
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         async move {
             // This loop runs forever in the background, waiting for actions.
@@ -351,7 +351,7 @@ pub fn use_graph_processor(
                         process_delete_node(node_id, graph_store, node_selected);
                     }
                     GraphStoreAction::AddOpticNode(new_node) => {
-                        process_add_optic_node(new_node, graph_store, editor_state, node_selected);
+                        process_add_optic_node(&new_node, graph_store, editor_state, node_selected);
                     }
                     GraphStoreAction::AddOpticReference(new_ref_node) => {
                         process_add_reference_node(new_ref_node, graph_store, node_selected);
@@ -521,7 +521,7 @@ fn process_delete_optical_node(
 }
 
 fn process_add_optic_node(
-    new_node_type_string: String,
+    new_node_type_string: &str,
     mut graph_store: Signal<GraphStore>,
     editor_state: Signal<EditorState>,
     mut node_selected: Signal<Option<NodeElement>>,

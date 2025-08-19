@@ -21,7 +21,7 @@ pub fn RaySpectralDistributionEditor(spect_dist_type_sig: Signal<SpecDistType>) 
     match &*spect_dist_type_sig.read() {
         SpecDistType::Gaussian(g) => {
             rsx! {
-                RowedInputs { inputs: GaussianSpectrumParam::to_input_data_vec(&g, spect_dist_type_sig) }
+                RowedInputs { inputs: GaussianSpectrumParam::to_input_data_vec(g, spect_dist_type_sig) }
             }
         }
         SpecDistType::LaserLines(laser_lines) => {

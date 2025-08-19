@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
 use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
-use crate::components::scenery_editor::{NodeElement, NodeType};
+use crate::components::scenery_editor::{GraphStoreAction, NodeElement, NodeType};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
@@ -50,6 +50,7 @@ fn use_node_config_processor(
     mut node_selected: Signal<Option<NodeElement>>,
     mut node_properties_sig: Signal<Properties>,
 ) {
+    let graph_processor = use_coroutine_handle::<GraphStoreAction>();
     use_coroutine(move |mut rx: UnboundedReceiver<NodeChangeAction>| {
         async move {
             // This loop runs forever in the background, waiting for actions.
@@ -117,21 +118,22 @@ fn use_node_config_processor(
                                 }
                             });
                         }
-                        NodeChangeAction::Inverted(inverted) => todo!(),
-                        // {
-                        //     spawn(async move {
-                        //         match api::update_node_inversion(active_node.id(), inverted).await {
-                        //             Ok(connections) => {
-                        //                 node_editor_command.set(Some(NodeEditorCommand::UpdateEdges(connections)));
-                        //                 active_node.set_inverted(inverted);
-                        //                 node.set(Some(active_node));
-                        //             }
-                        //             Err(err_str) => {
-                        //                 OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                        //             }
-                        //         }
-                        //     });
-                        // }
+                        NodeChangeAction::Inverted(inverted) => {
+                            spawn(async move {
+                                let mut active_node = active_node.clone();
+                                match api::update_node_inversion(active_node.id(), inverted).await {
+                                    Ok(connections) => {
+                                        graph_processor
+                                            .send(GraphStoreAction::UpdateEdges(connections));
+                                        active_node.set_inverted(inverted);
+                                        node_selected.set(Some(active_node));
+                                    }
+                                    Err(err_str) => {
+                                        OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                    }
+                                }
+                            });
+                        }
                         NodeChangeAction::AnalyzerType(analyzer_type) => {
                             spawn(async move {
                                 if let Err(err_str) =

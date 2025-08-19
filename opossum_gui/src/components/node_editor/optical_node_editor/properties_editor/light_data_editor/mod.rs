@@ -6,7 +6,6 @@ mod ray_source_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    node_config_editor::NodeChangeAction,
     optical_node_editor::properties_editor::{
         light_data_editor::energy_source_editor::EnergySourceEditor, use_set_node_change_property,
     },
@@ -21,11 +20,7 @@ use dioxus::prelude::*;
 pub fn LightDataEditor(light_data_builder: LightDataBuilder, property_key: String) -> Element {
     let light_data_builder_sig = use_signal(|| light_data_builder.clone());
 
-    use_set_node_change_property(
-        &property_key,
-        light_data_builder.clone(),
-        light_data_builder_sig,
-    );
+    use_set_node_change_property(&property_key, light_data_builder, light_data_builder_sig);
 
     let mut accordion_item_content = vec![rsx! {
     SourceLightDataBuilderSelector {light_data_builder_sig }}];

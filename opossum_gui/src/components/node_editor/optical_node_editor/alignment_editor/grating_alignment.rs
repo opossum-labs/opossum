@@ -6,9 +6,8 @@ use crate::{
     components::node_editor::{
         CallbackWrapper,
         inputs::input_components::{LabeledInput, LabeledSelect},
-        optical_node_editor::{
-            alignment_editor::{RotationAlignmentInputs, TranslationAlignmentInputs},
-            properties_editor::use_update_signal_with_reactive_prop,
+        optical_node_editor::alignment_editor::{
+            RotationAlignmentInputs, TranslationAlignmentInputs,
         },
     },
 };
@@ -66,9 +65,6 @@ pub fn LittrowConfigEditor(
 ) -> Element {
     let incident_angle_sig = use_signal(|| true);
     let mut reference_wavelength_sig = use_signal(|| nanometer!(1053.));
-    // use_update_signal_with_reactive_prop(incident, incident_angle_sig);
-    // use_update_signal_with_reactive_prop(wavelength, reference_wavelength_sig);
-
     rsx! {
         InOrOutgoingFromLittrowSelector { incident_angle_sig }
         LabeledInput {

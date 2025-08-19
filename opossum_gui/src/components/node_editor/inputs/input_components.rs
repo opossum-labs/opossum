@@ -152,20 +152,18 @@ pub fn LabeledInput(
     #[props(default = false)] readonly: bool,
 ) -> Element {
     let step = if r#type == "number" && step.is_none() {
-        if let Ok(val) = value.parse::<f64>() {
+        value.parse::<f64>().map_or(None, |val| {
             if relative_eq!(val, 0.) {
                 Some("1.".to_owned())
             } else {
                 Some(format!(
                     "{}",
-                    f64::powf(10., (val.abs().log(10.) - 2.).floor())
+                    f64::powf(10., (val.abs().log10() - 2.).floor())
                 ))
             }
-        } else {
-            None
-        }
+        })
     } else {
-        step.map(|s| s.to_owned())
+        step.map(std::borrow::ToOwned::to_owned)
     };
     rsx! {
         div { class: "form-floating border-start", "data-mdb-input-init": "",
