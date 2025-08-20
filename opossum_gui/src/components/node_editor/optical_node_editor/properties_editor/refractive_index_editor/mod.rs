@@ -18,19 +18,14 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
-    node_config_editor::NodeChange,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 
 #[component]
-pub fn RefractiveIndexEditor(
-    ref_ind_type: RefractiveIndexType,
-    property_key: String,
-    node_change: Signal<Option<NodeChange>>,
-) -> Element {
+pub fn RefractiveIndexEditor(ref_ind_type: RefractiveIndexType, property_key: String) -> Element {
     let mut ref_ind_type_sig = use_signal(|| ref_ind_type.clone());
 
-    use_set_node_change_property(&property_key, ref_ind_type, ref_ind_type_sig, node_change);
+    use_set_node_change_property(&property_key, ref_ind_type, ref_ind_type_sig);
 
     let select_id = format!("refractiveIndexProperty{property_key}").to_camel_case();
     rsx! {
@@ -53,19 +48,21 @@ pub fn RefractiveIndexEditor(
     }
 }
 
-fn get_refractive_index_input_data(ref_ind_sig: Signal<RefractiveIndexType>) -> Vec<InputData> {
-    match &*ref_ind_sig.read() {
+fn get_refractive_index_input_data(
+    ref_ind_type_sig: Signal<RefractiveIndexType>,
+) -> Vec<InputData> {
+    match &*ref_ind_type_sig.read() {
         RefractiveIndexType::Const(ref_ind) => {
-            ConstRefParam::to_input_data_vec(ref_ind, ref_ind_sig)
+            ConstRefParam::to_input_data_vec(ref_ind, ref_ind_type_sig)
         }
         RefractiveIndexType::Sellmeier1(ref_ind) => {
-            Sellmeier1Param::to_input_data_vec(ref_ind, ref_ind_sig)
+            Sellmeier1Param::to_input_data_vec(ref_ind, ref_ind_type_sig)
         }
         RefractiveIndexType::Schott(ref_ind) => {
-            SchottParam::to_input_data_vec(ref_ind, ref_ind_sig)
+            SchottParam::to_input_data_vec(ref_ind, ref_ind_type_sig)
         }
         RefractiveIndexType::Conrady(ref_ind) => {
-            ConradyParam::to_input_data_vec(ref_ind, ref_ind_sig)
+            ConradyParam::to_input_data_vec(ref_ind, ref_ind_type_sig)
         }
     }
 }

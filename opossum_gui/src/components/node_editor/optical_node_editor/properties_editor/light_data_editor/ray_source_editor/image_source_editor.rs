@@ -30,7 +30,7 @@ pub fn ImageSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Elemen
     }
 }
 
-fn get_image_source_input_params(
+pub fn get_image_source_input_params(
     img_src: &ImageSrc,
     ray_data_builder_sig: Signal<RayDataBuilder>,
 ) -> Vec<InputData> {

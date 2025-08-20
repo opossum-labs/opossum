@@ -17,6 +17,7 @@ use crate::components::node_editor::{
         input_components::{InputParamLabeledInput, LabeledSelect},
         select_options_from_enum_iterator,
     },
+    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 
 #[component]
@@ -44,6 +45,10 @@ pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + 'st
     builder_sig: Signal<T>,
 ) -> Element {
     let spectral_filter_builder_sig = use_signal(|| spectral_filter_builder.clone());
+    use_update_signal_with_reactive_prop(
+        spectral_filter_builder.clone(),
+        spectral_filter_builder_sig,
+    );
 
     use_effect(move || {
         if spectral_filter_builder != *spectral_filter_builder_sig.read() {

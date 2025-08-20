@@ -1,12 +1,12 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::{HTTP_API_CLIENT, api};
+use crate::api;
 use dioxus::prelude::*;
 
 const LOGO: Asset = asset!("./assets/LogoBanner.svg");
 
 #[component]
 pub fn About(mut show_about: Signal<bool>) -> Element {
-    let future = use_resource(move || async move { api::get_version(&HTTP_API_CLIENT()).await });
+    let future = use_resource(move || async move { api::get_version().await });
     let about_body = match &*future.read_unchecked() {
         Some(Ok(response)) => rsx! {
             p { {format!("Opossum library: v.{}", response.opossum_version())} }

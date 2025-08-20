@@ -13,7 +13,6 @@ use opossum::{
     meter,
     nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
-    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     utils::geom_transformation::Isometry,
@@ -24,10 +23,11 @@ use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Debug, PartialEq)]
 pub struct NodeInfo {
     uuid: Uuid,
     name: String,
+    inverted: bool,
     node_type: String,
     input_ports: Vec<String>,
     output_ports: Vec<String>,
@@ -39,6 +39,7 @@ impl NodeInfo {
     pub const fn new(
         uuid: Uuid,
         name: String,
+        inverted: bool,
         node_type: String,
         input_ports: Vec<String>,
         output_ports: Vec<String>,
@@ -47,6 +48,7 @@ impl NodeInfo {
         Self {
             uuid,
             name,
+            inverted,
             node_type,
             input_ports,
             output_ports,
@@ -58,12 +60,14 @@ impl NodeInfo {
         self.uuid
     }
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
+    pub const fn inverted(&self) -> bool {
+        self.inverted
+    }
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
     pub fn node_type(&self) -> &str {
         &self.node_type
     }
@@ -122,6 +126,7 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
+                let inverted = node.inverted();
                 let input_ports = node.ports().names(&PortType::Input);
                 let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = node.gui_position().map(|position| (position.x, position.y));
@@ -129,6 +134,7 @@ async fn get_subnodes(
                 NodeInfo {
                     uuid: n.uuid(),
                     name,
+                    inverted,
                     node_type,
                     input_ports,
                     output_ports,
@@ -149,6 +155,7 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
+                let inverted = node.inverted();
                 let input_ports = node.ports().names(&PortType::Input);
                 let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = node.gui_position().map(|position| (position.x, position.y));
@@ -157,6 +164,7 @@ async fn get_subnodes(
                     uuid: n.uuid(),
                     name,
                     node_type,
+                    inverted,
                     input_ports,
                     output_ports,
                     gui_position,
@@ -189,7 +197,15 @@ pub async fn get_connections(
         scenery
             .connections()
             .iter()
-            .map(|c| ConnectInfo::new(c.0, c.1.clone(), c.2, c.3.clone(), c.4.get::<meter>()))
+            .map(|c| {
+                ConnectInfo::new(
+                    c.src_id,
+                    c.src_port.clone(),
+                    c.target_id,
+                    c.target_port.clone(),
+                    c.distance.get::<meter>(),
+                )
+            })
             .collect::<Vec<ConnectInfo>>()
     } else {
         // subgroup
@@ -201,12 +217,20 @@ pub async fn get_connections(
             .as_group_mut()?
             .connections()
             .iter()
-            .map(|c| ConnectInfo::new(c.0, c.1.clone(), c.2, c.3.clone(), c.4.get::<meter>()))
+            .map(|c| {
+                ConnectInfo::new(
+                    c.src_id,
+                    c.src_port.clone(),
+                    c.target_id,
+                    c.target_port.clone(),
+                    c.distance.get::<meter>(),
+                )
+            })
             .collect::<Vec<ConnectInfo>>()
     };
     Ok(Json(connect_infos))
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
 pub struct NewNode {
     node_type: String,
     gui_position: (f64, f64),
@@ -275,6 +299,7 @@ async fn post_subnode(
     let node_info = NodeInfo {
         uuid: new_node_uuid,
         name: node.name(),
+        inverted: node.inverted(),
         node_type: node.node_type(),
         input_ports: node.ports().names(&PortType::Input),
         output_ports: node.ports().names(&PortType::Output),
@@ -283,7 +308,7 @@ async fn post_subnode(
     drop(node);
     Ok(Json(node_info))
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
 pub struct NewRefNode {
     referring_node: Uuid,
     gui_position: (f64, f64),
@@ -349,7 +374,6 @@ async fn post_subreference(
     let referring_node = scenery.node_recursive(ref_node_info.referring_node)?;
     let ref_node = node.as_refnode_mut().unwrap();
     ref_node.assign_reference(&referring_node);
-    println!("{:?}", ref_node.node_attr());
     drop(referring_node);
     drop(node);
     let new_node_uuid = if group_uuid.is_nil() {
@@ -369,6 +393,7 @@ async fn post_subreference(
     let node_info = NodeInfo {
         uuid: new_node_uuid,
         name: node.name(),
+        inverted: node.inverted(),
         node_type: node.node_type(),
         input_ports: node.ports().names(&PortType::Input),
         output_ports: node.ports().names(&PortType::Output),
@@ -428,7 +453,7 @@ async fn post_node_position(
     }
 }
 
-/// Update the GUI name of an optica node
+/// Update the GUI name of an optical node
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "name of the optical node"),
@@ -644,6 +669,70 @@ async fn post_node_isometry(
     }
 }
 
+/// Update the inverted status of an optical node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "inverted status of the optical node"),
+    ),
+    request_body(content = String,
+        description = "updated inverted status of node",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, description = "Node inverted status successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/inversion/{uuid}")]
+async fn post_node_inversion(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    inverted: web::Json<bool>,
+) -> Result<Json<Vec<ConnectInfo>>, ErrorResponse> {
+    let uuid: Uuid = path.into_inner();
+    let inverted = inverted.into_inner();
+    let mut document = data.document.lock();
+    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+        node_ref
+            .optical_ref
+            .lock()
+            .unwrap()
+            .node_attr_mut()
+            .set_inverted(inverted);
+        match document
+            .scenery_mut()
+            .graph_mut()
+            .update_connections_of_single_inverted_node(uuid)
+        {
+            Ok(()) => {
+                let connect_infos = document
+                    .scenery()
+                    .connections()
+                    .iter()
+                    .map(|c| {
+                        ConnectInfo::new(
+                            c.src_id,
+                            c.src_port.clone(),
+                            c.target_id,
+                            c.target_port.clone(),
+                            c.distance.get::<meter>(),
+                        )
+                    })
+                    .collect::<Vec<ConnectInfo>>();
+                drop(document);
+                Ok(Json(connect_infos))
+            }
+            Err(e) => Err(ErrorResponse::new(400, "Opossum", e.to_string().as_str())),
+        }
+    } else {
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+        ))
+    }
+}
+
 /// Delete a node
 ///
 /// This function deletes a node. It also deletes reference nodes which refer to this node.
@@ -836,7 +925,7 @@ async fn patch_properties(
     Ok(web::Json(node_attr.clone()))
 }
 /// Connection Information
-#[derive(ToSchema, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(ToSchema, Clone, PartialEq, Serialize, Deserialize, Debug)]
 pub struct ConnectInfo {
     /// UUID of the source node
     src_uuid: Uuid,
@@ -1003,6 +1092,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);
     cfg.service(post_node_isometry);
+    cfg.service(post_node_inversion);
     cfg.service(post_analyzer_config);
 
     cfg.service(get_properties_ron);

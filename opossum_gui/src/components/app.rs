@@ -5,81 +5,60 @@ use crate::components::{
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
     node_editor::NodeConfigEditor,
-    scenery_editor::{GraphEditor, NodeEditorCommand, NodeElement},
+    scenery_editor::{GraphEditor, GraphState, GraphStoreAction, NodeElement, use_graph_processor},
 };
 use dioxus::prelude::*;
-// use crate::{api,HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
-// use std::path::PathBuf;
-// use opossum_backend::{create_data_dir, create_report_and_data_files};
-
-// pub async fn analyze_setup(path: PathBuf) {
-//     match api::analyze(&HTTP_API_CLIENT()).await {
-//         Ok(reports) => {
-//             if create_data_dir(&path).is_err() {
-//                 OPOSSUM_UI_LOGS
-//                     .write()
-//                     .add_log("Error while creating report-data directory");
-//             }
-//             // create_dot_file(&opossum_args.report_directory, document.scenery())?;
-//             for report in reports.iter().enumerate() {
-//                 if create_report_and_data_files(&path, report.1, report.0).is_err() {
-//                     OPOSSUM_UI_LOGS
-//                         .write()
-//                         .add_log("Error while creating report and data files");
-//                 }
-//             }
-//         }
-//         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-//     }
-// }
+use opossum_backend::scenery::NewAnalyzerInfo;
 
 #[component]
 pub fn App() -> Element {
-    let menu_item_selected = use_signal(|| None::<MenuSelection>);
-    let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
-    let cxt_command = use_signal(|| None::<CxtCommand>);
     let selected_node = use_signal(|| None::<NodeElement>);
+    let graph_state: Signal<GraphState> = use_signal(GraphState::default);
+    let graph_processor: Coroutine<GraphStoreAction> =
+        use_graph_processor(selected_node, graph_state);
+    let menu_item_selected = use_signal(|| None::<MenuSelection>);
+
+    let cxt_command = use_signal(|| None::<CxtCommand>);
     let project_directory = use_signal(|| Path::new("./").to_path_buf());
 
     use_effect(move || {
         let cxt_command = cxt_command.read();
         if let Some(cxt_command) = &*(cxt_command) {
             match cxt_command {
-                CxtCommand::AddRefNode(new_ref_node) => node_editor_command
-                    .set(Some(NodeEditorCommand::AddNodeRef(new_ref_node.clone()))),
+                CxtCommand::AddRefNode(new_ref_node) => {
+                    graph_processor.send(GraphStoreAction::AddOpticReference(*new_ref_node));
+                }
             }
         }
     });
 
     use_effect(move || {
-        node_editor_command.set(Some(NodeEditorCommand::UpdateActiveNode(selected_node())));
+        graph_processor.send(GraphStoreAction::UpdateActiveNode(selected_node()));
     });
+
     use_effect(move || {
         let menu_item = menu_item_selected.read();
         if let Some(menu_item) = &*(menu_item) {
             match menu_item {
-                MenuSelection::AddNode(node_selected) => {
-                    node_editor_command
-                        .set(Some(NodeEditorCommand::AddNode(node_selected.clone())));
+                MenuSelection::AddNode(node_type_string) => {
+                    graph_processor.send(GraphStoreAction::AddOpticNode(node_type_string.clone()));
                 }
-                MenuSelection::AddAnalyzer(analyzer_selected) => {
-                    node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(
-                        analyzer_selected.clone(),
-                    )));
+                MenuSelection::AddAnalyzer(analyzer_type) => {
+                    let new_analyzer_info =
+                        NewAnalyzerInfo::new(analyzer_type.clone(), (100.0, 100.0));
+                    graph_processor.send(GraphStoreAction::AddAnalyzer(new_analyzer_info));
                 }
                 MenuSelection::AutoLayout => {
-                    node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
+                    graph_processor.send(GraphStoreAction::OptimizeLayout);
                 }
                 MenuSelection::NewProject => {
-                    node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
+                    graph_processor.send(GraphStoreAction::DeleteScenery);
                 }
                 MenuSelection::OpenProject(path) => {
-                    let path = path.to_owned();
-                    node_editor_command.set(Some(NodeEditorCommand::LoadFile(path)));
+                    graph_processor.send(GraphStoreAction::LoadFromFile(path.to_owned()));
                 }
                 MenuSelection::SaveProject(path) => {
-                    let path = path.to_owned();
-                    node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
+                    graph_processor.send(GraphStoreAction::SaveToFile(path.to_owned()));
                 }
                 MenuSelection::WinMaximize => {
                     println!("App::Window maximize selected");
@@ -108,10 +87,7 @@ pub fn App() -> Element {
                     NodeConfigEditor { node_element_sig: selected_node }
                 }
                 div { class: "col px-0 graph-editor-container",
-                    GraphEditor {
-                        command: node_editor_command,
-                        node_selected: selected_node,
-                    }
+                    GraphEditor { graph_state, node_selected: selected_node }
                 }
             }
             div { class: "row footer",

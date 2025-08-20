@@ -49,9 +49,9 @@ impl IntoInputDataStrings<RefrIndexSellmeier1> for Sellmeier1Param {
     fn create_value_string(&self, obj: &RefrIndexSellmeier1) -> String {
         match self {
             Self::WaveLengthStart => {
-                format!("{:.3e}", obj.wavelength_range().start.get::<nanometer>())
+                format!("{:.3}", obj.wavelength_range().start.get::<nanometer>())
             }
-            Self::WavelengthEnd => format!("{:.3e}", obj.wavelength_range().end.get::<nanometer>()),
+            Self::WavelengthEnd => format!("{:.3}", obj.wavelength_range().end.get::<nanometer>()),
             Self::K1 => format!("{:.3e}", obj.k1()),
             Self::K2 => format!("{:.3e}", obj.k2()),
             Self::K3 => format!("{:.3e}", obj.k3()),

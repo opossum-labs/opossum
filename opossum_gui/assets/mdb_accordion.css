@@ -98,6 +98,10 @@ input[type=number] {
   height: 1rem;
 }
 
+.form-floating > input:disabled{
+  color: rgb(141, 141, 141) !important;
+}
+
 #laserlinesubmit, #energylaserlinesubmit{
     background-color:rgb(70, 70, 70) !important;
     width: 100%;

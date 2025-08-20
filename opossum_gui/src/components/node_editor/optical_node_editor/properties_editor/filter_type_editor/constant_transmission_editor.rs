@@ -4,7 +4,10 @@ use opossum_backend::{Property, Proptype};
 
 use crate::{
     OPOSSUM_UI_LOGS,
-    components::node_editor::{CallbackWrapper, inputs::input_components::LabeledInput},
+    components::node_editor::{
+        CallbackWrapper, inputs::input_components::LabeledInput,
+        optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
+    },
 };
 
 #[component]
@@ -14,6 +17,9 @@ pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Into<Proptype> + 'sta
 ) -> Element {
     let transmission_sig = use_signal(|| transmission);
     let property = use_context::<Property>();
+
+    use_update_signal_with_reactive_prop(transmission, transmission_sig);
+
     use_effect(move || {
         if relative_ne!(transmission, *transmission_sig.read()) {
             builder_sig.set((*transmission_sig.read()).into());

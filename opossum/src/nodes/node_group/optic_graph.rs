@@ -32,7 +32,26 @@ use std::{
 };
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
-pub type ConnectionInfo = (Uuid, String, Uuid, String, Length);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionInfo {
+    pub src_id: Uuid,
+    pub src_port: String,
+    pub target_id: Uuid,
+    pub target_port: String,
+    pub distance: Length,
+}
+
+impl ConnectionInfo {
+    pub fn invert(&mut self) {
+        let src_id_buf = self.src_id;
+        let src_port_buf = self.src_port.clone();
+        self.src_id = self.target_id;
+        self.src_port = self.target_port.clone();
+        self.target_id = src_id_buf;
+        self.target_port = src_port_buf;
+    }
+}
 
 /// Data structure representing an optical graph
 #[derive(Debug, Default, Clone)]
@@ -160,6 +179,27 @@ impl OpticGraph {
         }
         None
     }
+    /// Delete all edges of a node with the [`NodeIndex`] `node_index`
+    pub fn delete_edges_of_node(&mut self, node_index: NodeIndex) {
+        self.delete_edges_of_node_with_direction(node_index, Direction::Incoming);
+        self.delete_edges_of_node_with_direction(node_index, Direction::Outgoing);
+    }
+    /// Delete all edges of a node with the [`NodeIndex`] `node_index` and the [`Direction`] `dir`
+    /// Simple loop might not work, as the call `remove_edge` re-indexes the remaining edges
+    pub fn delete_edges_of_node_with_direction(&mut self, node_index: NodeIndex, dir: Direction) {
+        while self.g.edges_directed(node_index, dir).count() != 0 {
+            let edge_idx_vec = self
+                .g
+                .edges_directed(node_index, dir)
+                .map(|e| e.id())
+                .collect::<Vec<EdgeIndex>>();
+
+            if let Some(idx) = edge_idx_vec.first() {
+                self.g.remove_edge(*idx);
+            }
+        }
+    }
+
     /// Connect two optical nodes within this [`OpticGraph`].
     ///
     /// This function connects two optical nodes (referenced by their [`NodeIndex`]) with their respective port names and their geometrical distance
@@ -222,6 +262,7 @@ impl OpticGraph {
         let target = self.g.node_weight(target_node).ok_or_else(|| {
             OpossumError::OpticScenery("target node with given id does not exist".into())
         })?;
+
         if !target
             .optical_ref
             .lock()
@@ -345,6 +386,89 @@ impl OpticGraph {
             )))
         }
     }
+
+    /// Update the connections of a single inverted node.
+    ///
+    /// This function is used to update the connections of a single inverted node. It removes all
+    /// connections of the node and connects it to the next node in the graph.
+    /// # Arguments
+    /// * `node_id` - The [`Uuid`] of the node to update.
+    /// # Errors
+    /// This function will return an error if the node with the given [`Uuid`] does not exist.
+    /// # Panics
+    /// This function will panic if the mutex lock fails.
+    pub fn update_connections_of_single_inverted_node(&mut self, node_id: Uuid) -> OpmResult<()> {
+        let node_index = self.node_idx_by_uuid(node_id).ok_or_else(|| {
+            OpossumError::OpticScenery("node with given index does not exist".into())
+        })?;
+
+        let outgoing_edges: Vec<(EdgeIndex, NodeIndex, NodeIndex, LightFlow)> = self
+            .g
+            .edges_directed(node_index, Direction::Outgoing)
+            .map(|e| (e.id(), e.target(), e.source(), e.weight().clone()))
+            .collect();
+        let incoming_edges: Vec<(EdgeIndex, NodeIndex, NodeIndex, LightFlow)> = self
+            .g
+            .edges_directed(node_index, Direction::Incoming)
+            .map(|e| (e.id(), e.target(), e.source(), e.weight().clone()))
+            .collect();
+
+        self.delete_edges_of_node(node_index);
+
+        if !self.input_port_map.contains_node(node_id)
+            && !self.input_port_map.contains_node(node_id)
+        {
+            if let Some(changed_node) = self.g.node_weight(node_index).cloned() {
+                let optical_ref = changed_node.optical_ref.lock().unwrap();
+                let ports = optical_ref.ports();
+                let input_ports = ports.ports(&PortType::Input).clone();
+                let output_ports = ports.ports(&PortType::Output).clone();
+                drop(optical_ref);
+                if output_ports.len() == 1 && input_ports.len() == 1 {
+                    if let Some(outgoing_edge) = outgoing_edges.first() {
+                        if outgoing_edges.len() == 1 {
+                            if let (Some((output_port, _)), Some(target_node)) = (
+                                output_ports.first_key_value(),
+                                self.g.node_weight(outgoing_edge.1),
+                            ) {
+                                self.connect_nodes(
+                                    node_id,
+                                    output_port,
+                                    target_node.uuid(),
+                                    outgoing_edge.3.target_port(),
+                                    *outgoing_edge.3.distance(),
+                                )?;
+                            }
+                        }
+                    }
+                    if let Some(incoming_edge) = incoming_edges.first() {
+                        if incoming_edges.len() == 1 {
+                            if let (Some((input_port, _)), Some(src_node)) = (
+                                input_ports.first_key_value(),
+                                self.g.node_weight(incoming_edge.2),
+                            ) {
+                                self.connect_nodes(
+                                    src_node.uuid(),
+                                    incoming_edge.3.src_port(),
+                                    node_id,
+                                    input_port,
+                                    *incoming_edge.3.distance(),
+                                )?;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            //todo, what about port mapping when inverting a group or a node inside a group that is mapped to an input or output of the group?
+            //as for now, if this node is involved in any kind of port mapping delete all edges an remove its mapping
+            self.input_port_map.remove_all_from_uuid(node_id);
+            self.output_port_map.remove_all_from_uuid(node_id);
+        }
+
+        Ok(())
+    }
+
     /// Returns a reference to the input port map of this [`OpticGraph`].
     #[must_use]
     pub const fn port_map(&self, port_type: &PortType) -> &PortMap {
@@ -650,13 +774,13 @@ impl OpticGraph {
             let src_port = edge_ref.weight().src_port();
             let target_port = edge_ref.weight().target_port();
             let dist = edge_ref.weight().distance();
-            let connection: ConnectionInfo = (
+            let connection = ConnectionInfo {
                 src_id,
-                src_port.to_string(),
+                src_port: src_port.to_string(),
                 target_id,
-                target_port.to_string(),
-                *dist,
-            );
+                target_port: target_port.to_string(),
+                distance: *dist,
+            };
             connections.push(connection);
         }
         connections
@@ -1048,20 +1172,20 @@ impl Serialize for OpticGraph {
         let edgeidx = self
             .g
             .edge_indices()
-            .map(|e| {
-                (
-                    self.g
-                        .node_weight(self.g.edge_endpoints(e).unwrap().0)
-                        .unwrap()
-                        .uuid(),
-                    self.g.edge_weight(e).unwrap().src_port().to_owned(),
-                    self.g
-                        .node_weight(self.g.edge_endpoints(e).unwrap().1)
-                        .unwrap()
-                        .uuid(),
-                    self.g.edge_weight(e).unwrap().target_port().to_owned(),
-                    *self.g.edge_weight(e).unwrap().distance(),
-                )
+            .map(|e| ConnectionInfo {
+                src_id: self
+                    .g
+                    .node_weight(self.g.edge_endpoints(e).unwrap().0)
+                    .unwrap()
+                    .uuid(),
+                src_port: self.g.edge_weight(e).unwrap().src_port().to_owned(),
+                target_id: self
+                    .g
+                    .node_weight(self.g.edge_endpoints(e).unwrap().1)
+                    .unwrap()
+                    .uuid(),
+                target_port: self.g.edge_weight(e).unwrap().target_port().to_owned(),
+                distance: *self.g.edge_weight(e).unwrap().distance(),
             })
             .collect::<Vec<ConnectionInfo>>();
         graph.serialize_field("edges", &edgeidx)?;
@@ -1174,10 +1298,16 @@ impl<'de> Deserialize<'de> for OpticGraph {
                         .map_err(|e| de::Error::custom(e.to_string()))?;
                 }
                 for edge in &edges {
-                    g.connect_nodes(edge.0, &edge.1, edge.2, &edge.3, edge.4)
-                        .map_err(|e| {
-                            de::Error::custom(format!("connecting OpticGraph nodes failed: {e}"))
-                        })?;
+                    g.connect_nodes(
+                        edge.src_id,
+                        &edge.src_port,
+                        edge.target_id,
+                        &edge.target_port,
+                        edge.distance,
+                    )
+                    .map_err(|e| {
+                        de::Error::custom(format!("connecting OpticGraph nodes failed: {e}"))
+                    })?;
                 }
                 if let Some(input_map) = input_map {
                     // todo: do sanity check

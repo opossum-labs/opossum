@@ -23,14 +23,12 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
+    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
-use opossum_backend::{DefaultFromName, PosDistType};
-fn get_pos_dist_input_data(
-    pos_dist_type: PosDistType,
-    pos_dist_type_sig: Signal<PosDistType>,
-) -> Vec<InputData> {
-    match &pos_dist_type {
+use opossum_backend::{DefaultFromName, PosDistType, ray_data_builder::RayDataBuilder};
+fn get_pos_dist_input_data(pos_dist_type_sig: Signal<PosDistType>) -> Vec<InputData> {
+    match &*pos_dist_type_sig.read() {
         PosDistType::Random(r) => RandomParam::to_input_data_vec(r, pos_dist_type_sig),
         PosDistType::Sobol(s) => SobolParam::to_input_data_vec(s, pos_dist_type_sig),
         PosDistType::Grid(g) => GridParam::to_input_data_vec(g, pos_dist_type_sig),
@@ -64,14 +62,24 @@ pub fn RayPositionDistributionSelector(pos_dist_type_sig: Signal<PosDistType>) -
 
 #[component]
 pub fn NodePosDistInputs(pos_dist_type_sig: Signal<PosDistType>) -> Element {
-    let inputs: Vec<InputData> = get_pos_dist_input_data(pos_dist_type_sig(), pos_dist_type_sig);
+    let inputs: Vec<InputData> = get_pos_dist_input_data(pos_dist_type_sig);
     rsx! {
         RowedInputs { inputs }
     }
 }
 
 #[component]
-pub fn PositionDistributionEditor(pos_dist_type_sig: Signal<PosDistType>) -> Element {
+pub fn PositionDistributionEditor(pos_dist_type: PosDistType) -> Element {
+    let mut ray_data_builder_sig = use_context::<Signal<RayDataBuilder>>();
+    let pos_dist_type_sig = use_signal(|| pos_dist_type);
+    use_update_signal_with_reactive_prop(pos_dist_type, pos_dist_type_sig);
+
+    use_effect(move || {
+        ray_data_builder_sig
+            .write()
+            .set_pos_dist(*pos_dist_type_sig.read());
+    });
+
     let accordion_item_content = rsx! {
         RayPositionDistributionSelector { pos_dist_type_sig }
         NodePosDistInputs { pos_dist_type_sig }

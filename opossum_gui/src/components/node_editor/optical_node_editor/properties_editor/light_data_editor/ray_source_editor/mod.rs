@@ -5,19 +5,31 @@ mod image_source_editor;
 mod point_source_editor;
 mod ray_type_selection;
 
-use collimated_source_editor::CollimatedSourceEditor;
 use dioxus::prelude::*;
-use image_source_editor::ImageSourceEditor;
 use opossum_backend::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder};
-use point_source_editor::PointSourceEditor;
 use ray_type_selection::RayDataBuilderSelector;
+
+use crate::components::node_editor::{
+    accordion::ElementList,
+    inputs::input_components::RowedInputs,
+    optical_node_editor::properties_editor::{
+        light_data_editor::ray_source_editor::{
+            collimated_source_editor::ReferenceLengthEditor,
+            distribution_editor::DistributionEditor,
+            image_source_editor::get_image_source_input_params,
+        },
+        use_update_signal_with_reactive_prop,
+    },
+};
 
 #[component]
 pub fn RaySourceEditor(
     ray_data_builder: RayDataBuilder,
     light_data_builder_sig: Signal<LightDataBuilder>,
 ) -> Element {
-    let ray_data_builder_sig = use_signal(|| ray_data_builder.clone());
+    let ray_data_builder_sig: Signal<RayDataBuilder> = use_signal(|| ray_data_builder.clone());
+    use_update_signal_with_reactive_prop(ray_data_builder.clone(), ray_data_builder_sig);
+    use_context_provider(|| ray_data_builder_sig);
 
     use_effect(move || {
         if ray_data_builder != *ray_data_builder_sig.read() {
@@ -27,10 +39,30 @@ pub fn RaySourceEditor(
         }
     });
 
+    let mut element_list = vec![rsx! {RayDataBuilderSelector { ray_data_builder_sig }}];
+
+    match &*ray_data_builder_sig.read() {
+        RayDataBuilder::Raw(_) => {}
+        RayDataBuilder::Collimated(_) => {
+            element_list.push(rsx! {
+                DistributionEditor {}
+            });
+        }
+        RayDataBuilder::PointSrc(point_src) => {
+            element_list.push(rsx! {
+                ReferenceLengthEditor { point_src: point_src.clone() }
+                DistributionEditor {}
+            });
+        }
+        RayDataBuilder::Image(img_src) => {
+            let inputs = get_image_source_input_params(img_src, ray_data_builder_sig);
+            element_list.push(rsx! {
+                RowedInputs { inputs }
+            });
+        }
+    }
+
     rsx! {
-        RayDataBuilderSelector { ray_data_builder_sig }
-        PointSourceEditor { ray_data_builder_sig }
-        CollimatedSourceEditor { ray_data_builder_sig }
-        ImageSourceEditor { ray_data_builder_sig }
+        ElementList { element_list }
     }
 }

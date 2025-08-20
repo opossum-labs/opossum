@@ -1,6 +1,7 @@
 //! General api calls
 
-use super::http_client::HTTPClient;
+use crate::HTTP_API_CLIENT;
+
 use opossum_backend::{
     AnalyzerType,
     general::{NodeType, VersionInfo},
@@ -14,8 +15,8 @@ use opossum_backend::{
 /// - the request fails (e.g. the base url is not reachable)
 /// - the response cannot be deserialized into a string
 #[allow(dead_code)]
-pub async fn get_api_welcome(client: &HTTPClient) -> Result<String, String> {
-    client.get::<String>("/api/").await
+pub async fn get_api_welcome() -> Result<String, String> {
+    HTTP_API_CLIENT().get::<String>("/api/").await
 }
 
 /// Send reqeust to get the version of the opossum backend and the opossum library.
@@ -24,8 +25,8 @@ pub async fn get_api_welcome(client: &HTTPClient) -> Result<String, String> {
 ///
 /// This function will return an error if
 /// - the `VersionInfo` struct cannot be deserialized
-pub async fn get_version(client: &HTTPClient) -> Result<VersionInfo, String> {
-    client.get::<VersionInfo>("/api/version").await
+pub async fn get_version() -> Result<VersionInfo, String> {
+    HTTP_API_CLIENT().get::<VersionInfo>("/api/version").await
 }
 
 /// Send a request to get all available node types.
@@ -34,8 +35,10 @@ pub async fn get_version(client: &HTTPClient) -> Result<VersionInfo, String> {
 ///
 /// This function will return an error if
 /// - the response cannot be deserialized into a vector of [`NodeType`] structs.
-pub async fn get_node_types(client: &HTTPClient) -> Result<Vec<NodeType>, String> {
-    client.get::<Vec<NodeType>>("/api/node_types").await
+pub async fn get_node_types() -> Result<Vec<NodeType>, String> {
+    HTTP_API_CLIENT()
+        .get::<Vec<NodeType>>("/api/node_types")
+        .await
 }
 
 /// Send a request to get all available anaylzer types.
@@ -44,8 +47,10 @@ pub async fn get_node_types(client: &HTTPClient) -> Result<Vec<NodeType>, String
 ///
 /// This function will return an error if
 /// - the response cannot be deserialized into a vector of [`AnalyzerType`] structs.
-pub async fn get_analyzer_types(client: &HTTPClient) -> Result<Vec<AnalyzerType>, String> {
-    client.get::<Vec<AnalyzerType>>("/api/analyzer_types").await
+pub async fn get_analyzer_types() -> Result<Vec<AnalyzerType>, String> {
+    HTTP_API_CLIENT()
+        .get::<Vec<AnalyzerType>>("/api/analyzer_types")
+        .await
 }
 
 // /// Send a request to analyze current setup.
@@ -62,6 +67,8 @@ pub async fn get_analyzer_types(client: &HTTPClient) -> Result<Vec<AnalyzerType>
 ///
 /// This function shuts down the backend server. No further communication is possible after this call.
 #[allow(dead_code)]
-pub async fn post_terminate(client: &HTTPClient) {
-    let _ = client.client().post("/api/terminate").send().await;
+pub async fn post_terminate() {
+    let _ = HTTP_API_CLIENT()
+        .post::<String, String>("/api/terminate", String::new())
+        .await;
 }

@@ -3,12 +3,12 @@
 use crate::components::node_editor::CallbackWrapper;
 use crate::components::node_editor::inputs::input_components::{LabeledInput, LabeledSelect};
 use crate::components::node_editor::inputs::select_options_from_enum_iterator;
-use crate::components::node_editor::node_config_editor::NodeChange;
+use crate::components::node_editor::node_config_editor::NodeChangeAction;
 use crate::components::node_editor::optical_node_editor::general_editor::{
     NodeIDInput, NodeTypeInput,
 };
 use crate::components::scenery_editor::NodeElement;
-use crate::{HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api};
+use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_backend::{
     AnalyzerType, DefaultFromName, FluenceEstimator, GhostFocusConfig, MissedSurfaceStrategy,
@@ -21,7 +21,7 @@ pub fn AnalyzerNodeEditor(node_element_sig: Signal<Option<NodeElement>>) -> Elem
     let resource_future = use_resource(move || async move {
         let node = node_element_sig.read();
         if let Some(node) = &*(node) {
-            match api::get_analyzer_info(&HTTP_API_CLIENT(), node.id()).await {
+            match api::get_analyzer_info(node.id()).await {
                 Ok(analyzer_info) => Some(analyzer_info),
                 Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -76,13 +76,13 @@ pub fn AnalyzerNodeEditor(node_element_sig: Signal<Option<NodeElement>>) -> Elem
 #[component]
 pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
     let mut ray_trace_config_sig = use_signal(|| ray_trace_config);
-    let mut node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+    let mut node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
 
     use_effect(move || {
         if ray_trace_config != *ray_trace_config_sig.read() {
-            node_change_signal.set(Some(NodeChange::AnalyzerType(AnalyzerType::RayTrace(
-                *ray_trace_config_sig.read(),
-            ))));
+            node_change_signal.set(Some(NodeChangeAction::AnalyzerType(
+                AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
+            )));
         }
     });
 
@@ -124,13 +124,17 @@ pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
                         OPOSSUM_UI_LOGS
                             .write()
                             .add_log("Minimum ray energy must be non-negative.");
-                        ray_trace_config_sig.write().set_min_energy_per_ray(old_value).unwrap_or_else(|err| {
+                        ray_trace_config_sig
+                            .write()
+                            .set_min_energy_per_ray(old_value)
+                            .unwrap_or_else(|err| {
                                 OPOSSUM_UI_LOGS.write().add_log(&err.to_string());
                             });
                     } else {
                         ray_trace_config_sig
                             .write()
-                            .set_min_energy_per_ray(picojoule!(min_ray_energy)).unwrap_or_else(|err| {
+                            .set_min_energy_per_ray(picojoule!(min_ray_energy))
+                            .unwrap_or_else(|err| {
                                 OPOSSUM_UI_LOGS.write().add_log(&err.to_string());
                             });
                     }
@@ -162,13 +166,13 @@ pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
 #[component]
 pub fn GhostFocusEditor(ghost_focus_config: GhostFocusConfig) -> Element {
     let mut ghost_focus_config_sig = use_signal(|| ghost_focus_config.clone());
-    let mut node_change_signal = use_context::<Signal<Option<NodeChange>>>();
+    let mut node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
 
     use_effect(move || {
         if ghost_focus_config != *ghost_focus_config_sig.read() {
-            node_change_signal.set(Some(NodeChange::AnalyzerType(AnalyzerType::GhostFocus(
-                ghost_focus_config_sig.read().clone(),
-            ))));
+            node_change_signal.set(Some(NodeChangeAction::AnalyzerType(
+                AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
+            )));
         }
     });
 

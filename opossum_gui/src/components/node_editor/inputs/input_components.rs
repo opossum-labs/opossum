@@ -1,5 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
+use approx::relative_eq;
 use dioxus::prelude::*;
 use itertools::Itertools;
 
@@ -98,6 +99,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 value: input_data.value,
                 onchange: input_data.callback_opt,
                 r#type: input_data.input_param.rtype(),
+                readonly: input_data.readonly,
             }
         }
     }
@@ -150,9 +152,18 @@ pub fn LabeledInput(
     #[props(default = false)] readonly: bool,
 ) -> Element {
     let step = if r#type == "number" && step.is_none() {
-        Some("0.01")
+        value.parse::<f64>().map_or(None, |val| {
+            if relative_eq!(val, 0.) {
+                Some("1.".to_owned())
+            } else {
+                Some(format!(
+                    "{}",
+                    f64::powf(10., (val.abs().log10() - 2.).floor())
+                ))
+            }
+        })
     } else {
-        step
+        step.map(std::borrow::ToOwned::to_owned)
     };
     rsx! {
         div { class: "form-floating border-start", "data-mdb-input-init": "",

@@ -1,7 +1,4 @@
-use crate::components::node_editor::{
-    CallbackWrapper, inputs::input_components::LabeledInput,
-    optical_node_editor::properties_editor::light_data_editor::ray_source_editor::distribution_editor::DistributionEditor,
-};
+use crate::components::node_editor::{CallbackWrapper, inputs::input_components::LabeledInput};
 use dioxus::prelude::*;
 use opossum_backend::{
     millimeter,
@@ -10,10 +7,8 @@ use opossum_backend::{
 use uom::si::length::millimeter;
 
 #[component]
-pub fn ReferenceLengthEditor(
-    ray_data_builder_sig: Signal<RayDataBuilder>,
-    point_src: PointSrc,
-) -> Element {
+pub fn ReferenceLengthEditor(point_src: PointSrc) -> Element {
+    let mut ray_data_builder_sig = use_context::<Signal<RayDataBuilder>>();
     rsx! {
         LabeledInput {
             id: "pointsrcRefLength",
@@ -30,20 +25,6 @@ pub fn ReferenceLengthEditor(
                 }
             }),
             r#type: "number",
-        }
-    }
-}
-
-#[component]
-pub fn CollimatedSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
-    match &*ray_data_builder_sig.read() {
-        RayDataBuilder::Collimated(_) => {
-            rsx! {
-                DistributionEditor { ray_data_builder_sig }
-            }
-        }
-        _ => {
-            rsx! {}
         }
     }
 }

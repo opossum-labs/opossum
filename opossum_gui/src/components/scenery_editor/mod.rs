@@ -8,5 +8,5 @@ mod nodes;
 mod ports;
 
 pub use graph_editor::GraphEditor;
-pub use graph_editor::NodeEditorCommand;
+pub use graph_store::{GraphState, GraphStoreAction, use_graph_processor};
 pub use node::{NodeElement, NodeType};
