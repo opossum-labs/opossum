@@ -1,6 +1,7 @@
 //! Scenery api calls
 
-use super::http_client::HTTPClient;
+use crate::HTTP_API_CLIENT;
+
 use opossum_backend::{AnalyzerInfo, scenery::NewAnalyzerInfo};
 use uuid::Uuid;
 
@@ -10,8 +11,8 @@ use uuid::Uuid;
 ///
 /// This function will return an error if
 /// - the request fails (e.g. the scenery is not valid)
-pub async fn delete_scenery(client: &HTTPClient) -> Result<String, String> {
-    client
+pub async fn delete_scenery() -> Result<String, String> {
+    HTTP_API_CLIENT()
         .delete::<String, String>("/api/scenery/", String::new())
         .await
 }
@@ -21,11 +22,8 @@ pub async fn delete_scenery(client: &HTTPClient) -> Result<String, String> {
 ///
 /// This function will return an error if
 /// - the provided [`AnalyzerType`] cannot be serialized.
-pub async fn post_add_analyzer(
-    client: &HTTPClient,
-    new_analyzer_info: NewAnalyzerInfo,
-) -> Result<Uuid, String> {
-    client
+pub async fn post_add_analyzer(new_analyzer_info: NewAnalyzerInfo) -> Result<Uuid, String> {
+    HTTP_API_CLIENT()
         .post::<NewAnalyzerInfo, Uuid>("/api/scenery/analyzers", new_analyzer_info)
         .await
 }
@@ -37,8 +35,8 @@ pub async fn post_add_analyzer(
 ///
 /// This function will return an error if
 /// - the returned data cannot be parsed (deserialized) into the correct data type.
-pub async fn get_analyzers(client: &HTTPClient) -> Result<Vec<AnalyzerInfo>, String> {
-    client
+pub async fn get_analyzers() -> Result<Vec<AnalyzerInfo>, String> {
+    HTTP_API_CLIENT()
         .get::<Vec<AnalyzerInfo>>("/api/scenery/analyzers")
         .await
 }
@@ -48,9 +46,9 @@ pub async fn get_analyzers(client: &HTTPClient) -> Result<Vec<AnalyzerInfo>, Str
 ///
 /// This function will return an error if
 /// - the Analyzer with the given id was not found.
-pub async fn delete_analyzer(client: &HTTPClient, id: Uuid) -> Result<String, String> {
-    client
-        .delete::<String, String>(&format!("/api/scenery/analyzers/{id}"), String::new())
+pub async fn delete_analyzer(id: Uuid) -> Result<Uuid, String> {
+    HTTP_API_CLIENT()
+        .delete::<String, Uuid>(&format!("/api/scenery/analyzers/{id}"), String::new())
         .await
 }
 /// Send request to receive the `OPM` file representation (as string) of the scenery.
@@ -59,8 +57,8 @@ pub async fn delete_analyzer(client: &HTTPClient, id: Uuid) -> Result<String, St
 /// # Errors
 ///
 /// This function will return an error if .
-pub async fn get_opm_file(client: &HTTPClient) -> Result<String, String> {
-    client.get_raw("/api/scenery/opmfile").await
+pub async fn get_opm_file() -> Result<String, String> {
+    HTTP_API_CLIENT().get_raw("/api/scenery/opmfile").await
 }
 /// Send request to load a scenery from an `OPM` file (string).
 ///
@@ -69,6 +67,8 @@ pub async fn get_opm_file(client: &HTTPClient) -> Result<String, String> {
 /// This function will return an error if
 /// - the `OPM` file cannot be parsed
 /// - the scenery cannot be constructed from the file data.
-pub async fn post_opm_file(client: &HTTPClient, opm_string: String) -> Result<String, String> {
-    client.post_string("/api/scenery/opmfile", opm_string).await
+pub async fn post_opm_file(opm_string: String) -> Result<String, String> {
+    HTTP_API_CLIENT()
+        .post_string("/api/scenery/opmfile", opm_string)
+        .await
 }

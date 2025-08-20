@@ -1,7 +1,7 @@
 // constants for GraphEditor
 pub const ZOOM_SENSITIVITY: f64 = 1.1;
 pub const MAX_ZOOM: f64 = 2.5;
-pub const MIN_ZOOM: f64 = 0.1;
+pub const MIN_ZOOM: f64 = 0.4;
 
 // constants for EDGE drawing
 pub const EDGE_BEZIER_OFFSET: f64 = 50.0;

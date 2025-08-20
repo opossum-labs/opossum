@@ -4,42 +4,16 @@ use crate::components::{
     context_menu::cx_menu::{ContextMenu, CxtCommand},
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
-    node_editor::NodeConfigEditor,
-    scenery_editor::{GraphEditor, NodeEditorCommand, NodeElement},
+    scenery_editor::{GraphEditor, NodeEditorCommand},
     simulation::simulation_window::SimulationWindow,
 };
 use dioxus::prelude::*;
-// use crate::{api,HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
-// use std::path::PathBuf;
-// use opossum_backend::{create_data_dir, create_report_and_data_files};
-
-// pub async fn analyze_setup(path: PathBuf) {
-//     match api::analyze(&HTTP_API_CLIENT()).await {
-//         Ok(reports) => {
-//             if create_data_dir(&path).is_err() {
-//                 OPOSSUM_UI_LOGS
-//                     .write()
-//                     .add_log("Error while creating report-data directory");
-//             }
-//             // create_dot_file(&opossum_args.report_directory, document.scenery())?;
-//             for report in reports.iter().enumerate() {
-//                 if create_report_and_data_files(&path, report.1, report.0).is_err() {
-//                     OPOSSUM_UI_LOGS
-//                         .write()
-//                         .add_log("Error while creating report and data files");
-//                 }
-//             }
-//         }
-//         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-//     }
-// }
 
 #[component]
 pub fn App() -> Element {
-    let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
+    let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
-    let selected_node = use_signal(|| None::<NodeElement>);
     let project_directory = use_signal(|| Path::new("./").to_path_buf());
     let mut run_simulation = use_signal(|| false);
 
@@ -47,15 +21,13 @@ pub fn App() -> Element {
         let cxt_command = cxt_command.read();
         if let Some(cxt_command) = &*(cxt_command) {
             match cxt_command {
-                CxtCommand::AddRefNode(new_ref_node) => node_editor_command
-                    .set(Some(NodeEditorCommand::AddNodeRef(new_ref_node.clone()))),
+                CxtCommand::AddRefNode(new_ref_node) => {
+                    node_editor_command.set(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
+                }
             }
         }
     });
 
-    use_effect(move || {
-        node_editor_command.set(Some(NodeEditorCommand::UpdateActiveNode(selected_node())));
-    });
     use_effect(move || {
         let menu_item = menu_item_selected.read();
         if let Some(menu_item) = &*(menu_item) {
@@ -107,17 +79,7 @@ pub fn App() -> Element {
                     MenuBar { menu_item_selected, project_directory }
                 }
             }
-            div { class: "row main-content-row",
-                div { style: "min-width:256px;", class: "col-2 sidebar",
-                    NodeConfigEditor { node_element_sig: selected_node }
-                }
-                div { class: "col px-0 graph-editor-container",
-                    GraphEditor {
-                        command: node_editor_command,
-                        node_selected: selected_node,
-                    }
-                }
-            }
+            GraphEditor { command: node_editor_command}
             div { class: "row footer",
                 div { class: "col", Logger {} }
             }

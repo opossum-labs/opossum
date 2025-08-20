@@ -28,19 +28,36 @@ impl Ports {
     pub const fn output_ports(&self) -> &Vec<String> {
         &self.output_ports
     }
+    pub fn invert_ports(&mut self) {
+        let input_buffer = self.input_ports.clone();
+        self.input_ports = self.output_ports.clone();
+        self.output_ports = input_buffer;
+    }
 }
 
 #[component]
-pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> Element {
-    let mut editor_status = use_context::<EditorState>();
+pub fn NodePort(
+    node: NodeElement,
+    port_name: String,
+    port_type: PortType,
+    inverted_node: bool,
+) -> Element {
+    let mut editor_status = use_context::<Signal<EditorState>>();
     let rel_port_position = node.rel_port_position(&port_type, &port_name);
     let abs_port_position = node.abs_port_position(&port_type, &port_name);
     let node_id = node.id();
-    let port_class = if port_type == PortType::Input {
+    let port_class = if inverted_node {
+        if port_type == PortType::Input {
+            "output-port"
+        } else {
+            "input-port"
+        }
+    } else if port_type == PortType::Input {
         "input-port"
     } else {
         "output-port"
     };
+
     rsx! {
         div {
             class: "port {port_class}",
@@ -60,6 +77,7 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
                 let port_type = port_type.clone();
                 move |event: MouseEvent| {
                     editor_status
+                        .write()
                         .drag_status
                         .set(
                             DragStatus::Edge(NewEdgeCreationStart {
@@ -74,7 +92,7 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
             },
             onmouseenter: {
                 move |event: MouseEvent| {
-                    let edge_increation = editor_status.edge_in_creation.read().clone();
+                    let edge_increation = editor_status.read().edge_in_creation.read().clone();
                     if let Some(mut edge_in_creation) = edge_increation {
                         edge_in_creation
                             .set_end_port(
@@ -84,17 +102,17 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
                                     port_type: port_type.clone(),
                                 }),
                             );
-                        editor_status.edge_in_creation.set(Some(edge_in_creation));
+                        editor_status.write().edge_in_creation.set(Some(edge_in_creation));
                         event.stop_propagation();
                     }
                 }
             },
             onmouseleave: {
                 move |event: MouseEvent| {
-                    let edge_increation = editor_status.edge_in_creation.read().clone();
+                    let edge_increation = editor_status.read().edge_in_creation.read().clone();
                     if let Some(mut edge_in_creation) = edge_increation {
                         edge_in_creation.set_end_port(None);
-                        editor_status.edge_in_creation.set(Some(edge_in_creation));
+                        editor_status.write().edge_in_creation.set(Some(edge_in_creation));
                         event.stop_propagation();
                     }
                 }
@@ -104,13 +122,14 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
 }
 
 #[component]
-pub fn NodePorts(node: NodeElement) -> Element {
+pub fn NodePorts(node: NodeElement, inverted: bool) -> Element {
     rsx! {
         for in_port in node.input_ports() {
             NodePort {
                 node: node.clone(),
                 port_name: in_port,
                 port_type: PortType::Input,
+                inverted_node: inverted,
             }
         }
         for out_port in node.output_ports() {
@@ -118,6 +137,7 @@ pub fn NodePorts(node: NodeElement) -> Element {
                 node: node.clone(),
                 port_name: out_port,
                 port_type: PortType::Output,
+                inverted_node: inverted,
             }
         }
     }

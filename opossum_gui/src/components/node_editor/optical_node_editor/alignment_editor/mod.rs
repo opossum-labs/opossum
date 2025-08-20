@@ -8,7 +8,8 @@ use crate::{
         CallbackWrapper,
         accordion::AccordionItem,
         inputs::{InputData, input_components::RowedInputs},
-        node_config_editor::NodeChange,
+        node_config_editor::NodeChangeAction,
+        optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
 use dioxus::prelude::*;
@@ -21,23 +22,28 @@ use uom::si::{angle::degree, length::millimeter};
 
 #[component]
 pub fn AlignmentEditor(
-    alignment: Option<Isometry>,
+    alignment: Isometry,
     node_properties_sig: Signal<Properties>,
     node_type: String,
 ) -> Element {
-    let mut node_change_sig = use_context::<Signal<Option<NodeChange>>>();
-    let iso_sig = use_signal(|| alignment.unwrap_or_else(Isometry::identity));
-
-    use_effect(move || node_change_sig.set(Some(NodeChange::Alignment(*iso_sig.read()))));
+    let alignment_sig = use_signal(|| alignment);
+    use_context_provider(|| alignment_sig);
+    use_update_signal_with_reactive_prop(alignment, alignment_sig);
+    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+    use_effect(move || {
+        if *alignment_sig.read() != alignment {
+            node_config_processor.send(NodeChangeAction::Alignment(*alignment_sig.read()));
+        }
+    });
 
     let accordion_content = if node_type == "reflective grating" {
         rsx! {
-            GratingAlignmentInputs { iso_sig, node_properties_sig }
+            GratingAlignmentInputs { alignment_sig, node_properties_sig }
         }
     } else {
         rsx! {
-            RotationAlignmentInputs { iso_sig, axes_skip: None }
-            TranslationAlignmentInputs { iso_sig }
+            RotationAlignmentInputs { alignment_sig, axes_skip: None }
+            TranslationAlignmentInputs { alignment_sig }
         }
     };
     rsx! {
@@ -52,8 +58,8 @@ pub fn AlignmentEditor(
 }
 
 #[component]
-fn TranslationAlignmentInputs(iso_sig: Signal<Isometry>) -> Element {
-    let input_data = get_translation_alignment_input_data(*iso_sig.read(), iso_sig);
+fn TranslationAlignmentInputs(alignment_sig: Signal<Isometry>) -> Element {
+    let input_data = get_translation_alignment_input_data(alignment_sig);
 
     rsx! {
         RowedInputs { inputs: input_data }
@@ -62,11 +68,10 @@ fn TranslationAlignmentInputs(iso_sig: Signal<Isometry>) -> Element {
 
 #[component]
 fn RotationAlignmentInputs(
-    iso_sig: Signal<Isometry>,
+    alignment_sig: Signal<Isometry>,
     axes_skip: Option<Vec<RotationAxis>>,
 ) -> Element {
-    let input_data =
-        get_rotation_alignment_input_data(*iso_sig.read(), iso_sig, axes_skip.as_ref());
+    let input_data = get_rotation_alignment_input_data(alignment_sig, axes_skip.as_ref());
     rsx! {
         RowedInputs { inputs: input_data }
     }
@@ -102,10 +107,7 @@ fn on_isometry_option_change(
     })
 }
 
-fn get_translation_alignment_input_data(
-    iso: Isometry,
-    iso_sig: Signal<Isometry>,
-) -> Vec<InputData> {
+fn get_translation_alignment_input_data(iso_sig: Signal<Isometry>) -> Vec<InputData> {
     let id_add_on = "inputNodeAlignmentTrans";
     let mut alignment_inputs = Vec::<InputData>::new();
     for trans_axis in TranslationAxis::iter() {
@@ -115,7 +117,10 @@ fn get_translation_alignment_input_data(
             on_isometry_option_change(iso_sig, AlignmentAxis::Translation(trans_axis)),
             format!(
                 "{:.3}",
-                iso.translation_of_axis(trans_axis).get::<millimeter>()
+                iso_sig
+                    .read()
+                    .translation_of_axis(trans_axis)
+                    .get::<millimeter>()
             ),
         ));
     }
@@ -123,7 +128,6 @@ fn get_translation_alignment_input_data(
 }
 
 fn get_rotation_alignment_input_data(
-    iso: Isometry,
     iso_sig: Signal<Isometry>,
     axes_skip: Option<&Vec<RotationAxis>>,
 ) -> Vec<InputData> {
@@ -139,7 +143,10 @@ fn get_rotation_alignment_input_data(
             rot_axis.into(),
             id_add_on,
             on_isometry_option_change(iso_sig, AlignmentAxis::Rotation(rot_axis)),
-            format!("{:.3}", iso.rotation_of_axis(rot_axis).get::<degree>()),
+            format!(
+                "{:.3}",
+                iso_sig.read().rotation_of_axis(rot_axis).get::<degree>()
+            ),
         ));
     }
     alignment_inputs

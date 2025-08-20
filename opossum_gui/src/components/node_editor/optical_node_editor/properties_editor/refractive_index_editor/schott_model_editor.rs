@@ -50,9 +50,9 @@ impl IntoInputDataStrings<RefrIndexSchott> for SchottParam {
     fn create_value_string(&self, obj: &RefrIndexSchott) -> String {
         match self {
             Self::WaveLengthStart => {
-                format!("{:.3e}", obj.wavelength_range().start.get::<nanometer>())
+                format!("{:.3}", obj.wavelength_range().start.get::<nanometer>())
             }
-            Self::WavelengthEnd => format!("{:.3e}", obj.wavelength_range().end.get::<nanometer>()),
+            Self::WavelengthEnd => format!("{:.3}", obj.wavelength_range().end.get::<nanometer>()),
             Self::A => format!("{:.3e}", obj.a0()),
             Self::B => format!("{:.3e}", obj.a1()),
             Self::C => format!("{:.3e}", obj.a2()),

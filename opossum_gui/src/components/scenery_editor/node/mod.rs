@@ -1,5 +1,5 @@
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{AnalyzerType, PortType, usize_to_f64};
+use opossum_backend::{AnalyzerInfo, AnalyzerType, PortType, nodes::NodeInfo, usize_to_f64};
 use uuid::Uuid;
 mod graph_node_components;
 pub mod node_component;
@@ -85,6 +85,7 @@ pub struct NodeElement {
     pos: Point2D<f64>,
     z_index: usize,
     ports: Ports,
+    inverted: bool,
 }
 
 impl NodeElement {
@@ -95,6 +96,7 @@ impl NodeElement {
         id: Uuid,
         pos: Point2D<f64>,
         ports: Ports,
+        inverted: bool,
     ) -> Self {
         Self {
             name,
@@ -103,6 +105,7 @@ impl NodeElement {
             id,
             z_index: 0,
             ports,
+            inverted,
         }
     }
     #[must_use]
@@ -116,6 +119,10 @@ impl NodeElement {
     #[must_use]
     pub const fn z_index(&self) -> usize {
         self.z_index
+    }
+    #[must_use]
+    pub const fn inverted(&self) -> bool {
+        self.inverted
     }
     #[must_use]
     pub const fn pos(&self) -> Point2D<f64> {
@@ -179,5 +186,44 @@ impl NodeElement {
     }
     pub fn set_name(&mut self, name: String) {
         self.name = name;
+    }
+    pub fn set_inverted(&mut self, inverted: bool) {
+        if self.inverted == inverted {
+            return;
+        }
+        self.inverted = inverted;
+        self.ports.invert_ports();
+    }
+}
+
+impl From<&NodeInfo> for NodeElement {
+    fn from(node_info: &NodeInfo) -> Self {
+        let position = node_info
+            .gui_position()
+            .map_or_else(Point2D::zero, |(x, y)| Point2D::new(x, y));
+        Self::new(
+            node_info.name().to_string(),
+            NodeType::Optical(node_info.node_type().to_string()),
+            node_info.uuid(),
+            position,
+            Ports::new(node_info.input_ports(), node_info.output_ports()),
+            node_info.inverted(),
+        )
+    }
+}
+
+impl From<&AnalyzerInfo> for NodeElement {
+    fn from(analyzer_info: &AnalyzerInfo) -> Self {
+        let position = analyzer_info
+            .gui_position()
+            .map_or_else(Point2D::zero, |p| Point2D::new(p.x, p.y));
+        Self::new(
+            format!("{}", analyzer_info.analyzer_type()),
+            NodeType::Analyzer(analyzer_info.analyzer_type().clone()),
+            analyzer_info.id(),
+            position,
+            Ports::default(),
+            false,
+        )
     }
 }

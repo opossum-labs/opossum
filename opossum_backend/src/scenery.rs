@@ -157,10 +157,10 @@ async fn add_analyzer(
 async fn delete_analyzer(
     data: web::Data<AppState>,
     index: web::Path<Uuid>,
-) -> Result<&'static str, ErrorResponse> {
-    let index = index.into_inner();
-    data.document.lock().remove_analyzer(index)?;
-    Ok("")
+) -> Result<Json<Uuid>, ErrorResponse> {
+    let uuid = index.into_inner();
+    data.document.lock().remove_analyzer(uuid)?;
+    Ok(Json(uuid))
 }
 /// Get the OPM file as string
 ///

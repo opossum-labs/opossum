@@ -7,9 +7,9 @@ use crate::components::node_editor::optical_node_editor::alignment_editor::Align
 use crate::components::node_editor::optical_node_editor::general_editor::GeneralEditor;
 use crate::components::node_editor::optical_node_editor::properties_editor::PropertiesEditor;
 use crate::components::scenery_editor::NodeElement;
-use crate::{HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api};
+use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_backend::Properties;
+use opossum_backend::{Isometry, Properties};
 
 #[component]
 pub fn OpticalNodeEditor(
@@ -19,7 +19,7 @@ pub fn OpticalNodeEditor(
     let resource_future = use_resource(move || async move {
         let node = node_element_sig.read();
         if let Some(node) = &*(node) {
-            match api::get_node_properties(&HTTP_API_CLIENT(), node.id()).await {
+            match api::get_node_properties(node.id()).await {
                 Ok(node_attr) => {
                     node_properties_sig.set(node_attr.properties().clone());
                     Some(node_attr)
@@ -47,10 +47,11 @@ pub fn OpticalNodeEditor(
                             node_type: node_attr.node_type(),
                             node_name: node_attr.name(),
                             node_lidt: *node_attr.lidt(),
+                            node_inverted: node_attr.inverted(),
                         }
                         PropertiesEditor { node_properties_sig }
                         AlignmentEditor {
-                            alignment: *node_attr.alignment(),
+                            alignment: node_attr.alignment().unwrap_or(Isometry::identity()),
                             node_properties_sig,
                             node_type: node_attr.node_type(),
                         }
