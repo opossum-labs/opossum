@@ -2,13 +2,12 @@ use actix_cors::Cors;
 use actix_web::{
     App, HttpResponse, HttpServer, ResponseError, dev::Server, middleware::Logger, web,
 };
-use env_logger::Env;
 use std::net::Ipv4Addr;
 use utoipa::OpenApi;
 use utoipa_actix_web::AppExt;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{app_state::AppState, error::ErrorResponse, pages, routes};
+use crate::{app_state::AppState, error::ErrorResponse, pages, routes, sse_logger::init_logger};
 
 async fn not_found() -> HttpResponse {
     let error = ErrorResponse::not_found();
@@ -37,7 +36,8 @@ pub fn start() -> Server {
     )]
     pub struct ApiDocs;
 
-    env_logger::init_from_env(Env::default().default_filter_or("info"));
+    // env_logger::init_from_env(Env::default().default_filter_or("info"));
+    init_logger().expect("Could not initialize logger");
     let app_state = web::Data::new(AppState::default());
     let srv = HttpServer::new({
         let app_state = app_state.clone();

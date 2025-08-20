@@ -78,7 +78,7 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                         }
                         div {
                             class: "modal-body",
-                            style: " height: 200px; overflow: auto;",
+                            style: " height: 200px; overflow: auto; font-size: 12px;",
                             for log_message in logs.read().iter() {
                                 "{log_message}"
                                 br {}

@@ -2,10 +2,13 @@
 use crate::{
     app_state::AppState,
     error::ErrorResponse,
-    nodes::{self},
+    nodes::{self}, sse_logger::SENDER,
 };
 use actix_web::{
-    delete, get, http::StatusCode, post, web::{self, Json}, Error, HttpResponse, Responder
+    Error, HttpResponse, Responder, delete, get,
+    http::StatusCode,
+    post,
+    web::{self, Json},
 };
 use nalgebra::Point2;
 use opossum::{OpmDocument, SceneryResources, analyzers::AnalyzerType, opm_document::AnalyzerInfo};
@@ -14,11 +17,9 @@ use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
-use actix_web::rt::time::interval;
-use std::time::Duration;
+use futures_util::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use futures_util::StreamExt;
 
 const RON_MEDIA_TYPE: &str = "application/ron";
 
@@ -195,6 +196,7 @@ async fn post_opmfile(
     drop(document);
     Ok("")
 }
+
 #[utoipa::path(tag = "scenery", request_body(content = String,
     description = "Start a simulation run",
     content_type = "text/plain",
@@ -206,47 +208,28 @@ async fn post_opmfile(
 ///
 /// This function starts the simulation of the current scenery.
 #[post("/simulate")]
-async fn simulate(
-    data: web::Data<AppState>,
-    report_dir: String,
-) -> impl Responder {
+async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Responder {
     let (tx, rx) = mpsc::channel(10);
-    //let mut document = data.document.lock().clone();
-    // Starte die "Simulation" in einem separaten Tokio-Task
-    actix_web::rt::spawn(async move {
-        //document.analyze();
-        let mut count = 0;
-        let mut ticker = interval(Duration::from_secs(1));
+    let mut document = data.document.lock().clone();
+      // Run the synchronous, blocking code in a dedicated thread pool.
+    web::block(move || {
+        SENDER.with(|cell| {
+            *cell.borrow_mut() = Some(tx);
+        });
 
-        loop {
-            // Warte auf den nächsten "Tick"
-            ticker.tick().await;
-            count += 1;
-
-            let log_message = format!("Simulationsschritt {} abgeschlossen.", count);
-
-            // Sende die Log-Nachricht über den Channel
-            // Wenn der Client die Verbindung schließt, schlägt dies fehl und wir beenden den Task.
-            if tx.send(log_message).await.is_err() {
-                println!("Client disconnected, stopping simulation.");
-                break;
-            }
-
-            if count >= 10 { // Simulation nach 10 Schritten beenden
-                let final_message = "Simulation beendet.".to_string();
-                let _ = tx.send(final_message).await;
-                println!("Simulation finished.");
-                break;
-            }
-        }
-    });
-
-    // Erstelle einen Responder, der die Daten vom Channel als SSE-Stream sendet
+        // Create and run the simulation.
+        let _= document.analyze();
+        SENDER.with(|cell| {
+            *cell.borrow_mut() = None;
+        });
+    }).await.ok(); // We don't care about the result of block, just that it ran.
     HttpResponse::Ok()
         .content_type("text/event-stream")
-        .streaming(ReceiverStream::new(rx).map(|s| -> Result<actix_web::web::Bytes, Error> {
-            Ok(actix_web::web::Bytes::from(format!("data: {}\n\n", &s)))
-        }))
+        .streaming(
+            ReceiverStream::new(rx).map(|s| -> Result<actix_web::web::Bytes, Error> {
+                Ok(actix_web::web::Bytes::from(format!("data: {}\n\n", &s)))
+            }),
+        )
 }
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_scenery);
