@@ -4,6 +4,7 @@ use crate::components::node_editor::{
     accordion::AccordionItem,
     inputs::input_components::{LabeledCheckboxInput, LabeledInput},
     node_config_editor::NodeChangeAction,
+    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, J_per_cm2};

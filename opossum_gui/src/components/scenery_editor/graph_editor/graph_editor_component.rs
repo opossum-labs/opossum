@@ -64,7 +64,7 @@ pub fn GraphEditor(
     let mut on_mounted: Signal<Option<std::rc::Rc<MountedData>>> = use_signal(|| None);
 
     let onwheel_handler = use_zoom(on_mounted);
-    let ondoubleclick_handler = use_center_graph(node_selected);
+    let ondoubleclick_handler = use_center_graph();
     let onmousedown_handler = use_drag_start(current_mouse_pos, node_selected);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();

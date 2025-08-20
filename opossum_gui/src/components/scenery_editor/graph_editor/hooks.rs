@@ -38,13 +38,12 @@ pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl Fn
     }
 }
 
-pub fn use_center_graph(mut node_selected: Signal<Option<NodeElement>>) -> impl FnMut(MouseEvent) {
+pub fn use_center_graph() -> impl FnMut(MouseEvent) {
     let graph_store = use_context::<Signal<GraphStore>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
 
     move |mouse_event| {
         mouse_event.stop_propagation();
-        node_selected.set(None);
         let bounding_box = graph_store().get_bounding_box();
         let center = bounding_box.center();
         let zoom = *editor_status.read().zoom.read();
@@ -77,7 +76,6 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
     let current_zoom = *editor_status().zoom.read();
 
     move |event| {
-        // let current_sz = *graph_shift_zoom.read();
         let drag_status = editor_status.read().drag_status.read().clone();
         let rel_shift_x = event.client_coordinates().x - current_mouse_pos().x;
         let rel_shift_y = event.client_coordinates().y - current_mouse_pos().y;
