@@ -325,9 +325,9 @@ pub fn use_graph_processor(
     mut graph_state: Signal<GraphState>,
 ) -> Coroutine<GraphStoreAction> {
     let action_successful = use_signal(|| true);
-    let mut graph_store = graph_state.write().graph_store;
-    let editor_state = graph_state.write().editor_state;
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
+        let mut graph_store = graph_state.write().graph_store;
+        let editor_state = graph_state.write().editor_state;
         async move {
             // This loop runs forever in the background, waiting for actions.
             while let Some(action) = rx.next().await {
