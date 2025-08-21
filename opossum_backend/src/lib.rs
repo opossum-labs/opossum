@@ -10,9 +10,9 @@ pub mod sse_logger;
 pub mod utils;
 
 pub use opossum::{
-    J_per_cm2,
+    AnalyzerInfo, J_per_cm2,
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig, raytrace::MissedSurfaceStrategy},
-    create_data_dir, create_report_and_data_files, degree,
+    create_data_dir, degree,
     energy_distributions::*,
     joule,
     lightdata::{
@@ -29,7 +29,6 @@ pub use opossum::{
         },
     },
     num_per_mm,
-    opm_document::AnalyzerInfo,
     optic_ports::PortType,
     picojoule,
     position_distributions::*,

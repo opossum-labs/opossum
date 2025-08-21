@@ -1,4 +1,6 @@
 //! Routes for managing the scenery (top-level `NodeGroup`)
+use std::{path::PathBuf, str::FromStr};
+
 use crate::{
     app_state::AppState,
     error::ErrorResponse,
@@ -11,8 +13,12 @@ use actix_web::{
     post,
     web::{self, Json},
 };
+use log::{error, info, warn};
 use nalgebra::Point2;
-use opossum::{OpmDocument, SceneryResources, analyzers::AnalyzerType, opm_document::AnalyzerInfo};
+use opossum::{
+    AnalyzerInfo, OpmDocument, SceneryResources, analyzers::AnalyzerType, create_data_dir,
+    reporting::report_helper::create_report_and_data_files,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -202,8 +208,7 @@ async fn post_opmfile(
     description = "Start a simulation run",
     content_type = "text/plain",
 ),
-    responses((status = 200, description = "simulation sucessfully performed"),
-    (status = 400, description = "Error during simulation"))
+    responses((status = 200, description = "simulation sucessfully performed"))
 )]
 /// Initiate an OPOSSUM simulation run
 ///
@@ -217,9 +222,36 @@ async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Respond
         SENDER.with(|cell| {
             *cell.borrow_mut() = Some(tx);
         });
-
-        // Create and run the simulation.
-        let _ = document.analyze();
+        match PathBuf::from_str(&report_dir) {
+            Ok(report_dir) => {
+                info!("Creating report directory: {}", report_dir.display());
+                if let Err(e) = create_data_dir(&report_dir) {
+                    error!("Error creating data directory: {e}");
+                } else {
+                    info!("Creating diagram files");
+                    document
+                        .create_dot_file(&report_dir)
+                        .unwrap_or_else(|e| warn!("{e}"));
+                    info!("Starting analysis");
+                    let analysis_reports = document.analyze();
+                    match analysis_reports {
+                        Ok(reports) => {
+                            info!("Generating report(s)");
+                            for report in reports.iter().enumerate() {
+                                create_report_and_data_files(&report_dir, report.1, report.0)
+                                    .unwrap_or_else(|e| warn!("{e}"));
+                            }
+                        }
+                        Err(e) => {
+                            error!("Error during analysis: {e}");
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Ill-formatted report directory: {e}")
+            }
+        }
         SENDER.with(|cell| {
             *cell.borrow_mut() = None;
         });

@@ -8,11 +8,11 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum::{
+    AnalyzerInfo,
     analyzers::AnalyzerType,
     error::OpossumError,
     meter,
     nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
-    opm_document::AnalyzerInfo,
     optic_ports::PortType,
     properties::Proptype,
     utils::geom_transformation::Isometry,

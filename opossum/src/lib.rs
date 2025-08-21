@@ -15,19 +15,21 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
 
 pub mod analyzers;
 pub mod aperture;
+pub mod coatings;
 pub mod console;
-pub mod dottable;
+mod dottable;
 pub mod energy_distributions;
 pub mod error;
 pub mod fluence_distributions;
+mod kde;
 mod light_flow;
-pub mod light_result;
+mod light_result;
 pub mod lightdata;
 pub mod nodes;
-pub mod opm_document;
+mod opm_document;
 pub mod optic_node;
 pub mod optic_ports;
-pub mod optic_ref;
+mod optic_ref;
 mod optic_scenery_rsc;
 pub mod plottable;
 mod port_map;
@@ -38,28 +40,22 @@ pub mod rays;
 pub mod refractive_index;
 pub mod spectral_distribution;
 // pub mod render;
-pub mod coatings;
-pub mod kde;
 pub mod reporting;
 pub mod spectrum;
 pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
 use std::{
-    fs::{File, create_dir, remove_dir_all},
-    io::{self, Write},
+    fs::{create_dir, remove_dir_all},
     path::{Path, PathBuf},
 };
 
 use chrono::DateTime;
 use log::info;
-pub use opm_document::OpmDocument;
+pub use opm_document::{AnalyzerInfo, OpmDocument};
 pub use optic_scenery_rsc::SceneryResources;
 
-use crate::{
-    error::{OpmResult, OpossumError},
-    reporting::analysis_report::AnalysisReport,
-};
+use crate::error::{OpmResult, OpossumError};
 /// Creates a fresh `data/` subdirectory in the given report directory.
 ///
 /// If a `data/` folder already exists, it is deleted first.
@@ -88,50 +84,6 @@ pub fn create_data_dir(report_directory: &Path) -> OpmResult<()> {
         .map_err(|e| OpossumError::Other(format!("creating data directory failed: {e}")))
 }
 
-/// Creates and writes report files in RON and HTML formats, and exports associated data.
-///
-/// This function serializes the report to a RON file and generates a corresponding HTML report file.
-/// It also calls the report’s data export function.
-///
-/// # Parameters
-///
-/// * `report_directory` - Path to the directory where the files will be written.
-/// * `report` - The `AnalysisReport` to be saved.
-/// * `report_number` - A unique number appended to the filename to distinguish multiple reports.
-///
-/// # Returns
-///
-/// * `Ok(())` on success.
-/// * `Err(OpossumError)` if writing to any file or exporting data fails.
-///
-/// # Errors
-///
-/// * Writing the RON or HTML report may fail due to file permission or I/O errors.
-/// * Exporting the report data may also return an error from the `AnalysisReport::export_data` implementation.
-pub fn create_report_and_data_files(
-    report_directory: &Path,
-    report: &AnalysisReport,
-    report_number: usize,
-) -> OpmResult<()> {
-    let mut output = create_dot_or_report_file_instance(
-        report_directory,
-        &format!("report_{report_number}"),
-        "ron",
-        "analysis report",
-    )?;
-    write!(output, "{}", report.to_file_string()?)
-        .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
-
-    let mut report_path = report_directory.to_path_buf();
-    report.export_data(&report_path)?;
-
-    report_path.push(format!("report_{report_number}.html"));
-    info!("Write html report to {}", report_path.display());
-    report.to_html_report()?.generate_html(&report_path)?;
-
-    Ok(())
-}
-
 /// Constructs a `PathBuf` from a directory, a filename (without extension), and a file extension.
 ///
 /// # Parameters
@@ -149,39 +101,6 @@ pub fn create_f_path(path: &Path, f_name: &str, f_ext: &str) -> PathBuf {
     f_path.push(f_name);
     f_path.set_extension(f_ext);
     f_path
-}
-
-/// Creates a new file at a path constructed from directory, filename, and extension,
-/// and logs the operation with a user-defined description.
-///
-/// # Parameters
-///
-/// * `path` - Base directory for the file.
-/// * `f_name` - Name of the file without extension.
-/// * `f_ext` - File extension (e.g., `"ron"`, `"dot"`).
-/// * `print_str` - A descriptive string used for logging (e.g., `"analysis report"`).
-///
-/// # Returns
-///
-/// * `Ok(File)` if the file is successfully created.
-/// * `Err(OpossumError)` if file creation fails.
-///
-/// # Errors
-///
-/// Returns an error if the file cannot be created (e.g., due to permissions, invalid path, or I/O issues).
-pub fn create_dot_or_report_file_instance(
-    path: &Path,
-    f_name: &str,
-    f_ext: &str,
-    print_str: &str,
-) -> OpmResult<File> {
-    let f_path = create_f_path(path, f_name, f_ext);
-
-    info!("Write {print_str} to {}...", f_path.display());
-    let _ = io::stdout().flush();
-
-    File::create(f_path)
-        .map_err(|e| OpossumError::Other(format!("{f_name} file creation failed: {e}")))
 }
 
 /// Return the version information of the currently built OPOSSUM executable.
