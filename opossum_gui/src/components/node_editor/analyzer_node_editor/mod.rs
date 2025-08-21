@@ -76,12 +76,11 @@ pub fn AnalyzerNodeEditor(node_element_sig: Signal<Option<NodeElement>>) -> Elem
 #[component]
 pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
     let mut ray_trace_config_sig = use_signal(|| ray_trace_config);
-    let mut node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
-
+    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
     use_effect(move || {
         if ray_trace_config != *ray_trace_config_sig.read() {
-            node_change_signal.set(Some(NodeChangeAction::AnalyzerType(
-                AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
+            node_config_processor.send(NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(
+                *ray_trace_config_sig.read(),
             )));
         }
     });
@@ -166,12 +165,11 @@ pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
 #[component]
 pub fn GhostFocusEditor(ghost_focus_config: GhostFocusConfig) -> Element {
     let mut ghost_focus_config_sig = use_signal(|| ghost_focus_config.clone());
-    let mut node_change_signal = use_context::<Signal<Option<NodeChangeAction>>>();
-
+    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
     use_effect(move || {
         if ghost_focus_config != *ghost_focus_config_sig.read() {
-            node_change_signal.set(Some(NodeChangeAction::AnalyzerType(
-                AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
+            node_config_processor.send(NodeChangeAction::AnalyzerType(AnalyzerType::GhostFocus(
+                ghost_focus_config_sig.read().clone(),
             )));
         }
     });
