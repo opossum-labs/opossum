@@ -79,7 +79,7 @@ pub fn App() -> Element {
                     MenuBar { menu_item_selected, project_directory }
                 }
             }
-            GraphEditor { command: node_editor_command}
+            GraphEditor { command: node_editor_command }
             div { class: "row footer",
                 div { class: "col", Logger {} }
             }

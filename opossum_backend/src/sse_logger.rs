@@ -1,10 +1,10 @@
-use std::{cell::RefCell, sync::Once};
 use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
+use std::{cell::RefCell, sync::Once};
 use tokio::sync::mpsc;
 
-// A thread-local variable to hold the sender for the current request.
+// A thread-local variable to hold the sender while logging to an HTTP stream.
 thread_local! {
-    pub (crate) static SENDER: RefCell<Option<mpsc::Sender<String>>> = RefCell::new(None);
+    pub (crate) static SENDER: RefCell<Option<mpsc::Sender<String>>> = const {RefCell::new(None)};
 }
 
 // Our custom logger struct.
@@ -12,15 +12,16 @@ pub struct SseLogger;
 
 // Implementation of the `log::Log` trait.
 impl Log for SseLogger {
-    fn enabled(&self, metadata: &Metadata) -> bool {
+    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
         // Log all messages of level INFO or higher.
         metadata.level() <= Level::Info
     }
 
-    fn log(&self, record: &Record) {
+    fn log(&self, record: &Record<'_>) {
         if self.enabled(record.metadata()) {
-            let log_message = format!("{}", record.args());
-            
+            let log_type = record.level().as_str();
+            let log_message = format!("{}##{}", log_type, record.args());
+
             // Try to send the log message through the thread-local sender.
             let sent = SENDER.with(|cell| {
                 if let Some(sender) = cell.borrow().as_ref() {
@@ -34,7 +35,7 @@ impl Log for SseLogger {
             // If it wasn't sent (no sender configured for this thread),
             // just print it to the console as a fallback.
             if !sent {
-                println!("[Fallback Console] {}", log_message);
+                println!("{log_message}");
             }
         }
     }
@@ -45,7 +46,15 @@ impl Log for SseLogger {
 static LOGGER: SseLogger = SseLogger;
 static INIT: Once = Once::new();
 
-// Function to initialize the logger once.
+/// Initialize the global logger.
+///
+/// # Panics
+///
+/// Panics if the logger could not be initialized.
+///
+/// # Errors
+///
+/// This function will return an error if a logger could not be initialized.
 pub fn init_logger() -> Result<(), SetLoggerError> {
     INIT.call_once(|| {
         log::set_logger(&LOGGER)

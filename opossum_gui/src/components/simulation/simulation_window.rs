@@ -1,9 +1,12 @@
+use std::str::FromStr;
+
 use dioxus::prelude::*;
 use futures_util::StreamExt;
+use log::Level;
 
 #[component]
 pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
-    let mut logs = use_signal(Vec::<String>::new);
+    let mut logs = use_signal(Vec::<(Level, String)>::new);
     let mut simulation_running = use_signal(|| false);
     use_effect(move || {
         if show_simulation() {
@@ -22,7 +25,8 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                 {
                     Ok(res) => res,
                     Err(err) => {
-                        logs.write().push(format!("Connection error: {}", err));
+                        logs.write()
+                            .push((Level::Error, format!("Connection error: {}", err)));
                         return;
                     }
                 };
@@ -43,14 +47,22 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                                 // SSE data lines start with "data: "
                                 if let Some(data) = line.strip_prefix("data: ") {
                                     if !data.trim().is_empty() {
+                                        // Split in log_level and message
+                                        let log_message: Vec<&str> = data.split("##").collect();
+                                        let log_level = Level::from_str(log_message[0].trim())
+                                            .unwrap_or(Level::Error);
                                         // Push the new log message into our signal
-                                        logs.write().push(data.trim().to_string());
+                                        logs.write().push((
+                                            log_level,
+                                            format!("{}", log_message[1].trim()),
+                                        ));
                                     }
                                 }
                             }
                         }
                         Err(err) => {
-                            logs.write().push(format!("Stream error: {}", err));
+                            logs.write()
+                                .push((Level::Error, format!("Stream error: {}", err)));
                             break;
                         }
                     }
@@ -61,16 +73,13 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
     });
     if show_simulation() {
         rsx! {
-            div {
-                class: "modal d-block",
-                "tabindex": "-1",
-                "data-bs-theme": "light",
+            div { class: "modal d-block", "tabindex": "-1",
                 div { class: "modal-dialog modal-dialog-centered",
-                    div { class: "modal-content",
+                    div { class: "modal-content bg-dark text-white",
                         div { class: "modal-header",
                             h5 { class: "modal-title", "Running simulation..." }
                             button {
-                                class: "btn-close",
+                                class: "btn-close btn-close-white",
                                 disabled: simulation_running(),
                                 "data-bs-dismiss": "modal",
                                 onclick: move |_| show_simulation.set(false),
@@ -78,10 +87,9 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                         }
                         div {
                             class: "modal-body",
-                            style: " height: 200px; overflow: auto; font-size: 12px;",
+                            style: "height: 200px; overflow: auto; font-size: 12px;",
                             for log_message in logs.read().iter() {
-                                "{log_message}"
-                                br {}
+                                p { class: "log-{log_message.0.as_str().to_lowercase()}", "{log_message.1}" }
                             }
                         }
                         div { class: "modal-footer",

@@ -2,7 +2,8 @@
 use crate::{
     app_state::AppState,
     error::ErrorResponse,
-    nodes::{self}, sse_logger::SENDER,
+    nodes::{self},
+    sse_logger::SENDER,
 };
 use actix_web::{
     Error, HttpResponse, Responder, delete, get,
@@ -211,18 +212,20 @@ async fn post_opmfile(
 async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Responder {
     let (tx, rx) = mpsc::channel(10);
     let mut document = data.document.lock().clone();
-      // Run the synchronous, blocking code in a dedicated thread pool.
+    // Run the synchronous, blocking code in a dedicated thread pool.
     web::block(move || {
         SENDER.with(|cell| {
             *cell.borrow_mut() = Some(tx);
         });
 
         // Create and run the simulation.
-        let _= document.analyze();
+        let _ = document.analyze();
         SENDER.with(|cell| {
             *cell.borrow_mut() = None;
         });
-    }).await.ok(); // We don't care about the result of block, just that it ran.
+    })
+    .await
+    .ok(); // We don't care about the result of block, just that it ran.
     HttpResponse::Ok()
         .content_type("text/event-stream")
         .streaming(

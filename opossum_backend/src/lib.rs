@@ -6,8 +6,8 @@ pub mod pages;
 pub mod routes;
 pub mod scenery;
 pub mod server;
-pub mod utils;
 pub mod sse_logger;
+pub mod utils;
 
 pub use opossum::{
     J_per_cm2,
