@@ -1,6 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 use futures_util::StreamExt;
+use std::env;
 use std::process::Stdio;
 use tempfile::tempdir;
 use tokio::{
@@ -94,15 +95,35 @@ pub fn SimulationWindow(
                 match action {
                     CommandAction::Run => {
                         is_running.set(true);
+                        let cli_path = match env::current_exe() {
+                            Ok(exe_path) => {
+                                // Get the directory containing the executable
+                                if let Some(exe_dir) = exe_path.parent() {
+                                    let path = exe_dir.join("../../../../../debug/opossum.exe");
+                                    path.to_string_lossy().to_string()
+                                } else {
+                                    output.set(format!(
+                                        "[ERROR] Failed to get parent path of executable"
+                                    ));
+                                    String::new()
+                                }
+                            }
+                            Err(e) => {
+                                output.set(format!("[ERROR] Failed to get executable path: {e}"));
+                                String::new()
+                            }
+                        };
+
                         let temp_dir = tempdir().unwrap();
                         let temp_model_file = temp_dir.path().join("temp-opossum.opm");
                         node_editor_command
                             .set(Some(NodeEditorCommand::SaveFile(temp_model_file.clone())));
                         output.set(String::new());
 
-                        let mut cmd = tokio::process::Command::new(
-                            "C:/Users/ueisenb/AppData/Local/0_gsi_executables/opossum/target/debug/opossum.exe",
-                        );
+                        // let mut cmd = tokio::process::Command::new(
+                        //     "C:/Users/ueisenb/AppData/Local/0_gsi_executables/opossum/target/debug/opossum.exe",
+                        // );
+                        let mut cmd = tokio::process::Command::new(cli_path);
                         cmd.arg("-r").arg("C:/Users/ueisenb/AppData/Local/0_gsi_executables/opossum/opossum/playground");
                         cmd.arg("-f").arg(temp_model_file);
                         cmd.arg("-s").arg("false"); // do not display OPOSSUM logo and version info

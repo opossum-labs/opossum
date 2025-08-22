@@ -65,7 +65,6 @@ pub fn App() -> Element {
                     println!("App::Window close selected");
                 }
                 MenuSelection::RunProject => {
-                    println!("Run Project");
                     run_simulation.set(true);
                 }
             }
