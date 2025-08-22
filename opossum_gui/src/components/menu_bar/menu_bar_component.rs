@@ -123,16 +123,16 @@ pub fn MenuBar(
                                     "Save Project"
                                 }
                             }
-                            li {
-                                a {
-                                    class: "dropdown-item",
-                                    role: "button",
-                                    onclick: move |_| {
-                                        menu_item_selected.set(Some(MenuSelection::RunProject));
-                                    },
-                                    "Run Project"
-                                }
-                            }
+                            // li {
+                            //     a {
+                            //         class: "dropdown-item",
+                            //         role: "button",
+                            //         onclick: move |_| {
+                            //             menu_item_selected.set(Some(MenuSelection::RunProject));
+                            //         },
+                            //         "Run Project"
+                            //     }
+                            // }
                         }
                     }
                     li { class: "nav-item",
@@ -196,6 +196,13 @@ pub fn MenuBar(
                 }
             }
             div { class: "d-flex align-items-center",
+                button {
+                    class: "btn btn-success me-4",
+                    onclick: move |_| {
+                        menu_item_selected.set(Some(MenuSelection::RunProject));
+                    },
+                    "Simulate"
+                }
                 a {
                     class: "text-secondary me-2",
                     role: "button",

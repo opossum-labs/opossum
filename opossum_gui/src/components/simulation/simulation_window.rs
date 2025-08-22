@@ -1,8 +1,8 @@
-use std::str::FromStr;
-
+#![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 use futures_util::StreamExt;
 use log::Level;
+use std::str::FromStr;
 
 #[component]
 pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
@@ -26,7 +26,7 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                     Ok(res) => res,
                     Err(err) => {
                         logs.write()
-                            .push((Level::Error, format!("Connection error: {}", err)));
+                            .push((Level::Error, format!("Connection error: {err}")));
                         return;
                     }
                 };
@@ -52,17 +52,15 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                                         let log_level = Level::from_str(log_message[0].trim())
                                             .unwrap_or(Level::Error);
                                         // Push the new log message into our signal
-                                        logs.write().push((
-                                            log_level,
-                                            format!("{}", log_message[1].trim()),
-                                        ));
+                                        logs.write()
+                                            .push((log_level, log_message[1].trim().to_string()));
                                     }
                                 }
                             }
                         }
                         Err(err) => {
                             logs.write()
-                                .push((Level::Error, format!("Stream error: {}", err)));
+                                .push((Level::Error, format!("Stream error: {err}")));
                             break;
                         }
                     }
