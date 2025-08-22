@@ -23,6 +23,8 @@ pub struct Args {
     pub file_path: PathBuf,
     /// destination directory of the report. if not defined, same directory as the filepath for the optical setup is used
     pub report_directory: PathBuf,
+    /// show intro logo
+    pub show_logo: bool,
 }
 #[derive(Parser)]
 #[command(author, version = Str::from(&get_version()), about, long_about = None)]
@@ -39,6 +41,10 @@ pub struct PartialArgs {
     /// destination directory of the report. if not defined, same directory as the filepath for the optical setup is used
     #[arg(short, long)]
     report_directory: Option<String>,
+
+    /// show OPOSSUM logo
+    #[arg(short, long)]
+    show_logo: Option<bool>,
 }
 
 /// Checks if the passed file path is valid.
@@ -149,7 +155,10 @@ impl TryFrom<PartialArgs> for Args {
         let mut reader = BufReader::new(stdin().lock());
         let mut writer = BufWriter::new(stdout().lock());
         //intro only shown when neither the help, nor the version flag is specified
-        show_intro();
+        let show_logo = part_args.show_logo.unwrap_or(true);
+        if show_logo {
+            show_intro();
+        }
         let file_path = get_args(
             eval_file_path_input,
             part_args.file_path.as_deref(),
@@ -177,6 +186,7 @@ impl TryFrom<PartialArgs> for Args {
         Ok(Self {
             file_path,
             report_directory,
+            show_logo: true,
         })
     }
 }
@@ -365,11 +375,13 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             file_path: Some(path_valid.clone()),
             analyzer: Some("e".to_owned()),
             report_directory: Some("".to_owned()),
+            show_logo: Some(true),
         };
 
         let args = Args {
             file_path: PathBuf::from(path_valid.clone()),
             report_directory: PathBuf::from(get_parent_dir(&PathBuf::from(path_valid.clone()))),
+            show_logo: true,
         };
 
         let args_from = Args::try_from(part_args).unwrap();
@@ -381,11 +393,13 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             file_path: Some(path_valid.clone()),
             analyzer: Some("e".to_owned()),
             report_directory: Some("./files_for_testing/".to_owned()),
+            show_logo: Some(true),
         };
 
         let args = Args {
             file_path: PathBuf::from(path_valid.clone()),
             report_directory: PathBuf::from("./files_for_testing/"),
+            show_logo: true,
         };
         let args_from = Args::try_from(part_args).unwrap();
         assert_eq!(args.report_directory, args_from.report_directory);

@@ -226,9 +226,9 @@ async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Respond
             Ok(report_dir) => {
                 info!("Creating report directory: {}", report_dir.display());
                 if let Err(e) = create_data_dir(&report_dir) {
-                     error!("Error creating data directory: {e}");
+                    error!("Error creating data directory: {e}");
                 } else {
-                     info!("Creating diagram files");
+                    info!("Creating diagram files");
                     document
                         .create_dot_file(&report_dir)
                         .unwrap_or_else(|e| warn!("{e}"));

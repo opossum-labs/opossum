@@ -1,9 +1,14 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use std::process::Stdio;
-
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use tokio::{io::{AsyncReadExt, BufReader}, process::Child};
+use std::process::Stdio;
+use tempfile::tempdir;
+use tokio::{
+    io::{AsyncReadExt, BufReader},
+    process::Child,
+};
+
+use crate::components::scenery_editor::NodeEditorCommand;
 // Define a message to control the coroutine
 enum CommandAction {
     Run,
@@ -11,7 +16,10 @@ enum CommandAction {
 }
 
 #[component]
-pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
+pub fn SimulationWindow(
+    mut show_simulation: Signal<bool>,
+    node_editor_command: Signal<Option<NodeEditorCommand>>,
+) -> Element {
     let mut output = use_signal(String::new);
     let mut is_running = use_signal(|| false);
     // Add this block to your component
@@ -86,17 +94,22 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                 match action {
                     CommandAction::Run => {
                         is_running.set(true);
+                        let temp_dir = tempdir().unwrap();
+                        let temp_model_file = temp_dir.path().join("temp-opossum.opm");
+                        node_editor_command
+                            .set(Some(NodeEditorCommand::SaveFile(temp_model_file.clone())));
                         output.set(String::new());
 
                         let mut cmd = tokio::process::Command::new(
                             "C:/Users/ueisenb/AppData/Local/0_gsi_executables/opossum/target/debug/opossum.exe",
                         );
                         cmd.arg("-r").arg("C:/Users/ueisenb/AppData/Local/0_gsi_executables/opossum/opossum/playground");
-                        cmd.arg("-f").arg("C:/Users/ueisenb/AppData/Local/0_gsi_executables/opossum/opossum/playground/ray_propagation.opm");
+                        cmd.arg("-f").arg(temp_model_file);
+                        cmd.arg("-s").arg("false"); // do not display OPOSSUM logo and version info
 
                         #[cfg(windows)]
                         {
-                            const CREATE_NO_WINDOW: u32 = 0x08000000;
+                            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
                             cmd.creation_flags(CREATE_NO_WINDOW);
                         }
                         cmd.stdout(Stdio::piped());
@@ -105,7 +118,7 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                         let mut child = match cmd.spawn() {
                             Ok(child) => child,
                             Err(e) => {
-                                output.set(format!("[ERROR] Failed to spawn command: {}", e));
+                                output.set(format!("[ERROR] Failed to spawn command: {e}"));
                                 is_running.set(false);
                                 continue;
                             }
@@ -130,10 +143,10 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                             tokio::select! {
                                 // This branch handles aborting the process
                                 maybe_action = rx.next() => {
-                                    if let Some(CommandAction::Abort) = maybe_action {
+                                    if matches!(maybe_action, Some(CommandAction::Abort)) {
                                         if let Some(mut child) = child_handle.take() {
                                             if let Err(e) = child.kill().await {
-                                                output.write().push_str(&format!("\n[ERROR] Failed to abort process: {}", e));
+                                                output.write().push_str(&format!("\n[ERROR] Failed to abort process: {e}"));
                                             } else {
                                                 output.write().push_str("\n[INFO] Process aborted by user.");
                                             }
@@ -144,23 +157,21 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                                 // Read raw bytes from stdout
                                 result = stdout_reader.read(&mut stdout_buf) => {
                                     match result {
-                                        Ok(0) => break, // EOF, stream closed.
+                                        Ok(0) | Err(_) => break, // EOF or Error, stream closed.
                                         Ok(n) => {
                                             let s = String::from_utf8_lossy(&stdout_buf[..n]);
                                             output.write().push_str(&s);
                                         },
-                                        Err(_) => break,
                                     }
                                 },
                                 // Read raw bytes from stderr
                                 result = stderr_reader.read(&mut stderr_buf) => {
                                      match result {
-                                        Ok(0) => {}, // EOF, but stdout might still be writing.
+                                        Ok(0) | Err(_) => {}, // EOF or Error, but stdout might still be writing.
                                         Ok(n) => {
                                             let s = String::from_utf8_lossy(&stderr_buf[..n]);
                                             output.write().push_str(&s);
                                         },
-                                        Err(_) => {} // Error, but stdout might still be writing.
                                     }
                                 }
                             }
@@ -170,6 +181,7 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                             let _ = child.wait().await;
                         }
                         is_running.set(false);
+                        temp_dir.close().unwrap();
                     }
                     CommandAction::Abort => {}
                 }
@@ -213,7 +225,7 @@ pub fn SimulationWindow(mut show_simulation: Signal<bool>) -> Element {
                                     if is_running() {
                                         command_runner.send(CommandAction::Abort);
                                     } else {
-                                        show_simulation.set(false)
+                                        show_simulation.set(false);
                                     }
                                 },
                                 if is_running() {
