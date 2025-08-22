@@ -277,7 +277,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(nr_of_nodes);
     cfg.service(get_opmfile);
     cfg.service(post_opmfile);
-    cfg.service(simulate);
+    // cfg.service(simulate);
     cfg.configure(nodes::config);
 }
 #[cfg(test)]

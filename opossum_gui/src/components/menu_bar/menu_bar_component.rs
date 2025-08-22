@@ -123,16 +123,16 @@ pub fn MenuBar(
                                     "Save Project"
                                 }
                             }
-                            // li {
-                            //     a {
-                            //         class: "dropdown-item",
-                            //         role: "button",
-                            //         onclick: move |_| {
-                            //             menu_item_selected.set(Some(MenuSelection::RunProject));
-                            //         },
-                            //         "Run Project"
-                            //     }
-                            // }
+                                                // li {
+                        //     a {
+                        //         class: "dropdown-item",
+                        //         role: "button",
+                        //         onclick: move |_| {
+                        //             menu_item_selected.set(Some(MenuSelection::RunProject));
+                        //         },
+                        //         "Run Project"
+                        //     }
+                        // }
                         }
                     }
                     li { class: "nav-item",

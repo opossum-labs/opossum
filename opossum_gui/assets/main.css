@@ -191,7 +191,7 @@ body {
     overflow-y: scroll;
 }
 
-.log-info {
+/* .log-info {
     color: rgb(1, 201, 1);
     margin: 0;
     padding: 0;
@@ -201,7 +201,7 @@ body {
 }
 .log-error {
     color: red;
-}
+} */
 .node_attributes {
     position: relative;
     display: flex;
