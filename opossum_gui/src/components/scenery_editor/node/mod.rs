@@ -194,6 +194,9 @@ impl NodeElement {
         self.inverted = inverted;
         self.ports.invert_ports();
     }
+    pub const fn is_optical_node(&self) -> bool {
+        matches!(self.node_type, NodeType::Optical(_))
+    }
 }
 
 impl From<&NodeInfo> for NodeElement {

@@ -39,6 +39,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
         node.z_index()
     };
     let node_icon = node.node_type.icon();
+    let is_optical_node = node.is_optical_node();
     rsx! {
         div {
             tabindex: 0, // necessary to allow to receive keyboard focus
@@ -70,19 +71,24 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
             oncontextmenu: {
                 move |event: Event<MouseData>| {
                     event.prevent_default();
-                    let new_ref_node = NewRefNode::new(
-                        id,
-                        (event.page_coordinates().x, event.page_coordinates().y),
-                    );
-                    let cx_menu = CxMenu::new(
-                        event.page_coordinates().x,
-                        event.page_coordinates().y,
-                        vec![
-                            ("Create reference".to_owned(), CxtCommand::AddRefNode(new_ref_node)),
-                        ],
-                    );
-                    let mut ctx = CONTEXT_MENU.write();
-                    *ctx = cx_menu;
+                    if is_optical_node {
+                        let new_ref_node = NewRefNode::new(
+                            id,
+                            (event.page_coordinates().x, event.page_coordinates().y),
+                        );
+                        let cx_menu = CxMenu::new(
+                            event.page_coordinates().x,
+                            event.page_coordinates().y,
+                            vec![
+                                (
+                                    "Create reference".to_owned(),
+                                    CxtCommand::AddRefNode(new_ref_node),
+                                ),
+                            ],
+                        );
+                        let mut ctx = CONTEXT_MENU.write();
+                        *ctx = cx_menu;
+                    }
                 }
             },
             GraphNodeContent {
