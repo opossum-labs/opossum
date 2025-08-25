@@ -275,7 +275,7 @@ pub async fn optimize_layout_and_sync(
         for l in layout {
             if let Some(uuid) = reg.get_uuid(u32::try_from(l.0).unwrap()) {
                 let pos = Point2D::new(
-                    -1.0 * isize_to_f64(l.1.1),
+                    -isize_to_f64(l.1.1),
                     SUGIYAMA_VERT_PATH_FACTOR.mul_add(isize_to_f64(l.1.0), height),
                 );
                 new_positions.insert(uuid, pos);

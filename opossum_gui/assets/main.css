@@ -191,6 +191,17 @@ body {
     overflow-y: scroll;
 }
 
+/* .log-info {
+    color: rgb(1, 201, 1);
+    margin: 0;
+    padding: 0;
+}
+.log-warn {
+    color: yellow;
+}
+.log-error {
+    color: red;
+} */
 .node_attributes {
     position: relative;
     display: flex;

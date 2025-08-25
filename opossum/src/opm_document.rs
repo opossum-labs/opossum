@@ -11,10 +11,11 @@ use crate::{
         Analyzer, AnalyzerType, energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer,
         raytrace::RayTracingAnalyzer,
     },
+    create_f_path,
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     optic_node::OpticNode,
-    reporting::analysis_report::AnalysisReport,
+    reporting::{analysis_report::AnalysisReport, report_helper::create_file_instance},
 };
 use log::{info, warn};
 use nalgebra::Point2;
@@ -300,6 +301,21 @@ impl OpmDocument {
     pub const fn analyzers_mut(&mut self) -> &mut HashMap<Uuid, AnalyzerInfo> {
         &mut self.analyzers
     }
+    /// Create a DOT & SVG diagram file of optical model (scenery).
+    ///
+    /// This is a helper function being used in the CLI and the backend.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the file creation fails.
+    pub fn create_dot_file(&self, dot_path: &Path) -> OpmResult<()> {
+        let mut output = create_file_instance(dot_path, "scenery", "dot")?;
+        write!(output, "{}", self.scenery.toplevel_dot("")?)
+            .map_err(|e| OpossumError::Other(format!("writing diagram file (.dot) failed: {e}")))?;
+        let mut output = create_file_instance(dot_path, "scenery", "svg")?;
+        let f_path = create_f_path(dot_path, "scenery", "dot");
+        self.scenery.toplevel_dot_svg(&f_path, &mut output)
+    }
 }
 
 #[cfg(test)]
@@ -545,5 +561,22 @@ mod test {
         let mut doc = OpmDocument::from_file(temp_model_file.path()).unwrap();
         let _ = doc.analyze().unwrap();
         check_logs(log::Level::Warn, vec![]);
+    }
+    #[test]
+    fn create_dot_file_test() {
+        let document =
+            OpmDocument::from_file(&Path::new("./files_for_testing/opm/opticscenery.opm")).unwrap();
+        assert!(
+            document
+                .create_dot_file(&Path::new("./files_for_testing/dot/_not_valid/"))
+                .is_err()
+        );
+        assert!(
+            document
+                .create_dot_file(&Path::new("./files_for_testing/dot/"))
+                .is_ok()
+        );
+        fs::remove_file("./files_for_testing/dot/scenery.dot").unwrap();
+        fs::remove_file("./files_for_testing/dot/scenery.svg").unwrap();
     }
 }

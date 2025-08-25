@@ -1,21 +1,32 @@
 //! Routes for managing the scenery (top-level `NodeGroup`)
+use std::{path::PathBuf, str::FromStr};
+
 use crate::{
     app_state::AppState,
     error::ErrorResponse,
     nodes::{self},
+    sse_logger::SENDER,
 };
 use actix_web::{
-    HttpResponse, Responder, delete, get,
+    Error, HttpResponse, Responder, delete, get,
     http::StatusCode,
     post,
     web::{self, Json},
 };
+use log::{error, info, warn};
 use nalgebra::Point2;
-use opossum::{OpmDocument, SceneryResources, analyzers::AnalyzerType, opm_document::AnalyzerInfo};
+use opossum::{
+    AnalyzerInfo, OpmDocument, SceneryResources, analyzers::AnalyzerType, create_data_dir,
+    reporting::report_helper::create_report_and_data_files,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
+
+use futures_util::StreamExt;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 const RON_MEDIA_TYPE: &str = "application/ron";
 
@@ -192,6 +203,69 @@ async fn post_opmfile(
     drop(document);
     Ok("")
 }
+
+#[utoipa::path(tag = "scenery", request_body(content = String,
+    description = "Start a simulation run",
+    content_type = "text/plain",
+),
+    responses((status = 200, description = "simulation sucessfully performed"))
+)]
+/// Initiate an OPOSSUM simulation run
+///
+/// This function starts the simulation of the current scenery.
+#[post("/simulate")]
+async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Responder {
+    let (tx, rx) = mpsc::channel(10);
+    let mut document = data.document.lock().clone();
+    // Run the synchronous, blocking code in a dedicated thread pool.
+    web::block(move || {
+        SENDER.with(|cell| {
+            *cell.borrow_mut() = Some(tx);
+        });
+        match PathBuf::from_str(&report_dir) {
+            Ok(report_dir) => {
+                info!("Creating report directory: {}", report_dir.display());
+                if let Err(e) = create_data_dir(&report_dir) {
+                    error!("Error creating data directory: {e}");
+                } else {
+                    info!("Creating diagram files");
+                    document
+                        .create_dot_file(&report_dir)
+                        .unwrap_or_else(|e| warn!("{e}"));
+                    info!("Starting analysis");
+                    let analysis_reports = document.analyze();
+                    match analysis_reports {
+                        Ok(reports) => {
+                            info!("Generating report(s)");
+                            for report in reports.iter().enumerate() {
+                                create_report_and_data_files(&report_dir, report.1, report.0)
+                                    .unwrap_or_else(|e| warn!("{e}"));
+                            }
+                        }
+                        Err(e) => {
+                            error!("Error during analysis: {e}");
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Ill-formatted report directory: {e}");
+            }
+        }
+        SENDER.with(|cell| {
+            *cell.borrow_mut() = None;
+        });
+    })
+    .await
+    .ok(); // We don't care about the result of block, just that it ran.
+    HttpResponse::Ok()
+        .content_type("text/event-stream")
+        .streaming(
+            ReceiverStream::new(rx).map(|s| -> Result<actix_web::web::Bytes, Error> {
+                Ok(actix_web::web::Bytes::from(format!("data: {}\n\n", &s)))
+            }),
+        )
+}
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_scenery);
     cfg.service(get_global_conf);
@@ -203,6 +277,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(nr_of_nodes);
     cfg.service(get_opmfile);
     cfg.service(post_opmfile);
+    // cfg.service(simulate);
     cfg.configure(nodes::config);
 }
 #[cfg(test)]

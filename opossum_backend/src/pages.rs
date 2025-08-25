@@ -42,7 +42,7 @@ async fn welcome() -> impl Responder {
     <div class=\"container\">
         <h1>Welcome to the OPOSSUM Backend Server</h1>
         <p>The OPOSSUM backend server provides a robust and scalable API for communicating with the OPOSSUM library.</p>
-        <a class=\"link\" href=\"https://git.gsi.de/phelix/rust/opossum\">OPOSSUM repository</a><br/>
+        <a class=\"link\" href=\"https://github.com/opossum-labs/opossum\">OPOSSUM repository</a><br/>
         <a class=\"link\" href=\"swagger-ui/\">View API Documentation</a>
     </div>
 </body>

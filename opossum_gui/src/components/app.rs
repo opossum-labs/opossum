@@ -5,6 +5,7 @@ use crate::components::{
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
     scenery_editor::{GraphEditor, NodeEditorCommand},
+    simulation::simulation_window::SimulationWindow,
 };
 use dioxus::prelude::*;
 
@@ -13,7 +14,8 @@ pub fn App() -> Element {
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
-    let project_directory = use_signal(|| Path::new("./").to_path_buf());
+    let mut project_directory = use_signal(|| Path::new("./").to_path_buf());
+    let mut run_simulation = use_signal(|| false);
 
     use_effect(move || {
         let cxt_command = cxt_command.read();
@@ -61,9 +63,13 @@ pub fn App() -> Element {
                 }
                 MenuSelection::WinClose => {
                     println!("App::Window close selected");
-                } // MenuSelection::RunProject => {
-                  //     spawn(async move { analyze_setup(project_directory()).await });
-                  // }
+                }
+                MenuSelection::RunProject => {
+                    run_simulation.set(true);
+                }
+                MenuSelection::SetReportDir(path) => {
+                    project_directory.set(path.clone());
+                }
             }
         }
     });
@@ -75,10 +81,11 @@ pub fn App() -> Element {
                     MenuBar { menu_item_selected, project_directory }
                 }
             }
-            GraphEditor { command: node_editor_command}
+            GraphEditor { command: node_editor_command }
             div { class: "row footer",
                 div { class: "col", Logger {} }
             }
+            SimulationWindow { show_simulation: run_simulation, project_directory }
         }
     }
 }

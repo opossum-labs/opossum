@@ -13,9 +13,13 @@ eula = false
 [dependencies]
 opossum = { path = "../opossum" }
 actix-web = "4"
+tokio= "1.47.1"
+tokio-stream = "0.1.17"
+futures-util="0.3.31"
 parking_lot="0.12.4"
 actix-cors = "0.7.0"
-env_logger = "0.11"
+# env_logger = "0.11"
+log= "0.4.27"
 serde = { version = "1.0", features = ["derive"] }
 ron = "0.10.1"
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
@@ -24,4 +28,4 @@ utoipa = {version ="5.3.1", features = ["actix_extras", "uuid"] }
 utoipa-actix-web = "0.1"
 utoipa-swagger-ui = { version ="9.0.1", features = ["actix-web", "vendored"] }
 serde_json = { version = "1"}
-nalgebra = { version = "0.33", features = ["serde-serialize"] }
+nalgebra = { version = "0.34.0", features = ["serde-serialize"] }
