@@ -36,32 +36,6 @@ where
         *LOADING.write() = false;
     });
 }
-// pub async fn run_action<F, T, S>(fut: F, on_success: Option<S>)
-// where
-//     F: Future<Output = Result<T, String>>, // No `Send` required
-//     S: FnOnce(T) + 'static,                // No `Send` required
-// {
-//     // Show loading state
-//     *LOADING.write() = true;
-
-//     // Await the result
-//     let result = fut.await;
-
-//     // Hide loading state
-//     *LOADING.write() = false;
-
-//     // Handle result
-//     match result {
-//         Ok(value) => {
-//             if let Some(callback) = on_success {
-//                 callback(value);
-//             }
-//         }
-//         Err(err_str) => {
-//             OPOSSUM_UI_LOGS.write().add_log(&err_str);
-//         }
-//     }
-// }
 
 #[allow(dead_code)]
 /// Extended version of [`run_action`] that allows providing a **custom error callback**.

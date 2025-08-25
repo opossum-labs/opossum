@@ -82,7 +82,7 @@ pub fn App() -> Element {
             div { class: "row footer",
                 div { class: "col", Logger {} }
             }
-            SimulationWindow { show_simulation: run_simulation, node_editor_command: node_editor_command }
+            SimulationWindow { show_simulation: run_simulation, node_editor_command }
         }
     }
 }

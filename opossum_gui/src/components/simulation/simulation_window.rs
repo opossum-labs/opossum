@@ -1,15 +1,19 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use std::env;
-use std::process::Stdio;
+use std::{fs, process::Stdio};
 use tempfile::tempdir;
 use tokio::{
     io::{AsyncReadExt, BufReader},
     process::Child,
 };
 
-use crate::components::scenery_editor::NodeEditorCommand;
+use crate::{
+    OPOSSUM_UI_LOGS,
+    api::{self, run_action},
+    components::{scenery_editor::NodeEditorCommand, simulation::utils::find_cli_executable},
+};
+
 // Define a message to control the coroutine
 enum CommandAction {
     Run,
@@ -23,69 +27,7 @@ pub fn SimulationWindow(
 ) -> Element {
     let mut output = use_signal(String::new);
     let mut is_running = use_signal(|| false);
-    // Add this block to your component
 
-    // use_effect(move || {
-    //     if show_simulation() {
-    //         logs.clear();
-    //         // Spawn a new asynchronous task
-    //         spawn(async move {
-    //             // Establish the connection to the SSE endpoint
-    //             // Create a reqwest client
-    //             let client = reqwest::Client::new();
-
-    //             // Build and send a POST request to the new endpoint
-    //             let response = match client
-    //                 .post("http://127.0.0.1:8001/api/scenery/simulate")
-    //                 .send()
-    //                 .await
-    //             {
-    //                 Ok(res) => res,
-    //                 Err(err) => {
-    //                     logs.write()
-    //                         .push((Level::Error, format!("Connection error: {err}")));
-    //                     return;
-    //                 }
-    //             };
-    //             simulation_running.set(true);
-    //             // Get the response body as a stream of bytes
-    //             let mut stream = response.bytes_stream();
-
-    //             // Process the stream
-    //             while let Some(item) = stream.next().await {
-    //                 match item {
-    //                     Ok(bytes) => {
-    //                         // Convert the bytes to a string
-    //                         let chunk = String::from_utf8_lossy(&bytes);
-
-    //                         // SSE messages are separated by double newlines.
-    //                         // A single chunk from the stream can contain multiple messages.
-    //                         for line in chunk.split("\n\n") {
-    //                             // SSE data lines start with "data: "
-    //                             if let Some(data) = line.strip_prefix("data: ") {
-    //                                 if !data.trim().is_empty() {
-    //                                     // Split in log_level and message
-    //                                     let log_message: Vec<&str> = data.split("##").collect();
-    //                                     let log_level = Level::from_str(log_message[0].trim())
-    //                                         .unwrap_or(Level::Error);
-    //                                     // Push the new log message into our signal
-    //                                     logs.write()
-    //                                         .push((log_level, log_message[1].trim().to_string()));
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-    //                     Err(err) => {
-    //                         logs.write()
-    //                             .push((Level::Error, format!("Stream error: {err}")));
-    //                         break;
-    //                     }
-    //                 }
-    //             }
-    //             simulation_running.set(false);
-    //         });
-    //     }
-    // });
     let command_runner = use_coroutine(
         move |mut rx: UnboundedReceiver<CommandAction>| async move {
             #[allow(unused_assignments)] // avoid false positive...
@@ -95,37 +37,30 @@ pub fn SimulationWindow(
                 match action {
                     CommandAction::Run => {
                         is_running.set(true);
-                        let cli_path = match env::current_exe() {
-                            Ok(exe_path) => {
-                                // Get the directory containing the executable
-                                if let Some(exe_dir) = exe_path.parent() {
-                                    let path = exe_dir.join("../../../../../debug/opossum.exe");
-                                    path.to_string_lossy().to_string()
-                                } else {
-                                    output.set(format!(
-                                        "[ERROR] Failed to get parent path of executable"
-                                    ));
-                                    String::new()
-                                }
-                            }
-                            Err(e) => {
-                                output.set(format!("[ERROR] Failed to get executable path: {e}"));
-                                String::new()
-                            }
-                        };
-
-                        let temp_dir = tempdir().unwrap();
-                        let temp_model_file = temp_dir.path().join("temp-opossum.opm");
-                        node_editor_command
-                            .set(Some(NodeEditorCommand::SaveFile(temp_model_file.clone())));
                         output.set(String::new());
-
-                        // let mut cmd = tokio::process::Command::new(
-                        //     "C:/Users/ueisenb/AppData/Local/0_gsi_executables/opossum/target/debug/opossum.exe",
-                        // );
+                        let Ok(temp_dir) = tempdir() else {
+                            output.set("Could not determine temp dir.".into());
+                            return;
+                        };
+                        let temp_model_file = temp_dir.path().join("temp-opossum.opm");
+                        let temp_model_file_clone = temp_model_file.clone();
+                        // We have to this with run_action instead of sending a node_editor_command since we have to be sure
+                        // that the file has been written before calling the CLI.
+                        run_action(
+                            api::get_opm_file(),
+                            Some(move |opm_string| {
+                                if let Err(err_str) = fs::write(temp_model_file, opm_string) {
+                                    OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
+                                }
+                            }),
+                        );
+                        let Ok(cli_path) = find_cli_executable() else {
+                            output.set("Did not find CLI".into());
+                            return;
+                        };
                         let mut cmd = tokio::process::Command::new(cli_path);
                         cmd.arg("-r").arg("C:/Users/ueisenb/AppData/Local/0_gsi_executables/opossum/opossum/playground");
-                        cmd.arg("-f").arg(temp_model_file);
+                        cmd.arg("-f").arg(temp_model_file_clone);
                         cmd.arg("-s").arg("false"); // do not display OPOSSUM logo and version info
 
                         #[cfg(windows)]
@@ -213,7 +148,7 @@ pub fn SimulationWindow(
         if show_simulation() {
             command_runner.send(CommandAction::Run);
         } else {
-            // NEW: If the window is closed while running, abort the process.
+            // If the window is closed while running, abort the process.
             if is_running() {
                 command_runner.send(CommandAction::Abort);
             }
@@ -233,10 +168,10 @@ pub fn SimulationWindow(
                                 onclick: move |_| show_simulation.set(false),
                             }
                         }
-                        div {
-                            class: "modal-body",
-                            style: "height: 200px; overflow: auto; font-size: 12px;",
-                            pre { code { "{output}" } }
+                        div { class: "modal-body", style: "overflow: auto;",
+                            pre { style: "height: 400px; font-size: 10px;",
+                                code { "{output}" }
+                            }
                         }
                         div { class: "modal-footer",
                             button {
