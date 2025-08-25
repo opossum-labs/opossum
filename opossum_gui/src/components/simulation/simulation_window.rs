@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use std::{fs, process::Stdio};
+use std::{fs, path::PathBuf, process::Stdio};
 use tempfile::tempdir;
 use tokio::{
     io::{AsyncReadExt, BufReader},
@@ -11,7 +11,7 @@ use tokio::{
 use crate::{
     OPOSSUM_UI_LOGS,
     api::{self, run_action},
-    components::{scenery_editor::NodeEditorCommand, simulation::utils::find_cli_executable},
+    components::simulation::utils::find_cli_executable,
 };
 
 // Define a message to control the coroutine
@@ -23,7 +23,7 @@ enum CommandAction {
 #[component]
 pub fn SimulationWindow(
     mut show_simulation: Signal<bool>,
-    node_editor_command: Signal<Option<NodeEditorCommand>>,
+    project_directory: Signal<PathBuf>,
 ) -> Element {
     let mut output = use_signal(String::new);
     let mut is_running = use_signal(|| false);
@@ -59,7 +59,7 @@ pub fn SimulationWindow(
                             return;
                         };
                         let mut cmd = tokio::process::Command::new(cli_path);
-                        cmd.arg("-r").arg("C:/Users/ueisenb/AppData/Local/0_gsi_executables/opossum/opossum/playground");
+                        cmd.arg("-r").arg(project_directory().as_path());
                         cmd.arg("-f").arg(temp_model_file_clone);
                         cmd.arg("-s").arg("false"); // do not display OPOSSUM logo and version info
 
@@ -102,8 +102,10 @@ pub fn SimulationWindow(
                                     if matches!(maybe_action, Some(CommandAction::Abort)) {
                                         if let Some(mut child) = child_handle.take() {
                                             if let Err(e) = child.kill().await {
+                                                #[allow(clippy::format_push_string)]
                                                 output.write().push_str(&format!("\n[ERROR] Failed to abort process: {e}"));
                                             } else {
+                                                #[allow(clippy::format_push_string)]
                                                 output.write().push_str("\n[INFO] Process aborted by user.");
                                             }
                                         }

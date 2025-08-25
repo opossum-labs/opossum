@@ -14,7 +14,7 @@ pub fn App() -> Element {
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
-    let project_directory = use_signal(|| Path::new("./").to_path_buf());
+    let mut project_directory = use_signal(|| Path::new("./").to_path_buf());
     let mut run_simulation = use_signal(|| false);
 
     use_effect(move || {
@@ -67,6 +67,9 @@ pub fn App() -> Element {
                 MenuSelection::RunProject => {
                     run_simulation.set(true);
                 }
+                MenuSelection::SetReportDir(path) => {
+                    project_directory.set(path.clone());
+                }
             }
         }
     });
@@ -82,7 +85,7 @@ pub fn App() -> Element {
             div { class: "row footer",
                 div { class: "col", Logger {} }
             }
-            SimulationWindow { show_simulation: run_simulation, node_editor_command }
+            SimulationWindow { show_simulation: run_simulation, project_directory }
         }
     }
 }

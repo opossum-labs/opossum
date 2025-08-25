@@ -21,6 +21,7 @@ pub enum MenuSelection {
     RunProject,
     OpenProject(PathBuf),
     SaveProject(PathBuf),
+    SetReportDir(PathBuf),
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     AutoLayout,
@@ -123,16 +124,6 @@ pub fn MenuBar(
                                     "Save Project"
                                 }
                             }
-                                                // li {
-                        //     a {
-                        //         class: "dropdown-item",
-                        //         role: "button",
-                        //         onclick: move |_| {
-                        //             menu_item_selected.set(Some(MenuSelection::RunProject));
-                        //         },
-                        //         "Run Project"
-                        //     }
-                        // }
                         }
                     }
                     li { class: "nav-item",
@@ -196,6 +187,19 @@ pub fn MenuBar(
                 }
             }
             div { class: "d-flex align-items-center",
+                button {
+                    class: "btn btn-success me-4",
+                    onclick: move |_| {
+                        let path = FileDialog::new()
+                            .set_directory("./")
+                            .set_title("Select OPOSSUM report directory")
+                            .pick_folder();
+                        if let Some(path) = path {
+                            menu_item_selected.set(Some(MenuSelection::SetReportDir(path)));
+                        }
+                    },
+                    "Set report dir"
+                }
                 button {
                     class: "btn btn-success me-4",
                     onclick: move |_| {

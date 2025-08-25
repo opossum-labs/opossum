@@ -14,6 +14,7 @@ pub use opossum::{
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig, raytrace::MissedSurfaceStrategy},
     create_data_dir, degree,
     energy_distributions::*,
+    error::{OpmResult, OpossumError},
     joule,
     lightdata::{
         energy_data_builder::{self, EnergyLaserLines},
@@ -45,5 +46,4 @@ pub use opossum::{
         geom_transformation::{AlignmentAxis, Isometry, RotationAxis, TranslationAxis},
         math_utils::{f64_to_usize, i32_to_f64, isize_to_f64, usize_to_f64},
     },
-    error::{OpmResult, OpossumError}
 };
