@@ -5,7 +5,7 @@ pub const MIN_ZOOM: f64 = 0.4;
 
 // constants for EDGE drawing
 pub const EDGE_BEZIER_OFFSET: f64 = 50.0;
-pub const EDGE_DISTANCE_FIELD_WIDTH: f64 = 60.0;
+pub const EDGE_DISTANCE_FIELD_WIDTH: f64 = 80.0;
 pub const EDGE_DISTANCE_FIELD_HEIGHT: f64 = 30.0;
 
 // constants for Node layout
