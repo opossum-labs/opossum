@@ -49,7 +49,7 @@ pub fn run_action_with_success_check<F, T, S>(
     on_success: Option<S>,
     mut action_successful: Signal<bool>,
 ) where
-    F: Future<Output = Result<T, String>> + 'static, // No `Send` required
+    F: Future<Output = Result<T, String>> + 'static,
     S: FnOnce(T) + 'static,
 {
     spawn(async move {

@@ -135,9 +135,10 @@ impl GraphStore {
         )
     }
     pub fn clear(&mut self) {
-        self.nodes.set(HashMap::new());
-        self.edges.set(Vec::new());
-        self.active_node.set(None);
+        self.nodes().write().clear();
+        self.edges().write().clear();
+        let mut active_node=self.active_node.write();
+        *active_node=None;
     }
     pub fn renumber_z_levels(&mut self) {
         let mut node_elements: Vec<(Uuid, usize)> = self
@@ -393,8 +394,8 @@ fn process_load_from_file(
     }
     graph_store.write().clear();
     process_get_optical_nodes(graph_store);
-    process_get_analyzer_nodes(graph_store);
     process_get_connections(graph_store);
+    process_get_analyzer_nodes(graph_store);
 }
 
 fn process_get_connections(mut graph_store: Signal<GraphStore>) {
@@ -410,6 +411,7 @@ fn process_get_analyzer_nodes(mut graph_store: Signal<GraphStore>) {
     run_action(
         api::get_analyzers(),
         Some(move |analyzers: Vec<AnalyzerInfo>| {
+            println!("number of analyzers: {}", analyzers.len());
             graph_store
                 .write()
                 .nodes
@@ -423,6 +425,7 @@ fn process_get_optical_nodes(mut graph_store: Signal<GraphStore>) {
     run_action(
         api::get_nodes(Uuid::nil()),
         Some(move |nodes: Vec<NodeInfo>| {
+            println!("number of nodes: {}", nodes.len());
             graph_store
                 .write()
                 .nodes
