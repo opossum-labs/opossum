@@ -94,6 +94,8 @@ pub fn SimulationWindow(
 
                         let mut stdout_buf = [0; 1024];
                         let mut stderr_buf = [0; 1024];
+                        let mut stdout_closed = false;
+                        let mut stderr_closed = false;
 
                         loop {
                             tokio::select! {
@@ -112,26 +114,31 @@ pub fn SimulationWindow(
                                         break;
                                     }
                                 }
-                                // Read raw bytes from stdout
-                                result = stdout_reader.read(&mut stdout_buf) => {
+                                // Read raw bytes from stdout, but only if the stream isn't closed yet
+                                result = stdout_reader.read(&mut stdout_buf), if !stdout_closed => {
                                     match result {
-                                        Ok(0) | Err(_) => break, // EOF or Error, stream closed.
+                                        Ok(0) | Err(_) => stdout_closed = true, // Mark as closed, don't break
                                         Ok(n) => {
                                             let s = String::from_utf8_lossy(&stdout_buf[..n]);
                                             output.write().push_str(&s);
                                         },
                                     }
                                 },
-                                // Read raw bytes from stderr
-                                result = stderr_reader.read(&mut stderr_buf) => {
+                                // Read raw bytes from stderr, but only if the stream isn't closed yet
+                                result = stderr_reader.read(&mut stderr_buf), if !stderr_closed => {
                                      match result {
-                                        Ok(0) | Err(_) => {}, // EOF or Error, but stdout might still be writing.
+                                        Ok(0) | Err(_) => stderr_closed = true, // Mark as closed
                                         Ok(n) => {
                                             let s = String::from_utf8_lossy(&stderr_buf[..n]);
                                             output.write().push_str(&s);
                                         },
                                     }
                                 }
+                            }
+
+                            // Exit the loop only when both streams are confirmed to be closed
+                            if stdout_closed && stderr_closed {
+                                break;
                             }
                         }
                         // Ensure the process is fully waited on after the loop exits
@@ -171,7 +178,7 @@ pub fn SimulationWindow(
                             }
                         }
                         div { class: "modal-body", style: "overflow: auto;",
-                            pre { style: "height: 400px; font-size: 10px;",
+                            pre { style: "height: 400px; font-size: 11px;",
                                 code { "{output}" }
                             }
                         }
