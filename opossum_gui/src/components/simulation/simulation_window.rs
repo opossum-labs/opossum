@@ -1,17 +1,17 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
+use crate::{
+    OPOSSUM_UI_LOGS,
+    api::{self, run_action},
+    components::simulation::utils::find_cli_executable,
+};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
+use std::fmt::Write;
 use std::{fs, path::PathBuf, process::Stdio};
 use tempfile::tempdir;
 use tokio::{
     io::{AsyncReadExt, BufReader},
     process::Child,
-};
-
-use crate::{
-    OPOSSUM_UI_LOGS,
-    api::{self, run_action},
-    components::simulation::utils::find_cli_executable,
 };
 
 // Define a message to control the coroutine
@@ -100,19 +100,17 @@ pub fn SimulationWindow(
                         loop {
                             tokio::select! {
                                 // This branch handles aborting the process
-                                maybe_action = rx.next() => {
-                                    if matches!(maybe_action, Some(CommandAction::Abort)) {
-                                        if let Some(mut child) = child_handle.take() {
-                                            if let Err(e) = child.kill().await {
-                                                #[allow(clippy::format_push_string)]
-                                                output.write().push_str(&format!("\n[ERROR] Failed to abort process: {e}"));
-                                            } else {
-                                                #[allow(clippy::format_push_string)]
-                                                output.write().push_str("\n[INFO] Process aborted by user.");
+                                    maybe_action = rx.next() => {
+                                        if matches!(maybe_action, Some(CommandAction::Abort)) {
+                                            if let Some(mut child) = child_handle.take() {
+                                                if let Err(e) = child.kill().await {
+                                                    write!(*output.write(), "\n[ERROR] Failed to abort process: {e}").unwrap();
+                                                } else {
+                                                    output.write().push_str("\n[INFO] Process aborted by user.");
+                                                }
                                             }
+                                            break;
                                         }
-                                        break;
-                                    }
                                 }
                                 // Read raw bytes from stdout, but only if the stream isn't closed yet
                                 result = stdout_reader.read(&mut stdout_buf), if !stdout_closed => {
@@ -126,7 +124,7 @@ pub fn SimulationWindow(
                                 },
                                 // Read raw bytes from stderr, but only if the stream isn't closed yet
                                 result = stderr_reader.read(&mut stderr_buf), if !stderr_closed => {
-                                     match result {
+                                        match result {
                                         Ok(0) | Err(_) => stderr_closed = true, // Mark as closed
                                         Ok(n) => {
                                             let s = String::from_utf8_lossy(&stderr_buf[..n]);
@@ -135,7 +133,6 @@ pub fn SimulationWindow(
                                     }
                                 }
                             }
-
                             // Exit the loop only when both streams are confirmed to be closed
                             if stdout_closed && stderr_closed {
                                 break;

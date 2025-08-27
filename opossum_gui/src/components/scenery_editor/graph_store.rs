@@ -42,7 +42,6 @@ pub struct GraphStore {
     edges: Signal<Vec<ConnectInfo>>,
     active_node: Signal<Option<Uuid>>,
 }
-#[allow(dead_code)]
 pub enum GraphStoreAction {
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),

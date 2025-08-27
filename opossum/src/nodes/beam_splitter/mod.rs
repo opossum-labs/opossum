@@ -262,135 +262,118 @@ impl BeamSplitter {
         }
         Ok((out1_data, out2_data))
     }
-    #[allow(clippy::too_many_lines)]
+    /// Processes rays arriving at a single input port.
+    /// This includes refraction, apodization, and splitting.
+    fn process_input_port(
+        &mut self,
+        input: Option<&LightData>,
+        port_name: &str,
+        splitting_config: &SplittingConfig,
+        missed_surface_strategy: MissedSurfaceStrategy,
+    ) -> OpmResult<(Rays, Rays)> {
+        if let Some(light_data) = input {
+            match light_data {
+                LightData::Geometric(r) => {
+                    let mut rays = r.clone();
+                    // Refract rays on the input surface
+                    if let Some(surf) = self.get_optic_surface_mut(port_name) {
+                        rays.refract_on_surface(surf, None, true, &missed_surface_strategy)?;
+                    } else {
+                        return Err(OpossumError::OpticPort(format!(
+                            "Input optic surface not found for port '{port_name}'"
+                        )));
+                    }
+
+                    // Apply the input aperture
+                    if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
+                        rays.apodize(aperture, &self.effective_surface_iso(port_name)?)?;
+                    } else {
+                        return Err(OpossumError::OpticPort(format!(
+                            "Input aperture not found for port '{port_name}'"
+                        )));
+                    }
+
+                    // Split the rays and return both parts
+                    let split_rays = rays.split(splitting_config)?;
+                    Ok((rays, split_rays))
+                }
+                _ => Err(OpossumError::Analysis(format!(
+                    "Expected LightData::Geometric at port '{port_name}'"
+                ))),
+            }
+        } else {
+            // No input, return empty sets of rays
+            Ok((Rays::default(), Rays::default()))
+        }
+    }
+    /// Processes rays for a single output port.
+    /// This includes apodization and invalidating low-energy rays.
+    fn process_output_port(
+        &self,
+        rays: &mut Rays,
+        port_name: &str,
+        analyzer_type: &AnalyzerType,
+    ) -> OpmResult<()> {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, port_name) {
+            let iso = self.effective_surface_iso(port_name)?;
+            rays.apodize(aperture, &iso)?;
+            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            }
+        } else {
+            return Err(OpossumError::OpticPort(format!(
+                "Output aperture not found for port '{port_name}'"
+            )));
+        }
+        Ok(())
+    }
     fn analyze_raytrace(
         &mut self,
         in1: Option<&LightData>,
         in2: Option<&LightData>,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<(Option<LightData>, Option<LightData>)> {
-        let in1_port = &self.ports().names(&PortType::Input)[0];
-        let in2_port = &self.ports().names(&PortType::Input)[1];
-        let out1_port = &self.ports().names(&PortType::Output)[0];
-        let out2_port = &self.ports().names(&PortType::Output)[1];
-
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
         }
+
+        let in1_port_name = &self.ports().names(&PortType::Input)[0];
+        let in2_port_name = &self.ports().names(&PortType::Input)[1];
+        let out1_port_name = &self.ports().names(&PortType::Output)[0];
+        let out2_port_name = &self.ports().names(&PortType::Output)[1];
+
         let splitting_config = self.splitting_config()?;
-        let refraction_intended = true;
         let missed_surface_strategy = match analyzer_type {
             AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
             AnalyzerType::RayTrace(ray_trace_config) => ray_trace_config.missed_surface_strategy(),
             AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
         };
-        let (mut in_ray1, split1) = if let Some(input_1) = in1 {
-            match input_1 {
-                LightData::Geometric(r) => {
-                    let mut rays = r.clone();
-                    if let Some(surf) = self.get_optic_surface_mut(in1_port) {
-                        rays.refract_on_surface(
-                            surf,
-                            None,
-                            refraction_intended,
-                            missed_surface_strategy,
-                        )?;
 
-                        match self.ports().aperture(&PortType::Input, in1_port) {
-                            Some(aperture) => {
-                                rays.apodize(aperture, &self.effective_surface_iso(in1_port)?)?;
-                            }
-                            _ => {
-                                return Err(OpossumError::OpticPort(
-                                    "input aperture not found".into(),
-                                ));
-                            }
-                        }
-                    } else {
-                        return Err(OpossumError::OpticPort(
-                            "input optic surface not found".into(),
-                        ));
-                    }
+        // Process both inputs
+        let (mut main_rays1, split_rays1) = self.process_input_port(
+            in1,
+            in1_port_name,
+            &splitting_config,
+            *missed_surface_strategy,
+        )?;
+        let (mut main_rays2, split_rays2) = self.process_input_port(
+            in2,
+            in2_port_name,
+            &splitting_config,
+            *missed_surface_strategy,
+        )?;
 
-                    let split_rays = rays.split(&splitting_config)?;
-                    (rays, split_rays)
-                }
-                _ => {
-                    return Err(OpossumError::Analysis(
-                        "expected Rays value at `input_1` port".into(),
-                    ));
-                }
-            }
-        } else {
-            (Rays::default(), Rays::default())
-        };
-        let (mut in_ray2, split2) = if let Some(input_2) = in2 {
-            match input_2 {
-                LightData::Geometric(r) => {
-                    let mut rays = r.clone();
-                    if let Some(surf) = self.get_optic_surface_mut(in2_port) {
-                        rays.refract_on_surface(
-                            surf,
-                            None,
-                            refraction_intended,
-                            missed_surface_strategy,
-                        )?;
-                        match self.ports().aperture(&PortType::Input, in2_port) {
-                            Some(aperture) => {
-                                rays.apodize(aperture, &self.effective_surface_iso(in2_port)?)?;
-                            }
-                            _ => {
-                                return Err(OpossumError::OpticPort(
-                                    "input aperture not found".into(),
-                                ));
-                            }
-                        }
-                        let split_rays = rays.split(&splitting_config)?;
-                        (rays, split_rays)
-                    } else {
-                        return Err(OpossumError::OpticPort(
-                            "input optic surface not found".into(),
-                        ));
-                    }
-                }
-                _ => {
-                    return Err(OpossumError::Analysis(
-                        "expected Rays value at `input_2` port".into(),
-                    ));
-                }
-            }
-        } else {
-            (Rays::default(), Rays::default())
-        };
-        in_ray1.merge(&split2);
-        in_ray2.merge(&split1);
-        let iso = self.effective_surface_iso(out1_port)?;
+        // Merge the transmitted and reflected rays for the two outputs
+        main_rays1.merge(&split_rays2); // out1 = trans1 + refl2
+        main_rays2.merge(&split_rays1); // out2 = trans2 + refl1
 
-        match self.ports().aperture(&PortType::Output, out1_port) {
-            Some(aperture) => {
-                in_ray1.apodize(aperture, &iso)?;
-                if let AnalyzerType::RayTrace(config) = analyzer_type {
-                    in_ray1.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                }
-            }
-            _ => {
-                return Err(OpossumError::OpticPort("ouput aperture not found".into()));
-            }
-        }
-        match self.ports().aperture(&PortType::Output, out2_port) {
-            Some(aperture) => {
-                in_ray2.apodize(aperture, &iso)?;
-                if let AnalyzerType::RayTrace(config) = analyzer_type {
-                    in_ray2.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                }
-            }
-            _ => {
-                return Err(OpossumError::OpticPort("ouput aperture not found".into()));
-            }
-        }
+        // Process both outputs
+        self.process_output_port(&mut main_rays1, out1_port_name, analyzer_type)?;
+        self.process_output_port(&mut main_rays2, out2_port_name, analyzer_type)?;
+
         Ok((
-            Some(LightData::Geometric(in_ray1)),
-            Some(LightData::Geometric(in_ray2)),
+            Some(LightData::Geometric(main_rays1)),
+            Some(LightData::Geometric(main_rays2)),
         ))
     }
 }

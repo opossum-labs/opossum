@@ -11,7 +11,6 @@ use approx::relative_ne;
 use colorous::Gradient;
 use image::RgbImage;
 use itertools::{Itertools, izip};
-use kahan::KahanSum;
 use log::warn;
 use nalgebra::{
     DMatrix, DVector, DVectorView, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3, Vector3,
@@ -311,40 +310,38 @@ impl PlotType {
         chart.draw_series(series).unwrap();
     }
 
-    #[allow(dead_code)]
-    fn check_equistancy_of_mesh(ax_vals: &MatrixXx1<f64>) -> bool {
-        let len_ax = ax_vals.len();
-        let mut equi = true;
-        if len_ax > 2 {
-            let mut distance = KahanSum::new_with_value(ax_vals[1]);
-            distance += -ax_vals[0];
-            for idx in 2..len_ax {
-                let mut diff = KahanSum::new_with_value(ax_vals[idx]);
-                diff += -ax_vals[idx - 1];
-                diff += -distance.sum();
-                if (diff.sum() / distance.sum()).abs() > 1e5 * f64::EPSILON {
-                    equi = false;
-                    break;
-                }
-            }
-        }
-        equi
-    }
+    // fn check_equistancy_of_mesh(ax_vals: &MatrixXx1<f64>) -> bool {
+    //     let len_ax = ax_vals.len();
+    //     let mut equi = true;
+    //     if len_ax > 2 {
+    //         let mut distance = KahanSum::new_with_value(ax_vals[1]);
+    //         distance += -ax_vals[0];
+    //         for idx in 2..len_ax {
+    //             let mut diff = KahanSum::new_with_value(ax_vals[idx]);
+    //             diff += -ax_vals[idx - 1];
+    //             diff += -distance.sum();
+    //             if (diff.sum() / distance.sum()).abs() > 1e5 * f64::EPSILON {
+    //                 equi = false;
+    //                 break;
+    //             }
+    //         }
+    //     }
+    //     equi
+    // }
 
-    #[allow(dead_code)]
-    fn get_ax_val_distance_if_equidistant(ax_vals: &MatrixXx1<f64>) -> f64 {
-        let mut dist = ax_vals[1] - ax_vals[0]; // / 2.;
-        if Self::check_equistancy_of_mesh(ax_vals) {
-            if dist <= 2. * f64::EPSILON {
-                dist = 0.5;
-            }
-        } else {
-            warn!(
-                "Warning! The points on this axis are not equidistant. This may distort the plot!"
-            );
-        }
-        dist
-    }
+    // fn get_ax_val_distance_if_equidistant(ax_vals: &MatrixXx1<f64>) -> f64 {
+    //     let mut dist = ax_vals[1] - ax_vals[0];
+    //     if Self::check_equistancy_of_mesh(ax_vals) {
+    //         if dist <= 2. * f64::EPSILON {
+    //             dist = 0.5;
+    //         }
+    //     } else {
+    //         warn!(
+    //             "Warning! The points on this axis are not equidistant. This may distort the plot!"
+    //         );
+    //     }
+    //     dist
+    // }
 
     fn draw_2d_colormesh<T: DrawingBackend>(
         chart: &mut ChartContext<'_, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
@@ -3435,30 +3432,30 @@ mod test {
             "Gradient(Turbo)".to_owned()
         );
     }
-    #[test]
-    fn get_ax_val_distance_if_equidistant_test() {
-        let x = linspace(0., 1., 101).unwrap();
-        let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
-        assert!((dist - 0.01).abs() < f64::EPSILON);
+    // #[test]
+    // fn get_ax_val_distance_if_equidistant_test() {
+    //     let x = linspace(0., 1., 101).unwrap();
+    //     let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
+    //     assert!((dist - 0.01).abs() < f64::EPSILON);
 
-        let x = linspace(0., f64::EPSILON, 101).unwrap();
-        let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
-        assert!((dist - 0.5).abs() < f64::EPSILON);
-    }
-    #[test]
-    fn check_equistancy_of_mesh_test() {
-        let x = linspace(0., 1., 101).unwrap();
-        assert!(PlotType::check_equistancy_of_mesh(&x));
+    //     let x = linspace(0., f64::EPSILON, 101).unwrap();
+    //     let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
+    //     assert!((dist - 0.5).abs() < f64::EPSILON);
+    // }
+    // #[test]
+    // fn check_equistancy_of_mesh_test() {
+    //     let x = linspace(0., 1., 101).unwrap();
+    //     assert!(PlotType::check_equistancy_of_mesh(&x));
 
-        let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100).unwrap();
-        assert!(PlotType::check_equistancy_of_mesh(&x));
+    //     let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100).unwrap();
+    //     assert!(PlotType::check_equistancy_of_mesh(&x));
 
-        let x = MatrixXx1::from_vec(vec![0., 1., 3.]);
-        assert!(!PlotType::check_equistancy_of_mesh(&x));
+    //     let x = MatrixXx1::from_vec(vec![0., 1., 3.]);
+    //     assert!(!PlotType::check_equistancy_of_mesh(&x));
 
-        let x = MatrixXx1::from_vec(vec![0.]);
-        assert!(PlotType::check_equistancy_of_mesh(&x));
-    }
+    //     let x = MatrixXx1::from_vec(vec![0.]);
+    //     assert!(PlotType::check_equistancy_of_mesh(&x));
+    // }
     #[test]
     fn calc_pixel_margin_test() {
         let axlims = AxLims::new(1e-4, 2e-4).unwrap();

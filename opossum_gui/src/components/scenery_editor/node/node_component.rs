@@ -87,7 +87,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                             ],
                         );
                         let mut ctx = CONTEXT_MENU.write();
-                        *ctx = cx_menu;
+                        *ctx = Some(cx_menu);
                     }
                 }
             },

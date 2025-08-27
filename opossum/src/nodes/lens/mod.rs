@@ -128,92 +128,91 @@ impl Lens {
         Ok(lens)
     }
 
-    /// create a default aperture: defined by
-    ///  - intersection of two spheres
-    ///  - intersection of sphere and plane
-    ///  - the minimum radius of the spheres if there is no intersection
-    #[allow(dead_code)]
-    fn get_minimum_logical_aperture_radius(
-        front_curvature: Length,
-        rear_curvature: Length,
-        center_thickness: Length,
-    ) -> Option<Length> {
-        // case 1: bi-convex
-        if front_curvature.is_sign_positive()
-            && front_curvature.is_finite()
-            && rear_curvature.is_sign_negative()
-            && rear_curvature.is_finite()
-        {
-            //get intersecting radius by calculating the area of a triangle that is defined the two radii and the distance between the sphere centers
-            let sphere_dist = rear_curvature.abs() + front_curvature.abs() - center_thickness;
-            let semiperimeter = 0.5 * (sphere_dist + rear_curvature.abs() + front_curvature.abs());
-            //herons formula
-            let triangle_area = (semiperimeter
-                * (semiperimeter - sphere_dist)
-                * (semiperimeter - rear_curvature.abs())
-                * (semiperimeter - front_curvature.abs()))
-            .sqrt();
-            //setting equal two are defined by base height x base length / 2 and rearrange
-            Some(triangle_area / sphere_dist * 2.)
-        }
-        // case 2a: plano-convex with back plane
-        else if front_curvature.is_sign_positive()
-            && front_curvature.is_finite()
-            && rear_curvature.is_infinite()
-        {
-            Some(
-                (front_curvature * front_curvature
-                    - (front_curvature.abs() - center_thickness)
-                        * (front_curvature.abs() - center_thickness))
-                    .sqrt(),
-            )
-        }
-        // case 2b: plano-convex with front plane
-        else if rear_curvature.is_sign_negative()
-            && rear_curvature.is_finite()
-            && front_curvature.is_infinite()
-        {
-            Some(
-                (rear_curvature * rear_curvature
-                    - (rear_curvature.abs() - center_thickness)
-                        * (rear_curvature.abs() - center_thickness))
-                    .sqrt(),
-            )
-        }
-        // case 3: positive meniscus lens
-        else if front_curvature.is_sign_positive()
-            && rear_curvature.is_sign_positive()
-            && front_curvature >= rear_curvature
-            && front_curvature.is_finite()
-            || front_curvature.is_sign_negative()
-                && rear_curvature.is_sign_negative()
-                && front_curvature <= rear_curvature
-                && rear_curvature.is_finite()
-        {
-            let g = front_curvature.abs() - (rear_curvature.abs() - center_thickness);
-            let semiperimeter = 0.5 * (g + rear_curvature.abs() + front_curvature.abs());
-            let triangle_area = (semiperimeter
-                * (semiperimeter - g)
-                * (semiperimeter - rear_curvature.abs())
-                * (semiperimeter - front_curvature.abs()))
-            .sqrt();
-            Some(
-                2. * triangle_area
-                    / (front_curvature.abs() + center_thickness - rear_curvature.abs()),
-            )
-        }
-        //case 4: flat flat. no defined aperture. set to infinity
-        else if front_curvature.is_infinite() && rear_curvature.is_infinite() {
-            None
-        }
-        // case 5: negative meniscus lens or bi-concave or plano-concave
-        // get the minimum of both radii
-        else if front_curvature.abs() < rear_curvature.abs() {
-            Some(front_curvature.abs())
-        } else {
-            Some(rear_curvature.abs())
-        }
-    }
+    // /// create a default aperture: defined by
+    // ///  - intersection of two spheres
+    // ///  - intersection of sphere and plane
+    // ///  - the minimum radius of the spheres if there is no intersection
+    // fn get_minimum_logical_aperture_radius(
+    //     front_curvature: Length,
+    //     rear_curvature: Length,
+    //     center_thickness: Length,
+    // ) -> Option<Length> {
+    //     // case 1: bi-convex
+    //     if front_curvature.is_sign_positive()
+    //         && front_curvature.is_finite()
+    //         && rear_curvature.is_sign_negative()
+    //         && rear_curvature.is_finite()
+    //     {
+    //         //get intersecting radius by calculating the area of a triangle that is defined the two radii and the distance between the sphere centers
+    //         let sphere_dist = rear_curvature.abs() + front_curvature.abs() - center_thickness;
+    //         let semiperimeter = 0.5 * (sphere_dist + rear_curvature.abs() + front_curvature.abs());
+    //         //herons formula
+    //         let triangle_area = (semiperimeter
+    //             * (semiperimeter - sphere_dist)
+    //             * (semiperimeter - rear_curvature.abs())
+    //             * (semiperimeter - front_curvature.abs()))
+    //         .sqrt();
+    //         //setting equal two are defined by base height x base length / 2 and rearrange
+    //         Some(triangle_area / sphere_dist * 2.)
+    //     }
+    //     // case 2a: plano-convex with back plane
+    //     else if front_curvature.is_sign_positive()
+    //         && front_curvature.is_finite()
+    //         && rear_curvature.is_infinite()
+    //     {
+    //         Some(
+    //             (front_curvature * front_curvature
+    //                 - (front_curvature.abs() - center_thickness)
+    //                     * (front_curvature.abs() - center_thickness))
+    //                 .sqrt(),
+    //         )
+    //     }
+    //     // case 2b: plano-convex with front plane
+    //     else if rear_curvature.is_sign_negative()
+    //         && rear_curvature.is_finite()
+    //         && front_curvature.is_infinite()
+    //     {
+    //         Some(
+    //             (rear_curvature * rear_curvature
+    //                 - (rear_curvature.abs() - center_thickness)
+    //                     * (rear_curvature.abs() - center_thickness))
+    //                 .sqrt(),
+    //         )
+    //     }
+    //     // case 3: positive meniscus lens
+    //     else if front_curvature.is_sign_positive()
+    //         && rear_curvature.is_sign_positive()
+    //         && front_curvature >= rear_curvature
+    //         && front_curvature.is_finite()
+    //         || front_curvature.is_sign_negative()
+    //             && rear_curvature.is_sign_negative()
+    //             && front_curvature <= rear_curvature
+    //             && rear_curvature.is_finite()
+    //     {
+    //         let g = front_curvature.abs() - (rear_curvature.abs() - center_thickness);
+    //         let semiperimeter = 0.5 * (g + rear_curvature.abs() + front_curvature.abs());
+    //         let triangle_area = (semiperimeter
+    //             * (semiperimeter - g)
+    //             * (semiperimeter - rear_curvature.abs())
+    //             * (semiperimeter - front_curvature.abs()))
+    //         .sqrt();
+    //         Some(
+    //             2. * triangle_area
+    //                 / (front_curvature.abs() + center_thickness - rear_curvature.abs()),
+    //         )
+    //     }
+    //     //case 4: flat flat. no defined aperture. set to infinity
+    //     else if front_curvature.is_infinite() && rear_curvature.is_infinite() {
+    //         None
+    //     }
+    //     // case 5: negative meniscus lens or bi-concave or plano-concave
+    //     // get the minimum of both radii
+    //     else if front_curvature.abs() < rear_curvature.abs() {
+    //         Some(front_curvature.abs())
+    //     } else {
+    //         Some(rear_curvature.abs())
+    //     }
+    // }
 }
 
 impl OpticNode for Lens {

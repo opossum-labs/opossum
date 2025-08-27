@@ -353,7 +353,6 @@ impl NewRefNode {
     )
 )]
 #[post("/{uuid}/references")]
-#[allow(clippy::significant_drop_tightening)]
 async fn post_subreference(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
@@ -918,11 +917,14 @@ async fn patch_properties(
     let document = data.document.lock();
     let node = document.scenery().node_recursive(uuid)?;
     drop(document);
-    let mut optic_ref = node.optical_ref.lock().unwrap();
-    let node_attr = optic_ref.node_attr_mut();
-    let update_json = updated_props.into_inner();
-    *node_attr = update_node_attr(node_attr, &update_json)?;
-    Ok(web::Json(node_attr.clone()))
+    let final_attr = {
+        let mut optic_ref = node.optical_ref.lock().unwrap();
+        let node_attr = optic_ref.node_attr_mut();
+        let update_json = updated_props.into_inner();
+        *node_attr = update_node_attr(node_attr, &update_json)?;
+        node_attr.clone()
+    };
+    Ok(web::Json(final_attr))
 }
 /// Connection Information
 #[derive(ToSchema, Clone, PartialEq, Serialize, Deserialize, Debug)]

@@ -53,7 +53,6 @@ fn start_backend() -> ProcessHandle {
     println!("Backend server started with PID: {}", child_process.id());
     ProcessHandle::new(child_process)
 }
-
 #[derive(Clone, Default)]
 struct ProcessHandle {
     #[allow(dead_code)]

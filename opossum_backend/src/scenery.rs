@@ -59,11 +59,9 @@ async fn nr_of_nodes(data: web::Data<AppState>) -> impl Responder {
 ///
 /// This function returns the global configuration of the model.
 #[get("/global_conf")]
-#[allow(clippy::significant_drop_tightening)] // no idea, how to fix this ...
 async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
     let document = data.document.lock();
-    let global_conf = document.global_conf().lock().unwrap().clone();
-    web::Json(global_conf)
+    web::Json(document.global_conf().lock().unwrap().clone())
 }
 #[utoipa::path(tag = "scenery",
     responses((status = 200, description = "Global configuration", body = SceneryResources))

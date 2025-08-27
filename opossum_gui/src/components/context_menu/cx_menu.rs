@@ -27,9 +27,8 @@ impl CxMenu {
     pub const fn padding() -> f64 {
         2.
     }
-    #[allow(clippy::unnecessary_wraps)]
     #[must_use]
-    pub const fn new(x: f64, y: f64, entries: Vec<(String, CxtCommand)>) -> Option<Self> {
+    pub const fn new(x: f64, y: f64, entries: Vec<(String, CxtCommand)>) -> Self {
         // MAIN_WINDOW_SIZE.read().as_ref().map(|rect| {
         //     let mut x = x;
         //     let mut y = y;
@@ -41,7 +40,7 @@ impl CxMenu {
         //     }
         //     Self { x, y, entries }
         // })
-        Some(Self { x, y, entries })
+        Self { x, y, entries }
     }
 }
 
