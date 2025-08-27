@@ -816,10 +816,9 @@ impl Ray {
             (old_dir - self.dir).norm(),
             0.,
             epsilon = f64::EPSILON * 1000.
-        ) {
-            if let Some(rot) = Rotation3::rotation_between(&old_dir, &self.dir) {
-                *up_direction = rot.transform_vector(up_direction);
-            }
+        ) && let Some(rot) = Rotation3::rotation_between(&old_dir, &self.dir)
+        {
+            *up_direction = rot.transform_vector(up_direction);
         }
 
         Ok(())

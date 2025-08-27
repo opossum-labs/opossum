@@ -170,10 +170,10 @@ impl OpticGraph {
             drop(node);
             if node_attrs.node_type() == "reference" {
                 let ref_node_props = node_attrs.properties();
-                if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id") {
-                    if *ref_uuid == node_id {
-                        return Some(node_idx);
-                    }
+                if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id")
+                    && *ref_uuid == node_id
+                {
+                    return Some(node_idx);
                 }
             }
         }
@@ -340,12 +340,12 @@ impl OpticGraph {
             Ok(())
         } else {
             let node_ref = self.node(src_id)?;
-            let node_info = node_ref
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
             Err(OpossumError::OpticScenery(format!(
-                "source node {node_info} with port <{src_port}> is not connected"
+                "source node {} with port <{src_port}> is not connected",
+                node_ref
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
             )))
         }
     }
@@ -377,12 +377,12 @@ impl OpticGraph {
             Ok(())
         } else {
             let node_ref = self.node(src_id)?;
-            let node_info = node_ref
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
             Err(OpossumError::OpticScenery(format!(
-                "source node {node_info} with port <{src_port}> is not connected"
+                "source node {} with port <{src_port}> is not connected",
+                node_ref
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
             )))
         }
     }
@@ -425,37 +425,36 @@ impl OpticGraph {
                 let output_ports = ports.ports(&PortType::Output).clone();
                 drop(optical_ref);
                 if output_ports.len() == 1 && input_ports.len() == 1 {
-                    if let Some(outgoing_edge) = outgoing_edges.first() {
-                        if outgoing_edges.len() == 1 {
-                            if let (Some((output_port, _)), Some(target_node)) = (
-                                output_ports.first_key_value(),
-                                self.g.node_weight(outgoing_edge.1),
-                            ) {
-                                self.connect_nodes(
-                                    node_id,
-                                    output_port,
-                                    target_node.uuid(),
-                                    outgoing_edge.3.target_port(),
-                                    *outgoing_edge.3.distance(),
-                                )?;
-                            }
-                        }
+                    if let Some(outgoing_edge) = outgoing_edges.first()
+                        && outgoing_edges.len() == 1
+                        && let (Some((output_port, _)), Some(target_node)) = (
+                            output_ports.first_key_value(),
+                            self.g.node_weight(outgoing_edge.1),
+                        )
+                    {
+                        self.connect_nodes(
+                            node_id,
+                            output_port,
+                            target_node.uuid(),
+                            outgoing_edge.3.target_port(),
+                            *outgoing_edge.3.distance(),
+                        )?;
                     }
-                    if let Some(incoming_edge) = incoming_edges.first() {
-                        if incoming_edges.len() == 1 {
-                            if let (Some((input_port, _)), Some(src_node)) = (
-                                input_ports.first_key_value(),
-                                self.g.node_weight(incoming_edge.2),
-                            ) {
-                                self.connect_nodes(
-                                    src_node.uuid(),
-                                    incoming_edge.3.src_port(),
-                                    node_id,
-                                    input_port,
-                                    *incoming_edge.3.distance(),
-                                )?;
-                            }
-                        }
+
+                    if let Some(incoming_edge) = incoming_edges.first()
+                        && incoming_edges.len() == 1
+                        && let (Some((input_port, _)), Some(src_node)) = (
+                            input_ports.first_key_value(),
+                            self.g.node_weight(incoming_edge.2),
+                        )
+                    {
+                        self.connect_nodes(
+                            src_node.uuid(),
+                            incoming_edge.3.src_port(),
+                            node_id,
+                            input_port,
+                            *incoming_edge.3.distance(),
+                        )?;
                     }
                 }
             }
@@ -605,10 +604,10 @@ impl OpticGraph {
             let mut mapped_light_result = LightResult::default();
             // map group-external data and add
             for incoming in incoming_data {
-                if let Some(mapping) = portmap.get(incoming.0) {
-                    if node_id == mapping.0 {
-                        mapped_light_result.insert(mapping.1.clone(), incoming.1.clone());
-                    }
+                if let Some(mapping) = portmap.get(incoming.0)
+                    && node_id == mapping.0
+                {
+                    mapped_light_result.insert(mapping.1.clone(), incoming.1.clone());
                 }
             }
             // add group internal data
@@ -692,10 +691,10 @@ impl OpticGraph {
                     .lock()
                     .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
 
-                if let Ok(group) = node.as_group_mut() {
-                    if let Ok(node) = group.graph.node_recursive(uuid) {
-                        return Ok(node);
-                    }
+                if let Ok(group) = node.as_group_mut()
+                    && let Ok(node) = group.graph.node_recursive(uuid)
+                {
+                    return Ok(node);
                 }
             }
             Err(OpossumError::OpticScenery(

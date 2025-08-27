@@ -90,11 +90,9 @@ impl AnalysisGhostFocus for NodeGroup {
                         self.graph
                             .set_outgoing_edge_data(idx, &outgoing_edge.0, &outgoing_edge.1);
 
-                    if !no_sink {
-                        if let LightData::GhostFocus(rays) = outgoing_edge.1 {
-                            for r in rays {
-                                ray_collection.push(r);
-                            }
+                    if !no_sink && let LightData::GhostFocus(rays) = outgoing_edge.1 {
+                        for r in rays {
+                            ray_collection.push(r);
                         }
                     }
                 }

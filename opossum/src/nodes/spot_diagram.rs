@@ -342,17 +342,16 @@ impl Plottable for SpotDiagram {
                 plt_type.set_plot_param(&PlotArgs::YLim(AxLims::new(-y_max * 1.1, 1.1 * y_max)))?;
 
                 //aperture / shape plot series
-                if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot_aperture") {
-                    if *plot_aperture {
-                        if let Some(aperture) = self.ports().aperture(&PortType::Input, "input_1") {
-                            let plt_series_opt = aperture.get_plot_series(
-                                &mut PlotType::Line2D(PlotParameters::default()),
-                                legend,
-                            )?;
-                            if let Some(aperture_plt_series) = plt_series_opt {
-                                plt_series.extend(aperture_plt_series);
-                            }
-                        }
+                if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot_aperture")
+                    && *plot_aperture
+                    && let Some(aperture) = self.ports().aperture(&PortType::Input, "input_1")
+                {
+                    let plt_series_opt = aperture.get_plot_series(
+                        &mut PlotType::Line2D(PlotParameters::default()),
+                        legend,
+                    )?;
+                    if let Some(aperture_plt_series) = plt_series_opt {
+                        plt_series.extend(aperture_plt_series);
                     }
                 }
                 match plt_type {

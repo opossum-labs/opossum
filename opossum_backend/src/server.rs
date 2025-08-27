@@ -1,3 +1,5 @@
+#![allow(clippy::needless_for_each)] // This is necessary because of linter errors for #[derive(OpenApi)]
+
 use actix_cors::Cors;
 use actix_web::{
     App, HttpResponse, HttpServer, ResponseError, dev::Server, middleware::Logger, web,

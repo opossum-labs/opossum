@@ -87,10 +87,10 @@ impl NodeInfo {
 
 /// helper function for checking the ACCEPT header.
 fn wants_ron_guard(ctx: &GuardContext<'_>) -> bool {
-    if let Some(val) = ctx.head().headers.get(header::ACCEPT) {
-        if let Ok(s) = val.to_str() {
-            return s.contains("application/ron");
-        }
+    if let Some(val) = ctx.head().headers.get(header::ACCEPT)
+        && let Ok(s) = val.to_str()
+    {
+        return s.contains("application/ron");
     }
     false
 }

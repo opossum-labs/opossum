@@ -587,14 +587,14 @@ impl OpticNode for NodeGroup {
         let mut group_props = Properties::default();
         for node in self.graph.nodes() {
             let sub_uuid = node.uuid().as_simple().to_string();
-            if let Ok(node_ref) = node.optical_ref.lock() {
-                if let Some(node_report) = node_ref.node_report(&sub_uuid) {
-                    let node_name = node_ref.name();
-                    if !(group_props.contains(&node_name)) {
-                        group_props
-                            .create(&node_name, "", node_report.into())
-                            .unwrap();
-                    }
+            if let Ok(node_ref) = node.optical_ref.lock()
+                && let Some(node_report) = node_ref.node_report(&sub_uuid)
+            {
+                let node_name = node_ref.name();
+                if !(group_props.contains(&node_name)) {
+                    group_props
+                        .create(&node_name, "", node_report.into())
+                        .unwrap();
                 }
             }
         }

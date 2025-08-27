@@ -23,15 +23,17 @@ impl AnalysisRayTrace for BeamSplitter {
         let in2 = incoming_data.get(input_port2);
         let (out1_data, out2_data) =
             self.analyze_raytrace(in1, in2, &AnalyzerType::RayTrace(*config))?;
-        if out1_data.is_some() && out2_data.is_some() {
+        if let Some(out1_data) = out1_data
+            && let Some(out2_data) = out2_data
+        {
             let (target1, target2) = if self.inverted() {
                 ("input_1", "input_2")
             } else {
                 ("out1_trans1_refl2", "out2_trans2_refl1")
             };
             Ok(LightResult::from([
-                (target1.into(), out1_data.unwrap()),
-                (target2.into(), out2_data.unwrap()),
+                (target1.into(), out1_data),
+                (target2.into(), out2_data),
             ]))
         } else {
             Ok(LightResult::default())

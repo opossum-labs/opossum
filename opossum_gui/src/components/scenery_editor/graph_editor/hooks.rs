@@ -133,26 +133,24 @@ pub fn use_drag_end() -> impl FnMut(MouseEvent) {
                 }
             }
             DragStatus::Edge(_) => {
-                if let Some(edge) = editor_status.write().edge_in_creation.write().take() {
-                    if edge.is_valid() {
-                        if let (Some(end_port), start_port) = (edge.end_port(), edge.start_port()) {
-                            let (start_port, end_port) = if start_port.port_type == PortType::Output
-                            {
-                                (start_port, end_port)
-                            } else {
-                                (end_port, start_port)
-                            };
+                if let Some(edge) = editor_status.write().edge_in_creation.write().take()
+                    && edge.is_valid()
+                    && let (Some(end_port), start_port) = (edge.end_port(), edge.start_port())
+                {
+                    let (start_port, end_port) = if start_port.port_type == PortType::Output {
+                        (start_port, end_port)
+                    } else {
+                        (end_port, start_port)
+                    };
 
-                            let new_edge = ConnectInfo::new(
-                                start_port.node_id,
-                                start_port.port_name.clone(),
-                                end_port.node_id,
-                                end_port.port_name.clone(),
-                                0.0,
-                            );
-                            graph_processor.send(GraphStoreAction::AddEdge(new_edge));
-                        }
-                    }
+                    let new_edge = ConnectInfo::new(
+                        start_port.node_id,
+                        start_port.port_name.clone(),
+                        end_port.node_id,
+                        end_port.port_name.clone(),
+                        0.0,
+                    );
+                    graph_processor.send(GraphStoreAction::AddEdge(new_edge));
                 }
             }
             _ => {}

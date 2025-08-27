@@ -137,8 +137,8 @@ impl GraphStore {
     pub fn clear(&mut self) {
         self.nodes().write().clear();
         self.edges().write().clear();
-        let mut active_node=self.active_node.write();
-        *active_node=None;
+        let mut active_node = self.active_node.write();
+        *active_node = None;
     }
     pub fn renumber_z_levels(&mut self) {
         let mut node_elements: Vec<(Uuid, usize)> = self

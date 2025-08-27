@@ -179,15 +179,9 @@ impl OpticNode for WaveFront {
                 .unwrap_or_else(|_| Isometry::identity());
             let wf_data_opt = rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(1.), &iso);
 
-            if wf_data_opt.is_ok()
-                && !wf_data_opt
-                    .as_ref()
-                    .unwrap()
-                    .wavefront_error_maps
-                    .is_empty()
+            if let Ok(wf_data) = wf_data_opt
+                && !wf_data.wavefront_error_maps.is_empty()
             {
-                let wf_data = wf_data_opt.unwrap();
-
                 props
                 .create(
                     "Wavefront Map",

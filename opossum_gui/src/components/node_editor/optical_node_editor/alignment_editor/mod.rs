@@ -134,10 +134,10 @@ fn get_rotation_alignment_input_data(
     let id_add_on = "inputNodeAlignmentRot";
     let mut alignment_inputs = Vec::<InputData>::new();
     for rot_axis in RotationAxis::iter() {
-        if let Some(axes_skip) = axes_skip {
-            if axes_skip.contains(&rot_axis) {
-                continue;
-            }
+        if let Some(axes_skip) = axes_skip
+            && axes_skip.contains(&rot_axis)
+        {
+            continue;
         }
         alignment_inputs.push(InputData::new(
             rot_axis.into(),

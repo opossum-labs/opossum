@@ -1115,13 +1115,14 @@ impl Rays {
     ///
     /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the range `(0.0..=1.0)`.
     pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
-        if let FilterType::Constant(t) = filter {
-            if !(0.0..=1.0).contains(t) {
-                return Err(OpossumError::Other(
-                    "transmission value must be in the range [0.0;1.0]".into(),
-                ));
-            }
+        if let FilterType::Constant(t) = filter
+            && !(0.0..=1.0).contains(t)
+        {
+            return Err(OpossumError::Other(
+                "transmission value must be in the range [0.0;1.0]".into(),
+            ));
         }
+
         for ray in &mut self.ray_bundle {
             if (*ray).valid() {
                 ray.filter_energy(filter)?;

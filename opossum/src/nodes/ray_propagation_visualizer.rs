@@ -105,31 +105,31 @@ impl OpticNode for RayPropagationVisualizer {
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
-        if let Some(LightData::Geometric(rays)) = data {
-            if let Ok(mut ray_position_histories) = rays.get_rays_position_history(true) {
-                if let Ok(Proptype::Vec3(view_vec)) = self.properties().get("view_direction") {
-                    ray_position_histories.plot_view_direction = Some(*view_vec);
-                }
-                if let Ok(Proptype::F64(transparency)) = self.properties().get("ray transparency") {
-                    ray_position_histories.ray_transparency = *transparency;
-                }
+        if let Some(LightData::Geometric(rays)) = data
+            && let Ok(mut ray_position_histories) = rays.get_rays_position_history(true)
+        {
+            if let Ok(Proptype::Vec3(view_vec)) = self.properties().get("view_direction") {
+                ray_position_histories.plot_view_direction = Some(*view_vec);
+            }
+            if let Ok(Proptype::F64(transparency)) = self.properties().get("ray transparency") {
+                ray_position_histories.ray_transparency = *transparency;
+            }
+            props
+                .create(
+                    "Ray plot",
+                    "Ray plot",
+                    Proptype::RayPositionHistory(ray_position_histories),
+                )
+                .unwrap();
+            if self.apodization_warning {
                 props
-                    .create(
-                        "Ray plot",
-                        "Ray plot",
-                        Proptype::RayPositionHistory(ray_position_histories),
-                    )
-                    .unwrap();
-                if self.apodization_warning {
-                    props
                     .create(
                         "Warning",
                         "warning during analysis",
-                                                "Rays have been apodized at input aperture. Results might not be accurate."
+                        "Rays have been apodized at input aperture. Results might not be accurate."
                             .into(),
                     )
                     .unwrap();
-                }
             }
         }
         Some(NodeReport::new(

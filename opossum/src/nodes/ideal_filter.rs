@@ -312,12 +312,12 @@ impl EdgeFilter {
                 "Edge wavelength must be positive and finite!".into(),
             ));
         }
-        if let Some(width) = smooth_step_width {
-            if !width.is_normal() || width.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Step width must be positive and finite when provided!".into(),
-                ));
-            }
+        if let Some(width) = smooth_step_width
+            && (!width.is_normal() || width.is_sign_negative())
+        {
+            return Err(OpossumError::Other(
+                "Step width must be positive and finite when provided!".into(),
+            ));
         }
         if !resolution.is_normal() || resolution.is_sign_negative() {
             return Err(OpossumError::Other(
@@ -408,12 +408,12 @@ impl EdgeFilter {
     /// # Errors
     /// Returns an error if the provided value is not positive and finite.
     pub fn set_smooth_step_width(&mut self, step_width: Option<Length>) -> OpmResult<()> {
-        if let Some(width) = step_width {
-            if !width.is_normal() || width.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Step width must be positive and finite when provided!".into(),
-                ));
-            }
+        if let Some(width) = step_width
+            && (!width.is_normal() || width.is_sign_negative())
+        {
+            return Err(OpossumError::Other(
+                "Step width must be positive and finite when provided!".into(),
+            ));
         }
         self.smooth_step_width = step_width;
         Ok(())
@@ -970,13 +970,14 @@ impl BandFilter {
     /// # Errors
     /// Returns an error if the provided value is not positive and finite.
     pub fn set_smooth_step_width(&mut self, mut step_width: Option<Length>) -> OpmResult<()> {
-        if let Some(width) = &mut step_width {
-            if !width.is_normal() || width.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Step width must be positive and finite when provided!".into(),
-                ));
-            }
+        if let Some(width) = &mut step_width
+            && (!width.is_normal() || width.is_sign_negative())
+        {
+            return Err(OpossumError::Other(
+                "Step width must be positive and finite when provided!".into(),
+            ));
         }
+
         self.smooth_step_width = step_width;
         Ok(())
     }
