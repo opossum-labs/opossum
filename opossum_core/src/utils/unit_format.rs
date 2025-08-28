@@ -11,7 +11,7 @@ use uom::si::{
 ///
 /// # Example
 /// ```
-/// use opossum::utils::unit_format::get_prefix_for_base_unit;
+/// use opossum_core::utils::unit_format::get_prefix_for_base_unit;
 ///
 /// assert_eq!(get_prefix_for_base_unit(2.5), ""); // no prefix
 /// assert_eq!(get_prefix_for_base_unit(2_500.0), "k"); // could be written as 2.5k
@@ -44,7 +44,7 @@ pub fn get_prefix_for_base_unit(base_unit_value: f64) -> String {
 ///
 /// # Example
 /// ```
-/// use opossum::utils::unit_format::get_exponent_for_base_unit_in_e3_steps;
+/// use opossum_core::utils::unit_format::get_exponent_for_base_unit_in_e3_steps;
 ///
 /// assert_eq!(get_exponent_for_base_unit_in_e3_steps(0.0), 0);
 /// assert_eq!(get_exponent_for_base_unit_in_e3_steps(0.1), -3); // could be written as 1.e-3

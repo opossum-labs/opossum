@@ -3,10 +3,10 @@ use std::{env, path::PathBuf};
 
 pub fn find_cli_executable() -> OpmResult<PathBuf> {
     let possible_cli_paths = vec![
-        "opossum",
-        "opossum.exe",
-        "../../../../../debug/opossum",
-        "../../../../../debug/opossum.exe",
+        "opossum_core",
+        "opossum_core.exe",
+        "../../../../../debug/opossum_core",
+        "../../../../../debug/opossum_core.exe",
     ];
     let gui_exe_path = env::current_exe()
         .map_err(|e| OpossumError::Other(format!("could not get gui executable path: {e}")))?;

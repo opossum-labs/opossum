@@ -90,7 +90,7 @@ impl Source {
     /// ## Example
     ///
     /// ```rust
-    /// use opossum::{
+    /// use opossum_core::{
     /// lightdata::{light_data_builder::LightDataBuilder, energy_data_builder::EnergyDataBuilder},
     /// nodes::Source,
     /// spectrum_helper::create_he_ne_spec};

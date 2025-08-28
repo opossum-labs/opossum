@@ -5,7 +5,7 @@ use actix_web::{
     HttpResponse, Responder, get, post,
     web::{self, Json},
 };
-use opossum::{analyzers::AnalyzerType, reporting::analysis_report::AnalysisReport};
+use opossum_core::{analyzers::AnalyzerType, reporting::analysis_report::AnalysisReport};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -53,7 +53,7 @@ async fn get_hello() -> &'static str {
 async fn get_version() -> impl Responder {
     Json(VersionInfo {
         backend_version: env!("CARGO_PKG_VERSION").to_string(),
-        opossum_version: opossum::get_version(),
+        opossum_version: opossum_core::get_version(),
     })
 }
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -72,7 +72,7 @@ impl Display for NodeType {
 #[utoipa::path(get, responses((status = OK, description = "success", body = Vec<NodeType>)), tag="general")]
 #[get("/node_types")]
 async fn get_node_types() -> Result<Json<Vec<NodeType>>, ErrorResponse> {
-    let types = opossum::nodes::node_types();
+    let types = opossum_core::nodes::node_types();
     let node_types: Vec<NodeType> = types
         .iter()
         .map(|t| NodeType {
@@ -88,7 +88,7 @@ async fn get_node_types() -> Result<Json<Vec<NodeType>>, ErrorResponse> {
 #[utoipa::path(get, responses((status = OK, description = "success", body = Vec<AnalyzerType>)), tag="general")]
 #[get("/analyzer_types")]
 async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, ErrorResponse> {
-    let analyzer_types = opossum::analyzers::AnalyzerType::analyzer_types();
+    let analyzer_types = opossum_core::analyzers::AnalyzerType::analyzer_types();
     Ok(Json(analyzer_types))
 }
 /// Terminate the backend server

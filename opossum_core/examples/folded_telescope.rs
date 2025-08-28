@@ -2,7 +2,7 @@ use core::f64;
 use std::path::Path;
 
 use nalgebra::Vector3;
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     centimeter,

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use num::Zero;
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,

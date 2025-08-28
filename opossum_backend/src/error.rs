@@ -1,5 +1,5 @@
 use actix_web::{HttpResponse, ResponseError, http::StatusCode};
-use opossum::error::OpossumError;
+use opossum_core::error::OpossumError;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

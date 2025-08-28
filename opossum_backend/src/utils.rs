@@ -1,4 +1,4 @@
-use opossum::nodes::NodeAttr;
+use opossum_core::nodes::NodeAttr;
 use serde_json::Value;
 
 use crate::error::ErrorResponse;

@@ -9,7 +9,7 @@ pub mod server;
 pub mod sse_logger;
 pub mod utils;
 
-pub use opossum::{
+pub use opossum_core::{
     AnalyzerInfo, J_per_cm2,
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig, raytrace::MissedSurfaceStrategy},
     create_data_dir, degree,

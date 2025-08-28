@@ -1,5 +1,5 @@
 use actix_web::dev::ServerHandle;
-use opossum::OpmDocument;
+use opossum_core::OpmDocument;
 use parking_lot::Mutex;
 
 #[derive(Default)]

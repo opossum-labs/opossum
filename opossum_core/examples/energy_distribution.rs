@@ -1,5 +1,5 @@
 use nalgebra::{DMatrix, DVector};
-use opossum::{
+use opossum_core::{
     degree,
     energy_distributions::general_gaussian::General2DGaussian,
     error::OpmResult,

@@ -1,5 +1,5 @@
 [package]
-name = "opossum"
+name = "opossum_core"
 version = "0.6.0"
 edition = "2024"
 authors = [

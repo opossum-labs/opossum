@@ -15,7 +15,7 @@ use actix_web::{
 };
 use log::{error, info, warn};
 use nalgebra::Point2;
-use opossum::{
+use opossum_core::{
     AnalyzerInfo, OpmDocument, SceneryResources, analyzers::AnalyzerType, create_data_dir,
     reporting::report_helper::create_report_and_data_files,
 };
@@ -281,7 +281,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 #[cfg(test)]
 mod test {
     use actix_web::{App, dev::Service, test, web::Data};
-    use opossum::{SceneryResources, nodes::Dummy};
+    use opossum_core::{SceneryResources, nodes::Dummy};
 
     use crate::{app_state::AppState, scenery::NrOfNodes};
 

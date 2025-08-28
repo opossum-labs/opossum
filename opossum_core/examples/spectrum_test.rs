@@ -1,4 +1,4 @@
-use opossum::{
+use opossum_core::{
     error::OpmResult, nanometer, plottable::Plottable, plottable::PltBackEnd, spectrum::Spectrum,
     spectrum_helper::create_visible_spec,
 };

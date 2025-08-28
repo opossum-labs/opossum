@@ -1,4 +1,4 @@
-use opossum::{
+use opossum_core::{
     aperture::{Aperture, RectangleConfig},
     error::OpmResult,
     millimeter,

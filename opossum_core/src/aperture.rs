@@ -10,7 +10,7 @@
 //! [`apodization_factor`](Aperture::apodization_factor()) is used.
 //! ```rust
 //! use nalgebra::Point2;
-//! use opossum::{millimeter, aperture::{Aperture, ApertureType, CircleConfig}};
+//! use opossum_core::{millimeter, aperture::{Aperture, ApertureType, CircleConfig}};
 //! use uom::si::{f64::Length, length::millimeter};
 //!
 //! let c = CircleConfig::new(millimeter!(1.0), millimeter!(1.0, 1.0)).unwrap();
@@ -22,7 +22,7 @@
 //! all configurations are created as "holes".
 //! ```rust
 //! use nalgebra::Point2;
-//! use opossum::{millimeter, aperture::{Aperture, ApertureType, CircleConfig, Apodize}};
+//! use opossum_core::{millimeter, aperture::{Aperture, ApertureType, CircleConfig, Apodize}};
 //! use uom::si::{f64::Length, length::millimeter};
 //!
 //! let mut c = CircleConfig::new(millimeter!(1.0), millimeter!(1.0, 1.0)).unwrap();

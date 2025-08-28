@@ -7,7 +7,7 @@ use actix_web::{
     web::{self, Json, PathConfig},
 };
 use nalgebra::Point2;
-use opossum::{
+use opossum_core::{
     AnalyzerInfo,
     analyzers::AnalyzerType,
     error::OpossumError,

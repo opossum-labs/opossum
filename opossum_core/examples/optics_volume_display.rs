@@ -1,4 +1,4 @@
-use opossum::error::OpmResult;
+use opossum_core::error::OpmResult;
 
 fn main() -> OpmResult<()> {
     // let cylinder = Cylinder::new(

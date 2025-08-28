@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     energy_distributions::General2DGaussian,

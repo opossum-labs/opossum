@@ -3,8 +3,8 @@
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
-use opossum::create_data_dir;
-use opossum::{
+use opossum_core::create_data_dir;
+use opossum_core::{
     OpmDocument,
     console::{Args, PartialArgs},
     error::OpmResult,

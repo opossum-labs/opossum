@@ -1,6 +1,6 @@
 use nalgebra::Vector3;
 use num::Zero;
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,

@@ -1,4 +1,4 @@
-use opossum::{
+use opossum_core::{
     J_per_cm2, OpmDocument,
     analyzers::{AnalyzerType, GhostFocusConfig},
     coatings::CoatingType,

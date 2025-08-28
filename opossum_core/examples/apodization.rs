@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     aperture::{Aperture, RectangleConfig},

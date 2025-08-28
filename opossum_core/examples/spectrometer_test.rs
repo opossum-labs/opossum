@@ -1,4 +1,4 @@
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     energy_distributions::UniformDist,

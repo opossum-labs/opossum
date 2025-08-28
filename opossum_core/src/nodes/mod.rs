@@ -9,7 +9,7 @@
 //!
 //! ```ignore
 //! use opm_macros_lib::OpmNode;
-//! use opossum::nodes::NodeAttr;
+//! use opossum_core::nodes::NodeAttr;
 //!  
 //! #[derive(OpmNode)]
 //! #[opm_node("red")]

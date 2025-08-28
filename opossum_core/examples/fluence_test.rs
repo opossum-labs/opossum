@@ -1,6 +1,6 @@
 use std::{f64::consts::PI, path::Path};
 
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,

@@ -5277,7 +5277,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "opossum"
+name = "opossum_backend"
+version = "0.6.0"
+dependencies = [
+ "actix-cors",
+ "actix-web",
+ "futures-util",
+ "log",
+ "nalgebra",
+ "opossum_core",
+ "parking_lot",
+ "ron",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "uom",
+ "utoipa",
+ "utoipa-actix-web",
+ "utoipa-swagger-ui",
+ "uuid",
+]
+
+[[package]]
+name = "opossum_core"
 version = "0.6.0"
 dependencies = [
  "approx",
@@ -5322,29 +5345,6 @@ dependencies = [
  "uuid",
  "vergen-git2",
  "voronator",
-]
-
-[[package]]
-name = "opossum_backend"
-version = "0.6.0"
-dependencies = [
- "actix-cors",
- "actix-web",
- "futures-util",
- "log",
- "nalgebra",
- "opossum",
- "parking_lot",
- "ron",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
- "uom",
- "utoipa",
- "utoipa-actix-web",
- "utoipa-swagger-ui",
- "uuid",
 ]
 
 [[package]]

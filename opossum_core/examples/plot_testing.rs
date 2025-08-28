@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use nalgebra::{DMatrix, DVector, MatrixXx2};
-use opossum::{
+use opossum_core::{
     error::OpmResult,
     joule, millimeter, nanometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},

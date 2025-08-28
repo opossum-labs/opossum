@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use opossum::{OpmDocument, error::OpmResult};
+use opossum_core::{OpmDocument, error::OpmResult};
 
 fn main() -> OpmResult<()> {
     let document = OpmDocument::default();

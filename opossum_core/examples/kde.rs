@@ -1,4 +1,4 @@
-use opossum::{
+use opossum_core::{
     error::OpmResult,
     joule, millimeter,
     plottable::Plottable,
@@ -24,7 +24,7 @@ fn main() -> OpmResult<()> {
     let fluence_data = hit_map.calc_fluence_map((100, 100), &FluenceEstimator::KDE, None, None)?;
     fluence_data.to_plot(
         Path::new("./opossum/playground/kde.png"),
-        opossum::plottable::PltBackEnd::Bitmap,
+        opossum_core::plottable::PltBackEnd::Bitmap,
     )?;
     Ok(())
 }

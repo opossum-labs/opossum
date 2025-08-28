@@ -24,7 +24,7 @@ use crate::reporting::html_report::HtmlProperty;
 ///
 /// ## Example
 /// ```rust
-/// use opossum::properties::Properties;
+/// use opossum_core::properties::Properties;
 /// let mut props = Properties::default();
 /// props.create("my float", "my floating point value", 3.14.into()).unwrap();
 /// props.set("my float", 2.71.into()).unwrap();

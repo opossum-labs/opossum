@@ -1,5 +1,5 @@
 use nalgebra::Vector3;
-use opossum::{
+use opossum_core::{
     error::OpmResult,
     millimeter,
     nodes::{NodeGroup, ParaxialSurface, RayPropagationVisualizer, SpotDiagram},

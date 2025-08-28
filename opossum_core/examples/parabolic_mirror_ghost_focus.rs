@@ -1,5 +1,5 @@
 use nalgebra::Vector2;
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     coatings::CoatingType,

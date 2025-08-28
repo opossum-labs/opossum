@@ -1,5 +1,5 @@
 use nalgebra::{Isometry3, Point3, Rotation, Vector3};
-use opossum::{degree, utils::geom_transformation::Isometry};
+use opossum_core::{degree, utils::geom_transformation::Isometry};
 
 fn main() {
     let rot_x = Isometry3::rotation(Vector3::x() * std::f64::consts::PI / 4.);

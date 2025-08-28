@@ -8,7 +8,7 @@ use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
 use num::Zero;
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
     aperture::{Aperture, CircleConfig},

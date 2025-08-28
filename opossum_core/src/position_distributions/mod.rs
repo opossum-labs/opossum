@@ -6,7 +6,7 @@
 //! ## Example
 //!
 //! ```rust
-//! use opossum::{millimeter, position_distributions::{PositionDistribution, Random}};
+//! use opossum_core::{millimeter, position_distributions::{PositionDistribution, Random}};
 //!
 //! let grid=Random::new(
 //!   millimeter!(1.0),

@@ -1,4 +1,4 @@
-use opossum::{
+use opossum_core::{
     degree,
     error::OpmResult,
     millimeter,

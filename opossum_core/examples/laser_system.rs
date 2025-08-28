@@ -1,5 +1,5 @@
 use num::Zero;
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
@@ -25,7 +25,7 @@ fn main() -> OpmResult<()> {
     )?)?;
     let i_e1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
-        opossum::nodes::Metertype::IdealEnergyMeter,
+        opossum_core::nodes::Metertype::IdealEnergyMeter,
     ))?;
     let i_sd1 = scenery.add_node(SpotDiagram::new("output_1"))?;
 
@@ -54,7 +54,7 @@ fn main() -> OpmResult<()> {
     let i_cb_sd2 = cam_box.add_node(SpotDiagram::new("Farfield"))?;
     let i_cb_e = cam_box.add_node(EnergyMeter::new(
         "Energy meter",
-        opossum::nodes::Metertype::IdealEnergyMeter,
+        opossum_core::nodes::Metertype::IdealEnergyMeter,
     ))?;
 
     cam_box.connect_nodes(

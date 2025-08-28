@@ -1,12 +1,12 @@
 use nalgebra::Vector3;
-use opossum::OpmDocument;
-use opossum::analyzers::{AnalyzerType, RayTraceConfig};
-use opossum::lightdata::light_data_builder::LightDataBuilder;
-use opossum::lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder};
-use opossum::nodes::{NodeGroup, NodeReference, ParaxialSurface, SpotDiagram, ThinMirror};
-use opossum::optic_node::Alignable;
-use opossum::refractive_index::{RefrIndexConst, RefractiveIndex};
-use opossum::{
+use opossum_core::OpmDocument;
+use opossum_core::analyzers::{AnalyzerType, RayTraceConfig};
+use opossum_core::lightdata::light_data_builder::LightDataBuilder;
+use opossum_core::lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder};
+use opossum_core::nodes::{NodeGroup, NodeReference, ParaxialSurface, SpotDiagram, ThinMirror};
+use opossum_core::optic_node::Alignable;
+use opossum_core::refractive_index::{RefrIndexConst, RefractiveIndex};
+use opossum_core::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule, millimeter, nanometer,

@@ -11,7 +11,7 @@ license = false
 eula = false
 
 [dependencies]
-opossum = { path = "../opossum_core" }
+opossum_core = { path = "../opossum_core" }
 actix-web = "4"
 tokio= "1.47.1"
 tokio-stream = "0.1.17"

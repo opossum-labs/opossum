@@ -1,5 +1,5 @@
 use num::Zero;
-use opossum::{
+use opossum_core::{
     OpmDocument,
     analyzers::AnalyzerType,
     error::OpmResult,
@@ -26,11 +26,11 @@ fn main() -> OpmResult<()> {
     let i_bs = scenery.add_node(bs)?;
     let i_d1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
-        opossum::nodes::Metertype::IdealEnergyMeter,
+        opossum_core::nodes::Metertype::IdealEnergyMeter,
     ))?;
     let i_d2 = scenery.add_node(EnergyMeter::new(
         "Energy meter 2",
-        opossum::nodes::Metertype::IdealEnergyMeter,
+        opossum_core::nodes::Metertype::IdealEnergyMeter,
     ))?;
 
     scenery.connect_nodes(i_s, "output_1", i_bs, "out1_trans1_refl2", Length::zero())?;
