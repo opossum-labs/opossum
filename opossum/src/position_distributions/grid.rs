@@ -4,7 +4,7 @@ use super::PositionDistribution;
 use crate::{
     error::{OpmResult, OpossumError},
     millimeter,
-    utils::usize_to_f64,
+    utils::to_f64,
 };
 use nalgebra::Point3;
 use num::Zero;
@@ -188,12 +188,12 @@ impl PositionDistribution for Grid {
         let nr_of_points_x = self.nr_of_points.0.clamp(1, usize::MAX);
         let nr_of_points_y = self.nr_of_points.1.clamp(1, usize::MAX);
         let distance_x = if nr_of_points_x > 1 {
-            self.side_length.0 / usize_to_f64(nr_of_points_x - 1)
+            self.side_length.0 / to_f64(nr_of_points_x - 1)
         } else {
             Length::zero()
         };
         let distance_y = if nr_of_points_y > 1 {
-            self.side_length.1 / usize_to_f64(nr_of_points_y - 1)
+            self.side_length.1 / to_f64(nr_of_points_y - 1)
         } else {
             Length::zero()
         };
@@ -211,8 +211,8 @@ impl PositionDistribution for Grid {
         for i_x in 0..nr_of_points_x {
             for i_y in 0..nr_of_points_y {
                 points.push(Point3::new(
-                    usize_to_f64(i_x) * distance_x - offset_x,
-                    usize_to_f64(i_y) * distance_y - offset_y,
+                    to_f64(i_x) * distance_x - offset_x,
+                    to_f64(i_y) * distance_y - offset_y,
                     Length::zero(),
                 ));
             }

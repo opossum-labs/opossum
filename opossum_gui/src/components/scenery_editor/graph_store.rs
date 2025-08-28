@@ -21,10 +21,10 @@ use dioxus::{
 };
 use futures_util::StreamExt;
 use opossum_backend::{
-    AnalyzerInfo, isize_to_f64,
+    AnalyzerInfo,
     nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     scenery::NewAnalyzerInfo,
-    usize_to_f64,
+    to_f64,
 };
 use rust_sugiyama::{configure::RankingType, from_edges};
 use std::{collections::HashMap, fs, path::PathBuf};
@@ -275,13 +275,13 @@ pub async fn optimize_layout_and_sync(
         for l in layout {
             if let Some(uuid) = reg.get_uuid(u32::try_from(l.0).unwrap()) {
                 let pos = Point2D::new(
-                    -isize_to_f64(l.1.1),
-                    SUGIYAMA_VERT_PATH_FACTOR.mul_add(isize_to_f64(l.1.0), height),
+                    -to_f64(l.1.1),
+                    SUGIYAMA_VERT_PATH_FACTOR.mul_add(to_f64(l.1.0), height),
                 );
                 new_positions.insert(uuid, pos);
             }
         }
-        height += usize_to_f64(group_height * SUGIYAMA_VERTEX_SPACING);
+        height += to_f64(group_height * SUGIYAMA_VERTEX_SPACING);
     }
     for (id, pos) in &new_positions {
         if let Err(err_str) = api::update_gui_position(*id, *pos).await {

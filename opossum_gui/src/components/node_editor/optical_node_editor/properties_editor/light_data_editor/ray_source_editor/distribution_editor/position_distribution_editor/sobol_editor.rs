@@ -1,6 +1,6 @@
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
-use opossum_backend::{PosDistType, SobolDist, f64_to_usize, millimeter};
+use opossum_backend::{PosDistType, SobolDist, millimeter, try_f64_to_usize};
 use strum::EnumIter;
 use uom::si::length::millimeter;
 
@@ -54,9 +54,9 @@ impl IntoInputData<f64, SobolDist, PosDistType> for SobolParam {
             Self::SideLengthY => {
                 move |obj: &mut SobolDist, val: f64| obj.set_side_length_y(millimeter!(val))
             }
-            Self::Points => {
-                move |obj: &mut SobolDist, val: f64| obj.set_nr_of_points(f64_to_usize(val))
-            }
+            Self::Points => move |obj: &mut SobolDist, val: f64| {
+                obj.set_nr_of_points(try_f64_to_usize(val).unwrap());
+            },
         }
     }
 }

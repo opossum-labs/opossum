@@ -13,7 +13,7 @@ use crate::{
 };
 use dioxus::prelude::*;
 use opossum_backend::{
-    Isometry, Properties, Proptype, RotationAxis, degree, i32_to_f64, nanometer, radian,
+    Isometry, Properties, Proptype, RotationAxis, degree, nanometer, radian, to_f64,
 };
 use uom::si::{
     angle::degree,
@@ -96,7 +96,7 @@ fn calc_deviation_angle_from_littrow(
     incident_angle: bool,
 ) -> Angle {
     let sin_theta: f64 =
-        i32_to_f64(diffraction_order) * alignment_wavelength.value * line_density.value;
+        to_f64(diffraction_order) * alignment_wavelength.value * line_density.value;
     let littrow_angle = radian!((sin_theta / 2.).asin());
 
     if incident_angle {
@@ -134,7 +134,7 @@ fn AngleToLittrowComponent(
             onchange: CallbackWrapper::new(move |e: Event<FormData>| {
                 if let Ok(angle) = e.data.value().parse::<f64>() {
                     let m_g_lambda = reference_wavelength_sig.read().get::<meter>()
-                        * line_density.get::<per_meter>() * i32_to_f64(diffraction_order);
+                        * line_density.get::<per_meter>() * to_f64(diffraction_order);
                     let littrow_angle = (m_g_lambda / 2.).asin();
                     let mut new_angle = radian!(littrow_angle) + degree!(angle);
                     if !*incident_angle_sig.read() {

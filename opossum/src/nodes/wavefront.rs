@@ -25,7 +25,7 @@ use crate::{
     utils::{
         geom_transformation::Isometry,
         griddata::{create_linspace_axes, interpolate_3d_scatter_data},
-        usize_to_f64,
+        to_f64,
     },
 };
 
@@ -149,7 +149,7 @@ impl WaveFrontErrorMap {
             let max = wf_dat.max();
             let min = wf_dat.min();
             let ptv = max - min;
-            let avg = wf_dat.sum() / usize_to_f64(wf_dat.len());
+            let avg = wf_dat.sum() / to_f64(wf_dat.len());
             let rms = f64::sqrt(
                 wf_dat
                     .iter()

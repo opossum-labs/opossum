@@ -1,5 +1,5 @@
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{AnalyzerInfo, AnalyzerType, PortType, nodes::NodeInfo, usize_to_f64};
+use opossum_backend::{AnalyzerInfo, AnalyzerType, PortType, nodes::NodeInfo, to_f64};
 use uuid::Uuid;
 mod graph_node_components;
 pub mod node_component;
@@ -153,7 +153,7 @@ impl NodeElement {
             .iter()
             .position(|port| port == port_name)
             .unwrap_or(0);
-        let y_pos = PORT_VER_SPACING.mul_add(usize_to_f64(port_index), PORT_VER_PADDING);
+        let y_pos = PORT_VER_SPACING.mul_add(to_f64(port_index), PORT_VER_PADDING);
         Point2D::new(x_pos, y_pos)
     }
     #[must_use]
@@ -167,7 +167,7 @@ impl NodeElement {
     #[must_use]
     pub fn node_body_height(&self) -> f64 {
         let max_vert_number_of_ports =
-            usize_to_f64(self.output_ports().len().max(self.input_ports().len()));
+            to_f64(self.output_ports().len().max(self.input_ports().len()));
         let necessary_body_height = 2.0f64.mul_add(
             PORT_VER_PADDING,
             PORT_VER_SPACING * (max_vert_number_of_ports - 1.0),

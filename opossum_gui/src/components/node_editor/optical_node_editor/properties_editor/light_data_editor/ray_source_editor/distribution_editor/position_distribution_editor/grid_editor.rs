@@ -1,6 +1,6 @@
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
-use opossum_backend::{Grid, PosDistType, f64_to_usize, millimeter};
+use opossum_backend::{Grid, PosDistType, millimeter, try_f64_to_usize};
 use strum::EnumIter;
 use uom::si::length::millimeter;
 
@@ -52,12 +52,12 @@ impl IntoInputData<f64, Grid, PosDistType> for GridParam {
 
     fn setter_from_obj(&self) -> impl FnMut(&mut Grid, f64) {
         match self {
-            Self::NrOfPointsX => {
-                move |obj: &mut Grid, val: f64| obj.set_nr_of_points_x(f64_to_usize(val))
-            }
-            Self::NrOfPointsY => {
-                move |obj: &mut Grid, val: f64| obj.set_nr_of_points_y(f64_to_usize(val))
-            }
+            Self::NrOfPointsX => move |obj: &mut Grid, val: f64| {
+                obj.set_nr_of_points_x(try_f64_to_usize(val).unwrap());
+            },
+            Self::NrOfPointsY => move |obj: &mut Grid, val: f64| {
+                obj.set_nr_of_points_y(try_f64_to_usize(val).unwrap());
+            },
             Self::LengthX => {
                 move |obj: &mut Grid, val: f64| obj.set_side_length_x(millimeter!(val))
             }

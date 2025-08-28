@@ -5319,6 +5319,7 @@ dependencies = [
  "mutants",
  "nalgebra",
  "num",
+ "num-traits",
  "opm_macros_lib",
  "petgraph 0.8.2",
  "plotters",

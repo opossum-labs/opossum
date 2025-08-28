@@ -12,12 +12,11 @@ use crate::{
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     plottable::AxLims,
     utils::{
-        f64_to_usize,
         griddata::{
             VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
             interpolate_3d_triangulated_scatter_data, linspace,
         },
-        usize_to_f64,
+        to_f64, try_f64_to_usize,
     },
 };
 use itertools::Itertools;
@@ -340,13 +339,13 @@ impl RaysHitMap {
                 } else {
                     self.calc_2d_bounding_box(Length::zero())?
                 };
-            let bin_width: Length = (right - left) / usize_to_f64(nr_of_points.0);
-            let bin_height: Length = (top - bottom) / usize_to_f64(nr_of_points.1);
+            let bin_width: Length = (right - left) / to_f64(nr_of_points.0);
+            let bin_height: Length = (top - bottom) / to_f64(nr_of_points.1);
 
             let bin_area: Area = bin_width * bin_height;
 
-            let width_step = (right - left) / (usize_to_f64(nr_of_points.0 - 1));
-            let height_step = (top - bottom) / (usize_to_f64(nr_of_points.1 - 1));
+            let width_step = (right - left) / (to_f64(nr_of_points.0 - 1));
+            let height_step = (top - bottom) / (to_f64(nr_of_points.1 - 1));
 
             let mut fluence_matrix = DMatrix::<Fluence>::zeros(nr_of_points.1, nr_of_points.0);
             for hit_point in hit_points {
@@ -354,8 +353,12 @@ impl RaysHitMap {
                     modf((hit_point.position.x - left).value / width_step.value);
                 let (fract_index_y, int_index_y) =
                     modf((hit_point.position.y - bottom).value / height_step.value);
-                let x_index = f64_to_usize(int_index_x);
-                let y_index = f64_to_usize(int_index_y);
+                let Some(x_index) = try_f64_to_usize(int_index_x) else {
+                    return Err(OpossumError::Analysis("cannot calculate x_index!".into()));
+                };
+                let Some(y_index) = try_f64_to_usize(int_index_y) else {
+                    return Err(OpossumError::Analysis("cannot calculate y_index!".into()));
+                };
 
                 let fluence = hit_point.value / bin_area;
                 let fluence_x = (1.0 - fract_index_x) * (1.0 - fract_index_y) * fluence;

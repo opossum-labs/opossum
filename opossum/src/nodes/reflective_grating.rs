@@ -20,7 +20,7 @@ use crate::{
     radian,
     rays::Rays,
     refractive_index::refr_index_vaccuum,
-    utils::math_utils::i32_to_f64,
+    utils::to_f64,
 };
 use nalgebra::Vector3;
 use opm_macros_lib::OpmNode;
@@ -124,7 +124,7 @@ impl ReflectiveGrating {
             return Err(OpossumError::Analysis("cannot read line density".into()));
         };
         let littrow =
-            (i32_to_f64(*diffraction_order) * wavelength.value * line_density.value / 2.).asin();
+            (to_f64(*diffraction_order) * wavelength.value * line_density.value / 2.).asin();
         self.with_tilt(radian!(0., littrow + angle.get::<radian>(), 0.0))
     }
     /// Set the angle of a grating such that the outgoing ray has an angle of `angle` to littrow
@@ -144,9 +144,9 @@ impl ReflectiveGrating {
             return Err(OpossumError::Analysis("cannot read line density".into()));
         };
         let littrow =
-            (i32_to_f64(*diffraction_order) * wavelength.value * line_density.value / 2.).asin();
+            (to_f64(*diffraction_order) * wavelength.value * line_density.value / 2.).asin();
         let angle_in_rad = angle.get::<radian>();
-        let rot_angle = (i32_to_f64(*diffraction_order) * wavelength.value)
+        let rot_angle = (to_f64(*diffraction_order) * wavelength.value)
             .mul_add(line_density.value, -(littrow + angle_in_rad).sin())
             .asin();
         self.with_tilt(radian!(0.0, rot_angle, 0.0))

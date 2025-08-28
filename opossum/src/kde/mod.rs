@@ -5,7 +5,7 @@ use crate::{
     error::OpmResult,
     millimeter,
     nodes::fluence_detector::Fluence,
-    utils::{f64_to_usize, math_utils::distance_2d_point, usize_to_f64},
+    utils::{math_utils::distance_2d_point, to_f64, try_f64_to_usize},
 };
 use gaussian::Gaussian2D;
 use nalgebra::{DMatrix, Point2, point};
@@ -54,7 +54,7 @@ impl Kde {
                 sum += distance;
             }
         }
-        let nr_of_points = usize_to_f64(distances.len());
+        let nr_of_points = to_f64(distances.len());
         let average_dist = sum / nr_of_points;
         let mut deviation_sum = Area::zero();
         for d in &distances {
@@ -68,13 +68,13 @@ impl Kde {
         } else {
             let mut sorted_values = values.to_owned();
             sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            let quart_index = 0.75 * usize_to_f64(sorted_values.len());
+            let quart_index = 0.75 * to_f64(sorted_values.len());
             // check if quart_index effectively an integer
             if quart_index.fract().is_zero() {
-                0.5 * (sorted_values[f64_to_usize(quart_index) - 1]
-                    + sorted_values[f64_to_usize(quart_index)])
+                0.5 * (sorted_values[try_f64_to_usize(quart_index).unwrap() - 1]
+                    + sorted_values[try_f64_to_usize(quart_index).unwrap()])
             } else {
-                sorted_values[f64_to_usize(f64::floor(quart_index))]
+                sorted_values[try_f64_to_usize(f64::floor(quart_index)).unwrap()]
             }
         }
     }
@@ -98,8 +98,7 @@ impl Kde {
                 let (distances, std_dev) = self.point_distances_std_dev();
                 let iqr = Self::distances_iqr(&distances);
                 // Silverman's rule of thumb
-                0.9 * Length::min(std_dev, iqr / 1.34)
-                    * (usize_to_f64(self.hit_map.len())).powf(-0.2)
+                0.9 * Length::min(std_dev, iqr / 1.34) * (to_f64(self.hit_map.len())).powf(-0.2)
             }
         }
     }
@@ -116,8 +115,8 @@ impl Kde {
         ranges: &(Range<Length>, Range<Length>),
         dimensions: (usize, usize),
     ) -> DMatrix<Fluence> {
-        let dx = (ranges.0.end - ranges.0.start) / usize_to_f64(dimensions.0);
-        let dy = (ranges.1.end - ranges.1.start) / usize_to_f64(dimensions.1);
+        let dx = (ranges.0.end - ranges.0.start) / to_f64(dimensions.0);
+        let dy = (ranges.1.end - ranges.1.start) / to_f64(dimensions.1);
         let mut matrix = DMatrix::<Fluence>::zeros(dimensions.1, dimensions.0);
         matrix
             .par_column_iter_mut()
@@ -125,8 +124,8 @@ impl Kde {
             .for_each(|(col_idx, mut col)| {
                 for point in col.iter_mut().enumerate() {
                     *point.1 = self.kde_value(point![
-                        ranges.0.start + usize_to_f64(col_idx) * dx,
-                        ranges.1.start + usize_to_f64(point.0) * dy
+                        ranges.0.start + to_f64(col_idx) * dx,
+                        ranges.1.start + to_f64(point.0) * dy
                     ]);
                 }
             });

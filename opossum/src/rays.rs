@@ -29,7 +29,7 @@ use crate::{
             VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
             interpolate_3d_triangulated_scatter_data, linspace,
         },
-        usize_to_f64,
+        to_f64,
     },
 };
 
@@ -111,14 +111,14 @@ impl Rays {
         // Normalize image (sum=1)
         let sum = image_matrix
             .iter()
-            .fold(0.0f64, |sum: f64, x: &u8| sum + usize_to_f64(*x as usize));
+            .fold(0.0f64, |sum: f64, x: &u8| sum + to_f64(*x));
         let energy_matrix = image_matrix.map(|p| energy * f64::from(p) / sum);
         let mut rays = Self::default();
         for (y, row) in energy_matrix.row_iter().enumerate() {
             for (x, pixel) in row.iter().enumerate() {
                 let centered_positions = (
-                    usize_to_f64(x) - f64::from(width) / 2.0,
-                    usize_to_f64(y) - f64::from(height) / 2.0,
+                    to_f64(x) - f64::from(width) / 2.0,
+                    to_f64(y) - f64::from(height) / 2.0,
                 );
                 let position = Point3::new(
                     pixel_size * centered_positions.0,
@@ -153,7 +153,7 @@ impl Rays {
         let points = strategy.generate();
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::with_capacity(nr_of_rays);
-        let energy_per_ray = energy / usize_to_f64(nr_of_rays);
+        let energy_per_ray = energy / to_f64(nr_of_rays);
         for point in points {
             let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
             rays.push(ray);
@@ -428,7 +428,7 @@ impl Rays {
             Hexapolar::new(millimeter!(size_after_unit_length), nr_of_rings)?.generate()
         };
         let nr_of_rays = points.len();
-        let energy_per_ray = energy / usize_to_f64(nr_of_rays);
+        let energy_per_ray = energy / to_f64(nr_of_rays);
         let mut rays: Vec<Ray> = Vec::new();
         for point in points {
             let direction = vector![
@@ -595,7 +595,7 @@ impl Rays {
     /// function returns `None` if [`Rays`] is empty.
     #[must_use]
     pub fn centroid(&self) -> Option<Point3<Length>> {
-        let len = usize_to_f64(self.nr_of_rays(true));
+        let len = to_f64(self.nr_of_rays(true));
         if len == 0.0 {
             return None;
         }
@@ -674,7 +674,7 @@ impl Rays {
                     sum_dist_sq += distance(&ray_2d, &c_in_millimeter).powi(2);
                 }
             }
-            let nr_of_rays = usize_to_f64(self.nr_of_rays(true));
+            let nr_of_rays = to_f64(self.nr_of_rays(true));
             sum_dist_sq /= nr_of_rays;
             millimeter!(sum_dist_sq.sqrt())
         })
@@ -1493,8 +1493,8 @@ impl FluenceRays {
         for i in 0..3 {
             let helper_ray_pos = original_ray.position()
                 + Vector3::<Length>::new(
-                    outer_radius * f64::cos(usize_to_f64(i) * 2. / 3. * std::f64::consts::PI),
-                    outer_radius * f64::sin(usize_to_f64(i) * 2. / 3. * std::f64::consts::PI),
+                    outer_radius * f64::cos(to_f64(i) * 2. / 3. * std::f64::consts::PI),
+                    outer_radius * f64::sin(to_f64(i) * 2. / 3. * std::f64::consts::PI),
                     meter!(0.),
                 );
             let mut helper_ray = Ray::new(

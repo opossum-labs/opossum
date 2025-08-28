@@ -6,7 +6,7 @@ use crate::{
     micrometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
-    utils::{f64_to_usize, usize_to_f64},
+    utils::{to_f64, try_f64_to_usize},
 };
 use csv::ReaderBuilder;
 use kahan::KahanSummator;
@@ -59,13 +59,18 @@ impl Spectrum {
                 "wavelength range limits must both be positive".into(),
             ));
         }
-        let number_of_elements =
-            f64_to_usize(((range.end - range.start) / resolution).value.round());
+        let Some(number_of_elements) =
+            try_f64_to_usize(((range.end - range.start) / resolution).value.round())
+        else {
+            return Err(OpossumError::Spectrum(
+                "cannot determine number of wavelength slots".into(),
+            ));
+        };
         let start = range.start.get::<micrometer>();
         let step = resolution.get::<micrometer>();
         let mut lambdas: Vec<f64> = Vec::new();
         for i in 0..number_of_elements {
-            lambdas.push(usize_to_f64(i).mul_add(step, start));
+            lambdas.push(to_f64(i).mul_add(step, start));
         }
         let data = lambdas.iter().map(|lambda| (*lambda, 0.0)).collect();
         Ok(Self { data })
@@ -195,7 +200,7 @@ impl Spectrum {
     pub fn average_resolution(&self) -> Length {
         let r = self.range();
         let bandwidth = r.end - r.start;
-        bandwidth / (usize_to_f64(self.data.len()) - 1.0)
+        bandwidth / (to_f64(self.data.len()) - 1.0)
     }
     /// Add a single peak to the given [`Spectrum`].
     ///

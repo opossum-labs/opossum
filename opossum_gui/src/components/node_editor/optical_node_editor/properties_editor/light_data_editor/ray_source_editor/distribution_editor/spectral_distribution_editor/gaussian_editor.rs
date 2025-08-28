@@ -1,6 +1,6 @@
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
-use opossum_backend::{Gaussian, SpecDistType, f64_to_usize, millimeter};
+use opossum_backend::{Gaussian, SpecDistType, millimeter, try_f64_to_usize};
 use strum::EnumIter;
 use uom::si::length::nanometer;
 
@@ -71,9 +71,9 @@ impl IntoInputData<f64, Gaussian, SpecDistType> for GaussianSpectrumParam {
             Self::WavelengthEnd => {
                 move |obj: &mut Gaussian, val: f64| obj.set_wvl_end(millimeter!(val))
             }
-            Self::NumPoints => {
-                move |obj: &mut Gaussian, val: f64| obj.set_num_points(f64_to_usize(val))
-            }
+            Self::NumPoints => move |obj: &mut Gaussian, val: f64| {
+                obj.set_num_points(try_f64_to_usize(val).unwrap());
+            },
         }
     }
 }

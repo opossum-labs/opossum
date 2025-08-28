@@ -9,7 +9,7 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
     surface::hit_map::fluence_estimator::FluenceEstimator,
-    utils::{griddata::linspace, usize_to_f64},
+    utils::{griddata::linspace, to_f64},
 };
 use nalgebra::{DMatrix, DVector};
 use plotters::style::RGBAColor;
@@ -127,8 +127,8 @@ impl FluenceData {
     /// Returns the total energy of this [`FluenceData`].
     #[must_use]
     pub fn total_energy(&self) -> Energy {
-        let dx = (self.x_range.end - self.x_range.start) / usize_to_f64(self.len_x());
-        let dy = (self.y_range.end - self.y_range.start) / usize_to_f64(self.len_y());
+        let dx = (self.x_range.end - self.x_range.start) / to_f64(self.len_x());
+        let dy = (self.y_range.end - self.y_range.start) / to_f64(self.len_y());
         let area = dx * dy;
         let mut energy = joule!(0.0);
         for fluence in &self.interp_distribution {
