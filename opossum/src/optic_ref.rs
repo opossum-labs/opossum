@@ -2,7 +2,7 @@
 //! Module for storing references to optical nodes.
 use serde::{
     Deserialize, Serialize,
-    de::{self, MapAccess, Visitor},
+    de::{self},
     ser::SerializeStruct,
 };
 use std::fmt::Debug;
@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::{
     analyzers::Analyzable,
     nodes::{NodeAttr, OpticGraph, create_node_ref},
+    optic_node::OpticNode,
     optic_scenery_rsc::SceneryResources,
 };
 
@@ -78,131 +79,64 @@ impl Serialize for OpticRef {
     where
         S: serde::Serializer,
     {
-        let mut node = serializer.serialize_struct("node", 2)?;
-        node.serialize_field(
-            "attributes",
-            &self
-                .optical_ref
-                .lock()
-                .expect("Mutex lock failed")
-                .node_attr(),
-        )?;
-        if let Ok(group_node) = self
+        let mut optical_ref = self.optical_ref.lock().expect("Mutex lock failed");
+
+        // We check if the node can be treated as a group node.
+        // This avoids serializing the 'graph' field for non-group nodes.
+        if let Ok(group_node) = optical_ref.as_group_mut() {
+            let mut state = serializer.serialize_struct("OpticRef", 2)?;
+            state.serialize_field("attributes", &group_node.node_attr())?;
+            state.serialize_field("graph", &group_node.graph())?;
+            state.end()
+        } else {
+            let mut state = serializer.serialize_struct("OpticRef", 1)?;
+            state.serialize_field("attributes", &optical_ref.node_attr())?;
+            drop(optical_ref);
+            state.end()
+        }
+    }
+}
+#[derive(Deserialize)]
+struct OpticRefIntermediate {
+    attributes: NodeAttr,
+    #[serde(default)]
+    graph: OpticGraph,
+}
+
+impl<'de> Deserialize<'de> for OpticRef {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let intermediate = OpticRefIntermediate::deserialize(deserializer)?;
+
+        let node_type = intermediate.attributes.node_type();
+        let node_ref = create_node_ref(&node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+        node_ref
+            .optical_ref
+            .lock()
+            .expect("Mutex lock failed")
+            .set_node_attr(intermediate.attributes);
+
+        // If the node is a group node, set its graph.
+        // The 'intermediate.graph' will always contain a valid OpticGraph
+        // (either deserialized from the source or a default one).
+        if let Ok(group_node) = node_ref
             .optical_ref
             .lock()
             .expect("Mutex lock failed")
             .as_group_mut()
         {
-            node.serialize_field("graph", &group_node.graph())?;
+            group_node.set_graph(intermediate.graph);
         }
-        node.end()
-    }
-}
+        node_ref
+            .optical_ref
+            .lock()
+            .expect("Mutex lock failed")
+            .after_deserialization_hook()
+            .map_err(|e| de::Error::custom(e.to_string()))?;
 
-impl<'de> Deserialize<'de> for OpticRef {
-    #[allow(clippy::too_many_lines)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        enum Field {
-            Attributes,
-            Graph,
-        }
-        const FIELDS: &[&str] = &["attributes", "graph"];
-
-        impl<'de> Deserialize<'de> for Field {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct FieldVisitor;
-
-                impl Visitor<'_> for FieldVisitor {
-                    type Value = Field;
-
-                    fn expecting(
-                        &self,
-                        formatter: &mut std::fmt::Formatter<'_>,
-                    ) -> std::fmt::Result {
-                        formatter.write_str("`attributes`, or `graph`")
-                    }
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
-                    where
-                        E: de::Error,
-                    {
-                        match value {
-                            "attributes" => Ok(Field::Attributes),
-                            "graph" => Ok(Field::Graph),
-                            _ => Err(de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
-        }
-
-        struct OpticRefVisitor;
-
-        impl<'de> Visitor<'de> for OpticRefVisitor {
-            type Value = OpticRef;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("a struct OpticRef")
-            }
-
-            fn visit_map<A>(self, mut map: A) -> std::result::Result<OpticRef, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
-                // let mut node_type = None;
-                let mut node_attributes = None;
-                let mut node_graph = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Attributes => {
-                            if node_attributes.is_some() {
-                                return Err(de::Error::duplicate_field("attributes"));
-                            }
-                            node_attributes = Some(map.next_value::<NodeAttr>()?);
-                        }
-                        Field::Graph => {
-                            if node_graph.is_some() {
-                                return Err(de::Error::duplicate_field("graph"));
-                            }
-                            node_graph = Some(map.next_value::<OpticGraph>()?);
-                        }
-                    }
-                }
-
-                let node_attributes =
-                    node_attributes.ok_or_else(|| de::Error::missing_field("attributes"))?;
-                let node_type = &node_attributes.node_type();
-                let node =
-                    create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
-                node.optical_ref
-                    .lock()
-                    .expect("Mutex lock failed")
-                    .set_node_attr(node_attributes);
-                if let Ok(group_node) = node
-                    .optical_ref
-                    .lock()
-                    .expect("Mutex lock failed")
-                    .as_group_mut()
-                {
-                    group_node
-                        .set_graph(node_graph.ok_or_else(|| de::Error::missing_field("graph"))?);
-                }
-                // group node: assign props to graph
-                node.optical_ref
-                    .lock()
-                    .expect("Mutex lock failed")
-                    .after_deserialization_hook()
-                    .map_err(|e| de::Error::custom(e.to_string()))?;
-                Ok(node)
-            }
-        }
-        deserializer.deserialize_struct("OpticRef", FIELDS, OpticRefVisitor)
+        Ok(node_ref)
     }
 }
 #[cfg(test)]
