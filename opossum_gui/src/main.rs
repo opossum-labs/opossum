@@ -17,7 +17,7 @@ const MDB_SUB_CSS: Asset = asset!("./assets/mdb_submenu.css");
 const MDB_ACC_CSS: Asset = asset!("./assets/mdb_accordion.css");
 
 fn read_icon() -> Option<Icon> {
-    let icon_bytes: &[u8] = include_bytes!("../../opossum/logo/Logo_square.ico");
+    let icon_bytes: &[u8] = include_bytes!("../../opossum_core/logo/Logo_square.ico");
     let mut reader = Cursor::new(icon_bytes);
     let icon_dir = ico::IconDir::read(&mut reader).unwrap();
     icon_dir.entries().iter().next().map_or_else(

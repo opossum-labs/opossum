@@ -29,7 +29,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.139"
 rfd = "0.15.3"
 reqwest = { version = "0.12.14", features = ["json", "stream"] }
-ron="0.10.1"
+ron="0.11.0"
 chrono = "0.4.40"
 rust-sugiyama = "0.3"
 ico = "0.4"
@@ -46,9 +46,9 @@ approx = "0.5.1"
 tempfile= "3.21"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-plotly = { version = "0.12", features = ["kaleido"] }
+plotly = { version = "0.13.5", features = ["kaleido"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-plotly = { version = "0.12", features = ["wasm"] }
+plotly = { version = "0.13.5" }
 
 [features]
 default = ["desktop"]

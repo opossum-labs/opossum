@@ -30,7 +30,7 @@ opm_macros_lib = { path = "opm_macros_lib" }
 petgraph = { version = "0.8.1", features = ["serde-1"] } # the graph library
 uom = {version="0.37", features = ["serde"] }
 serde = { version = "1", features = ['rc'] }
-ron="0.10.1"
+ron="0.11.0"
 
 csv = "1"
 plotters = "0.3"
@@ -82,7 +82,7 @@ doc-images = []
 regex = "1"
 assert_matches = "1"
 testing_logger= "0.1"
-criterion = { version = "0.6.0", features = ["html_reports"] }
+criterion = { version = "0.7.0", features = ["html_reports"] }
 
 [build-dependencies]
 vergen-git2 = { version = "1" } # get git version infos compiled in binary
