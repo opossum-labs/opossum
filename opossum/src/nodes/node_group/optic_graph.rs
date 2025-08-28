@@ -22,7 +22,7 @@ use petgraph::{
 };
 use serde::{
     Deserialize, Serialize,
-    de::{self, MapAccess, Visitor},
+    de::{self},
     ser::SerializeStruct,
 };
 use std::fmt::Write as _;
@@ -1165,161 +1165,83 @@ impl Serialize for OpticGraph {
     where
         S: serde::Serializer,
     {
-        let mut graph = serializer.serialize_struct("graph", 4)?;
+        // 1. Dynamically count the number of fields to be serialized.
+        //    Start with the fields that are always present.
+        let mut field_count = 2; // "nodes" and "edges"
+        if self.input_port_map.len() != 0 {
+            field_count += 1;
+        }
+        if self.output_port_map.len() != 0 {
+            field_count += 1;
+        }
+
+        // 2. Start serialization with the correct field count.
+        let mut graph = serializer.serialize_struct("graph", field_count)?;
+
+        // 3. Serialize mandatory fields.
         let nodes = self.g.node_weights().cloned().collect::<Vec<OpticRef>>();
         graph.serialize_field("nodes", &nodes)?;
-        let edgeidx = self
-            .g
-            .edge_indices()
-            .map(|e| ConnectionInfo {
-                src_id: self
-                    .g
-                    .node_weight(self.g.edge_endpoints(e).unwrap().0)
-                    .unwrap()
-                    .uuid(),
-                src_port: self.g.edge_weight(e).unwrap().src_port().to_owned(),
-                target_id: self
-                    .g
-                    .node_weight(self.g.edge_endpoints(e).unwrap().1)
-                    .unwrap()
-                    .uuid(),
-                target_port: self.g.edge_weight(e).unwrap().target_port().to_owned(),
-                distance: *self.g.edge_weight(e).unwrap().distance(),
-            })
-            .collect::<Vec<ConnectionInfo>>();
-        graph.serialize_field("edges", &edgeidx)?;
-        graph.serialize_field("input_map", &self.input_port_map)?;
-        graph.serialize_field("output_map", &self.output_port_map)?;
+
+        // You can reuse your existing `connections()` method here for cleaner code.
+        let connections = self.connections();
+        graph.serialize_field("edges", &connections)?;
+
+        // 4. Conditionally serialize the port maps.
+        if self.input_port_map.len() != 0 {
+            graph.serialize_field("input_map", &self.input_port_map)?;
+        }
+        if self.output_port_map.len() != 0 {
+            graph.serialize_field("output_map", &self.output_port_map)?;
+        }
+
         graph.end()
     }
 }
 
 impl<'de> Deserialize<'de> for OpticGraph {
-    #[allow(clippy::too_many_lines)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        enum Field {
-            Nodes,
-            Edges,
-            InputPortMap,
-            OutputPortMap,
+        // Define a helper struct that matches the serialized format.
+        #[derive(Deserialize)]
+        struct SerializableGraph {
+            nodes: Vec<OpticRef>,
+            edges: Vec<ConnectionInfo>,
+            #[serde(default)]
+            input_map: PortMap,
+            #[serde(default)]
+            output_map: PortMap,
         }
-        const FIELDS: &[&str] = &["nodes", "edges", "input_map", "output_map"];
+        let temp_graph = SerializableGraph::deserialize(deserializer)?;
 
-        impl<'de> Deserialize<'de> for Field {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct FieldVisitor;
+        let mut g = Self::default();
 
-                impl Visitor<'_> for FieldVisitor {
-                    type Value = Field;
-
-                    fn expecting(
-                        &self,
-                        formatter: &mut std::fmt::Formatter<'_>,
-                    ) -> std::fmt::Result {
-                        formatter.write_str("`nodes`, `edges`, `input_map`, or `output_map`")
-                    }
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
-                    where
-                        E: de::Error,
-                    {
-                        match value {
-                            "nodes" => Ok(Field::Nodes),
-                            "edges" => Ok(Field::Edges),
-                            "input_map" => Ok(Field::InputPortMap),
-                            "output_map" => Ok(Field::OutputPortMap),
-                            _ => Err(de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
+        // 1. Add all nodes to the graph.
+        for node in &temp_graph.nodes {
+            g.g.add_node(node.clone());
         }
-
-        struct OpticGraphVisitor;
-
-        impl<'de> Visitor<'de> for OpticGraphVisitor {
-            type Value = OpticGraph;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("an OpticGraph")
-            }
-            fn visit_map<A>(self, mut map: A) -> std::result::Result<OpticGraph, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
-                let mut g = OpticGraph::default();
-                let mut nodes: Option<Vec<OpticRef>> = None;
-                let mut edges: Option<Vec<ConnectionInfo>> = None;
-                let mut input_map: Option<PortMap> = None;
-                let mut output_map: Option<PortMap> = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Nodes => {
-                            if nodes.is_some() {
-                                return Err(de::Error::duplicate_field("nodes"));
-                            }
-                            nodes = Some(map.next_value::<Vec<OpticRef>>()?);
-                        }
-                        Field::Edges => {
-                            if edges.is_some() {
-                                return Err(de::Error::duplicate_field("edges"));
-                            }
-                            edges = Some(map.next_value::<Vec<ConnectionInfo>>()?);
-                        }
-                        Field::InputPortMap => {
-                            if input_map.is_some() {
-                                return Err(de::Error::duplicate_field("input_map"));
-                            }
-                            input_map = Some(map.next_value::<PortMap>()?);
-                        }
-                        Field::OutputPortMap => {
-                            if output_map.is_some() {
-                                return Err(de::Error::duplicate_field("output_map"));
-                            }
-                            output_map = Some(map.next_value::<PortMap>()?);
-                        }
-                    }
-                }
-                let nodes = nodes.ok_or_else(|| de::Error::missing_field("nodes"))?;
-                let edges = edges.ok_or_else(|| de::Error::missing_field("edges"))?;
-                for node in &nodes {
-                    g.g.add_node(node.clone());
-                }
-                for node_ref in &nodes {
-                    // assign references to ref nodes (if any)
-                    assign_reference_to_ref_node(node_ref, &g)
-                        .map_err(|e| de::Error::custom(e.to_string()))?;
-                }
-                for edge in &edges {
-                    g.connect_nodes(
-                        edge.src_id,
-                        &edge.src_port,
-                        edge.target_id,
-                        &edge.target_port,
-                        edge.distance,
-                    )
-                    .map_err(|e| {
-                        de::Error::custom(format!("connecting OpticGraph nodes failed: {e}"))
-                    })?;
-                }
-                if let Some(input_map) = input_map {
-                    // todo: do sanity check
-                    g.input_port_map = input_map;
-                }
-                if let Some(output_map) = output_map {
-                    // todo: do sanity check
-                    g.output_port_map = output_map;
-                }
-                Ok(g)
-            }
+        // 2. Assign references for any reference nodes. This must be done after all
+        //    nodes are already in the graph, so that the referenced node can be found.
+        for node_ref in &temp_graph.nodes {
+            assign_reference_to_ref_node(node_ref, &g)
+                .map_err(|e| de::Error::custom(e.to_string()))?;
         }
-        deserializer.deserialize_struct("OpticGraph", FIELDS, OpticGraphVisitor)
+        // 3. Re-create all the connections (edges) between the nodes.
+        for edge in &temp_graph.edges {
+            g.connect_nodes(
+                edge.src_id,
+                &edge.src_port,
+                edge.target_id,
+                &edge.target_port,
+                edge.distance,
+            )
+            .map_err(|e| de::Error::custom(format!("connecting OpticGraph nodes failed: {e}")))?;
+        }
+        // 4. Assign the port maps (might be empty (default value))
+        g.input_port_map = temp_graph.input_map;
+        g.output_port_map = temp_graph.output_map;
+        Ok(g)
     }
 }
 

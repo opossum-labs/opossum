@@ -102,8 +102,6 @@
                     distance: 0.0,
                 ),
             ],
-            input_map: ({}),
-            output_map: ({}),
         ),
     ),
     global: (
