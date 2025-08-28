@@ -1,10 +1,18 @@
 #![warn(missing_docs)]
 //! Module handling the export of a [`NodeGroup`](crate::nodes::NodeGroup) into the Graphviz `.dot` format.
-use num::ToPrimitive;
-
 use crate::error::OpmResult;
 use crate::optic_ports::{OpticPorts, PortType};
+use num::ToPrimitive;
 use std::fmt::Write as _;
+
+/// Structure for holding the calculated layout parameters for the node's table representation.
+pub struct NodeLayout {
+    node_cell_size: usize,
+    num_cells: usize,
+    row_col_span: usize,
+    input_port_start: usize,
+    output_port_start: usize,
+}
 
 /// This trait deals with the translation of the [`NodeGroup`](crate::nodes::NodeGroup) structure to the dot-file
 /// format which is needed to visualize the graphs
@@ -103,6 +111,112 @@ pub trait Dottable {
         new_str
     }
 
+    /// Helper method to calculate layout parameters for the node table.
+    fn calculate_layout(&self, max_ports: usize, node_name: &str) -> NodeLayout {
+        let (num_cells, row_col_span) = if max_ports > 1 {
+            ((max_ports + 1) * 2 + 1, max_ports * 2 + 1)
+        } else {
+            (7, 5)
+        };
+
+        let node_name_chars = node_name.len().to_f64().unwrap();
+        let min_width_from_ports = 16 * (max_ports * 2 + 1);
+        let min_width_from_name = (node_name_chars * 6.5).ceil().to_usize().unwrap();
+
+        let mut single_cell_size = if min_width_from_ports > min_width_from_name {
+            (min_width_from_ports + 20) / num_cells
+        } else {
+            (min_width_from_name + 20) / num_cells
+        };
+
+        if single_cell_size < 80 / (num_cells - 2) {
+            single_cell_size = 80 / (num_cells - 2);
+        }
+
+        let node_cell_size = single_cell_size * (num_cells - 2);
+
+        let input_port_start = if num_cells > 7 || max_ports > 1 {
+            max_ports - (max_ports.saturating_sub(1)) + 2
+        } else {
+            3
+        };
+
+        let output_port_start = if num_cells > 7 || max_ports > 1 {
+            max_ports - (max_ports.saturating_sub(1)) + 2
+        } else {
+            3
+        };
+
+        NodeLayout {
+            node_cell_size,
+            num_cells,
+            row_col_span,
+            input_port_start,
+            output_port_start,
+        }
+    }
+
+    /// Helper method to create the main body cell of the node.
+    fn create_node_body_cell(&self, node_name: &str, rankdir: &str, layout: &NodeLayout) -> String {
+        let (width, height) = if rankdir == "LR" {
+            (layout.node_cell_size, layout.node_cell_size)
+        } else {
+            (layout.node_cell_size, 16 + layout.row_col_span - 1)
+        };
+
+        format!(
+            "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>\n",
+            layout.row_col_span,
+            layout.row_col_span,
+            self.node_color(),
+            width,
+            height,
+            node_name
+        )
+    }
+
+    /// Helper method to create empty spacer cells.
+    fn create_spacer_cell(
+        &self,
+        ax_nums: (usize, usize),
+        rankdir: &str,
+        layout: &NodeLayout,
+    ) -> String {
+        let (row, col) = ax_nums;
+        let is_corner =
+            (row == 0 || row == layout.num_cells - 1) && (col == 1 || col == layout.num_cells - 2);
+        let is_side_middle =
+            (col == 0 || col == layout.num_cells - 1) && (row == 1 || row == layout.num_cells - 2);
+
+        if is_corner || is_side_middle {
+            let size = (layout.node_cell_size - (layout.num_cells - 4) * 16) / 2;
+            let (width, height) = if rankdir == "LR" {
+                ("16".to_string(), size.to_string())
+            } else {
+                (
+                    if is_corner {
+                        "16".to_string()
+                    } else {
+                        size.to_string()
+                    },
+                    "1".to_string(),
+                )
+            };
+            return format!(
+                "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"{width}\" HEIGHT=\"{height}\"> </TD>\n"
+            );
+        }
+
+        // Default inner spacer
+        let (width, height) = if rankdir == "LR" {
+            ("16", "16")
+        } else {
+            ("16", "1")
+        };
+        format!(
+            "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"{width}\" HEIGHT=\"{height}\"> </TD>\n"
+        )
+    }
     /// Creates the respective table cell of the optical node, depending on the number of ports and orientation of the node
     ///
     /// # Attributes
@@ -113,7 +227,6 @@ pub trait Dottable {
     ///
     /// # Returns
     /// Returns the String that describes the table cell of the node table.
-    #[allow(clippy::too_many_lines)]
     fn create_node_table_cells(
         &self,
         ports: (&Vec<String>, &Vec<String>),
@@ -122,139 +235,40 @@ pub trait Dottable {
         node_name: &str,
         rankdir: &str,
     ) -> String {
-        let mut dot_str = String::new();
-        let max_port_num = if ports.0.len() <= ports.1.len() {
-            ports.1.len()
-        } else {
-            ports.0.len()
-        };
+        let (inputs, outputs) = ports;
+        let (in_port_count, out_port_count) = ports_count;
+        let (row, col) = ax_nums;
 
-        let port_0_count = ports_count.0;
-        let port_1_count = ports_count.1;
+        let max_ports = inputs.len().max(outputs.len());
+        let layout = self.calculate_layout(max_ports, node_name);
 
-        let node_name_chars = node_name.len().to_f64().unwrap();
-        let (node_cell_size, num_cells, row_col_span, port_0_start, port_1_start) = {
-            let (num_cells, col_span) = if max_port_num > 1 {
-                ((max_port_num + 1) * 2 + 1, max_port_num * 2 + 1)
-            } else {
-                (7, 5)
-            };
-            let mut single_cell_size = if 16 * (max_port_num * 2 + 1)
-                > (node_name_chars * 6.5).ceil().to_usize().unwrap()
-            {
-                (16 * (max_port_num * 2 + 1) + 20) / num_cells
-            } else {
-                ((node_name_chars * 6.5).ceil().to_usize().unwrap() + 20) / num_cells
-            };
-            if single_cell_size < 80 / (num_cells - 2) {
-                single_cell_size = 80 / (num_cells - 2);
-            }
-            let input_start = if num_cells > 7 || ports.0.len() > 1 {
-                max_port_num - ports.0.len() + 2
-            } else {
-                3
-            };
-            let output_start = if num_cells > 7 || ports.1.len() > 1 {
-                max_port_num - ports.1.len() + 2
-            } else {
-                3
-            };
-            (
-                single_cell_size * (num_cells - 2),
-                num_cells,
-                col_span,
-                input_start,
-                output_start,
-            )
-        };
-        if port_0_count < &mut ports.0.len()
-            && ax_nums.0 >= port_0_start
-            && (ax_nums.0 - port_0_start) % 2 == 0
-            && ax_nums.1 == 0
+        // Try to create an input port cell
+        if col == 0
+            && *in_port_count < inputs.len()
+            && row >= layout.input_port_start
+            && (row - layout.input_port_start) % 2 == 0
         {
-            dot_str.push_str(&self.create_port_cell_str(
-                &ports.0[*port_0_count],
-                true,
-                *port_0_count + 1,
-            ));
-            *port_0_count += 1;
-        } else if port_1_count < &mut ports.1.len()
-            && ax_nums.0 >= port_1_start
-            && (ax_nums.0 - port_1_start) % 2 == 0
-            && ax_nums.1 == num_cells - 1
-        {
-            dot_str.push_str(&self.create_port_cell_str(
-                &ports.1[*port_1_count],
-                false,
-                *port_1_count + 1,
-            ));
-            *port_1_count += 1;
-        } else if ax_nums.0 == 1 && ax_nums.1 == 1 {
-            if rankdir == "LR" {
-                let _ = writeln!(
-                    dot_str,
-                    "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>",
-                    row_col_span,
-                    row_col_span,
-                    self.node_color(),
-                    node_cell_size,
-                    node_cell_size,
-                    node_name
-                );
-            } else {
-                let _ = writeln!(
-                    dot_str,
-                    "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>",
-                    row_col_span,
-                    row_col_span,
-                    self.node_color(),
-                    node_cell_size,
-                    16 + row_col_span - 1,
-                    node_name
-                );
-            }
-        } else if (ax_nums.0 == 0 || ax_nums.0 == num_cells - 1)
-            && (ax_nums.1 == 1 || ax_nums.1 == num_cells - 2)
-        {
-            let size = (node_cell_size - (num_cells - 4) * 16) / 2;
-            if rankdir == "LR" {
-                let _ = writeln!(
-                    dot_str,
-                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>"
-                );
-            } else {
-                let _ = writeln!(
-                    dot_str,
-                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"1\"> </TD>"
-                );
-            }
-        } else if (ax_nums.1 == 0 || ax_nums.1 == num_cells - 1)
-            && (ax_nums.0 == 1 || ax_nums.0 == num_cells - 2)
-        {
-            let size = (node_cell_size - (num_cells - 4) * 16) / 2;
-            if rankdir == "LR" {
-                let _ = writeln!(
-                    dot_str,
-                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>"
-                );
-            } else {
-                let _ = writeln!(
-                    dot_str,
-                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"{size}\" HEIGHT=\"1\"> </TD>"
-                );
-            }
-        } else if rankdir == "LR" {
-            let _ = writeln!(
-                dot_str,
-                "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"16\"> </TD>"
-            );
-        } else {
-            let _ = writeln!(
-                dot_str,
-                "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"1\"> </TD>"
-            );
+            let cell = self.create_port_cell_str(&inputs[*in_port_count], true, *in_port_count + 1);
+            *in_port_count += 1;
+            return cell;
         }
-        dot_str
+        // Try to create an output port cell
+        if col == layout.num_cells - 1
+            && *out_port_count < outputs.len()
+            && row >= layout.output_port_start
+            && (row - layout.output_port_start) % 2 == 0
+        {
+            let cell =
+                self.create_port_cell_str(&outputs[*out_port_count], false, *out_port_count + 1);
+            *out_port_count += 1;
+            return cell;
+        }
+        // Try to create the main node body cell
+        if row == 1 && col == 1 {
+            return self.create_node_body_cell(node_name, rankdir, &layout);
+        }
+        // Otherwise, create a spacer cell
+        self.create_spacer_cell(ax_nums, rankdir, &layout)
     }
 
     /// Creates the html-like label that describes the node to be displayed via graphwiz

@@ -62,13 +62,82 @@ pub use source_helper::{
     collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
 };
 pub use spot_diagram::SpotDiagram;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock, Mutex},
+};
 pub use wedge::Wedge;
 
 use crate::{
     error::{OpmResult, OpossumError},
     optic_ref::OpticRef,
 };
+// A type alias for the node constructor function
+type NodeConstructor = Box<dyn Fn() -> OpticRef + Send + Sync>;
+
+// Struct to hold all info about a node type
+struct NodeInfo {
+    constructor: NodeConstructor,
+    description: &'static str,
+}
+
+// Create a node factory as single point of truth.
+// Create a lazily-initialized static HashMap.
+static NODE_FACTORY: LazyLock<HashMap<&'static str, NodeInfo>> = LazyLock::new(|| {
+    let mut map = HashMap::new();
+    // A little helper macro to reduce boilerplate when adding nodes.
+    macro_rules! register_node {
+        ($map:expr, $name:expr, $type:ty, $desc:expr) => {
+            $map.insert(
+                $name,
+                NodeInfo {
+                    constructor: Box::new(|| {
+                        OpticRef::new(Arc::new(Mutex::new(<$type>::default())), None)
+                    }),
+                    description: $desc,
+                },
+            );
+        };
+    }
+
+    register_node!(map, "dummy", Dummy, "dummy node");
+    register_node!(map, "beam splitter", BeamSplitter, "ideal beam splitter");
+    register_node!(map, "energy meter", EnergyMeter, "ideal energy meter");
+    register_node!(
+        map,
+        "group",
+        NodeGroup,
+        "group node containing other nodes or groups"
+    );
+    register_node!(map, "ideal filter", IdealFilter, "ideal filter");
+    register_node!(
+        map,
+        "reflective grating",
+        ReflectiveGrating,
+        "reflective optical grating"
+    );
+    register_node!(map, "reference", NodeReference, "reference to another node");
+    register_node!(map, "lens", Lens, "spherical lens");
+    register_node!(map, "cylindric lens", CylindricLens, "cylindric lens");
+    register_node!(map, "source", Source, "light source");
+    register_node!(map, "spectrometer", Spectrometer, "ideal spectrometer");
+    register_node!(map, "spot diagram", SpotDiagram, "spot diagram detector");
+    register_node!(map, "wavefront monitor", WaveFront, "wavefront detector");
+    register_node!(map, "paraxial surface", ParaxialSurface, "ideal thin lens");
+    register_node!(
+        map,
+        "ray propagation",
+        RayPropagationVisualizer,
+        "ray propagation plotter"
+    );
+    register_node!(map, "fluence detector", FluenceDetector, "fluence detector");
+    register_node!(map, "wedge", Wedge, "wedged substrate (prism)");
+    register_node!(map, "mirror", ThinMirror, "ideal flat / spherical mirror");
+    register_node!(map, "parabolic mirror", ParabolicMirror, "parabolic mirror");
+
+    map
+});
+
 /// Factory function creating a new reference of an optical node of the given type.
 ///
 /// If a uuid is given, the optical node is created using this id. Otherwise a new (random) id is generated. This
@@ -77,78 +146,13 @@ use crate::{
 /// # Errors
 ///
 /// This function will return an [`OpossumError`] if there is no node with the given type.
-#[allow(clippy::too_many_lines)]
 pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
-    match node_type {
-        "dummy" => Ok(OpticRef::new(Arc::new(Mutex::new(Dummy::default())), None)),
-        "beam splitter" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(BeamSplitter::default())),
-            None,
-        )),
-        "energy meter" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(EnergyMeter::default())),
-            None,
-        )),
-        "group" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(NodeGroup::default())),
-            None,
-        )),
-        "ideal filter" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(IdealFilter::default())),
-            None,
-        )),
-        "reflective grating" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(ReflectiveGrating::default())),
-            None,
-        )),
-        "reference" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(NodeReference::default())),
-            None,
-        )),
-        "lens" => Ok(OpticRef::new(Arc::new(Mutex::new(Lens::default())), None)),
-        "cylindric lens" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(CylindricLens::default())),
-            None,
-        )),
-        "source" => Ok(OpticRef::new(Arc::new(Mutex::new(Source::default())), None)),
-        "spectrometer" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(Spectrometer::default())),
-            None,
-        )),
-        "spot diagram" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(SpotDiagram::default())),
-            None,
-        )),
-        "wavefront monitor" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(WaveFront::default())),
-            None,
-        )),
-        "paraxial surface" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(ParaxialSurface::default())),
-            None,
-        )),
-        "ray propagation" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(RayPropagationVisualizer::default())),
-            None,
-        )),
-        "fluence detector" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(FluenceDetector::default())),
-            None,
-        )),
-        "wedge" => Ok(OpticRef::new(Arc::new(Mutex::new(Wedge::default())), None)),
-        "mirror" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(ThinMirror::default())),
-            None,
-        )),
-        "parabolic mirror" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(ParabolicMirror::default())),
-            None,
-        )),
-        _ => Err(OpossumError::Other(format!(
-            "cannot create node type <{node_type}>"
-        ))),
-    }
+    NODE_FACTORY
+        .get(node_type)
+        .map(|info| (info.constructor)())
+        .ok_or_else(|| OpossumError::Other(format!("cannot create node type <{node_type}>")))
 }
+
 /// Return a list of all available node types.
 ///
 /// Returns a vector of tuples containing the name and the description of all
@@ -157,27 +161,13 @@ pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
 /// separate endpoint for adding reference nodes.
 #[must_use]
 pub fn node_types() -> Vec<(&'static str, &'static str)> {
-    vec![
-        ("dummy", "dummy node"),
-        ("beam splitter", "ideal beam splitter"),
-        ("energy meter", "ideal energy meter"),
-        ("group", "group node containing othe nodes or groups"),
-        ("ideal filter", "ideal filter"),
-        ("reflective grating", "reflective optical grating"),
-        ("lens", "spherical lens"),
-        ("cylindric lens", "cylindric lens"),
-        ("source", "light source"),
-        ("spectrometer", "ideal spectrometer"),
-        ("spot diagram", "spot diagram detector"),
-        ("wavefront monitor", "wavefront detector"),
-        ("paraxial surface", "ideal thin lens"),
-        ("ray propagation", "ray propagation plotter"),
-        ("fluence detector", "fluence detector"),
-        ("wedge", "wedged substrate (prism)"),
-        ("mirror", "ideal flat / spherical mirror"),
-        ("parabolic mirror", "parabolic mirror"),
-    ]
+    NODE_FACTORY
+        .iter()
+        .filter(|(name, _)| **name != "reference") // Filter out "reference" as in the original
+        .map(|(name, info)| (*name, info.description))
+        .collect()
 }
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -185,30 +175,11 @@ mod test {
     fn create_node_ref_error() {
         assert!(create_node_ref("test").is_err());
     }
+
     #[test]
     fn create_node_ref_ok() {
-        let node_types = vec![
-            "dummy",
-            "beam splitter",
-            "energy meter",
-            "group",
-            "ideal filter",
-            "reflective grating",
-            "reference",
-            "lens",
-            "cylindric lens",
-            "source",
-            "spectrometer",
-            "spot diagram",
-            "wavefront monitor",
-            "paraxial surface",
-            "ray propagation",
-            "fluence detector",
-            "wedge",
-            "mirror",
-            "parabolic mirror",
-        ];
-        for node_type in node_types {
+        // Test against the keys in our factory map, which is now the single source of truth.
+        for node_type in NODE_FACTORY.keys() {
             assert!(create_node_ref(node_type).is_ok());
         }
     }
