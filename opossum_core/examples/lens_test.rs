@@ -40,5 +40,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(l2, "output_1", det, "input_1", millimeter!(50.0))?;
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-    doc.save_to_file(Path::new("./opossum/playground/lens_test.opm"))
+    doc.save_to_file(Path::new("./opossum_core/playground/lens_test.opm"))
 }

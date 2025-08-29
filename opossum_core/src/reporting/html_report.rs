@@ -1,9 +1,14 @@
 //! Module for generating html reports from analysis results.
+use log::info;
 use serde::Serialize;
 use std::{fs, path::Path};
 use tinytemplate::TinyTemplate;
 
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    optic_node::OpticNode,
+    reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
+};
 
 static HTML_REPORT: &str = include_str!("../html/html_report.html");
 static HTML_NODE_REPORT: &str = include_str!("../html/node_report.html");
@@ -33,24 +38,75 @@ impl HtmlReport {
             node_reports,
         }
     }
-    /// Generate an html report from this [`HtmlReport`].
+    /// Creates a new [`HtmlReport`] from an [`AnalysisReport`].
     ///
     /// # Errors
     ///
-    /// This function will return an error if
-    ///   - underlying templates could not be compiled.
-    ///   - the base file name could not be determined.
-    ///   - the conversion
-    pub fn generate_html(&self, path: &Path) -> OpmResult<()> {
+    /// This function returns an error if the provided [`AnalysisReport`] has an empty scenery.
+    pub fn from_analysis_report(report: &AnalysisReport) -> OpmResult<Self> {
+        let Some(scenery) = &report.scenery() else {
+            return Err(OpossumError::Other("no scenery found".into()));
+        };
+        let html_node_reports: Vec<HtmlNodeReport> = report
+            .node_reports()
+            .iter()
+            .map(|r| HtmlNodeReport::from_node_report(r, ""))
+            .collect();
+
+        Ok(Self::new(
+            report.opossum_version().to_string(),
+            report
+                .analysis_timestamp()
+                .format("%Y/%m/%d %H:%M")
+                .to_string(),
+            report.analysis_type().to_string(),
+            scenery.node_attr().name(),
+            html_node_reports,
+        ))
+    }
+    /// Generate a complete HTML report, including the main HTML file
+    /// and all associated data files.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    /// - the data directory `data` cannot be created.
+    /// - the main HTML file could not be written.
+    /// - the export of data files fails.
+    pub fn generate_report_files(
+        &self,
+        report_path: &Path,
+        analysis_report: &AnalysisReport,
+        report_number: usize,
+    ) -> OpmResult<()> {
+        // 1. Export associated data first
+        let data_dir = report_path.join("data");
+        fs::create_dir_all(&data_dir).map_err(|e| {
+            OpossumError::Other(format!("Error creating data dir for html report: {e}"))
+        })?;
+        for node_report in analysis_report.node_reports() {
+            node_report.properties().export_data(
+                &data_dir,
+                &format!("_{}_{}", &node_report.name(), &node_report.uuid()),
+            )?;
+        }
+
+        // 2. Render and write the main HTML file
         let mut tt = TinyTemplate::new();
-        tt.add_template("report", HTML_REPORT)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        tt.add_template("report", HTML_REPORT).map_err(|e| {
+            OpossumError::Other(format!("Error adding html `report` template: {e}"))
+        })?;
         tt.add_template("node_report", HTML_NODE_REPORT)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        let rendered = tt
-            .render("report", &self)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        fs::write(path, rendered).map_err(|e| OpossumError::Other(e.to_string()))?;
+            .map_err(|e| {
+                OpossumError::Other(format!("Error adding html `node_report` template: {e}"))
+            })?;
+        let rendered = tt.render("report", &self).map_err(|e| {
+            OpossumError::Other(format!("Error rendering html `report` template: {e}"))
+        })?;
+        let html_path = report_path.join(format!("report_{report_number}.html"));
+        fs::write(&html_path, rendered)
+            .map_err(|e| OpossumError::Other(format!("Error writing html file: {e}")))?;
+        info!("Write html report to {}", html_path.display());
         Ok(())
     }
 }
@@ -68,10 +124,58 @@ pub struct HtmlNodeReport {
     /// show or hide item in report by default
     pub show_item: bool,
 }
-
+impl HtmlNodeReport {
+    /// Create this [`HtmlNodeReport`] from an [`NodeReport`].
+    #[must_use]
+    pub fn from_node_report(node_report: &NodeReport, id: &str) -> Self {
+        Self {
+            node_name: node_report.name().to_string(),
+            node_type: node_report.node_type().to_string(),
+            props: node_report.properties().html_props(&format!(
+                "{id}_{}_{}",
+                node_report.name(),
+                node_report.uuid()
+            )),
+            uuid: node_report.uuid().to_string(),
+            show_item: node_report.show_item(),
+        }
+    }
+}
 #[derive(Serialize)]
 pub struct HtmlProperty {
     pub name: String,
     pub description: String,
     pub prop_value: String,
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        properties::Properties,
+        reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
+    };
+
+    // #[test]
+    // fn from_analysis_report() {
+    // }
+    // #[test]
+    // fn generate_report_files() {
+    // }
+    #[test]
+    fn from_node_report() {
+        let mut properties = Properties::default();
+        properties.create("test1", "desc1", 1.0.into()).unwrap();
+        properties.create("test2", "desc2", "test".into()).unwrap();
+        let report = NodeReport::new("test detector", "detector name", "123", properties);
+        let html_report = HtmlNodeReport::from_node_report(&report, "345");
+        assert_eq!(html_report.node_name, "detector name");
+        assert_eq!(html_report.node_type, "test detector");
+        assert_eq!(html_report.uuid, "123");
+        assert_eq!(html_report.show_item, false);
+        let html_props = html_report.props;
+
+        assert_eq!(html_props[0].name, "test1");
+        assert_eq!(html_props[0].description, "desc1");
+        assert_eq!(html_props[0].prop_value, "1.000000");
+    }
 }

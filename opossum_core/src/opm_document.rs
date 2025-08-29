@@ -15,7 +15,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     optic_node::OpticNode,
-    reporting::{analysis_report::AnalysisReport, report_helper::create_file_instance},
+    reporting::analysis_report::AnalysisReport,
+    utils::file_utils::create_file_instance,
 };
 use log::{info, warn};
 use nalgebra::Point2;

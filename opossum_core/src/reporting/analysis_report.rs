@@ -1,17 +1,13 @@
 #![warn(missing_docs)]
 //! Module handling analysis reports and converting them to HTML.
 
-use std::{fs, path::Path};
+use std::{fs::File, io::Write, path::Path};
 
-use super::{
-    html_report::{HtmlNodeReport, HtmlReport},
-    node_report::NodeReport,
-};
+use super::{html_report::HtmlReport, node_report::NodeReport};
 use crate::{
     error::{OpmResult, OpossumError},
     get_version,
     nodes::NodeGroup,
-    optic_node::OpticNode,
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
@@ -63,6 +59,11 @@ impl AnalysisReport {
     pub fn add_node_report(&mut self, report: NodeReport) {
         self.node_reports.push(report);
     }
+    /// Returns the scenery of this [`AnalysisReport`].
+    #[must_use]
+    pub fn scenery(&self) -> Option<NodeGroup> {
+        self.scenery.clone()
+    }
     /// Serialize this [`AnalysisReport`] to a file string.
     ///
     /// # Errors
@@ -72,52 +73,26 @@ impl AnalysisReport {
         ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::new().new_line("\n"))
             .map_err(|e| OpossumError::Other(format!("Error serializing AnalysisReport: {e}")))
     }
-    /// Export data of each [`NodeReport`] of this [`AnalysisReport`].
+    /// Saves the complete report to the specified directory.
+    ///
+    /// This creates a RON file for the report data, an HTML representation,
+    /// and exports all associated data files (e.g., plots, images).
     ///
     /// # Errors
     ///
-    /// This function will return an error if the individual `export_data` function of the individual
-    /// nodes fails.
-    pub fn export_data(&self, report_path: &Path) -> OpmResult<()> {
-        let report_path = report_path.join(Path::new("data"));
-        if !report_path.exists() {
-            return Err(OpossumError::Other("report path does not exist".into()));
-        }
-        let md = fs::metadata(&report_path).map_err(|e| {
-            OpossumError::Other(format!("could not check directory permissions: {e}"))
-        })?;
-        let permissions = md.permissions();
-        if permissions.readonly() {
-            return Err(OpossumError::Other(
-                "report path dow not have write permissions".into(),
-            ));
-        }
-        for node_report in &self.node_reports {
-            node_report.export_data(&report_path, "")?;
-        }
+    /// Returns an error if any file I/O or data export operation fails.
+    pub fn save(&self, report_directory: &Path, report_number: usize) -> OpmResult<()> {
+        // 1. Save the RON file
+        let ron_path = report_directory.join(format!("report_{report_number}.ron"));
+        let mut ron_file = File::create(ron_path)
+            .map_err(|e| OpossumError::Other(format!("RON file creation failed: {e}")))?;
+        write!(ron_file, "{}", self.to_file_string()?)
+            .map_err(|e| OpossumError::Other(format!("writing RON file failed: {e}")))?;
+
+        // 2. Save the HTML report (including data files)
+        let html_report = HtmlReport::from_analysis_report(self)?;
+        html_report.generate_report_files(report_directory, self, report_number)?;
         Ok(())
-    }
-    /// Generate an [`HtmlReport`] from this [`AnalysisReport`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the report has no scenery set.
-    pub fn to_html_report(&self) -> OpmResult<HtmlReport> {
-        let Some(scenery) = &self.scenery else {
-            return Err(OpossumError::Other("no scenery found".into()));
-        };
-        let html_node_reports: Vec<HtmlNodeReport> = self
-            .node_reports
-            .iter()
-            .map(|r| r.to_html_node_report(""))
-            .collect();
-        Ok(HtmlReport::new(
-            self.opossum_version.clone(),
-            self.analysis_timestamp.format("%Y/%m/%d %H:%M").to_string(),
-            self.analysis_type.clone(),
-            scenery.node_attr().name(),
-            html_node_reports,
-        ))
     }
     /// Sets the analysis type of this [`AnalysisReport`].
     ///
@@ -125,16 +100,35 @@ impl AnalysisReport {
     pub fn set_analysis_type(&mut self, analysis_type: &str) {
         analysis_type.clone_into(&mut self.analysis_type);
     }
+    /// Returns a reference to the opossum version of this [`AnalysisReport`].
+    #[must_use]
+    pub fn opossum_version(&self) -> &str {
+        &self.opossum_version
+    }
+    /// Returns the analysis timestamp of this [`AnalysisReport`].
+    #[must_use]
+    pub const fn analysis_timestamp(&self) -> DateTime<Local> {
+        self.analysis_timestamp
+    }
+    /// Returns a reference to the analysis type of this [`AnalysisReport`].
+    #[must_use]
+    pub fn analysis_type(&self) -> &str {
+        &self.analysis_type
+    }
+    /// Returns a reference to the node reports of this [`AnalysisReport`].
+    #[must_use]
+    pub fn node_reports(&self) -> &[NodeReport] {
+        &self.node_reports
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use std::fs;
-
-    use tempfile::TempDir;
+    // use std::fs;
+    // use tempfile::TempDir;
 
     use super::*;
-    use crate::properties::Properties;
+    use crate::{OpmDocument, properties::Properties};
     #[test]
     fn new() {
         let timestamp = Local::now();
@@ -176,19 +170,14 @@ mod test {
         assert_eq!(report.node_reports.len(), 1);
     }
     #[test]
-    fn to_html_report() {
-        let mut report = AnalysisReport::default();
-        assert!(report.to_html_report().is_err());
-        report.add_scenery(&NodeGroup::default());
-        assert!(report.to_html_report().is_ok());
-        // further details to be checked in html_reports module (private fields...)
-    }
-    #[test]
-    fn export_data() {
-        let report = AnalysisReport::default();
-        assert!(report.export_data(Path::new("")).is_err());
-        let tmp_dir = TempDir::new().unwrap();
-        fs::create_dir(tmp_dir.path().join("data")).unwrap();
-        assert!(report.export_data(tmp_dir.path()).is_ok());
+    fn save() {
+        let mut document =
+            OpmDocument::from_file(&Path::new("./files_for_testing/opm/opticscenery.opm")).unwrap();
+        let reports = document.analyze().unwrap();
+        assert!(
+            reports[0]
+                .save(&Path::new("./files_for_testing/report/_not_valid/"), 0)
+                .is_err()
+        );
     }
 }

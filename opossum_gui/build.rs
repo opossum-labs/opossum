@@ -21,7 +21,7 @@ fn main() {
 "#,
         );
         if let Err(e) = res.compile() {
-            eprintln!("Failed to compile Windows resources: {}", e);
+            eprintln!("Failed to compile Windows resources: {e}");
             std::process::exit(1);
         }
     }

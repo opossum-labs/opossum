@@ -90,5 +90,7 @@ fn main() -> OpmResult<()> {
     let mut config = GhostFocusConfig::default();
     config.set_max_bounces(2);
     doc.add_analyzer(AnalyzerType::GhostFocus(config));
-    doc.save_to_file(Path::new("./opossum/playground/workshop_11_ghostfocus.opm"))
+    doc.save_to_file(Path::new(
+        "./opossum_core/playground/workshop_11_ghostfocus.opm",
+    ))
 }

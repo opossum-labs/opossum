@@ -477,5 +477,5 @@ fn main() -> OpmResult<()> {
     config.set_max_bounces(0);
     doc.add_analyzer(AnalyzerType::GhostFocus(config));
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-    doc.save_to_file(Path::new("./opossum/playground/hhts.opm"))
+    doc.save_to_file(Path::new("./opossum_core/playground/hhts.opm"))
 }
