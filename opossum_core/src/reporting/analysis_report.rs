@@ -3,15 +3,11 @@
 
 use std::{fs::File, io::Write, path::Path};
 
-use super::{
-    html_report::{HtmlNodeReport, HtmlReport},
-    node_report::NodeReport,
-};
+use super::{html_report::HtmlReport, node_report::NodeReport};
 use crate::{
     error::{OpmResult, OpossumError},
     get_version,
     nodes::NodeGroup,
-    optic_node::OpticNode,
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
@@ -98,28 +94,6 @@ impl AnalysisReport {
         html_report.generate_report_files(report_directory, self, report_number)?;
         Ok(())
     }
-    /// Generate an [`HtmlReport`] from this [`AnalysisReport`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the report has no scenery set.
-    pub fn to_html_report(&self) -> OpmResult<HtmlReport> {
-        let Some(scenery) = &self.scenery else {
-            return Err(OpossumError::Other("no scenery found".into()));
-        };
-        let html_node_reports: Vec<HtmlNodeReport> = self
-            .node_reports
-            .iter()
-            .map(|r| r.to_html_node_report(""))
-            .collect();
-        Ok(HtmlReport::new(
-            self.opossum_version.clone(),
-            self.analysis_timestamp.format("%Y/%m/%d %H:%M").to_string(),
-            self.analysis_type.clone(),
-            scenery.node_attr().name(),
-            html_node_reports,
-        ))
-    }
     /// Sets the analysis type of this [`AnalysisReport`].
     ///
     /// This information is used i.e. in the [`HtmlReport`].
@@ -195,22 +169,6 @@ mod test {
         ));
         assert_eq!(report.node_reports.len(), 1);
     }
-    #[test]
-    fn to_html_report() {
-        let mut report = AnalysisReport::default();
-        assert!(report.to_html_report().is_err());
-        report.add_scenery(&NodeGroup::default());
-        assert!(report.to_html_report().is_ok());
-        // further details to be checked in html_reports module (private fields...)
-    }
-    // #[test]
-    // fn export_data() {
-    //     let report = AnalysisReport::default();
-    //     assert!(report.export_data(Path::new("")).is_err());
-    //     let tmp_dir = TempDir::new().unwrap();
-    //     fs::create_dir(tmp_dir.path().join("data")).unwrap();
-    //     assert!(report.export_data(tmp_dir.path()).is_ok());
-    // }
     #[test]
     fn save() {
         let mut document =

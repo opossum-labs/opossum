@@ -1,5 +1,4 @@
 //! Module for storing node specific data to be integrated in an [`AnalysisReport`](crate::reporting::analysis_report::AnalysisReport).
-use super::html_report::HtmlNodeReport;
 use crate::properties::{Properties, Proptype};
 use serde::{Deserialize, Serialize};
 
@@ -57,21 +56,6 @@ impl NodeReport {
     pub const fn set_show_item(&mut self, show_item: bool) {
         self.show_item = show_item;
     }
-    /// Return an [`HtmlNodeReport`] from this [`NodeReport`].
-    ///
-    /// This function is necessary, since `TinyTemplates` cannot deal with [`Properties`] directly. Maybe this can be changed later.
-    #[must_use]
-    pub fn to_html_node_report(&self, id: &str) -> HtmlNodeReport {
-        HtmlNodeReport {
-            node_name: self.name.clone(),
-            node_type: self.node_type.clone(),
-            props: self
-                .properties
-                .html_props(&format!("{id}_{}_{}", self.name, self.uuid)),
-            uuid: self.uuid.clone(),
-            show_item: self.show_item,
-        }
-    }
 }
 
 impl From<NodeReport> for Proptype {
@@ -114,23 +98,6 @@ mod test {
         report.set_show_item(true);
         assert_eq!(report.show_item, true);
         assert_eq!(report.show_item(), true);
-    }
-    #[test]
-    fn to_html_node_report() {
-        let mut properties = Properties::default();
-        properties.create("test1", "desc1", 1.0.into()).unwrap();
-        properties.create("test2", "desc2", "test".into()).unwrap();
-        let report = NodeReport::new("test detector", "detector name", "123", properties);
-        let html_report = report.to_html_node_report("345");
-        assert_eq!(html_report.node_name, "detector name");
-        assert_eq!(html_report.node_type, "test detector");
-        assert_eq!(html_report.uuid, "123");
-        assert_eq!(html_report.show_item, false);
-        let html_props = html_report.props;
-
-        assert_eq!(html_props[0].name, "test1");
-        assert_eq!(html_props[0].description, "desc1");
-        assert_eq!(html_props[0].prop_value, "1.000000");
     }
     #[test]
     fn to_proptype() {

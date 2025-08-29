@@ -7,7 +7,7 @@ use tinytemplate::TinyTemplate;
 use crate::{
     error::{OpmResult, OpossumError},
     optic_node::OpticNode,
-    reporting::analysis_report::AnalysisReport,
+    reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
 };
 
 static HTML_REPORT: &str = include_str!("../html/html_report.html");
@@ -50,7 +50,7 @@ impl HtmlReport {
         let html_node_reports: Vec<HtmlNodeReport> = report
             .node_reports()
             .iter()
-            .map(|r| r.to_html_node_report(""))
+            .map(|r| HtmlNodeReport::from_node_report(r, ""))
             .collect();
 
         Ok(Self::new(
@@ -124,7 +124,23 @@ pub struct HtmlNodeReport {
     /// show or hide item in report by default
     pub show_item: bool,
 }
-
+impl HtmlNodeReport {
+    /// Create this [`HtmlNodeReport`] from an [`NodeReport`].
+    #[must_use]
+    pub fn from_node_report(node_report: &NodeReport, id: &str) -> Self {
+        Self {
+            node_name: node_report.name().to_string(),
+            node_type: node_report.node_type().to_string(),
+            props: node_report.properties().html_props(&format!(
+                "{id}_{}_{}",
+                node_report.name(),
+                node_report.uuid()
+            )),
+            uuid: node_report.uuid().to_string(),
+            show_item: node_report.show_item(),
+        }
+    }
+}
 #[derive(Serialize)]
 pub struct HtmlProperty {
     pub name: String,
@@ -134,10 +150,32 @@ pub struct HtmlProperty {
 
 #[cfg(test)]
 mod test {
+    use crate::{
+        properties::Properties,
+        reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
+    };
+
     // #[test]
     // fn from_analysis_report() {
     // }
     // #[test]
     // fn generate_report_files() {
     // }
+    #[test]
+    fn from_node_report() {
+        let mut properties = Properties::default();
+        properties.create("test1", "desc1", 1.0.into()).unwrap();
+        properties.create("test2", "desc2", "test".into()).unwrap();
+        let report = NodeReport::new("test detector", "detector name", "123", properties);
+        let html_report = HtmlNodeReport::from_node_report(&report, "345");
+        assert_eq!(html_report.node_name, "detector name");
+        assert_eq!(html_report.node_type, "test detector");
+        assert_eq!(html_report.uuid, "123");
+        assert_eq!(html_report.show_item, false);
+        let html_props = html_report.props;
+
+        assert_eq!(html_props[0].name, "test1");
+        assert_eq!(html_props[0].description, "desc1");
+        assert_eq!(html_props[0].prop_value, "1.000000");
+    }
 }
