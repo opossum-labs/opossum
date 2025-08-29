@@ -46,5 +46,5 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-    doc.save_to_file(Path::new("./opossum/playground/mirror.opm"))
+    doc.save_to_file(Path::new("./opossum_core/playground/mirror.opm"))
 }

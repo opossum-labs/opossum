@@ -1,5 +1,6 @@
 //! Module for additional computational capabilities
 pub mod default_from_name;
+pub mod file_utils;
 pub mod filter_data;
 pub mod geom_transformation;
 pub mod griddata;

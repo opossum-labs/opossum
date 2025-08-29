@@ -110,5 +110,7 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::Energy);
-    doc.save_to_file(Path::new("./opossum/playground/workshop_10_multi_path.opm"))
+    doc.save_to_file(Path::new(
+        "./opossum_core/playground/workshop_10_multi_path.opm",
+    ))
 }

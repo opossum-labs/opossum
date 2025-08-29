@@ -22,7 +22,7 @@ fn main() -> OpmResult<()> {
     plt_params
         .set(&PlotArgs::FName("equal axis test.png".into()))
         .unwrap()
-        .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))
         .unwrap()
         .set(&PlotArgs::PlotSize((1000, 1000)))
         .unwrap();
@@ -49,7 +49,7 @@ fn main() -> OpmResult<()> {
     plt_params
         .set(&PlotArgs::FName("ray_fluence_test_random.png".into()))
         .unwrap()
-        .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))
         .unwrap()
         .set(&PlotArgs::ExpandBounds(false))
         .unwrap()
@@ -88,7 +88,7 @@ fn main() -> OpmResult<()> {
     plt_params
         .set(&PlotArgs::FName("spot_ray_fluence_test.png".into()))
         .unwrap()
-        .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))
         .unwrap()
         .set(&PlotArgs::PlotSize((1000, 850)))
         .unwrap();

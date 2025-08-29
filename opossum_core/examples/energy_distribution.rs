@@ -33,7 +33,7 @@ fn main() -> OpmResult<()> {
     plt_params
         .set(&PlotArgs::FName("gaussian.png".into()))
         .unwrap()
-        .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))
         .unwrap()
         .set(&PlotArgs::PlotSize((1000, 800)))
         .unwrap();

@@ -67,6 +67,8 @@ fn main() -> OpmResult<()> {
     // let mut config = GhostFocusConfig::default();
     // config.set_max_bounces(0);
     // doc.add_analyzer(AnalyzerType::GhostFocus(config));
-    doc.save_to_file(Path::new("./opossum/playground/position_dist_test.opm"))?;
+    doc.save_to_file(Path::new(
+        "./opossum_core/playground/position_dist_test.opm",
+    ))?;
     Ok(())
 }
