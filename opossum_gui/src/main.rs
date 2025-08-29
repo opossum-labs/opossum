@@ -38,12 +38,12 @@ fn read_icon() -> Option<Icon> {
 #[cfg(not(debug_assertions))]
 fn start_backend() -> ProcessHandle {
     use std::process::Command;
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
     let mut command = Command::new("opossum_backend.exe");
-    #[cfg(linux)]
+    #[cfg(target_os = "linux")]
     let mut command = Command::new("opossum_backend");
     // On Windows, you might need to prevent a new console window from opening.
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
