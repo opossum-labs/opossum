@@ -2,6 +2,7 @@
 icon = "assets/favicon.ico"
 # App (Project) Name
 name = "opossum_gui"
+product_name = "Opossum"
 
 [web.app]
 # HTML title tag content
@@ -10,7 +11,7 @@ title = "OPOSSUM"
 # include `assets` in web platform
 [desktop.resource]
 # Additional CSS style files
-style = [] # "assets/main.css"]
+style = []
 
 [web.resource.dev]
 script = []
@@ -47,6 +48,7 @@ enable_elevated_update_task= false
 fips_compliant = false
 banner_path = "../opossum_core/logo/Logo_InstallBanner.png"
 dialog_image_path = "../opossum_core/logo/Logo_InstallDialog.png"
+license_path = "../LICENSE"
 
 [bundle.linux]
 resources = ["../target/release/opossum_backend", "../target/release/opossum_core"]

@@ -14,6 +14,7 @@ publish = true
 readme = "../README.md"
 edition = "2024"
 
+
 [dependencies]
 opossum_backend = { path = "../opossum_backend" }
 dioxus = { version = "0.6" }
@@ -45,10 +46,13 @@ num = "0.4.3"
 approx = "0.5.1"
 tempfile= "3.21"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-plotly = { version = "0.13.5", features = ["kaleido"] }
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-plotly = { version = "0.13.5" }
+[build-dependencies]
+winres = "0.1" 
+
+# [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# plotly = { version = "0.13.5", features = ["kaleido"] }
+# [target.'cfg(target_arch = "wasm32")'.dependencies]
+# plotly = { version = "0.13.5" }
 
 [features]
 default = ["desktop"]
