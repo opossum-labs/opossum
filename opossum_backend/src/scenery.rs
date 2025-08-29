@@ -17,7 +17,6 @@ use log::{error, info, warn};
 use nalgebra::Point2;
 use opossum_core::{
     AnalyzerInfo, OpmDocument, SceneryResources, analyzers::AnalyzerType, create_data_dir,
-    reporting::report_helper::create_report_and_data_files,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -236,7 +235,9 @@ async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Respond
                         Ok(reports) => {
                             info!("Generating report(s)");
                             for report in reports.iter().enumerate() {
-                                create_report_and_data_files(&report_dir, report.1, report.0)
+                                report
+                                    .1
+                                    .save(&report_dir, report.0)
                                     .unwrap_or_else(|e| warn!("{e}"));
                             }
                         }

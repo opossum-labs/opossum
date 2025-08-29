@@ -8,7 +8,6 @@ use opossum_core::{
     OpmDocument,
     console::{Args, PartialArgs},
     error::OpmResult,
-    reporting::report_helper::create_report_and_data_files,
 };
 use std::{env, path::Path};
 
@@ -35,7 +34,7 @@ fn opossum() -> OpmResult<()> {
         .unwrap_or_else(|e| warn!("{e}"));
     let reports = document.analyze()?;
     for report in reports.iter().enumerate() {
-        create_report_and_data_files(&opossum_args.report_directory, report.1, report.0)?;
+        report.1.save(&opossum_args.report_directory, report.0)?;
     }
     Ok(())
 }

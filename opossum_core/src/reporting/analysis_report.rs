@@ -1,7 +1,11 @@
 #![warn(missing_docs)]
 //! Module handling analysis reports and converting them to HTML.
 
-use std::{fs, path::Path};
+use std::{
+    fs::{self, File},
+    io::Write,
+    path::Path,
+};
 
 use super::{
     html_report::{HtmlNodeReport, HtmlReport},
@@ -14,6 +18,7 @@ use crate::{
     optic_node::OpticNode,
 };
 use chrono::{DateTime, Local};
+use log::info;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug, Clone, Deserialize)]
@@ -97,6 +102,32 @@ impl AnalysisReport {
         }
         Ok(())
     }
+    /// Saves the complete report to the specified directory.
+    ///
+    /// This creates a RON file for the report data, an HTML representation,
+    /// and exports all associated data files (e.g., plots, images).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any file I/O or data export operation fails.
+    pub fn save(&self, report_directory: &Path, report_number: usize) -> OpmResult<()> {
+        // 1. Save the RON file
+        let ron_path = report_directory.join(format!("report_{report_number}.ron"));
+        let mut ron_file = File::create(ron_path)
+            .map_err(|e| OpossumError::Other(format!("RON file creation failed: {e}")))?;
+        write!(ron_file, "{}", self.to_file_string()?)
+            .map_err(|e| OpossumError::Other(format!("writing RON file failed: {e}")))?;
+
+        // 2. Export associated data for the HTML report
+        self.export_data(report_directory)?;
+
+        // 3. Save the HTML file
+        let html_path = report_directory.join(format!("report_{report_number}.html"));
+        info!("Write html report to {}", html_path.display());
+        self.to_html_report()?.generate_html(&html_path)?;
+
+        Ok(())
+    }
     /// Generate an [`HtmlReport`] from this [`AnalysisReport`].
     ///
     /// # Errors
@@ -134,7 +165,7 @@ mod test {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::properties::Properties;
+    use crate::{OpmDocument, properties::Properties};
     #[test]
     fn new() {
         let timestamp = Local::now();
@@ -190,5 +221,16 @@ mod test {
         let tmp_dir = TempDir::new().unwrap();
         fs::create_dir(tmp_dir.path().join("data")).unwrap();
         assert!(report.export_data(tmp_dir.path()).is_ok());
+    }
+    #[test]
+    fn save() {
+        let mut document =
+            OpmDocument::from_file(&Path::new("./files_for_testing/opm/opticscenery.opm")).unwrap();
+        let reports = document.analyze().unwrap();
+        assert!(
+            reports[0]
+                .save(&Path::new("./files_for_testing/report/_not_valid/"), 0)
+                .is_err()
+        );
     }
 }
