@@ -3,14 +3,12 @@ use super::{
     ports::ports_component::Ports,
 };
 use crate::{
-    OPOSSUM_UI_LOGS,
-    api::{self, run_action, run_action_with_success_check},
-    components::scenery_editor::{
+    api::{self, run_action}, components::scenery_editor::{
         constants::{
-            HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING,
+            HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERTEX_SPACING, SUGIYAMA_VERT_PATH_FACTOR
         },
         graph_editor::graph_editor_component::EditorState,
-    },
+    }, OPOSSUM_UI_LOGS
 };
 use dioxus::{
     html::geometry::euclid::{
@@ -324,7 +322,6 @@ pub fn use_graph_processor(
     node_selected: Signal<Option<NodeElement>>,
     mut graph_state: Signal<GraphState>,
 ) -> Coroutine<GraphStoreAction> {
-    let action_successful = use_signal(|| true);
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         let mut graph_store = graph_state.write().graph_store;
         let editor_state = graph_state.write().editor_state;
@@ -339,74 +336,70 @@ pub fn use_graph_processor(
                         process_update_active_node(node, graph_store);
                     }
                     GraphStoreAction::LoadFromFile(path) => {
-                        process_load_from_file(path, graph_store, action_successful);
+                        process_load_from_file(path, graph_store).await;
                     }
                     GraphStoreAction::SaveToFile(path) => {
-                        process_save_to_file(path);
+                        process_save_to_file(path).await;
                     }
                     GraphStoreAction::SyncNodePosition(node_id, pos) => {
-                        run_action(api::update_gui_position(node_id, pos), None::<fn(String)>);
+                        run_action(api::update_gui_position(node_id, pos), None::<fn(String)>).await;
                     }
                     GraphStoreAction::DeleteNode(node_id) => {
-                        process_delete_node(node_id, graph_store, node_selected);
+                        process_delete_node(node_id, graph_store, node_selected).await;
                     }
                     GraphStoreAction::AddOpticNode(new_node) => {
-                        process_add_optic_node(&new_node, graph_store, editor_state, node_selected);
+                        process_add_optic_node(&new_node, graph_store, editor_state, node_selected).await;
                     }
                     GraphStoreAction::AddOpticReference(new_ref_node) => {
-                        process_add_reference_node(new_ref_node, graph_store, node_selected);
+                        process_add_reference_node(new_ref_node, graph_store, node_selected).await;
                     }
                     GraphStoreAction::AddAnalyzer(new_analyzer) => {
-                        process_add_analyzer(new_analyzer, graph_store, node_selected);
+                        process_add_analyzer(new_analyzer, graph_store, node_selected).await;
                     }
                     GraphStoreAction::AddEdge(connect_info) => {
-                        process_add_edge(connect_info, graph_store);
+                        process_add_edge(connect_info, graph_store).await;
                     }
                     GraphStoreAction::UpdateEdge(connect_info) => {
-                        process_update_edge(connect_info, graph_store);
+                        process_update_edge(connect_info, graph_store).await;
                     }
                     GraphStoreAction::DeleteEdge(connect_info) => {
-                        process_delete_edge(connect_info, graph_store);
+                        process_delete_edge(connect_info, graph_store).await;
                     }
                     GraphStoreAction::DeleteScenery => {
-                        process_delete_scenery(graph_store);
+                        process_delete_scenery(graph_store).await;
                     }
                     GraphStoreAction::OptimizeLayout => {
-                        process_optimize_layout(graph_store);
-                    } // GraphStoreAction::TerminateBackend => {
-                      //     api::post_terminate(&HTTP_API_CLIENT()).await;
-                      // }
+                        process_optimize_layout(graph_store).await;
+                    } 
                 }
             }
         }
     })
 }
 
-fn process_load_from_file(
+async fn process_load_from_file(
     path: PathBuf,
     mut graph_store: Signal<GraphStore>,
-    action_successful: Signal<bool>,
 ) {
-    process_send_opm_file_to_server(path, action_successful);
-    if !*action_successful.read() {
-        return;
-    }
+    process_send_opm_file_to_server(path).await;
+
     graph_store.write().clear();
-    process_get_optical_nodes(graph_store);
-    process_get_connections(graph_store);
-    process_get_analyzer_nodes(graph_store);
+    process_get_optical_nodes(graph_store).await;
+    process_get_connections(graph_store).await;
+    process_get_analyzer_nodes(graph_store).await;
 }
 
-fn process_get_connections(mut graph_store: Signal<GraphStore>) {
+
+async fn process_get_connections(mut graph_store: Signal<GraphStore>) {
     run_action(
         api::get_connections(Uuid::nil()),
         Some(move |connect_infos: Vec<ConnectInfo>| {
             graph_store.write().edges.set(connect_infos);
         }),
-    );
+    ).await;
 }
 
-fn process_get_analyzer_nodes(mut graph_store: Signal<GraphStore>) {
+async fn process_get_analyzer_nodes(mut graph_store: Signal<GraphStore>) {
     run_action(
         api::get_analyzers(),
         Some(move |analyzers: Vec<AnalyzerInfo>| {
@@ -417,10 +410,10 @@ fn process_get_analyzer_nodes(mut graph_store: Signal<GraphStore>) {
                 .write()
                 .extend(analyzers.iter().map(|node| (node.id(), node.into())));
         }),
-    );
+    ).await;
 }
 
-fn process_get_optical_nodes(mut graph_store: Signal<GraphStore>) {
+async fn process_get_optical_nodes(mut graph_store: Signal<GraphStore>) {
     run_action(
         api::get_nodes(Uuid::nil()),
         Some(move |nodes: Vec<NodeInfo>| {
@@ -431,23 +424,19 @@ fn process_get_optical_nodes(mut graph_store: Signal<GraphStore>) {
                 .write()
                 .extend(nodes.iter().map(|node| (node.uuid(), node.into())));
         }),
-    );
+    ).await;
 }
-fn process_send_opm_file_to_server(path: PathBuf, mut action_successful: Signal<bool>) {
+async fn process_send_opm_file_to_server(path: PathBuf) {
     let opm_string = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
             OPOSSUM_UI_LOGS.write().add_log(&e.to_string());
-            action_successful.set(false);
             return;
         }
     };
 
-    run_action_with_success_check(
-        api::post_opm_file(opm_string),
-        None::<fn(String)>,
-        action_successful,
-    );
+    run_action(api::post_opm_file(opm_string),
+        None::<fn(String)>).await;
 }
 
 fn process_update_active_node(node: Option<NodeElement>, mut graph_store: Signal<GraphStore>) {
@@ -461,7 +450,7 @@ fn process_update_active_node(node: Option<NodeElement>, mut graph_store: Signal
     }
 }
 
-fn process_save_to_file(path: PathBuf) {
+async fn process_save_to_file(path: PathBuf) {
     run_action(
         api::get_opm_file(),
         Some(move |opm_string| {
@@ -469,10 +458,10 @@ fn process_save_to_file(path: PathBuf) {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
             }
         }),
-    );
+    ).await;
 }
 
-fn process_delete_node(
+async fn process_delete_node(
     node_id: Uuid,
     graph_store: Signal<GraphStore>,
     node_selected: Signal<Option<NodeElement>>,
@@ -481,10 +470,10 @@ fn process_delete_node(
     if let Some(node_type) = node_type_opt {
         match node_type {
             NodeType::Optical(_) => {
-                process_delete_optical_node(node_id, graph_store, node_selected);
+                process_delete_optical_node(node_id, graph_store, node_selected).await;
             }
             NodeType::Analyzer(_) => {
-                process_delete_analyzer_node(node_id, graph_store, node_selected);
+                process_delete_analyzer_node(node_id, graph_store, node_selected).await;
             }
         }
     } else {
@@ -494,7 +483,7 @@ fn process_delete_node(
     }
 }
 
-fn process_delete_analyzer_node(
+async fn process_delete_analyzer_node(
     analyzer_id: Uuid,
     mut graph_store: Signal<GraphStore>,
     mut node_selected: Signal<Option<NodeElement>>,
@@ -505,10 +494,10 @@ fn process_delete_analyzer_node(
             graph_store.write().remove_nodes_by_id(vec![deleted_id]);
             node_selected.set(None);
         }),
-    );
+    ).await;
 }
 
-fn process_delete_optical_node(
+async fn process_delete_optical_node(
     node_id: Uuid,
     mut graph_store: Signal<GraphStore>,
     mut node_selected: Signal<Option<NodeElement>>,
@@ -519,10 +508,10 @@ fn process_delete_optical_node(
             graph_store.write().remove_nodes_by_id(deleted_ids);
             node_selected.set(None);
         }),
-    );
+    ).await;
 }
 
-fn process_add_optic_node(
+async fn process_add_optic_node(
     new_node_type_string: &str,
     mut graph_store: Signal<GraphStore>,
     editor_state: Signal<EditorState>,
@@ -544,10 +533,10 @@ fn process_add_optic_node(
             let node_element = graph_store.write().add_new_optical_node(&node_info);
             node_selected.set(Some(node_element));
         }),
-    );
+    ).await;
 }
 
-fn process_add_reference_node(
+async fn process_add_reference_node(
     new_ref_node: NewRefNode,
     mut graph_store: Signal<GraphStore>,
     mut node_selected: Signal<Option<NodeElement>>,
@@ -558,10 +547,10 @@ fn process_add_reference_node(
             let node_element = graph_store.write().add_new_reference_node(&node_info);
             node_selected.set(Some(node_element));
         }),
-    );
+    ).await;
 }
 
-fn process_add_analyzer(
+async fn process_add_analyzer(
     new_analyzer: NewAnalyzerInfo,
     mut graph_store: Signal<GraphStore>,
     mut node_selected: Signal<Option<NodeElement>>,
@@ -574,10 +563,10 @@ fn process_add_analyzer(
                 .add_new_analyzer(new_analyzer, analyzer_id);
             node_selected.set(Some(node_element));
         }),
-    );
+    ).await;
 }
 
-fn process_update_edge(connect_info: ConnectInfo, mut graph_store: Signal<GraphStore>) {
+async fn process_update_edge(connect_info: ConnectInfo, mut graph_store: Signal<GraphStore>) {
     run_action(
         api::update_distance(connect_info),
         Some(move |ci: ConnectInfo| {
@@ -591,37 +580,37 @@ fn process_update_edge(connect_info: ConnectInfo, mut graph_store: Signal<GraphS
                 *e = ci;
             }
         }),
-    );
+    ).await;
 }
 
-fn process_delete_edge(connect_info: ConnectInfo, mut graph_store: Signal<GraphStore>) {
+async fn process_delete_edge(connect_info: ConnectInfo, mut graph_store: Signal<GraphStore>) {
     run_action(
         api::delete_connection(connect_info),
         Some(move |ci| graph_store.write().edges.write().retain(|e| e != &ci)),
-    );
+    ).await;
 }
 
-fn process_add_edge(connect_info: ConnectInfo, mut graph_store: Signal<GraphStore>) {
+async fn process_add_edge(connect_info: ConnectInfo, mut graph_store: Signal<GraphStore>) {
     run_action(
         api::post_add_connection(connect_info),
         Some(move |ci| {
             graph_store.write().edges_mut().write().push(ci);
         }),
-    );
+    ).await;
 }
 
-fn process_optimize_layout(mut graph_store: Signal<GraphStore>) {
+async fn process_optimize_layout(mut graph_store: Signal<GraphStore>) {
     let edges = graph_store.read().edges().read().clone();
     run_action(
         optimize_layout_and_sync(edges),
         Some(move |new_positions| {
             graph_store.write().update_node_positions(new_positions);
         }),
-    );
+    ).await;
 }
-fn process_delete_scenery(mut graph_store: Signal<GraphStore>) {
+async fn process_delete_scenery(mut graph_store: Signal<GraphStore>) {
     run_action(
         api::delete_scenery(),
         Some(move |_| graph_store.write().clear()),
-    );
+    ).await;
 }
