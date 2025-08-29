@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{
     OPOSSUM_UI_LOGS,
-    api::{self, run_action},
+    api::{self, eval_action_run},
     components::simulation::utils::find_cli_executable,
 };
 use dioxus::prelude::*;
@@ -46,8 +46,8 @@ pub fn SimulationWindow(
                         let temp_model_file_clone = temp_model_file.clone();
                         // We have to this with run_action instead of sending a node_editor_command since we have to be sure
                         // that the file has been written before calling the CLI.
-                        run_action(
-                            api::get_opm_file(),
+                        eval_action_run(
+                            api::get_opm_file().await,
                             Some(move |opm_string| {
                                 if let Err(err_str) = fs::write(temp_model_file, opm_string) {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
