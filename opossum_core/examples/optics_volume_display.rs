@@ -43,7 +43,7 @@ fn main() -> OpmResult<()> {
     //     )
     //     .unwrap();
 
-    // let fpath = "./opossum/playground/.render_test.png";
+    // let fpath = "./opossum_core/playground/.render_test.png";
     // sdf_collection2
     //     .plot_image(&image, (256, 256), fpath)
     //     .unwrap();

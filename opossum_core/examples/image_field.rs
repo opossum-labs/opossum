@@ -47,5 +47,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_lens, "output_1", i_fd, "input_1", millimeter!(195.0))?;
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-    doc.save_to_file(Path::new("./opossum/playground/image_field.opm"))
+    doc.save_to_file(Path::new("./opossum_core/playground/image_field.opm"))
 }

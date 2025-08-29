@@ -1,11 +1,7 @@
 #![warn(missing_docs)]
 //! Module handling analysis reports and converting them to HTML.
 
-use std::{
-    fs::{self, File},
-    io::Write,
-    path::Path,
-};
+use std::{fs::File, io::Write, path::Path};
 
 use super::{
     html_report::{HtmlNodeReport, HtmlReport},
@@ -18,7 +14,6 @@ use crate::{
     optic_node::OpticNode,
 };
 use chrono::{DateTime, Local};
-use log::info;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug, Clone, Deserialize)]
@@ -68,6 +63,11 @@ impl AnalysisReport {
     pub fn add_node_report(&mut self, report: NodeReport) {
         self.node_reports.push(report);
     }
+    /// Returns the scenery of this [`AnalysisReport`].
+    #[must_use]
+    pub fn scenery(&self) -> Option<NodeGroup> {
+        self.scenery.clone()
+    }
     /// Serialize this [`AnalysisReport`] to a file string.
     ///
     /// # Errors
@@ -76,31 +76,6 @@ impl AnalysisReport {
     pub fn to_file_string(&self) -> OpmResult<String> {
         ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::new().new_line("\n"))
             .map_err(|e| OpossumError::Other(format!("Error serializing AnalysisReport: {e}")))
-    }
-    /// Export data of each [`NodeReport`] of this [`AnalysisReport`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the individual `export_data` function of the individual
-    /// nodes fails.
-    pub fn export_data(&self, report_path: &Path) -> OpmResult<()> {
-        let report_path = report_path.join(Path::new("data"));
-        if !report_path.exists() {
-            return Err(OpossumError::Other("report path does not exist".into()));
-        }
-        let md = fs::metadata(&report_path).map_err(|e| {
-            OpossumError::Other(format!("could not check directory permissions: {e}"))
-        })?;
-        let permissions = md.permissions();
-        if permissions.readonly() {
-            return Err(OpossumError::Other(
-                "report path dow not have write permissions".into(),
-            ));
-        }
-        for node_report in &self.node_reports {
-            node_report.export_data(&report_path, "")?;
-        }
-        Ok(())
     }
     /// Saves the complete report to the specified directory.
     ///
@@ -118,14 +93,9 @@ impl AnalysisReport {
         write!(ron_file, "{}", self.to_file_string()?)
             .map_err(|e| OpossumError::Other(format!("writing RON file failed: {e}")))?;
 
-        // 2. Export associated data for the HTML report
-        self.export_data(report_directory)?;
-
-        // 3. Save the HTML file
-        let html_path = report_directory.join(format!("report_{report_number}.html"));
-        info!("Write html report to {}", html_path.display());
-        self.to_html_report()?.generate_html(&html_path)?;
-
+        // 2. Save the HTML report (including data files)
+        let html_report = HtmlReport::from_analysis_report(self)?;
+        html_report.generate_report_files(report_directory, self, report_number)?;
         Ok(())
     }
     /// Generate an [`HtmlReport`] from this [`AnalysisReport`].
@@ -156,13 +126,32 @@ impl AnalysisReport {
     pub fn set_analysis_type(&mut self, analysis_type: &str) {
         analysis_type.clone_into(&mut self.analysis_type);
     }
+    /// Returns a reference to the opossum version of this [`AnalysisReport`].
+    #[must_use]
+    pub fn opossum_version(&self) -> &str {
+        &self.opossum_version
+    }
+    /// Returns the analysis timestamp of this [`AnalysisReport`].
+    #[must_use]
+    pub const fn analysis_timestamp(&self) -> DateTime<Local> {
+        self.analysis_timestamp
+    }
+    /// Returns a reference to the analysis type of this [`AnalysisReport`].
+    #[must_use]
+    pub fn analysis_type(&self) -> &str {
+        &self.analysis_type
+    }
+    /// Returns a reference to the node reports of this [`AnalysisReport`].
+    #[must_use]
+    pub fn node_reports(&self) -> &[NodeReport] {
+        &self.node_reports
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use std::fs;
-
-    use tempfile::TempDir;
+    // use std::fs;
+    // use tempfile::TempDir;
 
     use super::*;
     use crate::{OpmDocument, properties::Properties};
@@ -214,14 +203,14 @@ mod test {
         assert!(report.to_html_report().is_ok());
         // further details to be checked in html_reports module (private fields...)
     }
-    #[test]
-    fn export_data() {
-        let report = AnalysisReport::default();
-        assert!(report.export_data(Path::new("")).is_err());
-        let tmp_dir = TempDir::new().unwrap();
-        fs::create_dir(tmp_dir.path().join("data")).unwrap();
-        assert!(report.export_data(tmp_dir.path()).is_ok());
-    }
+    // #[test]
+    // fn export_data() {
+    //     let report = AnalysisReport::default();
+    //     assert!(report.export_data(Path::new("")).is_err());
+    //     let tmp_dir = TempDir::new().unwrap();
+    //     fs::create_dir(tmp_dir.path().join("data")).unwrap();
+    //     assert!(report.export_data(tmp_dir.path()).is_ok());
+    // }
     #[test]
     fn save() {
         let mut document =

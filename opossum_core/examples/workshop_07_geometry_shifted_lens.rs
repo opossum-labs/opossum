@@ -58,6 +58,6 @@ fn main() -> OpmResult<()> {
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new(
-        "./opossum/playground/workshop_07_geometry_shifted_lens.opm",
+        "./opossum_core/playground/workshop_07_geometry_shifted_lens.opm",
     ))
 }

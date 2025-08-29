@@ -52,5 +52,7 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::Energy);
-    doc.save_to_file(Path::new("./opossum/playground/beam_combiner_test.opm"))
+    doc.save_to_file(Path::new(
+        "./opossum_core/playground/beam_combiner_test.opm",
+    ))
 }

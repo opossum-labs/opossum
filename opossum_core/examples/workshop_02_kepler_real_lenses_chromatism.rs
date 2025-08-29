@@ -70,6 +70,6 @@ fn main() -> OpmResult<()> {
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new(
-        "./opossum/playground/workshop_02_kepler_chromatism.opm",
+        "./opossum_core/playground/workshop_02_kepler_chromatism.opm",
     ))
 }

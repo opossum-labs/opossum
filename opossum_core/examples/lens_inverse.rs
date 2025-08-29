@@ -39,5 +39,5 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-    doc.save_to_file(Path::new("./opossum/playground/lens_inverse.opm"))
+    doc.save_to_file(Path::new("./opossum_core/playground/lens_inverse.opm"))
 }

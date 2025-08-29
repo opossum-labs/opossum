@@ -204,7 +204,9 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-    doc.save_to_file(Path::new("./opossum/playground/workshop_09_phelix.opm"))
+    doc.save_to_file(Path::new(
+        "./opossum_core/playground/workshop_09_phelix.opm",
+    ))
 }
 
 fn amp(name: &str) -> OpmResult<NodeGroup> {

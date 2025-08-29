@@ -86,7 +86,7 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-    doc.save_to_file(Path::new("./opossum/playground/treacy_compressor.opm"))?;
+    doc.save_to_file(Path::new("./opossum_core/playground/treacy_compressor.opm"))?;
 
     //////////////////////////////////////////////////////////////////////
     //       Martinez Stretcher with folded telescope                   //
@@ -119,7 +119,7 @@ fn main() -> OpmResult<()> {
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new(
-        "./opossum/playground/nonideal_folded_martinez.opm",
+        "./opossum_core/playground/nonideal_folded_martinez.opm",
     ))?;
 
     //////////////////////////////////////////////////////////
@@ -152,7 +152,9 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-    doc.save_to_file(Path::new("./opossum/playground/ideal_folded_martinez.opm"))?;
+    doc.save_to_file(Path::new(
+        "./opossum_core/playground/ideal_folded_martinez.opm",
+    ))?;
 
     //////////////////////////////////////////////////////////
     //       Martinez Stretcher with folded telescope       //
@@ -185,7 +187,7 @@ fn main() -> OpmResult<()> {
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new(
-        "./opossum/playground/ideal_folded_martinez_circle_of_least_conf.opm",
+        "./opossum_core/playground/ideal_folded_martinez_circle_of_least_conf.opm",
     ))?;
 
     //////////////////////////////////////////////////////////
@@ -222,7 +224,7 @@ fn main() -> OpmResult<()> {
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new(
-        "./opossum/playground/ideal_folded_martinez_longer_f.opm",
+        "./opossum_core/playground/ideal_folded_martinez_longer_f.opm",
     ))?;
 
     //////////////////////////////////////////////////////////
@@ -259,7 +261,7 @@ fn main() -> OpmResult<()> {
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new(
-        "./opossum/playground/achromat_ideal_folded_martinez.opm",
+        "./opossum_core/playground/achromat_ideal_folded_martinez.opm",
     ))?;
 
     //////////////////////////////////////////////////////////
@@ -295,7 +297,7 @@ fn main() -> OpmResult<()> {
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new(
-        "./opossum/playground/achromat_ideal_folded_martinez.opm",
+        "./opossum_core/playground/achromat_ideal_folded_martinez.opm",
     ))?;
 
     ////////////////////////////
@@ -383,5 +385,5 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-    doc.save_to_file(Path::new("./opossum/playground/telescope.opm"))
+    doc.save_to_file(Path::new("./opossum_core/playground/telescope.opm"))
 }
