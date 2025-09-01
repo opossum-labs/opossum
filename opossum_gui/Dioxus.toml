@@ -1,17 +1,15 @@
 [application]
 icon = "assets/favicon.ico"
-# App (Project) Name
 name = "opossum_gui"
-product_name = "Opossum"
 
 [web.app]
 # HTML title tag content
 title = "OPOSSUM"
 
 # include `assets` in web platform
-[desktop.resource]
+#[desktop.resource]
 # Additional CSS style files
-style = []
+#style = []
 
 [web.resource.dev]
 script = []
@@ -23,6 +21,11 @@ short_description = "Open-source optic simulation system and unified modeler"
 long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
 category = "Utility"
 icon = ["assets/Logo_square.png"]
+# Include your helper binaries in the final app
+external_bin = [
+  "../target/release/opossum_backend",
+  "../target/release/opossum_core"
+]
 
 [bundle.windows]
 icon_path = "assets/favicon.ico"
@@ -49,18 +52,6 @@ banner_path = "../opossum_core/logo/Logo_InstallBanner.png"
 dialog_image_path = "../opossum_core/logo/Logo_InstallDialog.png"
 license_path = "../LICENSE"
 
-[bundle.linux]
-resources = ["../target/release/opossum_backend", "../target/release/opossum_core"]
-
-# Add extra executables
-[[bin]]
-name = "opossum_gui"
-path = "../target/release/opossum_gui"
-
-[[bin]]
-name = "opossum_backend"
-path = "../target/release/opossum_backend"
-
-[[bin]]
-name = "opossum_core"
-path = "../target/release/opossum_core"
+[bundle.deb]
+# (optional but explicit) force where the helpers land inside the package
+files = { "usr/lib/OpossumGui/opossum_backend" = "../target/release/opossum_backend", "usr/lib/OpossumGui/opossum_core"    = "../target/release/opossum_core"}
