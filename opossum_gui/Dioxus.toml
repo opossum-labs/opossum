@@ -22,7 +22,7 @@ publisher = "OpossumLabs"
 short_description = "Open-source optic simulation system and unified modeler"
 long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
 category = "Utility"
-icon = ["assets/favicon.ico"]
+icon = ["assets/Logo_square.png"]
 
 [bundle.windows]
 icon_path = "assets/favicon.ico"
@@ -51,3 +51,16 @@ license_path = "../LICENSE"
 
 [bundle.linux]
 resources = ["../target/release/opossum_backend", "../target/release/opossum_core"]
+
+# Add extra executables
+[[bin]]
+name = "opossum_gui"
+path = "../target/release/opossum_gui"
+
+[[bin]]
+name = "opossum_backend"
+path = "../target/release/opossum_backend"
+
+[[bin]]
+name = "opossum_core"
+path = "../target/release/opossum_core"
