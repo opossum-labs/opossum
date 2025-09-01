@@ -54,4 +54,4 @@ license_path = "../LICENSE"
 
 [bundle.deb]
 # (optional but explicit) force where the helpers land inside the package
-files = { "usr/lib/OpossumGui/opossum_backend" = "../target/release/opossum_backend", "usr/lib/OpossumGui/opossum_core"    = "../target/release/opossum_core"}
+files = { "usr/lib/OpossumGui/opossum_backend" = "../target/release/opossum_backend", "usr/lib/OpossumGui/opossum_core" = "../target/release/opossum_core"}

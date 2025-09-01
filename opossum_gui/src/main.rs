@@ -41,7 +41,7 @@ fn start_backend() -> ProcessHandle {
     #[cfg(target_os = "windows")]
     let mut command = Command::new("opossum_backend.exe");
     #[cfg(target_os = "linux")]
-    let mut command = Command::new("opossum_backend");
+    let mut command = Command::new("../lib/OpossumGui/opossum_backend");
     // On Windows, you might need to prevent a new console window from opening.
     #[cfg(target_os = "windows")]
     {
