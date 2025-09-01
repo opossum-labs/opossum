@@ -22,10 +22,10 @@ long_description = "An open-source framework for the simulation of optical (lase
 category = "Utility"
 icon = ["assets/Logo_square.png"]
 # Include your helper binaries in the final app
-external_bin = [
-  "../target/release/opossum_backend",
-  "../target/release/opossum_core"
-]
+# external_bin = [
+#   "../target/release/opossum_backend",
+#   "../target/release/opossum_core"
+# ]
 
 [bundle.windows]
 icon_path = "assets/favicon.ico"
