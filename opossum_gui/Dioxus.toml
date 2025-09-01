@@ -3,13 +3,7 @@ icon = "assets/favicon.ico"
 name = "opossum_gui"
 
 [web.app]
-# HTML title tag content
 title = "OPOSSUM"
-
-# include `assets` in web platform
-#[desktop.resource]
-# Additional CSS style files
-#style = []
 
 [web.resource.dev]
 script = []
@@ -21,11 +15,6 @@ short_description = "Open-source optic simulation system and unified modeler"
 long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
 category = "Utility"
 icon = ["assets/Logo_square.png"]
-# Include your helper binaries in the final app
-# external_bin = [
-#   "../target/release/opossum_backend",
-#   "../target/release/opossum_core"
-# ]
 
 [bundle.windows]
 icon_path = "assets/favicon.ico"
@@ -53,5 +42,5 @@ dialog_image_path = "../opossum_core/logo/Logo_InstallDialog.png"
 license_path = "../LICENSE"
 
 [bundle.deb]
-# (optional but explicit) force where the helpers land inside the package
+# bundle the helper binaries
 files = { "usr/lib/OpossumGui/opossum_backend" = "../target/release/opossum_backend", "usr/lib/OpossumGui/opossum_core" = "../target/release/opossum_core"}
