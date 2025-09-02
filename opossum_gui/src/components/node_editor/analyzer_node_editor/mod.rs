@@ -144,8 +144,8 @@ pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
             min: Some("0."),
         }
         LabeledSelect {
-            id: "ghostFocusAnalyzerConfigFluenceEstimator",
-            label: "Fluence Estimator",
+            id: "rayTracingAnalyzerMissedSurfaceStrategy",
+            label: "Missed-Surface Strategy",
             options: select_options_from_enum_iterator(
                 ray_trace_config_sig.read().missed_surface_strategy(),
                 None,
