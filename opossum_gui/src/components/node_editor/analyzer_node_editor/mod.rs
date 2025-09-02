@@ -4,9 +4,7 @@ use crate::components::node_editor::CallbackWrapper;
 use crate::components::node_editor::inputs::input_components::{LabeledInput, LabeledSelect};
 use crate::components::node_editor::inputs::select_options_from_enum_iterator;
 use crate::components::node_editor::node_config_editor::NodeChangeAction;
-use crate::components::node_editor::optical_node_editor::general_editor::{
-    NodeIDInput, NodeTypeInput,
-};
+use crate::components::node_editor::optical_node_editor::general_editor::NodeTypeInput;
 use crate::components::scenery_editor::NodeElement;
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
@@ -45,7 +43,6 @@ pub fn AnalyzerNodeEditor(node_element_sig: Signal<Option<NodeElement>>) -> Elem
                             node_type: format!("{}", analyzer_info.analyzer_type()),
                             label: "Analyzer Type",
                         }
-                        NodeIDInput { node_id: analyzer_info.id(), label: "Analyzer ID" }
                         {
                             match analyzer_info.analyzer_type().clone() {
                                 AnalyzerType::Energy => rsx! {},

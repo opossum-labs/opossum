@@ -8,18 +8,15 @@ use crate::components::node_editor::{
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, J_per_cm2};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
-use uuid::Uuid;
 
 #[component]
 pub fn GeneralEditor(
-    node_id: Uuid,
     node_type: String,
     node_name: String,
     node_lidt: Fluence,
     node_inverted: bool,
 ) -> Element {
     let accordion_content = vec![rsx! {
-            NodeIDInput {node_id, label: "Node ID"},
             NodeTypeInput {node_type, label: "Node Type"},
             NodeNameInput {node_name},
             NodeLIDTInput {node_lidt},
@@ -78,19 +75,6 @@ pub fn lidt_onchange(node_config_processor: Coroutine<NodeChangeAction>) -> Call
             node_config_processor.send(NodeChangeAction::Lidt(J_per_cm2!(lidt)));
         }
     })
-}
-
-#[component]
-pub fn NodeIDInput(node_id: Uuid, label: &'static str) -> Element {
-    rsx! {
-        LabeledInput {
-            id: "inputNodeID",
-            label,
-            value: format!("{node_id}"),
-            readonly: true,
-            onchange: CallbackWrapper::noop(),
-        }
-    }
 }
 
 #[component]
