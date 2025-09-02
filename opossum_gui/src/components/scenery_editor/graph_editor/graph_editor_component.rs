@@ -89,6 +89,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let onmousedown_handler = use_drag_start(current_mouse_pos, node_selected);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
+    let onmouseleave_handler = use_drag_end();
 
     let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
     let zoom = use_memo(move || *graph_state.read().editor_state.read().zoom.read());
@@ -147,6 +148,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                     onmouseup: onmouseup_handler,
                     onmousemove: onmousemove_handler,
                     ondoubleclick: ondoubleclick_handler,
+                    onmouseleave: onmouseleave_handler,
                     onresize: move |event| {
                         if let Ok(size) = event.data().get_content_box_size() {
                             graph_state.write().editor_state.write().editor_size.set(size);
