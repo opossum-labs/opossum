@@ -45,7 +45,6 @@ pub fn AnalyzerNodeEditor(node_element_sig: Signal<Option<NodeElement>>) -> Elem
                             node_type: format!("{}", analyzer_info.analyzer_type()),
                             label: "Analyzer Type",
                         }
-                        NodeIDInput { node_id: analyzer_info.id(), label: "Analyzer ID" }
                         {
                             match analyzer_info.analyzer_type().clone() {
                                 AnalyzerType::Energy => rsx! {},

@@ -78,18 +78,6 @@ pub fn lidt_onchange(node_config_processor: Coroutine<NodeChangeAction>) -> Call
     })
 }
 
-#[component]
-pub fn NodeIDInput(node_id: Uuid, label: &'static str) -> Element {
-    rsx! {
-        LabeledInput {
-            id: "inputNodeID",
-            label,
-            value: format!("{node_id}"),
-            readonly: true,
-            onchange: CallbackWrapper::noop(),
-        }
-    }
-}
 
 #[component]
 pub fn NodeTypeInput(node_type: String, label: &'static str) -> Element {
