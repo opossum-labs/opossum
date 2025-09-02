@@ -80,7 +80,7 @@ pub fn PositioningEditor(
 
     let mut accordion_content = Vec::<Result<VNode, RenderError>>::new();
     if node_type != "source" {
-        accordion_content.push(rsx!{
+        accordion_content.push(rsx! {
         LabeledSelect {
             id: "nodePositioningSelector",
             label: "Position Strategy",
@@ -102,11 +102,9 @@ pub fn PositioningEditor(
                 PositioningInputs { position_opt_sig }
             });
         }
+    } else {
+        accordion_content.push(rsx! {PositioningInputs { position_opt_sig }})
     }
-    else{
-        accordion_content.push(rsx!{PositioningInputs { position_opt_sig }})
-    }
-
 
     rsx! {
         AccordionItem {
