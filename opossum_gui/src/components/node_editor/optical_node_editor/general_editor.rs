@@ -8,7 +8,6 @@ use crate::components::node_editor::{
 use dioxus::prelude::*;
 use opossum_backend::{Fluence, J_per_cm2};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
-use uuid::Uuid;
 
 #[component]
 pub fn GeneralEditor(
@@ -77,7 +76,6 @@ pub fn lidt_onchange(node_config_processor: Coroutine<NodeChangeAction>) -> Call
         }
     })
 }
-
 
 #[component]
 pub fn NodeTypeInput(node_type: String, label: &'static str) -> Element {
