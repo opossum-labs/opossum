@@ -244,9 +244,9 @@ pub async fn update_node_property(
 /// - The HTTP request fails to reach the server (e.g., network issues).
 /// - The server responds with an error status code (e.g., 4xx or 5xx).
 /// - Serialization of the [`Isometry`] payload fails before sending.
-pub async fn update_node_isometry(node_id: Uuid, iso: Isometry) -> Result<String, String> {
+pub async fn update_node_isometry(node_id: Uuid, iso: Option<Isometry>) -> Result<String, String> {
     HTTP_API_CLIENT()
-        .post::<Isometry, String>(
+        .post::<Option<Isometry>, String>(
             &format!("/api/scenery/isometry/{}", node_id.as_simple()),
             iso,
         )

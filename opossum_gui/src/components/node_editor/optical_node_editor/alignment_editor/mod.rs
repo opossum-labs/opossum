@@ -7,7 +7,10 @@ use crate::{
     components::node_editor::{
         CallbackWrapper,
         accordion::AccordionItem,
-        inputs::{InputData, input_components::RowedInputs},
+        inputs::{
+            InputData,
+            input_components::{LabeledSelect, RowedInputs},
+        },
         node_config_editor::NodeChangeAction,
         optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
@@ -54,6 +57,72 @@ pub fn AlignmentEditor(
             parent_id: "accordionNodeConfig",
             content_id: "alignmentCollapse",
         }
+    }
+}
+
+#[component]
+pub fn PositioningEditor(
+    position_opt: Option<Isometry>,
+    node_properties_sig: Signal<Properties>,
+    node_type: String,
+) -> Element {
+    let mut position_opt_sig = use_signal(|| position_opt);
+    use_context_provider(|| position_opt_sig);
+
+    use_update_signal_with_reactive_prop(position_opt, position_opt_sig);
+    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+
+    use_effect(move || {
+        if *position_opt_sig.read() != position_opt {
+            node_config_processor.send(NodeChangeAction::Isometry(*position_opt_sig.read()));
+        }
+    });
+
+    let mut accordion_content = vec![rsx! {
+    LabeledSelect {
+        id: "nodePositioningSelector",
+        label: "Position Strategy",
+        options: vec![
+            (position_opt_sig.read().is_none(), "Relative".to_owned()),
+            (position_opt_sig.read().is_some(), "Absolute".to_owned()),
+        ],
+        onchange: move |_: Event<FormData>| {
+            if position_opt_sig.read().is_some() {
+                position_opt_sig.set(None);
+            } else {
+                position_opt_sig.set(Some(Isometry::default()));
+            }
+        },
+    }}];
+
+    if position_opt_sig.read().is_some() {
+        accordion_content.push(rsx! {
+            PositioningInputs { position_opt_sig }
+        });
+    }
+
+    rsx! {
+        AccordionItem {
+            elements: accordion_content,
+            header: "Position",
+            header_id: "positionHeading",
+            parent_id: "accordionNodeConfig",
+            content_id: "positionCollapse",
+        }
+    }
+}
+#[component]
+fn PositioningInputs(position_opt_sig: Signal<Option<Isometry>>) -> Element {
+    let position_sig = use_signal(|| position_opt_sig.read().unwrap_or_default());
+    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+
+    use_effect(move || {
+        node_config_processor.send(NodeChangeAction::Isometry(Some(*position_sig.read())));
+    });
+
+    rsx! {
+        RotationAlignmentInputs { alignment_sig: position_sig, axes_skip: None }
+        TranslationAlignmentInputs { alignment_sig: position_sig }
     }
 }
 

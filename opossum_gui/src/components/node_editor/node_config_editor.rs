@@ -15,7 +15,7 @@ pub enum NodeChangeAction {
     Alignment(Isometry),
     Inverted(bool),
     Property(String, Proptype),
-    Isometry(Isometry),
+    Isometry(Option<Isometry>),
     AnalyzerType(AnalyzerType),
 }
 
