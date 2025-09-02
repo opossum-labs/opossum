@@ -40,7 +40,8 @@ pub fn SimulationWindow(
                         output.set(String::new());
                         let Ok(temp_dir) = tempdir() else {
                             output.set("Could not determine temp dir.".into());
-                            return;
+                            is_running.set(false);
+                            continue;
                         };
                         let temp_model_file = temp_dir.path().join("temp-opossum.opm");
                         let temp_model_file_clone = temp_model_file.clone();
@@ -56,7 +57,8 @@ pub fn SimulationWindow(
                         );
                         let Ok(cli_path) = find_cli_executable() else {
                             output.set("Did not find CLI".into());
-                            return;
+                            is_running.set(false);
+                            continue;
                         };
                         let mut cmd = tokio::process::Command::new(cli_path);
                         cmd.arg("-r").arg(project_directory().as_path());
@@ -145,7 +147,10 @@ pub fn SimulationWindow(
                         is_running.set(false);
                         temp_dir.close().unwrap();
                     }
-                    CommandAction::Abort => {}
+                    CommandAction::Abort => {
+                        //todo: really abort the simulation
+                        show_simulation.set(false);
+                    }
                 }
             }
         },
@@ -171,7 +176,13 @@ pub fn SimulationWindow(
                                 class: "btn-close btn-close-white",
                                 disabled: is_running(),
                                 "data-bs-dismiss": "modal",
-                                onclick: move |_| show_simulation.set(false),
+                                onclick: move |_| {
+                                    if is_running() {
+                                        command_runner.send(CommandAction::Abort);
+                                    } else {
+                                        show_simulation.set(false);
+                                    }
+                                },
                             }
                         }
                         div { class: "modal-body", style: "overflow: auto;",
