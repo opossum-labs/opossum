@@ -45,7 +45,6 @@ pub fn OpticalNodeEditor(
                         class: "accordion accordion-borderless bg-dark ",
                         id: "accordionNodeConfig",
                         GeneralEditor {
-                            node_id: node_attr.uuid(),
                             node_type: node_attr.node_type(),
                             node_name: node_attr.name(),
                             node_lidt: *node_attr.lidt(),

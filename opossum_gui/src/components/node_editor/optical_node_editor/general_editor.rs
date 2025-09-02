@@ -12,14 +12,12 @@ use uuid::Uuid;
 
 #[component]
 pub fn GeneralEditor(
-    node_id: Uuid,
     node_type: String,
     node_name: String,
     node_lidt: Fluence,
     node_inverted: bool,
 ) -> Element {
     let accordion_content = vec![rsx! {
-            NodeIDInput {node_id, label: "Node ID"},
             NodeTypeInput {node_type, label: "Node Type"},
             NodeNameInput {node_name},
             NodeLIDTInput {node_lidt},
