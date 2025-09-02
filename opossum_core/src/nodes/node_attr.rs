@@ -185,6 +185,11 @@ impl NodeAttr {
     pub const fn set_isometry(&mut self, isometry: Isometry) {
         self.isometry = Some(isometry);
     }
+
+    /// Sets the isometry option of this [`NodeAttr`].
+    pub const fn set_isometry_option(&mut self, isometry_opt: Option<Isometry>) {
+        self.isometry = isometry_opt;
+    }
     /// Returns a reference to the isometry of this [`NodeAttr`].
     #[must_use]
     pub const fn isometry(&self) -> Option<Isometry> {

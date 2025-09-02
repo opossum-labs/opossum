@@ -3,7 +3,9 @@ pub mod alignment_editor;
 pub mod general_editor;
 pub mod properties_editor;
 
-use crate::components::node_editor::optical_node_editor::alignment_editor::AlignmentEditor;
+use crate::components::node_editor::optical_node_editor::alignment_editor::{
+    AlignmentEditor, PositioningEditor,
+};
 use crate::components::node_editor::optical_node_editor::general_editor::GeneralEditor;
 use crate::components::node_editor::optical_node_editor::properties_editor::PropertiesEditor;
 use crate::components::scenery_editor::NodeElement;
@@ -50,6 +52,11 @@ pub fn OpticalNodeEditor(
                             node_inverted: node_attr.inverted(),
                         }
                         PropertiesEditor { node_properties_sig }
+                        PositioningEditor {
+                            position_opt: node_attr.isometry(),
+                            node_properties_sig,
+                            node_type: node_attr.node_type(),
+                        }
                         AlignmentEditor {
                             alignment: node_attr.alignment().unwrap_or(Isometry::identity()),
                             node_properties_sig,

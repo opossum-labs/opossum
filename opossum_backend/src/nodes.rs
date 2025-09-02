@@ -646,10 +646,10 @@ async fn post_node_property(
 async fn post_node_isometry(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    iso: web::Json<Isometry>,
+    iso: web::Json<Option<Isometry>>,
 ) -> Result<(), ErrorResponse> {
     let uuid: Uuid = path.into_inner();
-    let iso = iso.into_inner();
+    let iso_opt = iso.into_inner();
     let document = data.document.lock();
     if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
         node_ref
@@ -657,7 +657,7 @@ async fn post_node_isometry(
             .lock()
             .unwrap()
             .node_attr_mut()
-            .set_isometry(iso);
+            .set_isometry_option(iso_opt);
         Ok(())
     } else {
         Err(ErrorResponse::new(
