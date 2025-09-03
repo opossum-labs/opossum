@@ -5143,6 +5143,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "opossum_cli"
+version = "0.6.0"
+dependencies = [
+ "clap 4.5.46",
+ "env_logger",
+ "log",
+ "opossum_core",
+]
+
+[[package]]
 name = "opossum_core"
 version = "0.6.0"
 dependencies = [
