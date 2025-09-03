@@ -404,6 +404,7 @@ async fn process_load_from_file(path: PathBuf, mut graph_store: Signal<GraphStor
             return;
         }
     };
+    graph_store.write().clear();
     eval_action_run(api::post_opm_file(opm_string).await, None::<fn(String)>);
     eval_action_run(
         api::get_nodes(Uuid::nil()).await,
