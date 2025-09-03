@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::PathBuf;
 
 use crate::components::{
     context_menu::cx_menu::{ContextMenu, CxtCommand},
@@ -14,7 +14,7 @@ pub fn App() -> Element {
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
-    let mut project_directory = use_signal(|| Path::new("./").to_path_buf());
+    let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut run_simulation = use_signal(|| false);
 
     use_effect(move || {
@@ -68,7 +68,7 @@ pub fn App() -> Element {
                     run_simulation.set(true);
                 }
                 MenuSelection::SetReportDir(path) => {
-                    project_directory.set(path.clone());
+                    project_directory.set(Some(path.clone()));
                 }
             }
         }

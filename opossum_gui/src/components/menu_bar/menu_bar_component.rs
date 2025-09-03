@@ -32,7 +32,7 @@ pub enum MenuSelection {
 #[component]
 pub fn MenuBar(
     menu_item_selected: Signal<Option<MenuSelection>>,
-    project_directory: Signal<PathBuf>,
+    project_directory: Signal<Option<PathBuf>>,
 ) -> Element {
     let mut about_window = use_signal(|| false);
     let node_selected = use_signal(String::new);
@@ -203,7 +203,18 @@ pub fn MenuBar(
                 button {
                     class: "btn btn-success me-4",
                     onclick: move |_| {
-                        menu_item_selected.set(Some(MenuSelection::RunProject));
+                        if project_directory().is_none() {
+                            let path = FileDialog::new()
+                                .set_directory("./")
+                                .set_title("Select OPOSSUM report directory")
+                                .pick_folder();
+                            if let Some(path) = path {
+                                project_directory.set(Some(path));
+                                menu_item_selected.set(Some(MenuSelection::RunProject));
+                            }
+                        } else {
+                            menu_item_selected.set(Some(MenuSelection::RunProject));
+                        }
                     },
                     "Simulate"
                 }
