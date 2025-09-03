@@ -23,7 +23,7 @@ enum CommandAction {
 #[component]
 pub fn SimulationWindow(
     mut show_simulation: Signal<bool>,
-    project_directory: Signal<PathBuf>,
+    project_directory: Signal<Option<PathBuf>>,
 ) -> Element {
     let mut output = use_signal(String::new);
     let mut is_running = use_signal(|| false);
@@ -60,8 +60,13 @@ pub fn SimulationWindow(
                             is_running.set(false);
                             continue;
                         };
+                        let Some(report_dir) = project_directory() else {
+                            output.set("No report directory set".into());
+                            is_running.set(false);
+                            continue;
+                        };
                         let mut cmd = tokio::process::Command::new(cli_path);
-                        cmd.arg("-r").arg(project_directory().as_path());
+                        cmd.arg("-r").arg(report_dir.as_path());
                         cmd.arg("-f").arg(temp_model_file_clone);
                         cmd.arg("-s").arg("false"); // do not display OPOSSUM logo and version info
 
