@@ -161,10 +161,10 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                                 copied_node.set(Some(node.id()))
                             }
                         }
-                        if ctrl_or_meta && event.data().key() == Key::Character("c".to_string()) {
+                        if ctrl_or_meta && event.data().key() == Key::Character("v".to_string()) {
                             if let Some(node_id) = &*copied_node.read(){
                                 OPOSSUM_UI_LOGS.write().add_log("pasted");
-                                // graph_processor.send(GraphStoreAction::CopyNode(node_id));
+                                graph_processor.send(GraphStoreAction::CopyNode(*node_id));
                             }
                         }
                         event.stop_propagation();

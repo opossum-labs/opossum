@@ -201,7 +201,7 @@ impl NodeGroup {
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
         self.graph.node(node_id)
     }
-    /// Return a reference to the optical node specified by its [`Uuid`].
+    /// Return a reference to the optical node specified by its [`Uuid`] and the Uuid of the group in which it is contained.
     ///
     /// This function is similar to [`node`](NodeGroup::node()), but it also recursively searches
     /// for the node in the subnodes of the group.
@@ -209,8 +209,8 @@ impl NodeGroup {
     /// # Errors
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
-    pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<OpticRef> {
-        self.graph.node_recursive(node_id)
+    pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<(OpticRef, Uuid)> {
+        self.graph.node_recursive(node_id, self.node_attr().uuid())
     }
     /// Returns all nodes of this [`NodeGroup`].
     #[must_use]

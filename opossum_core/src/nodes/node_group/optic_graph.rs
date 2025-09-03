@@ -673,7 +673,7 @@ impl OpticGraph {
                 Ok,
             )
     }
-    /// Returns a reference to the optical node specified by its [`Uuid`].
+    /// Returns a reference to the optical node specified by its [`Uuid`] and the Uuid of the group in which it is contained.
     ///
     /// This function is similar to [`OpticGraph::node`] but also checks recursively for
     /// the node in all sub-groups.
@@ -681,9 +681,9 @@ impl OpticGraph {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub fn node_recursive(&self, uuid: Uuid) -> OpmResult<OpticRef> {
+    pub fn node_recursive(&self, uuid: Uuid, group_id: Uuid) -> OpmResult<(OpticRef, Uuid)> {
         if let Ok(node) = self.node(uuid) {
-            Ok(node)
+            Ok((node, group_id))
         } else {
             for node_ref in self.g.node_weights() {
                 let mut node = node_ref
@@ -692,9 +692,9 @@ impl OpticGraph {
                     .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
 
                 if let Ok(group) = node.as_group_mut()
-                    && let Ok(node) = group.graph.node_recursive(uuid)
+                    && let Ok((node, group_id)) = group.node_recursive(uuid)
                 {
-                    return Ok(node);
+                    return Ok((node, group_id));
                 }
             }
             Err(OpossumError::OpticScenery(
@@ -1966,11 +1966,11 @@ mod test {
     fn node_recursive_simple() {
         let mut graph = OpticGraph::default();
         let i_d1 = graph.add_node(Dummy::default()).unwrap();
-        let i_d2 = graph.add_node(Dummy::default()).unwrap();
-
-        assert_eq!(graph.node_recursive(i_d1).unwrap().uuid(), i_d1);
-        assert_eq!(graph.node_recursive(i_d2).unwrap().uuid(), i_d2);
-        assert!(graph.node_recursive(uuid::Uuid::nil()).is_err());
+        let i_d2 = graph.add_node(Dummy::default()).unwrap();        
+        
+        assert_eq!(graph.node_recursive(i_d1, uuid::Uuid::nil()).unwrap().0.uuid(), i_d1);
+        assert_eq!(graph.node_recursive(i_d2, uuid::Uuid::nil()).unwrap().0.uuid(), i_d2);
+        assert!(graph.node_recursive(uuid::Uuid::nil(), uuid::Uuid::nil()).is_err());
     }
     #[test]
     fn node_recursive_nested() {
@@ -1985,12 +1985,13 @@ mod test {
 
         let i_g_g2 = group.add_node(group2).unwrap();
 
+        let group_id = group.node_attr().uuid();
         let i_g = graph.add_node(group).unwrap();
-        assert_eq!(graph.node_recursive(i_d).unwrap().uuid(), i_d);
-        assert_eq!(graph.node_recursive(i_g).unwrap().uuid(), i_g);
-        assert_eq!(graph.node_recursive(i_g_d1).unwrap().uuid(), i_g_d1);
-        assert_eq!(graph.node_recursive(i_g_d2).unwrap().uuid(), i_g_d2);
-        assert_eq!(graph.node_recursive(i_g_g2).unwrap().uuid(), i_g_g2);
-        assert_eq!(graph.node_recursive(i_g_g2_d).unwrap().uuid(), i_g_g2_d);
+        assert_eq!(graph.node_recursive(i_d, group_id).unwrap().0.uuid(), i_d);
+        assert_eq!(graph.node_recursive(i_g, group_id).unwrap().0.uuid(), i_g);
+        assert_eq!(graph.node_recursive(i_g_d1, group_id).unwrap().0.uuid(), i_g_d1);
+        assert_eq!(graph.node_recursive(i_g_d2, group_id).unwrap().0.uuid(), i_g_d2);
+        assert_eq!(graph.node_recursive(i_g_g2, group_id).unwrap().0.uuid(), i_g_g2);
+        assert_eq!(graph.node_recursive(i_g_g2_d, group_id).unwrap().0.uuid(), i_g_g2_d);
     }
 }
