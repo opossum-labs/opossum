@@ -591,7 +591,9 @@ async fn process_delete_edge(connect_info: ConnectInfo, mut graph_store: Signal<
 async fn process_copy_node(node_id: Uuid, mut graph_store: Signal<GraphStore>) {
     eval_action_run(
         api::post_copy_node(node_id).await,
-        Some(move |node_info| {let _ = graph_store.write().add_new_optical_node(&node_info);}),
+        Some(move |node_info| {
+            let _ = graph_store.write().add_new_optical_node(&node_info);
+        }),
     );
 }
 

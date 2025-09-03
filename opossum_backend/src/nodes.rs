@@ -144,7 +144,8 @@ async fn get_subnodes(
             .collect()
     } else {
         scenery
-            .node_recursive(uuid)?.0
+            .node_recursive(uuid)?
+            .0
             .optical_ref
             .lock()
             .unwrap()
@@ -210,7 +211,8 @@ pub async fn get_connections(
     } else {
         // subgroup
         scenery
-            .node_recursive(uuid)?.0
+            .node_recursive(uuid)?
+            .0
             .optical_ref
             .lock()
             .unwrap()
@@ -267,16 +269,15 @@ async fn post_copy_node(
     node_id: web::Json<Uuid>,
 ) -> Result<Json<NodeInfo>, ErrorResponse> {
     let node_id_to_copy = node_id.into_inner();
-    println!("id to copy: {node_id_to_copy}");
 
     //get optic ref of nde that should be copied
     let document = data.document.lock();
-    let (node_ref_to_copy, group_id) = document.scenery().node_recursive(node_id_to_copy)?.clone();
+    let (node_ref_to_copy, _) = document.scenery().node_recursive(node_id_to_copy)?;
     drop(document);
 
     // get node type and node attributes of node that should be copied
     let node_to_copy = node_ref_to_copy.optical_ref.lock().unwrap();
-    
+
     // create new node and apply node attributes
     let new_node_ref = create_node_ref(&node_to_copy.node_type())?;
     let mut node = new_node_ref.optical_ref.lock().unwrap();
@@ -285,10 +286,9 @@ async fn post_copy_node(
     drop(node_to_copy);
     drop(node);
 
-    println!("found in group: {group_id}");
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    let new_node_uuid =scenery.add_node_ref(new_node_ref.clone())?;
+    let new_node_uuid = scenery.add_node_ref(new_node_ref.clone())?;
     // let new_node_uuid = if group_id.is_nil() {
     // } else {
     //     scenery
@@ -300,7 +300,7 @@ async fn post_copy_node(
     //         .add_node_ref(new_node_ref.clone())?
     // };
     drop(document);
-    
+
     let node = new_node_ref.optical_ref.lock().unwrap();
     let gui_position = node.gui_position().map(|position| (position.x, position.y));
     let node_info = NodeInfo {
@@ -349,7 +349,6 @@ async fn post_subnode(
         new_node_info.gui_position.0,
         new_node_info.gui_position.1,
     )));
-    println!("new node id:{}", node_attr.uuid());
     drop(node);
     let mut document = data.document.lock();
     let uuid = path.into_inner();
@@ -358,7 +357,8 @@ async fn post_subnode(
         scenery.add_node_ref(new_node_ref.clone())?
     } else {
         scenery
-            .node_recursive(uuid)?.0
+            .node_recursive(uuid)?
+            .0
             .optical_ref
             .lock()
             .unwrap()
@@ -451,7 +451,8 @@ async fn post_subreference(
         scenery.add_node_ref(new_node_ref.clone())?
     } else {
         scenery
-            .node_recursive(group_uuid)?.0
+            .node_recursive(group_uuid)?
+            .0
             .optical_ref
             .lock()
             .unwrap()
@@ -833,7 +834,8 @@ fn get_node_attr_from_state(
     let document = data.document.lock();
     let node_attr = document
         .scenery()
-        .node_recursive(uuid)?.0
+        .node_recursive(uuid)?
+        .0
         .optical_ref
         .lock()
         .unwrap()

@@ -1,14 +1,18 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use std::path::PathBuf;
 
-use crate::{components::{
+use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
+        GraphState, GraphStoreAction, NodeElement,
         edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-        }, graph_editor::hooks::{use_center_graph, use_drag, use_drag_end, use_drag_start, use_zoom}, nodes::Nodes, use_graph_processor, GraphState, GraphStoreAction, NodeElement
+        },
+        graph_editor::hooks::{use_center_graph, use_drag, use_drag_end, use_drag_start, use_zoom},
+        nodes::Nodes,
+        use_graph_processor,
     },
-}, OPOSSUM_UI_LOGS};
+};
 use dioxus::{
     html::geometry::{PixelsSize, euclid::default::Point2D},
     prelude::*,
@@ -155,17 +159,15 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                     onkeydown: move |event| {
                         let modifiers = event.modifiers();
                         let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
-                        if ctrl_or_meta && event.data().key() == Key::Character("c".to_string()) {
-                            if let Some(node) = &*node_selected.read(){
-                                OPOSSUM_UI_LOGS.write().add_log("copied");
-                                copied_node.set(Some(node.id()))
+                        if ctrl_or_meta && event.data().key() == Key::Character("c".to_string())
+                            && let Some(node) = &*node_selected.read(){
+                                copied_node.set(Some(node.id()));
                             }
-                        }
-                        if ctrl_or_meta && event.data().key() == Key::Character("v".to_string()) {
-                            if let Some(node_id) = &*copied_node.read(){
-                                OPOSSUM_UI_LOGS.write().add_log("pasted");
+
+                        if ctrl_or_meta && event.data().key() == Key::Character("v".to_string())
+                            && let Some(node_id) = &*copied_node.read(){
                                 graph_processor.send(GraphStoreAction::CopyNode(*node_id));
-                            }
+
                         }
                         event.stop_propagation();
                     },

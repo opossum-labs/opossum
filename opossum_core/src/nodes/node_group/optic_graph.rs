@@ -1966,11 +1966,29 @@ mod test {
     fn node_recursive_simple() {
         let mut graph = OpticGraph::default();
         let i_d1 = graph.add_node(Dummy::default()).unwrap();
-        let i_d2 = graph.add_node(Dummy::default()).unwrap();        
-        
-        assert_eq!(graph.node_recursive(i_d1, uuid::Uuid::nil()).unwrap().0.uuid(), i_d1);
-        assert_eq!(graph.node_recursive(i_d2, uuid::Uuid::nil()).unwrap().0.uuid(), i_d2);
-        assert!(graph.node_recursive(uuid::Uuid::nil(), uuid::Uuid::nil()).is_err());
+        let i_d2 = graph.add_node(Dummy::default()).unwrap();
+
+        assert_eq!(
+            graph
+                .node_recursive(i_d1, uuid::Uuid::nil())
+                .unwrap()
+                .0
+                .uuid(),
+            i_d1
+        );
+        assert_eq!(
+            graph
+                .node_recursive(i_d2, uuid::Uuid::nil())
+                .unwrap()
+                .0
+                .uuid(),
+            i_d2
+        );
+        assert!(
+            graph
+                .node_recursive(uuid::Uuid::nil(), uuid::Uuid::nil())
+                .is_err()
+        );
     }
     #[test]
     fn node_recursive_nested() {
@@ -1989,9 +2007,21 @@ mod test {
         let i_g = graph.add_node(group).unwrap();
         assert_eq!(graph.node_recursive(i_d, group_id).unwrap().0.uuid(), i_d);
         assert_eq!(graph.node_recursive(i_g, group_id).unwrap().0.uuid(), i_g);
-        assert_eq!(graph.node_recursive(i_g_d1, group_id).unwrap().0.uuid(), i_g_d1);
-        assert_eq!(graph.node_recursive(i_g_d2, group_id).unwrap().0.uuid(), i_g_d2);
-        assert_eq!(graph.node_recursive(i_g_g2, group_id).unwrap().0.uuid(), i_g_g2);
-        assert_eq!(graph.node_recursive(i_g_g2_d, group_id).unwrap().0.uuid(), i_g_g2_d);
+        assert_eq!(
+            graph.node_recursive(i_g_d1, group_id).unwrap().0.uuid(),
+            i_g_d1
+        );
+        assert_eq!(
+            graph.node_recursive(i_g_d2, group_id).unwrap().0.uuid(),
+            i_g_d2
+        );
+        assert_eq!(
+            graph.node_recursive(i_g_g2, group_id).unwrap().0.uuid(),
+            i_g_g2
+        );
+        assert_eq!(
+            graph.node_recursive(i_g_g2_d, group_id).unwrap().0.uuid(),
+            i_g_g2_d
+        );
     }
 }

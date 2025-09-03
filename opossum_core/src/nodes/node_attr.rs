@@ -287,10 +287,9 @@ impl NodeAttr {
     }
 
     ///Replaces itself with a copy of the passed [`NodeAttr`] but keeps its original uuid
-    pub fn replace_from_node_attr(&mut self, node_attr: &Self){
+    pub fn replace_from_node_attr(&mut self, node_attr: &Self) {
         let id = self.uuid;
         *self = node_attr.clone();
         self.uuid = id;
     }
-
 }

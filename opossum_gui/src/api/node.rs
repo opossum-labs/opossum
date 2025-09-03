@@ -63,10 +63,7 @@ pub async fn post_add_node(new_node_info: NewNode, group_id: Uuid) -> Result<Nod
 /// - the response cannot be deserialized into the [`NodeInfo`] struct
 pub async fn post_copy_node(node_id: Uuid) -> Result<NodeInfo, String> {
     HTTP_API_CLIENT()
-        .post::<Uuid, NodeInfo>(
-            "/api/scenery/node_copy",
-            node_id,
-        )
+        .post::<Uuid, NodeInfo>("/api/scenery/node_copy", node_id)
         .await
 }
 /// Send a request to add a reference node to the scenery.

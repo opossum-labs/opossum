@@ -11,7 +11,6 @@ use crate::components::scenery_editor::{
     node::graph_node_components::GraphNodeContent,
     ports::ports_component::NodePorts,
 };
-use crate::OPOSSUM_UI_LOGS;
 use dioxus::prelude::*;
 use opossum_backend::nodes::NewRefNode;
 
@@ -67,7 +66,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                 if event.data().key() == Key::Delete {
                     graph_processor.send(GraphStoreAction::DeleteNode(id));
                     event.stop_propagation();
-                }                
+                }
             },
             oncontextmenu: {
                 move |event: Event<MouseData>| {
