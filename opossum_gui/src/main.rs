@@ -1,8 +1,8 @@
 #![windows_subsystem = "windows"]
+#![allow(clippy::items_after_statements)]
 use dioxus::{desktop::tao::window::Icon, prelude::*};
 use opossum_gui::App;
 use std::{
-    env,
     io::Cursor,
     process::Child,
     sync::{Arc, Mutex},
@@ -38,14 +38,14 @@ fn read_icon() -> Option<Icon> {
 }
 #[cfg(not(debug_assertions))]
 fn start_backend() -> ProcessHandle {
+    use std::env;
     let gui_exe_path = env::current_exe().expect("could not get current executable path: {e}");
-    let gui_exe_dir = gui_exe_path
-        .parent().expect("could not get exucutable dir");
+    let gui_exe_dir = gui_exe_path.parent().expect("could not get exucutable dir");
     use std::process::Command;
     #[cfg(target_os = "windows")]
-    let backend_path=gui_exe_dir.join("opossum_backend.exe");
+    let backend_path = gui_exe_dir.join("opossum_backend.exe");
     #[cfg(target_os = "linux")]
-    let backend_path=gui_exe_dir.join("../lib/OpossumGui/opossum_backend");
+    let backend_path = gui_exe_dir.join("../lib/OpossumGui/opossum_backend");
     println!("Starting backend server... at {}", backend_path.display());
     let mut command = Command::new(backend_path);
     // On Windows, you might need to prevent a new console window from opening.
@@ -53,7 +53,7 @@ fn start_backend() -> ProcessHandle {
     {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    } 
+    }
     let child_process = command.spawn().expect("Failed to backend server.");
     println!("Backend server started with PID: {}", child_process.id());
     ProcessHandle::new(child_process)

@@ -1,12 +1,87 @@
+# According to the dioxus 0.6.3 source code, the section structure is the following:
+# NOTE: All further option are silently ignored !!!
+
+# [application]
+#   out_dir: Option<PathBuf>
+#   tailwind_input: Option<PathBuf>
+#   tailwind_output: Option<PathBuf>
+#   ios_info_plist: Option<PathBuf>
+#   macos_info_plist: Option<PathBuf>
+#   ios_entitlements: Option<PathBuf>
+#   macos_entitlements: Option<PathBuf>
+#   android_manifest: Option<PathBuf>
+#   android_main_activity: Option<PathBuf>,
+#   android_min_sdk_version: Option<u32>,
+# [web]
+#   proxy
+#   watcher
+#   resource
+#   https
+#   pre_compress
+#   [web.app]
+#   [web.wasm_opt]
+# [bundle]
+#   identifier: Option<String>,
+#   publisher: Option<String>,
+#   icon: Option<Vec<String>>,
+#   resources: Option<Vec<String>>,
+#   copyright: Option<String>,
+#   category: Option<String>,
+#   short_description: Option<String>,
+#   long_description: Option<String>,
+#   external_bin: Option<Vec<String>>,
+#   [bundle.deb]
+#     depends: Option<Vec<String>>,
+#     recommends: Option<Vec<String>>,
+#     provides: Option<Vec<String>>,
+#     conflicts: Option<Vec<String>>,
+#     replaces: Option<Vec<String>>,
+#     files: HashMap<PathBuf, PathBuf>,
+#     desktop_template: Option<PathBuf>, Path to a custom desktop file Handlebars template with the variables:
+#     section: Option<String> The section (e.g. main, contrib, non-free, etc) -> https://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections
+#     priority: Option<String> Priorities as of now are :  `required`, `important`, `standard`, `optional`, `extra`
+#     changelog: Option<PathBuf>, Path of the uncompressed Changelog file -> https://www.debian.org/doc/debian-policy/ch-docs.html#changelog-files-and-release-notes
+#     pre_install_script: Option<PathBuf>,
+#     post_install_script: Option<PathBuf>,
+#     pre_remove_script: Option<PathBuf>,
+#     post_remove_script: Option<PathBuf>, 
+#   [bundle.macos]
+#   [bundle.windows]
+#     digest_algorithm: Option<String>,
+#     certificate_thumbprint: Option<String>,
+#     timestamp_url: Option<String>,
+#     tsp: bool,
+#     icon_path: Option<PathBuf>,
+#     webview_install_mode: WebviewInstallMode,
+#     webview_fixed_runtime_path: Option<PathBuf>,
+#     sign_command: Option<CustomSignCommandSettings>,
+#     allow_downgrades: bool,
+#     [bundle.windows.wix]
+#       language: Vec<(String, Option<PathBuf>)>,
+#       template: Option<PathBuf>,
+#       fragment_paths: Vec<PathBuf>,
+#       component_group_refs: Vec<String>,
+#       component_refs: Vec<String>,
+#       feature_group_refs: Vec<String>,
+#       feature_refs: Vec<String>,
+#       merge_refs: Vec<String>,
+#       skip_webview_install: bool,
+#       license: Option<PathBuf>,
+#       enable_elevated_update_task: bool,
+#       banner_path: Option<PathBuf>,
+#       dialog_image_path: Option<PathBuf>,
+#       fips_compliant: bool,
+#       version: Option<String>, MSI installer version in the format `major.minor.patch.build` (build is optional) -> <https://learn.microsoft.com/en-us/windows/win32/msi/productversion>
+#       upgrade_code: Option<uuid::Uuid>, fixed UUID to be set once in order to relate updates to an already installed package.
+#     [bundle.windows.nsis]
+#   [bundle.android]
+
 [application]
 icon = "assets/favicon.ico"
 name = "opossum_gui"
 
 [web.app]
 title = "OPOSSUM"
-
-[web.resource.dev]
-script = []
 
 [bundle]
 identifier = "com.opossumlabs.opossum"
@@ -15,23 +90,20 @@ short_description = "Open-source optic simulation system and unified modeler"
 long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
 category = "Utility"
 icon = ["assets/Logo_square.png"]
-# this is only for windows. It seems to be ignored for linux...
-resources = ["../target/release/opossum_backend.exe","../target/release/opossum_core.exe"]
 
 [bundle.windows]
 icon_path = "assets/favicon.ico"
 timestamp_url = "http://timestamp.digicert.com"
 tsp = true
 allow_downgrades = true
-resources = ["../target/release/opossum_backend.exe","../target/release/opossum_core.exe"]
 
 [bundle.windows.webview_install_mode.EmbedBootstrapper]
 silent = false
 
 [bundle.windows.wix]
 language = []
-fragment_paths = []
-component_group_refs = []
+fragment_paths = ["packaging/extra_binaries.wxs"]
+component_group_refs = ["HelperBinariesComponentGroup"]
 component_refs = []
 feature_group_refs = []
 feature_refs = []

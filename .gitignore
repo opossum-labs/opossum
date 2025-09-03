@@ -3,3 +3,4 @@
 /.vscode
 /doc/book/book/
 .VSCodeCounter
+*.wxs
