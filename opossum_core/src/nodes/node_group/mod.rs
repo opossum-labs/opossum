@@ -246,11 +246,7 @@ impl NodeGroup {
     /// # Concurrency
     /// A mutex is only acquired when `node_id != self.uuid()`. Avoid performing operations
     /// inside `f` that would attempt to lock the same node again to prevent deadlocks.
-    pub fn with_group_node<R>(
-        &self,
-        node_id: Uuid,
-        f: impl FnOnce(&NodeGroup) -> R,
-    ) -> OpmResult<R> {
+    pub fn with_group_node<R>(&self, node_id: Uuid, f: impl FnOnce(&Self) -> R) -> OpmResult<R> {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self));
         }
@@ -258,8 +254,10 @@ impl NodeGroup {
         let arc = self.optical_arc(node_id)?;
         let guard = arc.lock_or()?;
         let group = guard.as_group()?;
+        let out = f(group);
+        drop(guard);
 
-        Ok(f(group))
+        Ok(out)
     }
 
     /// Execute a mutable operation on the `NodeGroup` identified by `node_id`.
@@ -292,7 +290,7 @@ impl NodeGroup {
     pub fn with_group_node_mut<R>(
         &mut self,
         node_id: Uuid,
-        f: impl FnOnce(&mut NodeGroup) -> R,
+        f: impl FnOnce(&mut Self) -> R,
     ) -> OpmResult<R> {
         if self.node_attr().uuid() == node_id {
             // direct access to self without lock
@@ -303,8 +301,9 @@ impl NodeGroup {
         let mut guard = arc.lock_or()?;
 
         let group = guard.as_group_mut()?;
-
-        Ok(f(group))
+        let out = f(group);
+        drop(guard);
+        Ok(out)
     }
 
     /// Returns all nodes of this [`NodeGroup`].

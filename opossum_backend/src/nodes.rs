@@ -13,7 +13,6 @@ use opossum_core::{
     error::OpossumError,
     meter,
     nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
-    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     utils::geom_transformation::Isometry,
@@ -141,7 +140,7 @@ async fn get_subnodes(
                     gui_position,
                 }
             })
-            .collect::< Vec<NodeInfo>>()
+            .collect::<Vec<NodeInfo>>()
     })?;
     Ok(Json(nodes_info))
 }

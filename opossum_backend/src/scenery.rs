@@ -295,7 +295,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 #[cfg(test)]
 mod test {
     use actix_web::{App, dev::Service, test, web::Data};
-    use opossum_core::{SceneryResources, nodes::Dummy, optic_node::OpticNode};
+    use opossum_core::{SceneryResources, nodes::Dummy};
 
     use crate::{app_state::AppState, scenery::NrOfNodes};
 
