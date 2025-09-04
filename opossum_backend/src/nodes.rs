@@ -194,7 +194,7 @@ pub async fn get_connections(
     let scenery = document.scenery().clone();
     drop(document);
     let uuid = path.into_inner();
-    let connect_infos = scenery.with_group_node_mut(uuid, |g| g.connections()
+    let connect_infos = scenery.with_group_node(uuid, |g| g.connections()
             .iter()
             .map(|c| {
                 ConnectInfo::new(

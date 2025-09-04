@@ -22,7 +22,7 @@ use num::Zero;
 use optic_graph::ConnectionInfo;
 pub use optic_graph::OpticGraph;
 use serde::{Deserialize, Serialize};
-use std::fmt::Write as _;
+use std::{fmt::Write as _, sync::MutexGuard};
 use std::{
     collections::{BTreeMap, HashMap},
     fs::{self, File},
@@ -212,6 +212,32 @@ impl NodeGroup {
     pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<(OpticRef, Uuid)> {
         self.graph.node_recursive(node_id, self.node_attr().uuid())
     }
+
+    pub fn with_group_node<R>(
+    &self,
+    node_id: Uuid,
+    f: impl FnOnce(&NodeGroup) -> R,
+) -> OpmResult<R> {
+    if self.node_attr().uuid() == node_id {
+        return Ok(f(self));
+    }
+
+    let arc = self
+        .graph
+        .node_recursive(node_id, self.node_attr().uuid())?
+        .0
+        .optical_ref
+        .clone();
+
+    let guard = arc
+        .lock()
+        .map_err(|_| OpossumError::OpticScenery("Poisoned lock".into()))?;
+
+    // falls dein Trait das hat:
+    let group = guard
+        .as_group()?;
+    Ok(f(group))
+}
 
     pub fn with_group_node_mut<R>(
         &mut self,
@@ -634,6 +660,9 @@ impl OpticNode for NodeGroup {
         ports
     }
     fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
+        Ok(self)
+    }
+    fn as_group(&self)-> OpmResult<&NodeGroup> {
         Ok(self)
     }
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
