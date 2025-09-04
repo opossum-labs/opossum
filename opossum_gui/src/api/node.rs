@@ -20,13 +20,11 @@ pub async fn get_nodes(group_id: Uuid) -> Result<Vec<NodeInfo>, String> {
         .await
 }
 /// Get a list of all connections (edges) of the given node group.
-/// If the `node_id` is `Uuid::nil()` the connections of the toplevel group
-/// are returned.
 ///
 /// # Errors
 ///
 /// This function will return an error if
-/// - the given `node_id` is not `Uuid::nil()` and does not correspond to a (sub-)group of the scenery.
+/// - the given `node_id` does not correspond to a (sub-)group of the scenery or the scenery itself.
 pub async fn get_connections(group_id: Uuid) -> Result<Vec<ConnectInfo>, String> {
     HTTP_API_CLIENT()
         .get::<Vec<ConnectInfo>>(&format!(

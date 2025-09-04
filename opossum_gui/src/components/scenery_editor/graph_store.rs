@@ -41,6 +41,7 @@ pub struct GraphStore {
     nodes: Signal<HashMap<Uuid, NodeElement>>,
     edges: Signal<Vec<ConnectInfo>>,
     active_node: Signal<Option<Uuid>>,
+    scenery_id: Uuid,
 }
 pub enum GraphStoreAction {
     LoadFromFile(PathBuf),
@@ -55,12 +56,16 @@ pub enum GraphStoreAction {
     DeleteEdge(ConnectInfo),
     DeleteNode(Uuid),
     CopyNode(Uuid),
+    GetSceneryId,
     DeleteScenery,
     OptimizeLayout,
     // TerminateBackend,
     UpdateActiveNode(Option<NodeElement>),
 }
 impl GraphStore {
+    pub const fn set_scenery_id(&mut self, id: Uuid) {
+        self.scenery_id = id;
+    }
     pub fn add_nodes(&mut self, nodes: &[NodeInfo]) {
         self.nodes
             .write()
@@ -392,12 +397,16 @@ pub fn use_graph_processor(
                     GraphStoreAction::OptimizeLayout => {
                         process_optimize_layout(graph_store).await;
                     }
+                    GraphStoreAction::GetSceneryId => eval_action_run(
+                        api::get_scenery_uuid().await,
+                        Some(move |id| graph_store.write().set_scenery_id(id)),
+                    ),
                 }
             }
         }
     })
 }
-//this flag is set because clipy expects Signal<GraphStore> to be Send.
+// this flag is set because clippy expects Signal<GraphStore> to be Send.
 // However graphstore is only used locally and not within another async thread
 #[allow(clippy::future_not_send)]
 async fn process_load_from_file(path: PathBuf, mut graph_store: Signal<GraphStore>) {
@@ -411,7 +420,13 @@ async fn process_load_from_file(path: PathBuf, mut graph_store: Signal<GraphStor
     graph_store.write().clear();
     eval_action_run(api::post_opm_file(opm_string).await, None::<fn(String)>);
     eval_action_run(
-        api::get_nodes(Uuid::nil()).await,
+        api::get_scenery_uuid().await,
+        Some(move |id| graph_store.write().set_scenery_id(id)),
+    );
+    let scenery_id = graph_store.peek().scenery_id;
+
+    eval_action_run(
+        api::get_nodes(scenery_id).await,
         Some(move |nodes: Vec<NodeInfo>| graph_store.write().add_nodes(&nodes)),
     );
     eval_action_run(
@@ -421,7 +436,7 @@ async fn process_load_from_file(path: PathBuf, mut graph_store: Signal<GraphStor
         }),
     );
     eval_action_run(
-        api::get_connections(Uuid::nil()).await,
+        api::get_connections(scenery_id).await,
         Some(move |connect_infos: Vec<ConnectInfo>| {
             graph_store.write().edges.set(connect_infos);
         }),
@@ -520,8 +535,9 @@ async fn process_add_optic_node(
         (view_port_center.y - shift.y) / zoom,
     );
     let new_node_info = NewNode::new(new_node_type_string.to_lowercase(), element_position);
+    let scenery_id = graph_store.peek().scenery_id;
     eval_action_run(
-        api::post_add_node(new_node_info, Uuid::nil()).await,
+        api::post_add_node(new_node_info, scenery_id).await,
         Some(move |node_info| {
             let node_element = graph_store.write().add_new_optical_node(&node_info);
             node_selected.set(Some(node_element));
@@ -535,8 +551,9 @@ async fn process_add_reference_node(
     mut graph_store: Signal<GraphStore>,
     mut node_selected: Signal<Option<NodeElement>>,
 ) {
+    let scenery_id = graph_store.peek().scenery_id;
     eval_action_run(
-        api::post_add_ref_node(new_ref_node, Uuid::nil()).await,
+        api::post_add_ref_node(new_ref_node, scenery_id).await,
         Some(move |node_info| {
             let node_element = graph_store.write().add_new_reference_node(&node_info);
             node_selected.set(Some(node_element));
