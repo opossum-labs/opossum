@@ -117,4 +117,4 @@ license_path = "../LICENSE"
 
 [bundle.deb]
 # bundle the helper binaries
-files = { "usr/lib/OpossumGui/opossum_backend" = "../target/release/opossum_backend", "usr/lib/OpossumGui/opossum_core" = "../target/release/opossum_core"}
+files = { "usr/lib/OpossumGui/opossum_backend" = "../target/release/opossum_backend", "usr/lib/OpossumGui/opossum_core" = "../target/release/opossum_cli"}

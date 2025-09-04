@@ -11,7 +11,7 @@
             <Component Id="OpossumCoreComponent" Guid="*">
                 <File Id="OpossumCoreExe"
                     Name="opossum_core.exe"
-                    Source="@@RELEASE_DIR@@\opossum_core.exe" 
+                    Source="@@RELEASE_DIR@@\opossum_cli.exe" 
                     KeyPath="yes" />
             </Component>
         </DirectoryRef>
