@@ -213,7 +213,7 @@ impl NodeGroup {
         self.graph.node_recursive(node_id, self.node_attr().uuid())
     }
 
-    pub fn with_group_node<R>(
+    pub fn with_group_node_mut<R>(
         &mut self,
         node_id: Uuid,
         f: impl FnOnce(&mut NodeGroup) -> R,
@@ -240,6 +240,34 @@ impl NodeGroup {
 
         Ok(f(group))
     }
+
+    // pub fn with_group_node<R>(
+    //     &mut self,
+    //     node_id: Uuid,
+    //     f: impl FnOnce(&mut NodeGroup) -> R,
+    // ) -> OpmResult<R> {
+    //     if self.node_attr().uuid() == node_id {
+    //         // direct access to self without lock
+    //         return Ok(f(self));
+    //     }
+
+    //     // get group first
+    //     let arc = self
+    //         .graph
+    //         .node_recursive(node_id, self.node_attr().uuid())?
+    //         .0
+    //         .optical_ref
+    //         .clone();
+
+    //     let mut guard = arc
+    //         .lock()
+    //         .map_err(|_| OpossumError::OpticScenery("Poisoned lock".into()))?;
+
+    //     let group = guard
+    //         .as_group_mut()?;
+
+    //     Ok(f(group))
+    // }
 
     /// Returns all nodes of this [`NodeGroup`].
     #[must_use]

@@ -194,7 +194,7 @@ pub async fn get_connections(
     let scenery = document.scenery().clone();
     drop(document);
     let uuid = path.into_inner();
-    let connect_infos = scenery.with_group_node(uuid, |g| g.connections()
+    let connect_infos = scenery.with_group_node_mut(uuid, |g| g.connections()
             .iter()
             .map(|c| {
                 ConnectInfo::new(
@@ -264,7 +264,7 @@ async fn post_copy_node(
 
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    let new_node_uuid = scenery.with_group_node(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
+    let new_node_uuid = scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     drop(document);
 
@@ -321,7 +321,7 @@ async fn post_subnode(
     let uuid = path.into_inner();
     let scenery = document.scenery_mut();
     
-    let new_node_uuid = scenery.with_group_node(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
+    let new_node_uuid = scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
     
     drop(document);
     let node = new_node_ref.optical_ref.lock().unwrap();
@@ -405,7 +405,7 @@ async fn post_subreference(
     ref_node.assign_reference(&referring_node);
     drop(referring_node);
     drop(node);
-    let new_node_uuid = scenery.with_group_node(group_uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
+    let new_node_uuid = scenery.with_group_node_mut(group_uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     drop(document);
     let node = new_node_ref.optical_ref.lock().unwrap();
