@@ -290,18 +290,7 @@ async fn post_copy_node(
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
     let new_node_uuid = scenery.with_group_node(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
-    // let new_node_uuid = if group_id == scenery.node_attr().uuid() {
-    //     scenery.add_node_ref(new_node_ref.clone())?
-    // } else {
-    //     scenery
-    //         .node_recursive(group_id)?
-    //         .0
-    //         .optical_ref
-    //         .lock()
-    //         .unwrap()
-    //         .as_group_mut()?
-    //         .add_node_ref(new_node_ref.clone())?
-    // };
+
     drop(document);
 
     let node = new_node_ref.optical_ref.lock().unwrap();
@@ -356,18 +345,9 @@ async fn post_subnode(
     let mut document = data.document.lock();
     let uuid = path.into_inner();
     let scenery = document.scenery_mut();
-    let new_node_uuid = if uuid == scenery.node_attr().uuid() {
-        scenery.add_node_ref(new_node_ref.clone())?
-    } else {
-        scenery
-            .node_recursive(uuid)?
-            .0
-            .optical_ref
-            .lock()
-            .unwrap()
-            .as_group_mut()?
-            .add_node_ref(new_node_ref.clone())?
-    };
+    
+    let new_node_uuid = scenery.with_group_node(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
+    
     drop(document);
     let node = new_node_ref.optical_ref.lock().unwrap();
     let gui_position = node.gui_position().map(|position| (position.x, position.y));
