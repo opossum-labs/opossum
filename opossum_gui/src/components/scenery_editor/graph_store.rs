@@ -109,7 +109,8 @@ impl GraphStore {
     pub fn active_node(&self) -> Option<Uuid> {
         *self.active_node.read()
     }
-    pub fn set_node_active(&mut self, id: Uuid) {
+    pub fn set_node_active(&mut self, id: Uuid, z_index: usize) {
+        self.set_z_level_to_top(id, z_index);
         let mut active_node = self.active_node.write();
         *active_node = Some(id);
     }
@@ -171,6 +172,19 @@ impl GraphStore {
             }
         }
     }
+    pub fn set_z_level_to_top(&mut self, node_id: Uuid, z_level: usize){
+        let number_of_nodes = self.nodes().read().len();
+        let mut nodes = self.nodes.write();
+        for (id, elem) in nodes.iter_mut() {
+            let z_index = elem.z_index();
+            if z_index > z_level && *id != node_id {
+                elem.set_z_index(z_index-1);
+            }
+            else if *id == node_id{
+                elem.set_z_index(number_of_nodes);
+            }
+        }    
+    }
 
     /// Adds a new reference node to the graph store.
     /// This function creates a new `NodeElement` for the reference node and inserts it into the store.
@@ -194,7 +208,7 @@ impl GraphStore {
         let nr_of_nodes = self.nodes().read().len();
         node_element.set_z_index(nr_of_nodes + 1);
         self.nodes.write().insert(id, node_element.clone());
-        self.set_node_active(id);
+        self.set_node_active(id, node_element.z_index());
         node_element
     }
 
@@ -234,7 +248,7 @@ impl GraphStore {
         self.nodes
             .write()
             .insert(node_info.uuid(), node_element.clone());
-        self.set_node_active(node_info.uuid());
+        self.set_node_active(node_info.uuid(),node_element.z_index());
         node_element
     }
 
@@ -445,10 +459,10 @@ async fn process_load_from_file(path: PathBuf, mut graph_store: Signal<GraphStor
 
 fn process_update_active_node(node: Option<NodeElement>, mut graph_store: Signal<GraphStore>) {
     if let Some(node) = node {
-        graph_store.write().set_node_active(node.id());
         if let Some(active_node) = graph_store.write().nodes_mut().write().get_mut(&node.id()) {
-            *active_node = node;
+            *active_node = node.clone();
         }
+        graph_store.write().set_node_active(node.id(), node.z_index());
     } else {
         graph_store.write().set_active_node_none();
     }
