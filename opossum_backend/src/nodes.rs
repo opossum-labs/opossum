@@ -254,6 +254,48 @@ async fn post_copy_node(
     Ok(Json(node_info))
 }
 
+/// Copy an existing node
+///
+/// This function copies an already existing optical node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
+    ),
+    request_body(content = Uuid,
+        description = "Uuid of the node to be copied",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/analyzer_copy")]
+async fn post_copy_analyzer(
+    data: web::Data<AppState>,
+    analyzer_id: web::Json<Uuid>,
+) -> Result<Json<AnalyzerInfo>, ErrorResponse> {
+    let analyzer_id_to_copy = analyzer_id.into_inner();
+    let mut document = data.document.lock();
+    if let Some(analyzer) = document.analyzers().get(&analyzer_id_to_copy) {
+        let new_analyzer = AnalyzerInfo::new(
+            analyzer.analyzer_type().clone(),
+            Uuid::new_v4(),
+            analyzer.gui_position().unwrap_or_default(),
+        );
+        document.add_analyzer_info(&new_analyzer);
+        drop(document);
+        Ok(Json(new_analyzer))
+    } else {
+        drop(document);
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in analyzers",
+        ))
+    }
+}
+
 /// Add a new node to a group node
 ///
 /// This function adds a new optical node to a group node specified by its UUID.
@@ -1086,6 +1128,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_position);
     cfg.service(post_node_name);
     cfg.service(post_copy_node);
+    cfg.service(post_copy_analyzer);
     cfg.service(post_node_lidt);
     cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);

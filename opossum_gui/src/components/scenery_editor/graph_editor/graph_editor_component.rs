@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStoreAction, NodeElement,
+        GraphState, GraphStoreAction, NodeElement, NodeType,
         edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
         },
@@ -73,7 +73,7 @@ pub enum DragStatus {
 #[component]
 pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let node_selected = use_signal(|| None::<NodeElement>);
-    let mut copied_node = use_signal(|| None::<Uuid>);
+    let mut copied_node = use_signal(|| None::<(NodeType, Uuid)>);
 
     let mut graph_state: Signal<GraphState> = use_signal(GraphState::default);
     let graph_processor: Coroutine<GraphStoreAction> =
@@ -167,12 +167,13 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                         if ctrl_or_meta && event.data().key() == Key::Character("c".to_string())
                             && let Some(node) = &*node_selected.read()
                         {
-                            copied_node.set(Some(node.id()));
+                            copied_node.set(Some((node.node_type().clone(), node.id())));
                         }
                         if ctrl_or_meta && event.data().key() == Key::Character("v".to_string())
-                            && let Some(node_id) = &*copied_node.read()
+                            && let Some((node_type, node_id)) = &*copied_node.read()
                         {
-                            graph_processor.send(GraphStoreAction::CopyNode(*node_id));
+                            graph_processor
+                                .send(GraphStoreAction::CopyNode((node_type.clone(), *node_id)));
                         }
                         event.stop_propagation();
                     },
