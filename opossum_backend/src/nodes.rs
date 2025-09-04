@@ -145,6 +145,7 @@ async fn get_subnodes(
     } else {
         scenery
             .node_recursive(uuid)?
+            .0
             .optical_ref
             .lock()
             .unwrap()
@@ -211,6 +212,7 @@ pub async fn get_connections(
         // subgroup
         scenery
             .node_recursive(uuid)?
+            .0
             .optical_ref
             .lock()
             .unwrap()
@@ -245,6 +247,75 @@ impl NewNode {
         }
     }
 }
+/// Copy an existing node
+///
+/// This function copies an already existing optical node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
+    ),
+    request_body(content = Uuid,
+        description = "Uuid of the node to be copied",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/node_copy")]
+async fn post_copy_node(
+    data: web::Data<AppState>,
+    node_id: web::Json<Uuid>,
+) -> Result<Json<NodeInfo>, ErrorResponse> {
+    let node_id_to_copy = node_id.into_inner();
+
+    //get optic ref of nde that should be copied
+    let document = data.document.lock();
+    let (node_ref_to_copy, _) = document.scenery().node_recursive(node_id_to_copy)?;
+    drop(document);
+
+    // get node type and node attributes of node that should be copied
+    let node_to_copy = node_ref_to_copy.optical_ref.lock().unwrap();
+
+    // create new node and apply node attributes
+    let new_node_ref = create_node_ref(&node_to_copy.node_type())?;
+    let mut node = new_node_ref.optical_ref.lock().unwrap();
+    let node_attr = node.node_attr_mut();
+    node_attr.replace_from_node_attr(node_to_copy.node_attr());
+    drop(node_to_copy);
+    drop(node);
+
+    let mut document = data.document.lock();
+    let scenery = document.scenery_mut();
+    let new_node_uuid = scenery.add_node_ref(new_node_ref.clone())?;
+    // let new_node_uuid = if group_id.is_nil() {
+    // } else {
+    //     scenery
+    //         .node_recursive(group_id)?.0
+    //         .optical_ref
+    //         .lock()
+    //         .unwrap()
+    //         .as_group_mut()?
+    //         .add_node_ref(new_node_ref.clone())?
+    // };
+    drop(document);
+
+    let node = new_node_ref.optical_ref.lock().unwrap();
+    let gui_position = node.gui_position().map(|position| (position.x, position.y));
+    let node_info = NodeInfo {
+        uuid: new_node_uuid,
+        name: node.name(),
+        inverted: node.inverted(),
+        node_type: node.node_type(),
+        input_ports: node.ports().names(&PortType::Input),
+        output_ports: node.ports().names(&PortType::Output),
+        gui_position,
+    };
+    drop(node);
+    Ok(Json(node_info))
+}
+
 /// Add a new node to a group node
 ///
 /// This function adds a new optical node to a group node specified by its UUID.
@@ -287,6 +358,7 @@ async fn post_subnode(
     } else {
         scenery
             .node_recursive(uuid)?
+            .0
             .optical_ref
             .lock()
             .unwrap()
@@ -370,7 +442,7 @@ async fn post_subreference(
     )));
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    let referring_node = scenery.node_recursive(ref_node_info.referring_node)?;
+    let (referring_node, _) = scenery.node_recursive(ref_node_info.referring_node)?;
     let ref_node = node.as_refnode_mut().unwrap();
     ref_node.assign_reference(&referring_node);
     drop(referring_node);
@@ -380,6 +452,7 @@ async fn post_subreference(
     } else {
         scenery
             .node_recursive(group_uuid)?
+            .0
             .optical_ref
             .lock()
             .unwrap()
@@ -427,7 +500,7 @@ async fn post_node_position(
     let position = Point2::new(position.0, position.1);
     let mut document = data.document.lock();
     match document.scenery().node_recursive(uuid) {
-        Ok(node_ref) => {
+        Ok((node_ref, _)) => {
             node_ref
                 .optical_ref
                 .lock()
@@ -476,7 +549,7 @@ async fn post_node_name(
     let uuid: Uuid = path.into_inner();
     let name = name.into_inner();
     let document = data.document.lock();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
             .lock()
@@ -516,7 +589,7 @@ async fn post_node_lidt(
     let uuid: Uuid = path.into_inner();
     let lidt = lidt.into_inner();
     let document = data.document.lock();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
             .lock()
@@ -556,7 +629,7 @@ async fn post_node_alignment_isometry(
     let uuid: Uuid = path.into_inner();
     let isometry = isometry_from_gui.into_inner();
     let document = data.document.lock();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
             .lock()
@@ -606,7 +679,7 @@ async fn post_node_property(
         }
     };
     let document = data.document.lock();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         let value = node_ref
             .optical_ref
             .lock()
@@ -651,7 +724,7 @@ async fn post_node_isometry(
     let uuid: Uuid = path.into_inner();
     let iso_opt = iso.into_inner();
     let document = data.document.lock();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
             .lock()
@@ -691,7 +764,7 @@ async fn post_node_inversion(
     let uuid: Uuid = path.into_inner();
     let inverted = inverted.into_inner();
     let mut document = data.document.lock();
-    if let Ok(node_ref) = document.scenery().node_recursive(uuid) {
+    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
             .lock()
@@ -762,6 +835,7 @@ fn get_node_attr_from_state(
     let node_attr = document
         .scenery()
         .node_recursive(uuid)?
+        .0
         .optical_ref
         .lock()
         .unwrap()
@@ -915,7 +989,7 @@ async fn patch_properties(
 ) -> Result<Json<NodeAttr>, ErrorResponse> {
     let uuid = path.into_inner();
     let document = data.document.lock();
-    let node = document.scenery().node_recursive(uuid)?;
+    let (node, _) = document.scenery().node_recursive(uuid)?;
     drop(document);
     let final_attr = {
         let mut optic_ref = node.optical_ref.lock().unwrap();
@@ -1090,6 +1164,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_subnode);
     cfg.service(post_node_position);
     cfg.service(post_node_name);
+    cfg.service(post_copy_node);
     cfg.service(post_node_lidt);
     cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);

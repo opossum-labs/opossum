@@ -73,6 +73,7 @@ pub enum DragStatus {
 #[component]
 pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let node_selected = use_signal(|| None::<NodeElement>);
+    let mut copied_node = use_signal(|| None::<Uuid>);
 
     let mut graph_state: Signal<GraphState> = use_signal(GraphState::default);
     let graph_processor: Coroutine<GraphStoreAction> =
@@ -155,6 +156,21 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                         }
                     },
                     onmounted: move |event| { on_mounted.set(Some(event.data)) },
+                    onkeydown: move |event| {
+                        let modifiers = event.modifiers();
+                        let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
+                        if ctrl_or_meta && event.data().key() == Key::Character("c".to_string())
+                            && let Some(node) = &*node_selected.read(){
+                                copied_node.set(Some(node.id()));
+                            }
+
+                        if ctrl_or_meta && event.data().key() == Key::Character("v".to_string())
+                            && let Some(node_id) = &*copied_node.read(){
+                                graph_processor.send(GraphStoreAction::CopyNode(*node_id));
+
+                        }
+                        event.stop_propagation();
+                    },
                     div {
                         draggable: false,
                         pointer_events: "none",

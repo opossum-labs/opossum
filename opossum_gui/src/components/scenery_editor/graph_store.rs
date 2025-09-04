@@ -54,6 +54,7 @@ pub enum GraphStoreAction {
     UpdateEdges(Vec<ConnectInfo>),
     DeleteEdge(ConnectInfo),
     DeleteNode(Uuid),
+    CopyNode(Uuid),
     DeleteScenery,
     OptimizeLayout,
     // TerminateBackend,
@@ -382,6 +383,9 @@ pub fn use_graph_processor(
                     GraphStoreAction::DeleteEdge(connect_info) => {
                         process_delete_edge(connect_info, graph_store).await;
                     }
+                    GraphStoreAction::CopyNode(node_id) => {
+                        process_copy_node(node_id, graph_store).await;
+                    }
                     GraphStoreAction::DeleteScenery => {
                         process_delete_scenery(graph_store).await;
                     }
@@ -580,6 +584,16 @@ async fn process_delete_edge(connect_info: ConnectInfo, mut graph_store: Signal<
     eval_action_run(
         api::delete_connection(connect_info).await,
         Some(move |ci| graph_store.write().edges.write().retain(|e| e != &ci)),
+    );
+}
+
+#[allow(clippy::future_not_send)]
+async fn process_copy_node(node_id: Uuid, mut graph_store: Signal<GraphStore>) {
+    eval_action_run(
+        api::post_copy_node(node_id).await,
+        Some(move |node_info| {
+            let _ = graph_store.write().add_new_optical_node(&node_info);
+        }),
     );
 }
 
