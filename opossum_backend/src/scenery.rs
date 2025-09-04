@@ -118,6 +118,18 @@ pub struct NewAnalyzerInfo {
     pub gui_position: (f64, f64),
 }
 
+impl From<AnalyzerInfo> for NewAnalyzerInfo {
+    fn from(value: AnalyzerInfo) -> Self {
+        let pos = value
+            .gui_position()
+            .map_or_else(|| (0., 0.), |p| (p.x, p.y));
+        Self {
+            analyzer_type: value.analyzer_type().clone(),
+            gui_position: pos,
+        }
+    }
+}
+
 impl NewAnalyzerInfo {
     #[must_use]
     pub const fn new(analyzer_type: AnalyzerType, gui_position: (f64, f64)) -> Self {
