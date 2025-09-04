@@ -59,9 +59,9 @@ pub async fn post_add_node(new_node_info: NewNode, group_id: Uuid) -> Result<Nod
 /// - the provided [`Uuid`] cannot be serialized
 /// - the request fails (e.g. the node ide does not exist)
 /// - the response cannot be deserialized into the [`NodeInfo`] struct
-pub async fn post_copy_optical_node(node_id: Uuid) -> Result<NodeInfo, String> {
+pub async fn post_copy_optical_node(node_id: Uuid, pos: Point2D<f64>) -> Result<NodeInfo, String> {
     HTTP_API_CLIENT()
-        .post::<Uuid, NodeInfo>("/api/scenery/node_copy", node_id)
+        .post::<(Uuid, (f64, f64)), NodeInfo>("/api/scenery/node_copy", (node_id, (pos.x, pos.y)))
         .await
 }
 /// Send a request to copy an aalyzer node of the scenery.
@@ -72,9 +72,15 @@ pub async fn post_copy_optical_node(node_id: Uuid) -> Result<NodeInfo, String> {
 /// - the provided [`Uuid`] cannot be serialized
 /// - the request fails (e.g. the node ide does not exist)
 /// - the response cannot be deserialized into the [`NodeInfo`] struct
-pub async fn post_copy_analyzer_node(analyzer_id: Uuid) -> Result<AnalyzerInfo, String> {
+pub async fn post_copy_analyzer_node(
+    analyzer_id: Uuid,
+    pos: Point2D<f64>,
+) -> Result<AnalyzerInfo, String> {
     HTTP_API_CLIENT()
-        .post::<Uuid, AnalyzerInfo>("/api/scenery/analyzer_copy", analyzer_id)
+        .post::<(Uuid, (f64, f64)), AnalyzerInfo>(
+            "/api/scenery/analyzer_copy",
+            (analyzer_id, (pos.x, pos.y)),
+        )
         .await
 }
 /// Send a request to add a reference node to the scenery.

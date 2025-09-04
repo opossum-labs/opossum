@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use std::path::PathBuf;
+use std::{path::PathBuf, rc::Rc};
 
 use crate::components::{
     node_editor::NodeConfigEditor,
@@ -8,13 +8,19 @@ use crate::components::{
         edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
         },
-        graph_editor::hooks::{use_center_graph, use_drag, use_drag_end, use_drag_start, use_zoom},
+        graph_editor::hooks::{
+            use_center_graph, use_drag, use_drag_end, use_drag_start, use_on_key_down,
+            use_on_mouse_leave, use_on_resize, use_zoom,
+        },
         nodes::Nodes,
         use_graph_processor,
     },
 };
 use dioxus::{
-    html::geometry::{PixelsSize, euclid::default::Point2D},
+    html::geometry::{
+        Pixels, PixelsSize,
+        euclid::{Rect, default::Point2D},
+    },
     prelude::*,
 };
 
@@ -39,6 +45,7 @@ pub struct EditorState {
     pub edge_in_creation: Signal<Option<EdgeCreation>>,
     pub zoom: Signal<f64>,
     pub shift: Signal<Point2D<f64>>,
+    pub rect: Signal<Rect<f64, Pixels>>,
 }
 
 impl Default for EditorState {
@@ -49,6 +56,7 @@ impl Default for EditorState {
             edge_in_creation: Signal::<Option<EdgeCreation>>::default(),
             zoom: Signal::new(1.),
             shift: Signal::<Point2D<f64>>::default(),
+            rect: Signal::<Rect<f64, Pixels>>::default(),
         }
     }
 }
@@ -73,9 +81,10 @@ pub enum DragStatus {
 #[component]
 pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let node_selected = use_signal(|| None::<NodeElement>);
-    let mut copied_node = use_signal(|| None::<(NodeType, Uuid)>);
+    let copied_node = use_signal(|| None::<(NodeType, Uuid)>);
+    let mut mouse_inside_sig = use_signal(|| false);
 
-    let mut graph_state: Signal<GraphState> = use_signal(GraphState::default);
+    let graph_state: Signal<GraphState> = use_signal(GraphState::default);
     let graph_processor: Coroutine<GraphStoreAction> =
         use_graph_processor(node_selected, graph_state);
 
@@ -83,14 +92,20 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     use_context_provider(|| graph_state().editor_state);
 
     let current_mouse_pos = use_signal(Point2D::default);
-    let mut on_mounted: Signal<Option<std::rc::Rc<MountedData>>> = use_signal(|| None);
-
+    let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
     let onwheel_handler = use_zoom(on_mounted);
     let ondoubleclick_handler = use_center_graph();
     let onmousedown_handler = use_drag_start(current_mouse_pos, node_selected);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
-    let onmouseleave_handler = use_drag_end();
+    let onmouseleave_handler = use_on_mouse_leave(mouse_inside_sig);
+    let onkeydownhandler = use_on_key_down(
+        current_mouse_pos,
+        node_selected,
+        copied_node,
+        mouse_inside_sig,
+    );
+    let onresizehandler = use_on_resize(on_mounted);
 
     let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
     let zoom = use_memo(move || *graph_state.read().editor_state.read().zoom.read());
@@ -111,7 +126,6 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                     graph_processor.send(GraphStoreAction::GetSceneryId);
                 }
                 NodeEditorCommand::AddNode(node_type) => {
-                    // calculate center of viewport (in graph coordinates)
                     graph_processor.send(GraphStoreAction::AddOpticNode(node_type.clone()));
                 }
                 NodeEditorCommand::AddNodeRef(new_ref_node) => {
@@ -143,7 +157,9 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
             div { style: "min-width:256px;", class: "col-2 sidebar",
                 NodeConfigEditor { node_element_sig: node_selected }
             }
-            div { class: "col px-0 graph-editor-container",
+            div {
+                class: "col px-0 graph-editor-container",
+                onkeydown: onkeydownhandler,
                 div {
                     class: "graph-editor",
                     id: "editor",
@@ -155,28 +171,9 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                     onmousemove: onmousemove_handler,
                     ondoubleclick: ondoubleclick_handler,
                     onmouseleave: onmouseleave_handler,
-                    onresize: move |event| {
-                        if let Ok(size) = event.data().get_content_box_size() {
-                            graph_state.write().editor_state.write().editor_size.set(size);
-                        }
-                    },
+                    onresize: onresizehandler,
+                    onmouseenter: move |_| mouse_inside_sig.set(true),
                     onmounted: move |event| { on_mounted.set(Some(event.data)) },
-                    onkeydown: move |event| {
-                        let modifiers = event.modifiers();
-                        let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
-                        if ctrl_or_meta && event.data().key() == Key::Character("c".to_string())
-                            && let Some(node) = &*node_selected.read()
-                        {
-                            copied_node.set(Some((node.node_type().clone(), node.id())));
-                        }
-                        if ctrl_or_meta && event.data().key() == Key::Character("v".to_string())
-                            && let Some((node_type, node_id)) = &*copied_node.read()
-                        {
-                            graph_processor
-                                .send(GraphStoreAction::CopyNode((node_type.clone(), *node_id)));
-                        }
-                        event.stop_propagation();
-                    },
                     div {
                         draggable: false,
                         pointer_events: "none",
