@@ -185,13 +185,20 @@ pub trait OpticNode: Dottable {
     // fn export_data(&self, _data_dir: &Path, _uuid: &str) -> OpmResult<()> {
     //     Ok(())
     // }
-    /// Return a downcasted reference of a [`NodeGroup`].
+
+
+    /// Return a downcasted mutable reference of a [`NodeGroup`].
     ///
     /// # Errors
     /// This function will return an error if the [`OpticNode`] does not have the `node_type` property "group".
     fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
+
+    /// Return a downcasted reference of a [`NodeGroup`].
+    ///
+    /// # Errors
+    /// This function will return an error if the [`OpticNode`] does not have the `node_type` property "group".
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }

@@ -410,7 +410,6 @@ pub fn use_graph_processor(
 // However graphstore is only used locally and not within another async thread
 #[allow(clippy::future_not_send)]
 async fn process_load_from_file(path: PathBuf, mut graph_store: Signal<GraphStore>) {
-    let scenery_id = graph_store.peek().scenery_id;
     let opm_string = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -420,6 +419,12 @@ async fn process_load_from_file(path: PathBuf, mut graph_store: Signal<GraphStor
     };
     graph_store.write().clear();
     eval_action_run(api::post_opm_file(opm_string).await, None::<fn(String)>);
+    eval_action_run(
+        api::get_scenery_uuid().await,
+        Some(move |id| graph_store.write().set_scenery_id(id)),
+    );
+    let scenery_id = graph_store.peek().scenery_id;
+
     eval_action_run(
         api::get_nodes(scenery_id).await,
         Some(move |nodes: Vec<NodeInfo>| graph_store.write().add_nodes(&nodes)),
