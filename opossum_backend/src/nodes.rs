@@ -194,10 +194,7 @@ pub async fn get_connections(
     let scenery = document.scenery().clone();
     drop(document);
     let uuid = path.into_inner();
-    let connect_infos: Vec<ConnectInfo> = if uuid == scenery.node_attr().uuid() {
-        // toplevel group
-        scenery
-            .connections()
+    let connect_infos = scenery.with_group_node(group_uuid, |g| g.connections()
             .iter()
             .map(|c| {
                 ConnectInfo::new(
@@ -208,29 +205,7 @@ pub async fn get_connections(
                     c.distance.get::<meter>(),
                 )
             })
-            .collect::<Vec<ConnectInfo>>()
-    } else {
-        // subgroup
-        scenery
-            .node_recursive(uuid)?
-            .0
-            .optical_ref
-            .lock()
-            .unwrap()
-            .as_group_mut()?
-            .connections()
-            .iter()
-            .map(|c| {
-                ConnectInfo::new(
-                    c.src_id,
-                    c.src_port.clone(),
-                    c.target_id,
-                    c.target_port.clone(),
-                    c.distance.get::<meter>(),
-                )
-            })
-            .collect::<Vec<ConnectInfo>>()
-    };
+            .collect::<Vec<ConnectInfo>>())?;
     Ok(Json(connect_infos))
 }
 #[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
