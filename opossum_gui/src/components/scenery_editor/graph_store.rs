@@ -55,7 +55,7 @@ pub enum GraphStoreAction {
     UpdateEdges(Vec<ConnectInfo>),
     DeleteEdge(ConnectInfo),
     DeleteNode(Uuid),
-    CopyNode((NodeType, Uuid)),
+    CopyNode((NodeType, Uuid, Point2D<f64>)),
     GetSceneryId,
     DeleteScenery,
     OptimizeLayout,
@@ -388,8 +388,8 @@ pub fn use_graph_processor(
                     GraphStoreAction::DeleteEdge(connect_info) => {
                         process_delete_edge(connect_info, graph_store).await;
                     }
-                    GraphStoreAction::CopyNode((node_type, node_id)) => {
-                        process_copy_node(node_type, node_id, graph_store).await;
+                    GraphStoreAction::CopyNode((node_type, node_id, pos)) => {
+                        process_copy_node(node_type, node_id, pos, graph_store).await;
                     }
                     GraphStoreAction::DeleteScenery => {
                         process_delete_scenery(graph_store).await;
@@ -608,17 +608,18 @@ async fn process_delete_edge(connect_info: ConnectInfo, mut graph_store: Signal<
 async fn process_copy_node(
     node_type: NodeType,
     node_id: Uuid,
+    pos: Point2D<f64>,
     mut graph_store: Signal<GraphStore>,
 ) {
     match node_type {
         NodeType::Optical(_) => eval_action_run(
-            api::post_copy_optical_node(node_id).await,
+            api::post_copy_optical_node(node_id, pos).await,
             Some(move |node_info| {
                 let _ = graph_store.write().add_new_optical_node(&node_info);
             }),
         ),
         NodeType::Analyzer(_) => eval_action_run(
-            api::post_copy_analyzer_node(node_id).await,
+            api::post_copy_analyzer_node(node_id, pos).await,
             Some(move |analyzer_info: AnalyzerInfo| {
                 let id = analyzer_info.id();
                 let _ = graph_store

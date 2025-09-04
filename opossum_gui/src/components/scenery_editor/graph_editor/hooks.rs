@@ -1,5 +1,7 @@
+use std::rc::Rc;
+
 use crate::components::scenery_editor::{
-    NodeElement,
+    NodeElement, NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
     edges::edges_component::EdgeCreation,
     graph_editor::graph_editor_component::{DragStatus, EditorState},
@@ -7,6 +9,7 @@ use crate::components::scenery_editor::{
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{PortType, nodes::ConnectInfo};
+use uuid::Uuid;
 
 pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl FnMut(WheelEvent) {
     let editor_status = use_context::<Signal<EditorState>>();
@@ -114,6 +117,73 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
         }
     }
 }
+
+pub fn use_on_resize(on_mounted: Signal<Option<Rc<MountedData>>>) -> impl FnMut(ResizeEvent) {
+    let mut editor_status = use_context::<Signal<EditorState>>();
+
+    move |event| {
+        if let Ok(size) = event.data().get_content_box_size() {
+            editor_status.write().editor_size.set(size);
+        }
+        spawn(async move {
+            if let Ok(rect) = on_mounted().unwrap().get_client_rect().await {
+                editor_status.write().rect.set(rect);
+            }
+        });
+    }
+}
+
+pub fn use_on_key_down(
+    mouse_pos: Signal<Point2D<f64>>,
+    node_selected: Signal<Option<NodeElement>>,
+    mut copied_node: Signal<Option<(NodeType, Uuid)>>,
+    mouse_inside: Signal<bool>,
+) -> impl FnMut(KeyboardEvent) {
+    let editor_status = use_context::<Signal<EditorState>>();
+    let graph_processor = use_coroutine_handle::<GraphStoreAction>();
+    move |event| {
+        if !event.is_auto_repeating() {
+            let modifiers = event.modifiers();
+            let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
+            if ctrl_or_meta
+                && event.data().key() == Key::Character("c".to_string())
+                && let Some(node) = &*node_selected.peek()
+            {
+                copied_node.set(Some((node.node_type().clone(), node.id())));
+            }
+            if ctrl_or_meta
+                && event.data().key() == Key::Character("v".to_string())
+                && let Some((node_type, node_id)) = &*copied_node.read()
+            {
+                let rect = *editor_status().rect.read();
+                let mouse = *mouse_pos.read();
+                if *mouse_inside.read() {
+                    let shift = *editor_status().shift.read();
+                    let zoom = *editor_status().zoom.read();
+                    let pos = Point2D::new(
+                        (mouse.x - shift.x - rect.min_x()) / zoom,
+                        (mouse.y - shift.y - rect.min_y()) / zoom,
+                    );
+                    graph_processor.send(GraphStoreAction::CopyNode((
+                        node_type.clone(),
+                        *node_id,
+                        pos,
+                    )));
+                }
+            }
+        }
+        event.stop_propagation();
+    }
+}
+
+pub fn use_on_mouse_leave(mut mouse_inside_sig: Signal<bool>) -> impl FnMut(MouseEvent) {
+    move |_| {
+        let mut editor_status = use_context::<Signal<EditorState>>();
+        mouse_inside_sig.set(false);
+        editor_status.write().drag_status.set(DragStatus::None);
+    }
+}
+
 pub fn use_drag_end() -> impl FnMut(MouseEvent) {
     let graph_store = use_context::<Signal<GraphStore>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
