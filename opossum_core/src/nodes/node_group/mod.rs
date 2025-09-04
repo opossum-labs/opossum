@@ -22,7 +22,6 @@ use num::Zero;
 use optic_graph::ConnectionInfo;
 pub use optic_graph::OpticGraph;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Write as _, sync::MutexGuard};
 use std::{
     collections::{BTreeMap, HashMap},
     fs::{self, File},
@@ -31,6 +30,7 @@ use std::{
     process::Stdio,
     sync::{Arc, Mutex},
 };
+use std::{fmt::Write as _, sync::MutexGuard};
 use uom::si::f64::Length;
 use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,32 +213,82 @@ impl NodeGroup {
         self.graph.node_recursive(node_id, self.node_attr().uuid())
     }
 
-    pub fn with_group_node<R>(
-    &self,
-    node_id: Uuid,
-    f: impl FnOnce(&NodeGroup) -> R,
-) -> OpmResult<R> {
-    if self.node_attr().uuid() == node_id {
-        return Ok(f(self));
+    fn optical_arc(&self, node_id: Uuid) -> OpmResult<Arc<Mutex<dyn Analyzable>>> {
+        let arc = self
+            .graph
+            .node_recursive(node_id, self.node_attr().uuid())?
+            .0
+            .optical_ref
+            .clone();
+        Ok(arc)
     }
 
-    let arc = self
-        .graph
-        .node_recursive(node_id, self.node_attr().uuid())?
-        .0
-        .optical_ref
-        .clone();
+    /// Execute a read-only operation on the `NodeGroup` identified by `node_id`.
+    ///
+    /// If `node_id` equals this group's own UUID, the closure is invoked directly with `&self`
+    /// (no lock is taken). Otherwise, the node is looked up in the graph, its internal mutex
+    /// is locked, and an `&NodeGroup` is passed to the closure. The lock is held only for the
+    /// duration of the closure call.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the target optical node.
+    /// - `f`: Closure that receives `&NodeGroup` and returns a value of type `R`.
+    ///
+    /// # Returns
+    /// The value produced by `f`, wrapped in `OpmResult<R>`.
+    ///
+    /// # Errors
+    /// Propagates errors from the underlying lookup and locking:
+    /// - The node cannot be found in the graph.
+    /// - The node is not a group node.
+    /// - The mutex is poisoned (e.g., due to a previous panic while locked).
+    ///
+    /// # Concurrency
+    /// A mutex is only acquired when `node_id != self.uuid()`. Avoid performing operations
+    /// inside `f` that would attempt to lock the same node again to prevent deadlocks.
+    pub fn with_group_node<R>(
+        &self,
+        node_id: Uuid,
+        f: impl FnOnce(&NodeGroup) -> R,
+    ) -> OpmResult<R> {
+        if self.node_attr().uuid() == node_id {
+            return Ok(f(self));
+        }
 
-    let guard = arc
-        .lock()
-        .map_err(|_| OpossumError::OpticScenery("Poisoned lock".into()))?;
+        let arc = self.optical_arc(node_id)?;
+        let guard = arc.lock_or()?;
+        let group = guard.as_group()?;
 
-    // falls dein Trait das hat:
-    let group = guard
-        .as_group()?;
-    Ok(f(group))
-}
+        Ok(f(group))
+    }
 
+    /// Execute a mutable operation on the `NodeGroup` identified by `node_id`.
+    ///
+    /// If `node_id` equals this group's own UUID, the closure is invoked directly with
+    /// `&mut self` (no lock is taken). Otherwise, the node is looked up in the graph,
+    /// its internal mutex is locked, and an `&mut NodeGroup` is passed to the closure.
+    /// The lock is held only for the duration of the closure call.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the target optical node.
+    /// - `f`: Closure that receives `&mut NodeGroup` and returns a value of type `R`.
+    ///
+    /// # Returns
+    /// The value produced by `f`, wrapped in `OpmResult<R>`.
+    ///
+    /// # Errors
+    /// Propagates errors from the underlying lookup and locking:
+    /// - The node cannot be found in the graph.
+    /// - The node is not a group node.
+    /// - The mutex is poisoned (e.g., due to a previous panic while locked).
+    ///
+    /// # Concurrency
+    /// A mutex is only acquired when `node_id != self.uuid()`. Be careful not to call APIs
+    /// within `f` that would attempt to lock the same node again to prevent deadlocks.
+    ///
+    /// # Panic Safety
+    /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
+    /// fail with a poisoned-lock error.
     pub fn with_group_node_mut<R>(
         &mut self,
         node_id: Uuid,
@@ -249,51 +299,13 @@ impl NodeGroup {
             return Ok(f(self));
         }
 
-        // get group first
-        let arc = self
-            .graph
-            .node_recursive(node_id, self.node_attr().uuid())?
-            .0
-            .optical_ref
-            .clone();
+        let arc = self.optical_arc(node_id)?;
+        let mut guard = arc.lock_or()?;
 
-        let mut guard = arc
-            .lock()
-            .map_err(|_| OpossumError::OpticScenery("Poisoned lock".into()))?;
-
-        let group = guard
-            .as_group_mut()?;
+        let group = guard.as_group_mut()?;
 
         Ok(f(group))
     }
-
-    // pub fn with_group_node<R>(
-    //     &mut self,
-    //     node_id: Uuid,
-    //     f: impl FnOnce(&mut NodeGroup) -> R,
-    // ) -> OpmResult<R> {
-    //     if self.node_attr().uuid() == node_id {
-    //         // direct access to self without lock
-    //         return Ok(f(self));
-    //     }
-
-    //     // get group first
-    //     let arc = self
-    //         .graph
-    //         .node_recursive(node_id, self.node_attr().uuid())?
-    //         .0
-    //         .optical_ref
-    //         .clone();
-
-    //     let mut guard = arc
-    //         .lock()
-    //         .map_err(|_| OpossumError::OpticScenery("Poisoned lock".into()))?;
-
-    //     let group = guard
-    //         .as_group_mut()?;
-
-    //     Ok(f(group))
-    // }
 
     /// Returns all nodes of this [`NodeGroup`].
     #[must_use]
@@ -643,6 +655,18 @@ impl NodeGroup {
     }
 }
 
+// little Extension-Trait für pretty Locking
+trait LockExt<T: ?Sized> {
+    fn lock_or(&self) -> OpmResult<MutexGuard<'_, T>>;
+}
+
+impl<T: ?Sized> LockExt<T> for Arc<Mutex<T>> {
+    fn lock_or(&self) -> OpmResult<MutexGuard<'_, T>> {
+        self.lock()
+            .map_err(|_| OpossumError::OpticScenery("Poisoned lock".into()))
+    }
+}
+
 impl OpticNode for NodeGroup {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
@@ -662,7 +686,7 @@ impl OpticNode for NodeGroup {
     fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
         Ok(self)
     }
-    fn as_group(&self)-> OpmResult<&NodeGroup> {
+    fn as_group(&self) -> OpmResult<&NodeGroup> {
         Ok(self)
     }
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {

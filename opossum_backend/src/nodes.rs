@@ -119,9 +119,8 @@ async fn get_subnodes(
     let scenery = document.scenery().clone();
     drop(document);
     let uuid = path.into_inner();
-    let nodes_info: Vec<NodeInfo> = if uuid == scenery.node_attr().uuid() {
-        scenery
-            .nodes()
+    let nodes_info = scenery.with_group_node(uuid, |g| {
+        g.nodes()
             .iter()
             .map(|n| {
                 let node = n.optical_ref.lock().unwrap();
@@ -142,38 +141,8 @@ async fn get_subnodes(
                     gui_position,
                 }
             })
-            .collect()
-    } else {
-        scenery
-            .node_recursive(uuid)?
-            .0
-            .optical_ref
-            .lock()
-            .unwrap()
-            .as_group_mut()?
-            .nodes()
-            .iter()
-            .map(|n| {
-                let node = n.optical_ref.lock().unwrap();
-                let name = node.name();
-                let node_type = node.node_type();
-                let inverted = node.inverted();
-                let input_ports = node.ports().names(&PortType::Input);
-                let output_ports = node.ports().names(&PortType::Output);
-                let gui_position = node.gui_position().map(|position| (position.x, position.y));
-                drop(node);
-                NodeInfo {
-                    uuid: n.uuid(),
-                    name,
-                    node_type,
-                    inverted,
-                    input_ports,
-                    output_ports,
-                    gui_position,
-                }
-            })
-            .collect()
-    };
+            .collect::< Vec<NodeInfo>>()
+    })?;
     Ok(Json(nodes_info))
 }
 #[utoipa::path(tag = "node",
@@ -194,7 +163,8 @@ pub async fn get_connections(
     let scenery = document.scenery().clone();
     drop(document);
     let uuid = path.into_inner();
-    let connect_infos = scenery.with_group_node(uuid, |g| g.connections()
+    let connect_infos = scenery.with_group_node(uuid, |g| {
+        g.connections()
             .iter()
             .map(|c| {
                 ConnectInfo::new(
@@ -205,7 +175,8 @@ pub async fn get_connections(
                     c.distance.get::<meter>(),
                 )
             })
-            .collect::<Vec<ConnectInfo>>())?;
+            .collect::<Vec<ConnectInfo>>()
+    })?;
     Ok(Json(connect_infos))
 }
 #[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
@@ -264,7 +235,8 @@ async fn post_copy_node(
 
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    let new_node_uuid = scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
+    let new_node_uuid =
+        scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     drop(document);
 
@@ -320,9 +292,10 @@ async fn post_subnode(
     let mut document = data.document.lock();
     let uuid = path.into_inner();
     let scenery = document.scenery_mut();
-    
-    let new_node_uuid = scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
-    
+
+    let new_node_uuid =
+        scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
+
     drop(document);
     let node = new_node_ref.optical_ref.lock().unwrap();
     let gui_position = node.gui_position().map(|position| (position.x, position.y));
@@ -405,7 +378,8 @@ async fn post_subreference(
     ref_node.assign_reference(&referring_node);
     drop(referring_node);
     drop(node);
-    let new_node_uuid = scenery.with_group_node_mut(group_uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
+    let new_node_uuid =
+        scenery.with_group_node_mut(group_uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     drop(document);
     let node = new_node_ref.optical_ref.lock().unwrap();
