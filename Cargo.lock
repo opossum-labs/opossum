@@ -5150,6 +5150,7 @@ dependencies = [
  "env_logger",
  "log",
  "opossum_core",
+ "rprompt",
 ]
 
 [[package]]
@@ -5184,7 +5185,6 @@ dependencies = [
  "regex",
  "ron",
  "roots",
- "rprompt",
  "serde",
  "sobol",
  "spade",
