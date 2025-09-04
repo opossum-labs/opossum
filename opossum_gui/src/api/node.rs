@@ -20,13 +20,11 @@ pub async fn get_nodes(group_id: Uuid) -> Result<Vec<NodeInfo>, String> {
         .await
 }
 /// Get a list of all connections (edges) of the given node group.
-/// If the `node_id` is `Uuid::nil()` the connections of the toplevel group
-/// are returned.
 ///
 /// # Errors
 ///
 /// This function will return an error if
-/// - the given `node_id` is not `Uuid::nil()` and does not correspond to a (sub-)group of the scenery.
+/// - the given `node_id` does not correspond to a (sub-)group of the scenery or the scenery itself.
 pub async fn get_connections(group_id: Uuid) -> Result<Vec<ConnectInfo>, String> {
     HTTP_API_CLIENT()
         .get::<Vec<ConnectInfo>>(&format!(
@@ -53,7 +51,7 @@ pub async fn post_add_node(new_node_info: NewNode, group_id: Uuid) -> Result<Nod
         .await
 }
 
-/// Send a request to copy a node of the scenery.
+/// Send a request to copy a optical node of the scenery.
 ///
 /// # Errors
 ///
@@ -61,9 +59,22 @@ pub async fn post_add_node(new_node_info: NewNode, group_id: Uuid) -> Result<Nod
 /// - the provided [`Uuid`] cannot be serialized
 /// - the request fails (e.g. the node ide does not exist)
 /// - the response cannot be deserialized into the [`NodeInfo`] struct
-pub async fn post_copy_node(node_id: Uuid) -> Result<NodeInfo, String> {
+pub async fn post_copy_optical_node(node_id: Uuid) -> Result<NodeInfo, String> {
     HTTP_API_CLIENT()
         .post::<Uuid, NodeInfo>("/api/scenery/node_copy", node_id)
+        .await
+}
+/// Send a request to copy an aalyzer node of the scenery.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the provided [`Uuid`] cannot be serialized
+/// - the request fails (e.g. the node ide does not exist)
+/// - the response cannot be deserialized into the [`NodeInfo`] struct
+pub async fn post_copy_analyzer_node(analyzer_id: Uuid) -> Result<AnalyzerInfo, String> {
+    HTTP_API_CLIENT()
+        .post::<Uuid, AnalyzerInfo>("/api/scenery/analyzer_copy", analyzer_id)
         .await
 }
 /// Send a request to add a reference node to the scenery.

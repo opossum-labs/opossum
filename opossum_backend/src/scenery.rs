@@ -17,6 +17,7 @@ use log::{error, info, warn};
 use nalgebra::Point2;
 use opossum_core::{
     AnalyzerInfo, OpmDocument, SceneryResources, analyzers::AnalyzerType, create_data_dir,
+    optic_node::OpticNode,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -63,6 +64,17 @@ async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
     web::Json(document.global_conf().lock().unwrap().clone())
 }
 #[utoipa::path(tag = "scenery",
+    responses((status = 200, description = "Scenery Uuid", body = SceneryResources))
+)]
+/// Get the scenery uuid of this model
+///
+/// This function returns the scenery uuid of the model.
+#[get("/scenery_uuid")]
+async fn get_scenery_uuid(data: web::Data<AppState>) -> impl Responder {
+    let document = data.document.lock();
+    web::Json(document.scenery().node_attr().uuid())
+}
+#[utoipa::path(tag = "scenery",
     responses((status = 200, description = "Global configuration", body = SceneryResources))
 )]
 /// Set the global configuration
@@ -104,6 +116,18 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
 pub struct NewAnalyzerInfo {
     pub analyzer_type: AnalyzerType,
     pub gui_position: (f64, f64),
+}
+
+impl From<AnalyzerInfo> for NewAnalyzerInfo {
+    fn from(value: AnalyzerInfo) -> Self {
+        let pos = value
+            .gui_position()
+            .map_or_else(|| (0., 0.), |p| (p.x, p.y));
+        Self {
+            analyzer_type: value.analyzer_type().clone(),
+            gui_position: pos,
+        }
+    }
 }
 
 impl NewAnalyzerInfo {
@@ -271,6 +295,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_global_conf);
     cfg.service(get_analyzers);
     cfg.service(get_analyzer);
+    cfg.service(get_scenery_uuid);
     cfg.service(add_analyzer);
     cfg.service(delete_analyzer);
     cfg.service(nr_of_nodes);

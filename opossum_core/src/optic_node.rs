@@ -175,21 +175,20 @@ pub trait OpticNode: Dottable {
         }
         Ok(())
     }
-    /// Export analysis data to file(s) within the given directory path.
-    ///
-    /// This function should be overridden by a node in order to export node-specific data into a file.
-    /// The default implementation does nothing.
-    ///
-    /// # Errors
-    /// This function might return an error depending on the particular implementation.
-    // fn export_data(&self, _data_dir: &Path, _uuid: &str) -> OpmResult<()> {
-    //     Ok(())
-    // }
-    /// Return a downcasted reference of a [`NodeGroup`].
+
+    /// Return a downcasted mutable reference of a [`NodeGroup`].
     ///
     /// # Errors
     /// This function will return an error if the [`OpticNode`] does not have the `node_type` property "group".
     fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
+        Err(OpossumError::Other("cannot cast to group".into()))
+    }
+
+    /// Return a downcasted reference of a [`NodeGroup`].
+    ///
+    /// # Errors
+    /// This function will return an error if the [`OpticNode`] does not have the `node_type` property "group".
+    fn as_group(&self) -> OpmResult<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
     /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
