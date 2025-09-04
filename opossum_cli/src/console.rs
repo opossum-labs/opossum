@@ -24,6 +24,7 @@ pub struct Args {
     /// destination directory of the report. if not defined, same directory as the filepath for the optical setup is used
     pub report_directory: PathBuf,
     /// show intro logo
+    #[allow(dead_code)]
     pub show_logo: bool,
 }
 #[derive(Parser)]

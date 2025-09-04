@@ -31,23 +31,15 @@ petgraph = { version = "0.8.1", features = ["serde-1"] } # the graph library
 uom = {version="0.37", features = ["serde"] }
 serde = { version = "1", features = ['rc'] }
 ron="0.11.0"
-
 csv = "1"
 plotters = "0.3"
-
 approx = "0.5" # assert macros for comparison of floats with tolerance
-clap = { version = "4", features = ["derive", "string"] } # command line argument parser
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 strum = { version = "0.27", features = ["derive"] }
 strum_macros = "0.27"
-
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
 libm = {version="0.2"}
 chrono = { version= "0.4", features = ["serde"] }
-
 embed-doc-image = "0.1" # allows for embedded images in the rust API doc
-
 image="0.25"
 tempfile="3"
 rand="0.9"
@@ -55,7 +47,6 @@ sobol="1"
 itertools = "0.14"
 nalgebra = {version = "0.34.0", features = ["serde-serialize", "rayon"]}
 colorous = "1"
-
 delaunator = "1"
 num = "0.4"
 kahan = "0.1"
@@ -64,13 +55,13 @@ env_logger= "0.11"
 roots = "0.0.8"
 voronator = "0.2"
 rayon = "1.10"
-
 tinytemplate = "1"
 spade = "2.12"
 earcutr = "0.5.0"
 utoipa = {version ="5.3.1", features = ["actix_extras", "uuid"] }
 num-traits = "0.2"
 mutants = "0.0.3"
+
 [lints.rust]
 # missing_docs = "warn"
 

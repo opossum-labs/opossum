@@ -5160,7 +5160,6 @@ dependencies = [
  "approx",
  "assert_matches",
  "chrono",
- "clap 4.5.46",
  "colorous",
  "criterion",
  "csv",

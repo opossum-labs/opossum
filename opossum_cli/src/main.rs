@@ -4,10 +4,7 @@ use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
 use opossum_core::create_data_dir;
-use opossum_core::{
-    OpmDocument,
-    error::OpmResult,
-};
+use opossum_core::{OpmDocument, error::OpmResult};
 use std::{env, path::Path};
 
 use crate::console::{Args, PartialArgs};
