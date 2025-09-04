@@ -430,18 +430,8 @@ async fn post_subreference(
     ref_node.assign_reference(&referring_node);
     drop(referring_node);
     drop(node);
-    let new_node_uuid = if group_uuid == scenery.node_attr().uuid() {
-        scenery.add_node_ref(new_node_ref.clone())?
-    } else {
-        scenery
-            .node_recursive(group_uuid)?
-            .0
-            .optical_ref
-            .lock()
-            .unwrap()
-            .as_group_mut()?
-            .add_node_ref(new_node_ref.clone())?
-    };
+    let new_node_uuid = scenery.with_group_node(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
+    
     drop(document);
     let node = new_node_ref.optical_ref.lock().unwrap();
     let gui_position = node.gui_position().map(|position| (position.x, position.y));
