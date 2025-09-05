@@ -160,6 +160,9 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
             div {
                 class: "col px-0 graph-editor-container",
                 onkeydown: onkeydownhandler,
+                onmouseleave: onmouseleave_handler,
+                onmouseenter: move |_| mouse_inside_sig.set(true),
+                tabindex:0,
                 div {
                     class: "graph-editor",
                     id: "editor",
@@ -170,9 +173,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                     onmouseup: onmouseup_handler,
                     onmousemove: onmousemove_handler,
                     ondoubleclick: ondoubleclick_handler,
-                    onmouseleave: onmouseleave_handler,
                     onresize: onresizehandler,
-                    onmouseenter: move |_| mouse_inside_sig.set(true),
                     onmounted: move |event| { on_mounted.set(Some(event.data)) },
                     div {
                         draggable: false,
