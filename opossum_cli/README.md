@@ -1,6 +1,18 @@
 # opossum_cli
 
-The command line interface for **OPOSSUM**, the **Open-source Optics Simulation System and Unified Modeler**, provides a way to use the Opossum framework without the graphical user interface.  
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
+> The command line interface for **OPOSSUM**, the **Open-source Optics Simulation System and Unified Modeler**, 
+
+## About
+
+`opossum_cli` provides a way to use the `opossum_core` library without the graphical user interface. 
+It is part of the OPOSSUM ecosystem, among the tools:
+
+* **`opossum-core`**: The core Rust library for optical simulation.
+* **`opossum-backend`**: A web API backend.
+* **`opossum-gui`**: A graphical user interface for modeling and simulation.
+
 It allows loading optical setup files (`.opm`), analyzing models, and generating reports directly from the command line.  
 
 ---
