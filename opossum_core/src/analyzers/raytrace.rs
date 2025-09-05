@@ -213,7 +213,7 @@ pub trait AnalysisRayTrace: OpticNode {
     /// Effectively the analyze function of detector nodes with a single surface for a ray-tracing analysis
     /// Helper function to reduce code-doubling
     /// # Attributes
-    /// - `incoming_data`: the incoming data for this anaylsis in form of a [`LightResult`]
+    /// - `incoming_data`: the incoming data for this anaylsis in form of a `LightResult`
     /// - `config`: the [`RayTraceConfig`] of this analysis
     /// # Errors
     /// This function errors if `pass_through_detector_surface` fails

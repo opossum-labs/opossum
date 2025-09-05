@@ -251,7 +251,7 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     /// Effectively the analyze function of detector nodes with a single surface for a ghost-focus analysis
     /// Helper function to reduce code-doubling
     /// # Attributes
-    /// - `incoming_data`: the incoming data for this anaylsis in form of [`LightRays`]
+    /// - `incoming_data`: the incoming data for this analysis
     /// - `config`: the [`RayTraceConfig`] of this analysis
     /// # Errors
     /// This function errors if `pass_through_detector_surface` fails    
