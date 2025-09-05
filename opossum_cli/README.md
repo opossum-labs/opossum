@@ -1,7 +1,6 @@
-# OPOSSUM CLI  
-**Open-source Optics Simulation System and Unified Modeler – Command Line Interface**
+# opossum_cli
 
-The **OPOSSUM CLI** provides a way to use the Opossum framework without the graphical user interface.  
+The command line interface for **OPOSSUM**, the **Open-source Optics Simulation System and Unified Modeler**, provides a way to use the Opossum framework without the graphical user interface.  
 It allows loading optical setup files (`.opm`), analyzing models, and generating reports directly from the command line.  
 
 ---
