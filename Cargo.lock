@@ -5166,7 +5166,6 @@ dependencies = [
  "delaunator",
  "earcutr",
  "embed-doc-image",
- "env_logger",
  "image 0.25.6",
  "itertools 0.14.0",
  "kahan",
