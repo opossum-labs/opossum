@@ -1,5 +1,5 @@
 [workspace]
-members = ["opossum_core", "opossum_backend", "opossum_gui", "xtask"]
+members = ["opossum_core", "opossum_backend", "opossum_gui", "xtask", "opossum_cli"]
 default-members = ["opossum_core", "opossum_backend", "opossum_gui"]
 resolver = "3"
 

@@ -4,12 +4,11 @@ use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
 use opossum_core::create_data_dir;
-use opossum_core::{
-    OpmDocument,
-    console::{Args, PartialArgs},
-    error::OpmResult,
-};
+use opossum_core::{OpmDocument, error::OpmResult};
 use std::{env, path::Path};
+
+use crate::console::{Args, PartialArgs};
+mod console;
 
 fn read_and_parse_model(path: &Path) -> OpmResult<OpmDocument> {
     info!("Reading model...");

@@ -2,7 +2,7 @@
 //! Handling the OPOSSUM CLI
 //!
 //! This module handles the command line parsing as well as basic information (e.g. help dialog, version information, etc.).
-use crate::{
+use opossum_core::{
     error::{OpmResult, OpossumError},
     get_version,
 };
@@ -24,6 +24,7 @@ pub struct Args {
     /// destination directory of the report. if not defined, same directory as the filepath for the optical setup is used
     pub report_directory: PathBuf,
     /// show intro logo
+    #[allow(dead_code)]
     pub show_logo: bool,
 }
 #[derive(Parser)]

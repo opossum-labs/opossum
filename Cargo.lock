@@ -5143,20 +5143,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "opossum_cli"
+version = "0.6.0"
+dependencies = [
+ "clap 4.5.46",
+ "env_logger",
+ "log",
+ "opossum_core",
+ "rprompt",
+]
+
+[[package]]
 name = "opossum_core"
 version = "0.6.0"
 dependencies = [
  "approx",
  "assert_matches",
  "chrono",
- "clap 4.5.46",
  "colorous",
  "criterion",
  "csv",
  "delaunator",
  "earcutr",
  "embed-doc-image",
- "env_logger",
  "image 0.25.6",
  "itertools 0.14.0",
  "kahan",
@@ -5174,7 +5183,6 @@ dependencies = [
  "regex",
  "ron",
  "roots",
- "rprompt",
  "serde",
  "sobol",
  "spade",
