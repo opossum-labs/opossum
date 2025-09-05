@@ -142,7 +142,6 @@ pub fn use_on_key_down(
     let editor_status = use_context::<Signal<EditorState>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
     move |event| {
-        println!("pressing");
         if !event.is_auto_repeating() {
             let modifiers = event.modifiers();
             let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
@@ -156,9 +155,6 @@ pub fn use_on_key_down(
                 && event.data().key() == Key::Character("v".to_string())
                 && let Some((node_type, node_id)) = &*copied_node.read()
             {
-                println!("copied: {:?}", node_type);
-                println!("mouse inside: {}", *mouse_inside.read());
-
                 let rect = *editor_status().rect.read();
                 let mouse = *mouse_pos.read();
                 if *mouse_inside.read() {
