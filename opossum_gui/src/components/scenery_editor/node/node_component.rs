@@ -29,15 +29,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
         }
     });
     let id = node.id();
-    let z_index = if let Some(active_node_id) = active_node_id {
-        if active_node_id == node.id {
-            9999
-        } else {
-            node.z_index()
-        }
-    } else {
-        node.z_index()
-    };
+    let z_index = node.z_index();
     let node_icon = node.node_type.icon();
     let is_optical_node = node.is_optical_node();
     rsx! {
@@ -46,7 +38,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
             class: "node {is_active}",
             draggable: false,
             style: format!(
-                "left: {}px; top: {}px; transform: translate({}px, {}px), z-index: {z_index}; border-width:{}px",
+                "left: {}px; top: {}px; transform: translate({}px, {}px); z-index: {z_index}; border-width:{}px",
                 position.x.trunc(),
                 position.y.trunc(),
                 position.x.fract(),
@@ -57,8 +49,9 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                 editor_status.write().drag_status.set(DragStatus::Node(id));
                 let previously_selected = graph_store().active_node();
                 if previously_selected != Some(id) {
-                    graph_store().set_node_active(id);
-                    node_activated.set(Some(node.clone()));
+                    graph_store().set_node_active(id,node.z_index());
+                    node_activated.set(Some(graph_store().nodes().read().get(&id).unwrap().clone()));
+                    println!("{}", graph_store().nodes().read().get(&id).unwrap().z_index());
                 }
                 event.stop_propagation();
             },

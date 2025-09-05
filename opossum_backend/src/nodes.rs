@@ -200,7 +200,7 @@ impl NewNode {
     params(
         ("uuid" = Uuid, Path, description = "UUID of the optical node"),
     ),
-    request_body(content = Uuid,
+    request_body(content = (Uuid, (f64, f64)),
         description = "Uuid of the node to be copied",
         content_type = "application/json",
     ),
@@ -212,9 +212,9 @@ impl NewNode {
 #[post("/node_copy")]
 async fn post_copy_node(
     data: web::Data<AppState>,
-    node_id: web::Json<Uuid>,
+    node_id: web::Json<(Uuid, (f64, f64))>,
 ) -> Result<Json<NodeInfo>, ErrorResponse> {
-    let node_id_to_copy = node_id.into_inner();
+    let (node_id_to_copy, node_pos_to_copy) = node_id.into_inner();
 
     //get optic ref of nde that should be copied
     let document = data.document.lock();
@@ -240,7 +240,7 @@ async fn post_copy_node(
     drop(document);
 
     let node = new_node_ref.optical_ref.lock().unwrap();
-    let gui_position = node.gui_position().map(|position| (position.x, position.y));
+    let gui_position = Some(node_pos_to_copy);
     let node_info = NodeInfo {
         uuid: new_node_uuid,
         name: node.name(),
@@ -261,7 +261,7 @@ async fn post_copy_node(
     params(
         ("uuid" = Uuid, Path, description = "UUID of the optical node"),
     ),
-    request_body(content = Uuid,
+    request_body(content = (Uuid, (f64, f64)),
         description = "Uuid of the node to be copied",
         content_type = "application/json",
     ),
@@ -273,15 +273,15 @@ async fn post_copy_node(
 #[post("/analyzer_copy")]
 async fn post_copy_analyzer(
     data: web::Data<AppState>,
-    analyzer_id: web::Json<Uuid>,
+    analyzer_id: web::Json<(Uuid, (f64, f64))>,
 ) -> Result<Json<AnalyzerInfo>, ErrorResponse> {
-    let analyzer_id_to_copy = analyzer_id.into_inner();
+    let (analyzer_id_to_copy, pos_to_copy) = analyzer_id.into_inner();
     let mut document = data.document.lock();
     if let Some(analyzer) = document.analyzers().get(&analyzer_id_to_copy) {
         let new_analyzer = AnalyzerInfo::new(
             analyzer.analyzer_type().clone(),
             Uuid::new_v4(),
-            analyzer.gui_position().unwrap_or_default(),
+            Point2::new(pos_to_copy.0, pos_to_copy.1),
         );
         document.add_analyzer_info(&new_analyzer);
         drop(document);
