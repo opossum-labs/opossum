@@ -6,7 +6,7 @@ use opossum_core::{
     error::{OpmResult, OpossumError},
     get_version,
 };
-use std::io::{BufReader, BufWriter};
+use std::{fs::create_dir, io::{BufReader, BufWriter}};
 
 use clap::builder::Str;
 use clap::{Parser, builder::OsStr};
@@ -34,10 +34,6 @@ pub struct PartialArgs {
     /// filepath of the opticscenery to read in
     #[arg(short, long)]
     file_path: Option<String>,
-
-    /// analyzer type that should be used to analyze the optical setup
-    #[arg(short, long)]
-    analyzer: Option<String>,
 
     /// destination directory of the report. if not defined, same directory as the filepath for the optical setup is used
     #[arg(short, long)]
@@ -83,12 +79,17 @@ fn eval_report_directory_input(report_path: &str) -> Option<PathBuf> {
     } else if report_path.is_empty() {
         Some(PathBuf::from(""))
     } else {
-        None
+        if create_dir(&report_path).is_ok(){
+            Some(PathBuf::from(report_path))
+        }
+        else{
+            None
+        }
     }
 }
 /// Creates the prompt string that is displayed in the console, depending on the flag and if the passed input for the respective flag is valid
 /// # Attributes
-/// * `flag`:       Respective argument flag. "f" for file path of the optical setup, "a" for analyzer to be used and "r" for the report directory.
+/// * `flag`:       Respective argument flag. "f" for file path of the optical setup and "r" for the report directory.
 /// * `init_str`:   Prepended String. Used if some messages schould be displayed beforehand.
 /// # Returns
 /// * Returns an [`OpmResult<String>`] containing the prompt message.
@@ -110,7 +111,7 @@ fn create_prompt_str(flag: &str, init_str: &str) -> OpmResult<String> {
 /// # Attributes
 /// * `func`:       Function to evaluate the input string of the given argument.
 /// * `input`:      String-Option of the argument
-/// * `arg_flag`:   Respective argument flag. "f" for file path of the optical setup, "a" for analyzer to be used and "r" for the report directory.
+/// * `arg_flag`:   Respective argument flag. "f" for file path of the optical setup and "r" for the report directory.
 /// * `reader`:     Type that implements the `BufRead` trait to read from. May be `stdin().lock()` for user input or a `BufReader` from a static String for tests
 /// * `writer`:     Type  that implements the Write trait to write into.
 /// # Returns
@@ -374,7 +375,6 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         let path_valid = "./files_for_testing/opm/opticscenery.opm".to_owned();
         let part_args = PartialArgs {
             file_path: Some(path_valid.clone()),
-            analyzer: Some("e".to_owned()),
             report_directory: Some("".to_owned()),
             show_logo: Some(true),
         };
@@ -392,7 +392,6 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
 
         let part_args = PartialArgs {
             file_path: Some(path_valid.clone()),
-            analyzer: Some("e".to_owned()),
             report_directory: Some("./files_for_testing/".to_owned()),
             show_logo: Some(true),
         };
