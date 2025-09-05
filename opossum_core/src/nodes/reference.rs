@@ -77,7 +77,7 @@ impl NodeReference {
     }
     /// Assign a reference to another optical node.
     ///
-    /// This functions allows for setting the optical node this [`NodeReference`] refers to. Normally, the [`OpticRef`] is given during the
+    /// This functions allows for setting the optical node this [`NodeReference`] refers to. Normally, the `OpticRef` is given during the
     /// construction of a [`NodeReference`] using it's `new` function. This function allows for setting / changing after construction (e.g.
     /// during deserialization).
     ///

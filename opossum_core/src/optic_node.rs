@@ -394,7 +394,7 @@ pub trait OpticNode: Dottable {
         self.node_attr().global_conf()
     }
     /// Set the global configuration for this [`OpticNode`].
-    /// **Note**: This function should normally only be used by [`OpticRef`](crate::optic_ref::OpticRef).
+    /// **Note**: This function should normally only be used internally by `OpticRef`.
     fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
         let node_attr = self.node_attr_mut();
         node_attr.set_global_conf(global_conf);

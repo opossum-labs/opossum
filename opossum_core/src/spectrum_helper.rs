@@ -33,7 +33,7 @@ pub fn create_nir_spec() -> Spectrum {
 ///
 /// # Errors
 ///
-/// This functions returns an [`OpossumError`] if the given energy is negative.
+/// This functions returns an [`OpossumError`](crate::error::OpossumError) if the given energy is negative.
 pub fn create_he_ne_spec(energy: f64) -> OpmResult<Spectrum> {
     let mut s = create_visible_spec();
     s.add_single_peak(nanometer!(632.816), energy)?;
@@ -46,7 +46,7 @@ pub fn create_he_ne_spec(energy: f64) -> OpmResult<Spectrum> {
 ///
 /// # Errors
 ///
-/// This functions returns an [`OpossumError`] if the given energy is negative.
+/// This functions returns an [`OpossumError`](crate::error::OpossumError) if the given energy is negative.
 pub fn create_nd_glass_spec(energy: f64) -> OpmResult<Spectrum> {
     let mut s = create_nir_spec();
     s.add_lorentzian_peak(nanometer!(1054.0), nanometer!(0.5), energy)?;
