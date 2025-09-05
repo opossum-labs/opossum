@@ -76,7 +76,7 @@ pub enum Proptype {
     // FilterType(FilterType),
     /// Property for storing a [`FilterTypeBuilder`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterTypeBuilder(FilterTypeBuilder),
-    /// Property for storing a [`SplittingConfig`] of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
+    /// Property for storing a [`SplittingConfig`](crate::nodes::SplittingConfig) of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
     SplittingConfigBuilder(SplittingConfigBuilder),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
@@ -86,7 +86,7 @@ pub enum Proptype {
     Uuid(Uuid),
     /// A property for storing an optical [`Aperture`].
     Aperture(Aperture),
-    /// A property for storing a [`Spectrum`](crate::spectrum::Spectrum).
+    /// A property for storing a [`Spectrum`].
     Spectrum(Spectrum),
     /// This property stores the fluence information [`FluenceData`]
     FluenceData(FluenceData),

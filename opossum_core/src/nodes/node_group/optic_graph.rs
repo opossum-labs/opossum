@@ -67,7 +67,7 @@ impl OpticGraph {
     /// Add a new optical node to this [`OpticGraph`].
     ///
     /// This function returns a unique node index ([`Uuid`]) of the added node for later referencing (see `connect_nodes`).
-    /// **Note**: While constructing the underlying [`OpticRef`] a random, uuid is assigned.
+    /// **Note**: While constructing the underlying `OpticRef` a random, `UUID` is assigned.
     ///
     /// # Errors
     /// This function returns an error if the graph is set as `inverted` and a node is added. (This could end up in
@@ -85,9 +85,9 @@ impl OpticGraph {
         ));
         Ok(node_id)
     }
-    /// Add an [`OpticRef`] to this [`OpticGraph`].
+    /// Add a node to this [`OpticGraph`].
     ///
-    /// This function is similar to [`OpticGraph::add_node`] but allows to add an existing [`OpticRef`] to the graph.
+    /// This function is similar to [`OpticGraph::add_node`] but allows to add an existing `OpticRef` to the graph.
     ///
     /// # Errors
     ///
@@ -654,7 +654,7 @@ impl OpticGraph {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
-    /// Returns [`OpticRef`] with the given [`Uuid`].
+    /// Returns a node with the given [`Uuid`].
     ///
     /// # Errors
     ///
@@ -754,7 +754,7 @@ impl OpticGraph {
             .node_indices()
             .find(|idx| self.g.node_weight(*idx).unwrap().uuid() == uuid)
     }
-    /// Returns all nodes ([`OpticRef`]) of this [`OpticGraph`].
+    /// Returns all nodes of this [`OpticGraph`].
     #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
         self.g.node_weights().collect()

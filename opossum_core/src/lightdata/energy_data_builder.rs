@@ -156,7 +156,7 @@ impl EnergyLaserLines {
     /// This initializes the internal storage without any spectral lines and a spectral resolution of 0.1 nm.
     ///
     /// # Returns
-    /// A new instance of [`LaserLines`] with an empty set of wavelength–intensity pairs.
+    /// A new instance of [`EnergyLaserLines`] with an empty set of wavelength–intensity pairs.
     #[must_use]
     pub fn new_empty() -> Self {
         Self {
