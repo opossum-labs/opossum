@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use dioxus::prelude::*;
+use dioxus::{desktop::use_window, prelude::*};
 use dioxus_free_icons::{
     Icon,
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
@@ -9,8 +9,7 @@ use rfd::FileDialog;
 use std::path::PathBuf;
 
 use crate::components::menu_bar::{
-    edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
-    help::about::About,
+    controls::controls_menu::ControlsMenu, edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu}, help::about::About
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
@@ -25,9 +24,6 @@ pub enum MenuSelection {
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     AutoLayout,
-    WinMaximize,
-    WinMinimize,
-    WinClose,
 }
 #[component]
 pub fn MenuBar(
@@ -37,15 +33,9 @@ pub fn MenuBar(
     let mut about_window = use_signal(|| false);
     let node_selected = use_signal(String::new);
     let analyzer_selected = use_signal(|| None::<AnalyzerType>);
-    // let window = use_window();
-    // let is_dragging = use_signal(|| false);
-    // let maximize_symbol = use_signal(|| {
-    //     if window.is_maximized() {
-    //         "🗗"
-    //     } else {
-    //         "🗖"
-    //     }
-    // });
+    let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| rsx!{Icon { width: 25, icon: FaWindowMaximize }} );
+
+
     use_effect(move || {
         if let Some(analyzer) = analyzer_selected() {
             menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer)));
@@ -65,7 +55,7 @@ pub fn MenuBar(
                 Icon { width: 25, icon: FaBars }
             }
             div {
-                class: "collapse navbar-collapse",
+                class: "collapse navbar-collapse flex-grow-0 w-auto",
                 id: "navbarSupportedContent",
                 img {
                     class: "navbar-brand mt-lg-0",
@@ -122,6 +112,22 @@ pub fn MenuBar(
                                         }
                                     },
                                     "Save Project"
+                                }
+                            }
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| {
+                                        let path = FileDialog::new()
+                                            .set_directory("./")
+                                            .set_title("Select OPOSSUM report directory")
+                                            .pick_folder();
+                                        if let Some(path) = path {
+                                            menu_item_selected.set(Some(MenuSelection::SetReportDir(path)));
+                                        }
+                                    },
+                                    "Set Report Directory"
                                 }
                             }
                         }
@@ -186,20 +192,8 @@ pub fn MenuBar(
                     }
                 }
             }
+            ExpandOnClick {maximize_symbol}
             div { class: "d-flex align-items-center",
-                button {
-                    class: "btn btn-success me-4",
-                    onclick: move |_| {
-                        let path = FileDialog::new()
-                            .set_directory("./")
-                            .set_title("Select OPOSSUM report directory")
-                            .pick_folder();
-                        if let Some(path) = path {
-                            menu_item_selected.set(Some(MenuSelection::SetReportDir(path)));
-                        }
-                    },
-                    "Set report dir"
-                }
                 button {
                     class: "btn btn-success me-4",
                     onclick: move |_| {
@@ -218,24 +212,7 @@ pub fn MenuBar(
                     },
                     "Simulate"
                 }
-                a {
-                    class: "text-secondary me-2",
-                    role: "button",
-                    onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinMinimize)),
-                    Icon { width: 25, icon: FaWindowMinimize }
-                }
-                a {
-                    class: "text-secondary me-2",
-                    role: "button",
-                    onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinMaximize)),
-                    Icon { width: 25, icon: FaWindowMaximize }
-                }
-                a {
-                    class: "text-secondary me-2",
-                    role: "button",
-                    onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinClose)),
-                    Icon { width: 25, icon: FaPowerOff }
-                }
+                ControlsMenu {maximize_symbol}
             }
         }
         {
@@ -248,4 +225,37 @@ pub fn MenuBar(
             }
         }
     }
+}
+
+#[cfg(feature = "desktop")]
+#[component]
+fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element{
+    use dioxus_free_icons::icons::fa_solid_icons::FaWindowRestore;
+
+    let window = use_window();
+    rsx!{
+        div {
+            class: "d-flex align-items-center flex-grow-1 mx-2 px-2 rounded align-self-stretch my-n2",
+            ondragstart: move |e| e.prevent_default(),
+            onmousemove: {
+                let window = window.clone();
+                move |_| window.drag()
+            },
+            ondoubleclick: move |_| {
+                if window.is_maximized() {
+                    window.set_maximized(false);
+                    maximize_symbol.set(rsx!{Icon { width: 25, icon: FaWindowMaximize }});
+                } else {
+                    window.set_maximized(true);
+                                        maximize_symbol.set(rsx!{Icon { width: 25, icon: FaWindowRestore }});
+
+                }
+            },
+        }
+    }
+}
+#[cfg(not(feature = "desktop"))]
+#[component]
+fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, _>>) -> Element {
+    rsx!{}
 }

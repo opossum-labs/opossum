@@ -162,7 +162,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
                 onmouseenter: move |_| mouse_inside_sig.set(true),
-                tabindex:0,
+                tabindex: 0,
                 div {
                     class: "graph-editor",
                     id: "editor",
