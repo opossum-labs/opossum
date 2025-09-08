@@ -2,14 +2,16 @@
 use dioxus::{desktop::use_window, prelude::*};
 use dioxus_free_icons::{
     Icon,
-    icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
+    icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize},
 };
 use opossum_backend::AnalyzerType;
 use rfd::FileDialog;
 use std::path::PathBuf;
 
 use crate::components::menu_bar::{
-    controls::controls_menu::ControlsMenu, edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu}, help::about::About
+    controls::controls_menu::ControlsMenu,
+    edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+    help::about::About,
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
@@ -33,8 +35,11 @@ pub fn MenuBar(
     let mut about_window = use_signal(|| false);
     let node_selected = use_signal(String::new);
     let analyzer_selected = use_signal(|| None::<AnalyzerType>);
-    let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| rsx!{Icon { width: 25, icon: FaWindowMaximize }} );
-
+    let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| {
+        rsx! {
+            Icon { width: 25, icon: FaWindowMaximize }
+        }
+    });
 
     use_effect(move || {
         if let Some(analyzer) = analyzer_selected() {
@@ -192,7 +197,7 @@ pub fn MenuBar(
                     }
                 }
             }
-            ExpandOnClick {maximize_symbol}
+            ExpandOnClick { maximize_symbol }
             div { class: "d-flex align-items-center",
                 button {
                     class: "btn btn-success me-4",
@@ -212,7 +217,7 @@ pub fn MenuBar(
                     },
                     "Simulate"
                 }
-                ControlsMenu {maximize_symbol}
+                ControlsMenu { maximize_symbol }
             }
         }
         {
@@ -229,11 +234,11 @@ pub fn MenuBar(
 
 #[cfg(feature = "desktop")]
 #[component]
-fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element{
+fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
     use dioxus_free_icons::icons::fa_solid_icons::FaWindowRestore;
 
     let window = use_window();
-    rsx!{
+    rsx! {
         div {
             class: "d-flex align-items-center flex-grow-1 mx-2 px-2 rounded align-self-stretch my-n2",
             ondragstart: move |e| e.prevent_default(),
@@ -244,11 +249,14 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
             ondoubleclick: move |_| {
                 if window.is_maximized() {
                     window.set_maximized(false);
-                    maximize_symbol.set(rsx!{Icon { width: 25, icon: FaWindowMaximize }});
+                    maximize_symbol.set(rsx! {
+                        Icon { width: 25, icon: FaWindowMaximize }
+                    });
                 } else {
                     window.set_maximized(true);
-                                        maximize_symbol.set(rsx!{Icon { width: 25, icon: FaWindowRestore }});
-
+                    maximize_symbol.set(rsx! {
+                        Icon { width: 25, icon: FaWindowRestore }
+                    });
                 }
             },
         }
@@ -257,5 +265,5 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
 #[cfg(not(feature = "desktop"))]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, _>>) -> Element {
-    rsx!{}
+    rsx! {}
 }
