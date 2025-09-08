@@ -40,7 +40,7 @@ fn read_icon() -> Option<Icon> {
 fn start_backend() -> ProcessHandle {
     use std::env;
     let gui_exe_path = env::current_exe().expect("could not get current executable path: {e}");
-    let gui_exe_dir = gui_exe_path.parent().expect("could not get exucutable dir");
+    let gui_exe_dir = gui_exe_path.parent().expect("could not get executable dir");
     use std::process::Command;
     #[cfg(target_os = "windows")]
     let backend_path = gui_exe_dir.join("opossum_backend.exe");
@@ -95,7 +95,7 @@ fn main() {
             |proj_dirs| proj_dirs.data_local_dir().to_path_buf(),
         );
         let window = dioxus::desktop::WindowBuilder::new()
-            //.with_decorations(true)
+            .with_decorations(false)
             .with_window_icon(read_icon())
             .with_title("Opossum");
         dioxus::LaunchBuilder::new()

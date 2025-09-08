@@ -6,7 +6,10 @@ use opossum_core::{
     error::{OpmResult, OpossumError},
     get_version,
 };
-use std::{fs::create_dir, io::{BufReader, BufWriter}};
+use std::{
+    fs::create_dir,
+    io::{BufReader, BufWriter},
+};
 
 use clap::builder::Str;
 use clap::{Parser, builder::OsStr};
@@ -79,10 +82,9 @@ fn eval_report_directory_input(report_path: &str) -> Option<PathBuf> {
     } else if report_path.is_empty() {
         Some(PathBuf::from(""))
     } else {
-        if create_dir(&report_path).is_ok(){
+        if create_dir(&report_path).is_ok() {
             Some(PathBuf::from(report_path))
-        }
-        else{
+        } else {
             None
         }
     }

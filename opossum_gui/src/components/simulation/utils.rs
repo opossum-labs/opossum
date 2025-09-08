@@ -19,5 +19,5 @@ pub fn find_cli_executable() -> OpmResult<PathBuf> {
             return Ok(test_path);
         }
     }
-    Err(OpossumError::Other("no CLI excutable found.".into()))
+    Err(OpossumError::Other("no CLI executable found.".into()))
 }

@@ -55,15 +55,6 @@ pub fn App() -> Element {
                     let path = path.to_owned();
                     node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
                 }
-                MenuSelection::WinMaximize => {
-                    println!("App::Window maximize selected");
-                }
-                MenuSelection::WinMinimize => {
-                    println!("App::Window minimize selected");
-                }
-                MenuSelection::WinClose => {
-                    println!("App::Window close selected");
-                }
                 MenuSelection::RunProject => {
                     run_simulation.set(true);
                 }
