@@ -82,7 +82,6 @@ pub enum DragStatus {
 pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let node_selected = use_signal(|| None::<NodeElement>);
     let copied_node = use_signal(|| None::<(NodeType, Uuid)>);
-    let mut mouse_inside_sig = use_signal(|| false);
 
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
     let graph_processor: Coroutine<GraphStoreAction> =
@@ -98,13 +97,8 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let onmousedown_handler = use_drag_start(current_mouse_pos, node_selected);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
-    let onmouseleave_handler = use_on_mouse_leave(mouse_inside_sig);
-    let onkeydownhandler = use_on_key_down(
-        current_mouse_pos,
-        node_selected,
-        copied_node,
-        mouse_inside_sig,
-    );
+    let onmouseleave_handler = use_on_mouse_leave();
+    let onkeydownhandler = use_on_key_down(current_mouse_pos, node_selected, copied_node);
     let onresizehandler = use_on_resize(on_mounted);
 
     let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
@@ -161,7 +155,6 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                 class: "col px-0 graph-editor-container",
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
-                onmouseenter: move |_| mouse_inside_sig.set(true),
                 tabindex: 0,
                 div {
                     class: "graph-editor",
