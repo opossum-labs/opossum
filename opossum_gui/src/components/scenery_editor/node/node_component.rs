@@ -52,7 +52,6 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                     graph_store().set_node_active(id, node.z_index());
                     node_activated
                         .set(Some(graph_store().nodes().read().get(&id).unwrap().clone()));
-                    println!("{}", graph_store().nodes().read().get(&id).unwrap().z_index());
                 }
                 event.stop_propagation();
             },

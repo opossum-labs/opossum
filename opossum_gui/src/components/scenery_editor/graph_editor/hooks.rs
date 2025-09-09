@@ -137,7 +137,6 @@ pub fn use_on_key_down(
     mouse_pos: Signal<Point2D<f64>>,
     node_selected: Signal<Option<NodeElement>>,
     mut copied_node: Signal<Option<(NodeType, Uuid)>>,
-    mouse_inside: Signal<bool>,
 ) -> impl FnMut(KeyboardEvent) {
     let editor_status = use_context::<Signal<EditorState>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
@@ -157,7 +156,7 @@ pub fn use_on_key_down(
             {
                 let rect = *editor_status().rect.read();
                 let mouse = *mouse_pos.read();
-                if *mouse_inside.read() {
+                if mouse.x > rect.min_x() && mouse.x < rect.max_x() && mouse.y > rect.min_y() && mouse.y < rect.max_y() {
                     let shift = *editor_status().shift.read();
                     let zoom = *editor_status().zoom.read();
                     let pos = Point2D::new(
@@ -176,10 +175,9 @@ pub fn use_on_key_down(
     }
 }
 
-pub fn use_on_mouse_leave(mut mouse_inside_sig: Signal<bool>) -> impl FnMut(MouseEvent) {
+pub fn use_on_mouse_leave() -> impl FnMut(MouseEvent) {
     move |_| {
         let mut editor_status = use_context::<Signal<EditorState>>();
-        mouse_inside_sig.set(false);
         editor_status.write().drag_status.set(DragStatus::None);
     }
 }
