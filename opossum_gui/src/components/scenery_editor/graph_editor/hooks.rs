@@ -156,7 +156,11 @@ pub fn use_on_key_down(
             {
                 let rect = *editor_status().rect.read();
                 let mouse = *mouse_pos.read();
-                if mouse.x > rect.min_x() && mouse.x < rect.max_x() && mouse.y > rect.min_y() && mouse.y < rect.max_y() {
+                if mouse.x > rect.min_x()
+                    && mouse.x < rect.max_x()
+                    && mouse.y > rect.min_y()
+                    && mouse.y < rect.max_y()
+                {
                     let shift = *editor_status().shift.read();
                     let zoom = *editor_status().zoom.read();
                     let pos = Point2D::new(

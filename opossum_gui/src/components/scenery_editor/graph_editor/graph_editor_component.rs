@@ -98,11 +98,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
     let onmouseleave_handler = use_on_mouse_leave();
-    let onkeydownhandler = use_on_key_down(
-        current_mouse_pos,
-        node_selected,
-        copied_node       
-    );
+    let onkeydownhandler = use_on_key_down(current_mouse_pos, node_selected, copied_node);
     let onresizehandler = use_on_resize(on_mounted);
 
     let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
