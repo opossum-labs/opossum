@@ -1,5 +1,5 @@
 use opossum_core::{
-    apertures::RectangleConfig,
+    apertures::RectangleShape,
     error::OpmResult,
     millimeter,
     nodes::{
@@ -10,7 +10,7 @@ use opossum_core::{
 };
 
 pub fn cambox_2w() -> OpmResult<NodeGroup> {
-    let _config = RectangleConfig::new(millimeter!(11.33), millimeter!(7.13), millimeter!(0., 0.))?;
+    let _config = RectangleShape::new(millimeter!(11.33), millimeter!(7.13), millimeter!(0., 0.))?;
     //let cam_aperture = Aperture::BinaryRectangle(config);
 
     let mut cb = NodeGroup::new("CamBox 2w");

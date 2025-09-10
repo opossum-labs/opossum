@@ -1,4 +1,7 @@
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    apertures::Shape,
+    error::{OpmResult, OpossumError},
+};
 use earcutr::earcut;
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
@@ -82,6 +85,11 @@ impl PolygonConfig {
     #[must_use]
     pub fn points(&self) -> &[Point2<Length>] {
         &self.points
+    }
+}
+impl Shape for PolygonConfig {
+    fn transmission_factor(&self, point: &Point2<Length>) -> f64 {
+        if self.in_polygon(point) { 1.0 } else { 0.0 }
     }
 }
 impl Apodize for PolygonConfig {

@@ -49,10 +49,10 @@ use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::millimeter};
 
-pub use circle::CircleConfig;
-pub use gaussian::GaussianConfig;
+pub use circle::CircleShape;
+pub use gaussian::GaussianShape;
 pub use polygon::PolygonConfig;
-pub use rectangle::RectangleConfig;
+pub use rectangle::RectangleShape;
 pub use stack::StackConfig;
 
 /// The apodization type of an [`Aperture`].
@@ -74,14 +74,14 @@ pub enum Aperture {
     #[default]
     None,
     /// binary (either transparent or opaque) circular aperture defined by a radius and center point
-    BinaryCircle(CircleConfig),
+    BinaryCircle(CircleShape),
     /// binary (either transparent or opaque) rectangular aperture defined by width and height as well as its center point
-    BinaryRectangle(RectangleConfig),
+    BinaryRectangle(RectangleShape),
     /// binary (either transparent or opaque) polygonial aperture defined by a set of 2D points. This polygon can also be
     /// non-convex but should not intersect.
     BinaryPolygon(PolygonConfig),
     /// variable transmission aperture using a 2D Gaussian function.
-    Gaussian(GaussianConfig),
+    Gaussian(GaussianShape),
     /// a stack of an arbitrary number of the above apertures. The transmission factor at a given point is the
     /// product of all indiviual aperture on the stack (subtractive apodization).
     Stack(StackConfig),
@@ -123,6 +123,12 @@ pub trait Apodize {
     /// or outside the aperture. For [`Aperture::Gaussian`] the function returns a continous transmission value.
     fn apodize(&self, point: &Point2<Length>) -> f64;
 }
+// Ein Trait, der das grundlegende Verhalten einer Form beschreibt
+pub trait Shape {
+    /// Berechnet den Transmissionsfaktor (immer als "Loch" interpretiert).
+    fn transmission_factor(&self, point: &Point2<Length>) -> f64;
+}
+
 impl Plottable for Aperture {
     fn get_plot_series(
         &self,
@@ -242,7 +248,7 @@ mod test {
     }
     #[test]
     fn binary_circle() {
-        let c = CircleConfig::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
+        let c = CircleShape::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
         let ap = Aperture::BinaryCircle(c);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 0.0)), 1.0);
@@ -251,7 +257,7 @@ mod test {
         assert_eq!(ap.apodization_factor(&meter!(0.0, 1.0)), 1.0);
         assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 0.0);
         assert_eq!(ap.apodization_factor(&meter!(2.0, 2.0)), 0.0);
-        let mut c = CircleConfig::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
+        let mut c = CircleShape::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
         c.set_aperture_type(ApertureType::Obstruction);
         let ap = Aperture::BinaryCircle(c);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
@@ -259,7 +265,7 @@ mod test {
     }
     #[test]
     fn binary_rectangle() {
-        let r = RectangleConfig::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
+        let r = RectangleShape::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
         let ap = Aperture::BinaryRectangle(r);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
         assert_eq!(ap.apodization_factor(&meter!(1.5, 1.0)), 1.0);
@@ -268,7 +274,7 @@ mod test {
         assert_eq!(ap.apodization_factor(&meter!(0.5, 0.0)), 1.0);
         assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 0.0);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 2.1)), 0.0);
-        let mut r = RectangleConfig::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
+        let mut r = RectangleShape::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
         r.set_aperture_type(ApertureType::Obstruction);
         let ap = Aperture::BinaryRectangle(r);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
@@ -299,14 +305,14 @@ mod test {
     }
     #[test]
     fn gaussian() {
-        let g = GaussianConfig::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
+        let g = GaussianShape::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
         let ap = Aperture::Gaussian(g);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
         assert_eq!(
             ap.apodization_factor(&meter!(0.0, 0.0)),
             1.0 / 1.0_f64.exp()
         );
-        let mut g = GaussianConfig::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
+        let mut g = GaussianShape::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
         g.set_aperture_type(ApertureType::Obstruction);
         let ap = Aperture::Gaussian(g);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
@@ -317,9 +323,9 @@ mod test {
     }
     #[test]
     fn stack() {
-        let r = RectangleConfig::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5)).unwrap();
+        let r = RectangleShape::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5)).unwrap();
         let r_ap = Aperture::BinaryRectangle(r);
-        let c = CircleConfig::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
+        let c = CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
         let c_ap = Aperture::BinaryCircle(c);
         let s = StackConfig::new(vec![r_ap, c_ap]);
         let s_ap = Aperture::Stack(s);
@@ -329,9 +335,9 @@ mod test {
         assert_eq!(s_ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
         assert_eq!(s_ap.apodization_factor(&meter!(-1.0, 0.0)), 0.0);
         assert_eq!(s_ap.apodization_factor(&meter!(0.0, -1.0)), 0.0);
-        let r = RectangleConfig::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5)).unwrap();
+        let r = RectangleShape::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5)).unwrap();
         let r_ap = Aperture::BinaryRectangle(r);
-        let c = CircleConfig::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
+        let c = CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
         let c_ap = Aperture::BinaryCircle(c);
         let mut s = StackConfig::new(vec![r_ap, c_ap]);
         s.set_aperture_type(ApertureType::Obstruction);

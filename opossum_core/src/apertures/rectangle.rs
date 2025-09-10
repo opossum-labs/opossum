@@ -2,18 +2,18 @@ use nalgebra::{Isometry2, Point2, Vector2};
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
 
-use super::{ApertureType, Apodize};
+use super::{ApertureType, Shape, Apodize};
 use crate::error::{OpmResult, OpossumError};
 
 /// Configuration data for a rectangular aperture.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct RectangleConfig {
+pub struct RectangleShape {
     width: Length,
     height: Length,
     center: Point2<Length>,
     aperture_type: ApertureType,
 }
-impl RectangleConfig {
+impl RectangleShape {
     /// Create a new rectangular aperture configuration by given width, height and the center point.
     ///
     /// By default the aperture has the aperture type [`ApertureType::Hole`].
@@ -57,7 +57,27 @@ impl RectangleConfig {
         self.center
     }
 }
-impl Apodize for RectangleConfig {
+impl Shape for RectangleShape {
+    fn transmission_factor(&self, point: &Point2<Length>) -> f64 {
+        let translation = Isometry2::translation(
+            self.center.coords[0].get::<meter>(),
+            self.center.coords[1].get::<meter>(),
+        );
+        let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
+        let point_transformed = translation.inverse_transform_point(&point_meter);
+
+        let q = Vector2::new(
+            point_transformed.x.abs() - self.width.get::<meter>() / 2.,
+            point_transformed.y.abs() - self.height.get::<meter>() / 2.,
+        );
+        let mut q_max = q;
+        q_max.iter_mut().for_each(|x: &mut f64| *x = x.max(0.0));
+        let sdf_val = q_max.x.mul_add(q_max.x, q_max.y.powi(2)).sqrt() + q.x.max(q.y).min(0.0);
+
+        if sdf_val <= 0. { 1.0 } else { 0.0 }
+    }
+}
+impl Apodize for RectangleShape {
     fn set_aperture_type(&mut self, aperture_type: ApertureType) {
         self.aperture_type = aperture_type;
     }
@@ -91,18 +111,18 @@ mod test {
     #[test]
     fn new() {
         let p = meter!(0.0, 0.0);
-        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_ok());
-        assert!(RectangleConfig::new(meter!(0.0), meter!(1.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(-1.0), meter!(1.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(f64::NAN), meter!(1.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(f64::INFINITY), meter!(1.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(1.0), meter!(0.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(1.0), meter!(-1.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(1.0), meter!(f64::NAN), p).is_err());
-        assert!(RectangleConfig::new(meter!(1.0), meter!(f64::INFINITY), p).is_err());
+        assert!(RectangleShape::new(meter!(2.0), meter!(1.0), p).is_ok());
+        assert!(RectangleShape::new(meter!(0.0), meter!(1.0), p).is_err());
+        assert!(RectangleShape::new(meter!(-1.0), meter!(1.0), p).is_err());
+        assert!(RectangleShape::new(meter!(f64::NAN), meter!(1.0), p).is_err());
+        assert!(RectangleShape::new(meter!(f64::INFINITY), meter!(1.0), p).is_err());
+        assert!(RectangleShape::new(meter!(1.0), meter!(0.0), p).is_err());
+        assert!(RectangleShape::new(meter!(1.0), meter!(-1.0), p).is_err());
+        assert!(RectangleShape::new(meter!(1.0), meter!(f64::NAN), p).is_err());
+        assert!(RectangleShape::new(meter!(1.0), meter!(f64::INFINITY), p).is_err());
         let p = meter!(f64::NAN, 0.0);
-        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_err());
+        assert!(RectangleShape::new(meter!(2.0), meter!(1.0), p).is_err());
         let p = meter!(f64::INFINITY, 0.0);
-        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_err());
+        assert!(RectangleShape::new(meter!(2.0), meter!(1.0), p).is_err());
     }
 }

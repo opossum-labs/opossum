@@ -1,7 +1,7 @@
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
-    apertures::{Aperture, CircleConfig},
+    apertures::{Aperture, CircleShape},
     error::OpmResult,
     joule, millimeter,
     nodes::{NodeGroup, ParaxialSurface, RayPropagationVisualizer, collimated_line_ray_source},
@@ -18,7 +18,7 @@ fn main() -> OpmResult<()> {
         3,
     )?)?;
     let mut lens1 = ParaxialSurface::new("100 mm lens", millimeter!(100.0))?;
-    let circle = CircleConfig::new(millimeter!(25.), millimeter!(0., 0.))?;
+    let circle = CircleShape::new(millimeter!(25.), millimeter!(0., 0.))?;
     lens1.set_aperture(&PortType::Input, "input_1", &Aperture::BinaryCircle(circle))?;
     let i_pl1 = scenery.add_node(lens1)?;
     let i_pl2 = scenery.add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0))?)?;

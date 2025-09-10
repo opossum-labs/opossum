@@ -1618,7 +1618,7 @@ mod test {
 
     use super::*;
     use crate::{
-        apertures::CircleConfig,
+        apertures::CircleShape,
         centimeter,
         coatings::CoatingType,
         energy_distributions::General2DGaussian,
@@ -2338,7 +2338,7 @@ mod test {
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         assert_eq!(rays.total_energy(), joule!(2.0));
-        let circle_config = CircleConfig::new(millimeter!(0.5), millimeter!(0.0, 0.0)).unwrap();
+        let circle_config = CircleShape::new(millimeter!(0.5), millimeter!(0.0, 0.0)).unwrap();
         let aperture = Aperture::BinaryCircle(circle_config);
         rays.apodize(&aperture, &Isometry::identity()).unwrap();
         assert_eq!(rays.total_energy(), joule!(1.0));

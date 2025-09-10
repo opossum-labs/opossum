@@ -8,7 +8,7 @@ use crate::{
     utils::math_distribution_functions::ellipse,
 };
 
-use super::{Aperture, ApertureType, Apodize, CircleConfig};
+use super::{Aperture, ApertureType, Apodize, CircleShape};
 
 /// Configuration of an aperture stack
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -49,7 +49,7 @@ impl Apodize for StackConfig {
         transmission
     }
 }
-pub fn plot_circle(conf: &CircleConfig) -> Vec<PlotSeries> {
+pub fn plot_circle(conf: &CircleShape) -> Vec<PlotSeries> {
     let circle_points = ellipse(
         (
             conf.center().x.get::<millimeter>(),

@@ -2,7 +2,7 @@ use num::Zero;
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
-    apertures::{Aperture, CircleConfig},
+    apertures::{Aperture, CircleShape},
     error::OpmResult,
     joule, millimeter,
     nodes::{Dummy, EnergyMeter, NodeGroup, SpotDiagram, round_collimated_ray_source},
@@ -16,7 +16,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Raysource demo");
     let mut source = round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 5)?;
     let aperture =
-        Aperture::BinaryCircle(CircleConfig::new(millimeter!(1.0), millimeter![0.5, 0.5])?);
+        Aperture::BinaryCircle(CircleShape::new(millimeter!(1.0), millimeter![0.5, 0.5])?);
     source.set_aperture(&PortType::Output, "output_1", &aperture)?;
     let i_s = scenery.add_node(source)?;
     let dummy = Dummy::default();

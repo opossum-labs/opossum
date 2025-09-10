@@ -11,7 +11,7 @@ use num::Zero;
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
-    apertures::{Aperture, CircleConfig},
+    apertures::{Aperture, CircleShape},
     energy_distributions::General2DGaussian,
     error::OpmResult,
     joule,
@@ -65,7 +65,7 @@ fn main() -> OpmResult<()> {
     )?;
 
     // apertures
-    let circle_config = CircleConfig::new(millimeter!(12.7), millimeter!(0., 0.))?;
+    let circle_config = CircleShape::new(millimeter!(12.7), millimeter!(0., 0.))?;
     let a_1inch = Aperture::BinaryCircle(circle_config);
 
     // collimated source

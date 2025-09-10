@@ -3,7 +3,7 @@ use std::path::Path;
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
-    apertures::{Aperture, RectangleConfig},
+    apertures::{Aperture, RectangleShape},
     error::OpmResult,
     joule, millimeter,
     nodes::{Dummy, NodeGroup, SpotDiagram, round_collimated_ray_source},
@@ -22,7 +22,7 @@ fn main() -> OpmResult<()> {
 
     let mut dummy = Dummy::default();
     let rect_config =
-        RectangleConfig::new(millimeter!(15.), millimeter!(15.), millimeter!(0.0, 0.0))?;
+        RectangleShape::new(millimeter!(15.), millimeter!(15.), millimeter!(0.0, 0.0))?;
     let aperture = Aperture::BinaryRectangle(rect_config);
 
     dummy.set_aperture(&PortType::Input, "input_1", &aperture)?;

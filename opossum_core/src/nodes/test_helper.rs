@@ -2,7 +2,7 @@
 pub mod test_helper {
     use crate::{
         analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
-        apertures::{Aperture, CircleConfig},
+        apertures::{Aperture, CircleShape},
         joule,
         light_result::LightResult,
         lightdata::LightData,
@@ -73,7 +73,7 @@ pub mod test_helper {
         testing_logger::setup();
         let mut node = T::default();
         node.set_isometry(Isometry::identity()).unwrap();
-        let config = CircleConfig::new(millimeter!(1.0), millimeter!(0.0, 0.0)).unwrap();
+        let config = CircleShape::new(millimeter!(1.0), millimeter!(0.0, 0.0)).unwrap();
         node.set_aperture(
             &PortType::Input,
             "input_1",
