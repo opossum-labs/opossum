@@ -67,3 +67,25 @@ impl Apodize for GaussianConfig {
         transmission
     }
 }
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::meter;
+    #[test]
+    fn new() {
+        let p = meter!(0.0, 0.0);
+        assert!(GaussianConfig::new((meter!(1.0), meter!(1.0)), p).is_ok());
+        assert!(GaussianConfig::new((meter!(0.0), meter!(1.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(-1.0), meter!(1.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(1.0), meter!(0.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(1.0), meter!(-1.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(f64::NAN), meter!(1.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(f64::INFINITY), meter!(1.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(1.0), meter!(f64::NAN)), p).is_err());
+        assert!(GaussianConfig::new((meter!(1.0), meter!(f64::INFINITY)), p).is_err());
+        let p = meter!(f64::NAN, 0.0);
+        assert!(GaussianConfig::new((meter!(1.0), meter!(1.0)), p).is_err());
+        let p = meter!(f64::INFINITY, 0.0);
+        assert!(GaussianConfig::new((meter!(1.0), meter!(1.0)), p).is_err());
+    }
+}

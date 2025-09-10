@@ -96,3 +96,15 @@ impl Apodize for PolygonConfig {
         transmission
     }
 }
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::meter;
+    #[test]
+    fn new() {
+        let ok_points = vec![meter!(0.0, 0.0), meter!(2.0, 0.0), meter!(1.0, 1.0)];
+        assert!(PolygonConfig::new(ok_points).is_ok());
+        let too_little_points = vec![meter!(0.0, 0.0), meter!(2.0, 0.0)];
+        assert!(PolygonConfig::new(too_little_points).is_err());
+    }
+}

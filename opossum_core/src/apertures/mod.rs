@@ -235,74 +235,10 @@ impl Plottable for Aperture {
 mod test {
     use super::*;
     use crate::meter;
-    use approx::assert_relative_eq;
-    use uom::si::length::meter;
-    use uom::si::ratio::ratio;
 
-    #[test]
-    fn ratio_test() {
-        let x = meter!(1.);
-        let xs = meter!(2.);
-
-        assert_relative_eq!(
-            x.get::<meter>() / xs.get::<meter>(),
-            (x / xs).get::<ratio>()
-        );
-    }
     #[test]
     fn default() {
         assert!(matches!(Aperture::default(), Aperture::None));
-    }
-    #[test]
-    fn circle_config() {
-        let center = meter!(0.0, 0.0);
-        assert!(CircleConfig::new(meter!(1.0), center).is_ok());
-        assert!(CircleConfig::new(meter!(0.0), center).is_err());
-        assert!(CircleConfig::new(meter!(-1.0), center).is_err());
-        assert!(CircleConfig::new(meter!(f64::NAN), center).is_err());
-        assert!(CircleConfig::new(meter!(f64::INFINITY), center).is_err());
-    }
-    #[test]
-    fn rectangle_config() {
-        let p = meter!(0.0, 0.0);
-        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_ok());
-        assert!(RectangleConfig::new(meter!(0.0), meter!(1.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(-1.0), meter!(1.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(f64::NAN), meter!(1.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(f64::INFINITY), meter!(1.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(1.0), meter!(0.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(1.0), meter!(-1.0), p).is_err());
-        assert!(RectangleConfig::new(meter!(1.0), meter!(f64::NAN), p).is_err());
-        assert!(RectangleConfig::new(meter!(1.0), meter!(f64::INFINITY), p).is_err());
-        let p = meter!(f64::NAN, 0.0);
-        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_err());
-        let p = meter!(f64::INFINITY, 0.0);
-        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_err());
-    }
-    #[test]
-    fn polygon_config() {
-        let ok_points = vec![meter!(0.0, 0.0), meter!(2.0, 0.0), meter!(1.0, 1.0)];
-        assert!(PolygonConfig::new(ok_points).is_ok());
-        let too_little_points = vec![meter!(0.0, 0.0), meter!(2.0, 0.0)];
-        assert!(PolygonConfig::new(too_little_points).is_err());
-    }
-    #[test]
-    fn gaussian_config() {
-        let p = meter!(0.0, 0.0);
-        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_ok());
-        assert!(GaussianConfig::new((meter!(1.0), meter!(1.0)), p).is_ok());
-        assert!(GaussianConfig::new((meter!(0.0), meter!(1.0)), p).is_err());
-        assert!(GaussianConfig::new((meter!(-1.0), meter!(1.0)), p).is_err());
-        assert!(GaussianConfig::new((meter!(1.0), meter!(0.0)), p).is_err());
-        assert!(GaussianConfig::new((meter!(1.0), meter!(-1.0)), p).is_err());
-        assert!(GaussianConfig::new((meter!(f64::NAN), meter!(1.0)), p).is_err());
-        assert!(GaussianConfig::new((meter!(f64::INFINITY), meter!(1.0)), p).is_err());
-        assert!(GaussianConfig::new((meter!(1.0), meter!(f64::NAN)), p).is_err());
-        assert!(GaussianConfig::new((meter!(1.0), meter!(f64::INFINITY)), p).is_err());
-        let p = meter!(f64::NAN, 0.0);
-        assert!(GaussianConfig::new((meter!(1.0), meter!(1.0)), p).is_err());
-        let p = meter!(f64::INFINITY, 0.0);
-        assert!(GaussianConfig::new((meter!(1.0), meter!(1.0)), p).is_err());
     }
     #[test]
     fn binary_circle() {

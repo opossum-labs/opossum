@@ -70,3 +70,18 @@ impl Apodize for CircleConfig {
         transmission
     }
 }
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::meter;
+
+    #[test]
+    fn new() {
+        let center = meter!(0.0, 0.0);
+        assert!(CircleConfig::new(meter!(1.0), center).is_ok());
+        assert!(CircleConfig::new(meter!(0.0), center).is_err());
+        assert!(CircleConfig::new(meter!(-1.0), center).is_err());
+        assert!(CircleConfig::new(meter!(f64::NAN), center).is_err());
+        assert!(CircleConfig::new(meter!(f64::INFINITY), center).is_err());
+    }
+}
