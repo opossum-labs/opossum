@@ -10,7 +10,7 @@
 //! [`apodization_factor`](Aperture::apodization_factor()) is used.
 //! ```rust
 //! use nalgebra::Point2;
-//! use opossum_core::{millimeter, aperture::{Aperture, ApertureType, CircleConfig}};
+//! use opossum_core::{millimeter, apertures::{Aperture, ApertureType, CircleConfig}};
 //! use uom::si::{f64::Length, length::millimeter};
 //!
 //! let c = CircleConfig::new(millimeter!(1.0), millimeter!(1.0, 1.0)).unwrap();
@@ -22,7 +22,7 @@
 //! all configurations are created as "holes".
 //! ```rust
 //! use nalgebra::Point2;
-//! use opossum_core::{millimeter, aperture::{Aperture, ApertureType, CircleConfig, Apodize}};
+//! use opossum_core::{millimeter, apertures::{Aperture, ApertureType, CircleConfig, Apodize}};
 //! use uom::si::{f64::Length, length::millimeter};
 //!
 //! let mut c = CircleConfig::new(millimeter!(1.0), millimeter!(1.0, 1.0)).unwrap();
@@ -31,23 +31,29 @@
 //! assert_eq!(ap.apodization_factor(&millimeter!(1.0, 1.0)), 0.0);
 //! assert_eq!(ap.apodization_factor(&millimeter!(0.0, 0.0)), 1.0);
 //! ```
+mod circle;
+mod gaussian;
+mod polygon;
+mod rectangle;
+mod stack;
 
 use crate::{
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
     utils::math_distribution_functions::ellipse,
 };
 use core::f64;
-use earcutr::earcut;
-use nalgebra::{Isometry2, Matrix2xX, MatrixXx2, Point2, Vector2};
+use nalgebra::{Matrix2xX, MatrixXx2, Point2};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use uom::si::{
-    f64::Length,
-    length::{meter, millimeter},
-    ratio::ratio,
-};
+use uom::si::{f64::Length, length::millimeter};
+
+pub use circle::CircleConfig;
+pub use gaussian::GaussianConfig;
+pub use polygon::PolygonConfig;
+pub use rectangle::RectangleConfig;
+pub use stack::StackConfig;
 
 /// The apodization type of an [`Aperture`].
 ///
@@ -100,7 +106,6 @@ impl Aperture {
         }
     }
 }
-
 impl From<Aperture> for Proptype {
     fn from(value: Aperture) -> Self {
         Self::Aperture(value)
@@ -118,331 +123,6 @@ pub trait Apodize {
     /// or outside the aperture. For [`Aperture::Gaussian`] the function returns a continous transmission value.
     fn apodize(&self, point: &Point2<Length>) -> f64;
 }
-/// Configuration data for a circular aperture.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CircleConfig {
-    radius: Length,
-    center: Point2<Length>,
-    aperture_type: ApertureType,
-}
-impl CircleConfig {
-    /// Create a new [`CircleConfig`] from a given radius and a center point.
-    ///
-    /// By default the aperture has the aperture type [`ApertureType::Hole`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the given radius of negative, NaN or Infinity.
-    pub fn new(radius: Length, center: Point2<Length>) -> OpmResult<Self> {
-        if radius.is_normal() && radius.is_sign_positive() {
-            Ok(Self {
-                radius,
-                center,
-                aperture_type: ApertureType::default(),
-            })
-        } else {
-            Err(OpossumError::Other("radius must be positive".into()))
-        }
-    }
-
-    ///return the radius of this [`CircleConfig`]
-    #[must_use]
-    pub fn radius(&self) -> &Length {
-        &self.radius
-    }
-}
-impl Apodize for CircleConfig {
-    fn set_aperture_type(&mut self, aperture_type: ApertureType) {
-        self.aperture_type = aperture_type;
-    }
-    fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let translation = Isometry2::translation(
-            self.center.coords[0].get::<meter>(),
-            self.center.coords[1].get::<meter>(),
-        );
-
-        let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
-        let point_transformed = translation.inverse_transform_point(&point_meter);
-        let mut transmission = if point_transformed
-            .y
-            .mul_add(point_transformed.y, point_transformed.x.powi(2))
-            <= self.radius.get::<meter>().powi(2)
-        {
-            1.0
-        } else {
-            0.0
-        };
-
-        if matches!(self.aperture_type, ApertureType::Obstruction) {
-            transmission = 1.0 - transmission;
-        }
-        transmission
-    }
-}
-/// Configuration data for a rectangular aperture.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct RectangleConfig {
-    width: Length,
-    height: Length,
-    center: Point2<Length>,
-    aperture_type: ApertureType,
-}
-impl RectangleConfig {
-    /// Create a new rectangular aperture configuration by given width, height and the center point.
-    ///
-    /// By default the aperture has the aperture type [`ApertureType::Hole`].
-    /// # Errors
-    ///
-    /// This function will return an error if width and/or height are negative, NaN or Infinity.
-    pub fn new(width: Length, height: Length, center: Point2<Length>) -> OpmResult<Self> {
-        if width.is_normal()
-            && width.is_sign_positive()
-            && height.is_normal()
-            && height.is_sign_positive()
-            && center.coords[0].is_finite()
-            && center.coords[1].is_finite()
-        {
-            Ok(Self {
-                width,
-                height,
-                center,
-                aperture_type: ApertureType::default(),
-            })
-        } else {
-            Err(OpossumError::Other(
-                "height & width must be positive".into(),
-            ))
-        }
-    }
-}
-impl Apodize for RectangleConfig {
-    fn set_aperture_type(&mut self, aperture_type: ApertureType) {
-        self.aperture_type = aperture_type;
-    }
-    fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let translation = Isometry2::translation(
-            self.center.coords[0].get::<meter>(),
-            self.center.coords[1].get::<meter>(),
-        );
-        let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
-        let point_transformed = translation.inverse_transform_point(&point_meter);
-
-        let q = Vector2::new(
-            point_transformed.x.abs() - self.width.get::<meter>() / 2.,
-            point_transformed.y.abs() - self.height.get::<meter>() / 2.,
-        );
-        let mut q_max = q;
-        q_max.iter_mut().for_each(|x: &mut f64| *x = x.max(0.0));
-        let sdf_val = q_max.x.mul_add(q_max.x, q_max.y.powi(2)).sqrt() + q.x.max(q.y).min(0.0);
-
-        let mut transmission = if sdf_val <= 0. { 1.0 } else { 0.0 };
-        if matches!(self.aperture_type, ApertureType::Obstruction) {
-            transmission = 1.0 - transmission;
-        }
-        transmission
-    }
-}
-/// Configuration of a polygonal aperture defined by a given set of points.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct PolygonConfig {
-    points: Vec<Point2<Length>>,
-    aperture_type: ApertureType,
-    triangle_indices: Vec<Vec<usize>>,
-}
-impl PolygonConfig {
-    /// Create a new polygonal aperture configuration by a set of given 2D points.
-    ///
-    /// The order of the points must follow the outline of the polygon. Otherwise intersections may occur.
-    /// By default the aperture has the aperture type [`ApertureType::Hole`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the number of points is less than three, so that no polygon can be created.
-    pub fn new(points: Vec<Point2<Length>>) -> OpmResult<Self> {
-        if points.len() < 3 {
-            return Err(OpossumError::Other("less than 3 points given".into()));
-        }
-        Ok(Self {
-            triangle_indices: Self::triangulate(&points)?,
-            points,
-            aperture_type: ApertureType::default(),
-        })
-    }
-
-    fn triangulate(points: &[Point2<Length>]) -> OpmResult<Vec<Vec<usize>>> {
-        let polygon_vertices_flat = points
-            .iter()
-            .flat_map(|p| vec![p.x.get::<meter>(), p.y.get::<meter>()])
-            .collect::<Vec<f64>>();
-
-        let triangulated_indices = earcut(polygon_vertices_flat.as_slice(), &[], 2)
-            .map_err(|e| OpossumError::Other(format!("Triangulation of polygon failed:{e}")))?;
-        let mut chunked_indices = Vec::<Vec<usize>>::with_capacity(triangulated_indices.len() / 3);
-        for chunk in triangulated_indices.chunks(3) {
-            chunked_indices.push(Vec::<usize>::from(chunk));
-        }
-        Ok(chunked_indices)
-    }
-
-    /// checks, if a point lies within this [`PolygonConfig`]
-    /// # Panics
-    /// This function panics if the triangulation fails
-    #[must_use]
-    pub fn in_polygon(&self, point: &Point2<Length>) -> bool {
-        let mut in_polygon = false;
-        for tri in &self.triangle_indices {
-            let p1 = self.points[tri[0]];
-            let p2 = self.points[tri[1]];
-            let p3 = self.points[tri[2]];
-
-            let denominator =
-                (p2[1] - p3[1]).mul_add(p1[0] - p3[0], (p3[0] - p2[0]) * (p1[1] - p3[1]));
-            let a = (((p2[1] - p3[1])
-                .mul_add(point.x - p3[0], (p3[0] - p2[0]) * (point.y - p3[1])))
-                / denominator)
-                .value;
-            let b = (((p3[1] - p1[1])
-                .mul_add(point.x - p3[0], (p1[0] - p3[0]) * (point.y - p3[1])))
-                / denominator)
-                .value;
-            let c = 1. - a - b;
-
-            if (0. ..=1.).contains(&a) && (0. ..=1.).contains(&b) && (0. ..=1.).contains(&c) {
-                in_polygon = true;
-                break;
-            }
-        }
-        in_polygon
-    }
-}
-impl Apodize for PolygonConfig {
-    fn set_aperture_type(&mut self, aperture_type: ApertureType) {
-        self.aperture_type = aperture_type;
-    }
-    fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let mut transmission = if self.in_polygon(point) { 1.0 } else { 0.0 };
-        if matches!(self.aperture_type, ApertureType::Obstruction) {
-            transmission = 1.0 - transmission;
-        }
-        transmission
-    }
-}
-
-/// Configuration data for a Gaussian aperture.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GaussianConfig {
-    sigma: (Length, Length),
-    center: Point2<Length>,
-    aperture_type: ApertureType,
-}
-impl GaussianConfig {
-    /// Create a Gaussian aperture configurartion given by `(sigma_x, sigma_y)` as well as the center point.
-    ///
-    /// By default the aperture has the aperture type [`ApertureType::Hole`].
-    /// # Errors
-    ///
-    /// This function will return an error if the given waists are negative and / or the center point is indefinite.
-    pub fn new(sigma: (Length, Length), center: Point2<Length>) -> OpmResult<Self> {
-        if sigma.0.is_normal()
-            && sigma.0.is_sign_positive()
-            && sigma.1.is_normal()
-            && sigma.1.is_sign_positive()
-            && center.coords[0].is_finite()
-            && center.coords[1].is_finite()
-        {
-            Ok(Self {
-                sigma,
-                center,
-                aperture_type: ApertureType::default(),
-            })
-        } else {
-            Err(OpossumError::Other("parameters out of range".into()))
-        }
-    }
-}
-impl Apodize for GaussianConfig {
-    fn set_aperture_type(&mut self, aperture_type: ApertureType) {
-        self.aperture_type = aperture_type;
-    }
-    fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let x_c = self.center.coords[0];
-        let y_c = self.center.coords[1];
-        let x = point.coords[0];
-        let y = point.coords[1];
-        let mut transmission = (-0.5
-            * (((x - x_c) / self.sigma.0).get::<ratio>().mul_add(
-                ((x - x_c) / self.sigma.0).get::<ratio>(),
-                ((y - y_c) / self.sigma.1).get::<ratio>().powi(2),
-            )))
-        .exp();
-        if matches!(self.aperture_type, ApertureType::Obstruction) {
-            transmission = 1.0 - transmission;
-        }
-        transmission
-    }
-}
-/// Configuration of an aperture stack
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct StackConfig {
-    apertures: Vec<Aperture>,
-    aperture_type: ApertureType,
-}
-impl StackConfig {
-    /// Creates a new [`StackConfig`] by a given set of apertures.
-    ///
-    /// All aperture transmissions are multiplied, thus realizing a "subtrative" aperture. After that the transmission can be "inverted"
-    /// (`transmission = 1.0 - transmission`) by setting the aperture type to [`ApertureType::Obstruction`].
-    #[must_use]
-    pub fn new(apertures: Vec<Aperture>) -> Self {
-        Self {
-            apertures,
-            aperture_type: ApertureType::default(),
-        }
-    }
-}
-impl Apodize for StackConfig {
-    fn set_aperture_type(&mut self, aperture_type: ApertureType) {
-        self.aperture_type = aperture_type;
-    }
-    fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let mut transmission = 1.0;
-        for a in &self.apertures {
-            transmission *= a.apodization_factor(point);
-        }
-        if matches!(self.aperture_type, ApertureType::Obstruction) {
-            transmission = 1.0 - transmission;
-        }
-        transmission
-    }
-}
-fn plot_circle(conf: &CircleConfig) -> Vec<PlotSeries> {
-    let circle_points = ellipse(
-        (
-            conf.center.x.get::<millimeter>(),
-            conf.center.y.get::<millimeter>(),
-        ),
-        (
-            conf.radius.get::<millimeter>(),
-            conf.radius.get::<millimeter>(),
-        ),
-        100,
-    )
-    .unwrap();
-    let plt_dat = PlotData::Dim2 {
-        xy_data: Matrix2xX::from_vec(
-            circle_points
-                .iter()
-                .flat_map(|p| vec![p.x, p.y])
-                .collect::<Vec<f64>>(),
-        )
-        .transpose(),
-    };
-    vec![PlotSeries::new(
-        &plt_dat,
-        RGBAColor(0, 0, 0, 1.),
-        Some("Aperture".to_owned()),
-    )]
-}
 impl Plottable for Aperture {
     fn get_plot_series(
         &self,
@@ -452,12 +132,12 @@ impl Plottable for Aperture {
         let plt_series_opt = match plt_type {
             PlotType::Line2D(_) | PlotType::Scatter2D(_) => match self {
                 Self::None => None,
-                Self::BinaryCircle(conf) => Some(plot_circle(conf)),
+                Self::BinaryCircle(conf) => Some(stack::plot_circle(conf)),
                 Self::BinaryRectangle(conf) => {
-                    let center_x = conf.center.x.get::<millimeter>();
-                    let center_y = conf.center.y.get::<millimeter>();
-                    let half_width = conf.width.get::<millimeter>() / 2.;
-                    let half_height = conf.height.get::<millimeter>() / 2.;
+                    let center_x = conf.center().x.get::<millimeter>();
+                    let center_y = conf.center().y.get::<millimeter>();
+                    let half_width = conf.width().get::<millimeter>() / 2.;
+                    let half_height = conf.height().get::<millimeter>() / 2.;
                     let plt_dat = PlotData::Dim2 {
                         xy_data: Matrix2xX::<f64>::from_vec(vec![
                             center_x - half_width,
@@ -483,10 +163,9 @@ impl Plottable for Aperture {
                         series_label,
                     )])
                 }
-
                 Self::BinaryPolygon(conf) => {
-                    let mut xy_data = MatrixXx2::from_element(conf.points.len(), 0.);
-                    for (row, p) in conf.points.iter().enumerate() {
+                    let mut xy_data = MatrixXx2::from_element(conf.points().len(), 0.);
+                    for (row, p) in conf.points().iter().enumerate() {
                         xy_data[(row, 0)] = p.x.get::<millimeter>();
                         xy_data[(row, 1)] = p.y.get::<millimeter>();
                     }
@@ -499,12 +178,12 @@ impl Plottable for Aperture {
                 Self::Gaussian(conf) => {
                     let circle_points = ellipse(
                         (
-                            conf.center.x.get::<millimeter>(),
-                            conf.center.y.get::<millimeter>(),
+                            conf.center().x.get::<millimeter>(),
+                            conf.center().y.get::<millimeter>(),
                         ),
                         (
-                            conf.sigma.0.get::<millimeter>() * 2.,
-                            conf.sigma.1.get::<millimeter>() * 2.,
+                            conf.sigma().0.get::<millimeter>() * 2.,
+                            conf.sigma().1.get::<millimeter>() * 2.,
                         ),
                         100,
                     )?;
@@ -523,8 +202,8 @@ impl Plottable for Aperture {
                 }
                 Self::Stack(conf) => {
                     let mut aperture_series_vec =
-                        Vec::<PlotSeries>::with_capacity(conf.apertures.len());
-                    for aperture in &conf.apertures {
+                        Vec::<PlotSeries>::with_capacity(conf.apertures().len());
+                    for aperture in conf.apertures() {
                         if let Some(plt_series_vec) = aperture.get_plot_series(plt_type, legend)? {
                             aperture_series_vec.extend(plt_series_vec);
                         }
@@ -557,6 +236,8 @@ mod test {
     use super::*;
     use crate::meter;
     use approx::assert_relative_eq;
+    use uom::si::length::meter;
+    use uom::si::ratio::ratio;
 
     #[test]
     fn ratio_test() {

@@ -8,7 +8,7 @@
 //! ```rust
 //! use opossum_core::optic_ports::{OpticPorts, PortType};
 //! use nalgebra::Point2;
-//! use opossum_core::{millimeter, aperture::{CircleConfig, Aperture}};
+//! use opossum_core::{millimeter, apertures::{CircleConfig, Aperture}};
 //! use uom::si::{f64::Length, length::millimeter};
 //!
 //! let mut ports = OpticPorts::new();
