@@ -17,7 +17,7 @@
 //! ports.set_aperture(&PortType::Input, "my input", &Aperture::BinaryCircle(circle_config)).unwrap();
 //! ```
 use crate::{
-    aperture::Aperture,
+    apertures::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
     surface::optic_surface::OpticSurface,

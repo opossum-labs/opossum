@@ -4,7 +4,7 @@ use std::cell::RefCell;
 
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
-    aperture::Aperture,
+    apertures::Aperture,
     error::{OpmResult, OpossumError},
     lightdata::{
         LightData,

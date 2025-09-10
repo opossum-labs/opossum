@@ -1,7 +1,7 @@
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
-    aperture::{Aperture, CircleConfig},
+    apertures::{Aperture, CircleConfig},
     degree,
     error::OpmResult,
     joule,

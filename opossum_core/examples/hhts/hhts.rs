@@ -11,7 +11,7 @@ use num::Zero;
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
-    aperture::{Aperture, CircleConfig},
+    apertures::{Aperture, CircleConfig},
     energy_distributions::General2DGaussian,
     error::OpmResult,
     joule,

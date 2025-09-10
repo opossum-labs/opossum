@@ -3,7 +3,7 @@
 use crate::{
     J_per_cm2,
     analyzers::raytrace::MissedSurfaceStrategy,
-    aperture::Aperture,
+    apertures::Aperture,
     centimeter, degree,
     energy_distributions::EnergyDistribution,
     error::{OpmResult, OpossumError},
@@ -1618,7 +1618,7 @@ mod test {
 
     use super::*;
     use crate::{
-        aperture::CircleConfig,
+        apertures::CircleConfig,
         centimeter,
         coatings::CoatingType,
         energy_distributions::General2DGaussian,

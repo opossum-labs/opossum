@@ -1,5 +1,5 @@
 use opossum_core::{
-    aperture::RectangleConfig,
+    apertures::RectangleConfig,
     error::OpmResult,
     millimeter,
     nodes::{

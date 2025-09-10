@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    aperture::Aperture,
+    apertures::Aperture,
     coatings::CoatingType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},

@@ -1,7 +1,7 @@
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
-    aperture::{Aperture, CircleConfig},
+    apertures::{Aperture, CircleConfig},
     error::OpmResult,
     joule, millimeter, nanometer,
     nodes::{Lens, NodeGroup, RayPropagationVisualizer, collimated_line_ray_source},

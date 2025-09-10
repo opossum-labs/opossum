@@ -14,7 +14,7 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
 #![allow(clippy::module_name_repetitions)]
 
 pub mod analyzers;
-pub mod aperture;
+pub mod apertures;
 pub mod coatings;
 mod dottable;
 pub mod energy_distributions;

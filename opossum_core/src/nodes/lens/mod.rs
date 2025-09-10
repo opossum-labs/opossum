@@ -323,7 +323,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
-        aperture::Aperture,
+        apertures::Aperture,
         joule,
         light_result::LightResult,
         lightdata::LightData,

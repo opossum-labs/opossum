@@ -2,7 +2,7 @@ use num::Zero;
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
-    aperture::{Aperture, CircleConfig},
+    apertures::{Aperture, CircleConfig},
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,

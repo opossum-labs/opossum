@@ -3,7 +3,7 @@ use std::path::Path;
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
-    aperture::{Aperture, RectangleConfig},
+    apertures::{Aperture, RectangleConfig},
     error::OpmResult,
     joule, millimeter,
     nodes::{Dummy, NodeGroup, SpotDiagram, round_collimated_ray_source},

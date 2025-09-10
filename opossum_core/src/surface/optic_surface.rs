@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     J_per_cm2,
-    aperture::Aperture,
+    apertures::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
     nodes::fluence_detector::Fluence,
@@ -270,7 +270,7 @@ mod test {
     use super::OpticSurface;
     use crate::{
         J_per_cm2,
-        aperture::{Aperture, CircleConfig},
+        apertures::{Aperture, CircleConfig},
         coatings::CoatingType,
         joule, meter, nanometer,
         ray::Ray,
