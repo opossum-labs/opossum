@@ -74,17 +74,17 @@ pub enum Aperture {
     #[default]
     None,
     /// binary (either transparent or opaque) circular aperture defined by a radius and center point
-    BinaryCircle(CircleShape),
+    BinaryCircle(CircleShape, ApertureType),
     /// binary (either transparent or opaque) rectangular aperture defined by width and height as well as its center point
-    BinaryRectangle(RectangleShape),
+    BinaryRectangle(RectangleShape, ApertureType),
     /// binary (either transparent or opaque) polygonial aperture defined by a set of 2D points. This polygon can also be
     /// non-convex but should not intersect.
-    BinaryPolygon(PolygonConfig),
+    BinaryPolygon(PolygonConfig, ApertureType),
     /// variable transmission aperture using a 2D Gaussian function.
-    Gaussian(GaussianShape),
+    Gaussian(GaussianShape, ApertureType),
     /// a stack of an arbitrary number of the above apertures. The transmission factor at a given point is the
     /// product of all indiviual aperture on the stack (subtractive apodization).
-    Stack(StackConfig),
+    Stack(StackConfig, ApertureType),
 }
 impl Aperture {
     #[must_use]
@@ -98,11 +98,11 @@ impl Aperture {
     pub fn apodization_factor(&self, point: &Point2<Length>) -> f64 {
         match self {
             Self::None => 1.0,
-            Self::BinaryCircle(circle) => circle.apodize(point),
-            Self::BinaryRectangle(rectangle) => rectangle.apodize(point),
-            Self::BinaryPolygon(p) => p.apodize(point),
-            Self::Gaussian(g) => g.apodize(point),
-            Self::Stack(s) => s.apodize(point),
+            Self::BinaryCircle(circle, _) => circle.apodize(point),
+            Self::BinaryRectangle(rectangle, _) => rectangle.apodize(point),
+            Self::BinaryPolygon(p, _) => p.apodize(point),
+            Self::Gaussian(g, _) => g.apodize(point),
+            Self::Stack(s, _) => s.apodize(point),
         }
     }
 }
@@ -138,8 +138,8 @@ impl Plottable for Aperture {
         let plt_series_opt = match plt_type {
             PlotType::Line2D(_) | PlotType::Scatter2D(_) => match self {
                 Self::None => None,
-                Self::BinaryCircle(conf) => Some(stack::plot_circle(conf)),
-                Self::BinaryRectangle(conf) => {
+                Self::BinaryCircle(conf,_) => Some(stack::plot_circle(conf)),
+                Self::BinaryRectangle(conf,_ ) => {
                     let center_x = conf.center().x.get::<millimeter>();
                     let center_y = conf.center().y.get::<millimeter>();
                     let half_width = conf.width().get::<millimeter>() / 2.;
@@ -169,7 +169,7 @@ impl Plottable for Aperture {
                         series_label,
                     )])
                 }
-                Self::BinaryPolygon(conf) => {
+                Self::BinaryPolygon(conf,_) => {
                     let mut xy_data = MatrixXx2::from_element(conf.points().len(), 0.);
                     for (row, p) in conf.points().iter().enumerate() {
                         xy_data[(row, 0)] = p.x.get::<millimeter>();
@@ -181,7 +181,7 @@ impl Plottable for Aperture {
                         Some("Aperture".to_owned()),
                     )])
                 }
-                Self::Gaussian(conf) => {
+                Self::Gaussian(conf,_) => {
                     let circle_points = ellipse(
                         (
                             conf.center().x.get::<millimeter>(),
@@ -206,7 +206,7 @@ impl Plottable for Aperture {
                         Some("Gaussian Aperture 2-sigma".to_owned()),
                     )])
                 }
-                Self::Stack(conf) => {
+                Self::Stack(conf,_) => {
                     let mut aperture_series_vec =
                         Vec::<PlotSeries>::with_capacity(conf.apertures().len());
                     for aperture in conf.apertures() {
@@ -249,7 +249,7 @@ mod test {
     #[test]
     fn binary_circle() {
         let c = CircleShape::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
-        let ap = Aperture::BinaryCircle(c);
+        let ap = Aperture::BinaryCircle(c, ApertureType::Hole);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 0.0)), 1.0);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 2.0)), 1.0);
@@ -259,14 +259,14 @@ mod test {
         assert_eq!(ap.apodization_factor(&meter!(2.0, 2.0)), 0.0);
         let mut c = CircleShape::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
         c.set_aperture_type(ApertureType::Obstruction);
-        let ap = Aperture::BinaryCircle(c);
+        let ap = Aperture::BinaryCircle(c, ApertureType::Obstruction);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
         assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 1.0);
     }
     #[test]
     fn binary_rectangle() {
         let r = RectangleShape::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
-        let ap = Aperture::BinaryRectangle(r);
+        let ap = Aperture::BinaryRectangle(r, ApertureType::Hole);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
         assert_eq!(ap.apodization_factor(&meter!(1.5, 1.0)), 1.0);
         assert_eq!(ap.apodization_factor(&meter!(1.5, 2.0)), 1.0);
@@ -276,7 +276,7 @@ mod test {
         assert_eq!(ap.apodization_factor(&meter!(1.0, 2.1)), 0.0);
         let mut r = RectangleShape::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
         r.set_aperture_type(ApertureType::Obstruction);
-        let ap = Aperture::BinaryRectangle(r);
+        let ap = Aperture::BinaryRectangle(r, ApertureType::Obstruction);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
         assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 1.0);
     }
@@ -289,7 +289,7 @@ mod test {
             meter!(1.0, 1.0),
         ])
         .unwrap();
-        let ap = Aperture::BinaryPolygon(poly);
+        let ap = Aperture::BinaryPolygon(poly, ApertureType::Hole);
         assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 1.0);
         assert_eq!(ap.apodization_factor(&meter!(2.0, 0.0)), 1.0);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
@@ -299,14 +299,14 @@ mod test {
         let mut poly =
             PolygonConfig::new(vec![meter!(0.0, 0.0), meter!(2.0, 0.0), meter!(1.0, 1.0)]).unwrap();
         poly.set_aperture_type(ApertureType::Obstruction);
-        let ap = Aperture::BinaryPolygon(poly);
+        let ap = Aperture::BinaryPolygon(poly, ApertureType::Obstruction);
         assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 0.0);
         assert_eq!(ap.apodization_factor(&meter!(2.0, 1.0)), 1.0);
     }
     #[test]
     fn gaussian() {
         let g = GaussianShape::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
-        let ap = Aperture::Gaussian(g);
+        let ap = Aperture::Gaussian(g, ApertureType::Hole);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
         assert_eq!(
             ap.apodization_factor(&meter!(0.0, 0.0)),
@@ -314,7 +314,7 @@ mod test {
         );
         let mut g = GaussianShape::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
         g.set_aperture_type(ApertureType::Obstruction);
-        let ap = Aperture::Gaussian(g);
+        let ap = Aperture::Gaussian(g, ApertureType::Obstruction);
         assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
         assert_eq!(
             ap.apodization_factor(&meter!(0.0, 0.0)),
@@ -324,11 +324,11 @@ mod test {
     #[test]
     fn stack() {
         let r = RectangleShape::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5)).unwrap();
-        let r_ap = Aperture::BinaryRectangle(r);
+        let r_ap = Aperture::BinaryRectangle(r, ApertureType::Hole);
         let c = CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
-        let c_ap = Aperture::BinaryCircle(c);
+        let c_ap = Aperture::BinaryCircle(c, ApertureType::Hole);
         let s = StackConfig::new(vec![r_ap, c_ap]);
-        let s_ap = Aperture::Stack(s);
+        let s_ap = Aperture::Stack(s,ApertureType::Hole);
         assert_eq!(s_ap.apodization_factor(&meter!(0.0, 0.0)), 1.0);
         assert_eq!(s_ap.apodization_factor(&meter!(1.0, 0.0)), 1.0);
         assert_eq!(s_ap.apodization_factor(&meter!(0.0, 1.0)), 1.0);
@@ -336,12 +336,12 @@ mod test {
         assert_eq!(s_ap.apodization_factor(&meter!(-1.0, 0.0)), 0.0);
         assert_eq!(s_ap.apodization_factor(&meter!(0.0, -1.0)), 0.0);
         let r = RectangleShape::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5)).unwrap();
-        let r_ap = Aperture::BinaryRectangle(r);
+        let r_ap = Aperture::BinaryRectangle(r, ApertureType::Hole);
         let c = CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
-        let c_ap = Aperture::BinaryCircle(c);
+        let c_ap = Aperture::BinaryCircle(c, ApertureType::Hole);
         let mut s = StackConfig::new(vec![r_ap, c_ap]);
         s.set_aperture_type(ApertureType::Obstruction);
-        let s_ap = Aperture::Stack(s);
+        let s_ap = Aperture::Stack(s, ApertureType::Obstruction);
         assert_eq!(s_ap.apodization_factor(&meter!(0.0, 0.0)), 0.0);
         assert_eq!(s_ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
     }

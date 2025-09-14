@@ -1618,7 +1618,7 @@ mod test {
 
     use super::*;
     use crate::{
-        apertures::CircleShape,
+        apertures::{ApertureType, CircleShape},
         centimeter,
         coatings::CoatingType,
         energy_distributions::General2DGaussian,
@@ -1626,7 +1626,7 @@ mod test {
         nodes::SplittingConfig,
         position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         radian,
-        refractive_index::{RefrIndexConst, refr_index_vaccuum},
+        refractive_index::{refr_index_vaccuum, RefrIndexConst},
         surface::optic_surface::OpticSurface,
         utils::test_helper::test_helper::check_logs,
     };
@@ -2339,7 +2339,7 @@ mod test {
         rays.add_ray(ray1);
         assert_eq!(rays.total_energy(), joule!(2.0));
         let circle_config = CircleShape::new(millimeter!(0.5), millimeter!(0.0, 0.0)).unwrap();
-        let aperture = Aperture::BinaryCircle(circle_config);
+        let aperture = Aperture::BinaryCircle(circle_config, ApertureType::Hole);
         rays.apodize(&aperture, &Isometry::identity()).unwrap();
         assert_eq!(rays.total_energy(), joule!(1.0));
     }

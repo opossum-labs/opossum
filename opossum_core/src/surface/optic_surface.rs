@@ -270,7 +270,7 @@ mod test {
     use super::OpticSurface;
     use crate::{
         J_per_cm2,
-        apertures::{Aperture, CircleShape},
+        apertures::{Aperture, ApertureType, CircleShape},
         coatings::CoatingType,
         joule, meter, nanometer,
         ray::Ray,
@@ -332,8 +332,10 @@ mod test {
             .is_ok()
         );
 
-        let aperture =
-            Aperture::BinaryCircle(CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap());
+        let aperture = Aperture::BinaryCircle(
+            CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap(),
+            ApertureType::Hole,
+        );
         let os = OpticSurface::new(
             GeoSurfaceRef(Arc::new(Mutex::new(
                 Sphere::new(meter!(1.0), Isometry::identity()).unwrap(),

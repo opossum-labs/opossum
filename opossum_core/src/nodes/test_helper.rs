@@ -1,8 +1,8 @@
 #[cfg(test)]
 pub mod test_helper {
     use crate::{
-        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
-        apertures::{Aperture, CircleShape},
+        analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+        apertures::{Aperture, ApertureType, CircleShape},
         joule,
         light_result::LightResult,
         lightdata::LightData,
@@ -77,7 +77,7 @@ pub mod test_helper {
         node.set_aperture(
             &PortType::Input,
             "input_1",
-            &crate::apertures::Aperture::BinaryCircle(config),
+            &crate::apertures::Aperture::BinaryCircle(config, ApertureType::Hole),
         )
         .unwrap();
         let mut input = LightResult::default();
