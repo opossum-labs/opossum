@@ -1,7 +1,7 @@
 #[cfg(test)]
 pub mod test_helper {
     use crate::{
-        analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
         apertures::{Aperture, ApertureType, CircleShape},
         joule,
         light_result::LightResult,

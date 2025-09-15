@@ -1,19 +1,14 @@
-use crate::{
-    apertures::Shape,
-    error::{OpmResult, OpossumError},
-};
+use super::Shape;
+use crate::error::{OpmResult, OpossumError};
 use earcutr::earcut;
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
 
-use super::{ApertureType, Apodize};
-
 /// Configuration of a polygonal aperture defined by a given set of points.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PolygonConfig {
     points: Vec<Point2<Length>>,
-    aperture_type: ApertureType,
     triangle_indices: Vec<Vec<usize>>,
 }
 impl PolygonConfig {
@@ -32,7 +27,6 @@ impl PolygonConfig {
         Ok(Self {
             triangle_indices: Self::triangulate(&points)?,
             points,
-            aperture_type: ApertureType::default(),
         })
     }
 
@@ -92,18 +86,6 @@ impl Shape for PolygonConfig {
         if self.in_polygon(point) { 1.0 } else { 0.0 }
     }
 }
-impl Apodize for PolygonConfig {
-    fn set_aperture_type(&mut self, aperture_type: ApertureType) {
-        self.aperture_type = aperture_type;
-    }
-    fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let mut transmission = if self.in_polygon(point) { 1.0 } else { 0.0 };
-        if matches!(self.aperture_type, ApertureType::Obstruction) {
-            transmission = 1.0 - transmission;
-        }
-        transmission
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -114,5 +96,21 @@ mod test {
         assert!(PolygonConfig::new(ok_points).is_ok());
         let too_little_points = vec![meter!(0.0, 0.0), meter!(2.0, 0.0)];
         assert!(PolygonConfig::new(too_little_points).is_err());
+    }
+    #[test]
+    fn transmission_factor() {
+        let poly = PolygonConfig::new(vec![
+            meter!(0.0, 0.0),
+            meter!(1.0, 0.5),
+            meter!(2.0, 0.0),
+            meter!(1.0, 1.0),
+        ])
+        .unwrap();
+        assert_eq!(poly.transmission_factor(&meter!(0.0, 0.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(2.0, 0.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(1.0, 1.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(1.0, 0.0)), 0.0);
+        assert_eq!(poly.transmission_factor(&meter!(2.0, 1.0)), 0.0);
+        assert_eq!(poly.transmission_factor(&meter!(0.0, 1.0)), 0.0);
     }
 }

@@ -1,7 +1,7 @@
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
-    apertures::{Aperture, CircleShape},
+    apertures::{Aperture, ApertureType},
     error::OpmResult,
     joule, millimeter,
     nodes::{Lens, NodeGroup, RayPropagationVisualizer, round_collimated_ray_source},
@@ -32,11 +32,8 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),
         &RefrIndexConst::new(2.0).unwrap(),
     )?;
-    lens2.set_aperture(
-        &PortType::Input,
-        "input_1",
-        &Aperture::BinaryCircle(CircleShape::new(millimeter!(3.), millimeter!(0., 0.))?),
-    )?;
+    let aperture = Aperture::new_circle(millimeter!(3.), millimeter!(0., 0.), ApertureType::Hole)?;
+    lens2.set_aperture(&PortType::Input, "input_1", &aperture)?;
     let l2 = scenery.add_node(lens2)?;
     let det = scenery.add_node(RayPropagationVisualizer::default())?;
     scenery.connect_nodes(src, "output_1", l1, "input_1", millimeter!(30.0))?;

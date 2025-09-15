@@ -557,7 +557,7 @@ impl Rays {
         for ray in &mut self.ray_bundle {
             if ray.valid() {
                 let ap_factor =
-                    aperture.apodization_factor(&ray.inverse_transformed_ray(iso).position().xy());
+                    aperture.apodize(&ray.inverse_transformed_ray(iso).position().xy());
                 if ap_factor > 0.0 {
                     ray.filter_energy(&FilterType::Constant(ap_factor))?;
                 } else {
@@ -1626,7 +1626,7 @@ mod test {
         nodes::SplittingConfig,
         position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         radian,
-        refractive_index::{refr_index_vaccuum, RefrIndexConst},
+        refractive_index::{RefrIndexConst, refr_index_vaccuum},
         surface::optic_surface::OpticSurface,
         utils::test_helper::test_helper::check_logs,
     };

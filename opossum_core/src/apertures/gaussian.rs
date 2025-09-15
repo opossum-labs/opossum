@@ -1,8 +1,5 @@
-use super::{ApertureType, Apodize};
-use crate::{
-    apertures::Shape,
-    error::{OpmResult, OpossumError},
-};
+use super::Shape;
+use crate::error::{OpmResult, OpossumError};
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, ratio::ratio};
@@ -12,7 +9,6 @@ use uom::si::{f64::Length, ratio::ratio};
 pub struct GaussianShape {
     sigma: (Length, Length),
     center: Point2<Length>,
-    aperture_type: ApertureType,
 }
 impl GaussianShape {
     /// Create a Gaussian aperture configurartion given by `(sigma_x, sigma_y)` as well as the center point.
@@ -29,11 +25,7 @@ impl GaussianShape {
             && center.coords[0].is_finite()
             && center.coords[1].is_finite()
         {
-            Ok(Self {
-                sigma,
-                center,
-                aperture_type: ApertureType::default(),
-            })
+            Ok(Self { sigma, center })
         } else {
             Err(OpossumError::Other("parameters out of range".into()))
         }
@@ -63,27 +55,6 @@ impl Shape for GaussianShape {
         .exp()
     }
 }
-impl Apodize for GaussianShape {
-    fn set_aperture_type(&mut self, aperture_type: ApertureType) {
-        self.aperture_type = aperture_type;
-    }
-    fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let x_c = self.center.coords[0];
-        let y_c = self.center.coords[1];
-        let x = point.coords[0];
-        let y = point.coords[1];
-        let mut transmission = (-0.5
-            * (((x - x_c) / self.sigma.0).get::<ratio>().mul_add(
-                ((x - x_c) / self.sigma.0).get::<ratio>(),
-                ((y - y_c) / self.sigma.1).get::<ratio>().powi(2),
-            )))
-        .exp();
-        if matches!(self.aperture_type, ApertureType::Obstruction) {
-            transmission = 1.0 - transmission;
-        }
-        transmission
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -104,5 +75,14 @@ mod test {
         assert!(GaussianShape::new((meter!(1.0), meter!(1.0)), p).is_err());
         let p = meter!(f64::INFINITY, 0.0);
         assert!(GaussianShape::new((meter!(1.0), meter!(1.0)), p).is_err());
+    }
+    #[test]
+    fn transmission_factor() {
+        let g = GaussianShape::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
+        assert_eq!(g.transmission_factor(&meter!(1.0, 1.0)), 1.0);
+        assert_eq!(
+            g.transmission_factor(&meter!(0.0, 0.0)),
+            1.0 / 1.0_f64.exp()
+        );
     }
 }

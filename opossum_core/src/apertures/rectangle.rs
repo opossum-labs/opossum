@@ -2,7 +2,7 @@ use nalgebra::{Isometry2, Point2, Vector2};
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
 
-use super::{ApertureType, Shape, Apodize};
+use super::Shape;
 use crate::error::{OpmResult, OpossumError};
 
 /// Configuration data for a rectangular aperture.
@@ -11,7 +11,6 @@ pub struct RectangleShape {
     width: Length,
     height: Length,
     center: Point2<Length>,
-    aperture_type: ApertureType,
 }
 impl RectangleShape {
     /// Create a new rectangular aperture configuration by given width, height and the center point.
@@ -32,7 +31,6 @@ impl RectangleShape {
                 width,
                 height,
                 center,
-                aperture_type: ApertureType::default(),
             })
         } else {
             Err(OpossumError::Other(
@@ -77,33 +75,6 @@ impl Shape for RectangleShape {
         if sdf_val <= 0. { 1.0 } else { 0.0 }
     }
 }
-impl Apodize for RectangleShape {
-    fn set_aperture_type(&mut self, aperture_type: ApertureType) {
-        self.aperture_type = aperture_type;
-    }
-    fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let translation = Isometry2::translation(
-            self.center.coords[0].get::<meter>(),
-            self.center.coords[1].get::<meter>(),
-        );
-        let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
-        let point_transformed = translation.inverse_transform_point(&point_meter);
-
-        let q = Vector2::new(
-            point_transformed.x.abs() - self.width.get::<meter>() / 2.,
-            point_transformed.y.abs() - self.height.get::<meter>() / 2.,
-        );
-        let mut q_max = q;
-        q_max.iter_mut().for_each(|x: &mut f64| *x = x.max(0.0));
-        let sdf_val = q_max.x.mul_add(q_max.x, q_max.y.powi(2)).sqrt() + q.x.max(q.y).min(0.0);
-
-        let mut transmission = if sdf_val <= 0. { 1.0 } else { 0.0 };
-        if matches!(self.aperture_type, ApertureType::Obstruction) {
-            transmission = 1.0 - transmission;
-        }
-        transmission
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -124,5 +95,16 @@ mod test {
         assert!(RectangleShape::new(meter!(2.0), meter!(1.0), p).is_err());
         let p = meter!(f64::INFINITY, 0.0);
         assert!(RectangleShape::new(meter!(2.0), meter!(1.0), p).is_err());
+    }
+    #[test]
+    fn transmission_factor() {
+        let r = RectangleShape::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
+        assert_eq!(r.transmission_factor(&meter!(1.0, 1.0)), 1.0);
+        assert_eq!(r.transmission_factor(&meter!(1.5, 1.0)), 1.0);
+        assert_eq!(r.transmission_factor(&meter!(1.5, 2.0)), 1.0);
+        assert_eq!(r.transmission_factor(&meter!(0.5, 2.0)), 1.0);
+        assert_eq!(r.transmission_factor(&meter!(0.5, 0.0)), 1.0);
+        assert_eq!(r.transmission_factor(&meter!(0.0, 0.0)), 0.0);
+        assert_eq!(r.transmission_factor(&meter!(1.0, 2.1)), 0.0);
     }
 }
