@@ -11,10 +11,7 @@
             uuid: "891d00fc-7aa3-4db1-93c3-421816121e37",
             lidt: 10000.0,
             props: {
-                "expand view": (
-                    prop: Bool(false),
-                    validator: None,
-                ),
+                "expand view": Bool(false),
             },
             inverted: false,
         ),
