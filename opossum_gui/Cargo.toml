@@ -1,6 +1,6 @@
 [package]
 name = "opossum_gui"
-version = "0.1.0"
+version = "0.7.0-1"
 authors = [
     "Udo Eisenbarth <u.eisenbarth@gsi.de>",
     "Yannik Zobus <y.zobus@gsi.de>",

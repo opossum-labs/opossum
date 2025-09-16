@@ -5121,7 +5121,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_backend"
-version = "0.6.0"
+version = "0.7.0-beta.1"
 dependencies = [
  "actix-cors",
  "actix-web",
@@ -5144,7 +5144,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_cli"
-version = "0.6.0"
+version = "0.7.0-beta.1"
 dependencies = [
  "clap 4.5.46",
  "env_logger",
@@ -5155,7 +5155,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_core"
-version = "0.6.0"
+version = "0.7.0-beta.1"
 dependencies = [
  "approx",
  "assert_matches",
@@ -5200,7 +5200,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_gui"
-version = "0.1.0"
+version = "0.7.0-1"
 dependencies = [
  "Inflector",
  "approx",
