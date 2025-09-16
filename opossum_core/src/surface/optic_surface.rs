@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     J_per_cm2,
-    aperture::Aperture,
+    apertures::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
     nodes::fluence_detector::Fluence,
@@ -270,7 +270,7 @@ mod test {
     use super::OpticSurface;
     use crate::{
         J_per_cm2,
-        aperture::{Aperture, CircleConfig},
+        apertures::{Aperture, ApertureType, CircleShape},
         coatings::CoatingType,
         joule, meter, nanometer,
         ray::Ray,
@@ -332,8 +332,10 @@ mod test {
             .is_ok()
         );
 
-        let aperture =
-            Aperture::BinaryCircle(CircleConfig::new(meter!(1.0), meter!(0.0, 0.0)).unwrap());
+        let aperture = Aperture::BinaryCircle(
+            CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap(),
+            ApertureType::Hole,
+        );
         let os = OpticSurface::new(
             GeoSurfaceRef(Arc::new(Mutex::new(
                 Sphere::new(meter!(1.0), Isometry::identity()).unwrap(),

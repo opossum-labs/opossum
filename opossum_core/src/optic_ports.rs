@@ -8,16 +8,16 @@
 //! ```rust
 //! use opossum_core::optic_ports::{OpticPorts, PortType};
 //! use nalgebra::Point2;
-//! use opossum_core::{millimeter, aperture::{CircleConfig, Aperture}};
+//! use opossum_core::{millimeter, apertures::{Aperture, ApertureType}};
 //! use uom::si::{f64::Length, length::millimeter};
 //!
 //! let mut ports = OpticPorts::new();
 //! ports.add(&PortType::Input, "my input").unwrap();
-//! let circle_config = CircleConfig::new(millimeter!(1.5), millimeter!(1.0, 1.0)).unwrap();
-//! ports.set_aperture(&PortType::Input, "my input", &Aperture::BinaryCircle(circle_config)).unwrap();
+//! let aperture = Aperture::new_circle(millimeter!(1.5), millimeter!(1.0, 1.0), ApertureType::Hole).unwrap();
+//! ports.set_aperture(&PortType::Input, "my input", &aperture).unwrap();
 //! ```
 use crate::{
-    aperture::Aperture,
+    apertures::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
     surface::optic_surface::OpticSurface,
