@@ -102,7 +102,7 @@ fn main() {
             .with_cfg(
                 dioxus::desktop::Config::new()
                     .with_window(window)
-                    .with_data_directory(data_dir)
+                    .with_data_directory(data_dir),
             )
             .with_context(backend_handle)
             .launch(MainApp);

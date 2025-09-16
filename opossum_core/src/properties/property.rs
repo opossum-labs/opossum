@@ -12,14 +12,13 @@ use std::{mem, path::Path};
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a validator.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-// #[serde(transparent)]
+#[serde(transparent)]
 pub struct Property {
     prop: Proptype,
     #[serde(skip)]
     description: String,
-    // #[serde(skip)]
+    #[serde(skip)]
     validator: Option<Validator>,
-    // validator: Option<Box<dyn Validator>>,
 }
 impl Property {
     /// Create a new `Property`.
@@ -30,7 +29,6 @@ impl Property {
     pub fn new(
         prop: Proptype,
         description: String,
-        // validator: Option<Box<dyn Validator>>,
         validator: Option<Validator>,
     ) -> OpmResult<Self> {
         if let Some(validator) = &validator {
@@ -72,6 +70,7 @@ impl Property {
     /// Validates the new proptype if a validator is defined
     ///
     /// # Errors
+    ///
     /// Returns an error if validation fails
     pub fn validate_proptype(&self, prop: &Proptype) -> OpmResult<()> {
         self.validator
