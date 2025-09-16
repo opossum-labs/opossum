@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::components::{
     context_menu::cx_menu::{ContextMenu, CxtCommand},
     logger::logger_component::Logger,
@@ -7,7 +5,11 @@ use crate::components::{
     scenery_editor::{GraphEditor, NodeEditorCommand},
     simulation::simulation_window::SimulationWindow,
 };
-use dioxus::prelude::*;
+use dioxus::{
+    desktop::{tao::window::ResizeDirection, use_window},
+    prelude::*,
+};
+use std::path::PathBuf;
 
 #[component]
 pub fn App() -> Element {
@@ -16,6 +18,9 @@ pub fn App() -> Element {
     let cxt_command = use_signal(|| None::<CxtCommand>);
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut run_simulation = use_signal(|| false);
+
+    // Get a reference to the window
+    let window = use_window();
 
     use_effect(move || {
         let cxt_command = cxt_command.read();
@@ -64,19 +69,96 @@ pub fn App() -> Element {
             }
         }
     });
+
     rsx! {
-        ContextMenu { command: cxt_command }
-        div { class: "container-fluid text-bg-dark",
-            div { class: "row",
-                div { class: "col",
-                    MenuBar { menu_item_selected, project_directory }
+        // The main container for the app and resize handles
+        div { class: "app-container",
+            // Resize Handles
+            div {
+                class: "resize-handle-top",
+                onmousedown: {
+                    let window = window.clone();
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::North);
+                    }
+                },
+            }
+            div {
+                class: "resize-handle-bottom",
+                onmousedown: {
+                    let window = window.clone();
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::South);
+                    }
+                },
+            }
+            div {
+                class: "resize-handle-left",
+                onmousedown: {
+                    let window = window.clone();
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::West);
+                    }
+                },
+            }
+            div {
+                class: "resize-handle-right",
+                onmousedown: {
+                    let window = window.clone();
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::East);
+                    }
+                },
+            }
+            div {
+                class: "resize-handle-top-left",
+                onmousedown: {
+                    let window = window.clone();
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::NorthWest);
+                    }
+                },
+            }
+            div {
+                class: "resize-handle-top-right",
+                onmousedown: {
+                    let window = window.clone();
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::NorthEast);
+                    }
+                },
+            }
+            div {
+                class: "resize-handle-bottom-left",
+                onmousedown: {
+                    let window = window.clone();
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::SouthWest);
+                    }
+                },
+            }
+            div {
+                class: "resize-handle-bottom-right",
+                onmousedown: {
+                    let window = window.clone();
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::SouthEast);
+                    }
+                },
+            }
+            ContextMenu { command: cxt_command }
+            div { class: "container-fluid text-bg-dark",
+                div { class: "row",
+                    div { class: "col",
+                        MenuBar { menu_item_selected, project_directory }
+                    }
                 }
+                GraphEditor { command: node_editor_command }
+                div { class: "row footer",
+                    div { class: "col", Logger {} }
+                }
+                SimulationWindow { show_simulation: run_simulation, project_directory }
             }
-            GraphEditor { command: node_editor_command }
-            div { class: "row footer",
-                div { class: "col", Logger {} }
-            }
-            SimulationWindow { show_simulation: run_simulation, project_directory }
         }
     }
 }
