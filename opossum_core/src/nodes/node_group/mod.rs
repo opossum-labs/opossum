@@ -600,7 +600,7 @@ impl NodeGroup {
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}. Maybe `graphviz` is not installed.")))?;
 
         let Some(child_stdin) = child.stdin.as_mut() else {
             return Err(OpossumError::Other(

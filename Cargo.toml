@@ -10,7 +10,16 @@ lto = "thin"
 strip = true
 
 [profile.release]
-# strip = true
+# Optimize for size. "z" is even smaller than "s".
+# opt-level = "z"
+# Link-Time Optimization increases compile time but reduces binary size.
+lto = true
+# Reduces parallelism in the compiler, allowing for better optimization.
+codegen-units = 1
+# Abort on panic rather than unwinding the stack.
+panic = "abort"
+# Automatically strip symbols from the binary.
+strip = true 
 
 # Disable debug symbols an link time optimization due to limitations of the Linux pipeline VM.
 [profile.test]
