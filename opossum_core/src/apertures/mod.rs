@@ -10,26 +10,22 @@
 //! [`apodization_factor`](Aperture::apodization_factor()) is used.
 //! ```rust
 //! use nalgebra::Point2;
-//! use opossum_core::{millimeter, apertures::{Aperture, ApertureType, CircleConfig}};
+//! use opossum_core::{millimeter, apertures::{Aperture, ApertureType}};
 //! use uom::si::{f64::Length, length::millimeter};
 //!
-//! let c = CircleConfig::new(millimeter!(1.0), millimeter!(1.0, 1.0)).unwrap();
-//! let ap = Aperture::BinaryCircle(c);
-//! assert_eq!(ap.apodization_factor(&millimeter!(1.0,1.0)), 1.0);
-//! assert_eq!(ap.apodization_factor(&millimeter!(0.0,0.0)), 0.0);
+//! let ap = Aperture::new_circle(millimeter!(1.0), millimeter!(1.0, 1.0), ApertureType::Hole).unwrap();
+//! assert_eq!(ap.apodize(&millimeter!(1.0,1.0)), 1.0);
+//! assert_eq!(ap.apodize(&millimeter!(0.0,0.0)), 0.0);
 //! ```
-//! Furthermore, each aperture can act as a "hole" or as an "obstruction". By default,
-//! all configurations are created as "holes".
+//! Furthermore, each aperture can act as a "hole" or as an "obstruction".
 //! ```rust
 //! use nalgebra::Point2;
-//! use opossum_core::{millimeter, apertures::{Aperture, ApertureType, CircleConfig, Apodize}};
+//! use opossum_core::{millimeter, apertures::{Aperture, ApertureType}};
 //! use uom::si::{f64::Length, length::millimeter};
 //!
-//! let mut c = CircleConfig::new(millimeter!(1.0), millimeter!(1.0, 1.0)).unwrap();
-//! c.set_aperture_type(ApertureType::Obstruction);
-//! let ap = Aperture::BinaryCircle(c);
-//! assert_eq!(ap.apodization_factor(&millimeter!(1.0, 1.0)), 0.0);
-//! assert_eq!(ap.apodization_factor(&millimeter!(0.0, 0.0)), 1.0);
+//! let ap = Aperture::new_circle(millimeter!(1.0), millimeter!(1.0, 1.0), ApertureType::Obstruction).unwrap();
+//! assert_eq!(ap.apodize(&millimeter!(1.0, 1.0)), 0.0);
+//! assert_eq!(ap.apodize(&millimeter!(0.0, 0.0)), 1.0);
 //! ```
 mod circle;
 mod gaussian;
@@ -87,6 +83,11 @@ pub enum Aperture {
     Stack(StackShape, ApertureType),
 }
 impl Aperture {
+    /// Create a new circular aperture.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the parameters of the aperture creation are invalid.
     pub fn new_circle(
         radius: Length,
         center: Point2<Length>,
@@ -95,6 +96,11 @@ impl Aperture {
         let config = CircleShape::new(radius, center)?;
         Ok(Self::BinaryCircle(config, aperture_type))
     }
+    /// Create a new retangular aperture.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the parameters of the aperture creation are invalid.
     pub fn new_rectangle(
         width: Length,
         height: Length,
@@ -104,6 +110,11 @@ impl Aperture {
         let config = RectangleShape::new(width, height, center)?;
         Ok(Self::BinaryRectangle(config, aperture_type))
     }
+    /// Create a new Gaussian aperture.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the parameters of the aperture creation are invalid.
     pub fn new_gaussian(
         sigma: (Length, Length),
         center: Point2<Length>,
@@ -112,6 +123,11 @@ impl Aperture {
         let config = GaussianShape::new(sigma, center)?;
         Ok(Self::Gaussian(config, aperture_type))
     }
+    /// Create a new polygon aperture.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the parameters of the aperture creation are invalid.
     pub fn new_polygon(
         points: Vec<Point2<Length>>,
         aperture_type: ApertureType,
@@ -119,7 +135,9 @@ impl Aperture {
         let config = PolygonConfig::new(points)?;
         Ok(Self::BinaryPolygon(config, aperture_type))
     }
-    pub fn new_stack(apertures: Vec<Aperture>, aperture_type: ApertureType) -> Self {
+    /// Create a new stack aperture.
+    #[must_use]
+    pub const fn new_stack(apertures: Vec<Self>, aperture_type: ApertureType) -> Self {
         let config = StackShape::new(apertures);
         Self::Stack(config, aperture_type)
     }
@@ -145,10 +163,10 @@ impl Aperture {
         };
         // Zentrale Logik für Loch vs. Hindernis
         let aperture_type = match self {
-            Self::BinaryCircle(_, aperture_type) => aperture_type,
-            Self::BinaryRectangle(_, aperture_type) => aperture_type,
-            Self::BinaryPolygon(_, aperture_type) => aperture_type,
-            Self::Stack(_, aperture_type) => aperture_type,
+            Self::BinaryCircle(_, aperture_type)
+            | Self::BinaryRectangle(_, aperture_type)
+            | Self::BinaryPolygon(_, aperture_type)
+            | Self::Stack(_, aperture_type) => aperture_type,
             _ => &ApertureType::Hole, // Default für None, Gaussian etc.
         };
 

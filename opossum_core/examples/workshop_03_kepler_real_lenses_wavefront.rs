@@ -1,7 +1,7 @@
 use opossum_core::{
     OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
-    apertures::{Aperture, CircleShape},
+    apertures::{Aperture, ApertureType},
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
@@ -48,8 +48,9 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),
         &refr_index_hzf52,
     )?;
-    let circle = CircleShape::new(millimeter!(25.), millimeter!(0., 0.))?;
-    lens1.set_aperture(&PortType::Input, "input_1", &Aperture::BinaryCircle(circle))?;
+    let aperture =
+        Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
+    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     let i_pl1 = scenery.add_node(lens1)?;
     let i_sd6 = scenery.add_node(SpotDiagram::new("spot diagram at focus"))?;
     let lens2 = Lens::new(

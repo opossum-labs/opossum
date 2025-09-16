@@ -556,8 +556,7 @@ impl Rays {
         let mut beams_invalided = false;
         for ray in &mut self.ray_bundle {
             if ray.valid() {
-                let ap_factor =
-                    aperture.apodize(&ray.inverse_transformed_ray(iso).position().xy());
+                let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position().xy());
                 if ap_factor > 0.0 {
                     ray.filter_energy(&FilterType::Constant(ap_factor))?;
                 } else {

@@ -19,7 +19,7 @@ impl StackShape {
     /// All aperture transmissions are multiplied, thus realizing a "subtractive" aperture. After that the transmission can be "inverted"
     /// (`transmission = 1.0 - transmission`) by setting the aperture type to [`ApertureType::Obstruction`].
     #[must_use]
-    pub fn new(apertures: Vec<Aperture>) -> Self {
+    pub const fn new(apertures: Vec<Aperture>) -> Self {
         Self { apertures }
     }
     /// Returns a reference to the apertures of this [`StackConfig`].
