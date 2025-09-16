@@ -41,7 +41,7 @@ pub fn ControlsMenu(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> 
                     }
                 },
                 {maximize_symbol()}
-            
+
             }
             a {
                 class: "text-secondary me-2",
