@@ -1,7 +1,6 @@
 use std::{f64::consts::PI, path::Path};
 
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     energy_distributions::General2DGaussian,
@@ -10,6 +9,7 @@ use opossum_core::{
     lightdata::light_data_builder::LightDataBuilder,
     millimeter, nanometer,
     nodes::{FluenceDetector, NodeGroup, Source},
+    opm_document::OpmDocument,
     optic_node::OpticNode,
     position_distributions::SobolDist,
     rays::Rays,

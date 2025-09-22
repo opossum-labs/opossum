@@ -15,7 +15,6 @@ impl PolygonConfig {
     /// Create a new polygonal aperture configuration by a set of given 2D points.
     ///
     /// The order of the points must follow the outline of the polygon. Otherwise intersections may occur.
-    /// By default the aperture has the aperture type [`ApertureType::Hole`].
     ///
     /// # Errors
     ///

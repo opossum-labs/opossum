@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
@@ -7,6 +6,7 @@ use opossum_core::{
     nodes::{
         NodeGroup, RayPropagationVisualizer, SpotDiagram, WaveFront, round_collimated_ray_source,
     },
+    opm_document::OpmDocument,
     optic_node::Alignable,
 };
 use std::path::Path;

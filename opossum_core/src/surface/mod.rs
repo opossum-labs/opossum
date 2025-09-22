@@ -5,7 +5,7 @@
 //! math part and an [`OpticSurface`](crate::surface::optic_surface::OpticSurface).
 //!
 //! An [`OpticSurface`](crate::surface::optic_surface::OpticSurface) contains a [`GeoSurface`](crate::surface::geo_surface::GeoSurface) but also
-//! adds further attributes such as a [`Coating`](crate::coatings::Coating) or an [`Aperture`](crate::aperture::Aperture).
+//! adds further attributes such as a [`Coating`](crate::coatings::Coating) or an [`Aperture`](crate::apertures::Aperture).
 
 mod cylinder;
 mod parabola;

@@ -7,7 +7,7 @@
 //! of higher complexity.
 //!
 //! Apertures a defined by their respective configuration struct. For the calculation the function
-//! [`apodization_factor`](Aperture::apodization_factor()) is used.
+//! [`apodize`](Aperture::apodize()) is used.
 //! ```rust
 //! use nalgebra::Point2;
 //! use opossum_core::{millimeter, apertures::{Aperture, ApertureType}};

@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     energy_distributions::UniformDist,
@@ -11,6 +10,7 @@ use opossum_core::{
     },
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
+    opm_document::OpmDocument,
     optic_node::{Alignable, OpticNode},
     position_distributions::Grid,
     refractive_index::refr_index_schott::RefrIndexSchott,

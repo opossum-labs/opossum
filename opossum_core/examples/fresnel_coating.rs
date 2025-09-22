@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     coatings::CoatingType,
     energy_distributions::UniformDist,
@@ -11,6 +10,7 @@ use opossum_core::{
     },
     millimeter, nanometer,
     nodes::{EnergyMeter, FluenceDetector, Lens, NodeGroup, RayPropagationVisualizer, Source},
+    opm_document::OpmDocument,
     optic_node::OpticNode,
     optic_ports::PortType,
     position_distributions::Grid,

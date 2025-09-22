@@ -16,8 +16,11 @@ use actix_web::{
 use log::{error, info, warn};
 use nalgebra::Point2;
 use opossum_core::{
-    AnalyzerInfo, OpmDocument, SceneryResources, analyzers::AnalyzerType, create_data_dir,
+    SceneryResources,
+    analyzers::AnalyzerType,
+    opm_document::{AnalyzerInfo, OpmDocument},
     optic_node::OpticNode,
+    utils::file_utils::create_data_dir,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

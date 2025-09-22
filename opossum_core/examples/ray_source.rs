@@ -1,11 +1,11 @@
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     apertures::{Aperture, ApertureType},
     error::OpmResult,
     joule, millimeter,
     nodes::{Dummy, EnergyMeter, NodeGroup, SpotDiagram, round_collimated_ray_source},
+    opm_document::OpmDocument,
     optic_node::OpticNode,
     optic_ports::PortType,
 };

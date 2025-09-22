@@ -1,8 +1,5 @@
-use std::path::Path;
-
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     joule, millimeter,
@@ -10,7 +7,9 @@ use opossum_core::{
         NodeGroup, ParaxialSurface, RayPropagationVisualizer, WaveFront,
         round_collimated_ray_source,
     },
+    opm_document::OpmDocument,
 };
+use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {

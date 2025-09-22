@@ -1,6 +1,11 @@
-//! Data structure for the graph edges.
+#![warn(missing_docs)]
+//! # Light Flow Modeling
 //!
-//! [`Light`] represents the information / data flowing from one node to another node. It contains information about
+//! Contains abstractions and algorithms for modeling the propagation of light
+//! through the optical system. It represents the data structure for the edges of the underlying
+//! `OpticGraph`.
+//!
+//! [`LightFlow`] represents the information / data flowing from one node to another node. It contains information about
 //! the respective source an target port names this edge connects as well as the actual light information (stored as
 //! [`LightData`]).
 use crate::{
@@ -17,7 +22,7 @@ pub struct LightFlow {
     /// name of the optic port of the target node
     target_port: String,
     #[serde(skip)]
-    /// the data "flowing" from source to target node.
+    /// the data (payload) "flowing" from a source to a target node.
     data: Option<LightData>,
     #[serde(skip)]
     /// the (straight) Euclidian distance between the anchor points of source and target node

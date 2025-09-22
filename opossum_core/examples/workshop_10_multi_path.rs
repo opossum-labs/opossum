@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::AnalyzerType,
     error::OpmResult,
     joule,
@@ -12,6 +11,7 @@ use opossum_core::{
         BeamSplitter, NodeGroup, Source, Spectrometer, SpectrometerType, SplittingConfigBuilder,
         ideal_filter::{EdgeFilter, EdgeFilterType},
     },
+    opm_document::OpmDocument,
 };
 use std::path::Path;
 

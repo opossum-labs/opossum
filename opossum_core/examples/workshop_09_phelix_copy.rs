@@ -1,7 +1,6 @@
 use nalgebra::Vector3;
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     energy_distributions::UniformDist,
@@ -16,6 +15,7 @@ use opossum_core::{
         NodeGroup, NodeReference, ParaxialSurface, RayPropagationVisualizer, Source, ThinMirror,
         Wedge,
     },
+    opm_document::OpmDocument,
     optic_node::{Alignable, OpticNode},
     position_distributions::Grid,
     properties::Proptype,

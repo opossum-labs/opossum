@@ -1,9 +1,9 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     millimeter,
     nodes::{Dummy, NodeGroup},
+    opm_document::OpmDocument,
 };
 use std::path::Path;
 

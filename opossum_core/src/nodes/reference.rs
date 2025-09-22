@@ -33,7 +33,7 @@ use uuid::Uuid;
 ///   - `inverted`
 ///
 /// **Note**: Since this node only refers to another optical node it does not handle
-/// (ignores) any [`Aperture`](crate::aperture::Aperture) definitions on its ports.
+/// (ignores) any [`Aperture`](crate::apertures::Aperture) definitions on its ports.
 pub struct NodeReference {
     reference: Option<Weak<Mutex<dyn Analyzable>>>,
     node_attr: NodeAttr,

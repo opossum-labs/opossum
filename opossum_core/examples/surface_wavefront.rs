@@ -1,6 +1,5 @@
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     apertures::{Aperture, ApertureType},
     error::OpmResult,
@@ -9,6 +8,7 @@ use opossum_core::{
         Lens, NodeGroup, RayPropagationVisualizer, SpotDiagram, WaveFront,
         round_collimated_ray_source,
     },
+    opm_document::OpmDocument,
     optic_node::OpticNode,
     optic_ports::PortType,
     refractive_index::RefrIndexConst,

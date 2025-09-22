@@ -1,11 +1,11 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     coatings::CoatingType,
     degree,
     error::OpmResult,
     joule, millimeter,
     nodes::{NodeGroup, RayPropagationVisualizer, ThinMirror, collimated_line_ray_source},
+    opm_document::OpmDocument,
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
 };

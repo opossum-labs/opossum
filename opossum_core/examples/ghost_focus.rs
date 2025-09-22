@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, GhostFocusConfig},
     coatings::CoatingType,
     degree,
@@ -12,6 +11,7 @@ use opossum_core::{
     },
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, Source, ThinMirror},
+    opm_document::OpmDocument,
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
     position_distributions::HexagonalTiling,

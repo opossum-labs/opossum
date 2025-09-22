@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     coatings::CoatingType,
     degree,
@@ -9,6 +8,7 @@ use opossum_core::{
         EnergyMeter, NodeGroup, RayPropagationVisualizer, SpotDiagram, ThinMirror, WaveFront,
         round_collimated_ray_source,
     },
+    opm_document::OpmDocument,
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
 };

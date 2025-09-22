@@ -1,19 +1,22 @@
 use nalgebra::Vector3;
-use opossum_core::OpmDocument;
-use opossum_core::analyzers::{AnalyzerType, RayTraceConfig};
-use opossum_core::lightdata::light_data_builder::LightDataBuilder;
-use opossum_core::lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder};
-use opossum_core::nodes::{NodeGroup, NodeReference, ParaxialSurface, SpotDiagram, ThinMirror};
-use opossum_core::optic_node::Alignable;
-use opossum_core::refractive_index::{RefrIndexConst, RefractiveIndex};
 use opossum_core::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     energy_distributions::UniformDist,
     error::OpmResult,
-    joule, millimeter, nanometer,
-    nodes::{Lens, RayPropagationVisualizer, Source},
-    optic_node::OpticNode,
+    joule,
+    lightdata::{
+        light_data_builder::LightDataBuilder,
+        ray_data_builder::{CollimatedSrc, RayDataBuilder},
+    },
+    millimeter, nanometer,
+    nodes::{
+        Lens, NodeGroup, NodeReference, ParaxialSurface, RayPropagationVisualizer, Source,
+        SpotDiagram, ThinMirror,
+    },
+    opm_document::OpmDocument,
+    optic_node::{Alignable, OpticNode},
     position_distributions::Hexapolar,
-    refractive_index::RefrIndexSellmeier1,
+    refractive_index::{RefrIndexConst, RefrIndexSellmeier1, RefractiveIndex},
     spectral_distribution::Gaussian,
     utils::geom_transformation::Isometry,
 };

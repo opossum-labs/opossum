@@ -13,7 +13,6 @@ pub struct GaussianShape {
 impl GaussianShape {
     /// Create a Gaussian aperture configurartion given by `(sigma_x, sigma_y)` as well as the center point.
     ///
-    /// By default the aperture has the aperture type [`ApertureType::Hole`].
     /// # Errors
     ///
     /// This function will return an error if the given waists are negative and / or the center point is indefinite.
@@ -30,12 +29,12 @@ impl GaussianShape {
             Err(OpossumError::Other("parameters out of range".into()))
         }
     }
-    /// Returns the sigma of this [`GaussianConfig`].
+    /// Returns the sigma of this [`GaussianShape`].
     #[must_use]
     pub fn sigma(&self) -> (Length, Length) {
         self.sigma
     }
-    /// Returns the center of this [`GaussianConfig`].
+    /// Returns the center of this [`GaussianShape`].
     #[must_use]
     pub fn center(&self) -> Point2<Length> {
         self.center

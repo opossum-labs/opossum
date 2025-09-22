@@ -1,7 +1,12 @@
 #![warn(missing_docs)]
-//! This module contains the concrete node types (lenses, filters, etc...)
+//! # Optical nodes (e.g. lenses. filters, source, etc.)
 //!
-//! To simplify the creation of new node types, the `OpmNode` derive macro is provided.
+//! This module defines the core types and logic for optical nodes in the system.
+//! Nodes represent optical elements, references to optical elements, or groups, and are organized
+//! hierarchically. This modules provides creation, manipulation, and serialization of nodes.
+//! Nodes can have input/output ports and are identified by UUIDs.
+//!
+//! To simplify the creation of new (custom) node types, the `OpmNode` derive macro is provided.
 //! This macro automatically implements the `Analyzable`, `Alignable` and `LIDT` traits for the annotated struct.
 //! Furthermore it allows to specify the color of the node in the `dot` file by using the `opm_node` attribute.
 //!

@@ -1,4 +1,4 @@
-//! Module for handling spectral distributions
+//! Spectral distribution functions
 use std::fmt::Display;
 
 use crate::{error::OpmResult, utils::default_from_name::DefaultFromName};

@@ -1,7 +1,4 @@
-use std::path::Path;
-
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     energy_distributions::General2DGaussian,
     error::OpmResult,
@@ -9,12 +6,14 @@ use opossum_core::{
     lightdata::light_data_builder::LightDataBuilder,
     millimeter, nanometer,
     nodes::{NodeGroup, Source, SpotDiagram},
+    opm_document::OpmDocument,
     optic_node::OpticNode,
     position_distributions::HexagonalTiling,
     radian,
     rays::Rays,
     utils::geom_transformation::Isometry,
 };
+use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let wvl_1w = nanometer!(1054.0);

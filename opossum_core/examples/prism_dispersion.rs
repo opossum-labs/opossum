@@ -1,8 +1,5 @@
-use std::path::Path;
-
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     energy_distributions::UniformDist,
@@ -14,12 +11,14 @@ use opossum_core::{
     },
     millimeter, nanometer,
     nodes::{NodeGroup, RayPropagationVisualizer, Source, SpotDiagram, Wedge},
+    opm_document::OpmDocument,
     optic_node::{Alignable, OpticNode},
     position_distributions::Grid,
     refractive_index::RefrIndexSellmeier1,
     spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
 };
+use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {

@@ -11,12 +11,11 @@ use crate::{
         Analyzer, AnalyzerType, energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer,
         raytrace::RayTracingAnalyzer,
     },
-    create_f_path,
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     optic_node::OpticNode,
     reporting::analysis_report::AnalysisReport,
-    utils::file_utils::create_file_instance,
+    utils::file_utils::{create_f_path, create_file_instance},
 };
 use log::{info, warn};
 use nalgebra::Point2;
@@ -30,7 +29,7 @@ use std::{
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
-/// A structu containing the [`AnalyzerType`] together with its position on a frontend GUI.
+/// A structure containing the [`AnalyzerType`] together with its position on a frontend GUI.
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnalyzerInfo {
     analyzer_type: AnalyzerType,

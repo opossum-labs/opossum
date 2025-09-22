@@ -15,7 +15,6 @@ pub struct RectangleShape {
 impl RectangleShape {
     /// Create a new rectangular aperture configuration by given width, height and the center point.
     ///
-    /// By default the aperture has the aperture type [`ApertureType::Hole`].
     /// # Errors
     ///
     /// This function will return an error if width and/or height are negative, NaN or Infinity.
@@ -39,17 +38,17 @@ impl RectangleShape {
         }
     }
 
-    /// Returns the width of this [`RectangleConfig`].
+    /// Returns the width of this [`RectangleShape`].
     #[must_use]
     pub fn width(&self) -> Length {
         self.width
     }
-    /// Returns the height of this [`RectangleConfig`].
+    /// Returns the height of this [`RectangleShape`].
     #[must_use]
     pub fn height(&self) -> Length {
         self.height
     }
-    /// Returns the center of this [`RectangleConfig`].
+    /// Returns the center of this [`RectangleShape`].
     #[must_use]
     pub fn center(&self) -> Point2<Length> {
         self.center

@@ -9,7 +9,6 @@ use hhts_input::hhts_input;
 
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
     apertures::{Aperture, ApertureType},
     energy_distributions::General2DGaussian,
@@ -25,6 +24,7 @@ use opossum_core::{
         RayPropagationVisualizer, Source, SplittingConfigBuilder, WaveFront,
         ideal_filter::{EdgeFilter, EdgeFilterType, FilterTypeBuilder, SpectralFilterBuilder},
     },
+    opm_document::OpmDocument,
     optic_node::OpticNode,
     optic_ports::PortType,
     position_distributions::HexagonalTiling,

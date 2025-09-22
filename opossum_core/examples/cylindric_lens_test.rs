@@ -1,6 +1,5 @@
 use nalgebra::Vector3;
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
@@ -9,6 +8,7 @@ use opossum_core::{
         CylindricLens, NodeGroup, RayPropagationVisualizer, SpotDiagram,
         round_collimated_ray_source,
     },
+    opm_document::OpmDocument,
     optic_node::Alignable,
     refractive_index::RefrIndexConst,
 };

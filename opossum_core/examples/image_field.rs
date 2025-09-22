@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
@@ -10,6 +9,7 @@ use opossum_core::{
     },
     micrometer, millimeter, nanometer,
     nodes::{FluenceDetector, Lens, NodeGroup, Source},
+    opm_document::OpmDocument,
     optic_node::{Alignable, OpticNode},
     refractive_index::RefrIndexConst,
     surface::hit_map::fluence_estimator::FluenceEstimator,

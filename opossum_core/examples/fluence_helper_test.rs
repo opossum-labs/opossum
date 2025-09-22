@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     fluence_distributions::general_gaussian::General2DGaussian,
@@ -7,6 +6,7 @@ use opossum_core::{
     lightdata::light_data_builder::LightDataBuilder,
     millimeter, nanometer,
     nodes::{FluenceDetector, NodeGroup, ParaxialSurface, Source},
+    opm_document::OpmDocument,
     optic_node::OpticNode,
     position_distributions::Hexapolar,
     radian,

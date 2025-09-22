@@ -3,7 +3,6 @@ use std::path::Path;
 
 use nalgebra::Vector3;
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     centimeter,
     energy_distributions::UniformDist,
@@ -15,6 +14,7 @@ use opossum_core::{
     },
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
+    opm_document::OpmDocument,
     optic_node::{Alignable, OpticNode},
     position_distributions::Hexapolar,
     refractive_index::RefrIndexSellmeier1,

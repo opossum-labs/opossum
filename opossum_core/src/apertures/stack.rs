@@ -16,13 +16,12 @@ pub struct StackShape {
 impl StackShape {
     /// Creates a new [`StackShape`] by a given set of apertures.
     ///
-    /// All aperture transmissions are multiplied, thus realizing a "subtractive" aperture. After that the transmission can be "inverted"
-    /// (`transmission = 1.0 - transmission`) by setting the aperture type to [`ApertureType::Obstruction`].
+    /// All aperture transmissions are multiplied, thus realizing a "subtractive" aperture.
     #[must_use]
     pub const fn new(apertures: Vec<Aperture>) -> Self {
         Self { apertures }
     }
-    /// Returns a reference to the apertures of this [`StackConfig`].
+    /// Returns a reference to the apertures of this [`StackShape`].
     #[must_use]
     pub fn apertures(&self) -> &[Aperture] {
         &self.apertures

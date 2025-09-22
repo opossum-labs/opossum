@@ -1,6 +1,5 @@
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::AnalyzerType,
     error::OpmResult,
     joule,
@@ -12,6 +11,7 @@ use opossum_core::{
     nodes::{
         EnergyMeter, IdealFilter, NodeGroup, NodeReference, Source, ideal_filter::FilterTypeBuilder,
     },
+    opm_document::OpmDocument,
 };
 use std::path::Path;
 use uom::si::f64::Length;

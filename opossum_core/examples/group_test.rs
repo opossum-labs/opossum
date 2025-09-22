@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
@@ -8,6 +7,7 @@ use opossum_core::{
         BeamSplitter, Lens, NodeGroup, RayPropagationVisualizer, ThinMirror,
         collimated_line_ray_source,
     },
+    opm_document::OpmDocument,
     optic_node::Alignable,
 };
 use std::path::Path;

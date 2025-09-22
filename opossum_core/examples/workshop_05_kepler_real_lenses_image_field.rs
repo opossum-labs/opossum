@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     apertures::{Aperture, ApertureType},
     degree,
@@ -11,6 +10,7 @@ use opossum_core::{
     },
     micrometer, millimeter, nanometer,
     nodes::{FluenceDetector, Lens, NodeGroup, Source},
+    opm_document::OpmDocument,
     optic_node::OpticNode,
     optic_ports::PortType,
     refractive_index::refr_index_schott::RefrIndexSchott,

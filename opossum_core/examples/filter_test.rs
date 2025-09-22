@@ -2,7 +2,6 @@ use std::path::Path;
 
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::AnalyzerType,
     error::OpmResult,
     lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
@@ -12,6 +11,7 @@ use opossum_core::{
         SplittingConfigBuilder,
         ideal_filter::{BandFilter, BandFilterType, FilterTypeBuilder, SpectralFilterBuilder},
     },
+    opm_document::OpmDocument,
 };
 use uom::si::f64::Length;
 

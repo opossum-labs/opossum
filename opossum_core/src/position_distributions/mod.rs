@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
-//! Module for handling position distributions
+//! Position distribution functions
 //!
-//! These distribution are mainly used during the construction of [`Ray`](crate::ray::Ray) bundles ([`Rays`](crate::rays::Rays)).
+//! These distributions are mainly used during the construction of [`Ray`](crate::ray::Ray) bundles ([`Rays`](crate::rays::Rays)).
 //!
 //! ## Example
 //!

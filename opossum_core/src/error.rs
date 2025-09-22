@@ -1,5 +1,8 @@
 #![warn(missing_docs)]
-//! Opossum specfic error structures
+//! # Error Handling
+//!
+//! Defines error types and handling strategies for the `opossum_core` library.
+//! Errors are used to signal invalid operations, missing data, and parsing failures.
 use std::{error::Error, fmt::Display};
 /// Opossum application specific Result type
 pub type OpmResult<T> = std::result::Result<T, OpossumError>;

@@ -67,7 +67,7 @@ use uuid::Uuid;
 ///   - `inverted`
 ///   - `expand view`
 ///
-/// **Note**: The group node does currently ignore all [`Aperture`](crate::aperture::Aperture) definitions on its publicly
+/// **Note**: The group node does currently ignore all [`Aperture`](crate::apertures::Aperture) definitions on its publicly
 /// mapped input and output ports.
 pub struct NodeGroup {
     node_attr: NodeAttr,

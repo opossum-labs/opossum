@@ -1,5 +1,4 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     energy_distributions::UniformDist,
     error::OpmResult,
@@ -10,6 +9,7 @@ use opossum_core::{
     },
     millimeter, nanometer,
     nodes::{NodeGroup, Source, Spectrometer},
+    opm_document::OpmDocument,
     optic_node::OpticNode,
     position_distributions::Hexapolar,
     spectral_distribution::LaserLines,

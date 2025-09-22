@@ -3,7 +3,6 @@ use std::path::Path;
 
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::AnalyzerType,
     error::OpmResult,
     joule,
@@ -16,6 +15,7 @@ use opossum_core::{
         BeamSplitter, Dummy, IdealFilter, NodeGroup, Source, SplittingConfigBuilder,
         ideal_filter::{EdgeFilter, EdgeFilterType, FilterTypeBuilder, SpectralFilterBuilder},
     },
+    opm_document::OpmDocument,
 };
 use uom::si::f64::Length;
 

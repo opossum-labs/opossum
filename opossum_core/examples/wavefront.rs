@@ -1,6 +1,5 @@
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     joule, meter,
@@ -8,6 +7,7 @@ use opossum_core::{
         FluenceDetector, NodeGroup, ParaxialSurface, RayPropagationVisualizer, Spectrometer,
         SpectrometerType, SpotDiagram, WaveFront, round_collimated_ray_source,
     },
+    opm_document::OpmDocument,
 };
 use std::path::Path;
 use uom::si::f64::Length;

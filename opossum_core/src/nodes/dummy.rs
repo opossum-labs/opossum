@@ -22,7 +22,7 @@ use crate::{
 /// development and debugging purposes. In addition, it can be used as an "optical terminal" of a
 /// [`NodeGroup`](crate::nodes::NodeGroup) such as the "input hole" of a cameara box which does not really
 /// represent an optically active component. However, this way a group can be positioned in a scenery.
-/// Similar to all other nodes, a [`Dummy`] can have an [`Aperture`](crate::aperture::Aperture) defined.
+/// Similar to all other nodes, a [`Dummy`] can have an [`Aperture`](crate::apertures::Aperture) defined.
 /// This way, things like a mask (e.g. serrated aperture) which apodizes an incoming beam can be realized.
 ///
 /// Geometrically, a [`Dummy`] node consists of a single flat surface.

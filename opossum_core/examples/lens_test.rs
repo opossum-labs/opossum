@@ -1,10 +1,10 @@
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
     nodes::{Lens, NodeGroup, RayPropagationVisualizer, Wedge, collimated_line_ray_source},
+    opm_document::OpmDocument,
     optic_node::Alignable,
     refractive_index::RefrIndexConst,
 };

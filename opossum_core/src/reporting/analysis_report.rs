@@ -124,11 +124,8 @@ impl AnalysisReport {
 
 #[cfg(test)]
 mod test {
-    // use std::fs;
-    // use tempfile::TempDir;
-
     use super::*;
-    use crate::{OpmDocument, properties::Properties};
+    use crate::{opm_document::OpmDocument, properties::Properties};
     #[test]
     fn new() {
         let timestamp = Local::now();

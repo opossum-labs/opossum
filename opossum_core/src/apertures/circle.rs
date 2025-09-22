@@ -13,8 +13,6 @@ pub struct CircleShape {
 impl CircleShape {
     /// Create a new [`CircleShape`] from a given radius and a center point.
     ///
-    /// By default the aperture has the aperture type [`ApertureType::Hole`].
-    ///
     /// # Errors
     ///
     /// This function will return an error if the given radius of negative, NaN or Infinity.
@@ -25,12 +23,12 @@ impl CircleShape {
             Err(OpossumError::Other("radius must be positive".into()))
         }
     }
-    /// Returns the radius of this [`CircleConfig`]
+    /// Returns the radius of this [`CircleShape`]
     #[must_use]
     pub fn radius(&self) -> &Length {
         &self.radius
     }
-    /// Returns the center of this [`CircleConfig`].
+    /// Returns the center of this [`CircleShape`].
     #[must_use]
     pub fn center(&self) -> Point2<Length> {
         self.center

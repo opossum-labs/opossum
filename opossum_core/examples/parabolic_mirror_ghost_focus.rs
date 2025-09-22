@@ -1,6 +1,5 @@
 use nalgebra::Vector2;
 use opossum_core::{
-    OpmDocument,
     analyzers::{AnalyzerType, RayTraceConfig},
     coatings::CoatingType,
     degree,
@@ -10,6 +9,7 @@ use opossum_core::{
         NodeGroup, ParabolicMirror, RayPropagationVisualizer, ThinMirror,
         round_collimated_ray_source,
     },
+    opm_document::OpmDocument,
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
 };

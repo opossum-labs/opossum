@@ -1,6 +1,5 @@
 use num::Zero;
 use opossum_core::{
-    OpmDocument,
     analyzers::AnalyzerType,
     error::OpmResult,
     joule,
@@ -10,6 +9,7 @@ use opossum_core::{
     },
     nanometer,
     nodes::{BeamSplitter, EnergyMeter, NodeGroup, Source, SplittingConfigBuilder},
+    opm_document::OpmDocument,
     optic_node::OpticNode,
 };
 use std::path::Path;
