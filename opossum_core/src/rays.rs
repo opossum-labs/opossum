@@ -575,7 +575,7 @@ impl Rays {
         let wvls = self
             .ray_bundle
             .iter()
-            .filter(|&r| (r.valid() || !valid_only))
+            .filter(|&r| r.valid() || !valid_only)
             .map(|r| r.wavelength().get::<nanometer>())
             .collect::<Vec<f64>>();
 

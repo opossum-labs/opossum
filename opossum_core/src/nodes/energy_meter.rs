@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
@@ -17,9 +18,6 @@ use log::warn;
 use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
-use uom::si::f64::Energy;
-
-use super::node_attr::NodeAttr;
 
 #[non_exhaustive]
 #[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -134,9 +132,10 @@ impl OpticNode for EnergyMeter {
         self.update_flat_single_surfaces()
     }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
-        let mut energy: Option<Energy> = None;
-        if let Some(light_data) = &self.light_data {
-            energy = match light_data {
+        let energy = self
+            .light_data
+            .as_ref()
+            .and_then(|light_data| match light_data {
                 LightData::Energy(s) => Some(joule!(s.total_energy())),
                 LightData::Geometric(r) => Some(r.total_energy()),
                 LightData::Fourier => None,
@@ -147,8 +146,7 @@ impl OpticNode for EnergyMeter {
                     }
                     Some(energy)
                 }
-            };
-        }
+            });
         let mut props = Properties::default();
         if let Some(e) = energy {
             props.create("Energy", "Output energy", e.into()).unwrap();

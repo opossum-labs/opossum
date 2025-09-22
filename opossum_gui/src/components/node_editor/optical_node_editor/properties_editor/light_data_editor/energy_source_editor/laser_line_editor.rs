@@ -38,12 +38,14 @@ impl IntoInputDataStrings<EnergyLaserLines> for EnergyLaserLinesParam {
     }
     fn create_value_string(&self, obj: &EnergyLaserLines) -> String {
         match self {
-            Self::Wavelength => obj.lines().last().map_or("1054.000".to_string(), |ll| {
-                format!("{:.3}", ll.0.get::<nanometer>())
-            }),
-            Self::Energy => obj.lines().last().map_or("1.000".to_string(), |ll| {
-                format!("{:.3}", ll.1.get::<joule>())
-            }),
+            Self::Wavelength => obj.lines().last().map_or_else(
+                || "1054.000".to_string(),
+                |ll| format!("{:.3}", ll.0.get::<nanometer>()),
+            ),
+            Self::Energy => obj.lines().last().map_or_else(
+                || "1.000".to_string(),
+                |ll| format!("{:.3}", ll.1.get::<joule>()),
+            ),
             Self::SpectralResolution => {
                 format!("{:.3}", obj.spectral_resolution().get::<nanometer>())
             }
