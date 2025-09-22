@@ -20,7 +20,7 @@ use opossum_core::{
     analyzers::AnalyzerType,
     opm_document::{AnalyzerInfo, OpmDocument},
     optic_node::OpticNode,
-    utils::file_utils::create_data_dir,
+    utils::file_utils::recreate_data_dir,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -249,7 +249,7 @@ async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Respond
         match PathBuf::from_str(&report_dir) {
             Ok(report_dir) => {
                 info!("Creating report directory: {}", report_dir.display());
-                if let Err(e) = create_data_dir(&report_dir) {
+                if let Err(e) = recreate_data_dir(&report_dir) {
                     error!("Error creating data directory: {e}");
                 } else {
                     info!("Creating diagram files");

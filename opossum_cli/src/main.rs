@@ -4,7 +4,7 @@ use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
 use opossum_core::{
-    error::OpmResult, opm_document::OpmDocument, utils::file_utils::create_data_dir,
+    error::OpmResult, opm_document::OpmDocument, utils::file_utils::recreate_data_dir,
 };
 use std::{env, path::Path};
 mod console;
@@ -27,7 +27,7 @@ fn opossum() -> OpmResult<()> {
     // read scenery model from file and deserialize it
     let mut document = read_and_parse_model(&opossum_args.file_path)?;
     // create the dot file of the scenery
-    create_data_dir(&opossum_args.report_directory)?;
+    recreate_data_dir(&opossum_args.report_directory)?;
     document
         .create_dot_file(&opossum_args.report_directory)
         .unwrap_or_else(|e| warn!("{e}"));

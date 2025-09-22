@@ -14,7 +14,6 @@ use std::{
 /// * `path` - Base directory for the file.
 /// * `f_name` - Name of the file without extension.
 /// * `f_ext` - File extension (e.g., `"ron"`, `"dot"`).
-/// * `print_str` - A descriptive string used for logging (e.g., `"analysis report"`).
 ///
 /// # Returns
 ///
@@ -25,9 +24,14 @@ use std::{
 ///
 /// Returns an error if the file cannot be created (e.g., due to permissions, invalid path, or I/O issues).
 pub fn create_file_instance(path: &Path, f_name: &str, f_ext: &str) -> OpmResult<File> {
-    let f_path = create_f_path(path, f_name, f_ext);
-    File::create(f_path)
-        .map_err(|e| OpossumError::Other(format!("{f_name} file creation failed: {e}")))
+    let f_path = path.join(f_name).with_extension(f_ext);
+    File::create(&f_path).map_err(|e| {
+        OpossumError::Other(format!(
+            "File creation failed for '{}': {}",
+            f_path.display(),
+            e
+        ))
+    })
 }
 /// Creates a fresh `data/` subdirectory in the given report directory.
 ///
@@ -46,8 +50,8 @@ pub fn create_file_instance(path: &Path, f_name: &str, f_ext: &str) -> OpmResult
 ///
 /// * Returns an error if the existing `data/` directory cannot be deleted.
 /// * Returns an error if the `data/` directory cannot be created.
-pub fn create_data_dir(report_directory: &Path) -> OpmResult<()> {
-    let data_dir = report_directory.join("data/");
+pub fn recreate_data_dir<P: AsRef<Path>>(report_directory: P) -> OpmResult<()> {
+    let data_dir = report_directory.as_ref().join("data"); // Use .as_ref()
     if data_dir.exists() {
         info!("Delete old report data dir");
         remove_dir_all(&data_dir)
@@ -69,9 +73,6 @@ pub fn create_data_dir(report_directory: &Path) -> OpmResult<()> {
 ///
 /// A `PathBuf` representing the full file path with the specified extension.
 #[must_use]
-pub fn create_f_path(path: &Path, f_name: &str, f_ext: &str) -> PathBuf {
-    let mut f_path = path.to_path_buf();
-    f_path.push(f_name);
-    f_path.set_extension(f_ext);
-    f_path
+pub fn create_f_path<P: AsRef<Path>>(path: P, f_name: &str, f_ext: &str) -> PathBuf {
+    path.as_ref().join(f_name).with_extension(f_ext)
 }
