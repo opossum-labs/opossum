@@ -14,40 +14,41 @@ publish = true
 readme = "../README.md"
 edition = "2024"
 
-
 [dependencies]
 opossum_backend = { path = "../opossum_backend" }
+
+approx.workspace = true
+chrono.workspace = true
+itertools.workspace = true
+log.workspace = true
+nalgebra.workspace = true
+num.workspace = true
+ron.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+uom.workspace = true
+uuid.workspace = true
+
 dioxus = { version = "0.6" }
 dioxus-free-icons = { version = "0.9", features = ["font-awesome-solid"] }
-uuid = { version = "1.10", features = ["v4", "serde", "js"] }
+directories = "6.0.0"
 futures-util = "0.3.31"
-tokio = { version = "1", features = ["full"] }
-log = "0.4.27"
+ico = "0.4"
+Inflector = "0.11.4"
+reqwest = { version = "0.12.14", features = ["json", "stream"] }
+rfd = "0.15.3"
+rust-sugiyama = "0.3"
+
 # wasm-bindgen = "0.2"
 # wasm-bindgen-futures = "0.4.50"
 # serde-wasm-bindgen = "0.6.5"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.139"
-rfd = "0.15.3"
-reqwest = { version = "0.12.14", features = ["json", "stream"] }
-ron="0.11.0"
-chrono = "0.4.40"
-rust-sugiyama = "0.3"
-ico = "0.4"
-uom = {version="0.37", features = ["serde"] }
-nalgebra = {version = "0.34.0", features = ["serde-serialize", "rayon"]}
-strum = "0.27.1"
-strum_macros = "0.27.1"
-itertools = "0.14.0"
-Inflector = "0.11.4"
-
-directories = "6.0.0"
-num = "0.4.3"
-approx = "0.5.1"
-tempfile= "3.21"
 
 [build-dependencies]
-winres = "0.1" 
+winres = "0.1"
 
 # [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # plotly = { version = "0.13.5", features = ["kaleido"] }

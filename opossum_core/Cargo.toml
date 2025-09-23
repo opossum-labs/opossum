@@ -27,37 +27,39 @@ dialog = "opossum/logo/Logo_InstallDialog.png"
 
 [dependencies]
 opm_macros_lib = { path = "opm_macros_lib" }
-petgraph = { version = "0.8.1", features = ["serde-1"] } # the graph library
-uom = {version="0.37", features = ["serde"] }
-serde = { version = "1", features = ['rc'] }
-ron="0.11.0"
+
+approx.workspace = true
+chrono.workspace = true
+itertools.workspace = true
+log.workspace = true
+nalgebra.workspace = true
+num.workspace = true
+ron.workspace = true
+serde.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+tempfile.workspace = true
+uom.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+
+petgraph = { version = "0.8.2", features = ["serde-1"] } # the graph library
 csv = "1"
 plotters = "0.3"
-approx = "0.5" # assert macros for comparison of floats with tolerance
-strum = { version = "0.27", features = ["derive"] }
-strum_macros = "0.27"
-uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
-libm = {version="0.2"}
-chrono = { version= "0.4", features = ["serde"] }
-embed-doc-image = "0.1" # allows for embedded images in the rust API doc
-image="0.25"
-tempfile="3"
-rand="0.9"
-sobol="1"
-itertools = "0.14"
-nalgebra = {version = "0.34.0", features = ["serde-serialize", "rayon"]}
+libm = { version = "0.2" }
+embed-doc-image = "0.1"                                  # allows for embedded images in the rust API doc
+image = "0.25"
+rand = "0.9"
+sobol = "1"
 colorous = "1"
 delaunator = "1"
-num = "0.4"
 kahan = "0.1"
-log = "0.4"
 roots = "0.0.8"
 voronator = "0.2"
 rayon = "1.10"
 tinytemplate = "1"
 spade = "2.12"
-earcutr = "0.5.0"
-utoipa = {version ="5.3.1", features = ["actix_extras", "uuid"] }
+earcutr = "0.5"
 num-traits = "0.2"
 mutants = "0.0.3"
 
@@ -70,7 +72,7 @@ doc-images = []
 [dev-dependencies]
 regex = "1"
 assert_matches = "1"
-testing_logger= "0.1"
+testing_logger = "0.1"
 criterion = { version = "0.7.0", features = ["html_reports"] }
 
 [build-dependencies]
