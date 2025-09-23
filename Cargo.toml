@@ -1,7 +1,31 @@
 [workspace]
-members = ["opossum_core", "opossum_backend", "opossum_gui", "xtask", "opossum_cli"]
+members = [
+    "opossum_core",
+    "opossum_backend",
+    "opossum_gui",
+    "xtask",
+    "opossum_cli",
+]
 default-members = ["opossum_core", "opossum_backend", "opossum_gui"]
 resolver = "3"
+
+[workspace.dependencies]
+approx = "0.5"
+chrono = { version = "0.4", features = ["serde"] }
+itertools = "0.14"
+log = "0.4"
+nalgebra = { version = "0.34.0", features = ["serde-serialize", "rayon"] }
+num = "0.4"
+ron = "0.11.0"
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0"
+strum = { version = "0.27.1", features = ["derive"] }
+strum_macros = "0.27.1"
+tempfile = "3.23"
+tokio = { version = "1", features = ["process"] }
+uom = { version = "0.37", features = ["serde"] }
+utoipa = { version = "5.4", features = ["actix_extras", "uuid"] }
+uuid = { version = "1", features = ["v4", "fast-rng", "serde", "js"] }
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
@@ -19,7 +43,7 @@ codegen-units = 1
 # Abort on panic rather than unwinding the stack.
 panic = "abort"
 # Automatically strip symbols from the binary.
-strip = true 
+strip = true
 
 # Disable debug symbols an link time optimization due to limitations of the Linux pipeline VM.
 [profile.test]
