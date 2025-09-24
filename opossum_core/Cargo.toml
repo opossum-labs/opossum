@@ -23,7 +23,7 @@ banner = "opossum/logo/Logo_InstallBanner.png"
 dialog = "opossum/logo/Logo_InstallDialog.png"
 
 [dependencies]
-opm_macros_lib = { path = "opm_macros_lib" }
+opm_macros_lib = { version="0.1.0", path = "opm_macros_lib" }
 
 approx.workspace = true
 chrono.workspace = true

@@ -23,6 +23,8 @@ keywords = ["laser", "optics", "physics", "simulation"]
 categories = ["science", "simulation"]
 
 [workspace.dependencies]
+opossum_core = { version = "0.7.0-beta.1", path = "./opossum_core" }
+
 approx = "0.5"
 chrono = { version = "0.4", features = ["serde"] }
 itertools = "0.14"

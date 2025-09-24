@@ -12,7 +12,7 @@ publish = true
 readme = "README.md"
 
 [dependencies]
-opossum_core = { path = "../opossum_core" }
+opossum_core = { workspace = true }
 
 log.workspace = true
 
