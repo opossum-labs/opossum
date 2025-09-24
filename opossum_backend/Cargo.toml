@@ -1,8 +1,15 @@
 [package]
 name = "opossum_backend"
-version = "0.7.0-beta.1"
-edition = "2024"
-authors = ["Udo Eisenbarth", "Yannik Zobus"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish = true
+readme = "README.md"
 
 [package.metadata.wix]
 upgrade-guid = "AE0EF413-A04C-4EF1-BAFA-7F0F01F2A50A"

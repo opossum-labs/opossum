@@ -9,6 +9,19 @@ members = [
 default-members = ["opossum_core", "opossum_backend", "opossum_gui"]
 resolver = "3"
 
+[workspace.package]
+version = "0.7.0-beta.1"
+edition = "2024"
+authors = [
+    "Udo Eisenbarth <u.eisenbarth@gsi.de>",
+    "Yannik Zobus <y.zobus@gsi.de>",
+]
+description = "Open-source Optics Simulation Software and Unified Modeler"
+repository = "https://github.com/opossum-labs/opossum"
+license = "GPL-3.0"
+keywords = ["laser", "optics", "physics", "simulation"]
+categories = ["science", "simulation"]
+
 [workspace.dependencies]
 approx = "0.5"
 chrono = { version = "0.4", features = ["serde"] }

@@ -1,19 +1,16 @@
 [package]
 name = "opossum_core"
-version = "0.7.0-beta.1"
-edition = "2024"
-authors = [
-  "Udo Eisenbarth <u.eisenbarth@gsi.de>",
-  "Yannik Zobus <y.zobus@gsi.de>",
-]
-description = "Open-source Optics Simulation Software and Unified Modeler"
-repository = "https://github.com/opossum-labs/opossum"
-license = "GPL-3.0"
-keywords = ["laser", "optics", "physics", "simulation"]
-categories = ["science", "simulation"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
 publish = true
 build = "build.rs"
-readme = "../README.md"
+readme = "README.md"
 
 [package.metadata.wix]
 upgrade-guid = "6A79F3B1-0417-472C-8C99-F1ADB17DE27D"
