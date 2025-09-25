@@ -185,8 +185,8 @@ pub fn use_on_key_down(
 }
 
 pub fn use_on_mouse_leave() -> impl FnMut(MouseEvent) {
+    let mut editor_status = use_context::<Signal<EditorState>>();
     move |_| {
-        let mut editor_status = use_context::<Signal<EditorState>>();
         editor_status.write().drag_status.set(DragStatus::None);
     }
 }

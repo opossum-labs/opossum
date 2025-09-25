@@ -12,6 +12,7 @@ use crate::components::menu_bar::{
     controls::controls_menu::ControlsMenu,
     edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
     help::about::About,
+    path_helper::abbreviate_path,
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
@@ -26,11 +27,14 @@ pub enum MenuSelection {
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     AutoLayout,
+    Quit,
 }
 #[component]
 pub fn MenuBar(
     menu_item_selected: Signal<Option<MenuSelection>>,
     project_directory: Signal<Option<PathBuf>>,
+    model_file_path: Signal<Option<PathBuf>>,
+    model_modified: Signal<bool>,
 ) -> Element {
     let mut about_window = use_signal(|| false);
     let node_selected = use_signal(String::new);
@@ -40,7 +44,6 @@ pub fn MenuBar(
             Icon { width: 25, icon: FaWindowMaximize }
         }
     });
-
     use_effect(move || {
         if let Some(analyzer) = analyzer_selected() {
             menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer)));
@@ -92,7 +95,7 @@ pub fn MenuBar(
                                     onclick: move |_| {
                                         let path = FileDialog::new()
                                             .set_directory("/")
-                                            .set_title("Save OPOSSUM setup file")
+                                            .set_title("Open OPOSSUM setup file")
                                             .add_filter("Opossum setup file", &["opm"])
                                             .pick_file();
                                         if let Some(path) = path {
@@ -100,6 +103,27 @@ pub fn MenuBar(
                                         }
                                     },
                                     "Open Project"
+                                }
+                            }
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| {
+                                        let path = if let Some(model_path) = model_file_path().as_ref() {
+                                            Some(model_path.to_path_buf())
+                                        } else {
+                                            FileDialog::new()
+                                                .set_directory("/")
+                                                .set_title("Save OPOSSUM setup file")
+                                                .add_filter("Opossum setup file", &["opm"])
+                                                .save_file()
+                                        };
+                                        if let Some(path) = path {
+                                            menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
+                                        }
+                                    },
+                                    "Save Project"
                                 }
                             }
                             li {
@@ -116,7 +140,7 @@ pub fn MenuBar(
                                             menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
                                         }
                                     },
-                                    "Save Project"
+                                    "Save Project As"
                                 }
                             }
                             li {
@@ -195,6 +219,19 @@ pub fn MenuBar(
                             }
                         }
                     }
+                    {
+                        let (display_path, full_path) = if let Some(path) = model_file_path() {
+                            (abbreviate_path(&path, 40), path.to_string_lossy().to_string())
+                        } else {
+                            ("unsaved.opm".to_string(), "this model has not been saved yet".to_string())
+                        };
+                        let modified_marker=if model_modified() {"*"} else {""};
+                        rsx! {
+                            li { class: "nav-item d-flex align-items-center",
+                                span { class: "navbar-text text-white-50 ms-3", title: "{full_path}", "{display_path} {modified_marker}" }
+                            }
+                        }
+                    }
                 }
             }
             ExpandOnClick { maximize_symbol }
@@ -217,7 +254,27 @@ pub fn MenuBar(
                     },
                     "Simulate"
                 }
-                ControlsMenu { maximize_symbol }
+                ControlsMenu {
+                    maximize_symbol,
+                    on_quit: move |_| {
+                        let should_close = if model_modified() {
+                            let confirm_quit = rfd::MessageDialog::new()
+                                .set_level(rfd::MessageLevel::Warning)
+                                .set_title("Unsaved Changes")
+                                .set_description(
+                                    "You have unsaved changes. Are you sure you want to quit?",
+                                )
+                                .set_buttons(rfd::MessageButtons::YesNo)
+                                .show();
+                            matches!(confirm_quit, rfd::MessageDialogResult::Yes)
+                        } else {
+                            true
+                        };
+                        if should_close {
+                            menu_item_selected.set(Some(MenuSelection::Quit));
+                        }
+                    },
+                }
             }
         }
         {

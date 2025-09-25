@@ -1,4 +1,4 @@
-mod callbacks;
+mod path_helper;
 pub mod controls;
 pub mod edit;
 pub mod help;
