@@ -110,15 +110,18 @@ pub fn MenuBar(
                                     class: "dropdown-item",
                                     role: "button",
                                     onclick: move |_| {
-                                        let path = if let Some(model_path) = model_file_path().as_ref() {
-                                            Some(model_path.to_path_buf())
-                                        } else {
-                                            FileDialog::new()
-                                                .set_directory("/")
-                                                .set_title("Save OPOSSUM setup file")
-                                                .add_filter("Opossum setup file", &["opm"])
-                                                .save_file()
-                                        };
+                                        let path = model_file_path()
+                                            .as_ref()
+                                            .map_or_else(
+                                                || {
+                                                    FileDialog::new()
+                                                        .set_directory("/")
+                                                        .set_title("Save OPOSSUM setup file")
+                                                        .add_filter("Opossum setup file", &["opm"])
+                                                        .save_file()
+                                                },
+                                                |model_path| Some(model_path.clone()),
+                                            );
                                         if let Some(path) = path {
                                             menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
                                         }
@@ -219,25 +222,29 @@ pub fn MenuBar(
                             }
                             // This is a hack to circumvent layout problems in the menu with only one entry
                             // This li can be removed if further entries are added.
-                            li {
-                                style: "height: 5px; padding-top: 0; padding-bottom: 0; border: 0;",
+                            li { style: "height: 5px; padding-top: 0; padding-bottom: 0; border: 0;",
                                 a {
                                     class: "dropdown-item",
-                                     style: "visibility: hidden; pointer-events: none;",
+                                    style: "visibility: hidden; pointer-events: none;",
                                 }
                             }
                         }
                     }
                     {
-                        let (display_path, full_path) = if let Some(path) = model_file_path() {
-                            (abbreviate_path(&path, 40), path.to_string_lossy().to_string())
-                        } else {
-                            ("unsaved.opm".to_string(), "this model has not been saved yet".to_string())
-                        };
-                        let modified_marker=if model_modified() {"*"} else {""};
+                        let (display_path, full_path) = model_file_path()
+                            .map_or_else(
+                                || (
+                                    "unsaved.opm".to_string(),
+                                    "this model has not been saved yet".to_string(),
+                                ),
+                                |path| (abbreviate_path(&path, 40), path.to_string_lossy().to_string()),
+                            );
+                        let modified_marker = if model_modified() { "*" } else { "" };
                         rsx! {
                             li { class: "nav-item d-flex align-items-center",
-                                span { class: "navbar-text text-white-50 ms-3", title: "{full_path}", "{display_path} {modified_marker}" }
+                                span { class: "navbar-text text-white-50 ms-3", title: "{full_path}",
+                                    "{display_path} {modified_marker}"
+                                }
                             }
                         }
                     }
@@ -265,7 +272,7 @@ pub fn MenuBar(
                 }
                 ControlsMenu {
                     maximize_symbol,
-                    on_quit: move |_| {
+                    on_quit: move || {
                         let should_close = if model_modified() {
                             let confirm_quit = rfd::MessageDialog::new()
                                 .set_level(rfd::MessageLevel::Warning)

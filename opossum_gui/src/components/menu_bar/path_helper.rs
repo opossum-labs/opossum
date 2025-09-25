@@ -23,5 +23,5 @@ pub fn abbreviate_path(path: &Path, max_len: usize) -> String {
         .chars()
         .skip(path_str.chars().count() - suffix_len)
         .collect::<String>();
-        format!("{}{}{}", prefix, ellipsis, suffix)
+    format!("{prefix}{ellipsis}{suffix}")
 }
