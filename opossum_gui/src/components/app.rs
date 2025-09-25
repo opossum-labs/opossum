@@ -1,9 +1,12 @@
-use crate::components::{
-    context_menu::cx_menu::{ContextMenu, CxtCommand},
-    logger::logger_component::Logger,
-    menu_bar::menu_bar_component::{MenuBar, MenuSelection},
-    scenery_editor::{GraphEditor, NodeEditorCommand},
-    simulation::simulation_window::SimulationWindow,
+use crate::{
+    api::delete_scenery,
+    components::{
+        context_menu::cx_menu::{ContextMenu, CxtCommand},
+        logger::logger_component::Logger,
+        menu_bar::menu_bar_component::{MenuBar, MenuSelection},
+        scenery_editor::{GraphEditor, NodeEditorCommand},
+        simulation::simulation_window::SimulationWindow,
+    },
 };
 use dioxus::{
     desktop::{tao::window::ResizeDirection, use_window},
@@ -24,6 +27,11 @@ pub fn App() -> Element {
     // Get a reference to the window
     let window = use_window();
 
+    use_effect(|| {
+        spawn(async move {
+            let _ = delete_scenery().await;
+        });
+    });
     use_effect(move || {
         let cxt_command = cxt_command.read();
         if let Some(cxt_command) = &*(cxt_command) {
@@ -35,8 +43,7 @@ pub fn App() -> Element {
         }
     });
     let window_for_quit = window.clone();
-    use_effect(
-        move || {
+    use_effect(move || {
         let menu_item = menu_item_selected.read();
         if let Some(menu_item) = &*(menu_item) {
             match menu_item {
@@ -77,7 +84,7 @@ pub fn App() -> Element {
                     project_directory.set(Some(path.clone()));
                 }
                 MenuSelection::Quit => {
-                    let _ = window_for_quit.close();
+                    window_for_quit.close();
                 }
             }
         }

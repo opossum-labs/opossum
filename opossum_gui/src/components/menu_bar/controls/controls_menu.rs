@@ -7,7 +7,10 @@ use dioxus_free_icons::{
 
 #[cfg(feature = "desktop")]
 #[component]
-pub fn ControlsMenu(mut maximize_symbol: Signal<Result<VNode, RenderError>>, on_quit: EventHandler) -> Element {
+pub fn ControlsMenu(
+    mut maximize_symbol: Signal<Result<VNode, RenderError>>,
+    on_quit: EventHandler,
+) -> Element {
     let window = use_window();
     rsx! {
         div { class: "menu-group menu-right",
@@ -24,7 +27,6 @@ pub fn ControlsMenu(mut maximize_symbol: Signal<Result<VNode, RenderError>>, on_
                 class: "text-secondary me-2",
                 role: "button",
                 onclick: {
-                    let window = window.clone();
                     move |_| {
                         if window.is_maximized() {
                             window.set_maximized(false);
