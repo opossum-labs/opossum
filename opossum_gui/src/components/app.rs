@@ -17,6 +17,8 @@ pub fn App() -> Element {
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
+    let mut model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
+    let mut model_modified: Signal<bool> = use_signal(|| false);
     let mut run_simulation = use_signal(|| false);
 
     // Get a reference to the window
@@ -32,39 +34,50 @@ pub fn App() -> Element {
             }
         }
     });
-
-    use_effect(move || {
+    let window_for_quit = window.clone();
+    use_effect(
+        move || {
         let menu_item = menu_item_selected.read();
         if let Some(menu_item) = &*(menu_item) {
             match menu_item {
                 MenuSelection::AddNode(node_selected) => {
+                    model_modified.set(true);
                     node_editor_command
                         .set(Some(NodeEditorCommand::AddNode(node_selected.clone())));
                 }
                 MenuSelection::AddAnalyzer(analyzer_selected) => {
+                    model_modified.set(true);
                     node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(
                         analyzer_selected.clone(),
                     )));
                 }
                 MenuSelection::AutoLayout => {
+                    model_modified.set(true);
                     node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
                 }
                 MenuSelection::NewProject => {
+                    model_modified.set(true);
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
                 }
                 MenuSelection::OpenProject(path) => {
                     let path = path.to_owned();
                     node_editor_command.set(Some(NodeEditorCommand::LoadFile(path)));
+                    model_modified.set(false);
                 }
                 MenuSelection::SaveProject(path) => {
                     let path = path.to_owned();
-                    node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
+                    node_editor_command.set(Some(NodeEditorCommand::SaveFile(path.clone())));
+                    model_file_path.set(Some(path));
+                    model_modified.set(false);
                 }
                 MenuSelection::RunProject => {
                     run_simulation.set(true);
                 }
                 MenuSelection::SetReportDir(path) => {
                     project_directory.set(Some(path.clone()));
+                }
+                MenuSelection::Quit => {
+                    let _ = window_for_quit.close();
                 }
             }
         }
@@ -149,7 +162,12 @@ pub fn App() -> Element {
             div { class: "container-fluid text-bg-dark",
                 div { class: "row",
                     div { class: "col",
-                        MenuBar { menu_item_selected, project_directory }
+                        MenuBar {
+                            menu_item_selected,
+                            project_directory,
+                            model_file_path,
+                            model_modified,
+                        }
                     }
                 }
                 GraphEditor { command: node_editor_command }
