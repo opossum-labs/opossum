@@ -1,11 +1,14 @@
 use std::rc::Rc;
 
-use crate::components::scenery_editor::{
-    NodeElement, NodeType,
-    constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
-    edges::edges_component::EdgeCreation,
-    graph_editor::graph_editor_component::{DragStatus, EditorState},
-    graph_store::{GraphStore, GraphStoreAction},
+use crate::{
+    CONTEXT_MENU,
+    components::scenery_editor::{
+        NodeElement, NodeType,
+        constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
+        edges::edges_component::EdgeCreation,
+        graph_editor::graph_editor_component::{DragStatus, EditorState},
+        graph_store::{GraphStore, GraphStoreAction},
+    },
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{PortType, nodes::ConnectInfo};
@@ -65,6 +68,8 @@ pub fn use_drag_start(
 
     move |event| {
         node_selected.set(None);
+        let mut ctx = CONTEXT_MENU.write();
+        *ctx = None;
         current_mouse_pos.set(Point2D::new(
             event.client_coordinates().x,
             event.client_coordinates().y,

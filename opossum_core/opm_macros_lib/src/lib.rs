@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
-use quote::{quote, TokenStreamExt};
-use syn::{parse_macro_input, AttrStyle, ItemStruct, LitStr};
+use quote::{TokenStreamExt, quote};
+use syn::{AttrStyle, ItemStruct, LitStr, parse_macro_input};
 
 // #[proc_macro_attribute]
 // pub fn opm_node(_args: TokenStream, input: TokenStream) -> TokenStream {
