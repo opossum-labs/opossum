@@ -161,7 +161,7 @@ pub fn MenuBar(
                             }
                         }
                     }
-                    li { class: "nav-item",
+                    li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
@@ -200,7 +200,7 @@ pub fn MenuBar(
                             }
                         }
                     }
-                    li { class: "nav-item",
+                    li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
@@ -215,6 +215,15 @@ pub fn MenuBar(
                                     role: "button",
                                     onclick: move |_| about_window.set(true),
                                     "About"
+                                }
+                            }
+                            // This is a hack to circumvent layout problems in the menu with only one entry
+                            // This li can be removed if further entries are added.
+                            li {
+                                style: "height: 5px; padding-top: 0; padding-bottom: 0; border: 0;",
+                                a {
+                                    class: "dropdown-item",
+                                     style: "visibility: hidden; pointer-events: none;",
                                 }
                             }
                         }
