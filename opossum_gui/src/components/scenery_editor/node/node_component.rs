@@ -57,7 +57,9 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
             },
             onkeydown: move |event| {
                 if event.data().key() == Key::Delete {
+                    if is_active!="" {
                     graph_processor.send(GraphStoreAction::DeleteNode(id));
+                    }
                     event.stop_propagation();
                 }
             },
