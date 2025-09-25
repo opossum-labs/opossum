@@ -1,10 +1,11 @@
 [workspace]
 members = [
     "opossum_core",
+    "opossum_cli",
     "opossum_backend",
     "opossum_gui",
+    "opossum_core/opm_macros_lib",
     "xtask",
-    "opossum_cli",
 ]
 default-members = ["opossum_core", "opossum_backend", "opossum_gui"]
 resolver = "3"
@@ -23,7 +24,9 @@ keywords = ["laser", "optics", "physics", "simulation"]
 categories = ["science", "simulation"]
 
 [workspace.dependencies]
-opossum_core = { version = "0.7.0-beta.1", path = "./opossum_core" }
+opossum_core = { version = "0.7.0-beta.1", path = "opossum_core" }
+opm_macros_lib = { version = "0.7.0-beta.1", path = "opossum_core/opm_macros_lib" }
+opossum_backend = { version = "0.7.0-beta.1", path = "opossum_backend" }
 
 approx = "0.5"
 chrono = { version = "0.4", features = ["serde"] }

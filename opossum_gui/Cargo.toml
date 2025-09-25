@@ -12,7 +12,7 @@ publish = true
 readme = "README.md"
 
 [dependencies]
-opossum_backend = { path = "../opossum_backend" }
+opossum_backend = { workspace = true }
 
 approx.workspace = true
 chrono.workspace = true
