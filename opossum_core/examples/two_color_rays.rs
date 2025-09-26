@@ -1,18 +1,10 @@
-use std::path::Path;
-
 use num::Zero;
+use opossum_core::prelude::*;
 use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    error::OpmResult,
-    joule,
-    lightdata::light_data_builder::LightDataBuilder,
-    millimeter, nanometer,
-    nodes::{Lens, NodeGroup, RayPropagationVisualizer, Source, SpotDiagram},
-    opm_document::OpmDocument,
     position_distributions::{FibonacciEllipse, Hexapolar},
     rays::Rays,
-    refractive_index::RefrIndexConst,
 };
+use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {

@@ -1,9 +1,5 @@
 use nalgebra::Vector3;
-use opossum_core::{
-    error::OpmResult,
-    millimeter,
-    nodes::{NodeGroup, ParaxialSurface, RayPropagationVisualizer, SpotDiagram},
-};
+use opossum_core::prelude::*;
 
 pub fn detector_group() -> OpmResult<NodeGroup> {
     let mut cb = NodeGroup::new("Detector Group");

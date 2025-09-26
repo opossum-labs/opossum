@@ -11,7 +11,7 @@ pub mod refr_index_const;
 pub mod refr_index_schott;
 pub mod refr_index_sellmeier1;
 
-use self::refr_index_schott::RefrIndexSchott;
+pub use self::refr_index_schott::RefrIndexSchott;
 pub use refr_index_conrady::RefrIndexConrady;
 pub use refr_index_const::RefrIndexConst;
 pub use refr_index_const::refr_index_vaccuum;

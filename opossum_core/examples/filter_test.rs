@@ -1,18 +1,6 @@
-use std::path::Path;
-
 use num::Zero;
-use opossum_core::{
-    analyzers::AnalyzerType,
-    error::OpmResult,
-    lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
-    nanometer,
-    nodes::{
-        BeamSplitter, EnergyMeter, IdealFilter, NodeGroup, Source, Spectrometer,
-        SplittingConfigBuilder,
-        ideal_filter::{BandFilter, BandFilterType, FilterTypeBuilder, SpectralFilterBuilder},
-    },
-    opm_document::OpmDocument,
-};
+use opossum_core::prelude::*;
+use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {

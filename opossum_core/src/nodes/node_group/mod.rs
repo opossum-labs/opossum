@@ -40,9 +40,7 @@ use uuid::Uuid;
 /// # Example
 ///
 /// ```rust
-/// use opossum_core::nodes::{NodeGroup, Dummy};
-/// use opossum_core::error::OpmResult;
-/// use opossum_core::millimeter;
+/// use opossum_core::prelude::*;
 ///
 /// fn main() -> OpmResult<()> {
 ///   let mut scenery = NodeGroup::new("OpticScenery demo");

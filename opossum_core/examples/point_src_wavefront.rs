@@ -1,13 +1,5 @@
-use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    degree,
-    error::OpmResult,
-    joule, meter,
-    nodes::{NodeGroup, WaveFront, point_ray_source},
-    opm_document::OpmDocument,
-};
+use opossum_core::prelude::*;
 use std::path::Path;
-
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let source = point_ray_source(degree!(90.0), joule!(1.))?;

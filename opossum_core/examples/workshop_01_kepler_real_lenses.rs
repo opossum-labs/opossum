@@ -1,14 +1,4 @@
-use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    apertures::{Aperture, ApertureType},
-    error::OpmResult,
-    joule, millimeter, nanometer,
-    nodes::{Lens, NodeGroup, RayPropagationVisualizer, collimated_line_ray_source},
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-    optic_ports::PortType,
-    refractive_index::refr_index_schott::RefrIndexSchott,
-};
+use opossum_core::prelude::*;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

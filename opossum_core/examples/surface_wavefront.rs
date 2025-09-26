@@ -1,21 +1,7 @@
 use num::Zero;
-use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    apertures::{Aperture, ApertureType},
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{
-        Lens, NodeGroup, RayPropagationVisualizer, SpotDiagram, WaveFront,
-        round_collimated_ray_source,
-    },
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-    optic_ports::PortType,
-    refractive_index::RefrIndexConst,
-};
+use opossum_core::prelude::*;
 use std::path::Path;
 use uom::si::f64::Length;
-
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let src = scenery.add_node(round_collimated_ray_source(

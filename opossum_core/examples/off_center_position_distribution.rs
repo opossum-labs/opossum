@@ -1,16 +1,6 @@
+use opossum_core::prelude::*;
 use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    energy_distributions::General2DGaussian,
-    error::OpmResult,
-    joule,
-    lightdata::light_data_builder::LightDataBuilder,
-    millimeter, nanometer,
-    nodes::{NodeGroup, Source, SpotDiagram},
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-    position_distributions::HexagonalTiling,
-    radian,
-    rays::Rays,
+    energy_distributions::General2DGaussian, position_distributions::HexagonalTiling, rays::Rays,
     utils::geom_transformation::Isometry,
 };
 use std::path::Path;

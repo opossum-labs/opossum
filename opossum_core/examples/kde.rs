@@ -1,6 +1,5 @@
+use opossum_core::prelude::*;
 use opossum_core::{
-    error::OpmResult,
-    joule, millimeter,
     plottable::Plottable,
     position_distributions::{Hexapolar, PositionDistribution},
     surface::hit_map::{

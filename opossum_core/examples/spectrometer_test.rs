@@ -1,21 +1,8 @@
+use opossum_core::prelude::*;
 use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    energy_distributions::UniformDist,
-    error::OpmResult,
-    joule,
-    lightdata::{
-        light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrc, RayDataBuilder},
-    },
-    millimeter, nanometer,
-    nodes::{NodeGroup, Source, Spectrometer},
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-    position_distributions::Hexapolar,
-    spectral_distribution::LaserLines,
-    utils::geom_transformation::Isometry,
+    energy_distributions::UniformDist, position_distributions::Hexapolar,
+    spectral_distribution::LaserLines, utils::geom_transformation::Isometry,
 };
-
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Raysource demo");
     let light_data_builder =

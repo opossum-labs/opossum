@@ -1,22 +1,7 @@
 #![allow(missing_docs)]
-use std::path::Path;
-
 use num::Zero;
-use opossum_core::{
-    analyzers::AnalyzerType,
-    error::OpmResult,
-    joule,
-    lightdata::{
-        energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
-        light_data_builder::LightDataBuilder,
-    },
-    nanometer,
-    nodes::{
-        BeamSplitter, Dummy, IdealFilter, NodeGroup, Source, SplittingConfigBuilder,
-        ideal_filter::{EdgeFilter, EdgeFilterType, FilterTypeBuilder, SpectralFilterBuilder},
-    },
-    opm_document::OpmDocument,
-};
+use opossum_core::prelude::*;
+use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {

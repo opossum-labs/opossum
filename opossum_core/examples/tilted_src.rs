@@ -1,14 +1,5 @@
-use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    degree,
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{NodeGroup, RayPropagationVisualizer, ThinMirror, collimated_line_ray_source},
-    opm_document::OpmDocument,
-    optic_node::Alignable,
-};
+use opossum_core::prelude::*;
 use std::path::Path;
-
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let src = collimated_line_ray_source(millimeter!(20.0), joule!(1.0), 21)?

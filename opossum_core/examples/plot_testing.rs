@@ -1,15 +1,13 @@
-use std::time::Instant;
-
 use nalgebra::{DMatrix, DVector, MatrixXx2};
+use opossum_core::prelude::*;
 use opossum_core::{
-    error::OpmResult,
-    joule, millimeter, nanometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     position_distributions::Hexapolar,
     rays::Rays,
     utils::geom_transformation::Isometry,
 };
 use plotters::style::RGBAColor;
+use std::time::Instant;
 use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
 fn main() -> OpmResult<()> {
     let rays = Rays::new_uniform_collimated(

@@ -1,23 +1,8 @@
 use num::Zero;
+use opossum_core::prelude::*;
 use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    apertures::{Aperture, ApertureType},
-    energy_distributions::UniformDist,
-    error::OpmResult,
-    joule,
-    lightdata::{
-        light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrc, RayDataBuilder},
-    },
-    millimeter, nanometer,
-    nodes::{Lens, NodeGroup, RayPropagationVisualizer, Source},
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-    optic_ports::PortType,
-    position_distributions::Grid,
-    refractive_index::refr_index_schott::RefrIndexSchott,
-    spectral_distribution::LaserLines,
-    utils::geom_transformation::Isometry,
+    energy_distributions::UniformDist, position_distributions::Grid,
+    spectral_distribution::LaserLines, utils::geom_transformation::Isometry,
 };
 use std::path::Path;
 use uom::si::f64::Length;

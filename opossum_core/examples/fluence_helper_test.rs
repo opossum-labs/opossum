@@ -1,17 +1,7 @@
+use opossum_core::prelude::*;
 use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    error::OpmResult,
-    fluence_distributions::general_gaussian::General2DGaussian,
-    joule,
-    lightdata::light_data_builder::LightDataBuilder,
-    millimeter, nanometer,
-    nodes::{FluenceDetector, NodeGroup, ParaxialSurface, Source},
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-    position_distributions::Hexapolar,
-    radian,
-    rays::Rays,
-    surface::hit_map::fluence_estimator::FluenceEstimator,
+    fluence_distributions::general_gaussian::General2DGaussian, position_distributions::Hexapolar,
+    radian, rays::Rays, surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::geom_transformation::Isometry,
 };
 use std::{f64::consts::PI, path::Path};

@@ -1,6 +1,6 @@
 use criterion::{Criterion, criterion_group, criterion_main};
+use opossum_core::prelude::*;
 use opossum_core::{
-    joule, millimeter,
     position_distributions::{Hexapolar, PositionDistribution, SobolDist},
     surface::hit_map::{
         fluence_estimator::FluenceEstimator,
