@@ -1,18 +1,4 @@
-use opossum_core::{
-    analyzers::AnalyzerType,
-    error::OpmResult,
-    joule,
-    lightdata::{
-        energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
-        light_data_builder::LightDataBuilder,
-    },
-    millimeter, nanometer,
-    nodes::{
-        BeamSplitter, NodeGroup, Source, Spectrometer, SpectrometerType, SplittingConfigBuilder,
-        ideal_filter::{EdgeFilter, EdgeFilterType},
-    },
-    opm_document::OpmDocument,
-};
+use opossum_core::prelude::*;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

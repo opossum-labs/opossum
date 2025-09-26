@@ -1,11 +1,4 @@
-use opossum_core::{
-    degree,
-    error::OpmResult,
-    millimeter,
-    nodes::{NodeGroup, ReflectiveGrating},
-    num_per_mm,
-    optic_node::{Alignable, OpticNode},
-};
+use opossum_core::prelude::*;
 use uom::si::f64::Length;
 
 pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {

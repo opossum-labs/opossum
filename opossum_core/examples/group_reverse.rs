@@ -1,21 +1,7 @@
-use std::path::Path;
-
 use num::Zero;
-use opossum_core::{
-    analyzers::AnalyzerType,
-    error::OpmResult,
-    joule,
-    lightdata::{
-        energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
-        light_data_builder::LightDataBuilder,
-    },
-    nanometer,
-    nodes::{Dummy, EnergyMeter, NodeGroup, Source},
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-};
+use opossum_core::prelude::*;
+use std::path::Path;
 use uom::si::f64::Length;
-
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Inverse Group test");
     let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(

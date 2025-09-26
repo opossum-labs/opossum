@@ -1,9 +1,7 @@
 use nalgebra::{DMatrix, DVector};
+use opossum_core::prelude::*;
 use opossum_core::{
-    degree,
     energy_distributions::general_gaussian::General2DGaussian,
-    error::OpmResult,
-    joule, millimeter, nanometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     position_distributions::FibonacciRectangle,
     rays::Rays,

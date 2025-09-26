@@ -1,21 +1,9 @@
-use std::{f64::consts::PI, path::Path};
-
+use opossum_core::prelude::*;
 use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    degree,
-    energy_distributions::General2DGaussian,
-    error::OpmResult,
-    joule,
-    lightdata::light_data_builder::LightDataBuilder,
-    millimeter, nanometer,
-    nodes::{FluenceDetector, NodeGroup, Source},
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-    position_distributions::SobolDist,
-    rays::Rays,
-    surface::hit_map::fluence_estimator::FluenceEstimator,
-    utils::geom_transformation::Isometry,
+    energy_distributions::General2DGaussian, position_distributions::SobolDist, rays::Rays,
+    surface::hit_map::fluence_estimator::FluenceEstimator, utils::geom_transformation::Isometry,
 };
+use std::{f64::consts::PI, path::Path};
 use uom::si::{length::millimeter, radiant_exposure::millijoule_per_square_centimeter};
 fn main() -> OpmResult<()> {
     let energy_dist = General2DGaussian::new(

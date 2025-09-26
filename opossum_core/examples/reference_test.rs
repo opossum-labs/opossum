@@ -1,21 +1,7 @@
 use num::Zero;
-use opossum_core::{
-    analyzers::AnalyzerType,
-    error::OpmResult,
-    joule,
-    lightdata::{
-        energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
-        light_data_builder::LightDataBuilder,
-    },
-    nanometer,
-    nodes::{
-        EnergyMeter, IdealFilter, NodeGroup, NodeReference, Source, ideal_filter::FilterTypeBuilder,
-    },
-    opm_document::OpmDocument,
-};
+use opossum_core::prelude::*;
 use std::path::Path;
 use uom::si::f64::Length;
-
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Reference node demo");
     let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(

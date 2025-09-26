@@ -1,21 +1,7 @@
+use opossum_core::prelude::*;
 use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    coatings::CoatingType,
-    energy_distributions::UniformDist,
-    error::OpmResult,
-    joule,
-    lightdata::{
-        light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrc, RayDataBuilder},
-    },
-    millimeter, nanometer,
-    nodes::{EnergyMeter, FluenceDetector, Lens, NodeGroup, RayPropagationVisualizer, Source},
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-    optic_ports::PortType,
-    position_distributions::Grid,
-    refractive_index::RefrIndexConst,
-    spectral_distribution::LaserLines,
+    coatings::CoatingType, energy_distributions::UniformDist, optic_ports::PortType,
+    position_distributions::Grid, spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
 };
 use std::path::Path;

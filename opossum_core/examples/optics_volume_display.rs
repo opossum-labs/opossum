@@ -1,5 +1,4 @@
-use opossum_core::error::OpmResult;
-
+use opossum_core::prelude::*;
 fn main() -> OpmResult<()> {
     // let cylinder = Cylinder::new(
     //     millimeter!(10.),

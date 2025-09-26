@@ -6,10 +6,8 @@
 //! [`Aperture::None`] by default), and a [`CoatingType`] ([`CoatingType::IdealAR`] by default). Furthermore, [`OpticPorts`] can be
 //! inverted (see inverted optic nodes). In this case input and output ports are swapped.
 //! ```rust
-//! use opossum_core::optic_ports::{OpticPorts, PortType};
-//! use nalgebra::Point2;
-//! use opossum_core::{millimeter, apertures::{Aperture, ApertureType}};
-//! use uom::si::{f64::Length, length::millimeter};
+//! use opossum_core::prelude::*;
+//! use opossum_core::optic_ports::OpticPorts;
 //!
 //! let mut ports = OpticPorts::new();
 //! ports.add(&PortType::Input, "my input").unwrap();

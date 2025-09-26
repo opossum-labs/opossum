@@ -137,7 +137,7 @@ impl Isometry {
         )))
     }
 
-    /// Create a "identiy" Isometry, which represents a zero translation and rotation.
+    /// Create an "identity" Isometry, (no translation and rotation).
     #[must_use]
     pub fn identity() -> Self {
         Self {

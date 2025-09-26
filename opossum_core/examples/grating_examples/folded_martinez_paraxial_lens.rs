@@ -1,11 +1,4 @@
-use opossum_core::{
-    centimeter, degree,
-    error::OpmResult,
-    millimeter,
-    nodes::{NodeGroup, NodeReference, ParaxialSurface, ReflectiveGrating, ThinMirror},
-    num_per_mm,
-    optic_node::{Alignable, OpticNode},
-};
+use opossum_core::prelude::*;
 use uom::si::f64::Length;
 
 pub fn folded_martinez_paraxial_lens(

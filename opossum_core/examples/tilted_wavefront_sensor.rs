@@ -1,14 +1,4 @@
-use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    degree,
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{
-        NodeGroup, RayPropagationVisualizer, SpotDiagram, WaveFront, round_collimated_ray_source,
-    },
-    opm_document::OpmDocument,
-    optic_node::Alignable,
-};
+use opossum_core::prelude::*;
 use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();

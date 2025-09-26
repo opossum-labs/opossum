@@ -1,17 +1,5 @@
-use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    coatings::CoatingType,
-    degree,
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{
-        EnergyMeter, NodeGroup, RayPropagationVisualizer, SpotDiagram, ThinMirror, WaveFront,
-        round_collimated_ray_source,
-    },
-    opm_document::OpmDocument,
-    optic_node::{Alignable, OpticNode},
-    optic_ports::PortType,
-};
+use opossum_core::coatings::CoatingType;
+use opossum_core::prelude::*;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

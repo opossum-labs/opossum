@@ -12,7 +12,6 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
            to enable."
 )]
 #![allow(clippy::module_name_repetitions)]
-
 pub mod analyzers;
 pub mod apertures;
 pub mod coatings;
@@ -33,6 +32,7 @@ mod optic_scenery_rsc;
 pub mod plottable;
 mod port_map;
 pub mod position_distributions;
+pub mod prelude;
 pub mod properties;
 pub mod ray;
 pub mod rays;

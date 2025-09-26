@@ -1,10 +1,4 @@
-use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    error::OpmResult,
-    millimeter,
-    nodes::{Dummy, NodeGroup},
-    opm_document::OpmDocument,
-};
+use opossum_core::prelude::*;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

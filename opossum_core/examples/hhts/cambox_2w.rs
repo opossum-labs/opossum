@@ -1,18 +1,6 @@
-use opossum_core::{
-    apertures::RectangleShape,
-    error::OpmResult,
-    millimeter,
-    nodes::{
-        BeamSplitter, Dummy, FluenceDetector, NodeGroup, ParaxialSurface, SplittingConfigBuilder,
-        SpotDiagram,
-    },
-    optic_node::OpticNode,
-};
+use opossum_core::prelude::*;
 
 pub fn cambox_2w() -> OpmResult<NodeGroup> {
-    let _config = RectangleShape::new(millimeter!(11.33), millimeter!(7.13), millimeter!(0., 0.))?;
-    //let cam_aperture = Aperture::BinaryRectangle(config);
-
     let mut cb = NodeGroup::new("CamBox 2w");
 
     let d1 = cb.add_node(Dummy::new("d1"))?;

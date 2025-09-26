@@ -1,26 +1,11 @@
 use core::f64;
-use std::path::Path;
-
 use nalgebra::Vector3;
+use opossum_core::prelude::*;
 use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    centimeter,
-    energy_distributions::UniformDist,
-    error::OpmResult,
-    joule,
-    lightdata::{
-        light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrc, RayDataBuilder},
-    },
-    millimeter, nanometer,
-    nodes::{Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
-    opm_document::OpmDocument,
-    optic_node::{Alignable, OpticNode},
-    position_distributions::Hexapolar,
-    refractive_index::RefrIndexSellmeier1,
-    spectral_distribution::Gaussian,
-    utils::geom_transformation::Isometry,
+    energy_distributions::UniformDist, position_distributions::Hexapolar,
+    spectral_distribution::Gaussian, utils::geom_transformation::Isometry,
 };
+use std::path::Path;
 
 pub fn main() -> OpmResult<()> {
     let alignment_wvl = nanometer!(1054.);

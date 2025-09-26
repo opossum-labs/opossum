@@ -1,14 +1,4 @@
-use opossum_core::{
-    apertures::{Aperture, ApertureType},
-    error::OpmResult,
-    millimeter,
-    nodes::{
-        BeamSplitter, Dummy, FluenceDetector, NodeGroup, ParaxialSurface, SplittingConfigBuilder,
-        SpotDiagram,
-    },
-    optic_node::OpticNode,
-    optic_ports::PortType,
-};
+use opossum_core::prelude::*;
 
 pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let cam_aperture = Aperture::new_rectangle(

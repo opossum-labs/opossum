@@ -9,9 +9,7 @@
 //! Apertures a defined by their respective configuration struct. For the calculation the function
 //! [`apodize`](Aperture::apodize()) is used.
 //! ```rust
-//! use nalgebra::Point2;
-//! use opossum_core::{millimeter, apertures::{Aperture, ApertureType}};
-//! use uom::si::{f64::Length, length::millimeter};
+//! use opossum_core::prelude::*;
 //!
 //! let ap = Aperture::new_circle(millimeter!(1.0), millimeter!(1.0, 1.0), ApertureType::Hole).unwrap();
 //! assert_eq!(ap.apodize(&millimeter!(1.0,1.0)), 1.0);
@@ -19,9 +17,7 @@
 //! ```
 //! Furthermore, each aperture can act as a "hole" or as an "obstruction".
 //! ```rust
-//! use nalgebra::Point2;
-//! use opossum_core::{millimeter, apertures::{Aperture, ApertureType}};
-//! use uom::si::{f64::Length, length::millimeter};
+//! use opossum_core::prelude::*;
 //!
 //! let ap = Aperture::new_circle(millimeter!(1.0), millimeter!(1.0, 1.0), ApertureType::Obstruction).unwrap();
 //! assert_eq!(ap.apodize(&millimeter!(1.0, 1.0)), 0.0);

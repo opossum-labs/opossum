@@ -1,19 +1,6 @@
+use opossum_core::prelude::*;
 use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    degree,
-    error::OpmResult,
-    joule,
-    lightdata::{
-        light_data_builder::LightDataBuilder,
-        ray_data_builder::{ImageSrc, RayDataBuilder},
-    },
-    micrometer, millimeter, nanometer,
-    nodes::{FluenceDetector, Lens, NodeGroup, Source},
-    opm_document::OpmDocument,
-    optic_node::{Alignable, OpticNode},
-    refractive_index::RefrIndexConst,
-    surface::hit_map::fluence_estimator::FluenceEstimator,
-    utils::geom_transformation::Isometry,
+    surface::hit_map::fluence_estimator::FluenceEstimator, utils::geom_transformation::Isometry,
 };
 use std::path::Path;
 

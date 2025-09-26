@@ -90,10 +90,8 @@ impl Source {
     /// ## Example
     ///
     /// ```rust
-    /// use opossum_core::{
-    /// lightdata::{light_data_builder::LightDataBuilder, energy_data_builder::EnergyDataBuilder},
-    /// nodes::Source,
-    /// spectrum_helper::create_he_ne_spec};
+    /// use opossum_core::prelude::*;
+    /// use opossum_core::{spectrum_helper::create_he_ne_spec};
     ///
     /// let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0).unwrap()));
     /// let source=Source::new("My Source", light_data_builder);

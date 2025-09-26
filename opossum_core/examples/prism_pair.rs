@@ -1,14 +1,5 @@
-use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    degree,
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{NodeGroup, RayPropagationVisualizer, SpotDiagram, Wedge, collimated_line_ray_source},
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-    refractive_index::RefrIndexConst,
-    utils::geom_transformation::Isometry,
-};
+use opossum_core::prelude::*;
+use opossum_core::{refractive_index::RefrIndexConst, utils::geom_transformation::Isometry};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

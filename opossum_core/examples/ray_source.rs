@@ -1,17 +1,7 @@
 use num::Zero;
-use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    apertures::{Aperture, ApertureType},
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{Dummy, EnergyMeter, NodeGroup, SpotDiagram, round_collimated_ray_source},
-    opm_document::OpmDocument,
-    optic_node::OpticNode,
-    optic_ports::PortType,
-};
+use opossum_core::prelude::*;
 use std::path::Path;
 use uom::si::f64::Length;
-
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Raysource demo");
     let mut source = round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 5)?;

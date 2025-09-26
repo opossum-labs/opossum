@@ -1,24 +1,8 @@
 use nalgebra::Vector3;
+use opossum_core::prelude::*;
 use opossum_core::{
-    analyzers::{AnalyzerType, RayTraceConfig},
-    energy_distributions::UniformDist,
-    error::OpmResult,
-    joule,
-    lightdata::{
-        light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrc, RayDataBuilder},
-    },
-    millimeter, nanometer,
-    nodes::{
-        Lens, NodeGroup, NodeReference, ParaxialSurface, RayPropagationVisualizer, Source,
-        SpotDiagram, ThinMirror,
-    },
-    opm_document::OpmDocument,
-    optic_node::{Alignable, OpticNode},
-    position_distributions::Hexapolar,
-    refractive_index::{RefrIndexConst, RefrIndexSellmeier1, RefractiveIndex},
-    spectral_distribution::Gaussian,
-    utils::geom_transformation::Isometry,
+    energy_distributions::UniformDist, position_distributions::Hexapolar,
+    spectral_distribution::Gaussian, utils::geom_transformation::Isometry,
 };
 
 mod folded_martinez;

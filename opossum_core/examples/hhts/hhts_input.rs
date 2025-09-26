@@ -1,14 +1,6 @@
+use opossum_core::prelude::*;
 use std::path::Path;
 
-use opossum_core::{
-    error::OpmResult,
-    millimeter,
-    nodes::{
-        BeamSplitter, Dummy, EnergyMeter, IdealFilter, Metertype, NodeGroup,
-        SplittingConfigBuilder,
-        ideal_filter::{FilterTypeBuilder, SpectralFilterBuilder},
-    },
-};
 pub fn hhts_input() -> OpmResult<NodeGroup> {
     let dichroic_mirror = SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::FromFile(
         Path::new("opossum/examples/hhts/MM15_Transmission.csv").to_path_buf(),
