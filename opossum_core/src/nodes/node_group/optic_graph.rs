@@ -25,11 +25,11 @@ use serde::{
     de::{self},
     ser::SerializeStruct,
 };
-use std::fmt::Write as _;
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
 };
+use std::{collections::HashSet, fmt::Write as _};
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
 
@@ -104,7 +104,8 @@ impl OpticGraph {
     /// Delete a node from this [`OpticGraph`].
     ///
     /// Deletes a node with the given [`Uuid`] from the graph. All edges connected to this node will be removed as well.
-    /// This function also deletes all nodes (and sub-nodes) that reference the given node. The function returns a vector
+    /// This function also deletes all nodes (and sub-nodes) that reference the given node. It also deletes possible cascades
+    /// of reference nodes (reference nodes of reference nodes referring to the given uuid). The function returns a vector
     /// of all deleted node [`Uuid`]s.
     ///
     /// # Errors
@@ -122,16 +123,31 @@ impl OpticGraph {
             ));
         }
         let mut nodes_deleted = vec![];
-        // delete node and/or references
-        while let Some(node_idx) = self.next_node_with_uuid(node_id) {
-            // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
-            let node_id = self.node_by_idx(node_idx).unwrap().uuid();
-            self.g.remove_node(node_idx);
-            // Remove possibly no longer valid port mappings
-            self.input_port_map.remove_all_from_uuid(node_id);
-            self.output_port_map.remove_all_from_uuid(node_id);
+        let mut deletion_queue = vec![node_id];
+        let mut processed_uuids = HashSet::new();
 
-            nodes_deleted.push(node_id);
+        while let Some(current_id_to_check) = deletion_queue.pop() {
+            // If we have already processed this UUID, skip it.
+            if !processed_uuids.insert(current_id_to_check) {
+                continue;
+            }
+
+            // This inner loop finds all nodes that are or reference the current_id_to_check
+            while let Some(node_idx) = self.next_node_with_uuid(current_id_to_check) {
+                // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
+                let actual_node_id = self.node_by_idx(node_idx).unwrap().uuid();
+                self.g.remove_node(node_idx);
+                // Remove possibly no longer valid port mappings
+                self.input_port_map.remove_all_from_uuid(actual_node_id);
+                self.output_port_map.remove_all_from_uuid(actual_node_id);
+
+                if !nodes_deleted.contains(&actual_node_id) {
+                    nodes_deleted.push(actual_node_id);
+                }
+                // Add the UUID of the node we just deleted to the queue.
+                // This ensures we will now search for any nodes that referenced *it*.
+                deletion_queue.push(actual_node_id);
+            }
         }
         // now check if subnodes exist and delete recusively
         for node_ref in self.nodes() {
@@ -140,8 +156,8 @@ impl OpticGraph {
                 .lock()
                 .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
             if let Ok(group) = node.as_group_mut() {
-                let deleted_nodes = group.graph.delete_node(node_id)?;
-                nodes_deleted.extend(deleted_nodes);
+                let deleted_nodes_in_group = group.graph.delete_node(node_id)?;
+                nodes_deleted.extend(deleted_nodes_in_group);
             }
         }
         if nodes_deleted.is_empty() {
@@ -149,6 +165,9 @@ impl OpticGraph {
                 "node with given uuid does not exist".into(),
             ));
         }
+        // Remove duplicates that might occur from the subgroup recursion
+        nodes_deleted.sort();
+        nodes_deleted.dedup();
         Ok(nodes_deleted)
     }
     /// Return the first [`NodeId`] with the given [`Uuid`] in this [`OpticGraph`].
@@ -1902,6 +1921,20 @@ mod test {
         assert_eq!(graph.output_port_map.len(), 1);
         assert!(deleted_nodes.contains(&i_d1));
         assert!(deleted_nodes.contains(&i_ref));
+    }
+    #[test]
+    fn delete_node_with_nested_refs() {
+        let mut graph = OpticGraph::default();
+        let i_d = graph.add_node(Dummy::default()).unwrap();
+        let ref_node = NodeReference::from_node(&graph.node(i_d).unwrap());
+        let i_ref = graph.add_node(ref_node).unwrap();
+        let ref_node = NodeReference::from_node(&graph.node(i_ref).unwrap());
+        let i_ref_ref = graph.add_node(ref_node).unwrap();
+        assert_eq!(graph.g.node_count(), 3);
+        let deleted_nodes = graph.delete_node(i_d).unwrap();
+        assert!(deleted_nodes.contains(&i_d));
+        assert!(deleted_nodes.contains(&i_ref));
+        assert!(deleted_nodes.contains(&i_ref_ref));
     }
     #[test]
     fn delete_node_with_mapped_ref() {
