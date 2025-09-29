@@ -184,7 +184,7 @@ impl NodeGroup {
                 .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
             node_ref.node_attr_mut().set_property(
                 "light data",
-                Some(LightDataBuilder::Geometric(new_rays.into())).into(),
+                LightDataBuilder::Geometric(new_rays.into()).into(),
             )?;
         }
         Ok(())

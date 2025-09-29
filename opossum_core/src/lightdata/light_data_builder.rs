@@ -12,7 +12,6 @@ use crate::{
     error::OpmResult,
     lightdata::ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc},
     position_distributions::PosDistType,
-    properties::Proptype,
     spectral_distribution::SpecDistType,
     utils::default_from_name::DefaultFromName,
 };
@@ -116,11 +115,6 @@ impl Display for LightDataBuilder {
         }
     }
 }
-impl From<Option<LightDataBuilder>> for Proptype {
-    fn from(value: Option<LightDataBuilder>) -> Self {
-        Self::LightDataBuilder(value)
-    }
-}
 
 impl From<ImageSrc> for LightDataBuilder {
     fn from(value: ImageSrc) -> Self {
@@ -143,7 +137,10 @@ impl From<CollimatedSrc> for LightDataBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{joule, lightdata::energy_data_builder::EnergyLaserLines, nanometer, rays::Rays};
+    use crate::{
+        joule, lightdata::energy_data_builder::EnergyLaserLines, nanometer, properties::Proptype,
+        rays::Rays,
+    };
 
     #[test]
     fn from_light_data_builder_to_proptype() {
@@ -151,7 +148,7 @@ mod tests {
             EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))
                 .unwrap(),
         ));
-        let proptype: Proptype = Some(light_data_builder).into();
+        let proptype: Proptype = light_data_builder.into();
         assert!(matches!(proptype, Proptype::LightDataBuilder(_)));
     }
     #[test]

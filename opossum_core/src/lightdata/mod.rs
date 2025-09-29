@@ -68,7 +68,7 @@ mod test {
     }
     #[test]
     fn from() {
-        let ld = Proptype::from(Some(LightDataBuilder::Geometric(RayDataBuilder::default())));
+        let ld = Proptype::from(LightDataBuilder::Geometric(RayDataBuilder::default()));
         assert_matches!(ld, Proptype::LightDataBuilder(_));
     }
 }
