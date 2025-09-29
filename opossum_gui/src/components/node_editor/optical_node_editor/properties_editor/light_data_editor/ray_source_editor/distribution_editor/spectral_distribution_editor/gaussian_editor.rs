@@ -1,6 +1,6 @@
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
-use opossum_backend::{Gaussian, SpecDistType, millimeter, try_f64_to_usize};
+use opossum_backend::{Gaussian, SpecDistType, nanometer, try_f64_to_usize};
 use strum::EnumIter;
 use uom::si::length::nanometer;
 
@@ -61,15 +61,15 @@ impl IntoInputData<f64, Gaussian, SpecDistType> for GaussianSpectrumParam {
     fn setter_from_obj(&self) -> impl FnMut(&mut Gaussian, f64) {
         match self {
             Self::CenterWavelength => {
-                move |obj: &mut Gaussian, val: f64| obj.set_mu(millimeter!(val))
+                move |obj: &mut Gaussian, val: f64| obj.set_mu(nanometer!(val))
             }
-            Self::Fwhm => move |obj: &mut Gaussian, val: f64| obj.set_fwhm(millimeter!(val)),
+            Self::Fwhm => move |obj: &mut Gaussian, val: f64| obj.set_fwhm(nanometer!(val)),
             Self::Power => move |obj: &mut Gaussian, val: f64| obj.set_power(val),
             Self::WavelengthStart => {
-                move |obj: &mut Gaussian, val: f64| obj.set_wvl_start(millimeter!(val))
+                move |obj: &mut Gaussian, val: f64| obj.set_wvl_start(nanometer!(val))
             }
             Self::WavelengthEnd => {
-                move |obj: &mut Gaussian, val: f64| obj.set_wvl_end(millimeter!(val))
+                move |obj: &mut Gaussian, val: f64| obj.set_wvl_end(nanometer!(val))
             }
             Self::NumPoints => move |obj: &mut Gaussian, val: f64| {
                 obj.set_num_points(try_f64_to_usize(val).unwrap());

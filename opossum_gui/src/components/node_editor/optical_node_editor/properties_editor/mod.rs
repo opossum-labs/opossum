@@ -95,10 +95,7 @@ fn get_editor(property: Property, property_key: String) -> Option<Element> {
             CurvatureEditor { curvature, property_key }
         }),
         Proptype::LightDataBuilder(light_data_builder) => Some(rsx! {
-            LightDataEditor {
-                light_data_builder,
-                property_key,
-            }
+            LightDataEditor { light_data_builder, property_key }
         }),
         Proptype::LengthOption(length_opt) => Some(rsx! {
             LengthOptionEditor { length_opt, property_key }
