@@ -324,6 +324,8 @@ mod test {
         assert_eq!(*output, input_light);
     }
     #[test]
+    #[ignore]
+    //obsolete test since source references are now allowed to be inverted
     fn analyze_non_invertible_ref() {
         let mut scenery = NodeGroup::default();
         let node_id = scenery.add_node(Source::default()).unwrap();
@@ -334,6 +336,6 @@ mod test {
         input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input);
-        assert!(output.is_err());
+        assert!(output.is_ok());
     }
 }

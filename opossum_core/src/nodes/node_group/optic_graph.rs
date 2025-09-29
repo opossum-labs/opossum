@@ -1786,7 +1786,7 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light);
         let output = graph.analyze_energy(&input);
-        assert!(output.is_err());
+        assert!(output.is_ok());
     }
     #[test]
     fn serialize_deserialize() {

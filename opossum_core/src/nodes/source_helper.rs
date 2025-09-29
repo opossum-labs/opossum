@@ -116,7 +116,7 @@ mod test {
         if let Proptype::LightDataBuilder(light_data_builder) =
             src.properties().get("light data").unwrap()
         {
-            let data = light_data_builder.clone().unwrap().build().unwrap();
+            let data = light_data_builder.clone().build().unwrap();
             if let LightData::Geometric(rays) = data {
                 assert_eq!(rays.nr_of_rays(true), 1);
                 assert_abs_diff_eq!(
@@ -134,7 +134,7 @@ mod test {
         if let Proptype::LightDataBuilder(light_data_builder) =
             src.properties().get("light data").unwrap()
         {
-            let data = light_data_builder.clone().unwrap().build().unwrap();
+            let data = light_data_builder.clone().build().unwrap();
             if let LightData::Geometric(rays) = data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
@@ -158,7 +158,7 @@ mod test {
         if let Proptype::LightDataBuilder(light_data_builder) =
             src.properties().get("light data").unwrap()
         {
-            let data = light_data_builder.clone().unwrap().build().unwrap();
+            let data = light_data_builder.clone().build().unwrap();
             if let LightData::Geometric(rays) = &data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),

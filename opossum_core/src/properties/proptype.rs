@@ -128,7 +128,7 @@ pub enum Proptype {
     /// 2-dimenstional vector
     Vec2(Vector2<f64>),
     /// [`LightData`] build configuration
-    LightDataBuilder(Option<LightDataBuilder>),
+    LightDataBuilder(LightDataBuilder),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -281,31 +281,25 @@ impl From<Vector2<f64>> for Proptype {
 
 impl From<CollimatedSrc> for Proptype {
     fn from(val: CollimatedSrc) -> Self {
-        Self::LightDataBuilder(Some(LightDataBuilder::Geometric(
-            RayDataBuilder::Collimated(val),
-        )))
+        Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataBuilder::Collimated(val)))
     }
 }
 
 impl From<PointSrc> for Proptype {
     fn from(val: PointSrc) -> Self {
-        Self::LightDataBuilder(Some(LightDataBuilder::Geometric(RayDataBuilder::PointSrc(
-            val,
-        ))))
+        Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataBuilder::PointSrc(val)))
     }
 }
 
 impl From<ImageSrc> for Proptype {
     fn from(val: ImageSrc) -> Self {
-        Self::LightDataBuilder(Some(LightDataBuilder::Geometric(RayDataBuilder::Image(
-            val,
-        ))))
+        Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataBuilder::Image(val)))
     }
 }
 
 impl From<LightDataBuilder> for Proptype {
     fn from(val: LightDataBuilder) -> Self {
-        Self::LightDataBuilder(Some(val))
+        Self::LightDataBuilder(val)
     }
 }
 
