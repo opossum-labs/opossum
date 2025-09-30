@@ -1,7 +1,7 @@
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::General2DGaussian, position_distributions::SobolDist, rays::Rays,
-    surface::hit_map::fluence_estimator::FluenceEstimator, utils::geom_transformation::Isometry,
+    surface::hit_map::fluence_estimator::FluenceEstimator,
 };
 use std::{f64::consts::PI, path::Path};
 use uom::si::{length::millimeter, radiant_exposure::millijoule_per_square_centimeter};
@@ -30,8 +30,7 @@ fn main() -> OpmResult<()> {
         );
     }
     let light_data_builder = LightDataBuilder::Geometric(rays.into());
-    let mut source = Source::new("source", light_data_builder);
-    source.set_isometry(Isometry::identity())?;
+    let source = Source::new("source", light_data_builder);
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(source)?;
 

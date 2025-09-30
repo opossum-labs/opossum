@@ -1,7 +1,6 @@
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::General2DGaussian, position_distributions::HexagonalTiling, rays::Rays,
-    utils::geom_transformation::Isometry,
 };
 use std::path::Path;
 
@@ -44,8 +43,7 @@ fn main() -> OpmResult<()> {
     rays.add_rays(&mut rays_2w);
     let mut scenery = NodeGroup::new("test");
     let light_data_builder = LightDataBuilder::Geometric(rays.into());
-    let mut src = Source::new("Source", light_data_builder);
-    src.set_isometry(Isometry::identity())?;
+    let src = Source::new("Source", light_data_builder);
     let src = scenery.add_node(src)?;
     let i_sd = scenery.add_node(SpotDiagram::default())?;
 

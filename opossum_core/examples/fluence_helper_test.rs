@@ -2,7 +2,6 @@ use opossum_core::prelude::*;
 use opossum_core::{
     fluence_distributions::general_gaussian::General2DGaussian, position_distributions::Hexapolar,
     radian, rays::Rays, surface::hit_map::fluence_estimator::FluenceEstimator,
-    utils::geom_transformation::Isometry,
 };
 use std::{f64::consts::PI, path::Path};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
@@ -23,8 +22,7 @@ fn main() -> OpmResult<()> {
         peak.get::<joule_per_square_centimeter>()
     );
     let light_data_builder = LightDataBuilder::Geometric(rays.into());
-    let mut source = Source::new("source", light_data_builder);
-    source.set_isometry(Isometry::identity())?;
+    let source = Source::new("source", light_data_builder);
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(source)?;
     let i_pl = scenery.add_node(ParaxialSurface::new("paraxial", millimeter!(500.0))?)?;

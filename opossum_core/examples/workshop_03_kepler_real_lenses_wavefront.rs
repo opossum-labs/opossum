@@ -1,7 +1,7 @@
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::UniformDist, position_distributions::Hexapolar,
-    spectral_distribution::LaserLines, utils::geom_transformation::Isometry,
+    spectral_distribution::LaserLines,
 };
 use std::path::Path;
 
@@ -13,8 +13,7 @@ fn main() -> OpmResult<()> {
             UniformDist::new(joule!(1.0))?.into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         )));
-    let mut src = Source::new("collimated ray source", light_data_builder);
-    src.set_isometry(Isometry::identity())?;
+    let src = Source::new("collimated ray source", light_data_builder);
     let i_src = scenery.add_node(src)?;
     let i_sd5 = scenery.add_node(WaveFront::new("wavefront before telecope"))?;
     let refr_index_hzf52 = RefrIndexSchott::new(

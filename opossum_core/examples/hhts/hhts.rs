@@ -12,7 +12,6 @@ use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::General2DGaussian, position_distributions::HexagonalTiling,
     refractive_index::refr_index_schott::RefrIndexSchott, spectral_distribution::LaserLines,
-    utils::geom_transformation::Isometry,
 };
 use uom::si::f64::Length;
 
@@ -65,8 +64,7 @@ fn main() -> OpmResult<()> {
         )));
 
     let mut scenery = NodeGroup::new("HHT Sensor");
-    let mut src = Source::new("Source", light_data_builder);
-    src.set_isometry(Isometry::identity())?;
+    let src = Source::new("Source", light_data_builder);
     let src = scenery.add_node(src)?;
     let input_group = scenery.add_node(hhts_input()?)?;
     scenery.connect_nodes(src, "output_1", input_group, "input_1", Length::zero())?;

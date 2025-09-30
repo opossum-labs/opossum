@@ -3,7 +3,7 @@ use nalgebra::Vector3;
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::UniformDist, position_distributions::Hexapolar,
-    spectral_distribution::Gaussian, utils::geom_transformation::Isometry,
+    spectral_distribution::Gaussian,
 };
 use std::path::Path;
 
@@ -34,7 +34,6 @@ pub fn main() -> OpmResult<()> {
         )));
     let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_alignment_wavelength(alignment_wvl)?;
-    src.set_isometry(Isometry::identity())?;
 
     let i_src = scenery.add_node(src)?;
     // focal length = 996.7 mm (Thorlabs LA1779-B)

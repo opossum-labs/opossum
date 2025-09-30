@@ -2,7 +2,7 @@ use num::Zero;
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::UniformDist, position_distributions::Grid,
-    spectral_distribution::LaserLines, utils::geom_transformation::Isometry,
+    spectral_distribution::LaserLines,
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -28,8 +28,7 @@ fn main() -> OpmResult<()> {
             UniformDist::new(joule!(1.0))?.into(),
             LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 1.0)])?.into(),
         )));
-    let mut light_src = Source::new("collimated ray source", light_data_builder);
-    light_src.set_isometry(Isometry::identity())?;
+    let light_src = Source::new("collimated ray source", light_data_builder);
     let src = scenery.add_node(light_src)?;
 
     let w1 = scenery.add_node(

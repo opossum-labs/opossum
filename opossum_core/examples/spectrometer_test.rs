@@ -1,7 +1,7 @@
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::UniformDist, position_distributions::Hexapolar,
-    spectral_distribution::LaserLines, utils::geom_transformation::Isometry,
+    spectral_distribution::LaserLines,
 };
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Raysource demo");
@@ -16,8 +16,7 @@ fn main() -> OpmResult<()> {
             ])?
             .into(),
         )));
-    let mut src = Source::new("collimated line ray source", light_data_builder);
-    src.set_isometry(Isometry::identity())?;
+    let src = Source::new("collimated line ray source", light_data_builder);
     let i_src = scenery.add_node(src)?;
     let i_spec = scenery.add_node(Spectrometer::default())?;
     scenery.connect_nodes(i_src, "output_1", i_spec, "input_1", millimeter!(5.0))?;
