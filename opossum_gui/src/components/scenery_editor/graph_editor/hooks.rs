@@ -45,49 +45,6 @@ pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl Fn
     }
 }
 
-pub fn use_center_graph() -> impl FnMut(MouseEvent) {
-    let graph_store = use_context::<Signal<GraphStore>>();
-    let mut editor_status = use_context::<Signal<EditorState>>();
-
-    move |mouse_event| {
-        mouse_event.stop_propagation();
-        let bounding_box = graph_store().get_bounding_box();
-        let center = bounding_box.center();
-        let zoom = *editor_status.read().zoom.read();
-        let view_center = editor_status.read().get_view_port_center();
-        editor_status.write().shift.set(Point2D::new(
-            center.x.mul_add(-zoom, view_center.x),
-            center.y.mul_add(-zoom, view_center.y),
-        ));
-    }
-}
-
-fn center_graph(graph_store: Signal<GraphStore>, mut editor_status: Signal<EditorState>){
-    let bounding_box = graph_store().get_bounding_box();
-    let center = bounding_box.center();
-    let zoom = *editor_status.read().zoom.read();
-    let view_center = editor_status.read().get_view_port_center();
-    editor_status.write().shift.set(Point2D::new(
-        center.x.mul_add(-zoom, view_center.x),
-        center.y.mul_add(-zoom, view_center.y),
-    ));
-}
-
-fn center_zoom_to_fit_graph(graph_store: Signal<GraphStore>, mut editor_status: Signal<EditorState>){
-    let bounding_box = graph_store().get_bounding_box();
-    let view_box = editor_status.read().get_view_port_size();
-    let zoom = *editor_status.peek().zoom.read();
-    let height_fac = view_box.height * 0.95/zoom / bounding_box.height();
-    let width_fac = view_box.width * 0.95/zoom / bounding_box.width();
-    {
-    let mut editor_state = editor_status.write();
-    let mut zoom = editor_state.zoom.write();
-
-    *zoom *= clamp(width_fac.min(height_fac), MIN_ZOOM, MAX_ZOOM);
-}
-    center_graph(graph_store, editor_status);
-}
-
 pub fn use_on_mouse_down(
     mut current_mouse_pos: Signal<Point2D<f64>>,
     mut node_selected: Signal<Option<NodeElement>>,
@@ -117,7 +74,7 @@ pub fn use_on_mouse_down(
                     let t0_opt = last_click.read().clone();
                     if let Some(t0) = t0_opt{
                         if now.duration_since(t0) < dc_time{
-                            center_graph(graph_store, editor_status);                        
+                            editor_status.write().center_graph(graph_store, false);                        
                             last_click.set(None);
                         }
                     }
@@ -236,12 +193,12 @@ pub fn use_on_key_down(
             if ctrl_or_meta && modifiers.shift()
                 && (event.data().key() == Key::Character("C".to_string()) || event.data().key() == Key::Character("c".to_string()))
             {
-                center_graph(graph_store, editor_status); 
+                editor_status.write().center_graph(graph_store.read().get_bounding_box(), false); 
             }
             if ctrl_or_meta && modifiers.shift()
                 && (event.data().key() == Key::Character("F".to_string()) || event.data().key() == Key::Character("f".to_string()))
             {
-                center_zoom_to_fit_graph(graph_store, editor_status); 
+                editor_status.write().center_graph(graph_store.read().get_bounding_box(), true); 
             }
         }
         event.stop_propagation();

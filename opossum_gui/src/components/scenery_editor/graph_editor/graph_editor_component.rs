@@ -4,16 +4,11 @@ use std::{path::PathBuf, rc::Rc, time::{Duration, Instant}};
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStoreAction, NodeElement, NodeType,
-        edges::edges_component::{
+        constants::{MAX_ZOOM, MIN_ZOOM}, edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-        },
-        graph_editor::hooks::{
-            use_center_graph, use_drag, use_drag_end, use_on_mouse_down, use_on_key_down,
-            use_on_mouse_leave, use_on_resize, use_zoom,
-        },
-        nodes::Nodes,
-        use_graph_processor,
+        }, graph_editor::hooks::{
+            use_center_graph, use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_mouse_leave, use_on_resize, use_zoom
+        }, nodes::Nodes, use_graph_processor, GraphState, GraphStoreAction, NodeElement, NodeType
     },
 };
 use dioxus::{
@@ -68,6 +63,31 @@ impl EditorState {
     }
     pub fn get_view_port_size(&self) -> Size2D<f64, Pixels>{
         *self.editor_size.read()
+    }
+
+    pub fn center_graph(&mut self, bounding_box: Rect<f64>, zoom_to_fit: bool){
+        if zoom_to_fit {
+            self.zoom_to_fit(bounding_box)
+        }
+        let center = bounding_box.center();
+        let zoom = *self.zoom.read();
+        let view_center = editor_status.read().get_view_port_center();
+        self.shift.set(Point2D::new(
+            center.x.mul_add(-zoom, view_center.x),
+            center.y.mul_add(-zoom, view_center.y),
+        ));
+    }
+
+    fn zoom_to_fit(&mut self, bounding_box: Rect<f64>){
+        let padding_fac = 0.95;
+        let view_box = self.get_view_port_size();
+        let zoom = *self.zoom.read();
+        let height_fac = view_box.height * padding_fac/zoom / bounding_box.height();
+        let width_fac = view_box.width * padding_fac/zoom / bounding_box.width();
+        {
+            let mut zoom = self.zoom.write();
+            *zoom *= clamp(width_fac.min(height_fac), MIN_ZOOM, MAX_ZOOM);
+        }
     }
 }
 
