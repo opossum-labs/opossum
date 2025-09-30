@@ -49,7 +49,6 @@ pub fn use_center_graph() -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
 
     move |mouse_event| {
-        println!("{:?}", mouse_event.trigger_button());
         mouse_event.stop_propagation();
         let bounding_box = graph_store().get_bounding_box();
         let center = bounding_box.center();
@@ -61,6 +60,18 @@ pub fn use_center_graph() -> impl FnMut(MouseEvent) {
         ));
     }
 }
+
+fn center_graph(graph_store: Signal<GraphStore>, mut editor_status: Signal<EditorState>){
+    let bounding_box = graph_store().get_bounding_box();
+    let center = bounding_box.center();
+    let zoom = *editor_status.read().zoom.read();
+    let view_center = editor_status.read().get_view_port_center();
+    editor_status.write().shift.set(Point2D::new(
+        center.x.mul_add(-zoom, view_center.x),
+        center.y.mul_add(-zoom, view_center.y),
+    ));
+}
+
 pub fn use_on_mouse_down(
     mut current_mouse_pos: Signal<Point2D<f64>>,
     mut node_selected: Signal<Option<NodeElement>>,
@@ -90,14 +101,7 @@ pub fn use_on_mouse_down(
                     let t0_opt = last_click.read().clone();
                     if let Some(t0) = t0_opt{
                         if now.duration_since(t0) < dc_time{
-                            let bounding_box = graph_store().get_bounding_box();
-                            let center = bounding_box.center();
-                            let zoom = *editor_status.read().zoom.read();
-                            let view_center = editor_status.read().get_view_port_center();
-                            editor_status.write().shift.set(Point2D::new(
-                                center.x.mul_add(-zoom, view_center.x),
-                                center.y.mul_add(-zoom, view_center.y),
-                            ));
+                            center_graph(graph_store, editor_status);                        
                             last_click.set(None);
                         }
                     }
@@ -177,18 +181,19 @@ pub fn use_on_key_down(
     mut copied_node: Signal<Option<(NodeType, Uuid)>>,
 ) -> impl FnMut(KeyboardEvent) {
     let editor_status = use_context::<Signal<EditorState>>();
+    let graph_store = use_context::<Signal<GraphStore>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
     move |event| {
         if !event.is_auto_repeating() {
             let modifiers = event.modifiers();
             let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
-            if ctrl_or_meta
+            if ctrl_or_meta && !modifiers.shift()
                 && event.data().key() == Key::Character("c".to_string())
                 && let Some(node) = &*node_selected.peek()
             {
                 copied_node.set(Some((node.node_type().clone(), node.id())));
             }
-            if ctrl_or_meta
+            if ctrl_or_meta && !modifiers.shift()
                 && event.data().key() == Key::Character("v".to_string())
                 && let Some((node_type, node_id)) = &*copied_node.read()
             {
@@ -211,6 +216,11 @@ pub fn use_on_key_down(
                         pos,
                     )));
                 }
+            }
+            if ctrl_or_meta && modifiers.shift()
+                && (event.data().key() == Key::Character("C".to_string()) || event.data().key() == Key::Character("c".to_string()))
+            {
+                center_graph(graph_store, editor_status); 
             }
         }
         event.stop_propagation();
