@@ -2,7 +2,6 @@ use opossum_core::prelude::*;
 use opossum_core::{
     coatings::CoatingType, energy_distributions::General2DGaussian, optic_ports::PortType,
     position_distributions::HexagonalTiling, spectral_distribution::LaserLines,
-    utils::geom_transformation::Isometry,
 };
 use std::path::Path;
 
@@ -23,8 +22,7 @@ fn main() -> OpmResult<()> {
             .into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         )));
-    let mut src = Source::new("collimated ray source", light_data_builder);
-    src.set_isometry(Isometry::identity())?;
+    let src = Source::new("collimated ray source", light_data_builder);
     let i_src = scenery.add_node(src)?;
     let mut lens = Lens::default();
     lens.set_coating(

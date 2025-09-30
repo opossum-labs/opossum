@@ -1,7 +1,5 @@
 use opossum_core::prelude::*;
-use opossum_core::{
-    surface::hit_map::fluence_estimator::FluenceEstimator, utils::geom_transformation::Isometry,
-};
+use opossum_core::surface::hit_map::fluence_estimator::FluenceEstimator;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
@@ -13,8 +11,7 @@ fn main() -> OpmResult<()> {
         nanometer!(1000.0),
         degree!(1.0),
     )));
-    let mut src = Source::new("image source", light_data_builder);
-    src.set_isometry(Isometry::identity())?;
+    let src = Source::new("image source", light_data_builder);
     let i_src = scenery.add_node(src)?;
     let mut fluence_det = FluenceDetector::new("Object Plane");
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;

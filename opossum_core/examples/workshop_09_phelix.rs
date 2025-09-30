@@ -2,7 +2,7 @@ use num::Zero;
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::UniformDist, position_distributions::Grid,
-    spectral_distribution::LaserLines, utils::geom_transformation::Isometry,
+    spectral_distribution::LaserLines,
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -16,8 +16,7 @@ fn main() -> OpmResult<()> {
             UniformDist::new(joule!(1.0))?.into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         )));
-    let mut src = Source::new("incoming rays", light_data_builder);
-    src.set_isometry(Isometry::identity())?;
+    let src = Source::new("incoming rays", light_data_builder);
     let i_src = scenery.add_node(src)?;
 
     let lens1 = ParaxialSurface::new("Input lens", millimeter!(1400.0))?;

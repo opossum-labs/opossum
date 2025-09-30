@@ -41,7 +41,11 @@ use std::fmt::Debug;
 ///   - `light data iso`
 ///   - `alignment wavelength`
 ///
-/// **Note**: If a [`Source`] is configured as `inverted` the initial output port becomes an input port and further data is discarded.
+/// **Note**: If a [`Source`] is configured as `inverted` the initial output port becomes an input port and further data is
+/// discarded. The node thus act as a sink.
+///
+/// **Note 2**: In contrast to all other optical nodes, a source is absolutely placed at the coordinate origin by default. This can be
+/// changed using the `set_isometry` function.
 #[derive(OpmNode, Clone)]
 #[opm_node("slateblue")]
 pub struct Source {
@@ -75,6 +79,7 @@ impl Default for Source {
             .unwrap();
 
         let mut src = Self { node_attr };
+        src.set_isometry(Isometry::identity()).unwrap();
         src.update_surfaces().unwrap();
         src
     }
@@ -331,6 +336,7 @@ mod test {
         let mut node = Source::default();
         assert_eq!(node.name(), "source");
         assert_eq!(node.node_type(), "source");
+        assert_eq!(node.isometry(), Some(Isometry::identity()));
         if let Proptype::Isometry(iso) = node.properties().get("light data iso").unwrap() {
             assert!(iso.is_none());
         } else {
@@ -434,7 +440,6 @@ mod test {
     #[test]
     fn analyze_raytrace_ok() {
         let mut node = Source::default();
-        node.set_isometry(Isometry::identity()).unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
@@ -464,7 +469,6 @@ mod test {
     #[test]
     fn analyze_raytrace_light_data_iso() {
         let mut node = Source::default();
-        node.set_isometry(Isometry::identity()).unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
@@ -497,7 +501,6 @@ mod test {
     #[test]
     fn calc_node_position_ok_alignement_wavelength_set() {
         let mut node = Source::default();
-        node.set_isometry(Isometry::identity()).unwrap();
         node.set_alignment_wavelength(nanometer!(630.0)).unwrap();
         let light_data_builder = LightDataBuilder::Geometric(Rays::default().into());
         node.set_light_data(light_data_builder).unwrap();
@@ -519,7 +522,6 @@ mod test {
     #[test]
     fn analyze_ghost_focus_ok() {
         let mut node = Source::default();
-        node.set_isometry(Isometry::identity()).unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),

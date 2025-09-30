@@ -10,10 +10,8 @@ use crate::{
         ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},
     },
     millimeter, nanometer,
-    optic_node::OpticNode,
     position_distributions::{Grid, Hexapolar},
     spectral_distribution::LaserLines,
-    utils::geom_transformation::Isometry,
 };
 use num::Zero;
 use uom::si::f64::{Angle, Energy, Length};
@@ -39,8 +37,7 @@ pub fn round_collimated_ray_source(
             UniformDist::new(energy)?.into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         )));
-    let mut src = Source::new("collimated line ray source", light_data_builder);
-    src.set_isometry(Isometry::identity())?;
+    let src = Source::new("collimated line ray source", light_data_builder);
     Ok(src)
 }
 /// Create a [`Source`] containing a line of collimated rays.
@@ -65,8 +62,7 @@ pub fn collimated_line_ray_source(
             UniformDist::new(energy)?.into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         )));
-    let mut src = Source::new("collimated line ray source", light_data_builder);
-    src.set_isometry(Isometry::identity())?;
+    let src = Source::new("collimated line ray source", light_data_builder);
     Ok(src)
 }
 /// Create a point [`Source`] on the optical axis with a given cone angle.
@@ -93,8 +89,7 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         millimeter!(1000.),
     )));
-    let mut src = Source::new("point ray source", light_data_builder);
-    src.set_isometry(Isometry::identity())?;
+    let src = Source::new("point ray source", light_data_builder);
     Ok(src)
 }
 #[cfg(test)]

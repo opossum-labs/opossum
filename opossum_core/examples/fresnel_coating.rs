@@ -2,7 +2,6 @@ use opossum_core::prelude::*;
 use opossum_core::{
     coatings::CoatingType, energy_distributions::UniformDist, optic_ports::PortType,
     position_distributions::Grid, spectral_distribution::LaserLines,
-    utils::geom_transformation::Isometry,
 };
 use std::path::Path;
 
@@ -14,8 +13,7 @@ fn main() -> OpmResult<()> {
             UniformDist::new(joule!(1.))?.into(),
             LaserLines::new(vec![(nanometer!(1000.), 1.0)])?.into(),
         )));
-    let mut source = Source::new("src", light_data_builder);
-    source.set_isometry(Isometry::identity())?;
+    let source = Source::new("src", light_data_builder);
     let src = scenery.add_node(source)?;
     let fd1 = scenery.add_node(FluenceDetector::new("before lens"))?;
 
