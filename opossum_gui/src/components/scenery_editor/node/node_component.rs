@@ -3,7 +3,7 @@ use super::NodeElement;
 use crate::CONTEXT_MENU;
 use crate::components::context_menu::cx_menu::CxMenu;
 use crate::components::context_menu::cx_menu::CxtCommand;
-use crate::components::scenery_editor::constants::BORDER_WIDTH;
+use crate::components::scenery_editor::constants::{BORDER_WIDTH, NODE_WIDTH};
 use crate::components::scenery_editor::graph_store::GraphStoreAction;
 use crate::components::scenery_editor::{
     graph_editor::graph_editor_component::{DragStatus, EditorState},
@@ -69,7 +69,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                     if is_optical_node {
                         let new_ref_node = NewRefNode::new(
                             id,
-                            (event.page_coordinates().x, event.page_coordinates().y),
+                            (position.x + NODE_WIDTH, position.y + 100.0),
                         );
                         let cx_menu = CxMenu::new(
                             event.page_coordinates().x,
