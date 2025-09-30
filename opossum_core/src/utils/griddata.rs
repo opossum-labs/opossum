@@ -419,8 +419,8 @@ pub fn interpolate_3d_triangulated_scatter_data(
         }
     }
     let mut interp_data =
-        DMatrix::<f64>::from_element(num_axes_points_x, num_axes_points_y, f64::NAN);
-    let mut mask = DMatrix::from_element(num_axes_points_x, num_axes_points_y, 0.);
+        DMatrix::<f64>::from_element(num_axes_points_y, num_axes_points_x, f64::NAN);
+    let mut mask = DMatrix::from_element(num_axes_points_y, num_axes_points_x, 0.);
     let mm = triangulation.natural_neighbor();
     for (x_index, x) in x_interp.iter().enumerate() {
         for (y_index, y) in y_interp.iter().enumerate() {

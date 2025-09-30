@@ -237,7 +237,7 @@ impl HitMap {
         if let Some(HitPoints::Energy(_)) = hit_point_opt {
             let (ax_1_range, ax_2_range) = self.get_bounding_box();
             let mut fluence_matrix =
-                DMatrix::from_element(nr_of_points.0, nr_of_points.1, J_per_cm2!(0.));
+                DMatrix::from_element(nr_of_points.1, nr_of_points.0, J_per_cm2!(0.));
 
             for bounced_hit_map in &self.hit_map {
                 for rays_hit_map in bounced_hit_map.hit_map.values() {
