@@ -13,10 +13,9 @@ use crate::{
     },
 };
 use dioxus::{
-    html::geometry::euclid::{
-        Size2D,
-        default::{Point2D, Rect},
-    },
+    html::geometry::{euclid::{
+        default::{Point2D, Rect}, Size2D
+    }, Pixels},
     prelude::*,
 };
 use futures_util::StreamExt;

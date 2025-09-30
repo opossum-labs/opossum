@@ -1,4 +1,4 @@
-use std::{cmp::min, rc::Rc, time::{Duration, Instant}};
+use std::{rc::Rc, time::{Duration, Instant}};
 
 use crate::{
     CONTEXT_MENU,
@@ -11,7 +11,6 @@ use crate::{
     },
 };
 use dioxus::{html::{geometry::euclid::default::Point2D, input_data::MouseButton}, prelude::*};
-use num::clamp;
 use opossum_backend::{PortType, nodes::ConnectInfo};
 use uuid::Uuid;
 
@@ -74,7 +73,7 @@ pub fn use_on_mouse_down(
                     let t0_opt = last_click.read().clone();
                     if let Some(t0) = t0_opt{
                         if now.duration_since(t0) < dc_time{
-                            editor_status.write().center_graph(graph_store, false);                        
+                            editor_status.write().center_graph(graph_store.read().get_bounding_box(), false);                        
                             last_click.set(None);
                         }
                     }
@@ -84,7 +83,6 @@ pub fn use_on_mouse_down(
 
             }
         }
-        
     }
 }
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
@@ -153,7 +151,7 @@ pub fn use_on_key_down(
     node_selected: Signal<Option<NodeElement>>,
     mut copied_node: Signal<Option<(NodeType, Uuid)>>,
 ) -> impl FnMut(KeyboardEvent) {
-    let editor_status = use_context::<Signal<EditorState>>();
+    let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
     move |event| {
