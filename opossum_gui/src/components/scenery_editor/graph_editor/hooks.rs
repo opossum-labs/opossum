@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{rc::Rc, time::{Duration, Instant}};
 
 use crate::{
     CONTEXT_MENU,
@@ -10,7 +10,7 @@ use crate::{
         graph_store::{GraphStore, GraphStoreAction},
     },
 };
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus::{html::{geometry::euclid::default::Point2D, input_data::MouseButton}, prelude::*};
 use opossum_backend::{PortType, nodes::ConnectInfo};
 use uuid::Uuid;
 
@@ -49,6 +49,7 @@ pub fn use_center_graph() -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
 
     move |mouse_event| {
+        println!("{:?}", mouse_event.trigger_button());
         mouse_event.stop_propagation();
         let bounding_box = graph_store().get_bounding_box();
         let center = bounding_box.center();
@@ -60,21 +61,53 @@ pub fn use_center_graph() -> impl FnMut(MouseEvent) {
         ));
     }
 }
-pub fn use_drag_start(
+pub fn use_on_mouse_down(
     mut current_mouse_pos: Signal<Point2D<f64>>,
     mut node_selected: Signal<Option<NodeElement>>,
+    mut last_click: Signal<Option<Instant>>
 ) -> impl FnMut(MouseEvent) {
+    // Tuning
+    let dc_time   = Duration::from_millis(300); // Doppelklick-Zeit
+    let graph_store = use_context::<Signal<GraphStore>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
 
     move |event| {
-        node_selected.set(None);
-        let mut ctx = CONTEXT_MENU.write();
-        *ctx = None;
-        current_mouse_pos.set(Point2D::new(
-            event.client_coordinates().x,
-            event.client_coordinates().y,
-        ));
-        editor_status.write().drag_status.set(DragStatus::Graph);
+        if let Some(trigger_button) = event.trigger_button(){
+            match trigger_button{
+                MouseButton::Primary => {
+                    node_selected.set(None);
+                    let mut ctx = CONTEXT_MENU.write();
+                    *ctx = None;
+                    current_mouse_pos.set(Point2D::new(
+                        event.client_coordinates().x,
+                        event.client_coordinates().y,
+                    ));
+                    editor_status.write().drag_status.set(DragStatus::Graph);
+                },
+                MouseButton::Auxiliary => {
+                    event.stop_propagation();
+                    let now = Instant::now();
+                    let t0_opt = last_click.read().clone();
+                    if let Some(t0) = t0_opt{
+                        if now.duration_since(t0) < dc_time{
+                            let bounding_box = graph_store().get_bounding_box();
+                            let center = bounding_box.center();
+                            let zoom = *editor_status.read().zoom.read();
+                            let view_center = editor_status.read().get_view_port_center();
+                            editor_status.write().shift.set(Point2D::new(
+                                center.x.mul_add(-zoom, view_center.x),
+                                center.y.mul_add(-zoom, view_center.y),
+                            ));
+                            last_click.set(None);
+                        }
+                    }
+                    last_click.set(Some(now));
+                },
+                _ => (),
+
+            }
+        }
+        
     }
 }
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {

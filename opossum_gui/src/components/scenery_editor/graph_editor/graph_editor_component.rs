@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use std::{path::PathBuf, rc::Rc};
+use std::{path::PathBuf, rc::Rc, time::{Duration, Instant}};
 
 use crate::components::{
     node_editor::NodeConfigEditor,
@@ -9,7 +9,7 @@ use crate::components::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
         },
         graph_editor::hooks::{
-            use_center_graph, use_drag, use_drag_end, use_drag_start, use_on_key_down,
+            use_center_graph, use_drag, use_drag_end, use_on_mouse_down, use_on_key_down,
             use_on_mouse_leave, use_on_resize, use_zoom,
         },
         nodes::Nodes,
@@ -80,6 +80,7 @@ pub enum DragStatus {
 
 #[component]
 pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
+    let last_auxiliary_click    = use_signal(|| Option::<Instant>::None);    
     let node_selected = use_signal(|| None::<NodeElement>);
     let copied_node = use_signal(|| None::<(NodeType, Uuid)>);
 
@@ -93,8 +94,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let current_mouse_pos = use_signal(Point2D::default);
     let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
     let onwheel_handler = use_zoom(on_mounted);
-    let ondoubleclick_handler = use_center_graph();
-    let onmousedown_handler = use_drag_start(current_mouse_pos, node_selected);
+    let onmousedown_handler = use_on_mouse_down(current_mouse_pos, node_selected, last_auxiliary_click);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
     let onmouseleave_handler = use_on_mouse_leave();
@@ -165,7 +165,6 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                     onmousedown: onmousedown_handler,
                     onmouseup: onmouseup_handler,
                     onmousemove: onmousemove_handler,
-                    ondoubleclick: ondoubleclick_handler,
                     onresize: onresizehandler,
                     onmounted: move |event| { on_mounted.set(Some(event.data)) },
                     div {
