@@ -1,4 +1,4 @@
-use std::{rc::Rc, time::{Duration, Instant}};
+use std::{cmp::min, rc::Rc, time::{Duration, Instant}};
 
 use crate::{
     CONTEXT_MENU,
@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use dioxus::{html::{geometry::euclid::default::Point2D, input_data::MouseButton}, prelude::*};
+use num::clamp;
 use opossum_backend::{PortType, nodes::ConnectInfo};
 use uuid::Uuid;
 
@@ -70,6 +71,21 @@ fn center_graph(graph_store: Signal<GraphStore>, mut editor_status: Signal<Edito
         center.x.mul_add(-zoom, view_center.x),
         center.y.mul_add(-zoom, view_center.y),
     ));
+}
+
+fn center_zoom_to_fit_graph(graph_store: Signal<GraphStore>, mut editor_status: Signal<EditorState>){
+    let bounding_box = graph_store().get_bounding_box();
+    let view_box = editor_status.read().get_view_port_size();
+    let zoom = *editor_status.peek().zoom.read();
+    let height_fac = view_box.height * 0.95/zoom / bounding_box.height();
+    let width_fac = view_box.width * 0.95/zoom / bounding_box.width();
+    {
+    let mut editor_state = editor_status.write();
+    let mut zoom = editor_state.zoom.write();
+
+    *zoom *= clamp(width_fac.min(height_fac), MIN_ZOOM, MAX_ZOOM);
+}
+    center_graph(graph_store, editor_status);
 }
 
 pub fn use_on_mouse_down(
@@ -221,6 +237,11 @@ pub fn use_on_key_down(
                 && (event.data().key() == Key::Character("C".to_string()) || event.data().key() == Key::Character("c".to_string()))
             {
                 center_graph(graph_store, editor_status); 
+            }
+            if ctrl_or_meta && modifiers.shift()
+                && (event.data().key() == Key::Character("F".to_string()) || event.data().key() == Key::Character("f".to_string()))
+            {
+                center_zoom_to_fit_graph(graph_store, editor_status); 
             }
         }
         event.stop_propagation();

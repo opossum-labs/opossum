@@ -18,8 +18,7 @@ use crate::components::{
 };
 use dioxus::{
     html::geometry::{
-        Pixels, PixelsSize,
-        euclid::{Rect, default::Point2D},
+        euclid::{default::Point2D, Rect, Size2D}, Pixels, PixelsSize
     },
     prelude::*,
 };
@@ -66,6 +65,9 @@ impl EditorState {
         let editor_size = *self.editor_size.read();
 
         Point2D::new(editor_size.width / 2., editor_size.height / 2.)
+    }
+    pub fn get_view_port_size(&self) -> Size2D<f64, Pixels>{
+        *self.editor_size.read()
     }
 }
 
