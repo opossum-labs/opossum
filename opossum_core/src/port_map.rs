@@ -101,6 +101,10 @@ impl PortMap {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+    /// Returns `true` if the [`PortMap`] is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 #[cfg(test)]
 mod tests {

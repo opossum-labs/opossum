@@ -1,3 +1,4 @@
+use super::serialization::SerializableGraph;
 use crate::{
     SceneryResources, light_flow::LightFlow, optic_ref::OpticRef, port_map::PortMap,
     prelude::PortType,
@@ -32,7 +33,8 @@ impl ConnectionInfo {
 }
 
 /// Data structure representing an optical graph
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(try_from = "SerializableGraph", into = "SerializableGraph")]
 pub struct OpticGraph {
     pub(super) g: DiGraph<OpticRef, LightFlow>, // pub(super) makes it visible to other modules in optic_graph
     pub(super) input_port_map: PortMap,
