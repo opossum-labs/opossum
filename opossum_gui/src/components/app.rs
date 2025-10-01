@@ -3,7 +3,10 @@ use crate::{
     components::{
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
-        menu_bar::menu_bar_component::{MenuBar, MenuSelection},
+        menu_bar::{
+            menu_bar_component::{MenuBar, MenuSelection},
+            save_project, save_project_as,
+        },
         scenery_editor::{GraphEditor, NodeEditorCommand},
         simulation::simulation_window::SimulationWindow,
     },
@@ -12,26 +15,7 @@ use dioxus::{
     desktop::{tao::window::ResizeDirection, use_window},
     prelude::*,
 };
-use rfd::FileDialog;
 use std::path::PathBuf;
-
-pub fn save_project(mut model_file_path: Signal<Option<PathBuf>>, mut menu_item_selected: Signal<Option<MenuSelection>>){
-    let path = model_file_path()
-        .as_ref()
-        .map_or_else(
-            || {
-                FileDialog::new()
-                    .set_directory("/")
-                    .set_title("Save OPOSSUM setup file")
-                    .add_filter("Opossum setup file", &["opm"])
-                    .save_file()
-            },
-            |model_path| Some(model_path.clone()),
-        );
-    if let Some(path) = path {
-        menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
-    }
-}
 
 #[component]
 pub fn App() -> Element {
@@ -82,8 +66,10 @@ pub fn App() -> Element {
                     node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
                 }
 
-                MenuSelection::CenterGraph{zoom_to_fit} => {
-                    node_editor_command.set(Some(NodeEditorCommand::CenterGraph{zoom_to_fit: *zoom_to_fit}));
+                MenuSelection::CenterGraph { zoom_to_fit } => {
+                    node_editor_command.set(Some(NodeEditorCommand::CenterGraph {
+                        zoom_to_fit: *zoom_to_fit,
+                    }));
                 }
                 MenuSelection::NewProject => {
                     model_modified.set(true);
@@ -115,44 +101,44 @@ pub fn App() -> Element {
 
     rsx! {
         // The main container for the app and resize handles
-        div { class: "app-container",
+        div {
+            class: "app-container",
             tabindex: 0,
-            onkeydown: move |event|{
+            onkeydown: move |event| {
                 let modifiers = event.modifiers();
                 let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
                 if ctrl_or_meta && modifiers.shift()
-                    && (event.data().key() == Key::Character("C".to_string()) || event.data().key() == Key::Character("c".to_string()))
+                    && (event.data().key() == Key::Character("C".to_string())
+                        || event.data().key() == Key::Character("c".to_string()))
                 {
-                    node_editor_command.set(Some(NodeEditorCommand::CenterGraph { zoom_to_fit: false }));
-                }
-                else if ctrl_or_meta && modifiers.shift()
-                    && (event.data().key() == Key::Character("F".to_string()) || event.data().key() == Key::Character("f".to_string()))
+                    node_editor_command
+                        .set(
+                            Some(NodeEditorCommand::CenterGraph {
+                                zoom_to_fit: false,
+                            }),
+                        );
+                } else if ctrl_or_meta && modifiers.shift()
+                    && (event.data().key() == Key::Character("F".to_string())
+                        || event.data().key() == Key::Character("f".to_string()))
                 {
-                    node_editor_command.set(Some(NodeEditorCommand::CenterGraph { zoom_to_fit: true }));
-                }
-                else if ctrl_or_meta && modifiers.shift()
-                    && (event.data().key() == Key::Character("A".to_string()) || event.data().key() == Key::Character("a".to_string()))
+                    node_editor_command
+                        .set(
+                            Some(NodeEditorCommand::CenterGraph {
+                                zoom_to_fit: true,
+                            }),
+                        );
+                } else if ctrl_or_meta && modifiers.shift()
+                    && (event.data().key() == Key::Character("A".to_string())
+                        || event.data().key() == Key::Character("a".to_string()))
                 {
                     node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
-                }
-                else if ctrl_or_meta && event.data().key() == Key::Character("s".to_string()) 
-                {
+                } else if ctrl_or_meta && event.data().key() == Key::Character("s".to_string()) {
                     save_project(model_file_path, menu_item_selected);
-                    // let path = model_file_path()
-                    //                 .as_ref()
-                    //                 .map_or_else(
-                    //                     || {
-                    //                         FileDialog::new()
-                    //                             .set_directory("/")
-                    //                             .set_title("Save OPOSSUM setup file")
-                    //                             .add_filter("Opossum setup file", &["opm"])
-                    //                             .save_file()
-                    //                     },
-                    //                     |model_path| Some(model_path.clone()),
-                    //                 );
-                    //             if let Some(path) = path {
-                    //                 menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
-                    //             }
+                } else if ctrl_or_meta && modifiers.shift()
+                    && (event.data().key() == Key::Character("s".to_string())
+                        || event.data().key() == Key::Character("S".to_string()))
+                {
+                    save_project_as(menu_item_selected);
                 }
             },
             // Resize Handles

@@ -9,10 +9,7 @@ use rfd::FileDialog;
 use std::path::PathBuf;
 
 use crate::components::menu_bar::{
-    controls::controls_menu::ControlsMenu,
-    edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
-    help::about::About,
-    path_helper::abbreviate_path,
+    controls::controls_menu::ControlsMenu, edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu}, help::about::About, path_helper::abbreviate_path, save_project, save_project_as
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
@@ -27,7 +24,7 @@ pub enum MenuSelection {
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     AutoLayout,
-    CenterGraph{zoom_to_fit:bool},
+    CenterGraph { zoom_to_fit: bool },
     Quit,
 }
 #[component]
@@ -110,23 +107,7 @@ pub fn MenuBar(
                                 a {
                                     class: "dropdown-item",
                                     role: "button",
-                                    onclick: move |_| {
-                                        let path = model_file_path()
-                                            .as_ref()
-                                            .map_or_else(
-                                                || {
-                                                    FileDialog::new()
-                                                        .set_directory("/")
-                                                        .set_title("Save OPOSSUM setup file")
-                                                        .add_filter("Opossum setup file", &["opm"])
-                                                        .save_file()
-                                                },
-                                                |model_path| Some(model_path.clone()),
-                                            );
-                                        if let Some(path) = path {
-                                            menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
-                                        }
-                                    },
+                                    onclick: move |_| save_project(model_file_path, menu_item_selected),
                                     "Save Project"
                                 }
                             }
@@ -134,16 +115,7 @@ pub fn MenuBar(
                                 a {
                                     class: "dropdown-item",
                                     role: "button",
-                                    onclick: move |_| {
-                                        let path = FileDialog::new()
-                                            .set_directory("/")
-                                            .set_title("Save OPOSSUM setup file")
-                                            .add_filter("Opossum setup file", &["opm"])
-                                            .save_file();
-                                        if let Some(path) = path {
-                                            menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
-                                        }
-                                    },
+                                    onclick: move |_| save_project_as(menu_item_selected),
                                     "Save Project As"
                                 }
                             }
@@ -175,16 +147,20 @@ pub fn MenuBar(
                         }
                         ul { class: "dropdown-menu",
                             li {
-                                a { class: "dropdown-item d-flex justify-content-between align-items-center",  role: "button",
+                                a {
+                                    class: "dropdown-item d-flex justify-content-between align-items-center",
+                                    role: "button",
                                     "Add Node"
-                                    Icon {height: 10, icon: FaAngleRight }
+                                    Icon { height: 10, icon: FaAngleRight }
                                 }
                                 ul { class: "dropdown-menu dropdown-submenu",
                                     NodesMenu { node_selected }
                                 }
                             }
                             li {
-                                a { class: "dropdown-item d-flex justify-content-between align-items-center", role: "button",
+                                a {
+                                    class: "dropdown-item d-flex justify-content-between align-items-center",
+                                    role: "button",
                                     "Add Analyzer"
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
@@ -204,25 +180,35 @@ pub fn MenuBar(
                         }
                         ul { class: "dropdown-menu",
                             li {
-                                a { class: "dropdown-item d-flex justify-content-between align-items-center", role: "button",onclick: move |_| {
-                                        menu_item_selected.set(Some(MenuSelection::CenterGraph{zoom_to_fit:false}));
+                                a {
+                                    class: "dropdown-item d-flex justify-content-between align-items-center",
+                                    role: "button",
+                                    onclick: move |_| {
+                                        menu_item_selected
+                                            .set(
+                                                Some(MenuSelection::CenterGraph {
+                                                    zoom_to_fit: false,
+                                                }),
+                                            );
                                     },
                                     "Center graph"
-                                    span { 
-                                        class: "text-muted ms-4", 
-                                        "Ctrl+Shift+c" 
-                                    }
+                                    span { class: "text-muted ms-4", "Ctrl+Shift+c" }
                                 }
                             }
                             li {
-                                a { class: "dropdown-item d-flex justify-content-between align-items-center", role: "button",onclick: move |_| {
-                                        menu_item_selected.set(Some(MenuSelection::CenterGraph{zoom_to_fit:true}));
+                                a {
+                                    class: "dropdown-item d-flex justify-content-between align-items-center",
+                                    role: "button",
+                                    onclick: move |_| {
+                                        menu_item_selected
+                                            .set(
+                                                Some(MenuSelection::CenterGraph {
+                                                    zoom_to_fit: true,
+                                                }),
+                                            );
                                     },
                                     "Zoom to fit graph"
-                                    span { 
-                                        class: "text-muted ms-4", 
-                                        "Ctrl+Shift+f" 
-                                    }
+                                    span { class: "text-muted ms-4", "Ctrl+Shift+f" }
                                 }
                             }
                             li {
@@ -233,10 +219,7 @@ pub fn MenuBar(
                                         menu_item_selected.set(Some(MenuSelection::AutoLayout));
                                     },
                                     "Auto Layout"
-                                    span { 
-                                        class: "text-muted ms-4", 
-                                        "Ctrl+Shift+a" 
-                                    }
+                                    span { class: "text-muted ms-4", "Ctrl+Shift+a" }
                                 }
                             }
                         }
@@ -347,9 +330,7 @@ pub fn MenuBar(
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
     use dioxus_free_icons::icons::fa_solid_icons::FaWindowRestore;
-
     let window = use_window();
-    let mut is_dragging = use_signal(|| false);
     rsx! {
         div {
             class: "d-flex align-items-center flex-grow-1 mx-2 px-2 rounded align-self-stretch my-n2",

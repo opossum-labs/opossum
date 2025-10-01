@@ -4,16 +4,23 @@ use std::{path::PathBuf, rc::Rc, time::Instant};
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        constants::{MAX_ZOOM, MIN_ZOOM}, edges::edges_component::{
+        GraphState, GraphStoreAction, NodeElement, NodeType,
+        constants::{MAX_ZOOM, MIN_ZOOM},
+        edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-        }, graph_editor::hooks::{
-            use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_mouse_leave, use_on_resize, use_zoom
-        }, nodes::Nodes, use_graph_processor, GraphState, GraphStoreAction, NodeElement, NodeType
+        },
+        graph_editor::hooks::{
+            use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_mouse_leave,
+            use_on_resize, use_zoom,
+        },
+        nodes::Nodes,
+        use_graph_processor,
     },
 };
 use dioxus::{
     html::geometry::{
-        euclid::{default::Point2D, Rect, Size2D, UnknownUnit}, Pixels, PixelsSize
+        Pixels, PixelsSize,
+        euclid::{Rect, Size2D, UnknownUnit, default::Point2D},
     },
     prelude::*,
 };
@@ -29,7 +36,7 @@ pub enum NodeEditorCommand {
     LoadFile(PathBuf),
     SaveFile(PathBuf),
     AutoLayout,
-    CenterGraph{zoom_to_fit:bool},
+    CenterGraph { zoom_to_fit: bool },
     UpdateActiveNode(Option<NodeElement>),
 }
 
@@ -62,11 +69,11 @@ impl EditorState {
 
         Point2D::new(editor_size.width / 2., editor_size.height / 2.)
     }
-    pub fn get_view_port_size(&self) -> Size2D<f64, Pixels>{
+    pub fn get_view_port_size(&self) -> Size2D<f64, Pixels> {
         *self.editor_size.read()
     }
 
-    pub fn center_graph(&mut self, bounding_box: Rect<f64, UnknownUnit>, zoom_to_fit: bool){
+    pub fn center_graph(&mut self, bounding_box: Rect<f64, UnknownUnit>, zoom_to_fit: bool) {
         if zoom_to_fit {
             self.zoom_to_fit(bounding_box)
         }
@@ -79,13 +86,14 @@ impl EditorState {
         ));
     }
 
-    fn zoom_to_fit(&mut self, bounding_box: Rect<f64, UnknownUnit>){
+    fn zoom_to_fit(&mut self, bounding_box: Rect<f64, UnknownUnit>) {
         let padding_fac = 0.95;
         let view_box = self.get_view_port_size();
         let zoom = *self.zoom.read();
-        let height_fac = view_box.height * padding_fac/zoom / bounding_box.height();
-        let width_fac = view_box.width * padding_fac/zoom / bounding_box.width();
-        self.zoom.set(zoom*width_fac.min(height_fac).clamp(MIN_ZOOM, MAX_ZOOM));
+        let height_fac = view_box.height * padding_fac / zoom / bounding_box.height();
+        let width_fac = view_box.width * padding_fac / zoom / bounding_box.width();
+        self.zoom
+            .set(zoom * width_fac.min(height_fac).clamp(MIN_ZOOM, MAX_ZOOM));
     }
 }
 
@@ -100,7 +108,7 @@ pub enum DragStatus {
 
 #[component]
 pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
-    let last_auxiliary_click    = use_signal(|| Option::<Instant>::None);    
+    let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let node_selected = use_signal(|| None::<NodeElement>);
     let copied_node = use_signal(|| None::<(NodeType, Uuid)>);
 
@@ -114,7 +122,8 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let current_mouse_pos = use_signal(Point2D::default);
     let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
     let onwheel_handler = use_zoom(on_mounted);
-    let onmousedown_handler = use_on_mouse_down(current_mouse_pos, node_selected, last_auxiliary_click);
+    let onmousedown_handler =
+        use_on_mouse_down(current_mouse_pos, node_selected, last_auxiliary_click);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
     let onmouseleave_handler = use_on_mouse_leave();
@@ -152,10 +161,12 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                 }
                 NodeEditorCommand::AutoLayout => {
                     graph_processor.send(GraphStoreAction::OptimizeLayout);
-                    graph_processor.send(GraphStoreAction::CenterGraph{zoom_to_fit: true});
+                    graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: true });
                 }
                 NodeEditorCommand::CenterGraph { zoom_to_fit } => {
-                    graph_processor.send(GraphStoreAction::CenterGraph{zoom_to_fit: *zoom_to_fit});
+                    graph_processor.send(GraphStoreAction::CenterGraph {
+                        zoom_to_fit: *zoom_to_fit,
+                    });
                 }
                 NodeEditorCommand::LoadFile(path) => {
                     graph_processor.send(GraphStoreAction::LoadFromFile(path.to_owned()));

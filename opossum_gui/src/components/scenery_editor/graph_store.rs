@@ -13,9 +13,13 @@ use crate::{
     },
 };
 use dioxus::{
-    html::geometry::{euclid::{
-        default::{Point2D, Rect}, Size2D
-    }, Pixels},
+    html::geometry::{
+        Pixels,
+        euclid::{
+            Size2D,
+            default::{Point2D, Rect},
+        },
+    },
     prelude::*,
 };
 use futures_util::StreamExt;
@@ -58,7 +62,7 @@ pub enum GraphStoreAction {
     GetSceneryId,
     DeleteScenery,
     OptimizeLayout,
-    CenterGraph{zoom_to_fit: bool},
+    CenterGraph { zoom_to_fit: bool },
     // TerminateBackend,
     UpdateActiveNode(Option<NodeElement>),
 }
@@ -362,61 +366,63 @@ pub fn use_graph_processor(
             while let Some(action) = rx.next().await {
                 match action {
                     GraphStoreAction::UpdateEdges(connect_infos) => {
-                                        graph_store.write().edges.set(connect_infos.clone());
-                                    }
+                        graph_store.write().edges.set(connect_infos.clone());
+                    }
                     GraphStoreAction::UpdateActiveNode(node) => {
-                                        process_update_active_node(node, graph_store);
-                                    }
+                        process_update_active_node(node, graph_store);
+                    }
                     GraphStoreAction::LoadFromFile(path) => {
-                                        process_load_from_file(path, graph_store).await;
-                                    }
+                        process_load_from_file(path, graph_store).await;
+                    }
                     GraphStoreAction::SaveToFile(path) => {
-                                        process_save_to_file(path).await;
-                                    }
+                        process_save_to_file(path).await;
+                    }
                     GraphStoreAction::SyncNodePosition(node_id, pos) => {
-                                        eval_action_run(
-                                            api::update_gui_position(node_id, pos).await,
-                                            None::<fn(String)>,
-                                        );
-                                    }
+                        eval_action_run(
+                            api::update_gui_position(node_id, pos).await,
+                            None::<fn(String)>,
+                        );
+                    }
                     GraphStoreAction::DeleteNode(node_id) => {
-                                        process_delete_node(node_id, graph_store, node_selected).await;
-                                    }
+                        process_delete_node(node_id, graph_store, node_selected).await;
+                    }
                     GraphStoreAction::AddOpticNode(new_node) => {
-                                        process_add_optic_node(&new_node, graph_store, editor_state, node_selected)
-                                            .await;
-                                    }
+                        process_add_optic_node(&new_node, graph_store, editor_state, node_selected)
+                            .await;
+                    }
                     GraphStoreAction::AddOpticReference(new_ref_node) => {
-                                        process_add_reference_node(new_ref_node, graph_store, node_selected).await;
-                                    }
+                        process_add_reference_node(new_ref_node, graph_store, node_selected).await;
+                    }
                     GraphStoreAction::AddAnalyzer(new_analyzer) => {
-                                        process_add_analyzer(new_analyzer, graph_store, node_selected).await;
-                                    }
+                        process_add_analyzer(new_analyzer, graph_store, node_selected).await;
+                    }
                     GraphStoreAction::AddEdge(connect_info) => {
-                                        process_add_edge(connect_info, graph_store).await;
-                                    }
+                        process_add_edge(connect_info, graph_store).await;
+                    }
                     GraphStoreAction::UpdateEdge(connect_info) => {
-                                        process_update_edge(connect_info, graph_store).await;
-                                    }
+                        process_update_edge(connect_info, graph_store).await;
+                    }
                     GraphStoreAction::DeleteEdge(connect_info) => {
-                                        process_delete_edge(connect_info, graph_store).await;
-                                    }
+                        process_delete_edge(connect_info, graph_store).await;
+                    }
                     GraphStoreAction::CopyNode((node_type, node_id, pos)) => {
-                                        process_copy_node(node_type, node_id, pos, graph_store).await;
-                                    }
+                        process_copy_node(node_type, node_id, pos, graph_store).await;
+                    }
                     GraphStoreAction::DeleteScenery => {
-                                        process_delete_scenery(graph_store).await;
-                                    }
+                        process_delete_scenery(graph_store).await;
+                    }
                     GraphStoreAction::OptimizeLayout => {
-                                        process_optimize_layout(graph_store).await;
-                                    }
+                        process_optimize_layout(graph_store).await;
+                    }
                     GraphStoreAction::GetSceneryId => eval_action_run(
-                                        api::get_scenery_uuid().await,
-                                        Some(move |id| graph_store.write().set_scenery_id(id)),
-                                    ),
+                        api::get_scenery_uuid().await,
+                        Some(move |id| graph_store.write().set_scenery_id(id)),
+                    ),
                     GraphStoreAction::CenterGraph { zoom_to_fit } => {
-                        editor_state.write().center_graph(graph_store.read().get_bounding_box(), zoom_to_fit);
-                    },
+                        editor_state
+                            .write()
+                            .center_graph(graph_store.read().get_bounding_box(), zoom_to_fit);
+                    }
                 }
             }
         }
