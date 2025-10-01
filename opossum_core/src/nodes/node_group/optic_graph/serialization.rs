@@ -60,7 +60,7 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
     if let Ok(ref_node) = node_ref
         .optical_ref
         .lock()
-        .expect("Mutex lock failed")
+        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
         .as_refnode_mut()
     {
         // if Ok, the node was indeed a reference node
@@ -80,7 +80,7 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
             reference_node
                 .optical_ref
                 .lock()
-                .expect("Mutex lock failed")
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
                 .name()
         );
         ref_node.assign_reference(&reference_node);
