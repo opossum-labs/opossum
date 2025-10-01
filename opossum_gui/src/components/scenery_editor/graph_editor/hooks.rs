@@ -1,4 +1,7 @@
-use std::rc::Rc;
+use std::{
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use crate::{
     CONTEXT_MENU,
@@ -10,7 +13,10 @@ use crate::{
         graph_store::{GraphStore, GraphStoreAction},
     },
 };
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus::{
+    html::{geometry::euclid::default::Point2D, input_data::MouseButton},
+    prelude::*,
+};
 use opossum_backend::{PortType, nodes::ConnectInfo};
 use uuid::Uuid;
 
@@ -44,37 +50,45 @@ pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl Fn
     }
 }
 
-pub fn use_center_graph() -> impl FnMut(MouseEvent) {
+pub fn use_on_mouse_down(
+    mut current_mouse_pos: Signal<Point2D<f64>>,
+    mut node_selected: Signal<Option<NodeElement>>,
+    mut last_click: Signal<Option<Instant>>,
+) -> impl FnMut(MouseEvent) {
+    let dc_time = Duration::from_millis(300);
     let graph_store = use_context::<Signal<GraphStore>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
 
-    move |mouse_event| {
-        mouse_event.stop_propagation();
-        let bounding_box = graph_store().get_bounding_box();
-        let center = bounding_box.center();
-        let zoom = *editor_status.read().zoom.read();
-        let view_center = editor_status.read().get_view_port_center();
-        editor_status.write().shift.set(Point2D::new(
-            center.x.mul_add(-zoom, view_center.x),
-            center.y.mul_add(-zoom, view_center.y),
-        ));
-    }
-}
-pub fn use_drag_start(
-    mut current_mouse_pos: Signal<Point2D<f64>>,
-    mut node_selected: Signal<Option<NodeElement>>,
-) -> impl FnMut(MouseEvent) {
-    let mut editor_status = use_context::<Signal<EditorState>>();
-
     move |event| {
-        node_selected.set(None);
-        let mut ctx = CONTEXT_MENU.write();
-        *ctx = None;
-        current_mouse_pos.set(Point2D::new(
-            event.client_coordinates().x,
-            event.client_coordinates().y,
-        ));
-        editor_status.write().drag_status.set(DragStatus::Graph);
+        if let Some(trigger_button) = event.trigger_button() {
+            match trigger_button {
+                MouseButton::Primary => {
+                    node_selected.set(None);
+                    let mut ctx = CONTEXT_MENU.write();
+                    *ctx = None;
+                    current_mouse_pos.set(Point2D::new(
+                        event.client_coordinates().x,
+                        event.client_coordinates().y,
+                    ));
+                    editor_status.write().drag_status.set(DragStatus::Graph);
+                }
+                MouseButton::Auxiliary => {
+                    event.stop_propagation();
+                    let now = Instant::now();
+                    let t0_opt = *last_click.read();
+                    if let Some(t0) = t0_opt
+                        && now.duration_since(t0) < dc_time
+                    {
+                        editor_status
+                            .write()
+                            .center_graph(graph_store.read().get_bounding_box(), false);
+                        last_click.set(None);
+                    }
+                    last_click.set(Some(now));
+                }
+                _ => (),
+            }
+        }
     }
 }
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
@@ -150,12 +164,14 @@ pub fn use_on_key_down(
             let modifiers = event.modifiers();
             let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
             if ctrl_or_meta
+                && !modifiers.shift()
                 && event.data().key() == Key::Character("c".to_string())
                 && let Some(node) = &*node_selected.peek()
             {
                 copied_node.set(Some((node.node_type().clone(), node.id())));
-            }
-            if ctrl_or_meta
+                event.stop_propagation();
+            } else if ctrl_or_meta
+                && !modifiers.shift()
                 && event.data().key() == Key::Character("v".to_string())
                 && let Some((node_type, node_id)) = &*copied_node.read()
             {
@@ -178,9 +194,19 @@ pub fn use_on_key_down(
                         pos,
                     )));
                 }
+                event.stop_propagation();
             }
+            // if ctrl_or_meta && modifiers.shift()
+            //     && (event.data().key() == Key::Character("C".to_string()) || event.data().key() == Key::Character("c".to_string()))
+            // {
+            //     graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: false });
+            // }
+            // if ctrl_or_meta && modifiers.shift()
+            //     && (event.data().key() == Key::Character("F".to_string()) || event.data().key() == Key::Character("f".to_string()))
+            // {
+            //     graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: true });
+            // }
         }
-        event.stop_propagation();
     }
 }
 

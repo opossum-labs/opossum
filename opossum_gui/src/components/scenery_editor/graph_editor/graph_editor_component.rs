@@ -1,16 +1,17 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use std::{path::PathBuf, rc::Rc};
+use std::{path::PathBuf, rc::Rc, time::Instant};
 
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
         GraphState, GraphStoreAction, NodeElement, NodeType,
+        constants::{MAX_ZOOM, MIN_ZOOM},
         edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
         },
         graph_editor::hooks::{
-            use_center_graph, use_drag, use_drag_end, use_drag_start, use_on_key_down,
-            use_on_mouse_leave, use_on_resize, use_zoom,
+            use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_mouse_leave,
+            use_on_resize, use_zoom,
         },
         nodes::Nodes,
         use_graph_processor,
@@ -19,7 +20,7 @@ use crate::components::{
 use dioxus::{
     html::geometry::{
         Pixels, PixelsSize,
-        euclid::{Rect, default::Point2D},
+        euclid::{Rect, Size2D, UnknownUnit, default::Point2D},
     },
     prelude::*,
 };
@@ -35,6 +36,7 @@ pub enum NodeEditorCommand {
     LoadFile(PathBuf),
     SaveFile(PathBuf),
     AutoLayout,
+    CenterGraph { zoom_to_fit: bool },
     UpdateActiveNode(Option<NodeElement>),
 }
 
@@ -67,6 +69,32 @@ impl EditorState {
 
         Point2D::new(editor_size.width / 2., editor_size.height / 2.)
     }
+    pub fn get_view_port_size(&self) -> Size2D<f64, Pixels> {
+        *self.editor_size.read()
+    }
+
+    pub fn center_graph(&mut self, bounding_box: Rect<f64, UnknownUnit>, zoom_to_fit: bool) {
+        if zoom_to_fit {
+            self.zoom_to_fit(bounding_box);
+        }
+        let center = bounding_box.center();
+        let zoom = *self.zoom.read();
+        let view_center = self.get_view_port_center();
+        self.shift.set(Point2D::new(
+            center.x.mul_add(-zoom, view_center.x),
+            center.y.mul_add(-zoom, view_center.y),
+        ));
+    }
+
+    fn zoom_to_fit(&mut self, bounding_box: Rect<f64, UnknownUnit>) {
+        let padding_fac = 0.95;
+        let view_box = self.get_view_port_size();
+        let zoom = *self.zoom.read();
+        let height_fac = view_box.height * padding_fac / zoom / bounding_box.height();
+        let width_fac = view_box.width * padding_fac / zoom / bounding_box.width();
+        self.zoom
+            .set((zoom * width_fac.min(height_fac)).clamp(MIN_ZOOM, MAX_ZOOM));
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -80,6 +108,7 @@ pub enum DragStatus {
 
 #[component]
 pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
+    let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let node_selected = use_signal(|| None::<NodeElement>);
     let copied_node = use_signal(|| None::<(NodeType, Uuid)>);
 
@@ -93,8 +122,8 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let current_mouse_pos = use_signal(Point2D::default);
     let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
     let onwheel_handler = use_zoom(on_mounted);
-    let ondoubleclick_handler = use_center_graph();
-    let onmousedown_handler = use_drag_start(current_mouse_pos, node_selected);
+    let onmousedown_handler =
+        use_on_mouse_down(current_mouse_pos, node_selected, last_auxiliary_click);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
     let onmouseleave_handler = use_on_mouse_leave();
@@ -132,6 +161,12 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                 }
                 NodeEditorCommand::AutoLayout => {
                     graph_processor.send(GraphStoreAction::OptimizeLayout);
+                    graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: true });
+                }
+                NodeEditorCommand::CenterGraph { zoom_to_fit } => {
+                    graph_processor.send(GraphStoreAction::CenterGraph {
+                        zoom_to_fit: *zoom_to_fit,
+                    });
                 }
                 NodeEditorCommand::LoadFile(path) => {
                     graph_processor.send(GraphStoreAction::LoadFromFile(path.to_owned()));
@@ -165,7 +200,6 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                     onmousedown: onmousedown_handler,
                     onmouseup: onmouseup_handler,
                     onmousemove: onmousemove_handler,
-                    ondoubleclick: ondoubleclick_handler,
                     onresize: onresizehandler,
                     onmounted: move |event| { on_mounted.set(Some(event.data)) },
                     div {

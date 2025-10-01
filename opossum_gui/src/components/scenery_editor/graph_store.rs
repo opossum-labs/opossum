@@ -59,6 +59,7 @@ pub enum GraphStoreAction {
     GetSceneryId,
     DeleteScenery,
     OptimizeLayout,
+    CenterGraph { zoom_to_fit: bool },
     // TerminateBackend,
     UpdateActiveNode(Option<NodeElement>),
 }
@@ -356,7 +357,7 @@ pub fn use_graph_processor(
 ) -> Coroutine<GraphStoreAction> {
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         let mut graph_store = graph_state.write().graph_store;
-        let editor_state = graph_state.write().editor_state;
+        let mut editor_state = graph_state.write().editor_state;
         async move {
             // This loop runs forever in the background, waiting for actions.
             while let Some(action) = rx.next().await {
@@ -414,6 +415,11 @@ pub fn use_graph_processor(
                         api::get_scenery_uuid().await,
                         Some(move |id| graph_store.write().set_scenery_id(id)),
                     ),
+                    GraphStoreAction::CenterGraph { zoom_to_fit } => {
+                        editor_state
+                            .write()
+                            .center_graph(graph_store.read().get_bounding_box(), zoom_to_fit);
+                    }
                 }
             }
         }

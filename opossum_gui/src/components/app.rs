@@ -5,6 +5,7 @@ use crate::{
         logger::logger_component::Logger,
         menu_bar::menu_bar_component::{MenuBar, MenuSelection},
         scenery_editor::{GraphEditor, NodeEditorCommand},
+        short_cuts::ShortcutHandler,
         simulation::simulation_window::SimulationWindow,
     },
 };
@@ -16,12 +17,18 @@ use std::path::PathBuf;
 
 #[component]
 pub fn App() -> Element {
-    let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
-    let menu_item_selected = use_signal(|| None::<MenuSelection>);
+    let mut node_editor_command: Signal<Option<NodeEditorCommand>> =
+        use_signal(|| None::<NodeEditorCommand>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
+
+    let menu_item_selected: Signal<Option<MenuSelection>> = use_signal(|| None::<MenuSelection>);
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut model_modified: Signal<bool> = use_signal(|| false);
+
+    let short_cut_handler =
+        ShortcutHandler::new(menu_item_selected, model_modified, model_file_path);
+    use_context_provider(|| short_cut_handler);
     let mut run_simulation = use_signal(|| false);
 
     // Get a reference to the window
@@ -62,8 +69,15 @@ pub fn App() -> Element {
                     model_modified.set(true);
                     node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
                 }
+
+                MenuSelection::CenterGraph { zoom_to_fit } => {
+                    node_editor_command.set(Some(NodeEditorCommand::CenterGraph {
+                        zoom_to_fit: *zoom_to_fit,
+                    }));
+                }
                 MenuSelection::NewProject => {
                     model_modified.set(true);
+                    model_file_path.set(None);
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
                 }
                 MenuSelection::OpenProject(path) => {
@@ -92,7 +106,11 @@ pub fn App() -> Element {
 
     rsx! {
         // The main container for the app and resize handles
-        div { class: "app-container",
+        div {
+            class: "app-container",
+            tabindex: 0,
+            onkeydown: move |e| short_cut_handler.handle_event(&e),
+            // short_cut_handler(menu_item_selected, model_modified, model_file_path),
             // Resize Handles
             div {
                 class: "resize-handle-top",
