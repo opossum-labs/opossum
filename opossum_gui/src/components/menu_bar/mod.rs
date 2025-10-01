@@ -5,4 +5,6 @@ pub mod menu_bar_component;
 mod path_helper;
 mod project_helper;
 
-pub use project_helper::{save_project, save_project_as};
+pub use project_helper::{
+    new_project, open_project, save_project, save_project_as, set_report_directory,
+};

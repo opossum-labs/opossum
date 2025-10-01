@@ -8,8 +8,15 @@ use opossum_backend::AnalyzerType;
 use rfd::FileDialog;
 use std::path::PathBuf;
 
-use crate::components::menu_bar::{
-    controls::controls_menu::ControlsMenu, edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu}, help::about::About, path_helper::abbreviate_path, save_project, save_project_as
+use crate::components::{
+    menu_bar::{
+        controls::controls_menu::ControlsMenu,
+        edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+        help::about::About,
+        path_helper::abbreviate_path,
+        project_helper::continue_operation,
+    },
+    short_cuts::{SHORTCUTS, ShortCutAction, ShortcutHandler},
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
@@ -78,63 +85,11 @@ pub fn MenuBar(
                             "File"
                         }
                         ul { class: "dropdown-menu",
-                            li {
-                                a {
-                                    class: "dropdown-item",
-                                    role: "button",
-                                    onclick: move |_| { menu_item_selected.set(Some(MenuSelection::NewProject)) },
-                                    "New Project"
-                                }
-                            }
-                            li {
-                                a {
-                                    class: "dropdown-item",
-                                    role: "button",
-                                    onclick: move |_| {
-                                        let path = FileDialog::new()
-                                            .set_directory("/")
-                                            .set_title("Open OPOSSUM setup file")
-                                            .add_filter("Opossum setup file", &["opm"])
-                                            .pick_file();
-                                        if let Some(path) = path {
-                                            menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
-                                        }
-                                    },
-                                    "Open Project"
-                                }
-                            }
-                            li {
-                                a {
-                                    class: "dropdown-item",
-                                    role: "button",
-                                    onclick: move |_| save_project(model_file_path, menu_item_selected),
-                                    "Save Project"
-                                }
-                            }
-                            li {
-                                a {
-                                    class: "dropdown-item",
-                                    role: "button",
-                                    onclick: move |_| save_project_as(menu_item_selected),
-                                    "Save Project As"
-                                }
-                            }
-                            li {
-                                a {
-                                    class: "dropdown-item",
-                                    role: "button",
-                                    onclick: move |_| {
-                                        let path = FileDialog::new()
-                                            .set_directory("./")
-                                            .set_title("Select OPOSSUM report directory")
-                                            .pick_folder();
-                                        if let Some(path) = path {
-                                            menu_item_selected.set(Some(MenuSelection::SetReportDir(path)));
-                                        }
-                                    },
-                                    "Set Report Directory"
-                                }
-                            }
+                            MenuListItemShortCut { short_cut_action: ShortCutAction::New }
+                            MenuListItemShortCut { short_cut_action: ShortCutAction::Open }
+                            MenuListItemShortCut { short_cut_action: ShortCutAction::Save }
+                            MenuListItemShortCut { short_cut_action: ShortCutAction::SaveAs }
+                            MenuListItemShortCut { short_cut_action: ShortCutAction::Report }
                         }
                     }
                     li { class: "nav-item dropdown",
@@ -179,49 +134,9 @@ pub fn MenuBar(
                             "Layout"
                         }
                         ul { class: "dropdown-menu",
-                            li {
-                                a {
-                                    class: "dropdown-item d-flex justify-content-between align-items-center",
-                                    role: "button",
-                                    onclick: move |_| {
-                                        menu_item_selected
-                                            .set(
-                                                Some(MenuSelection::CenterGraph {
-                                                    zoom_to_fit: false,
-                                                }),
-                                            );
-                                    },
-                                    "Center graph"
-                                    span { class: "text-muted ms-4", "Ctrl+Shift+c" }
-                                }
-                            }
-                            li {
-                                a {
-                                    class: "dropdown-item d-flex justify-content-between align-items-center",
-                                    role: "button",
-                                    onclick: move |_| {
-                                        menu_item_selected
-                                            .set(
-                                                Some(MenuSelection::CenterGraph {
-                                                    zoom_to_fit: true,
-                                                }),
-                                            );
-                                    },
-                                    "Zoom to fit graph"
-                                    span { class: "text-muted ms-4", "Ctrl+Shift+f" }
-                                }
-                            }
-                            li {
-                                a {
-                                    class: "dropdown-item d-flex justify-content-between align-items-center",
-                                    role: "button",
-                                    onclick: move |_| {
-                                        menu_item_selected.set(Some(MenuSelection::AutoLayout));
-                                    },
-                                    "Auto Layout"
-                                    span { class: "text-muted ms-4", "Ctrl+Shift+a" }
-                                }
-                            }
+                            MenuListItemShortCut { short_cut_action: ShortCutAction::Center }
+                            MenuListItemShortCut { short_cut_action: ShortCutAction::ZoomToFit }
+                            MenuListItemShortCut { short_cut_action: ShortCutAction::AutoLayout }
                         }
                     }
                     li { class: "nav-item dropdown",
@@ -294,20 +209,8 @@ pub fn MenuBar(
                 ControlsMenu {
                     maximize_symbol,
                     on_quit: move || {
-                        let should_close = if model_modified() {
-                            let confirm_quit = rfd::MessageDialog::new()
-                                .set_level(rfd::MessageLevel::Warning)
-                                .set_title("Unsaved Changes")
-                                .set_description(
-                                    "You have unsaved changes. Are you sure you want to quit?",
-                                )
-                                .set_buttons(rfd::MessageButtons::YesNo)
-                                .show();
-                            matches!(confirm_quit, rfd::MessageDialogResult::Yes)
-                        } else {
-                            true
-                        };
-                        if should_close {
+                        let msg = "You have unsaved changes. Are you sure you want to quit?";
+                        if continue_operation(model_modified, msg) {
                             menu_item_selected.set(Some(MenuSelection::Quit));
                         }
                     },
@@ -326,6 +229,25 @@ pub fn MenuBar(
     }
 }
 
+#[component]
+fn MenuListItemShortCut(short_cut_action: ShortCutAction) -> Element {
+    let short_cut_handler = use_context::<ShortcutHandler>();
+    let short_cut_display = SHORTCUTS
+        .get(&short_cut_action)
+        .map_or(String::new(), super::super::short_cuts::Shortcut::display);
+    rsx! {
+        li {
+            a {
+                class: "dropdown-item d-flex justify-content-between align-items-center",
+                role: "button",
+                onclick: move |_| short_cut_handler.emulate(short_cut_action),
+                {short_cut_action.display()}
+                span { class: "text-muted ms-4", {short_cut_display} }
+            }
+        }
+    }
+}
+
 #[cfg(feature = "desktop")]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
@@ -334,51 +256,35 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
     use dioxus_free_icons::icons::fa_solid_icons::FaWindowRestore;
     let window = use_window();
     let mut last_click = use_signal(|| Option::<Instant>::None);
-    let dc_time = Duration::from_millis(300); // Doppelklick-Zeit
+    let dc_time = Duration::from_millis(300);
 
     rsx! {
         div {
             class: "d-flex align-items-center flex-grow-1 mx-2 px-2 rounded align-self-stretch my-n2",
             ondragstart: move |e| e.prevent_default(),
             onmousedown: {
-                let window = window.clone();
                 move |_| {
                     let now = Instant::now();
-                    let t0_opt = last_click.read().clone();
-                    if t0_opt.map_or(false, |t0| now.duration_since(t0) < dc_time ) {
-                            if window.is_maximized() {
-                                window.set_maximized(false);
-                                maximize_symbol.set(rsx! {
-                                    Icon { width: 25, icon: FaWindowMaximize }
-                                });
-                            } else {
-                                window.set_maximized(true);
-                                maximize_symbol.set(rsx! {
-                                    Icon { width: 25, icon: FaWindowRestore }
-                                });
-                            }
-                            last_click.set(None);
-                        
-                    }
-                    else{
+                    let t0_opt = *last_click.read();
+                    if t0_opt.is_some_and(|t0| now.duration_since(t0) < dc_time) {
+                        if window.is_maximized() {
+                            window.set_maximized(false);
+                            maximize_symbol.set(rsx! {
+                                Icon { width: 25, icon: FaWindowMaximize }
+                            });
+                        } else {
+                            window.set_maximized(true);
+                            maximize_symbol.set(rsx! {
+                                Icon { width: 25, icon: FaWindowRestore }
+                            });
+                        }
+                        last_click.set(None);
+                    } else {
                         window.drag();
                     }
                     last_click.set(Some(now));
                 }
             },
-            // ondoubleclick: move |_| {
-            //     if window.is_maximized() {
-            //         window.set_maximized(false);
-            //         maximize_symbol.set(rsx! {
-            //             Icon { width: 25, icon: FaWindowMaximize }
-            //         });
-            //     } else {
-            //         window.set_maximized(true);
-            //         maximize_symbol.set(rsx! {
-            //             Icon { width: 25, icon: FaWindowRestore }
-            //         });
-            //     }
-            // },
         }
     }
 }

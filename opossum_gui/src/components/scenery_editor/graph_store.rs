@@ -13,12 +13,9 @@ use crate::{
     },
 };
 use dioxus::{
-    html::geometry::{
-        Pixels,
-        euclid::{
-            Size2D,
-            default::{Point2D, Rect},
-        },
+    html::geometry::euclid::{
+        Size2D,
+        default::{Point2D, Rect},
     },
     prelude::*,
 };

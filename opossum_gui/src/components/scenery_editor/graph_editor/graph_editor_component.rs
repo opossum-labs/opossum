@@ -75,7 +75,7 @@ impl EditorState {
 
     pub fn center_graph(&mut self, bounding_box: Rect<f64, UnknownUnit>, zoom_to_fit: bool) {
         if zoom_to_fit {
-            self.zoom_to_fit(bounding_box)
+            self.zoom_to_fit(bounding_box);
         }
         let center = bounding_box.center();
         let zoom = *self.zoom.read();
@@ -93,7 +93,7 @@ impl EditorState {
         let height_fac = view_box.height * padding_fac / zoom / bounding_box.height();
         let width_fac = view_box.width * padding_fac / zoom / bounding_box.width();
         self.zoom
-            .set(zoom * width_fac.min(height_fac).clamp(MIN_ZOOM, MAX_ZOOM));
+            .set((zoom * width_fac.min(height_fac)).clamp(MIN_ZOOM, MAX_ZOOM));
     }
 }
 

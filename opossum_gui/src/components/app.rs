@@ -3,11 +3,9 @@ use crate::{
     components::{
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
-        menu_bar::{
-            menu_bar_component::{MenuBar, MenuSelection},
-            save_project, save_project_as,
-        },
+        menu_bar::menu_bar_component::{MenuBar, MenuSelection},
         scenery_editor::{GraphEditor, NodeEditorCommand},
+        short_cuts::ShortcutHandler,
         simulation::simulation_window::SimulationWindow,
     },
 };
@@ -19,12 +17,18 @@ use std::path::PathBuf;
 
 #[component]
 pub fn App() -> Element {
-    let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
-    let mut menu_item_selected = use_signal(|| None::<MenuSelection>);
+    let mut node_editor_command: Signal<Option<NodeEditorCommand>> =
+        use_signal(|| None::<NodeEditorCommand>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
+
+    let menu_item_selected: Signal<Option<MenuSelection>> = use_signal(|| None::<MenuSelection>);
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut model_modified: Signal<bool> = use_signal(|| false);
+
+    let short_cut_handler =
+        ShortcutHandler::new(menu_item_selected, model_modified, model_file_path);
+    use_context_provider(|| short_cut_handler);
     let mut run_simulation = use_signal(|| false);
 
     // Get a reference to the window
@@ -73,6 +77,7 @@ pub fn App() -> Element {
                 }
                 MenuSelection::NewProject => {
                     model_modified.set(true);
+                    model_file_path.set(None);
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
                 }
                 MenuSelection::OpenProject(path) => {
@@ -104,43 +109,8 @@ pub fn App() -> Element {
         div {
             class: "app-container",
             tabindex: 0,
-            onkeydown: move |event| {
-                let modifiers = event.modifiers();
-                let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
-                if ctrl_or_meta && modifiers.shift()
-                    && (event.data().key() == Key::Character("C".to_string())
-                        || event.data().key() == Key::Character("c".to_string()))
-                {
-                    node_editor_command
-                        .set(
-                            Some(NodeEditorCommand::CenterGraph {
-                                zoom_to_fit: false,
-                            }),
-                        );
-                } else if ctrl_or_meta && modifiers.shift()
-                    && (event.data().key() == Key::Character("F".to_string())
-                        || event.data().key() == Key::Character("f".to_string()))
-                {
-                    node_editor_command
-                        .set(
-                            Some(NodeEditorCommand::CenterGraph {
-                                zoom_to_fit: true,
-                            }),
-                        );
-                } else if ctrl_or_meta && modifiers.shift()
-                    && (event.data().key() == Key::Character("A".to_string())
-                        || event.data().key() == Key::Character("a".to_string()))
-                {
-                    node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
-                } else if ctrl_or_meta && event.data().key() == Key::Character("s".to_string()) {
-                    save_project(model_file_path, menu_item_selected);
-                } else if ctrl_or_meta && modifiers.shift()
-                    && (event.data().key() == Key::Character("s".to_string())
-                        || event.data().key() == Key::Character("S".to_string()))
-                {
-                    save_project_as(menu_item_selected);
-                }
-            },
+            onkeydown: move |e| short_cut_handler.handle_event(&e),
+            // short_cut_handler(menu_item_selected, model_modified, model_file_path),
             // Resize Handles
             div {
                 class: "resize-handle-top",

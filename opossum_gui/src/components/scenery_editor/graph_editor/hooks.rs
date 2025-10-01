@@ -55,7 +55,6 @@ pub fn use_on_mouse_down(
     mut node_selected: Signal<Option<NodeElement>>,
     mut last_click: Signal<Option<Instant>>,
 ) -> impl FnMut(MouseEvent) {
-
     let dc_time = Duration::from_millis(300);
     let graph_store = use_context::<Signal<GraphStore>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
@@ -76,14 +75,14 @@ pub fn use_on_mouse_down(
                 MouseButton::Auxiliary => {
                     event.stop_propagation();
                     let now = Instant::now();
-                    let t0_opt = last_click.read().clone();
-                    if let Some(t0) = t0_opt {
-                        if now.duration_since(t0) < dc_time {
-                            editor_status
-                                .write()
-                                .center_graph(graph_store.read().get_bounding_box(), false);
-                            last_click.set(None);
-                        }
+                    let t0_opt = *last_click.read();
+                    if let Some(t0) = t0_opt
+                        && now.duration_since(t0) < dc_time
+                    {
+                        editor_status
+                            .write()
+                            .center_graph(graph_store.read().get_bounding_box(), false);
+                        last_click.set(None);
                     }
                     last_click.set(Some(now));
                 }
