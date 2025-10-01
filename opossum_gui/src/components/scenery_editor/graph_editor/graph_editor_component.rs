@@ -29,6 +29,7 @@ pub enum NodeEditorCommand {
     LoadFile(PathBuf),
     SaveFile(PathBuf),
     AutoLayout,
+    CenterGraph{zoom_to_fit:bool},
     UpdateActiveNode(Option<NodeElement>),
 }
 
@@ -84,10 +85,7 @@ impl EditorState {
         let zoom = *self.zoom.read();
         let height_fac = view_box.height * padding_fac/zoom / bounding_box.height();
         let width_fac = view_box.width * padding_fac/zoom / bounding_box.width();
-        {
-            let mut zoom = self.zoom.write();
-            *zoom *= width_fac.min(height_fac).clamp(MIN_ZOOM, MAX_ZOOM);
-        }
+        self.zoom.set(zoom*width_fac.min(height_fac).clamp(MIN_ZOOM, MAX_ZOOM));
     }
 }
 
@@ -154,6 +152,10 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                 }
                 NodeEditorCommand::AutoLayout => {
                     graph_processor.send(GraphStoreAction::OptimizeLayout);
+                    graph_processor.send(GraphStoreAction::CenterGraph{zoom_to_fit: true});
+                }
+                NodeEditorCommand::CenterGraph { zoom_to_fit } => {
+                    graph_processor.send(GraphStoreAction::CenterGraph{zoom_to_fit: *zoom_to_fit});
                 }
                 NodeEditorCommand::LoadFile(path) => {
                     graph_processor.send(GraphStoreAction::LoadFromFile(path.to_owned()));

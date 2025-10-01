@@ -27,6 +27,7 @@ pub enum MenuSelection {
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     AutoLayout,
+    CenterGraph{zoom_to_fit:bool},
     Quit,
 }
 #[component]
@@ -174,16 +175,16 @@ pub fn MenuBar(
                         }
                         ul { class: "dropdown-menu",
                             li {
-                                a { class: "dropdown-item", role: "button",
+                                a { class: "dropdown-item d-flex justify-content-between align-items-center",  role: "button",
                                     "Add Node"
-                                    Icon { height: 10, icon: FaAngleRight }
+                                    Icon {height: 10, icon: FaAngleRight }
                                 }
                                 ul { class: "dropdown-menu dropdown-submenu",
                                     NodesMenu { node_selected }
                                 }
                             }
                             li {
-                                a { class: "dropdown-item", role: "button",
+                                a { class: "dropdown-item d-flex justify-content-between align-items-center", role: "button",
                                     "Add Analyzer"
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
@@ -191,14 +192,51 @@ pub fn MenuBar(
                                     AnalyzersMenu { analyzer_selected }
                                 }
                             }
+                        }
+                    }
+                    li { class: "nav-item dropdown",
+                        a {
+                            "data-mdb-dropdown-init": "",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            id: "navbarDropdownMenuLink",
+                            role: "button",
+                            "Layout"
+                        }
+                        ul { class: "dropdown-menu",
+                            li {
+                                a { class: "dropdown-item d-flex justify-content-between align-items-center", role: "button",onclick: move |_| {
+                                        menu_item_selected.set(Some(MenuSelection::CenterGraph{zoom_to_fit:false}));
+                                    },
+                                    "Center graph"
+                                    span { 
+                                        class: "text-muted ms-4", 
+                                        "Ctrl+Shift+c" 
+                                    }
+                                }
+                            }
+                            li {
+                                a { class: "dropdown-item d-flex justify-content-between align-items-center", role: "button",onclick: move |_| {
+                                        menu_item_selected.set(Some(MenuSelection::CenterGraph{zoom_to_fit:true}));
+                                    },
+                                    "Zoom to fit graph"
+                                    span { 
+                                        class: "text-muted ms-4", 
+                                        "Ctrl+Shift+f" 
+                                    }
+                                }
+                            }
                             li {
                                 a {
-                                    class: "dropdown-item",
+                                    class: "dropdown-item d-flex justify-content-between align-items-center",
                                     role: "button",
                                     onclick: move |_| {
                                         menu_item_selected.set(Some(MenuSelection::AutoLayout));
                                     },
                                     "Auto Layout"
+                                    span { 
+                                        class: "text-muted ms-4", 
+                                        "Ctrl+Shift+a" 
+                                    }
                                 }
                             }
                         }

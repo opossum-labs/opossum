@@ -151,8 +151,7 @@ pub fn use_on_key_down(
     node_selected: Signal<Option<NodeElement>>,
     mut copied_node: Signal<Option<(NodeType, Uuid)>>,
 ) -> impl FnMut(KeyboardEvent) {
-    let mut editor_status = use_context::<Signal<EditorState>>();
-    let graph_store = use_context::<Signal<GraphStore>>();
+    let editor_status = use_context::<Signal<EditorState>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
     move |event| {
         if !event.is_auto_repeating() {
@@ -163,8 +162,9 @@ pub fn use_on_key_down(
                 && let Some(node) = &*node_selected.peek()
             {
                 copied_node.set(Some((node.node_type().clone(), node.id())));
+                event.stop_propagation();
             }
-            if ctrl_or_meta && !modifiers.shift()
+            else if ctrl_or_meta && !modifiers.shift()
                 && event.data().key() == Key::Character("v".to_string())
                 && let Some((node_type, node_id)) = &*copied_node.read()
             {
@@ -187,19 +187,19 @@ pub fn use_on_key_down(
                         pos,
                     )));
                 }
+                event.stop_propagation();
             }
-            if ctrl_or_meta && modifiers.shift()
-                && (event.data().key() == Key::Character("C".to_string()) || event.data().key() == Key::Character("c".to_string()))
-            {
-                editor_status.write().center_graph(graph_store.read().get_bounding_box(), false); 
-            }
-            if ctrl_or_meta && modifiers.shift()
-                && (event.data().key() == Key::Character("F".to_string()) || event.data().key() == Key::Character("f".to_string()))
-            {
-                editor_status.write().center_graph(graph_store.read().get_bounding_box(), true); 
-            }
+            // if ctrl_or_meta && modifiers.shift()
+            //     && (event.data().key() == Key::Character("C".to_string()) || event.data().key() == Key::Character("c".to_string()))
+            // {
+            //     graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: false });
+            // }
+            // if ctrl_or_meta && modifiers.shift()
+            //     && (event.data().key() == Key::Character("F".to_string()) || event.data().key() == Key::Character("f".to_string()))
+            // {
+            //     graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: true });
+            // }
         }
-        event.stop_propagation();
     }
 }
 

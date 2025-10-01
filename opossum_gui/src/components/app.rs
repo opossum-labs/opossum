@@ -62,6 +62,10 @@ pub fn App() -> Element {
                     model_modified.set(true);
                     node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
                 }
+
+                MenuSelection::CenterGraph{zoom_to_fit} => {
+                    node_editor_command.set(Some(NodeEditorCommand::CenterGraph{zoom_to_fit: *zoom_to_fit}));
+                }
                 MenuSelection::NewProject => {
                     model_modified.set(true);
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
@@ -93,6 +97,26 @@ pub fn App() -> Element {
     rsx! {
         // The main container for the app and resize handles
         div { class: "app-container",
+            tabindex: 0,
+            onkeydown: move |event|{
+                let modifiers = event.modifiers();
+                let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
+                if ctrl_or_meta && modifiers.shift()
+                    && (event.data().key() == Key::Character("C".to_string()) || event.data().key() == Key::Character("c".to_string()))
+                {
+                    node_editor_command.set(Some(NodeEditorCommand::CenterGraph { zoom_to_fit: false }));
+                }
+                else if ctrl_or_meta && modifiers.shift()
+                    && (event.data().key() == Key::Character("F".to_string()) || event.data().key() == Key::Character("f".to_string()))
+                {
+                    node_editor_command.set(Some(NodeEditorCommand::CenterGraph { zoom_to_fit: true }));
+                }
+                else if ctrl_or_meta && modifiers.shift()
+                    && (event.data().key() == Key::Character("A".to_string()) || event.data().key() == Key::Character("a".to_string()))
+                {
+                    node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
+                }
+            },
             // Resize Handles
             div {
                 class: "resize-handle-top",
