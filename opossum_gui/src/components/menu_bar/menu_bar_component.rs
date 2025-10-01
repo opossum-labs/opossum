@@ -329,29 +329,56 @@ pub fn MenuBar(
 #[cfg(feature = "desktop")]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
+    use std::time::{Duration, Instant};
+
     use dioxus_free_icons::icons::fa_solid_icons::FaWindowRestore;
     let window = use_window();
+    let mut last_click = use_signal(|| Option::<Instant>::None);
+    let dc_time = Duration::from_millis(300); // Doppelklick-Zeit
+
     rsx! {
         div {
             class: "d-flex align-items-center flex-grow-1 mx-2 px-2 rounded align-self-stretch my-n2",
             ondragstart: move |e| e.prevent_default(),
             onmousedown: {
                 let window = window.clone();
-                move |_| window.drag()
-            },
-            ondoubleclick: move |_| {
-                if window.is_maximized() {
-                    window.set_maximized(false);
-                    maximize_symbol.set(rsx! {
-                        Icon { width: 25, icon: FaWindowMaximize }
-                    });
-                } else {
-                    window.set_maximized(true);
-                    maximize_symbol.set(rsx! {
-                        Icon { width: 25, icon: FaWindowRestore }
-                    });
+                move |_| {
+                    let now = Instant::now();
+                    let t0_opt = last_click.read().clone();
+                    if t0_opt.map_or(false, |t0| now.duration_since(t0) < dc_time ) {
+                            if window.is_maximized() {
+                                window.set_maximized(false);
+                                maximize_symbol.set(rsx! {
+                                    Icon { width: 25, icon: FaWindowMaximize }
+                                });
+                            } else {
+                                window.set_maximized(true);
+                                maximize_symbol.set(rsx! {
+                                    Icon { width: 25, icon: FaWindowRestore }
+                                });
+                            }
+                            last_click.set(None);
+                        
+                    }
+                    else{
+                        window.drag();
+                    }
+                    last_click.set(Some(now));
                 }
             },
+            // ondoubleclick: move |_| {
+            //     if window.is_maximized() {
+            //         window.set_maximized(false);
+            //         maximize_symbol.set(rsx! {
+            //             Icon { width: 25, icon: FaWindowMaximize }
+            //         });
+            //     } else {
+            //         window.set_maximized(true);
+            //         maximize_symbol.set(rsx! {
+            //             Icon { width: 25, icon: FaWindowRestore }
+            //         });
+            //     }
+            // },
         }
     }
 }

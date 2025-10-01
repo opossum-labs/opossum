@@ -55,8 +55,8 @@ pub fn use_on_mouse_down(
     mut node_selected: Signal<Option<NodeElement>>,
     mut last_click: Signal<Option<Instant>>,
 ) -> impl FnMut(MouseEvent) {
-    // Tuning
-    let dc_time = Duration::from_millis(300); // Doppelklick-Zeit
+
+    let dc_time = Duration::from_millis(300);
     let graph_store = use_context::<Signal<GraphStore>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
 
