@@ -12,12 +12,31 @@ use dioxus::{
     desktop::{tao::window::ResizeDirection, use_window},
     prelude::*,
 };
+use rfd::FileDialog;
 use std::path::PathBuf;
+
+pub fn save_project(mut model_file_path: Signal<Option<PathBuf>>, mut menu_item_selected: Signal<Option<MenuSelection>>){
+    let path = model_file_path()
+        .as_ref()
+        .map_or_else(
+            || {
+                FileDialog::new()
+                    .set_directory("/")
+                    .set_title("Save OPOSSUM setup file")
+                    .add_filter("Opossum setup file", &["opm"])
+                    .save_file()
+            },
+            |model_path| Some(model_path.clone()),
+        );
+    if let Some(path) = path {
+        menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
+    }
+}
 
 #[component]
 pub fn App() -> Element {
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
-    let menu_item_selected = use_signal(|| None::<MenuSelection>);
+    let mut menu_item_selected = use_signal(|| None::<MenuSelection>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
@@ -115,6 +134,25 @@ pub fn App() -> Element {
                     && (event.data().key() == Key::Character("A".to_string()) || event.data().key() == Key::Character("a".to_string()))
                 {
                     node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
+                }
+                else if ctrl_or_meta && event.data().key() == Key::Character("s".to_string()) 
+                {
+                    save_project(model_file_path, menu_item_selected);
+                    // let path = model_file_path()
+                    //                 .as_ref()
+                    //                 .map_or_else(
+                    //                     || {
+                    //                         FileDialog::new()
+                    //                             .set_directory("/")
+                    //                             .set_title("Save OPOSSUM setup file")
+                    //                             .add_filter("Opossum setup file", &["opm"])
+                    //                             .save_file()
+                    //                     },
+                    //                     |model_path| Some(model_path.clone()),
+                    //                 );
+                    //             if let Some(path) = path {
+                    //                 menu_item_selected.set(Some(MenuSelection::SaveProject(path)));
+                    //             }
                 }
             },
             // Resize Handles

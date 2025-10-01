@@ -37,7 +37,7 @@ pub fn MenuBar(
     model_file_path: Signal<Option<PathBuf>>,
     model_modified: Signal<bool>,
 ) -> Element {
-    let mut about_window = use_signal(|| false);
+    let mut about_window: Signal<bool> = use_signal(|| false);
     let node_selected = use_signal(String::new);
     let analyzer_selected = use_signal(|| None::<AnalyzerType>);
     let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| {
@@ -349,11 +349,12 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
     use dioxus_free_icons::icons::fa_solid_icons::FaWindowRestore;
 
     let window = use_window();
+    let mut is_dragging = use_signal(|| false);
     rsx! {
         div {
             class: "d-flex align-items-center flex-grow-1 mx-2 px-2 rounded align-self-stretch my-n2",
             ondragstart: move |e| e.prevent_default(),
-            onmousemove: {
+            onmousedown: {
                 let window = window.clone();
                 move |_| window.drag()
             },
