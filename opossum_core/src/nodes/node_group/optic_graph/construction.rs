@@ -92,7 +92,7 @@ impl OpticGraph {
             }
 
             // This inner loop finds all nodes that are or reference the current_id_to_check
-            while let Some(node_idx) = self.next_node_with_uuid(current_id_to_check) {
+            while let Some(node_idx) = self.find_first_node_with_uuid(current_id_to_check) {
                 // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
                 let actual_node_id = self.node_by_idx(node_idx).unwrap().uuid();
                 self.g.remove_node(node_idx);
@@ -137,7 +137,7 @@ impl OpticGraph {
     /// # Panics
     ///
     /// Panics if the mutex lock fails.
-    fn next_node_with_uuid(&self, node_id: Uuid) -> Option<NodeIndex> {
+    fn find_first_node_with_uuid(&self, node_id: Uuid) -> Option<NodeIndex> {
         for node_idx in self.g.node_indices() {
             let node_ref = self.node_by_idx(node_idx).unwrap();
             if node_ref.uuid() == node_id {
@@ -162,8 +162,9 @@ impl OpticGraph {
         self.delete_edges_of_node_with_direction(node_index, Direction::Incoming);
         self.delete_edges_of_node_with_direction(node_index, Direction::Outgoing);
     }
-    /// Delete all edges of a node with the [`NodeIndex`] `node_index` and the [`Direction`] `dir`
-    /// Simple loop might not work, as the call `remove_edge` re-indexes the remaining edges
+    /// Delete all edges of a node with the [`NodeIndex`] `node_index` and the [`Direction`] `dir`.
+    ///
+    /// A simple loop might not work, as the call `remove_edge` re-indexes the remaining edges
     pub fn delete_edges_of_node_with_direction(&mut self, node_index: NodeIndex, dir: Direction) {
         while self.g.edges_directed(node_index, dir).count() != 0 {
             let edge_idx_vec = self
@@ -943,9 +944,9 @@ mod test {
         let ref_node = NodeReference::from_node(&graph.node(i_d1).unwrap());
         let _ = graph.add_node(ref_node).unwrap();
 
-        assert!(graph.next_node_with_uuid(Uuid::nil()).is_none());
+        assert!(graph.find_first_node_with_uuid(Uuid::nil()).is_none());
         let mut nodes = vec![];
-        while let Some(node_idx) = graph.next_node_with_uuid(i_d2) {
+        while let Some(node_idx) = graph.find_first_node_with_uuid(i_d2) {
             nodes.push(graph.node_by_idx(node_idx).unwrap().uuid());
             graph.g.remove_node(node_idx);
         }
@@ -961,7 +962,7 @@ mod test {
         let i_ref = graph.add_node(ref_node).unwrap();
 
         let mut nodes = vec![];
-        while let Some(node_idx) = graph.next_node_with_uuid(i_d1) {
+        while let Some(node_idx) = graph.find_first_node_with_uuid(i_d1) {
             nodes.push(graph.node_by_idx(node_idx).unwrap().uuid());
             graph.g.remove_node(node_idx);
         }

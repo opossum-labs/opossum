@@ -80,17 +80,6 @@ impl OpticGraph {
             .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
         Ok(node.clone())
     }
-    /// Return the corresponding [`NodeIndex`] from a node with a given [`Uuid`].
-    ///
-    /// # Panics
-    ///
-    /// Panics theoretically if the internal [`NodeIndex`] was not found while looping over all nodes.
-    #[must_use]
-    pub fn idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
-        self.g
-            .node_indices()
-            .find(|idx| self.g.node_weight(*idx).unwrap().uuid() == uuid)
-    }
     /// Return a mutable reference to the optical node specified by its node index.
     ///
     /// This function is mainly useful for setting up a reference node.
