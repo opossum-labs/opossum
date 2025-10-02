@@ -14,6 +14,7 @@ use crate::{
     nodes::{NodeAttr, OpticGraph, create_node_ref},
     optic_node::OpticNode,
     optic_scenery_rsc::SceneryResources,
+    utils::LockExt,
 };
 
 #[derive(Clone)]
@@ -36,9 +37,7 @@ impl OpticRef {
         node: Arc<Mutex<dyn Analyzable>>,
         global_conf: Option<Arc<Mutex<SceneryResources>>>,
     ) -> Self {
-        node.lock()
-            .expect("Mutex lock failed")
-            .set_global_conf(global_conf);
+        node.lock_opm().unwrap().set_global_conf(global_conf);
         Self { optical_ref: node }
     }
     /// Returns the [`Uuid`] of the node, reference to by this [`OpticRef`].
@@ -48,11 +47,7 @@ impl OpticRef {
     /// This function might theoretically panic if locking of an internal mutex fails.
     #[must_use]
     pub fn uuid(&self) -> Uuid {
-        self.optical_ref
-            .lock()
-            .expect("Mutex lock failed")
-            .node_attr()
-            .uuid()
+        self.optical_ref.lock_opm().unwrap().node_attr().uuid()
     }
     /// Update the reference to the global configuration.
     /// **Note**: This functions is normally only called from `OpticGraph`.
@@ -62,15 +57,15 @@ impl OpticRef {
     /// This function might theoretically panic if locking of an internal mutex fails.
     pub fn update_global_config(&self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
         self.optical_ref
-            .lock()
-            .expect("Mutex lock failed")
+            .lock_opm()
+            .unwrap()
             .set_global_conf(global_conf);
     }
 }
 impl Debug for OpticRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OpticRef")
-            .field("optical_ref", &self.optical_ref.lock().unwrap())
+            .field("optical_ref", &self.optical_ref.lock_opm().unwrap())
             .finish()
     }
 }
@@ -79,7 +74,7 @@ impl Serialize for OpticRef {
     where
         S: serde::Serializer,
     {
-        let mut optical_ref = self.optical_ref.lock().expect("Mutex lock failed");
+        let mut optical_ref = self.optical_ref.lock_opm().unwrap();
 
         // We check if the node can be treated as a group node.
         // This avoids serializing the 'graph' field for non-group nodes.
@@ -114,25 +109,20 @@ impl<'de> Deserialize<'de> for OpticRef {
         let node_ref = create_node_ref(&node_type).map_err(|e| de::Error::custom(e.to_string()))?;
         node_ref
             .optical_ref
-            .lock()
-            .expect("Mutex lock failed")
+            .lock_opm()
+            .unwrap()
             .set_node_attr(intermediate.attributes);
 
         // If the node is a group node, set its graph.
         // The 'intermediate.graph' will always contain a valid OpticGraph
         // (either deserialized from the source or a default one).
-        if let Ok(group_node) = node_ref
-            .optical_ref
-            .lock()
-            .expect("Mutex lock failed")
-            .as_group_mut()
-        {
+        if let Ok(group_node) = node_ref.optical_ref.lock_opm().unwrap().as_group_mut() {
             group_node.set_graph(intermediate.graph);
         }
         node_ref
             .optical_ref
-            .lock()
-            .expect("Mutex lock failed")
+            .lock_opm()
+            .unwrap()
             .after_deserialization_hook()
             .map_err(|e| de::Error::custom(e.to_string()))?;
 
@@ -144,6 +134,7 @@ mod test {
     use super::*;
     use crate::nodes::Dummy;
     use crate::optic_node::OpticNode;
+    use crate::utils::LockExt;
     use std::io::Read;
     use std::{fs::File, path::PathBuf};
     use uuid::uuid;
@@ -173,7 +164,7 @@ mod test {
             optic_ref.uuid(),
             uuid!("98248e7f-dc4c-4131-8710-f3d5be2ff087")
         );
-        let optic_ref = optic_ref.optical_ref.lock().expect("Mutex lock failed");
+        let optic_ref = optic_ref.optical_ref.lock_opm().unwrap();
         assert_eq!(optic_ref.node_type(), "dummy");
         assert_eq!(optic_ref.name(), "test123");
     }

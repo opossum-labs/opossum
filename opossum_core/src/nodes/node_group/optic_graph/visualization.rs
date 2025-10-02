@@ -3,6 +3,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_flow::LightFlow,
     properties::proptype::format_quantity,
+    utils::LockExt,
 };
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use std::fmt::Write;
@@ -19,10 +20,7 @@ impl OpticGraph {
     fn create_node_edge_str(&self, end_node_idx: NodeIndex, light_port: &str) -> OpmResult<String> {
         let node_id = format!("i{}", self.node_by_idx(end_node_idx)?.uuid().as_simple());
         let node_ref = self.node_by_idx(end_node_idx)?;
-        let mut node = node_ref
-            .optical_ref
-            .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+        let mut node = node_ref.optical_ref.lock_opm()?;
         if let Ok(group_node) = node.as_group_mut() {
             Ok(group_node.get_mapped_port_str(light_port, &node_id)?)
         } else {
@@ -42,10 +40,7 @@ impl OpticGraph {
         let sorted = self.topologically_sorted()?;
         for idx in &sorted {
             let node_ref = self.node_by_idx(*idx)?;
-            let node = node_ref
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            let node = node_ref.optical_ref.lock_opm()?;
             let node_name = node.name();
             let inverted = node.inverted();
             let ports = node.ports();

@@ -15,7 +15,7 @@ use opossum_core::{
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
     properties::Proptype,
-    utils::geom_transformation::Isometry,
+    utils::{LockExt, geom_transformation::Isometry},
 };
 use serde::{Deserialize, Serialize};
 use uom::si::length::meter;
@@ -122,7 +122,7 @@ async fn get_subnodes(
         g.nodes()
             .iter()
             .map(|n| {
-                let node = n.optical_ref.lock().unwrap();
+                let node = n.optical_ref.lock_opm().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
                 let inverted = node.inverted();
@@ -222,11 +222,11 @@ async fn post_copy_node(
     drop(document);
 
     // get node type and node attributes of node that should be copied
-    let node_to_copy = node_ref_to_copy.optical_ref.lock().unwrap();
+    let node_to_copy = node_ref_to_copy.optical_ref.lock_opm()?;
 
     // create new node and apply node attributes
     let new_node_ref = create_node_ref(&node_to_copy.node_type())?;
-    let mut node = new_node_ref.optical_ref.lock().unwrap();
+    let mut node = new_node_ref.optical_ref.lock_opm()?;
     let node_attr = node.node_attr_mut();
     node_attr.replace_from_node_attr(node_to_copy.node_attr());
     drop(node_to_copy);
@@ -239,7 +239,7 @@ async fn post_copy_node(
 
     drop(document);
 
-    let node = new_node_ref.optical_ref.lock().unwrap();
+    let node = new_node_ref.optical_ref.lock_opm()?;
     let gui_position = Some(node_pos_to_copy);
     let node_info = NodeInfo {
         uuid: new_node_uuid,
@@ -323,7 +323,7 @@ async fn post_subnode(
 ) -> Result<Json<NodeInfo>, ErrorResponse> {
     let new_node_info = node_type.into_inner();
     let new_node_ref = create_node_ref(&new_node_info.node_type)?;
-    let mut node = new_node_ref.optical_ref.lock().unwrap();
+    let mut node = new_node_ref.optical_ref.lock_opm()?;
     let node_attr = node.node_attr_mut();
     node_attr.set_gui_position(Some(Point2::new(
         new_node_info.gui_position.0,
@@ -338,7 +338,7 @@ async fn post_subnode(
         scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     drop(document);
-    let node = new_node_ref.optical_ref.lock().unwrap();
+    let node = new_node_ref.optical_ref.lock_opm()?;
     let gui_position = node.gui_position().map(|position| (position.x, position.y));
     let node_info = NodeInfo {
         uuid: new_node_uuid,
@@ -406,7 +406,7 @@ async fn post_subreference(
     let ref_node_info = ref_node_info.into_inner();
 
     let new_node_ref = create_node_ref("reference")?;
-    let mut node = new_node_ref.optical_ref.lock().unwrap();
+    let mut node = new_node_ref.optical_ref.lock_opm()?;
     let node_attr = node.node_attr_mut();
     node_attr.set_gui_position(Some(Point2::new(
         ref_node_info.gui_position.0,
@@ -423,7 +423,7 @@ async fn post_subreference(
         scenery.with_group_node_mut(group_uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     drop(document);
-    let node = new_node_ref.optical_ref.lock().unwrap();
+    let node = new_node_ref.optical_ref.lock_opm()?;
     let gui_position = node.gui_position().map(|position| (position.x, position.y));
     let node_info = NodeInfo {
         uuid: new_node_uuid,
@@ -466,8 +466,7 @@ async fn post_node_position(
         Ok((node_ref, _)) => {
             node_ref
                 .optical_ref
-                .lock()
-                .unwrap()
+                .lock_opm()?
                 .node_attr_mut()
                 .set_gui_position(Some(position));
             Ok(())
@@ -515,8 +514,7 @@ async fn post_node_name(
     if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
-            .lock()
-            .unwrap()
+            .lock_opm()?
             .node_attr_mut()
             .set_name(&name);
         Ok(())
@@ -555,8 +553,7 @@ async fn post_node_lidt(
     if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
-            .lock()
-            .unwrap()
+            .lock_opm()?
             .node_attr_mut()
             .set_lidt(&lidt);
         Ok(())
@@ -595,8 +592,7 @@ async fn post_node_alignment_isometry(
     if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
-            .lock()
-            .unwrap()
+            .lock_opm()?
             .node_attr_mut()
             .set_alignment(isometry);
         Ok(())
@@ -645,8 +641,7 @@ async fn post_node_property(
     if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         let value = node_ref
             .optical_ref
-            .lock()
-            .unwrap()
+            .lock_opm()?
             .node_attr_mut()
             .set_property(prop_key.as_str(), prop_value);
         match value {
@@ -690,8 +685,7 @@ async fn post_node_isometry(
     if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
-            .lock()
-            .unwrap()
+            .lock_opm()?
             .node_attr_mut()
             .set_isometry_option(iso_opt);
         Ok(())
@@ -730,8 +724,7 @@ async fn post_node_inversion(
     if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
         node_ref
             .optical_ref
-            .lock()
-            .unwrap()
+            .lock_opm()?
             .node_attr_mut()
             .set_inverted(inverted);
         match document
@@ -800,8 +793,7 @@ fn get_node_attr_from_state(
         .node_recursive(uuid)?
         .0
         .optical_ref
-        .lock()
-        .unwrap()
+        .lock_opm()?
         .node_attr()
         .clone();
     // The lock is dropped automatically when `document` goes out of scope here
@@ -955,7 +947,7 @@ async fn patch_properties(
     let (node, _) = document.scenery().node_recursive(uuid)?;
     drop(document);
     let final_attr = {
-        let mut optic_ref = node.optical_ref.lock().unwrap();
+        let mut optic_ref = node.optical_ref.lock_opm()?;
         let node_attr = optic_ref.node_attr_mut();
         let update_json = updated_props.into_inner();
         *node_attr = update_node_attr(node_attr, &update_json)?;

@@ -3,6 +3,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     optic_ports::PortType,
     optic_ref::OpticRef,
+    utils::LockExt,
 };
 use petgraph::{Direction, algo::connected_components, graph::NodeIndex, visit::EdgeRef};
 use uuid::Uuid;
@@ -50,11 +51,7 @@ impl OpticGraph {
             Ok((node, group_id))
         } else {
             for node_ref in self.g.node_weights() {
-                let mut node = node_ref
-                    .optical_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
-
+                let mut node = node_ref.optical_ref.lock_opm()?;
                 if let Ok(group) = node.as_group_mut()
                     && let Ok((node, group_id)) = group.node_recursive(uuid)
                 {
@@ -165,8 +162,8 @@ impl OpticGraph {
             .node(node_id)
             .unwrap()
             .optical_ref
-            .lock()
-            .expect("Mutex lock failed")
+            .lock_opm()
+            .unwrap()
             .ports()
             .ports(&PortType::Input)
             .len();
@@ -186,15 +183,16 @@ impl OpticGraph {
     ///
     /// Panics if an error occurs while locking the mutex.
     #[must_use]
-    pub fn is_output_node(&self, idx: NodeIndex) -> bool {
+    pub fn is_output_node(&self, node_id: Uuid) -> bool {
         let ports = self
-            .node_by_idx(idx)
+            .node(node_id)
             .unwrap()
             .optical_ref
-            .lock()
-            .expect("Mutex lock failed")
+            .lock_opm()
+            .unwrap()
             .ports();
         let nr_of_output_ports = ports.ports(&PortType::Output).len();
+        let idx = self.node_idx_by_uuid(node_id).unwrap();
         let nr_of_outgoing_edges = self.g.edges_directed(idx, Direction::Outgoing).count();
         debug_assert!(
             nr_of_outgoing_edges <= nr_of_output_ports,

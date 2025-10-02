@@ -23,6 +23,7 @@ use crate::{
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
     surface::hit_map::fluence_estimator::FluenceEstimator,
+    utils::LockExt,
 };
 
 use super::{Analyzer, AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace};
@@ -135,19 +136,13 @@ impl Analyzer for GhostFocusAnalyzer {
         analysis_report.add_node_report(node_report);
 
         for node_ref in scenery.graph().nodes() {
-            let node = node_ref
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".into()))?;
+            let node = node_ref.optical_ref.lock_opm()?;
             let node_name = &node.name();
             let hit_maps = node.hit_maps();
             drop(node);
             for hit_map in &hit_maps {
                 let critical_positions = hit_map.1.critical_fluences();
-                let node = node_ref
-                    .optical_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".into()))?;
+                let node = node_ref.optical_ref.lock_opm()?;
                 let lidt = *node
                     .get_optic_surface(hit_map.0)
                     .expect("OpticSurface not found!")
@@ -461,15 +456,9 @@ impl GhostFocusHistory {
                         report_str += format!("bounce {bounce} at node '").as_str();
                     }
                     if let Ok(opt_ref) = graph.node(node_uuid) {
-                        report_str += format!(
-                            "{}', ",
-                            opt_ref
-                                .optical_ref
-                                .lock()
-                                .expect("Mutex lock failed")
-                                .name()
-                        )
-                        .as_str();
+                        report_str +=
+                            format!("{}', ", opt_ref.optical_ref.lock_opm().unwrap().name())
+                                .as_str();
                     }
                 }
             }

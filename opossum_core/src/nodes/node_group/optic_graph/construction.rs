@@ -11,6 +11,7 @@ use crate::{
     optic_ref::OpticRef,
     prelude::PortType,
     properties::Proptype,
+    utils::LockExt,
 };
 use petgraph::{
     Directed, Direction,
@@ -110,10 +111,7 @@ impl OpticGraph {
         }
         // now check if subnodes exist and delete recusively
         for node_ref in self.nodes() {
-            let mut node = node_ref
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            let mut node = node_ref.optical_ref.lock_opm()?;
             if let Ok(group) = node.as_group_mut() {
                 let deleted_nodes_in_group = group.graph.delete_node(node_id)?;
                 nodes_deleted.extend(deleted_nodes_in_group);
@@ -143,7 +141,7 @@ impl OpticGraph {
             if node_ref.uuid() == node_id {
                 return Some(node_idx);
             }
-            let node = node_ref.optical_ref.lock().expect("Mutex lock failed");
+            let node = node_ref.optical_ref.lock_opm().unwrap();
             let node_attrs = node.node_attr().clone();
             drop(node);
             if node_attrs.node_type() == "reference" {
@@ -214,22 +212,20 @@ impl OpticGraph {
         })?;
         if !source
             .optical_ref
-            .lock()
-            .unwrap()
+            .lock_opm()?
             .ports()
             .names(&PortType::Output)
             .contains(&src_port.into())
         {
             let src_ports = source
                 .optical_ref
-                .lock()
-                .unwrap()
+                .lock_opm()?
                 .ports()
                 .names(&PortType::Output)
                 .join(", ");
             return Err(OpossumError::OpticScenery(format!(
                 "source node {} does not have an output port {}. Possible values are: {}",
-                source.optical_ref.lock().unwrap(),
+                source.optical_ref.lock_opm()?,
                 src_port,
                 src_ports
             )));
@@ -243,22 +239,20 @@ impl OpticGraph {
 
         if !target
             .optical_ref
-            .lock()
-            .unwrap()
+            .lock_opm()?
             .ports()
             .names(&PortType::Input)
             .contains(&target_port.into())
         {
             let target_ports = target
                 .optical_ref
-                .lock()
-                .unwrap()
+                .lock_opm()?
                 .ports()
                 .names(&PortType::Input)
                 .join(", ");
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} does not have an input port {}. Possible values are: {}",
-                target.optical_ref.lock().unwrap(),
+                target.optical_ref.lock_opm()?,
                 target_port,
                 target_ports
             )));
@@ -266,19 +260,19 @@ impl OpticGraph {
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "src node <{}> with port <{}> is already connected",
-                source.optical_ref.lock().unwrap(),
+                source.optical_ref.lock_opm()?,
                 src_port
             )));
         }
         if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} with port <{}> is already connected",
-                target.optical_ref.lock().unwrap(),
+                target.optical_ref.lock_opm()?,
                 target_port
             )));
         }
-        let src_name = source.optical_ref.lock().unwrap().name();
-        let target_name = target.optical_ref.lock().unwrap().name();
+        let src_name = source.optical_ref.lock_opm()?.name();
+        let target_name = target.optical_ref.lock_opm()?.name();
         let light = LightFlow::new(src_port, target_port, distance)?;
         let edge_index = self.g.add_edge(src_node, target_node, light);
         if is_cyclic_directed(&self.g) {
@@ -320,10 +314,7 @@ impl OpticGraph {
             let node_ref = self.node(src_id)?;
             Err(OpossumError::OpticScenery(format!(
                 "source node {} with port <{src_port}> is not connected",
-                node_ref
-                    .optical_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                node_ref.optical_ref.lock_opm()?
             )))
         }
     }
@@ -357,10 +348,7 @@ impl OpticGraph {
             let node_ref = self.node(src_id)?;
             Err(OpossumError::OpticScenery(format!(
                 "source node {} with port <{src_port}> is not connected",
-                node_ref
-                    .optical_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                node_ref.optical_ref.lock_opm()?
             )))
         }
     }
@@ -402,7 +390,7 @@ impl OpticGraph {
             && !self.input_port_map.contains_node(node_id)
         {
             if let Some(changed_node) = self.g.node_weight(node_index).cloned() {
-                let optical_ref = changed_node.optical_ref.lock().unwrap();
+                let optical_ref = changed_node.optical_ref.lock_opm()?;
                 let ports = optical_ref.ports();
                 let input_ports = ports.ports(&PortType::Input).clone();
                 let output_ports = ports.ports(&PortType::Output).clone();
@@ -458,15 +446,10 @@ impl OpticGraph {
     /// This function will return an error if one tries to invert a graph containing a non-invertable node (eg. source).
     pub fn invert_graph(&mut self) -> OpmResult<()> {
         for node in self.g.node_weights_mut() {
-            let node_to_be_inverted = !node
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
-                .inverted();
+            let node_to_be_inverted = !node.optical_ref.lock_opm()?.inverted();
 
             node.optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                .lock_opm()?
                 .set_inverted(node_to_be_inverted)
                 .map_err(|_| {
                     OpossumError::OpticGroup(
@@ -492,8 +475,8 @@ impl OpticGraph {
                 .node_by_idx(node_idx)
                 .unwrap()
                 .optical_ref
-                .lock()
-                .expect("Mutex lock failed")
+                .lock_opm()
+                .unwrap()
                 .ports()
                 .names(port_type)
                 .len();
@@ -552,8 +535,7 @@ impl OpticGraph {
         };
         if !node
             .optical_ref
-            .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+            .lock_opm()?
             .ports()
             .names(port_type)
             .contains(&(internal_name.to_string()))

@@ -9,6 +9,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
+    utils::LockExt,
 };
 
 use super::OpticGraph;
@@ -81,27 +82,20 @@ impl OpticGraph {
             if self.is_stale_node(node_id) {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
-                    node.lock()
-                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                    node.lock_opm()?
                 );
             } else {
                 let incoming_edges = self.get_incoming(node_id, incoming_data);
-                let node_name = format!(
-                    "{}",
-                    node.lock()
-                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
-                );
+                let node_name = format!("{}", node.lock_opm()?);
                 let outgoing_edges = AnalysisEnergy::analyze(
-                    &mut *node
-                        .lock()
-                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
+                    &mut *node.lock_opm()?,
                     incoming_edges,
                 )
                 .map_err(|e| {
                     OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
                 })?;
                 // If node is sink node, rewrite port names according to output mapping
-                if self.is_output_node(idx) {
+                if self.is_output_node(node_id) {
                     let portmap = if self.is_inverted() {
                         self.input_port_map.clone()
                     } else {
@@ -192,10 +186,7 @@ impl OpticGraph {
             let node_ref = self.node(node_id)?;
             let distance_from_predecessor =
                 self.distance_from_predecessor(node_id, incoming_edge.0)?;
-            let mut node = node_ref
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            let mut node = node_ref.optical_ref.lock_opm()?;
             if let Ok(group) = node.as_group_mut() {
                 group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
             }

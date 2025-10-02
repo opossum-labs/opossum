@@ -8,6 +8,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
     rays::Rays,
+    utils::LockExt,
 };
 use log::warn;
 
@@ -40,9 +41,7 @@ impl AnalysisGhostFocus for NodeGroup {
         let sorted = self.graph.topologically_sorted()?;
         for idx in sorted {
             let node_ref = g_clone.graph.node_by_idx(idx)?.optical_ref;
-            let node = node_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            let node = node_ref.lock_opm()?;
             let node_id = node.node_attr().uuid();
             let node_info = node.to_string();
             drop(node);
@@ -55,9 +54,7 @@ impl AnalysisGhostFocus for NodeGroup {
                 );
 
                 let mut outgoing_edges = AnalysisGhostFocus::analyze(
-                    &mut *node_ref
-                        .lock()
-                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
+                    &mut *node_ref.lock_opm()?,
                     light_result_to_light_rays(incoming_edges)?,
                     config,
                     ray_collection,
@@ -70,7 +67,7 @@ impl AnalysisGhostFocus for NodeGroup {
 
                 current_bouncing_rays.clone_from(&outgoing_edges);
 
-                if self.graph.is_output_node(idx) {
+                if self.graph.is_output_node(node_id) {
                     let portmap = if self.graph.is_inverted() {
                         self.graph.port_map(&PortType::Input).clone()
                     } else {

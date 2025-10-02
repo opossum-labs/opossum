@@ -14,7 +14,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
     radian,
-    utils::geom_transformation::Isometry,
+    utils::{LockExt, geom_transformation::Isometry},
 };
 
 fn filter_ray_limits(light_result: &mut LightResult, r_config: &RayTraceConfig) {
@@ -43,9 +43,7 @@ impl AnalysisRayTrace for NodeGroup {
         let mut light_result = incoming_data.clone();
         for idx in sorted {
             let node_ref = g_clone.graph.node_by_idx(idx)?.optical_ref;
-            let node = node_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            let node = node_ref.lock_opm()?;
             let node_info = node.to_string();
             let node_id = node.node_attr().uuid();
             drop(node);
@@ -53,19 +51,14 @@ impl AnalysisRayTrace for NodeGroup {
                 warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");
             } else {
                 let incoming_edges = self.graph.get_incoming(node_id, &incoming_data);
-                let mut outgoing_edges = AnalysisRayTrace::analyze(
-                    &mut *node_ref
-                        .lock()
-                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
-                    incoming_edges,
-                    config,
-                )
-                .map_err(|e| {
-                    OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
-                })?;
+                let mut outgoing_edges =
+                    AnalysisRayTrace::analyze(&mut *node_ref.lock_opm()?, incoming_edges, config)
+                        .map_err(|e| {
+                        OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
+                    })?;
                 filter_ray_limits(&mut outgoing_edges, config);
                 // If node is sink node, rewrite port names according to output mapping
-                if self.graph.is_output_node(idx) {
+                if self.graph.is_output_node(node_id) {
                     let portmap = if self.graph.is_inverted() {
                         self.graph.port_map(&PortType::Input).clone()
                     } else {
@@ -125,9 +118,7 @@ fn calculate_single_node_position(
     light_result: &mut LightResult,
 ) -> OpmResult<()> {
     let node_ref = graph.node_by_idx(node_idx)?.optical_ref;
-    let node = node_ref
-        .lock()
-        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+    let node = node_ref.lock_opm()?;
     let node_attr = node.node_attr().clone();
     let node_type = node_attr.node_type();
     let node_isometry = node_attr.isometry();
@@ -140,21 +131,14 @@ fn calculate_single_node_position(
             warn!("{node_info} has no incoming edges");
         }
         if let Some((node_id, distance)) = node_attr.get_align_like_node_at_distance() {
-            let align_ref_iso = graph
-                .node(*node_id)?
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
-                .isometry();
+            let align_ref_iso = graph.node(*node_id)?.optical_ref.lock_opm()?.isometry();
             if let Some(align_ref_iso) = align_ref_iso {
                 let align_iso = Isometry::new(
                     Point3::new(Length::zero(), Length::zero(), *distance),
                     radian!(0., 0., 0.),
                 )?;
                 let new_iso = align_ref_iso.append(&align_iso);
-                let mut node = node_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+                let mut node = node_ref.lock_opm()?;
                 node.set_isometry(new_iso)?;
                 drop(node);
             } else {
@@ -170,20 +154,15 @@ fn calculate_single_node_position(
     } else {
         info!("Node {node_info} has already been placed. Leaving untouched.");
     }
-    let output = AnalysisRayTrace::calc_node_positions(
-        &mut *node_ref
-            .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
-        incoming_edges,
-        config,
-    );
+    let output =
+        AnalysisRayTrace::calc_node_positions(&mut *node_ref.lock_opm()?, incoming_edges, config);
     let outgoing_edges = output.map_err(|e| {
         OpossumError::Analysis(format!(
             "calculation of optical axis for node {node_info} failed: {e}"
         ))
     })?;
     // If node is sink node, rewrite port names according to output mapping
-    if graph.is_output_node(node_idx) {
+    if graph.is_output_node(node_id) {
         let portmap = if graph.is_inverted() {
             graph.port_map(&PortType::Input).clone()
         } else {
@@ -197,9 +176,7 @@ fn calculate_single_node_position(
         }
     }
     for outgoing_edge in outgoing_edges {
-        let node = node_ref
-            .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+        let node = node_ref.lock_opm()?;
         if node_type == "source" {
             *up_direction = node.define_up_direction(&outgoing_edge.1)?;
         } else {

@@ -5,6 +5,7 @@ use crate::{
     port_map::PortMap,
     prelude::OpticNode,
     properties::Proptype,
+    utils::LockExt,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -57,12 +58,7 @@ impl TryFrom<SerializableGraph> for OpticGraph {
 }
 
 fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmResult<()> {
-    if let Ok(ref_node) = node_ref
-        .optical_ref
-        .lock()
-        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
-        .as_refnode_mut()
-    {
+    if let Ok(ref_node) = node_ref.optical_ref.lock_opm()?.as_refnode_mut() {
         // if Ok, the node was indeed a reference node
         let node_props = ref_node.properties().clone();
         let uuid = if let Proptype::Uuid(uuid) = node_props.get("reference id").unwrap() {
@@ -75,14 +71,7 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
                 "reference node found, which does not reference anything".into(),
             ));
         };
-        let ref_name = format!(
-            "ref ({})",
-            reference_node
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
-                .name()
-        );
+        let ref_name = format!("ref ({})", reference_node.optical_ref.lock_opm()?.name());
         ref_node.assign_reference(&reference_node);
         ref_node.node_attr_mut().set_name(&ref_name);
     }
