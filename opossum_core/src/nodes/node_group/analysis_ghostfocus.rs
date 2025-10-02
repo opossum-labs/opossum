@@ -45,13 +45,13 @@ impl AnalysisGhostFocus for NodeGroup {
             let node_id = node.node_attr().uuid();
             let node_info = node.to_string();
             drop(node);
-            if self.graph.is_stale_node(node_id) {
+            if self.graph.is_stale_node(node_id)? {
                 warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");
             } else {
                 let incoming_edges = self.graph.get_incoming(
                     node_id,
                     &light_rays_to_light_result(current_bouncing_rays.clone()),
-                );
+                )?;
 
                 let mut outgoing_edges = AnalysisGhostFocus::analyze(
                     &mut *node_ref.lock_opm()?,

@@ -11,13 +11,15 @@ use uuid::Uuid;
 impl OpticGraph {
     /// Return `true` if the node with the given [`Uuid`] is not connected to any other node.
     ///
-    /// # Panics
-    /// This function will panic if the node with the given [`Uuid`] does not exist.
-    #[must_use]
-    pub fn is_stale_node(&self, node_id: Uuid) -> bool {
-        let idx = self.node_idx_by_uuid(node_id).unwrap();
+    /// # Errors
+    ///
+    /// This function returns an error if the given `node_id` is not found
+    pub fn is_stale_node(&self, node_id: Uuid) -> OpmResult<bool> {
+        let idx = self
+            .node_idx_by_uuid(node_id)
+            .ok_or_else(|| OpossumError::Analysis("uuid does not exist".into()))?;
         let neighbors = self.g.neighbors_undirected(idx);
-        neighbors.count() == 0 && !self.input_port_map.contains_node(node_id)
+        Ok(neighbors.count() == 0 && !self.input_port_map.contains_node(node_id))
     }
     /// Returns a node with the given [`Uuid`].
     ///
@@ -153,14 +155,12 @@ impl OpticGraph {
     ///
     /// This function checks if a node with the given [`NodeIndex`] has an unconnected input port.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if an error occurs while locking the mutex.
-    #[must_use]
-    pub fn is_incoming_node(&self, node_id: Uuid) -> bool {
+    /// This function returns an error if the given `node_ide` is not found.
+    pub fn is_incoming_node(&self, node_id: Uuid) -> OpmResult<bool> {
         let nr_of_input_ports = self
-            .node(node_id)
-            .unwrap()
+            .node(node_id)?
             .optical_ref
             .lock_opm()
             .unwrap()
@@ -173,7 +173,7 @@ impl OpticGraph {
             nr_of_incoming_edges <= nr_of_input_ports,
             "# of incoming edges > # of input ports ???"
         );
-        nr_of_incoming_edges < nr_of_input_ports
+        Ok(nr_of_incoming_edges < nr_of_input_ports)
     }
     /// Returns `true` if the node is an output node.
     ///

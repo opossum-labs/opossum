@@ -20,8 +20,12 @@ impl OpticGraph {
     /// This function returns the incoming data of a node with the given [`Uuid`]. If the node is an external node, the
     /// incoming data is mapped to the internal node names.
     #[must_use]
-    pub fn get_incoming(&self, node_id: Uuid, incoming_data: &LightResult) -> LightResult {
-        if self.is_incoming_node(node_id) {
+    pub fn get_incoming(
+        &self,
+        node_id: Uuid,
+        incoming_data: &LightResult,
+    ) -> OpmResult<LightResult> {
+        if self.is_incoming_node(node_id)? {
             let portmap = if self.is_inverted() {
                 self.output_port_map.clone()
             } else {
@@ -40,9 +44,9 @@ impl OpticGraph {
             for edge in self.incoming_edges(node_id) {
                 mapped_light_result.insert(edge.0.clone(), edge.1.clone());
             }
-            mapped_light_result
+            Ok(mapped_light_result)
         } else {
-            self.incoming_edges(node_id)
+            Ok(self.incoming_edges(node_id))
         }
     }
     /// Clear the [`LightData`] stored in the edges of this [`OpticGraph`]. Useful for back-
@@ -79,13 +83,13 @@ impl OpticGraph {
         for idx in sorted {
             let node = g_clone.node_by_idx(idx)?.optical_ref;
             let node_id = g_clone.node_by_idx(idx)?.uuid();
-            if self.is_stale_node(node_id) {
+            if self.is_stale_node(node_id)? {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
                     node.lock_opm()?
                 );
             } else {
-                let incoming_edges = self.get_incoming(node_id, incoming_data);
+                let incoming_edges = self.get_incoming(node_id, incoming_data)?;
                 let node_name = format!("{}", node.lock_opm()?);
                 let outgoing_edges = AnalysisEnergy::analyze(
                     &mut *node.lock_opm()?,

@@ -47,10 +47,10 @@ impl AnalysisRayTrace for NodeGroup {
             let node_info = node.to_string();
             let node_id = node.node_attr().uuid();
             drop(node);
-            if self.graph.is_stale_node(node_id) {
+            if self.graph.is_stale_node(node_id)? {
                 warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");
             } else {
-                let incoming_edges = self.graph.get_incoming(node_id, &incoming_data);
+                let incoming_edges = self.graph.get_incoming(node_id, &incoming_data)?;
                 let mut outgoing_edges =
                     AnalysisRayTrace::analyze(&mut *node_ref.lock_opm()?, incoming_edges, config)
                         .map_err(|e| {
@@ -125,7 +125,7 @@ fn calculate_single_node_position(
     let node_info = node.to_string();
     let node_id = node_attr.uuid();
     drop(node);
-    let incoming_edges: LightResult = graph.get_incoming(node_id, incoming_data);
+    let incoming_edges: LightResult = graph.get_incoming(node_id, incoming_data)?;
     if node_isometry.is_none() {
         if incoming_edges.is_empty() {
             warn!("{node_info} has no incoming edges");
