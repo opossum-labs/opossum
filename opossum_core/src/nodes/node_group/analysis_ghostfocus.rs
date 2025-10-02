@@ -34,13 +34,12 @@ impl AnalysisGhostFocus for NodeGroup {
             self.graph.invert_graph()?;
         }
 
-        let g_clone = self.clone();
         if !self.graph.is_single_tree() {
             warn!("group contains unconnected sub-trees. Analysis might not be complete.");
         }
         let sorted = self.graph.topologically_sorted()?;
         for idx in sorted {
-            let node_ref = g_clone.graph.node_by_idx(idx)?.optical_ref;
+            let node_ref = self.graph.node_by_idx(idx)?.optical_ref;
             let node = node_ref.lock_opm()?;
             let node_id = node.node_attr().uuid();
             let node_info = node.to_string();
@@ -67,7 +66,7 @@ impl AnalysisGhostFocus for NodeGroup {
 
                 current_bouncing_rays.clone_from(&outgoing_edges);
 
-                if self.graph.is_output_node(node_id) {
+                if self.graph.is_output_node(node_id)? {
                     let portmap = if self.graph.is_inverted() {
                         self.graph.port_map(&PortType::Input).clone()
                     } else {

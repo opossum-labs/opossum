@@ -35,14 +35,13 @@ impl AnalysisRayTrace for NodeGroup {
         if self.graph.is_inverted() {
             self.graph.invert_graph()?;
         }
-        let g_clone = self.clone();
         if !self.graph.is_single_tree() {
             warn!("group contains unconnected sub-trees. Analysis might not be complete.");
         }
         let sorted = self.graph.topologically_sorted()?;
         let mut light_result = incoming_data.clone();
         for idx in sorted {
-            let node_ref = g_clone.graph.node_by_idx(idx)?.optical_ref;
+            let node_ref = self.graph.node_by_idx(idx)?.optical_ref;
             let node = node_ref.lock_opm()?;
             let node_info = node.to_string();
             let node_id = node.node_attr().uuid();
@@ -58,7 +57,7 @@ impl AnalysisRayTrace for NodeGroup {
                     })?;
                 filter_ray_limits(&mut outgoing_edges, config);
                 // If node is sink node, rewrite port names according to output mapping
-                if self.graph.is_output_node(node_id) {
+                if self.graph.is_output_node(node_id)? {
                     let portmap = if self.graph.is_inverted() {
                         self.graph.port_map(&PortType::Input).clone()
                     } else {
@@ -162,7 +161,7 @@ fn calculate_single_node_position(
         ))
     })?;
     // If node is sink node, rewrite port names according to output mapping
-    if graph.is_output_node(node_id) {
+    if graph.is_output_node(node_id)? {
         let portmap = if graph.is_inverted() {
             graph.port_map(&PortType::Input).clone()
         } else {

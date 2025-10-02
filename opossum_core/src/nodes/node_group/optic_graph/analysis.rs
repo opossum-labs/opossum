@@ -19,7 +19,10 @@ impl OpticGraph {
     ///
     /// This function returns the incoming data of a node with the given [`Uuid`]. If the node is an external node, the
     /// incoming data is mapped to the internal node names.
-    #[must_use]
+    ///
+    /// # Errors
+    ///
+    /// This functions returns an error if the given `node_id` does not exist.
     pub fn get_incoming(
         &self,
         node_id: Uuid,
@@ -27,9 +30,9 @@ impl OpticGraph {
     ) -> OpmResult<LightResult> {
         if self.is_incoming_node(node_id)? {
             let portmap = if self.is_inverted() {
-                self.output_port_map.clone()
+                &self.output_port_map
             } else {
-                self.input_port_map.clone()
+                &self.input_port_map
             };
             let mut mapped_light_result = LightResult::default();
             // map group-external data and add
@@ -74,15 +77,14 @@ impl OpticGraph {
         if self.is_inverted() {
             self.invert_graph()?;
         }
-        let g_clone = self.clone();
         if !self.is_single_tree() {
             warn!("group contains unconnected sub-trees. Analysis might not be complete.");
         }
         let sorted = self.topologically_sorted()?;
         let mut light_result = LightResult::default();
         for idx in sorted {
-            let node = g_clone.node_by_idx(idx)?.optical_ref;
-            let node_id = g_clone.node_by_idx(idx)?.uuid();
+            let node = self.node_by_idx(idx)?.optical_ref;
+            let node_id = self.node_by_idx(idx)?.uuid();
             if self.is_stale_node(node_id)? {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
@@ -99,11 +101,11 @@ impl OpticGraph {
                     OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
                 })?;
                 // If node is sink node, rewrite port names according to output mapping
-                if self.is_output_node(node_id) {
+                if self.is_output_node(node_id)? {
                     let portmap = if self.is_inverted() {
-                        self.input_port_map.clone()
+                        &self.input_port_map
                     } else {
-                        self.output_port_map.clone()
+                        &self.output_port_map
                     };
                     let node_id = self.node_by_idx(idx)?.uuid();
                     let assigned_ports = portmap.assigned_ports_for_node(node_id);
@@ -136,9 +138,9 @@ impl OpticGraph {
     /// - the length cannot be determined (e.g. predecessor node has no fixed isometry set).
     pub fn distance_from_predecessor(&self, node_id: Uuid, port_name: &str) -> OpmResult<Length> {
         let portmap = if self.is_inverted() {
-            self.output_port_map.clone()
+            &self.output_port_map
         } else {
-            self.input_port_map.clone()
+            &self.input_port_map
         };
         if let Some(external_port_name) = portmap.external_port_name(node_id, port_name) {
             self.external_distances().get(&external_port_name).map_or_else(|| Err(OpossumError::Analysis(format!("did not find distance from predecessor to target port '{port_name}' because it's not in the list of external distances"))), |length| Ok(*length))

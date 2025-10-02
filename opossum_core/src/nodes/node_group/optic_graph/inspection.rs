@@ -162,43 +162,37 @@ impl OpticGraph {
         let nr_of_input_ports = self
             .node(node_id)?
             .optical_ref
-            .lock_opm()
-            .unwrap()
+            .lock_opm()?
             .ports()
             .ports(&PortType::Input)
             .len();
-        let idx = self.node_idx_by_uuid(node_id).unwrap();
+        let idx = self
+            .node_idx_by_uuid(node_id)
+            .ok_or_else(|| OpossumError::OpticGroup("node_id does not exist".into()))?;
         let nr_of_incoming_edges = self.g.edges_directed(idx, Direction::Incoming).count();
-        assert!(
-            nr_of_incoming_edges <= nr_of_input_ports,
-            "# of incoming edges > # of input ports ???"
-        );
         Ok(nr_of_incoming_edges < nr_of_input_ports)
     }
     /// Returns `true` if the node is an output node.
     ///
     /// This function checks if a node with the given [`NodeIndex`] has an unconnected output port.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if an error occurs while locking the mutex.
-    #[must_use]
-    pub fn is_output_node(&self, node_id: Uuid) -> bool {
-        let ports = self
-            .node(node_id)
-            .unwrap()
-            .optical_ref
-            .lock_opm()
-            .unwrap()
-            .ports();
+    /// This functions returns na error if
+    /// - the given `node_id` does not exist.
+    /// - an error during mutex locking occurs.
+    pub fn is_output_node(&self, node_id: Uuid) -> OpmResult<bool> {
+        let ports = self.node(node_id)?.optical_ref.lock_opm()?.ports();
         let nr_of_output_ports = ports.ports(&PortType::Output).len();
-        let idx = self.node_idx_by_uuid(node_id).unwrap();
+        let idx = self
+            .node_idx_by_uuid(node_id)
+            .ok_or_else(|| OpossumError::OpticGroup("node_id does not exist".into()))?;
         let nr_of_outgoing_edges = self.g.edges_directed(idx, Direction::Outgoing).count();
         debug_assert!(
             nr_of_outgoing_edges <= nr_of_output_ports,
             "# of outgoing edges > # of output ports ???"
         );
-        nr_of_outgoing_edges < nr_of_output_ports
+        Ok(nr_of_outgoing_edges < nr_of_output_ports)
     }
 }
 #[cfg(test)]
