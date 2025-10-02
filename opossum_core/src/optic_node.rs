@@ -20,7 +20,7 @@ use crate::{
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
     surface::{Plane, geo_surface::GeoSurfaceRef, hit_map::HitMap, optic_surface::OpticSurface},
-    utils::geom_transformation::Isometry,
+    utils::{LockExt, geom_transformation::Isometry},
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -411,12 +411,7 @@ pub trait OpticNode: Dottable {
                 );
                 SceneryResources::default().ambient_refr_index
             },
-            |conf| {
-                conf.lock()
-                    .expect("Mutex lock failed")
-                    .ambient_refr_index
-                    .clone()
-            },
+            |conf| conf.lock_opm().unwrap().ambient_refr_index.clone(),
         )
     }
 

@@ -24,7 +24,7 @@ use crate::{
         hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
         optic_surface::OpticSurface,
     },
-    utils::geom_transformation::Isometry,
+    utils::{LockExt, geom_transformation::Isometry},
 };
 
 ///Struct that contains all information about an optical ray
@@ -458,11 +458,7 @@ impl Ray {
             ));
         }
         let geo_surf = s.geo_surface();
-        let surf_vectors = geo_surf
-            .0
-            .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
-            .calc_intersect_and_normal(self);
+        let surf_vectors = geo_surf.0.lock_opm()?.calc_intersect_and_normal(self);
         if let Some((intersection_point, surface_normal)) = surf_vectors {
             let surface_normal = surface_normal.normalize();
 
@@ -490,8 +486,7 @@ impl Ray {
             let dist_from_origin = s
                 .geo_surface()
                 .0
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                .lock_opm()?
                 .isometry()
                 .inverse_transform_point_f64(&intersection_in_m)
                 .x;
@@ -557,11 +552,7 @@ impl Ray {
             ));
         }
         let geo_surface = os.geo_surface();
-        let surf_vectors = geo_surface
-            .0
-            .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
-            .calc_intersect_and_normal(self);
+        let surf_vectors = geo_surface.0.lock_opm()?.calc_intersect_and_normal(self);
         if let Some((intersection_point, surface_normal)) = surf_vectors {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
@@ -609,8 +600,7 @@ impl Ray {
                         HitPoint::Energy(EnergyHitPoint::new(
                             os.geo_surface()
                                 .0
-                                .lock()
-                                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                                .lock_opm()?
                                 .isometry()
                                 .inverse_transform_point(&intersection_point),
                             input_energy,
@@ -624,8 +614,7 @@ impl Ray {
                         HitPoint::Fluence(FluenceHitPoint::new(
                             os.geo_surface()
                                 .0
-                                .lock()
-                                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                                .lock_opm()?
                                 .isometry()
                                 .inverse_transform_point(&intersection_point),
                             *helper_fluence,

@@ -17,6 +17,7 @@ use crate::{
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
     surface::optic_surface::OpticSurface,
+    utils::LockExt,
 };
 use num::Zero;
 use optic_graph::ConnectionInfo;
@@ -30,9 +31,9 @@ use std::{
     process::Stdio,
     sync::{Arc, Mutex},
 };
-use std::{fmt::Write as _, sync::MutexGuard};
 use uom::si::f64::Length;
 use uuid::Uuid;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// The basic building block of an optical system. It represents a group of other optical
 /// nodes ([`OpticNode`]s) arranged in a (sub)graph.
@@ -165,10 +166,7 @@ impl NodeGroup {
     }
     fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
         let node_ref = self.graph.node(node_id)?;
-        let node = node_ref
-            .optical_ref
-            .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+        let node = node_ref.optical_ref.lock_opm()?;
         let Ok(node_props) = node.node_attr().get_property("light data") else {
             return Ok(());
         };
@@ -177,11 +175,7 @@ impl NodeGroup {
         if let Proptype::LightData(Some(LightData::Geometric(rays))) = node_props {
             let mut new_rays = rays;
             new_rays.set_node_origin_uuid(node_id);
-
-            let mut node_ref = node_ref
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            let mut node_ref = node_ref.optical_ref.lock_opm()?;
             node_ref.node_attr_mut().set_property(
                 "light data",
                 LightDataBuilder::Geometric(new_rays.into()).into(),
@@ -250,7 +244,7 @@ impl NodeGroup {
         }
 
         let arc = self.optical_arc(node_id)?;
-        let guard = arc.lock_or()?;
+        let guard = arc.lock_opm()?;
         let group = guard.as_group()?;
         let out = f(group);
         drop(guard);
@@ -296,7 +290,7 @@ impl NodeGroup {
         }
 
         let arc = self.optical_arc(node_id)?;
-        let mut guard = arc.lock_or()?;
+        let mut guard = arc.lock_opm()?;
 
         let group = guard.as_group_mut()?;
         let out = f(group);
@@ -523,11 +517,7 @@ impl NodeGroup {
         let mut section_number: usize = 0;
         for node_ref in self.graph.nodes() {
             let uuid = node_ref.uuid().as_simple().to_string();
-            let node_report = node_ref
-                .optical_ref
-                .lock()
-                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
-                .node_report(&uuid);
+            let node_report = node_ref.optical_ref.lock_opm()?.node_report(&uuid);
             if let Some(mut node_report) = node_report {
                 if section_number.is_zero() {
                     node_report.set_show_item(true);
@@ -540,6 +530,7 @@ impl NodeGroup {
     }
     /// Returns the dot-file header of this [`NodeGroup`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
+        use std::fmt::Write;
         let mut dot_string = String::from("digraph {\n\tfontsize = 10;\n");
         let _ = writeln!(dot_string, "\tcompound = true;");
         let _ = writeln!(dot_string, "\trankdir = \"{rankdir}\";");
@@ -656,18 +647,6 @@ impl NodeGroup {
     }
 }
 
-// little Extension-Trait für pretty Locking
-trait LockExt<T: ?Sized> {
-    fn lock_or(&self) -> OpmResult<MutexGuard<'_, T>>;
-}
-
-impl<T: ?Sized> LockExt<T> for Arc<Mutex<T>> {
-    fn lock_or(&self) -> OpmResult<MutexGuard<'_, T>> {
-        self.lock()
-            .map_err(|_| OpossumError::OpticScenery("Poisoned lock".into()))
-    }
-}
-
 impl OpticNode for NodeGroup {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
@@ -698,7 +677,7 @@ impl OpticNode for NodeGroup {
         let mut group_props = Properties::default();
         for node in self.graph.nodes() {
             let sub_uuid = node.uuid().as_simple().to_string();
-            if let Ok(node_ref) = node.optical_ref.lock()
+            if let Ok(node_ref) = node.optical_ref.lock_opm()
                 && let Some(node_report) = node_ref.node_report(&sub_uuid)
             {
                 let node_name = node_ref.name();
@@ -739,7 +718,7 @@ impl OpticNode for NodeGroup {
     fn reset_data(&mut self) {
         let nodes = self.graph.nodes();
         for node in nodes {
-            if let Ok(mut node) = node.optical_ref.lock() {
+            if let Ok(mut node) = node.optical_ref.lock_opm() {
                 node.reset_data();
             }
         }
@@ -791,7 +770,7 @@ mod test {
         optic_node::OpticNode,
         ray::Ray,
         rays::Rays,
-        utils::geom_transformation::Isometry,
+        utils::{LockExt, geom_transformation::Isometry},
     };
     use num::Zero;
     #[test]
@@ -926,8 +905,7 @@ mod test {
             .node(i_e)
             .unwrap()
             .optical_ref
-            .lock()
-            .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))
+            .lock_opm()
             .unwrap()
             .node_report(&uuid)
             .unwrap();

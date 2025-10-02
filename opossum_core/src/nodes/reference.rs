@@ -10,7 +10,7 @@ use crate::{
     optic_ports::OpticPorts,
     optic_ref::OpticRef,
     properties::Proptype,
-    utils::geom_transformation::Isometry,
+    utils::{LockExt, geom_transformation::Isometry},
 };
 use opm_macros_lib::OpmNode;
 use std::sync::{Arc, Mutex, Weak};
@@ -65,7 +65,7 @@ impl NodeReference {
     #[must_use]
     pub fn from_node(node: &OpticRef) -> Self {
         let mut refr = Self::default();
-        let node_mut = node.optical_ref.lock().expect("Mutex lock failed");
+        let node_mut = node.optical_ref.lock_opm().unwrap();
         refr.node_attr
             .set_property("reference id", Proptype::Uuid(node_mut.node_attr().uuid()))
             .unwrap();
@@ -88,10 +88,7 @@ impl NodeReference {
         self.node_attr_mut()
             .set_property("reference id", Proptype::Uuid(node.uuid()))
             .unwrap();
-        let ref_name = format!(
-            "ref ({})",
-            node.optical_ref.lock().expect("Mutex lock failed").name()
-        );
+        let ref_name = format!("ref ({})", node.optical_ref.lock_opm().unwrap().name());
         self.node_attr.set_name(&ref_name);
         self.reference = Some(Arc::downgrade(&node.optical_ref));
     }
@@ -101,12 +98,7 @@ impl OpticNode for NodeReference {
         self.reference
             .as_ref()
             .map_or_else(OpticPorts::default, |rf| {
-                let mut ports = rf
-                    .upgrade()
-                    .unwrap()
-                    .lock()
-                    .expect("Mutex lock failed")
-                    .ports();
+                let mut ports = rf.upgrade().unwrap().lock_opm().unwrap().ports();
                 if self.inverted() {
                     ports.set_inverted(true);
                 }
@@ -126,7 +118,7 @@ impl OpticNode for NodeReference {
         self.reference.as_ref().and_then(|rf| {
             rf.upgrade()
                 .unwrap()
-                .lock()
+                .lock_opm()
                 .map_or(None, |ref_node| ref_node.isometry())
         })
     }
@@ -150,9 +142,7 @@ impl AnalysisEnergy for NodeReference {
             .clone()
             .ok_or_else(|| OpossumError::Analysis("no reference defined".into()))?;
         let ref_node = rf.upgrade().unwrap();
-        let mut ref_node = ref_node
-            .lock()
-            .map_err(|_| OpossumError::Analysis("Mutex lock failed".into()))?;
+        let mut ref_node = ref_node.lock_opm()?;
         if self.inverted() {
             ref_node.set_inverted(true).map_err(|_e| {
                 OpossumError::Analysis(format!("referenced node {ref_node} cannot be inverted"))
@@ -178,9 +168,7 @@ impl AnalysisRayTrace for NodeReference {
             .clone()
             .ok_or_else(|| OpossumError::Analysis("no reference defined".into()))?;
         let ref_node_arc = rf.upgrade().unwrap();
-        let mut ref_node = ref_node_arc
-            .lock()
-            .map_err(|_| OpossumError::Analysis("Mutex lock failed".into()))?;
+        let mut ref_node = ref_node_arc.lock_opm()?;
         if self.inverted() {
             ref_node.set_inverted(true).map_err(|_e| {
                 OpossumError::Analysis(format!("referenced node {ref_node} cannot be inverted"))
@@ -201,6 +189,7 @@ mod test {
         nodes::{Dummy, NodeGroup, Source, test_helper::test_helper::*},
         optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
+        utils::LockExt,
     };
     #[test]
     fn default() {
@@ -225,14 +214,7 @@ mod test {
         let mut scenery = NodeGroup::default();
         let node_id = scenery.add_node(Dummy::default()).unwrap();
         let node_ref = scenery.node(node_id).unwrap();
-        let node_name = format!(
-            "ref ({})",
-            node_ref
-                .optical_ref
-                .lock()
-                .expect("Mutex lock failed")
-                .name()
-        );
+        let node_name = format!("ref ({})", node_ref.optical_ref.lock_opm().unwrap().name());
         let node = NodeReference::from_node(&node_ref);
 
         assert_eq!(node.name(), node_name);

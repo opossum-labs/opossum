@@ -11,7 +11,7 @@ use crate::{
     nodes::fluence_detector::Fluence,
     rays::Rays,
     surface::hit_map::HitMap,
-    utils::geom_transformation::Isometry,
+    utils::{LockExt, geom_transformation::Isometry},
 };
 
 use super::{
@@ -147,11 +147,7 @@ impl OpticSurface {
     ///
     /// This function might theoretically panic if locking of an internal mutex fails.
     pub fn set_isometry(&self, iso: Isometry) {
-        self.geo_surface
-            .0
-            .lock()
-            .expect("Mutex lock failed")
-            .set_isometry(iso);
+        self.geo_surface.0.lock_opm().unwrap().set_isometry(iso);
     }
     /// Returns a reference to the hit map of this [`OpticSurface`].
     ///
@@ -259,7 +255,7 @@ impl Debug for OpticSurface {
         f.debug_struct("OpticSurface")
             .field("aperture", &self.aperture)
             .field("coating", &self.coating)
-            .field("geometric surface", &self.geo_surface.0.lock().unwrap())
+            .field("geometric surface", &self.geo_surface.0.lock_opm().unwrap())
             .field("lidt", &self.lidt)
             .finish_non_exhaustive()
     }
