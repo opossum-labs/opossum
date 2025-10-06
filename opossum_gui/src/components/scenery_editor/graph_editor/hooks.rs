@@ -60,6 +60,7 @@ pub fn use_on_mouse_down(
     let mut editor_status = use_context::<Signal<EditorState>>();
 
     move |event| {
+        event.stop_propagation();
         if let Some(trigger_button) = event.trigger_button() {
             match trigger_button {
                 MouseButton::Primary => {
@@ -94,10 +95,11 @@ pub fn use_on_mouse_down(
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
-    let current_shift = *editor_status().shift.read();
-    let current_zoom = *editor_status().zoom.read();
 
     move |event| {
+        event.stop_propagation();
+        let current_shift = *editor_status().shift.read();
+        let current_zoom = *editor_status().zoom.read();
         let drag_status = editor_status.read().drag_status.read().clone();
         let rel_shift_x = event.client_coordinates().x - current_mouse_pos().x;
         let rel_shift_y = event.client_coordinates().y - current_mouse_pos().y;
@@ -207,13 +209,6 @@ pub fn use_on_key_down(
             //     graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: true });
             // }
         }
-    }
-}
-
-pub fn use_on_mouse_leave() -> impl FnMut(MouseEvent) {
-    let mut editor_status = use_context::<Signal<EditorState>>();
-    move |_| {
-        editor_status.write().drag_status.set(DragStatus::None);
     }
 }
 

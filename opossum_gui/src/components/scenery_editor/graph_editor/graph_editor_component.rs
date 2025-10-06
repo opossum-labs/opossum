@@ -10,8 +10,7 @@ use crate::components::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
         },
         graph_editor::hooks::{
-            use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_mouse_leave,
-            use_on_resize, use_zoom,
+            use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
         },
         nodes::Nodes,
         use_graph_processor,
@@ -126,7 +125,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
         use_on_mouse_down(current_mouse_pos, node_selected, last_auxiliary_click);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
-    let onmouseleave_handler = use_on_mouse_leave();
+    let onmouseleave_handler = use_drag_end(); // use_on_mouse_leave();
     let onkeydownhandler = use_on_key_down(current_mouse_pos, node_selected, copied_node);
     let onresizehandler = use_on_resize(on_mounted);
 
@@ -184,13 +183,17 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { node_element_sig: node_selected }
+               NodeConfigEditor { node_element_sig: node_selected }
             }
             div {
                 class: "col px-0 graph-editor-container",
+                tabindex: 0,
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
-                tabindex: 0,
+                // onmouseleave: |_| {
+                //     // THIS IS THE HANDLER WE ARE TESTING
+                //     println!("!!! DIOXUS MOUSE LEAVE HANDLER FIRED !!!");
+                // },
                 div {
                     class: "graph-editor",
                     id: "editor",

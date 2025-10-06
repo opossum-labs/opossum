@@ -110,10 +110,10 @@ pub fn NodePort(
             onmouseleave: {
                 move |event: MouseEvent| {
                     let edge_increation = editor_status.read().edge_in_creation.read().clone();
+                    event.stop_propagation();
                     if let Some(mut edge_in_creation) = edge_increation {
                         edge_in_creation.set_end_port(None);
                         editor_status.write().edge_in_creation.set(Some(edge_in_creation));
-                        event.stop_propagation();
                     }
                 }
             },
