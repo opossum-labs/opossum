@@ -91,24 +91,6 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 }
                 span { style: "font-size: 9pt; margin-left: 3px; color: #555;", "m" }
             }
-                // input {
-        //     class: "form-control",
-        //     style: "text-align: center; width: 100%; height: 100%; font-size: 11pt",
-        //     r#type: "number",
-        //     value: edge.distance(),
-        //     onchange: {
-        //         move |event: Event<FormData>| {
-        //             if let Ok(new_distance) = event.data.parsed::<f64>() {
-        //                 edge.set_distance(new_distance);
-        //                 let edge = edge.clone();
-        //                 graph_processor.send(GraphStoreAction::UpdateEdge(edge));
-        //             }
-        //         }
-        //     },
-        //     ondoubleclick: |event| {
-        //         event.stop_propagation();
-        //     },
-        // }
         }
     }
 }

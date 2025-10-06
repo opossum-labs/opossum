@@ -60,6 +60,7 @@ pub fn use_on_mouse_down(
     let mut editor_status = use_context::<Signal<EditorState>>();
 
     move |event| {
+        event.stop_propagation();
         if let Some(trigger_button) = event.trigger_button() {
             match trigger_button {
                 MouseButton::Primary => {
@@ -94,10 +95,11 @@ pub fn use_on_mouse_down(
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
-    let current_shift = *editor_status().shift.read();
-    let current_zoom = *editor_status().zoom.read();
 
     move |event| {
+        event.stop_propagation();
+        let current_shift = *editor_status().shift.read();
+        let current_zoom = *editor_status().zoom.read();
         let drag_status = editor_status.read().drag_status.read().clone();
         let rel_shift_x = event.client_coordinates().x - current_mouse_pos().x;
         let rel_shift_y = event.client_coordinates().y - current_mouse_pos().y;
@@ -113,7 +115,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
                     current_shift.y + rel_shift_y,
                 ));
             }
-            DragStatus::Node(id) => {
+            DragStatus::Node(id, _) => {
                 graph_store().shift_node_position(id, graph_shift);
             }
             DragStatus::Edge(edge_creation_start) => {
@@ -210,13 +212,6 @@ pub fn use_on_key_down(
     }
 }
 
-pub fn use_on_mouse_leave() -> impl FnMut(MouseEvent) {
-    let mut editor_status = use_context::<Signal<EditorState>>();
-    move |_| {
-        editor_status.write().drag_status.set(DragStatus::None);
-    }
-}
-
 pub fn use_drag_end() -> impl FnMut(MouseEvent) {
     let graph_store = use_context::<Signal<GraphStore>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
@@ -224,7 +219,7 @@ pub fn use_drag_end() -> impl FnMut(MouseEvent) {
     move |_| {
         let drag_status = editor_status.read().drag_status.read().clone();
         match drag_status {
-            DragStatus::Node(uuid) => {
+            DragStatus::Node(uuid, old_position) => {
                 if let Some(pos) = graph_store
                     .read()
                     .nodes()
@@ -232,7 +227,10 @@ pub fn use_drag_end() -> impl FnMut(MouseEvent) {
                     .get(&uuid)
                     .map(NodeElement::pos)
                 {
-                    graph_processor.send(GraphStoreAction::SyncNodePosition(uuid, pos));
+                    // Update node GUI position (only if really changed)
+                    if pos != old_position {
+                        graph_processor.send(GraphStoreAction::SyncNodePosition(uuid, pos));
+                    }
                 }
             }
             DragStatus::Edge(_) => {
