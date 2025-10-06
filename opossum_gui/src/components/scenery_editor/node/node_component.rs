@@ -15,7 +15,8 @@ use dioxus::prelude::*;
 use opossum_backend::nodes::NewRefNode;
 
 #[component]
-pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> Element {
+pub fn Node(node: NodeElement) -> Element {
+    let mut node_activated = use_context::<Signal<Option<NodeElement>>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();

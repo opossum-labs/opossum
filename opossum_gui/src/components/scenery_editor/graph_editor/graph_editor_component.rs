@@ -116,18 +116,18 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let graph_processor: Coroutine<GraphStoreAction> =
         use_graph_processor(node_selected, graph_state);
 
+    use_context_provider(|| node_selected);
     use_context_provider(|| graph_state().graph_store);
     use_context_provider(|| graph_state().editor_state);
 
     let current_mouse_pos = use_signal(Point2D::default);
     let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
     let onwheel_handler = use_zoom(on_mounted);
-    let onmousedown_handler =
-        use_on_mouse_down(current_mouse_pos, node_selected, last_auxiliary_click);
+    let onmousedown_handler = use_on_mouse_down(current_mouse_pos, last_auxiliary_click);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
     let onmouseleave_handler = use_on_mouse_leave();
-    let onkeydownhandler = use_on_key_down(current_mouse_pos, node_selected, copied_node);
+    let onkeydownhandler = use_on_key_down(current_mouse_pos, copied_node);
     let onresizehandler = use_on_resize(on_mounted);
 
     let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
@@ -183,9 +183,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
 
     rsx! {
         div { class: "row main-content-row",
-            div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { node_element_sig: node_selected }
-            }
+            div { style: "min-width:256px;", class: "col-2 sidebar", NodeConfigEditor {} }
             div {
                 class: "col px-0 graph-editor-container",
                 onkeydown: onkeydownhandler,
@@ -211,7 +209,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                             shift().y,
                             zoom(),
                         ),
-                        Nodes { node_activated: node_selected }
+                        Nodes {}
                         svg {
                             width: "100%",
                             height: "100%",
