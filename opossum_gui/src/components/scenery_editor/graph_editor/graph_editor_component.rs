@@ -101,7 +101,7 @@ pub enum DragStatus {
     #[default]
     None,
     Graph,
-    Node(Uuid),
+    Node(Uuid, Point2D<f64>), // stores also old position before drag.
     Edge(NewEdgeCreationStart),
 }
 
@@ -183,7 +183,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-               NodeConfigEditor { node_element_sig: node_selected }
+                NodeConfigEditor { node_element_sig: node_selected }
             }
             div {
                 class: "col px-0 graph-editor-container",

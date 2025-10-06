@@ -46,7 +46,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> E
                 BORDER_WIDTH,
             ),
             onmousedown: move |event: MouseEvent| {
-                editor_status.write().drag_status.set(DragStatus::Node(id));
+                editor_status.write().drag_status.set(DragStatus::Node(id, position));
                 let previously_selected = graph_store().active_node();
                 if previously_selected != Some(id) {
                     graph_store().set_node_active(id, node.z_index());

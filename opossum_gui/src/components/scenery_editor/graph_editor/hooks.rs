@@ -115,7 +115,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
                     current_shift.y + rel_shift_y,
                 ));
             }
-            DragStatus::Node(id) => {
+            DragStatus::Node(id, _) => {
                 graph_store().shift_node_position(id, graph_shift);
             }
             DragStatus::Edge(edge_creation_start) => {
@@ -219,7 +219,7 @@ pub fn use_drag_end() -> impl FnMut(MouseEvent) {
     move |_| {
         let drag_status = editor_status.read().drag_status.read().clone();
         match drag_status {
-            DragStatus::Node(uuid) => {
+            DragStatus::Node(uuid, old_position) => {
                 if let Some(pos) = graph_store
                     .read()
                     .nodes()
@@ -227,7 +227,10 @@ pub fn use_drag_end() -> impl FnMut(MouseEvent) {
                     .get(&uuid)
                     .map(NodeElement::pos)
                 {
-                    graph_processor.send(GraphStoreAction::SyncNodePosition(uuid, pos));
+                    // Update node GUI position (only if really changed)
+                    if pos != old_position {
+                        graph_processor.send(GraphStoreAction::SyncNodePosition(uuid, pos));
+                    }
                 }
             }
             DragStatus::Edge(_) => {
