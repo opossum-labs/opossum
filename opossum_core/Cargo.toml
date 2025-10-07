@@ -86,3 +86,11 @@ path = "examples/grating_examples/grating_examples.rs"
 [[bench]]
 name = "fluence_estimator"
 harness = false
+
+[[bench]]
+name = "ray_bench"
+harness = false
+
+[[bench]]
+name = "surface_benches"
+harness = false
