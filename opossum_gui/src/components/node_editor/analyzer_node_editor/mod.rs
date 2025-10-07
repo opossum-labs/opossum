@@ -15,7 +15,8 @@ use opossum_backend::{
 use uom::si::energy::picojoule;
 
 #[component]
-pub fn AnalyzerNodeEditor(node_element_sig: Signal<Option<NodeElement>>) -> Element {
+pub fn AnalyzerNodeEditor() -> Element {
+    let node_element_sig = use_context::<Signal<Option<NodeElement>>>();
     let resource_future = use_resource(move || async move {
         let node = node_element_sig.read();
         if let Some(node) = &*(node) {

@@ -14,10 +14,8 @@ use dioxus::prelude::*;
 use opossum_backend::{Isometry, Properties};
 
 #[component]
-pub fn OpticalNodeEditor(
-    node_element_sig: Signal<Option<NodeElement>>,
-    node_properties_sig: Signal<Properties>,
-) -> Element {
+pub fn OpticalNodeEditor(node_properties_sig: Signal<Properties>) -> Element {
+    let node_element_sig = use_context::<Signal<Option<NodeElement>>>();
     let resource_future = use_resource(move || async move {
         let node = node_element_sig.read();
         if let Some(node) = &*(node) {

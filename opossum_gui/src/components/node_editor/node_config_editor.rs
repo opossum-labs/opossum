@@ -20,10 +20,12 @@ pub enum NodeChangeAction {
 }
 
 #[component]
-pub fn NodeConfigEditor(mut node_element_sig: Signal<Option<NodeElement>>) -> Element {
+pub fn NodeConfigEditor() -> Element {
     let node_properties_sig = use_signal(Properties::default);
+    let node_element_sig = use_context::<Signal<Option<NodeElement>>>();
+
     use_context_provider(|| node_properties_sig);
-    use_node_config_processor(node_element_sig, node_properties_sig);
+    use_node_config_processor(node_properties_sig);
 
     (*node_element_sig.read()).as_ref().map_or_else(
         || {
@@ -34,23 +36,21 @@ pub fn NodeConfigEditor(mut node_element_sig: Signal<Option<NodeElement>>) -> El
         |active_node| match active_node.node_type() {
             NodeType::Optical(_) => {
                 rsx! {
-                    OpticalNodeEditor { node_element_sig, node_properties_sig }
+                    OpticalNodeEditor { node_properties_sig }
                 }
             }
             NodeType::Analyzer(_) => {
                 rsx! {
-                    AnalyzerNodeEditor { node_element_sig }
+                    AnalyzerNodeEditor {}
                 }
             }
         },
     )
 }
 
-fn use_node_config_processor(
-    mut node_selected: Signal<Option<NodeElement>>,
-    mut node_properties_sig: Signal<Properties>,
-) {
+fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
+    let mut node_selected = use_context::<Signal<Option<NodeElement>>>();
     use_coroutine(move |mut rx: UnboundedReceiver<NodeChangeAction>| {
         async move {
             // This loop runs forever in the background, waiting for actions.
