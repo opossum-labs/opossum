@@ -38,21 +38,41 @@ impl Default for Plane {
 }
 impl GeoSurface for Plane {
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
-        let mut trans_pos_in_m = ray.position().map(|c| c.value);
-        let trans_dir = ray.direction();
-        // Check, if ray position is on the surface, then directly return position as intersection point
-        if !trans_pos_in_m.z.is_zero() {
-            let distance_in_z_direction = -trans_pos_in_m.z;
-            if distance_in_z_direction.signum() != trans_dir.z.signum() {
-                // Ray propagates away from the plane => no intersection
-                return None;
-            }
-            let length_in_ray_dir = distance_in_z_direction / trans_dir.z;
-            trans_pos_in_m += length_in_ray_dir * trans_dir;
+        let pos = ray.position();
+        let dir = ray.direction();
+
+        // A ray parallel to the plane only intersects if it starts *on* the plane.
+        if dir.z.is_zero() {
+            return if pos.z.value.is_zero() {
+                // Ray is on the plane, intersection is its current position.
+                Some((pos, Vector3::new(0.0, 0.0, -dir.z.signum())))
+            } else {
+                // Ray is parallel but not on the plane, so no intersection.
+                None
+            };
         }
+
+        // 2. Calculate the intersection parameter 't'.
+        // Intersection with plane at z=0 happens at t = -pos.z / dir.z
+        let t = -pos.z.value / dir.z;
+
+        // 3. Check if the intersection is behind the ray's origin.
+        // If t is negative, the plane is "behind" the ray, so no intersection.
+        if t < 0.0 {
+            return None;
+        }
+
+        // 4. Calculate the intersection point and normal vector.
+        let intersection_point = pos.map(|c| c.value) + t * dir;
+        let normal = Vector3::new(0.0, 0.0, -dir.z.signum());
+
         Some((
-            meter!(trans_pos_in_m.x, trans_pos_in_m.y, trans_pos_in_m.z),
-            Vector3::new(0.0, 0.0, -trans_dir.z.signum()),
+            meter!(
+                intersection_point.x,
+                intersection_point.y,
+                intersection_point.z
+            ),
+            normal,
         ))
     }
     fn set_isometry(&mut self, isometry: Isometry) {
