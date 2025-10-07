@@ -511,6 +511,7 @@ mod test {
         // Perform ghost focus analysis
         let analyzer = GhostFocusAnalyzer::new(GhostFocusConfig::default());
         analyzer.analyze(&mut scenery).unwrap();
+
         check_logs(log::Level::Warn, vec![]);
     }
     #[test]

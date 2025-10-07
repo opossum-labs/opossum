@@ -11,9 +11,13 @@ pub mod test_helper {
             assert_eq!(
                 captured_logs.len(),
                 expected_warnings.len(),
-                "expected # of warnings do not match: {} != {}",
+                "expected # of warnings do not match: {} != {}. Got warnings: {:?}",
                 captured_logs.len(),
-                expected_warnings.len()
+                expected_warnings.len(),
+                captured_logs
+                    .iter()
+                    .map(|l| l.body.as_str())
+                    .collect::<Vec<_>>()
             );
             for log in captured_logs.iter().zip(expected_warnings.clone()) {
                 assert_eq!(log.0.body, log.1);

@@ -8,13 +8,13 @@ use crate::{
     ray::Ray,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::{Point3, Vector3, vector};
+use nalgebra::{Point3, Vector3};
 use num::Zero;
 use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
 
 #[derive(Debug, Clone)]
-/// A cylindracal surface with its anchor point on the optical axis.
+/// A cylindrical surface with its anchor point on the optical axis.
 pub struct Cylinder {
     radius: Length,
     isometry: Isometry,
@@ -43,15 +43,12 @@ impl Cylinder {
 }
 
 impl GeoSurface for Cylinder {
+    #[allow(clippy::mul_add)] // don't use mul_add here for a,b,c because the current implementation is faster!
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let dir = ray.direction();
-        let pos = vector![
-            ray.position().x.value,
-            ray.position().y.value,
-            ray.position().z.value
-        ];
+        let pos_vec = ray.position().coords.map(|v| v.value);
         let radius = self.radius.value;
-        let is_back_propagating = dir.z.is_sign_negative();
+
         // cylinder formula (at origin) with the non-curved direction oriented along the y axis
         // x^2 + z^2 = r^2
         //
@@ -63,59 +60,60 @@ impl GeoSurface for Cylinder {
         // b = 2 (d_x * p_x + d_z *p_z )
         // c = p_x^2 + p_z^2 - r^2
 
-        let a = dir.x.mul_add(dir.x, dir.z * dir.z);
-        let b = 2.0 * dir.x.mul_add(pos.x, dir.z * pos.z);
-        let c = radius.mul_add(-radius, pos.x.mul_add(pos.x, pos.z * pos.z));
-        // Solve t of qudaratic equation
+        let a = dir.x * dir.x + dir.z * dir.z;
+        let b = 2.0 * (pos_vec.x * dir.x + pos_vec.z * dir.z);
+        let c = pos_vec.x * pos_vec.x + pos_vec.z * pos_vec.z - radius * radius;
+
+        // Robustness check for rays parallel to the axis.
+        if a.abs() < 1e-9 {
+            return None;
+        }
         let roots = find_roots_quadratic(a, b, c);
-        let intersection_point = match roots {
-            // no intersection
+        let is_back_propagating = dir.z.is_sign_negative();
+        let real_t = match roots {
             Roots::No(_) => return None,
-            // "just touching" intersection
             Roots::One(t) => {
                 if t[0] >= 0.0 {
-                    pos + t[0] * dir
+                    t[0]
                 } else {
                     return None;
                 }
             }
-            // "regular" intersection
             Roots::Two(t) => {
-                let real_t = if self.radius.is_sign_positive() {
-                    // convex surface => use min t
+                if self.radius.is_sign_positive() {
+                    // Convex surface
                     if is_back_propagating {
                         f64::max(t[0], t[1])
                     } else {
                         f64::min(t[0], t[1])
                     }
                 } else {
-                    // concave surface => use max t
+                    // Concave surface
                     if is_back_propagating {
                         f64::min(t[0], t[1])
                     } else {
                         f64::max(t[0], t[1])
                     }
-                };
-                if real_t.is_sign_negative() {
-                    // surface behind beam
-                    return None;
                 }
-                pos + real_t * dir
             }
             _ => unreachable!(),
         };
-        let mut normal_vector = intersection_point.normalize();
-        // remove y component
-        normal_vector.y = 0.0;
-        normal_vector = normal_vector.normalize();
-        if self.radius.is_sign_negative() {
-            if is_back_propagating {
-            } else {
-                normal_vector *= -1.0;
-            }
+        if real_t.is_sign_negative() {
+            return None;
         }
-        if self.radius.is_sign_positive() && is_back_propagating {
-            normal_vector *= -1.0;
+        let intersection_point = pos_vec + real_t * dir;
+        let mut normal = Vector3::new(intersection_point.x, 0.0, intersection_point.z).normalize();
+        // The normal always "faces" the incoming ray
+        if self.radius.is_sign_positive() {
+            // Convex
+            if is_back_propagating {
+                normal *= -1.0;
+            }
+        } else {
+            // Concave
+            if !is_back_propagating {
+                normal *= -1.0;
+            }
         }
         Some((
             meter!(
@@ -123,9 +121,10 @@ impl GeoSurface for Cylinder {
                 intersection_point.y,
                 intersection_point.z
             ),
-            normal_vector,
+            normal,
         ))
     }
+
     fn set_isometry(&mut self, isometry: Isometry) {
         let anchor_isometry = Isometry::new(
             Point3::new(Length::zero(), Length::zero(), self.radius),
@@ -137,7 +136,6 @@ impl GeoSurface for Cylinder {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
-
     fn name(&self) -> String {
         "cylindric".into()
     }
@@ -226,5 +224,56 @@ mod test {
         assert_abs_diff_eq!(normal.x, -1.0);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, 0.0);
+    }
+    #[test]
+    fn intersect_positive_back_propagating_on_axis() {
+        let wvl = nanometer!(1053.0);
+        let ray = Ray::new(millimeter!(0.0, 0.0, 10.0), -Vector3::z(), wvl, joule!(1.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(0.0)).unwrap();
+        let s = Cylinder::new(millimeter!(1.0), iso).unwrap();
+        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_abs_diff_eq!(intersection_point.x.value, 0.0);
+        assert_abs_diff_eq!(intersection_point.y.value, 0.0);
+        assert_abs_diff_eq!(intersection_point.z.value, -0.001);
+        assert_abs_diff_eq!(normal.x, 0.0);
+        assert_abs_diff_eq!(normal.y, 0.0);
+        assert_abs_diff_eq!(normal.z, 1.0);
+    }
+    #[test]
+    fn intersect_negative_back_propagating_on_axis() {
+        let wvl = nanometer!(1053.0);
+        let ray = Ray::new(millimeter!(0.0, 0.0, 10.0), -Vector3::z(), wvl, joule!(1.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(0.0)).unwrap();
+        let s = Cylinder::new(millimeter!(-1.0), iso).unwrap();
+        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_abs_diff_eq!(intersection_point.x.value, 0.0);
+        assert_abs_diff_eq!(intersection_point.y.value, 0.0);
+        assert_abs_diff_eq!(intersection_point.z.value, 0.001);
+        assert_abs_diff_eq!(normal.x, 0.0);
+        assert_abs_diff_eq!(normal.y, 0.0);
+        assert_abs_diff_eq!(normal.z, 1.0);
+    }
+    #[test]
+    fn intersect_negative_on_axis() {
+        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let s = Cylinder::new(millimeter!(-1.0), iso).unwrap();
+        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
+        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_abs_diff_eq!(intersection_point.x.value, 0.0);
+        assert_abs_diff_eq!(intersection_point.y.value, 0.0);
+        assert_abs_diff_eq!(intersection_point.z.value, 0.011);
+        assert_abs_diff_eq!(normal.x, 0.0);
+        assert_abs_diff_eq!(normal.y, 0.0);
+        assert_abs_diff_eq!(normal.z, -1.0);
+
+        let ray = Ray::new_collimated(millimeter!(0.0, 1.0, 0.0), nanometer!(1053.0), joule!(1.0))
+            .unwrap();
+        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_abs_diff_eq!(intersection_point.x.value, 0.0);
+        assert_abs_diff_eq!(intersection_point.y.value, 0.001);
+        assert_abs_diff_eq!(intersection_point.z.value, 0.011);
+        assert_abs_diff_eq!(normal.x, 0.0);
+        assert_abs_diff_eq!(normal.y, 0.0);
+        assert_abs_diff_eq!(normal.z, -1.0);
     }
 }

@@ -50,7 +50,7 @@ pub struct CylindricLens {
 unsafe impl Send for CylindricLens {}
 
 impl Default for CylindricLens {
-    /// Create a cylindric lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
+    /// Create a cylindric biconvex lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("cylindric lens");
         node_attr
@@ -60,7 +60,6 @@ impl Default for CylindricLens {
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
                 },
-                // and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 Proptype::Curvature(millimeter!(500.0)),
             )
             .unwrap();
@@ -71,7 +70,6 @@ impl Default for CylindricLens {
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
                 },
-                // and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 Proptype::Curvature(millimeter!(-500.0)),
             )
             .unwrap();
