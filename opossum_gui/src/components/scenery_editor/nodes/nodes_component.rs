@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
     graph_store::GraphStore,
-    node::{Node, NodeElement},
+    node::Node,
 };
 use dioxus::prelude::*;
 
