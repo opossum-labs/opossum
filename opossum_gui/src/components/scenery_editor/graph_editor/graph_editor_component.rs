@@ -4,7 +4,7 @@ use std::{path::PathBuf, rc::Rc, time::Instant};
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStoreAction, NodeElement, NodeType,
+        GraphState, GraphStoreAction, NodeType,
         constants::{MAX_ZOOM, MIN_ZOOM},
         edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
@@ -36,7 +36,6 @@ pub enum NodeEditorCommand {
     SaveFile(PathBuf),
     AutoLayout,
     CenterGraph { zoom_to_fit: bool },
-    UpdateActiveNode(Option<NodeElement>),
 }
 
 #[derive(Clone, Copy)]
@@ -108,12 +107,10 @@ pub enum DragStatus {
 #[component]
 pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
-    let node_selected = use_signal(|| None::<NodeElement>);
     let copied_node = use_signal(|| None::<(NodeType, Uuid)>);
 
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
-    let graph_processor: Coroutine<GraphStoreAction> =
-        use_graph_processor(node_selected, graph_state);
+    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(graph_state);
 
     use_context_provider(|| graph_state().graph_store);
     use_context_provider(|| graph_state().editor_state);
@@ -121,12 +118,11 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let current_mouse_pos = use_signal(Point2D::default);
     let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
     let onwheel_handler = use_zoom(on_mounted);
-    let onmousedown_handler =
-        use_on_mouse_down(current_mouse_pos, node_selected, last_auxiliary_click);
+    let onmousedown_handler = use_on_mouse_down(current_mouse_pos, last_auxiliary_click);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
     let onmouseleave_handler = use_drag_end(); // use_on_mouse_leave();
-    let onkeydownhandler = use_on_key_down(current_mouse_pos, node_selected, copied_node);
+    let onkeydownhandler = use_on_key_down(current_mouse_pos, copied_node);
     let onresizehandler = use_on_resize(on_mounted);
 
     let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
@@ -134,10 +130,6 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
 
     use_effect(move || {
         graph_processor.send(GraphStoreAction::GetSceneryId);
-    });
-
-    use_effect(move || {
-        command.set(Some(NodeEditorCommand::UpdateActiveNode(node_selected())));
     });
 
     use_effect(move || {
@@ -173,27 +165,18 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                 NodeEditorCommand::SaveFile(path) => {
                     graph_processor.send(GraphStoreAction::SaveToFile(path.to_owned()));
                 }
-                NodeEditorCommand::UpdateActiveNode(node) => {
-                    graph_processor.send(GraphStoreAction::UpdateActiveNode(node.clone()));
-                }
             }
         }
     });
 
     rsx! {
         div { class: "row main-content-row",
-            div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { node_element_sig: node_selected }
-            }
+            div { style: "min-width:256px;", class: "col-2 sidebar", NodeConfigEditor {} }
             div {
                 class: "col px-0 graph-editor-container",
                 tabindex: 0,
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
-                // onmouseleave: |_| {
-                //     // THIS IS THE HANDLER WE ARE TESTING
-                //     println!("!!! DIOXUS MOUSE LEAVE HANDLER FIRED !!!");
-                // },
                 div {
                     class: "graph-editor",
                     id: "editor",
@@ -214,7 +197,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                             shift().y,
                             zoom(),
                         ),
-                        Nodes { node_activated: node_selected }
+                        Nodes {}
                         svg {
                             width: "100%",
                             height: "100%",

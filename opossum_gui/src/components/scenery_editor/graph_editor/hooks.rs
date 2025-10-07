@@ -52,7 +52,6 @@ pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl Fn
 
 pub fn use_on_mouse_down(
     mut current_mouse_pos: Signal<Point2D<f64>>,
-    mut node_selected: Signal<Option<NodeElement>>,
     mut last_click: Signal<Option<Instant>>,
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
@@ -64,7 +63,6 @@ pub fn use_on_mouse_down(
         if let Some(trigger_button) = event.trigger_button() {
             match trigger_button {
                 MouseButton::Primary => {
-                    node_selected.set(None);
                     let mut ctx = CONTEXT_MENU.write();
                     *ctx = None;
                     current_mouse_pos.set(Point2D::new(
@@ -156,11 +154,12 @@ pub fn use_on_resize(on_mounted: Signal<Option<Rc<MountedData>>>) -> impl FnMut(
 
 pub fn use_on_key_down(
     mouse_pos: Signal<Point2D<f64>>,
-    node_selected: Signal<Option<NodeElement>>,
     mut copied_node: Signal<Option<(NodeType, Uuid)>>,
 ) -> impl FnMut(KeyboardEvent) {
+    let graph_store = use_context::<Signal<GraphStore>>();
     let editor_status = use_context::<Signal<EditorState>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
+
     move |event| {
         if !event.is_auto_repeating() {
             let modifiers = event.modifiers();
@@ -168,7 +167,7 @@ pub fn use_on_key_down(
             if ctrl_or_meta
                 && !modifiers.shift()
                 && event.data().key() == Key::Character("c".to_string())
-                && let Some(node) = &*node_selected.peek()
+                && let Some(node) = graph_store.read().get_active_node()
             {
                 copied_node.set(Some((node.node_type().clone(), node.id())));
                 event.stop_propagation();
