@@ -5,7 +5,7 @@ use crate::components::node_editor::inputs::input_components::{LabeledInput, Lab
 use crate::components::node_editor::inputs::select_options_from_enum_iterator;
 use crate::components::node_editor::node_config_editor::NodeChangeAction;
 use crate::components::node_editor::optical_node_editor::general_editor::NodeTypeInput;
-use crate::components::scenery_editor::NodeElement;
+use crate::components::scenery_editor::GraphStore;
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_backend::{
@@ -16,11 +16,11 @@ use uom::si::energy::picojoule;
 
 #[component]
 pub fn AnalyzerNodeEditor() -> Element {
-    let node_element_sig = use_context::<Signal<Option<NodeElement>>>();
+    let graph_store = use_context::<Signal<GraphStore>>();
     let resource_future = use_resource(move || async move {
-        let node = node_element_sig.read();
-        if let Some(node) = &*(node) {
-            match api::get_analyzer_info(node.id()).await {
+        let node_id_opt = graph_store.read().active_node();
+        if let Some(id) = node_id_opt {
+            match api::get_analyzer_info(id).await {
                 Ok(analyzer_info) => Some(analyzer_info),
                 Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);

@@ -156,9 +156,10 @@ pub fn use_on_key_down(
     mouse_pos: Signal<Point2D<f64>>,
     mut copied_node: Signal<Option<(NodeType, Uuid)>>,
 ) -> impl FnMut(KeyboardEvent) {
-    let node_selected = use_context::<Signal<Option<NodeElement>>>();
+    let graph_store = use_context::<Signal<GraphStore>>();
     let editor_status = use_context::<Signal<EditorState>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
+
     move |event| {
         if !event.is_auto_repeating() {
             let modifiers = event.modifiers();
@@ -166,7 +167,7 @@ pub fn use_on_key_down(
             if ctrl_or_meta
                 && !modifiers.shift()
                 && event.data().key() == Key::Character("c".to_string())
-                && let Some(node) = &*node_selected.peek()
+                && let Some(node) = graph_store.read().get_active_node()
             {
                 copied_node.set(Some((node.node_type().clone(), node.id())));
                 event.stop_propagation();
