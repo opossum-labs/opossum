@@ -16,7 +16,6 @@ use opossum_backend::nodes::NewRefNode;
 
 #[component]
 pub fn Node(node: NodeElement) -> Element {
-    let mut node_activated = use_context::<Signal<Option<NodeElement>>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
@@ -51,8 +50,6 @@ pub fn Node(node: NodeElement) -> Element {
                 let previously_selected = graph_store().active_node();
                 if previously_selected != Some(id) {
                     graph_store().set_node_active(id, node.z_index());
-                    node_activated
-                        .set(Some(graph_store().nodes().read().get(&id).unwrap().clone()));
                 }
                 event.stop_propagation();
             },

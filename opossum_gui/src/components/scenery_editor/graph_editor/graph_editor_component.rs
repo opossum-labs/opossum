@@ -4,7 +4,7 @@ use std::{path::PathBuf, rc::Rc, time::Instant};
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStoreAction, NodeElement, NodeType,
+        GraphState, GraphStoreAction, NodeType,
         constants::{MAX_ZOOM, MIN_ZOOM},
         edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
@@ -36,7 +36,6 @@ pub enum NodeEditorCommand {
     SaveFile(PathBuf),
     AutoLayout,
     CenterGraph { zoom_to_fit: bool },
-    UpdateActiveNode(Option<NodeElement>),
 }
 
 #[derive(Clone, Copy)]
@@ -108,14 +107,11 @@ pub enum DragStatus {
 #[component]
 pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
-    let node_selected = use_signal(|| None::<NodeElement>);
     let copied_node = use_signal(|| None::<(NodeType, Uuid)>);
 
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
-    let graph_processor: Coroutine<GraphStoreAction> =
-        use_graph_processor(node_selected, graph_state);
+    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(graph_state);
 
-    use_context_provider(|| node_selected);
     use_context_provider(|| graph_state().graph_store);
     use_context_provider(|| graph_state().editor_state);
 
@@ -134,10 +130,6 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
 
     use_effect(move || {
         graph_processor.send(GraphStoreAction::GetSceneryId);
-    });
-
-    use_effect(move || {
-        command.set(Some(NodeEditorCommand::UpdateActiveNode(node_selected())));
     });
 
     use_effect(move || {
@@ -173,9 +165,6 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                 NodeEditorCommand::SaveFile(path) => {
                     graph_processor.send(GraphStoreAction::SaveToFile(path.to_owned()));
                 }
-                NodeEditorCommand::UpdateActiveNode(node) => {
-                    graph_processor.send(GraphStoreAction::UpdateActiveNode(node.clone()));
-                }
             }
         }
     });
@@ -188,10 +177,6 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                 tabindex: 0,
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
-                // onmouseleave: |_| {
-                //     // THIS IS THE HANDLER WE ARE TESTING
-                //     println!("!!! DIOXUS MOUSE LEAVE HANDLER FIRED !!!");
-                // },
                 div {
                     class: "graph-editor",
                     id: "editor",

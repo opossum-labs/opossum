@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
 use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
-use crate::components::scenery_editor::{GraphStoreAction, NodeElement, NodeType};
+use crate::components::scenery_editor::{GraphStore, GraphStoreAction, NodeType};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
@@ -22,12 +22,12 @@ pub enum NodeChangeAction {
 #[component]
 pub fn NodeConfigEditor() -> Element {
     let node_properties_sig = use_signal(Properties::default);
-    let node_element_sig = use_context::<Signal<Option<NodeElement>>>();
+    let graph_store = use_context::<Signal<GraphStore>>();
 
     use_context_provider(|| node_properties_sig);
     use_node_config_processor(node_properties_sig);
 
-    (*node_element_sig.read()).as_ref().map_or_else(
+    (graph_store.read().get_active_node()).map_or_else(
         || {
             rsx! {
                 div { "No node selected" }
@@ -36,7 +36,7 @@ pub fn NodeConfigEditor() -> Element {
         |active_node| match active_node.node_type() {
             NodeType::Optical(_) => {
                 rsx! {
-                    OpticalNodeEditor { node_properties_sig }
+                    OpticalNodeEditor {node_properties_sig }
                 }
             }
             NodeType::Analyzer(_) => {
@@ -50,30 +50,28 @@ pub fn NodeConfigEditor() -> Element {
 
 fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
-    let mut node_selected = use_context::<Signal<Option<NodeElement>>>();
+    let mut graph_store = use_context::<Signal<GraphStore>>();
     use_coroutine(move |mut rx: UnboundedReceiver<NodeChangeAction>| {
         async move {
             // This loop runs forever in the background, waiting for actions.
             while let Some(action) = rx.next().await {
-                if let Some(active_node) = node_selected() {
+                if let Some(active_node_id) = graph_store.read().active_node() {
                     match action {
                         NodeChangeAction::Name(name) => {
                             spawn(async move {
-                                let mut active_node = active_node.clone();
                                 if let Err(err_str) =
-                                    api::update_node_name(active_node.id(), name.clone()).await
+                                    api::update_node_name(active_node_id, name.clone()).await
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                                 } else {
-                                    active_node.set_name(name);
-                                    node_selected.set(Some(active_node));
+                                    graph_store.write().set_name_of_node(active_node_id, name);
                                 }
                             });
                         }
                         NodeChangeAction::Lidt(lidt) => {
                             spawn(async move {
                                 if let Err(err_str) =
-                                    api::update_node_lidt(active_node.id(), lidt).await
+                                    api::update_node_lidt(active_node_id, lidt).await
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                                 }
@@ -82,7 +80,7 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                         NodeChangeAction::Alignment(iso) => {
                             spawn(async move {
                                 if let Err(err_str) =
-                                    api::update_node_alignment(active_node.id(), iso).await
+                                    api::update_node_alignment(active_node_id, iso).await
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                                 }
@@ -91,7 +89,7 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                         NodeChangeAction::Property(key, prop) => {
                             spawn(async move {
                                 if let Err(err_str) = api::update_node_property(
-                                    active_node.id(),
+                                    active_node_id,
                                     (key.clone(), prop.clone()),
                                 )
                                 .await
@@ -112,7 +110,7 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                         NodeChangeAction::Isometry(iso) => {
                             spawn(async move {
                                 if let Err(err_str) =
-                                    api::update_node_isometry(active_node.id(), iso).await
+                                    api::update_node_isometry(active_node_id, iso).await
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                                 }
@@ -120,13 +118,13 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                         }
                         NodeChangeAction::Inverted(inverted) => {
                             spawn(async move {
-                                let mut active_node = active_node.clone();
-                                match api::update_node_inversion(active_node.id(), inverted).await {
+                                match api::update_node_inversion(active_node_id, inverted).await {
                                     Ok(connections) => {
                                         graph_processor
                                             .send(GraphStoreAction::UpdateEdges(connections));
-                                        active_node.set_inverted(inverted);
-                                        node_selected.set(Some(active_node));
+                                        graph_store
+                                            .write()
+                                            .set_node_inverted(active_node_id, inverted);
                                     }
                                     Err(err_str) => {
                                         OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -137,7 +135,7 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                         NodeChangeAction::AnalyzerType(analyzer_type) => {
                             spawn(async move {
                                 if let Err(err_str) =
-                                    api::update_analyzer_config_ron(active_node.id(), analyzer_type)
+                                    api::update_analyzer_config_ron(active_node_id, analyzer_type)
                                         .await
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
