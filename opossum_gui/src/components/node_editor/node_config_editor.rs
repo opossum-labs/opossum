@@ -6,6 +6,7 @@ use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
 use opossum_backend::{AnalyzerType, Fluence, Isometry, Properties, Proptype};
+use uuid::Uuid;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
@@ -20,28 +21,27 @@ pub enum NodeChangeAction {
 }
 
 #[component]
-pub fn NodeConfigEditor() -> Element {
+pub fn NodeConfigEditor(active_node_opt: Memo<Option<(NodeType, Uuid)>>) -> Element {
     let node_properties_sig = use_signal(Properties::default);
-    let graph_store = use_context::<Signal<GraphStore>>();
-
+    println!("rerender NodeConfigEditor");
     use_context_provider(|| node_properties_sig);
     use_node_config_processor(node_properties_sig);
 
-    (graph_store.read().get_active_node()).map_or_else(
+    (active_node_opt()).map_or_else(
         || {
             rsx! {
                 div { "No node selected" }
             }
         },
-        |active_node| match active_node.node_type() {
+        |(active_node_type, node_id)| match active_node_type {
             NodeType::Optical(_) => {
                 rsx! {
-                    OpticalNodeEditor {node_properties_sig }
+                    OpticalNodeEditor { node_id, node_properties_sig }
                 }
             }
             NodeType::Analyzer(_) => {
                 rsx! {
-                    AnalyzerNodeEditor {}
+                    AnalyzerNodeEditor { node_id }
                 }
             }
         },

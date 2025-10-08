@@ -8,29 +8,23 @@ use crate::components::node_editor::optical_node_editor::alignment_editor::{
 };
 use crate::components::node_editor::optical_node_editor::general_editor::GeneralEditor;
 use crate::components::node_editor::optical_node_editor::properties_editor::PropertiesEditor;
-use crate::components::scenery_editor::GraphStore;
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_backend::{Isometry, Properties};
+use uuid::Uuid;
 
 #[component]
-pub fn OpticalNodeEditor(node_properties_sig: Signal<Properties>) -> Element {
-    let graph_store = use_context::<Signal<GraphStore>>();
+pub fn OpticalNodeEditor(node_id: Uuid, node_properties_sig: Signal<Properties>) -> Element {
     let resource_future = use_resource(move || async move {
-        let node_id_opt = graph_store.read().active_node();
-        if let Some(id) = node_id_opt {
-            match api::get_node_properties(id).await {
-                Ok(node_attr) => {
-                    node_properties_sig.set(node_attr.properties().clone());
-                    Some(node_attr)
-                }
-                Err(err_str) => {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                    None
-                }
+        match api::get_node_properties(node_id).await {
+            Ok(node_attr) => {
+                node_properties_sig.set(node_attr.properties().clone());
+                Some(node_attr)
             }
-        } else {
-            None
+            Err(err_str) => {
+                OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                None
+            }
         }
     });
 
