@@ -11,7 +11,7 @@ fn main() -> OpmResult<()> {
     let fluence_dist = General2DGaussian::new(
         tot_energy,
         millimeter!(0., 0.),
-        millimeter!(2.5, 2.5),
+        millimeter!(4., 2.5),
         radian!(0.),
     )?;
     let rays = Rays::new_collimated_w_fluence_helper(nanometer!(1000.), &fluence_dist, &pos_dist)?;

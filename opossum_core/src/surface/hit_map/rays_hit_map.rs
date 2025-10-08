@@ -498,6 +498,7 @@ impl RaysHitMap {
             };
             let voronied_data =
                 VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)?;
+
             //currently only interpolation. voronoid data for plotting must still be implemented
             let (interp_fluence, _) =
                 interpolate_3d_triangulated_scatter_data(&voronied_data, &co_ax1, &co_ax2)?;
@@ -676,7 +677,7 @@ impl RaysHitMap {
                     linspace(
                         range.start.get::<length::centimeter>(),
                         range.end.get::<length::centimeter>(),
-                        nr_of_points.0,
+                        nr_of_points.1,
                     )?,
                     range.clone(),
                 )
@@ -689,7 +690,7 @@ impl RaysHitMap {
                         )
                     })?;
                 (
-                    linspace(proj_ax2_lim.min, proj_ax2_lim.max, nr_of_points.0)?,
+                    linspace(proj_ax2_lim.min, proj_ax2_lim.max, nr_of_points.1)?,
                     centimeter!(proj_ax2_lim.min)..centimeter!(proj_ax2_lim.max),
                 )
             };
@@ -706,6 +707,7 @@ impl RaysHitMap {
             let voronoi_fluence_scatter =
                 VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence)?;
 
+
             //currently only interpolation. voronoid data for plotting must still be implemented
             let (interp_fluence, _) = interpolate_3d_triangulated_scatter_data(
                 &voronoi_fluence_scatter,
@@ -715,8 +717,8 @@ impl RaysHitMap {
 
             Ok(FluenceData::new(
                 DMatrix::from_iterator(
-                    co_ax1.len(),
                     co_ax2.len(),
+                    co_ax1.len(),
                     interp_fluence.iter().map(|val| J_per_cm2!(*val)),
                 ),
                 ax_1_range,
