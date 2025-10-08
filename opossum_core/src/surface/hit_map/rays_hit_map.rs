@@ -707,7 +707,6 @@ impl RaysHitMap {
             let voronoi_fluence_scatter =
                 VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence)?;
 
-
             //currently only interpolation. voronoid data for plotting must still be implemented
             let (interp_fluence, _) = interpolate_3d_triangulated_scatter_data(
                 &voronoi_fluence_scatter,
@@ -887,6 +886,7 @@ mod test_hitpoints {
         J_per_cm2, joule, meter,
         surface::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
     };
+
     #[test]
     fn len() {
         let hp = HitPoints::Energy(vec![]);
@@ -924,11 +924,30 @@ mod test_hitpoints {
 }
 #[cfg(test)]
 mod test_rays_hit_map {
+    use uuid::Uuid;
+
     use super::RaysHitMap;
     use crate::{
-        J_per_cm2, joule, meter,
-        surface::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint, HitPoints},
+        J_per_cm2, centimeter, joule, meter,
+        surface::hit_map::{
+            HitMap,
+            rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint, HitPoints},
+        },
     };
+
+    // helper function
+    fn dummy_fluence_hitpoints(n_x: usize, n_y: usize) -> HitPoints {
+        let mut pts = Vec::new();
+        for i in 0..n_y {
+            for j in 0..n_x {
+                pts.push(FluenceHitPoint {
+                    position: centimeter!(j as f64, i as f64, 0.0),
+                    value: J_per_cm2!((i * n_x + j) as f64 + 1.0),
+                });
+            }
+        }
+        HitPoints::Fluence(pts)
+    }
     use core::f64;
     #[test]
     fn lims() {
@@ -1058,5 +1077,113 @@ mod test_rays_hit_map {
         assert!(rhm.calc_2d_bounding_box(meter!(f64::NAN)).is_err());
         assert!(rhm.calc_2d_bounding_box(meter!(f64::INFINITY)).is_err());
         assert!(rhm.calc_2d_bounding_box(meter!(f64::NEG_INFINITY)).is_err());
+    }
+
+    #[test]
+    fn fluence_matrix_has_expected_dimensions() {
+        let ray_map = RaysHitMap {
+            hit_points: dummy_fluence_hitpoints(4, 3),
+            ..Default::default()
+        };
+
+        let nr_of_points = (5, 4);
+        let result = ray_map
+            .calc_fluence_with_helper_rays(nr_of_points, None, None)
+            .expect("Fluence calculation should succeed");
+
+        let matrix = result.interp_distribution();
+        assert_eq!(
+            matrix.ncols(),
+            nr_of_points.0,
+            "x-axis should define number of rows"
+        );
+        assert_eq!(
+            matrix.nrows(),
+            nr_of_points.1,
+            "y-axis should define number of columns"
+        );
+    }
+
+    #[test]
+    fn too_few_points_should_fail() {
+        let ray_map = RaysHitMap {
+            hit_points: HitPoints::Fluence(vec![
+                FluenceHitPoint {
+                    position: centimeter!(0.0, 0.0, 0.0),
+                    value: J_per_cm2!(1.0),
+                },
+                FluenceHitPoint {
+                    position: centimeter!(1.0, 0.0, 0.0),
+                    value: J_per_cm2!(1.0),
+                },
+            ]),
+            ..Default::default()
+        };
+
+        let result = ray_map.calc_fluence_with_helper_rays((4, 4), None, None);
+        assert!(
+            result.is_err(),
+            "Less than 3 points should result in an error"
+        );
+    }
+
+    #[test]
+    fn fluence_values_are_positive_and_finite() {
+        let ray_map = RaysHitMap {
+            hit_points: dummy_fluence_hitpoints(4, 4),
+            ..Default::default()
+        };
+
+        let res = ray_map
+            .calc_fluence_with_helper_rays((6, 5), None, None)
+            .expect("Fluence calc should succeed");
+
+        let mat = res.interp_distribution();
+        for (idx, val) in mat.iter().enumerate() {
+            assert!(
+                val.is_finite() && val.value >= 0.0,
+                "Value at Index {} is invalid: {}",
+                idx,
+                val.value
+            );
+        }
+    }
+
+    #[test]
+    fn combined_fluence_respects_dimensions() {
+        let mut scene = HitMap::default();
+        let id = Uuid::new_v4();
+        match dummy_fluence_hitpoints(3, 3) {
+            HitPoints::Energy(_) => (),
+            HitPoints::Fluence(fluence_hit_points) => {
+                for hp in fluence_hit_points {
+                    let _ = scene.add_to_hitmap(HitPoint::Fluence(hp), 0, id);
+                }
+            }
+        }
+
+        let nr_of_points = (10, 6);
+        let fluence_data = scene
+            .calc_combined_fluence_with_helper_rays(nr_of_points)
+            .expect("Combined fluence should succeed");
+
+        let mat = fluence_data.interp_distribution();
+        assert_eq!(mat.ncols(), nr_of_points.0);
+        assert_eq!(mat.nrows(), nr_of_points.1);
+    }
+
+    #[test]
+    fn values_increase_consistently_with_position() {
+        let ray_map = RaysHitMap {
+            hit_points: dummy_fluence_hitpoints(3, 3),
+            ..Default::default()
+        };
+
+        let res = ray_map
+            .calc_fluence_with_helper_rays((3, 3), None, None)
+            .expect("Fluence calc should succeed");
+
+        let mat = res.interp_distribution();
+        assert!(mat[(0, 0)] < mat[(2, 2)]);
     }
 }
