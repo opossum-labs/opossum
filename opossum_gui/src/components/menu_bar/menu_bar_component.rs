@@ -108,7 +108,7 @@ pub fn MenuBar(
                                     "Add Node"
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
-                                ul { class: "dropdown-menu dropdown-submenu",
+                                ul { class: "dropdown-menu dropdown-submenu custom-scroll",
                                     NodesMenu { node_selected }
                                 }
                             }
@@ -119,7 +119,7 @@ pub fn MenuBar(
                                     "Add Analyzer"
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
-                                ul { class: "dropdown-menu dropdown-submenu",
+                                ul { class: "dropdown-menu dropdown-submenu custom-scroll",
                                     AnalyzersMenu { analyzer_selected }
                                 }
                             }
