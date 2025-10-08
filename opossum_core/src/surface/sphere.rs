@@ -8,7 +8,7 @@ use crate::{
     ray::Ray,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::{Point3, Vector3, vector};
+use nalgebra::{Point3, Vector3};
 use num::Zero;
 use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
@@ -56,13 +56,10 @@ impl Sphere {
     }
 }
 impl GeoSurface for Sphere {
+    #[allow(clippy::suboptimal_flops)] // don't use mul_add here for a,b,c because the current implementation is faster!
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let dir = ray.direction();
-        let pos = vector![
-            ray.position().x.value,
-            ray.position().y.value,
-            ray.position().z.value
-        ];
+        let pos_vec = ray.position().coords.map(|v| v.value);
         let radius = self.radius.value;
         let is_back_propagating = dir.z.is_sign_negative();
         // sphere formula (at origin)
@@ -76,55 +73,56 @@ impl GeoSurface for Sphere {
         // b = 2 (d_x * p_x + d_y * p_y + d_z *p_z )
         // c = p_x^2 + p_y^2 + p_z^2 - r^2
         let a = dir.norm_squared();
-        let b = 2.0 * dir.z.mul_add(0.0, dir.dot(&pos));
-        let c = radius.mul_add(-radius, pos.norm_squared());
-        // Solve t of qudaratic equation
+        let b = 2.0 * dir.dot(&pos_vec);
+        let c = pos_vec.norm_squared() - radius * radius;
+
         let roots = find_roots_quadratic(a, b, c);
-        let intersection_point = match roots {
-            // no intersection
+
+        let real_t = match roots {
             Roots::No(_) => return None,
-            // "just touching" intersection
             Roots::One(t) => {
                 if t[0] >= 0.0 {
-                    pos + t[0] * dir
+                    t[0]
                 } else {
                     return None;
                 }
             }
-            // "regular" intersection
             Roots::Two(t) => {
-                let real_t = if self.radius.is_sign_positive() {
-                    // convex surface => use min t
+                if self.radius.is_sign_positive() {
+                    // Convex surface
                     if is_back_propagating {
                         f64::max(t[0], t[1])
                     } else {
                         f64::min(t[0], t[1])
                     }
                 } else {
-                    // concave surface => use max t
+                    // Concave surface
                     if is_back_propagating {
                         f64::min(t[0], t[1])
                     } else {
                         f64::max(t[0], t[1])
                     }
-                };
-                if real_t.is_sign_negative() {
-                    // surface behind beam
-                    return None;
                 }
-                pos + real_t * dir
             }
             _ => unreachable!(),
         };
-        let mut normal_vector = intersection_point.normalize();
-        if self.radius.is_sign_negative() {
-            if is_back_propagating {
-            } else {
-                normal_vector *= -1.0;
-            }
+
+        if real_t.is_sign_negative() {
+            return None;
         }
-        if self.radius.is_sign_positive() && is_back_propagating {
-            normal_vector *= -1.0;
+
+        let intersection_point = pos_vec + real_t * dir;
+        let mut normal = intersection_point.normalize();
+        if self.radius.is_sign_positive() {
+            // Convex
+            if is_back_propagating {
+                normal *= -1.0;
+            }
+        } else {
+            // Concave
+            if !is_back_propagating {
+                normal *= -1.0;
+            }
         }
         Some((
             meter!(
@@ -132,7 +130,7 @@ impl GeoSurface for Sphere {
                 intersection_point.y,
                 intersection_point.z
             ),
-            normal_vector,
+            normal,
         ))
     }
     fn set_isometry(&mut self, isometry: Isometry) {
@@ -220,7 +218,7 @@ mod test {
             .unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
         assert_eq!(intersection_point, sphere_position);
-        assert_eq!(normal, vector![0.0, 0.0, -1.0]);
+        assert_eq!(normal, -Vector3::z());
 
         // start "outside" the sphere
         let ray = Ray::new_collimated(
@@ -252,7 +250,7 @@ mod test {
             .unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
         assert_eq!(intersection_point, sphere_position);
-        assert_eq!(normal, vector![0.0, 0.0, -1.0]);
+        assert_eq!(normal, -Vector3::z());
 
         // start "outside" the sphere
         let ray = Ray::new_collimated(
@@ -282,19 +280,19 @@ mod test {
         // start "within" the sphere (not really)...
         let ray = Ray::new(
             millimeter!(0.0, 0.0, 5.0),
-            vector![0.0, 0.0, -1.0],
+            -Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
         )
         .unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
         assert_eq!(intersection_point, sphere_position);
-        assert_eq!(normal, vector![0.0, 0.0, 1.0]);
+        assert_eq!(normal, Vector3::z());
 
         // start "outside" the sphere
         let ray = Ray::new(
             millimeter!(0.0, 0.0, 15.0),
-            vector![0.0, 0.0, -1.0],
+            -Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
         )
@@ -307,7 +305,7 @@ mod test {
         // non-intersecting
         let ray = Ray::new(
             millimeter!(0.0, 0.0, -5.0),
-            vector![0.0, 0.0, -1.0],
+            -Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
         )
@@ -315,7 +313,7 @@ mod test {
         assert!(s.calc_intersect_and_normal(&ray).is_none());
         let ray = Ray::new(
             millimeter!(0.0, 0.0, -15.0),
-            vector![0.0, 0.0, -1.0],
+            -Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
         )
@@ -330,19 +328,19 @@ mod test {
         // start "within" the sphere (not really)...
         let ray = Ray::new(
             millimeter!(0.0, 0.0, 5.0),
-            vector![0.0, 0.0, -1.0],
+            -Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
         )
         .unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
         assert_eq!(intersection_point, sphere_position);
-        assert_eq!(normal, vector![0.0, 0.0, 1.0]);
+        assert_eq!(normal, Vector3::z());
 
         // start "outside" the sphere
         let ray = Ray::new(
             millimeter!(0.0, 0.0, 15.0),
-            vector![0.0, 0.0, -1.0],
+            -Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
         )
@@ -355,7 +353,7 @@ mod test {
         // non-intersecting
         let ray = Ray::new(
             millimeter!(0.0, 0.0, -5.0),
-            vector![0.0, 0.0, -1.0],
+            -Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
         )
@@ -363,7 +361,7 @@ mod test {
         assert!(s.calc_intersect_and_normal(&ray).is_none());
         let ray = Ray::new(
             millimeter!(0.0, 0.0, -15.0),
-            vector![0.0, 0.0, -1.0],
+            -Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
         )
@@ -398,6 +396,6 @@ mod test {
             0.011,
             epsilon = 1000.0 * f64::EPSILON
         );
-        assert_abs_diff_eq!(normal, vector![0.0, -1.0, 0.0]);
+        assert_abs_diff_eq!(normal, -Vector3::y());
     }
 }
