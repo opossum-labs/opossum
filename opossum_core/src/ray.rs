@@ -460,7 +460,7 @@ impl Ray {
         let geo_surf = s.geo_surface();
         let surf_vectors = geo_surf.0.lock_opm()?.calc_intersect_and_normal(self);
         if let Some((intersection_point, surface_normal)) = surf_vectors {
-            let surface_normal = surface_normal.normalize();
+            // it is assumed that the surface normal is already normalized and points against the ray direction.
 
             // get correctly normalized k vector of ray
             let ray_dir_norm = self.dir.norm();
@@ -557,13 +557,13 @@ impl Ray {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
             // s1: incoming direction (normalized??)
-            // n: surface normal (normalized??)
+            // n: surface normal (must be normalized)
             // s2: refracted dir
             //
             // s2 = mu * [ n x ( -n x s1) ] - n* sqrt(1 - mu^2 * (n x s1) dot (n x s1))
             let mu = self.refractive_index / n_refri_2;
             let s1 = self.dir.normalize();
-            let n = surface_normal.normalize();
+            let n = surface_normal;
             let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
             let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
             let pos_in_m = self.pos.map(|c| c.value);

@@ -42,16 +42,13 @@ impl Parabola {
 }
 
 impl GeoSurface for Parabola {
+    #[allow(clippy::suboptimal_flops)] // don't use mul_add here for a,b,c because the current implementation is faster!
     fn calc_intersect_and_normal_do(
         &self,
         ray: &crate::ray::Ray,
     ) -> Option<(Point3<Length>, Vector3<f64>)> {
         let dir = ray.direction();
-        let pos = vector![
-            ray.position().x.value,
-            ray.position().y.value,
-            ray.position().z.value
-        ];
+        let pos_vec = ray.position().coords.map(|v| v.value);
         let f_length = self.focal_length.value;
         // parabola formula (at origin)
         // x^2 + y^2 - 4fz = 0
@@ -64,41 +61,60 @@ impl GeoSurface for Parabola {
         // b = 2* (p_x*d_x + p_y*d_y - 2*f*d_z)
         // c = p_x^2 + p_y^2 - 4f*p_z
         let a = dir.x.mul_add(dir.x, dir.y * dir.y);
-        let b = 2. * (2. * f_length).mul_add(-dir.z, pos.x.mul_add(dir.x, pos.y * dir.y));
-        let c = (4. * f_length).mul_add(-pos.z, pos.x.mul_add(pos.x, pos.y * pos.y));
-        // Solve t of qudaratic equation
+        let b = 2. * (2. * f_length).mul_add(-dir.z, pos_vec.x.mul_add(dir.x, pos_vec.y * dir.y));
+        let c = (4. * f_length).mul_add(
+            -pos_vec.z,
+            pos_vec.x.mul_add(pos_vec.x, pos_vec.y * pos_vec.y),
+        );
+
+        if a.abs() < 1e-9 {
+            if b.abs() < 1e-9 {
+                return None; // Ray is on the surface and parallel to it. No unique intersection.
+            }
+            let t = -c / b;
+            if t < 0.0 {
+                return None; // Intersection is behind the ray.
+            }
+            let intersection_point = pos_vec + t * dir;
+            let normal =
+                vector![intersection_point.x, intersection_point.y, -2. * f_length].normalize();
+            return Some((
+                meter!(
+                    intersection_point.x,
+                    intersection_point.y,
+                    intersection_point.z
+                ),
+                normal,
+            ));
+        }
         let roots = find_roots_quadratic(a, b, c);
-        let intersection_point = match roots {
-            // no intersection
+        let real_t = match roots {
             Roots::No(_) => return None,
-            // "just touching" intersection
             Roots::One(t) => {
                 if t[0] >= 0.0 {
-                    pos + t[0] * dir
+                    t[0]
                 } else {
                     return None;
                 }
             }
-            // "regular" intersection
             Roots::Two(t) => {
-                let real_t = if self.focal_length.is_sign_negative() {
-                    // concave surface => use max t
+                if self.focal_length.is_sign_negative() {
+                    // Concave (opens towards -z)
                     f64::max(t[0], t[1])
                 } else {
-                    // convex surface => use min t
+                    // Convex (opens towards +z)
                     f64::min(t[0], t[1])
-                };
-                if real_t.is_sign_negative() {
-                    // surface behind beam
-                    return None;
                 }
-                pos + real_t * dir
             }
             _ => unreachable!(),
         };
-        // calc surface normal
-        // calculate grad F(x,y,z) =(2 * p_x, 2 * p_y, 4 * f)
-        let normal_vector = vector![intersection_point.x, intersection_point.y, -2. * f_length];
+        if real_t < 0.0 {
+            return None;
+        }
+        let intersection_point = pos_vec + real_t * dir;
+        let normal_vector =
+            vector![intersection_point.x, intersection_point.y, -2. * f_length].normalize();
+
         Some((
             meter!(
                 intersection_point.x,
@@ -108,6 +124,7 @@ impl GeoSurface for Parabola {
             normal_vector,
         ))
     }
+
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
@@ -127,6 +144,7 @@ mod test {
         joule, meter, nanometer, ray::Ray, surface::geo_surface::GeoSurface,
         utils::geom_transformation::Isometry,
     };
+    use approx::assert_abs_diff_eq;
     use core::f64;
     use nalgebra::vector;
     #[test]
@@ -141,9 +159,17 @@ mod test {
         let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
         let ray = Ray::new_collimated(meter!(-1.0, -1.0, -10.0), nanometer!(1000.0), joule!(1.0))
             .unwrap();
-        let intersection = parabola.calc_intersect_and_normal_do(&ray).unwrap();
-        assert_eq!(intersection.0, meter!(-1., -1., 0.5));
-        assert_eq!(intersection.1, vector![-1., -1., -2.]);
+        let (intersection_point, surface_normal) =
+            parabola.calc_intersect_and_normal_do(&ray).unwrap();
+        assert_eq!(intersection_point, meter!(-1., -1., 0.5));
+        assert_abs_diff_eq!(
+            surface_normal,
+            vector![
+                -0.4082482904638631,
+                -0.4082482904638631,
+                -0.8164965809277261
+            ]
+        );
     }
     #[test]
     fn intersect_ray_through_focus_concave() {

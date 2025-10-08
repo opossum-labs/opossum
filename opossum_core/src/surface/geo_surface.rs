@@ -19,6 +19,8 @@ use uom::si::f64::Length;
 pub trait GeoSurface: Send + Sync {
     /// Calculate intersection point and its normal vector of a [`Ray`] with a [`GeoSurface`]
     ///
+    /// The surface normal is guaranteed to point always against the ray direction and is normalized.
+    ///
     /// This function returns `None` if the given ray does not intersect with the surface.
     fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let transformed_ray = ray.inverse_transformed_ray(self.isometry());
@@ -37,6 +39,8 @@ pub trait GeoSurface: Send + Sync {
     /// **Note**: Do not call this functions directly but rather
     /// `calc_intersect_and_normal` which is a wrapper handling all isometric transformations. The implemented function
     /// does not need to consider any isometries.
+    ///
+    /// **Note2**: It is assumed that the surface normal always points against the ray direction and is normalized.
     ///
     /// This function returns `None` if the given ray does not intersect with the surface.
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)>;

@@ -141,7 +141,7 @@ mod test {
         let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
-            Some((millimeter!(0.0, 0.0, 10.0), Vector3::new(0.0, 0.0, -1.0)))
+            Some((millimeter!(0.0, 0.0, 10.0), -Vector3::z()))
         );
     }
     #[test]
@@ -158,7 +158,7 @@ mod test {
         let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
-            Some((millimeter!(0.0, 0.0, 0.0), Vector3::new(0.0, 0.0, -1.0)))
+            Some((millimeter!(0.0, 0.0, 0.0), -Vector3::z()))
         );
     }
     #[test]
@@ -169,7 +169,7 @@ mod test {
             .unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
-            Some((millimeter!(0.0, 1.0, 10.0), Vector3::new(0.0, 0.0, -1.0)))
+            Some((millimeter!(0.0, 1.0, 10.0), -Vector3::z()))
         );
         let ray = Ray::new(
             millimeter!(0.0, 1.0, 0.0),
@@ -180,7 +180,23 @@ mod test {
         .unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
-            Some((millimeter!(0.0, 11.0, 10.0), Vector3::new(0.0, 0.0, -1.0)))
+            Some((millimeter!(0.0, 11.0, 10.0), -Vector3::z()))
+        );
+    }
+    #[test]
+    fn intersect_on_axis_backwards() {
+        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let s = Plane::new(iso);
+        let ray = Ray::new(
+            millimeter!(0.0, 0.0, 20.0),
+            -Vector3::z(),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.calc_intersect_and_normal(&ray),
+            Some((millimeter!(0.0, 0.0, 10.0), Vector3::z()))
         );
     }
 }
