@@ -112,6 +112,15 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
     let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(graph_state);
 
+    let active_node_opt = use_memo(move || {
+        graph_state
+            .read()
+            .graph_store
+            .read()
+            .get_active_node()
+            .map(|n| (n.node_type().clone(), n.id()))
+    });
+
     use_context_provider(|| graph_state().graph_store);
     use_context_provider(|| graph_state().editor_state);
 
@@ -171,7 +180,9 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
 
     rsx! {
         div { class: "row main-content-row",
-            div { style: "min-width:256px;", class: "col-2 sidebar", NodeConfigEditor {} }
+            div { style: "min-width:256px;", class: "col-2 sidebar",
+                NodeConfigEditor { active_node_opt }
+            }
             div {
                 class: "col px-0 graph-editor-container",
                 tabindex: 0,
