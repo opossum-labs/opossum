@@ -5,7 +5,7 @@ use inflector::Inflector;
 use crate::{OPOSSUM_UI_LOGS, api};
 
 #[component]
-pub fn NodesMenu(node_selected: Signal<String>) -> Element {
+pub fn NodesMenu(on_node_selected: EventHandler<String>) -> Element {
     let future = use_resource({
         move || async move {
             match api::get_node_types().await {
@@ -34,7 +34,7 @@ pub fn NodesMenu(node_selected: Signal<String>) -> Element {
                         a {
                             class: "dropdown-item",
                             role: "button",
-                            onclick: move |_| node_selected.set(element.clone()),
+                            onclick: move |_| on_node_selected.call(element.clone()),
                             {element.clone()}
                         }
                     }

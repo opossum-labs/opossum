@@ -215,7 +215,7 @@ pub fn GraphEditor(
                             shift().y,
                             zoom(),
                         ),
-                        Nodes { is_modified: is_modified }
+                        Nodes { is_modified }
                         svg {
                             width: "100%",
                             height: "100%",
@@ -223,7 +223,7 @@ pub fn GraphEditor(
                             tabindex: 0,
                             {
                                 rsx! {
-                                    EdgesComponent { is_modified: is_modified }
+                                    EdgesComponent { is_modified }
                                     EdgeCreationComponent {}
                                 }
                             }

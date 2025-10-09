@@ -38,11 +38,10 @@ pub enum MenuSelection {
 pub fn MenuBar(
     menu_item_selected: Signal<Option<MenuSelection>>,
     project_directory: Signal<Option<PathBuf>>,
-    model_file_path: Signal<Option<PathBuf>>,
-    model_modified: Signal<bool>,
+    model_file_path: ReadOnlySignal<Option<PathBuf>>,
+    model_modified: ReadOnlySignal<bool>,
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
-    let node_selected = use_signal(String::new);
     let analyzer_selected = use_signal(|| None::<AnalyzerType>);
     let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| {
         rsx! {
@@ -52,11 +51,6 @@ pub fn MenuBar(
     use_effect(move || {
         if let Some(analyzer) = analyzer_selected() {
             menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer)));
-        }
-    });
-    use_effect(move || {
-        if !node_selected.read().is_empty() {
-            menu_item_selected.set(Some(MenuSelection::AddNode(node_selected())));
         }
     });
     rsx! {
@@ -80,7 +74,8 @@ pub fn MenuBar(
                         a {
                             "data-mdb-dropdown-init": "",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
-                            id: "navbarDropdownMenuLink",
+                            id: "navbarDropdownFileMenuLink",
+                            "data-mdb-toggle": "dropdown",
                             role: "button",
                             "File"
                         }
@@ -95,8 +90,9 @@ pub fn MenuBar(
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
+                            "data-mdb-toggle": "dropdown",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
-                            id: "navbarDropdownMenuLink",
+                            id: "navbarDropdownEditMenuLink",
                             role: "button",
                             "Edit"
                         }
@@ -109,7 +105,7 @@ pub fn MenuBar(
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
                                 ul { class: "dropdown-menu dropdown-submenu custom-scroll",
-                                    NodesMenu { node_selected }
+                                    NodesMenu { on_node_selected: move |node_name| { menu_item_selected.set(Some(MenuSelection::AddNode(node_name))) } }
                                 }
                             }
                             li {
@@ -128,8 +124,9 @@ pub fn MenuBar(
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
+                            "data-mdb-toggle": "dropdown",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
-                            id: "navbarDropdownMenuLink",
+                            id: "navbarDropdownLayoutMenuLink",
                             role: "button",
                             "Layout"
                         }
@@ -142,8 +139,9 @@ pub fn MenuBar(
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
+                            "data-mdb-toggle": "dropdown",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
-                            id: "navbarDropdownMenuLink",
+                            id: "navbarDropdownHelpMenuLink",
                             role: "button",
                             "Help"
                         }

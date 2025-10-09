@@ -9,7 +9,7 @@ pub fn Nodes(is_modified: Signal<bool>) -> Element {
         for node in graph_store().nodes().read().iter() {
             {
                 rsx! {
-                    Node { node: node.1.clone(), is_modified: is_modified }
+                    Node { node: node.1.clone(), is_modified }
                 }
             }
         }
