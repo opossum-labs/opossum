@@ -82,6 +82,7 @@ impl Spectrum {
     /// The first column corresponds to the wavelength in nm, the second columns represent values in
     /// percent. This file format corresponds to the CSV export format from an transmission (Excel) file
     /// as provided by Thorlabs.
+    ///
     /// # Panics
     ///
     /// Panics if ???
