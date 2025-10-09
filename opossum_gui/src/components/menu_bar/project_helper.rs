@@ -25,14 +25,20 @@ pub fn save_project(
     }
 }
 
-pub fn open_project(mut menu_item_selected: Signal<Option<MenuSelection>>) {
-    let path = FileDialog::new()
-        .set_directory("/")
-        .set_title("Open OPOSSUM setup file")
-        .add_filter("Opossum setup file", &["opm"])
-        .pick_file();
-    if let Some(path) = path {
-        menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
+pub fn open_project(
+    mut menu_item_selected: Signal<Option<MenuSelection>>,
+    model_modified: Signal<bool>,
+) {
+    let msg = "You have unsaved changes. Are you sure you want to open a new project?";
+    if continue_operation(*model_modified.peek(), msg) {
+        let path = FileDialog::new()
+            .set_directory("/")
+            .set_title("Open OPOSSUM setup file")
+            .add_filter("Opossum setup file", &["opm"])
+            .pick_file();
+        if let Some(path) = path {
+            menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
+        }
     }
 }
 
@@ -50,13 +56,13 @@ pub fn new_project(
     model_modified: Signal<bool>,
 ) {
     let msg = "You have unsaved changes. Are you sure you want to open a new project?";
-    if continue_operation(model_modified, msg) {
+    if continue_operation(*model_modified.peek(), msg) {
         menu_item_selected.set(Some(MenuSelection::NewProject));
     }
 }
 
-pub fn continue_operation(model_modified: Signal<bool>, msg: &'static str) -> bool {
-    if model_modified() {
+pub fn continue_operation(model_modified: bool, msg: &'static str) -> bool {
+    if model_modified {
         let confirm_quit = rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Warning)
             .set_title("Unsaved Changes")

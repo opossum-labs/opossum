@@ -82,7 +82,8 @@ pub fn App() -> Element {
                 }
                 MenuSelection::OpenProject(path) => {
                     let path = path.to_owned();
-                    node_editor_command.set(Some(NodeEditorCommand::LoadFile(path)));
+                    node_editor_command.set(Some(NodeEditorCommand::LoadFile(path.clone())));
+                    model_file_path.set(Some(path));
                     model_modified.set(false);
                 }
                 MenuSelection::SaveProject(path) => {
@@ -195,7 +196,7 @@ pub fn App() -> Element {
                         }
                     }
                 }
-                GraphEditor { command: node_editor_command }
+                GraphEditor { command: node_editor_command, is_modified: model_modified }
                 div { class: "row footer",
                     div { class: "col", Logger {} }
                 }

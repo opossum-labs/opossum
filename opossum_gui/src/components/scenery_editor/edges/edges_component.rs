@@ -86,11 +86,11 @@ impl EdgeCreation {
     }
 }
 #[component]
-pub fn EdgesComponent() -> Element {
+pub fn EdgesComponent(is_modified: Signal<bool>) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
     rsx! {
         for edge in graph_store().edges()() {
-            EdgeComponent { edge }
+            EdgeComponent { edge, is_modified: is_modified }
         }
     }
 }

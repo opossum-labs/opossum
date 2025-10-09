@@ -210,7 +210,7 @@ pub fn MenuBar(
                     maximize_symbol,
                     on_quit: move || {
                         let msg = "You have unsaved changes. Are you sure you want to quit?";
-                        if continue_operation(model_modified, msg) {
+                        if continue_operation(model_modified(), msg) {
                             menu_item_selected.set(Some(MenuSelection::Quit));
                         }
                     },
