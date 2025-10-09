@@ -55,7 +55,8 @@ pub enum GraphStoreAction {
     UpdateEdges(Vec<ConnectInfo>),
     DeleteEdge(ConnectInfo),
     DeleteNode(Uuid),
-    CopyNode((NodeType, Uuid, Point2D<f64>)),
+    CopyNode((NodeType, Uuid)),
+    PasteNode(Point2D<f64>),
     GetSceneryId,
     DeleteScenery,
     OptimizeLayout,
@@ -398,8 +399,11 @@ pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<Gra
                     GraphStoreAction::DeleteEdge(connect_info) => {
                         process_delete_edge(connect_info, graph_store).await;
                     }
-                    GraphStoreAction::CopyNode((node_type, node_id, pos)) => {
-                        process_copy_node(node_type, node_id, pos, graph_store).await;
+                    GraphStoreAction::CopyNode((node_type, node_id)) => {
+                        process_copy_node(node_type, node_id, graph_store).await;
+                    }
+                    GraphStoreAction::PasteNode(pos) => {
+                        process_paste_node( pos, graph_store).await;
                     }
                     GraphStoreAction::DeleteScenery => {
                         process_delete_scenery(graph_store).await;
@@ -586,26 +590,61 @@ async fn process_delete_edge(connect_info: ConnectInfo, mut graph_store: Signal<
 async fn process_copy_node(
     node_type: NodeType,
     node_id: Uuid,
-    pos: Point2D<f64>,
     mut graph_store: Signal<GraphStore>,
 ) {
     match node_type {
         NodeType::Optical(_) => eval_action_run(
-            api::post_copy_optical_node(node_id, pos).await,
-            Some(move |node_info| {
-                graph_store.write().add_new_optical_node(&node_info);
-            }),
+            api::post_copy_optical_node(node_id).await,
+            None::<fn(String)>,
         ),
-        NodeType::Analyzer(_) => eval_action_run(
-            api::post_copy_analyzer_node(node_id, pos).await,
-            Some(move |analyzer_info: AnalyzerInfo| {
-                let id = analyzer_info.id();
-                graph_store
-                    .write()
-                    .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);
-            }),
-        ),
+        NodeType::Analyzer(_) => todo!()
+        // eval_action_run(
+        //     api::post_copy_analyzer_node(node_id, pos).await,
+        //     Some(move |analyzer_info: AnalyzerInfo| {
+        //         let id = analyzer_info.id();
+        //         graph_store
+        //             .write()
+        //             .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);
+        //     }),
+        // ),
     }
+}
+
+#[allow(clippy::future_not_send)]
+async fn process_paste_node(
+    pos: Point2D<f64>,
+    mut graph_store: Signal<GraphStore>,
+) {
+    let group_id = graph_store.read().scenery_id;
+    eval_action_run(
+            api::post_paste_optical_node(group_id, pos).await,
+            Some(move |node_info_opt| {
+                println!("success pasting!");
+                if let Some(node_info) = node_info_opt{
+                    graph_store.write().add_new_optical_node(&node_info);
+                }
+            }),
+        );
+    // match node_type {
+    //     NodeType::Optical(_) => eval_action_run(
+    //         api::post_paste_optical_node(pos).await,
+    //         Some(move |node_info_opt| {
+    //             if let Some(node_info) = node_info_opt{
+    //                 graph_store.write().add_new_optical_node(&node_info);
+    //             }
+    //         }),
+    //     ),
+    //     NodeType::Analyzer(_) => todo!()
+    //     // eval_action_run(
+    //     //     api::post_copy_analyzer_node(node_id, pos).await,
+    //     //     Some(move |analyzer_info: AnalyzerInfo| {
+    //     //         let id = analyzer_info.id();
+    //     //         graph_store
+    //     //             .write()
+    //     //             .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);
+    //     //     }),
+    //     // ),
+    // }
 }
 
 #[allow(clippy::future_not_send)]

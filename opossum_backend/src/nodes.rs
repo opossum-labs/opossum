@@ -193,6 +193,71 @@ impl NewNode {
         }
     }
 }
+
+/// paste a copied node
+///
+/// This function sends an already copied optical node to the frontend
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
+    ),
+    request_body(content = (Uuid, (f64, f64)),
+        description = "Uuid of the group node to be asted in and the position at which the node should be pasted",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, body= NodeInfo, description = "Node successfully pasted", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/node_paste")]
+async fn post_paste_node(
+    data: web::Data<AppState>,
+    node_paste_info: web::Json<(Uuid, (f64, f64))>,
+) -> Result<Json<Option<NodeInfo>>, ErrorResponse> {
+    let (group_id,node_pos) = node_paste_info.into_inner();
+
+    //get optic ref of node that should be copied
+    let copied_node_opt = data.node_copy_chache.lock();
+
+    let node_info_opt = if let Some(copied_node) = copied_node_opt.as_ref() {
+        let node_to_copy_from = copied_node.optical_ref.lock_opm()?;
+        let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
+        let mut node = new_node_ref.optical_ref.lock_opm()?;
+        let node_attr = node.node_attr_mut();
+        node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
+        drop(node_to_copy_from);
+        drop(node);
+
+        let gui_position = Some(node_pos);
+        let mut document = data.document.lock();
+        let scenery = document.scenery_mut();
+        let new_node_uuid =
+            scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
+        drop(document);
+
+        let node = new_node_ref.optical_ref.lock_opm()?;
+
+        let node_info = NodeInfo {
+            uuid: new_node_uuid,
+            name: node.name(),
+            inverted: node.inverted(),
+            node_type: node.node_type(),
+            input_ports: node.ports().names(&PortType::Input),
+            output_ports: node.ports().names(&PortType::Output),
+            gui_position,
+        };
+        drop(node);
+        Some(node_info)
+    } else {
+        None
+    };
+
+    drop(copied_node_opt);
+    println!("sending node info");
+    Ok(Json(node_info_opt))
+}
+
 /// Copy an existing node
 ///
 /// This function copies an already existing optical node
@@ -200,7 +265,7 @@ impl NewNode {
     params(
         ("uuid" = Uuid, Path, description = "UUID of the optical node"),
     ),
-    request_body(content = (Uuid, (f64, f64)),
+    request_body(content = Uuid,
         description = "Uuid of the node to be copied",
         content_type = "application/json",
     ),
@@ -212,46 +277,51 @@ impl NewNode {
 #[post("/node_copy")]
 async fn post_copy_node(
     data: web::Data<AppState>,
-    node_id: web::Json<(Uuid, (f64, f64))>,
-) -> Result<Json<NodeInfo>, ErrorResponse> {
-    let (node_id_to_copy, node_pos_to_copy) = node_id.into_inner();
+    node_id: web::Json<Uuid>,
+) -> Result<(), ErrorResponse> {
+    let node_id_to_copy = node_id.into_inner();
 
     //get optic ref of nde that should be copied
     let document = data.document.lock();
-    let (node_ref_to_copy, group_id) = document.scenery().node_recursive(node_id_to_copy)?;
+    let (node_ref_to_copy, _) = document.scenery().node_recursive(node_id_to_copy)?;
     drop(document);
 
+    let mut copied_node_opt = data.node_copy_chache.lock();
+    *copied_node_opt = Some(node_ref_to_copy);
+    // println!("copying node with id: {}", copied_node_opt.unwrap().uuid().as_simple());
+    drop(copied_node_opt);
+    Ok(())
     // get node type and node attributes of node that should be copied
-    let node_to_copy = node_ref_to_copy.optical_ref.lock_opm()?;
+    // let node_to_copy = node_ref_to_copy.optical_ref.lock_opm()?;
 
-    // create new node and apply node attributes
-    let new_node_ref = create_node_ref(&node_to_copy.node_type())?;
-    let mut node = new_node_ref.optical_ref.lock_opm()?;
-    let node_attr = node.node_attr_mut();
-    node_attr.replace_from_node_attr(node_to_copy.node_attr());
-    drop(node_to_copy);
-    drop(node);
+    // // create new node and apply node attributes
+    // let new_node_ref = create_node_ref(&node_to_copy.node_type())?;
+    // let mut node = new_node_ref.optical_ref.lock_opm()?;
+    // let node_attr = node.node_attr_mut();
+    // node_attr.replace_from_node_attr(node_to_copy.node_attr());
+    // drop(node_to_copy);
+    // drop(node);
 
-    let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
-    let new_node_uuid =
-        scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
+    // let mut document = data.document.lock();
+    // let scenery = document.scenery_mut();
+    // let new_node_uuid =
+    //     scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
 
-    drop(document);
+    // drop(document);
 
-    let node = new_node_ref.optical_ref.lock_opm()?;
-    let gui_position = Some(node_pos_to_copy);
-    let node_info = NodeInfo {
-        uuid: new_node_uuid,
-        name: node.name(),
-        inverted: node.inverted(),
-        node_type: node.node_type(),
-        input_ports: node.ports().names(&PortType::Input),
-        output_ports: node.ports().names(&PortType::Output),
-        gui_position,
-    };
-    drop(node);
-    Ok(Json(node_info))
+    // let node = new_node_ref.optical_ref.lock_opm()?;
+    // let gui_position = Some(node_pos_to_copy);
+    // let node_info = NodeInfo {
+    //     uuid: new_node_uuid,
+    //     name: node.name(),
+    //     inverted: node.inverted(),
+    //     node_type: node.node_type(),
+    //     input_ports: node.ports().names(&PortType::Input),
+    //     output_ports: node.ports().names(&PortType::Output),
+    //     gui_position,
+    // };
+    // drop(node);
+    // Ok(Json(node_info))
 }
 
 /// Copy an existing node
@@ -1120,6 +1190,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_position);
     cfg.service(post_node_name);
     cfg.service(post_copy_node);
+    cfg.service(post_paste_node);
     cfg.service(post_copy_analyzer);
     cfg.service(post_node_lidt);
     cfg.service(post_node_alignment_isometry);
