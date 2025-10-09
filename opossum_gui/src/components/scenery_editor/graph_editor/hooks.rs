@@ -211,7 +211,7 @@ pub fn use_on_key_down(
     }
 }
 
-pub fn use_drag_end() -> impl FnMut(MouseEvent) {
+pub fn use_drag_end(mut graph_modified: Signal<bool>) -> impl FnMut(MouseEvent) {
     let graph_store = use_context::<Signal<GraphStore>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
@@ -229,6 +229,7 @@ pub fn use_drag_end() -> impl FnMut(MouseEvent) {
                     // Update node GUI position (only if really changed)
                     if pos != old_position {
                         graph_processor.send(GraphStoreAction::SyncNodePosition(uuid, pos));
+                        graph_modified.set(true);
                     }
                 }
             }
@@ -251,6 +252,7 @@ pub fn use_drag_end() -> impl FnMut(MouseEvent) {
                         0.0,
                     );
                     graph_processor.send(GraphStoreAction::AddEdge(new_edge));
+                    graph_modified.set(true);
                 }
             }
             _ => {}

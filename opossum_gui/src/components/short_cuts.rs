@@ -119,7 +119,7 @@ impl ShortCutAction {
             Self::AutoLayout => menu_item_selected.set(Some(MenuSelection::AutoLayout)),
             Self::Save => save_project(model_file_path, menu_item_selected),
             Self::SaveAs => save_project_as(menu_item_selected),
-            Self::Open => open_project(menu_item_selected),
+            Self::Open => open_project(menu_item_selected, model_modified),
             Self::New => new_project(menu_item_selected, model_modified),
             Self::Report => set_report_directory(menu_item_selected),
         }

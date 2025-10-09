@@ -7,7 +7,7 @@ use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{PortType, nodes::ConnectInfo};
 
 #[component]
-pub fn EdgeComponent(edge: ConnectInfo) -> Element {
+pub fn EdgeComponent(edge: ConnectInfo, is_modified: Signal<bool>) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
 
@@ -55,6 +55,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 move |event: Event<KeyboardData>| {
                     if event.data().key() == Key::Delete {
                         graph_processor.send(GraphStoreAction::DeleteEdge(edge.clone()));
+                        is_modified.set(true);
                     }
                     event.stop_propagation();
                 }
@@ -74,7 +75,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 input {
                     style: "text-align: right; flex:1; min-width: 0; height: 100%; font-size: 11pt; border: none; outline: none; padding: 0;",
                     r#type: "number",
-                    r#step: "0.0001",
+                    step: "0.0001",
                     value: format!("{:.4}", edge.distance()),
                     onchange: {
                         move |event: Event<FormData>| {
@@ -82,6 +83,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                                 edge.set_distance(new_distance);
                                 let edge = edge.clone();
                                 graph_processor.send(GraphStoreAction::UpdateEdge(edge));
+                                is_modified.set(true);
                             }
                         }
                     },

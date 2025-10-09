@@ -1,6 +1,4 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use std::{path::PathBuf, rc::Rc, time::Instant};
-
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
@@ -23,6 +21,7 @@ use dioxus::{
     },
     prelude::*,
 };
+use std::{path::PathBuf, rc::Rc, time::Instant};
 
 use opossum_backend::{AnalyzerType, nodes::NewRefNode, scenery::NewAnalyzerInfo};
 use uuid::Uuid;
@@ -105,7 +104,10 @@ pub enum DragStatus {
 }
 
 #[component]
-pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
+pub fn GraphEditor(
+    mut command: Signal<Option<NodeEditorCommand>>,
+    is_modified: Signal<bool>,
+) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let copied_node = use_signal(|| None::<(NodeType, Uuid)>);
 
@@ -129,8 +131,8 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
     let onwheel_handler = use_zoom(on_mounted);
     let onmousedown_handler = use_on_mouse_down(current_mouse_pos, last_auxiliary_click);
     let onmousemove_handler = use_drag(current_mouse_pos);
-    let onmouseup_handler = use_drag_end();
-    let onmouseleave_handler = use_drag_end();
+    let onmouseup_handler = use_drag_end(is_modified);
+    let onmouseleave_handler = use_drag_end(is_modified);
     let onkeydownhandler = use_on_key_down(current_mouse_pos, copied_node);
     let onresizehandler = use_on_resize(on_mounted);
 
@@ -145,21 +147,26 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
         if let Some(command) = command.read().as_ref() {
             match command {
                 NodeEditorCommand::DeleteAll => {
+                    is_modified.set(true);
                     graph_processor.send(GraphStoreAction::DeleteScenery);
                     graph_processor.send(GraphStoreAction::GetSceneryId);
                 }
                 NodeEditorCommand::AddNode(node_type) => {
+                    is_modified.set(true);
                     graph_processor.send(GraphStoreAction::AddOpticNode(node_type.clone()));
                 }
                 NodeEditorCommand::AddNodeRef(new_ref_node) => {
+                    is_modified.set(true);
                     graph_processor.send(GraphStoreAction::AddOpticReference(*new_ref_node));
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
+                    is_modified.set(true);
                     let new_analyzer_info =
                         NewAnalyzerInfo::new(analyzer_type.clone(), (100.0, 100.0));
                     graph_processor.send(GraphStoreAction::AddAnalyzer(new_analyzer_info));
                 }
                 NodeEditorCommand::AutoLayout => {
+                    is_modified.set(true);
                     graph_processor.send(GraphStoreAction::OptimizeLayout);
                     graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: true });
                 }
@@ -208,7 +215,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                             shift().y,
                             zoom(),
                         ),
-                        Nodes {}
+                        Nodes { is_modified: is_modified }
                         svg {
                             width: "100%",
                             height: "100%",
@@ -216,7 +223,7 @@ pub fn GraphEditor(mut command: Signal<Option<NodeEditorCommand>>) -> Element {
                             tabindex: 0,
                             {
                                 rsx! {
-                                    EdgesComponent {}
+                                    EdgesComponent { is_modified: is_modified }
                                     EdgeCreationComponent {}
                                 }
                             }

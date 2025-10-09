@@ -81,12 +81,10 @@ fn eval_report_directory_input(report_path: &str) -> Option<PathBuf> {
         Some(PathBuf::from(report_path))
     } else if report_path.is_empty() {
         Some(PathBuf::from(""))
+    } else if create_dir(report_path).is_ok() {
+        Some(PathBuf::from(report_path))
     } else {
-        if create_dir(&report_path).is_ok() {
-            Some(PathBuf::from(report_path))
-        } else {
-            None
-        }
+        None
     }
 }
 /// Creates the prompt string that is displayed in the console, depending on the flag and if the passed input for the respective flag is valid
@@ -474,7 +472,8 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         )
         .unwrap();
         let report_path_str3 = report_path3.to_str().unwrap();
-        assert_eq!(report_path_str3, "./files_for_testing/");
+        assert_eq!(report_path_str3, "./files_for_not_testing/");
+        std::fs::remove_dir("./files_for_not_testing/").unwrap();
     }
 
     #[test]
