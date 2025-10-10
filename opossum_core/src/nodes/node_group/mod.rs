@@ -322,7 +322,7 @@ impl NodeGroup {
     ///
     /// # Errors
     /// This function returns an [`OpossumError::OpticScenery`] if
-    ///   - the group is set as `inverted`. Connectiing subnodes of an inverted group node would result in strange behaviour.
+    ///   - the group is set as `inverted`. Connecting subnodes of an inverted group node would result in strange behaviour.
     ///   - the source node / port or target node / port does not exist.
     ///   - the source node / port or target node / port is already connected.
     ///   - the node connection would form a loop in the graph.

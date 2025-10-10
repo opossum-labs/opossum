@@ -50,6 +50,11 @@ impl Gaussian {
                 "range end must be positive and finite".into(),
             ));
         }
+        if wvl_range.1 <= wvl_range.0 {
+            return Err(OpossumError::Other(
+                "range end must be >= range start".into(),
+            ));
+        }
         if !mu.is_normal() || mu.is_sign_negative() {
             return Err(OpossumError::Other(
                 "mean value must be positive and finite!".into(),
@@ -299,6 +304,27 @@ mod test {
                 .is_err()
             );
         }
+        // invalid wavelength range
+        assert!(
+            Gaussian::new(
+                (nanometer!(500.0), nanometer!(500.0)),
+                500,
+                nanometer!(750.0),
+                nanometer!(10.0),
+                1.0
+            )
+            .is_err()
+        );
+        assert!(
+            Gaussian::new(
+                (nanometer!(1000.0), nanometer!(999.0)),
+                10,
+                nanometer!(1500.0),
+                nanometer!(100.0),
+                1.0
+            )
+            .is_err()
+        );
     }
     #[test]
     fn generate() {
