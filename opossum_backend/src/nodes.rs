@@ -1,4 +1,4 @@
-use crate::{app_state::AppState, error::ErrorResponse, utils::update_node_attr};
+use crate::{app_state::{AppState, NodeCacheItem}, error::ErrorResponse, general::NodeType, utils::update_node_attr};
 use actix_web::{
     HttpResponse, Responder, delete, get,
     guard::GuardContext,
@@ -217,7 +217,7 @@ async fn post_paste_node(
     //get optic ref of node that should be copied
     let copied_node_opt = data.node_copy_cache.lock();
 
-    let node_info_opt = if let Some(copied_node) = copied_node_opt.as_ref() {
+    let node_info_opt = if let Some(NodeCacheItem::Optical(copied_node)) = copied_node_opt.as_ref() {
         let node_to_copy_from = copied_node.optical_ref.lock_opm()?;
         let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
         let mut node = new_node_ref.optical_ref.lock_opm()?;
@@ -280,7 +280,7 @@ async fn post_copy_node(
     drop(document);
 
     let mut copied_node_opt = data.node_copy_cache.lock();
-    *copied_node_opt = Some(node_ref_to_copy);
+    *copied_node_opt = Some(NodeCacheItem::Optical(node_ref_to_copy));
     drop(copied_node_opt);
     Ok(())
 }
@@ -308,11 +308,10 @@ async fn post_copy_analyzer(
     if let Some(analyzer) = document.analyzers().get(&analyzer_id_to_copy).cloned(){
         drop(document);
     
-        let mut analyzer_cache = data.analyzer_copy_cache.lock();
-        *analyzer_cache = Some(analyzer);
-        drop(analyzer_cache);
+        let mut node_cache = data.node_copy_cache.lock();
+        *node_cache = Some(NodeCacheItem::Analyzer(analyzer));
+        drop(node_cache);
         Ok(())
-
     }
     else {
         Err(ErrorResponse::new(
@@ -342,14 +341,15 @@ async fn post_paste_analyzer(
     analyzer_pos: web::Json<(f64,f64)>,
 ) -> Result<Json<AnalyzerInfo>, ErrorResponse> {
     let analyzer_pos = analyzer_pos.into_inner();
-    let analyzer_cache = data.analyzer_copy_cache.lock().clone();
+    let analyzer_cache = data.node_copy_cache.lock();
 
-    if let Some(analyzer) = analyzer_cache {
+    if let Some(NodeCacheItem::Analyzer(analyzer)) = analyzer_cache.as_ref() {
         let new_analyzer = AnalyzerInfo::new(
             analyzer.analyzer_type().clone(),
             Uuid::new_v4(),
             Point2::new(analyzer_pos.0, analyzer_pos.1),
         );
+        drop(analyzer_cache);
         let mut document = data.document.lock();
         document.add_analyzer_info(&new_analyzer);
         drop(document);
@@ -358,8 +358,36 @@ async fn post_paste_analyzer(
         Err(ErrorResponse::new(
             404,
             "Opossum",
-            "No analyzer store in copy-cache",
+            "No analyzer stored in copy-cache",
         ))
+    }
+}
+
+/// Get the type of node that has been copied
+///
+/// This function sends the node-type information of the copy_node_cache to the frontend
+#[utoipa::path(tag = "node",
+    responses(
+        (status = OK, body= NodeInfo, description = "Node type successfully sent", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "No node stored in copy cache", content_type="application/json")
+    )
+)]
+#[get("/copied_node_type")]
+async fn get_copied_node_type(
+    data: web::Data<AppState>,
+) -> Result<Json<bool>, ErrorResponse> {
+    let node_cache = data.node_copy_cache.lock();
+
+    match node_cache.as_ref(){
+        Some(NodeCacheItem::Analyzer(_)) => Ok(Json(false)),
+        Some(NodeCacheItem::Optical(_)) => Ok(Json(true)),
+        None  => {
+            Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "No node stored in copy-cache",
+        ))
+        }       
     }
 }
 
@@ -1190,6 +1218,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_paste_node);
     cfg.service(post_copy_analyzer);
     cfg.service(post_paste_analyzer);
+    cfg.service(get_copied_node_type);
     cfg.service(post_node_lidt);
     cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);

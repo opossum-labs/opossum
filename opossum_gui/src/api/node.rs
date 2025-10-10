@@ -1,7 +1,6 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_backend::{
-    AnalyzerInfo, AnalyzerType, Fluence, Isometry, NodeAttr, Proptype,
-    nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
+    app_state::NodeCacheItem, nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo}, AnalyzerInfo, AnalyzerType, Fluence, Isometry, NodeAttr, Proptype
 };
 use uuid::Uuid;
 
@@ -50,7 +49,12 @@ pub async fn post_add_node(new_node_info: NewNode, group_id: Uuid) -> Result<Nod
         )
         .await
 }
-
+// true: optical node, false, analyzer node
+pub async fn get_copied_node_type() -> Result<bool, String>{
+    HTTP_API_CLIENT()
+        .get::<bool>("/api/scenery/copied_node_type")
+        .await
+}
 /// Send a request to copy a optical node of the scenery.
 ///
 /// # Errors
@@ -70,22 +74,40 @@ pub async fn post_paste_optical_node(group_id: Uuid, pos: Point2D<f64>) -> Resul
         .post::<(Uuid,(f64, f64)), Option<NodeInfo>>("/api/scenery/node_paste", (group_id,(pos.x, pos.y)))
         .await
 }
-/// Send a request to copy an aalyzer node of the scenery.
+/// Send a request to copy an analyzer node of the scenery.
 ///
 /// # Errors
 ///
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized
-/// - the request fails (e.g. the node ide does not exist)
-/// - the response cannot be deserialized into the [`NodeInfo`] struct
+/// - the request fails (e.g. the node id does not exist)
+/// - the response cannot be deserialized into the [`AnalyzerInfo`] struct
 pub async fn post_copy_analyzer_node(
     analyzer_id: Uuid,
+) -> Result<String, String> {
+    HTTP_API_CLIENT()
+        .post::<Uuid, String>(
+            "/api/scenery/analyzer_copy",
+            analyzer_id,
+        )
+        .await
+}
+
+/// Send a request to paste an analyzer node of the scenery.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the provided [`Uuid`] cannot be serialized
+/// - the request fails (e.g. the node id does not exist)
+/// - the response cannot be deserialized into the [`AnalyzerInfo`] struct
+pub async fn post_paste_analyzer_node(
     pos: Point2D<f64>,
 ) -> Result<AnalyzerInfo, String> {
     HTTP_API_CLIENT()
-        .post::<(Uuid, (f64, f64)), AnalyzerInfo>(
-            "/api/scenery/analyzer_copy",
-            (analyzer_id, (pos.x, pos.y)),
+        .post::<(f64, f64), AnalyzerInfo>(
+            "/api/scenery/analyzer_paste",
+            (pos.x, pos.y),
         )
         .await
 }

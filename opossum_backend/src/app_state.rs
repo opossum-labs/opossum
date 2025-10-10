@@ -1,13 +1,14 @@
 use actix_web::dev::ServerHandle;
 use opossum_core::{opm_document::{AnalyzerInfo, OpmDocument}, OpticRef};
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
+
 
 #[derive(Default)]
 pub struct AppState {
     pub document: Mutex<OpmDocument>,
     pub server_handle: Mutex<Option<ServerHandle>>,
-    pub node_copy_cache: Mutex<Option<OpticRef>>,
-    pub analyzer_copy_cache: Mutex<Option<AnalyzerInfo>>,
+    pub node_copy_cache: Mutex<Option<NodeCacheItem>>,
 }
 impl AppState {
     /// Sets the server handle to stop.
@@ -20,8 +21,13 @@ impl Clone for AppState {
         Self {
             document: Mutex::new(self.document.lock().clone()),
             server_handle: Mutex::new(self.server_handle.lock().clone()),
-            node_copy_cache: Mutex::new(None::<OpticRef>),
-            analyzer_copy_cache: Mutex::new(None::<AnalyzerInfo>),
+            node_copy_cache: Mutex::new(None::<NodeCacheItem>),
         }
     }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum NodeCacheItem{
+    Optical(OpticRef),
+    Analyzer(AnalyzerInfo)
 }
