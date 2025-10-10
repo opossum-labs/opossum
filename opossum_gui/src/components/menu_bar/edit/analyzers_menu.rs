@@ -33,7 +33,7 @@ pub fn AnalyzersMenu(on_analyzer_selected: EventHandler<AnalyzerType>) -> Elemen
                             class: "dropdown-item",
                             role: "button",
                             onclick: move |_| on_analyzer_selected.call(analyzer_type.clone()),
-                            {analyzer_name.clone()}
+                            {analyzer_name}
                         }
                     }
                 }

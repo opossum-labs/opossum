@@ -105,13 +105,13 @@ pub fn MenuBar(
                                             menu_item_selected.set(Some(MenuSelection::AddNode(node_name)));
                                             spawn(async {
                                                 let _ = eval(
-                                                        r#"
+                                                        r"
                                                             const el = document.getElementById('navbarDropdownEditMenuLink');
                                                             if (el) {
                                                                 const instance = mdb.Dropdown.getInstance(el);
                                                                 if (instance) instance.hide();
                                                             }
-                                                        "#,
+                                                        ",
                                                     )
                                                     .await;
                                             });
@@ -132,13 +132,13 @@ pub fn MenuBar(
                                             menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_type)));
                                             spawn(async {
                                                 let _ = eval(
-                                                        r#"
+                                                        r"
                                                             const el = document.getElementById('navbarDropdownEditMenuLink');
                                                             if (el) {
                                                                 const instance = mdb.Dropdown.getInstance(el);
                                                                 if (instance) instance.hide();
                                                             }
-                                                        "#,
+                                                        ",
                                                     )
                                                     .await;
                                             });

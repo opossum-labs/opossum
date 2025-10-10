@@ -355,7 +355,10 @@ impl UuidRegistry {
         self.backward.get(&id).copied()
     }
 }
-pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<GraphStoreAction> {
+pub fn use_graph_processor(
+    mut graph_state: Signal<GraphState>,
+    is_modified: Signal<bool>,
+) -> Coroutine<GraphStoreAction> {
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         let mut graph_store = graph_state.write().graph_store;
         let mut editor_state = graph_state.write().editor_state;
@@ -403,7 +406,7 @@ pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<Gra
                         process_copy_node(node_type, node_id).await;
                     }
                     GraphStoreAction::PasteNode(pos) => {
-                        process_paste_node( pos, graph_store).await;
+                        process_paste_node(pos, graph_store, is_modified).await;
                     }
                     GraphStoreAction::DeleteScenery => {
                         process_delete_scenery(graph_store).await;
@@ -587,10 +590,7 @@ async fn process_delete_edge(connect_info: ConnectInfo, mut graph_store: Signal<
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_copy_node(
-    node_type: NodeType,
-    node_id: Uuid,
-) {
+async fn process_copy_node(node_type: NodeType, node_id: Uuid) {
     match node_type {
         NodeType::Optical(_) => eval_action_run(
             api::post_copy_optical_node(node_id).await,
@@ -599,16 +599,7 @@ async fn process_copy_node(
         NodeType::Analyzer(_) => eval_action_run(
             api::post_copy_analyzer_node(node_id).await,
             None::<fn(String)>,
-        )
-        // eval_action_run(
-        //     api::post_copy_analyzer_node(node_id, pos).await,
-        //     Some(move |analyzer_info: AnalyzerInfo| {
-        //         let id = analyzer_info.id();
-        //         graph_store
-        //             .write()
-        //             .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);
-        //     }),
-        // ),
+        ),
     }
 }
 
@@ -616,100 +607,38 @@ async fn process_copy_node(
 async fn process_paste_node(
     pos: Point2D<f64>,
     mut graph_store: Signal<GraphStore>,
+    mut is_modified: Signal<bool>,
 ) {
     let group_id = graph_store.read().scenery_id;
-    match api::get_copied_node_type().await{
+    match api::get_copied_node_type().await {
         Ok(node_type) => {
-            if node_type{
-                    eval_action_run(
+            if node_type {
+                eval_action_run(
                     api::post_paste_optical_node(group_id, pos).await,
                     Some(move |node_info_opt| {
-                        if let Some(node_info) = node_info_opt{
+                        if let Some(node_info) = node_info_opt {
                             graph_store.write().add_new_optical_node(&node_info);
+                            is_modified.set(true);
                         }
                     }),
                 );
-                }
-                else{
-                    eval_action_run(
+            } else {
+                eval_action_run(
                     api::post_paste_analyzer_node(pos).await,
                     Some(move |analyzer_info: AnalyzerInfo| {
                         let id = analyzer_info.id();
                         graph_store
                             .write()
-                            .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);                       
-                        
+                            .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);
+                        is_modified.set(true);
                     }),
                 );
-                }
-        },
+            }
+        }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
+        }
     }
-}
-    // }
-    // elseErr(err_str) => {
-    //         OPOSSUM_UI_LOGS.write().add_log(&err_str);
-    // }
-    // eval_action_run(
-    //         api::get_copied_node_type().await,
-    //         Some(move |node_type| {
-    //             let graph_store = graph_store.clone();
-    //             async move {
-    //             if node_type{
-    //                 eval_action_run(
-    //                 api::post_paste_optical_node(group_id, pos).await,
-    //                 Some(move |node_info_opt| {
-    //                     if let Some(node_info) = node_info_opt{
-    //                         graph_store.write().add_new_optical_node(&node_info);
-    //                     }
-    //                 }),
-    //             );
-    //             }
-    //             else{
-    //                 eval_action_run(
-    //                 api::post_paste_analyzer_node(pos).await,
-    //                 Some(move |analyzer_info: AnalyzerInfo| {
-    //                     let id = analyzer_info.id();
-    //                     graph_store
-    //                         .write()
-    //                         .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);                       
-                        
-    //                 }),
-    //             );
-    //             }
-    //         };}),
-    //     );
-    // let group_id = graph_store.read().scenery_id;
-    // eval_action_run(
-    //         api::post_paste_optical_node(group_id, pos).await,
-    //         Some(move |node_info_opt| {
-    //             println!("success pasting!");
-    //             if let Some(node_info) = node_info_opt{
-    //                 graph_store.write().add_new_optical_node(&node_info);
-    //             }
-    //         }),
-    //     );
-    // match node_type {
-    //     NodeType::Optical(_) => eval_action_run(
-    //         api::post_paste_optical_node(pos).await,
-    //         Some(move |node_info_opt| {
-    //             if let Some(node_info) = node_info_opt{
-    //                 graph_store.write().add_new_optical_node(&node_info);
-    //             }
-    //         }),
-    //     ),
-    //     NodeType::Analyzer(_) => todo!()
-    //     // eval_action_run(
-    //     //     api::post_copy_analyzer_node(node_id, pos).await,
-    //     //     Some(move |analyzer_info: AnalyzerInfo| {
-    //     //         let id = analyzer_info.id();
-    //     //         graph_store
-    //     //             .write()
-    //     //             .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);
-    //     //     }),
-    //     // ),
-    // }
 }
 
 #[allow(clippy::future_not_send)]

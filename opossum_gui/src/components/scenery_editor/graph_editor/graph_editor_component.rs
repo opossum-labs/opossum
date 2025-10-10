@@ -109,10 +109,10 @@ pub fn GraphEditor(
     is_modified: Signal<bool>,
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
-    let copied_node = use_signal(|| None::<(NodeType, Uuid)>);
 
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
-    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(graph_state);
+    let graph_processor: Coroutine<GraphStoreAction> =
+        use_graph_processor(graph_state, is_modified);
 
     let active_node_opt = use_memo(move || {
         graph_state
@@ -133,7 +133,7 @@ pub fn GraphEditor(
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end(is_modified);
     let onmouseleave_handler = use_drag_end(is_modified);
-    let onkeydownhandler = use_on_key_down(current_mouse_pos, copied_node);
+    let onkeydownhandler = use_on_key_down(current_mouse_pos);
     let onresizehandler = use_on_resize(on_mounted);
 
     let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
@@ -188,7 +188,7 @@ pub fn GraphEditor(
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { active_node_opt }
+                NodeConfigEditor { active_node_opt, is_modified }
             }
             div {
                 class: "col px-0 graph-editor-container",
