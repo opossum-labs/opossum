@@ -15,8 +15,10 @@ use uuid::Uuid;
 
 #[component]
 pub fn OpticalNodeEditor(node_id: Uuid, node_properties_sig: Signal<Properties>) -> Element {
+    let node_id_memo = use_memo(use_reactive!(|node_id| node_id));
+    
     let resource_future = use_resource(move || async move {
-        match api::get_node_properties(node_id).await {
+        match api::get_node_properties(node_id_memo()).await {
             Ok(node_attr) => {
                 node_properties_sig.set(node_attr.properties().clone());
                 Some(node_attr)
