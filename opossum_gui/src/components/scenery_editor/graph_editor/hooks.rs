@@ -152,10 +152,7 @@ pub fn use_on_resize(on_mounted: Signal<Option<Rc<MountedData>>>) -> impl FnMut(
     }
 }
 
-pub fn use_on_key_down(
-    mouse_pos: Signal<Point2D<f64>>,
-    mut copied_node: Signal<Option<(NodeType, Uuid)>>,
-) -> impl FnMut(KeyboardEvent) {
+pub fn use_on_key_down(mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(KeyboardEvent) {
     let graph_store = use_context::<Signal<GraphStore>>();
     let editor_status = use_context::<Signal<EditorState>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
@@ -169,12 +166,14 @@ pub fn use_on_key_down(
                 && event.data().key() == Key::Character("c".to_string())
                 && let Some(node) = graph_store.read().get_active_node()
             {
-                copied_node.set(Some((node.node_type().clone(), node.id())));
+                graph_processor.send(GraphStoreAction::CopyNode((
+                    node.node_type().clone(),
+                    node.id(),
+                )));
                 event.stop_propagation();
             } else if ctrl_or_meta
                 && !modifiers.shift()
                 && event.data().key() == Key::Character("v".to_string())
-                && let Some((node_type, node_id)) = &*copied_node.read()
             {
                 let rect = *editor_status().rect.read();
                 let mouse = *mouse_pos.read();
@@ -189,24 +188,10 @@ pub fn use_on_key_down(
                         (mouse.x - shift.x - rect.min_x()) / zoom,
                         (mouse.y - shift.y - rect.min_y()) / zoom,
                     );
-                    graph_processor.send(GraphStoreAction::CopyNode((
-                        node_type.clone(),
-                        *node_id,
-                        pos,
-                    )));
+                    graph_processor.send(GraphStoreAction::PasteNode(pos));
                 }
                 event.stop_propagation();
             }
-            // if ctrl_or_meta && modifiers.shift()
-            //     && (event.data().key() == Key::Character("C".to_string()) || event.data().key() == Key::Character("c".to_string()))
-            // {
-            //     graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: false });
-            // }
-            // if ctrl_or_meta && modifiers.shift()
-            //     && (event.data().key() == Key::Character("F".to_string()) || event.data().key() == Key::Character("f".to_string()))
-            // {
-            //     graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: true });
-            // }
         }
     }
 }
