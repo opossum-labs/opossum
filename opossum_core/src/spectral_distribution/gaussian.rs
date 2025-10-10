@@ -1,3 +1,4 @@
+use num::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
@@ -53,6 +54,11 @@ impl Gaussian {
         if wvl_range.1 <= wvl_range.0 {
             return Err(OpossumError::Other(
                 "range end must be >= range start".into(),
+            ));
+        }
+        if num_points.is_zero() {
+            return Err(OpossumError::Other(
+                "number of points must be !=0".into(),
             ));
         }
         if !mu.is_normal() || mu.is_sign_negative() {
@@ -319,6 +325,16 @@ mod test {
             Gaussian::new(
                 (nanometer!(1000.0), nanometer!(999.0)),
                 10,
+                nanometer!(1500.0),
+                nanometer!(100.0),
+                1.0
+            )
+            .is_err()
+        );
+        assert!(
+            Gaussian::new(
+                (nanometer!(1000.0), nanometer!(2000.0)),
+                0,
                 nanometer!(1500.0),
                 nanometer!(100.0),
                 1.0

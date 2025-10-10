@@ -18,7 +18,7 @@ use crate::{
     millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
-    properties::Proptype,
+    properties::{Proptype, validator::Validator},
     ray::Ray,
     rays::Rays,
     utils::geom_transformation::Isometry,
@@ -57,9 +57,10 @@ impl Default for Source {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("source");
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 "light data",
                 "data of the emitted light",
+                Validator::LightDataBuilderValidator,
                 LightDataBuilder::default().into(),
             )
             .unwrap();

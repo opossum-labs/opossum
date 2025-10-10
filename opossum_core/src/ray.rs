@@ -86,13 +86,11 @@ impl Ray {
         if direction.norm().is_zero() {
             return Err(OpossumError::Other("length of direction must be >0".into()));
         }
-        // let pos_hist = vec![position];
         Ok(Self {
             pos: position,
             pos_hist: Vec::<Point3<Length>>::new(),
             dir: direction.normalize(),
             prev_dir: None,
-            //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
             e: energy,
             wvl: wave_length,
             path_length: Length::zero(),

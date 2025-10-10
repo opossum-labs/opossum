@@ -48,7 +48,6 @@ impl LightDataBuilder {
             // Self::Fourier => Ok(LightData::Fourier),
         }
     }
-
     /// Get the position distribution type, if applicable.
     ///
     /// Returns the [`PosDistType`] used in the ray-based (geometric) light source,
