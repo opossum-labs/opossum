@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use opossum_backend::AnalyzerType;
 
 #[component]
-pub fn AnalyzersMenu(analyzer_selected: Signal<Option<AnalyzerType>>) -> Element {
+pub fn AnalyzersMenu(on_analyzer_selected: EventHandler<AnalyzerType>) -> Element {
     let future = use_resource({
         move || async move {
             match api::get_analyzer_types().await {
@@ -25,15 +25,15 @@ pub fn AnalyzersMenu(analyzer_selected: Signal<Option<AnalyzerType>>) -> Element
         _ => vec![],
     };
     rsx! {
-        for element in analyzer_list.into_iter() {
+        for (analyzer_type , analyzer_name) in analyzer_list.into_iter() {
             {
                 rsx! {
                     li {
                         a {
                             class: "dropdown-item",
                             role: "button",
-                            onclick: move |_| analyzer_selected.set(Some(element.clone().0)),
-                            {element.clone().1}
+                            onclick: move |_| on_analyzer_selected.call(analyzer_type.clone()),
+                            {analyzer_name.clone()}
                         }
                     }
                 }

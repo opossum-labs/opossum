@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use dioxus::{desktop::use_window, prelude::*};
+use dioxus::{desktop::use_window, document::eval, prelude::*};
 use dioxus_free_icons::{
     Icon,
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize},
@@ -42,15 +42,9 @@ pub fn MenuBar(
     model_modified: ReadOnlySignal<bool>,
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
-    let analyzer_selected = use_signal(|| None::<AnalyzerType>);
     let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| {
         rsx! {
             Icon { width: 25, icon: FaWindowMaximize }
-        }
-    });
-    use_effect(move || {
-        if let Some(analyzer) = analyzer_selected() {
-            menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer)));
         }
     });
     rsx! {
@@ -91,6 +85,7 @@ pub fn MenuBar(
                         a {
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
+                            "data-mdb-auto-close": "outside",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
                             id: "navbarDropdownEditMenuLink",
                             role: "button",
@@ -105,7 +100,23 @@ pub fn MenuBar(
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
                                 ul { class: "dropdown-menu dropdown-submenu custom-scroll",
-                                    NodesMenu { on_node_selected: move |node_name| { menu_item_selected.set(Some(MenuSelection::AddNode(node_name))) } }
+                                    NodesMenu {
+                                        on_node_selected: move |node_name| {
+                                            menu_item_selected.set(Some(MenuSelection::AddNode(node_name)));
+                                            spawn(async {
+                                                let _ = eval(
+                                                        r#"
+                                                            const el = document.getElementById('navbarDropdownEditMenuLink');
+                                                            if (el) {
+                                                                const instance = mdb.Dropdown.getInstance(el);
+                                                                if (instance) instance.hide();
+                                                            }
+                                                        "#,
+                                                    )
+                                                    .await;
+                                            });
+                                        },
+                                    }
                                 }
                             }
                             li {
@@ -116,7 +127,23 @@ pub fn MenuBar(
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
                                 ul { class: "dropdown-menu dropdown-submenu custom-scroll",
-                                    AnalyzersMenu { analyzer_selected }
+                                    AnalyzersMenu {
+                                        on_analyzer_selected: move |analyzer_type| {
+                                            menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_type)));
+                                            spawn(async {
+                                                let _ = eval(
+                                                        r#"
+                                                            const el = document.getElementById('navbarDropdownEditMenuLink');
+                                                            if (el) {
+                                                                const instance = mdb.Dropdown.getInstance(el);
+                                                                if (instance) instance.hide();
+                                                            }
+                                                        "#,
+                                                    )
+                                                    .await;
+                                            });
+                                        },
+                                    }
                                 }
                             }
                         }
