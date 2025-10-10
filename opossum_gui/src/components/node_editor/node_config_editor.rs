@@ -23,7 +23,7 @@ pub enum NodeChangeAction {
 #[component]
 pub fn NodeConfigEditor(active_node_opt: Memo<Option<(NodeType, Uuid)>>) -> Element {
     let node_properties_sig = use_signal(Properties::default);
-    println!("rerender NodeConfigEditor");
+
     use_context_provider(|| node_properties_sig);
     use_node_config_processor(node_properties_sig);
 
