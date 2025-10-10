@@ -194,15 +194,12 @@ impl NewNode {
     }
 }
 
-/// paste a copied node
+/// Paste a copied node
 ///
 /// This function sends an already copied optical node to the frontend
 #[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
-    ),
     request_body(content = (Uuid, (f64, f64)),
-        description = "Uuid of the group node to be asted in and the position at which the node should be pasted",
+        description = "Uuid of the group node to be pasted in and the position at which the node should be pasted",
         content_type = "application/json",
     ),
     responses(
@@ -254,7 +251,6 @@ async fn post_paste_node(
     };
 
     drop(copied_node_opt);
-    println!("sending node info");
     Ok(Json(node_info_opt))
 }
 
@@ -262,9 +258,6 @@ async fn post_paste_node(
 ///
 /// This function copies an already existing optical node
 #[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
-    ),
     request_body(content = Uuid,
         description = "Uuid of the node to be copied",
         content_type = "application/json",
@@ -288,51 +281,16 @@ async fn post_copy_node(
 
     let mut copied_node_opt = data.node_copy_cache.lock();
     *copied_node_opt = Some(node_ref_to_copy);
-    // println!("copying node with id: {}", copied_node_opt.unwrap().uuid().as_simple());
     drop(copied_node_opt);
     Ok(())
-    // get node type and node attributes of node that should be copied
-    // let node_to_copy = node_ref_to_copy.optical_ref.lock_opm()?;
-
-    // // create new node and apply node attributes
-    // let new_node_ref = create_node_ref(&node_to_copy.node_type())?;
-    // let mut node = new_node_ref.optical_ref.lock_opm()?;
-    // let node_attr = node.node_attr_mut();
-    // node_attr.replace_from_node_attr(node_to_copy.node_attr());
-    // drop(node_to_copy);
-    // drop(node);
-
-    // let mut document = data.document.lock();
-    // let scenery = document.scenery_mut();
-    // let new_node_uuid =
-    //     scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
-
-    // drop(document);
-
-    // let node = new_node_ref.optical_ref.lock_opm()?;
-    // let gui_position = Some(node_pos_to_copy);
-    // let node_info = NodeInfo {
-    //     uuid: new_node_uuid,
-    //     name: node.name(),
-    //     inverted: node.inverted(),
-    //     node_type: node.node_type(),
-    //     input_ports: node.ports().names(&PortType::Input),
-    //     output_ports: node.ports().names(&PortType::Output),
-    //     gui_position,
-    // };
-    // drop(node);
-    // Ok(Json(node_info))
 }
 
-/// Copy an existing node
+/// Copy an existing analyzer node
 ///
-/// This function copies an already existing optical node
+/// This function copies an already existing analyzer node
 #[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
-    ),
-    request_body(content = (Uuid, (f64, f64)),
-        description = "Uuid of the node to be copied",
+    request_body(content = Uuid,
+        description = "Uuid of the analyzer node to be copied",
         content_type = "application/json",
     ),
     responses(
@@ -343,25 +301,64 @@ async fn post_copy_node(
 #[post("/analyzer_copy")]
 async fn post_copy_analyzer(
     data: web::Data<AppState>,
-    analyzer_id: web::Json<(Uuid, (f64, f64))>,
+    analyzer_id: web::Json<Uuid>,
+) -> Result<(), ErrorResponse> {
+    let analyzer_id_to_copy = analyzer_id.into_inner();
+    let document = data.document.lock();
+    if let Some(analyzer) = document.analyzers().get(&analyzer_id_to_copy).cloned(){
+        drop(document);
+    
+        let mut analyzer_cache = data.analyzer_copy_cache.lock();
+        *analyzer_cache = Some(analyzer);
+        drop(analyzer_cache);
+        Ok(())
+
+    }
+    else {
+        Err(ErrorResponse::new(
+            404,
+            "Opossum",
+            "Analyzer to be copied was not found in document",
+        ))
+    }
+}
+
+/// Pastes the analyzer node of the cache
+///
+/// This function sends the copied analyzer node to the frontend
+#[utoipa::path(tag = "node",
+    request_body(content = (f64, f64),
+        description = "Position of the node to be placed in the GUI",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/analyzer_paste")]
+async fn post_paste_analyzer(
+    data: web::Data<AppState>,
+    analyzer_pos: web::Json<(f64,f64)>,
 ) -> Result<Json<AnalyzerInfo>, ErrorResponse> {
-    let (analyzer_id_to_copy, pos_to_copy) = analyzer_id.into_inner();
-    let mut document = data.document.lock();
-    if let Some(analyzer) = document.analyzers().get(&analyzer_id_to_copy) {
+    let analyzer_pos = analyzer_pos.into_inner();
+    let analyzer_cache = data.analyzer_copy_cache.lock().clone();
+
+    if let Some(analyzer) = analyzer_cache {
         let new_analyzer = AnalyzerInfo::new(
             analyzer.analyzer_type().clone(),
             Uuid::new_v4(),
-            Point2::new(pos_to_copy.0, pos_to_copy.1),
+            Point2::new(analyzer_pos.0, analyzer_pos.1),
         );
+        let mut document = data.document.lock();
         document.add_analyzer_info(&new_analyzer);
         drop(document);
         Ok(Json(new_analyzer))
     } else {
-        drop(document);
         Err(ErrorResponse::new(
             404,
             "Opossum",
-            "uuid not found in analyzers",
+            "No analyzer store in copy-cache",
         ))
     }
 }
@@ -1192,6 +1189,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_copy_node);
     cfg.service(post_paste_node);
     cfg.service(post_copy_analyzer);
+    cfg.service(post_paste_analyzer);
     cfg.service(post_node_lidt);
     cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);
