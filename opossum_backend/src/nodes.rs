@@ -218,7 +218,7 @@ async fn post_paste_node(
     let (group_id,node_pos) = node_paste_info.into_inner();
 
     //get optic ref of node that should be copied
-    let copied_node_opt = data.node_copy_chache.lock();
+    let copied_node_opt = data.node_copy_cache.lock();
 
     let node_info_opt = if let Some(copied_node) = copied_node_opt.as_ref() {
         let node_to_copy_from = copied_node.optical_ref.lock_opm()?;
@@ -286,7 +286,7 @@ async fn post_copy_node(
     let (node_ref_to_copy, _) = document.scenery().node_recursive(node_id_to_copy)?;
     drop(document);
 
-    let mut copied_node_opt = data.node_copy_chache.lock();
+    let mut copied_node_opt = data.node_copy_cache.lock();
     *copied_node_opt = Some(node_ref_to_copy);
     // println!("copying node with id: {}", copied_node_opt.unwrap().uuid().as_simple());
     drop(copied_node_opt);
