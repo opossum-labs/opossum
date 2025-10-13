@@ -1,4 +1,5 @@
 use crate::{
+    ProcessHandle,
     api::delete_scenery,
     components::{
         context_menu::cx_menu::{ContextMenu, CxtCommand},
@@ -17,6 +18,7 @@ use std::path::PathBuf;
 
 #[component]
 pub fn App() -> Element {
+    let backend_handle = use_context::<ProcessHandle>();
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> =
         use_signal(|| None::<NodeEditorCommand>);
     let cxt_command = use_signal(|| None::<CxtCommand>);
@@ -99,6 +101,11 @@ pub fn App() -> Element {
                     project_directory.set(Some(path.clone()));
                 }
                 MenuSelection::Quit => {
+                    #[cfg(not(debug_assertions))]
+                    {
+                        backend_handle.kill();
+                        println!("Stopping app...")
+                    }
                     window_for_quit.close();
                 }
             }

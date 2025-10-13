@@ -50,7 +50,7 @@ pub fn NodeConfigEditor(
         },
     )
 }
-
+#[allow(clippy::too_many_lines)]
 fn use_node_config_processor(
     mut node_properties_sig: Signal<Properties>,
     mut is_modified: Signal<bool>,
