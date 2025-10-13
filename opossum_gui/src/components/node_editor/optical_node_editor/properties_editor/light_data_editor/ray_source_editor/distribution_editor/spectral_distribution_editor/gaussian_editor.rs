@@ -73,10 +73,9 @@ impl IntoInputData<f64, Gaussian, SpecDistType> for GaussianSpectrumParam {
             }
             Self::NumPoints => move |obj: &mut Gaussian, val: f64| {
                 let old_val = obj.num_points();
-                if let Some(new_val) = try_f64_to_usize(val){
+                if let Some(new_val) = try_f64_to_usize(val) {
                     obj.set_num_points(new_val);
-                }
-                else{
+                } else {
                     obj.set_num_points(old_val);
                 }
             },

@@ -2,7 +2,7 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStoreAction, NodeType,
+        GraphState, GraphStoreAction,
         constants::{MAX_ZOOM, MIN_ZOOM},
         edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
