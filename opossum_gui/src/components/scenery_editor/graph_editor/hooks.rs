@@ -6,7 +6,7 @@ use std::{
 use crate::{
     CONTEXT_MENU,
     components::scenery_editor::{
-        NodeElement, NodeType,
+        NodeElement,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
         edges::edges_component::EdgeCreation,
         graph_editor::graph_editor_component::{DragStatus, EditorState},
@@ -18,7 +18,6 @@ use dioxus::{
     prelude::*,
 };
 use opossum_backend::{PortType, nodes::ConnectInfo};
-use uuid::Uuid;
 
 pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl FnMut(WheelEvent) {
     let editor_status = use_context::<Signal<EditorState>>();
