@@ -2,11 +2,9 @@
 #![allow(clippy::items_after_statements)]
 use dioxus::{desktop::tao::window::Icon, prelude::*};
 use opossum_gui::App;
-use std::{
-    io::Cursor,
-    process::Child,
-    sync::{Arc, Mutex},
-};
+#[cfg(feature = "desktop")]
+use opossum_gui::ProcessHandle;
+use std::io::Cursor;
 
 const MAIN_CSS: Asset = asset!("./assets/main.css");
 // const PLOTLY_JS: Asset = asset!("./assets/plotly.js");
@@ -58,33 +56,7 @@ fn start_backend() -> ProcessHandle {
     println!("Backend server started with PID: {}", child_process.id());
     ProcessHandle::new(child_process)
 }
-#[derive(Clone, Default)]
-struct ProcessHandle {
-    #[allow(dead_code)]
-    inner: Option<Arc<Mutex<Child>>>,
-}
-#[cfg(not(debug_assertions))]
-impl ProcessHandle {
-    pub fn new(child: Child) -> Self {
-        Self {
-            inner: Some(Arc::new(Mutex::new(child))),
-        }
-    }
-    pub fn kill(&self) {
-        println!("Attempting to terminate backend server...");
-        if let Some(child) = &self.inner {
-            let mut handle = child.lock().unwrap();
-            match handle.kill() {
-                Ok(_) => {
-                    // Wait for the process to ensure it's fully cleaned up
-                    let _ = handle.wait();
-                    println!("Backend server terminated successfully.");
-                }
-                Err(e) => eprintln!("Error terminating backend server: {}", e),
-            }
-        }
-    }
-}
+
 fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app(backend_handle: ProcessHandle) {
