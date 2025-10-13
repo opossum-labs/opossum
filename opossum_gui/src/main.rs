@@ -4,11 +4,7 @@ use dioxus::{desktop::tao::window::Icon, prelude::*};
 use opossum_gui::App;
 #[cfg(feature = "desktop")]
 use opossum_gui::ProcessHandle;
-use std::{
-    io::Cursor,
-    process::Child,
-    sync::{Arc, Mutex},
-};
+use std::io::Cursor;
 
 const MAIN_CSS: Asset = asset!("./assets/main.css");
 // const PLOTLY_JS: Asset = asset!("./assets/plotly.js");

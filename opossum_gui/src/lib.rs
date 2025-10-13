@@ -22,7 +22,6 @@ pub struct ProcessHandle {
     inner: Option<Arc<Mutex<Child>>>,
 }
 
-
 #[cfg(not(debug_assertions))]
 impl ProcessHandle {
     pub fn new(child: Child) -> Self {

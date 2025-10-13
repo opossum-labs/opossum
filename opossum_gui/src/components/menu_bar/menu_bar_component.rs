@@ -14,6 +14,7 @@ use crate::components::{
         edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
         help::about::About,
         path_helper::abbreviate_path,
+        project_helper::continue_operation,
     },
     short_cuts::{SHORTCUTS, ShortCutAction, ShortcutHandler},
 };
@@ -232,8 +233,12 @@ pub fn MenuBar(
                 }
                 ControlsMenu {
                     maximize_symbol,
-                    model_modified,
-                    menu_item_selected
+                    on_quit: move |()| {
+                        let msg = "You have unsaved changes. Are you sure you want to quit?";
+                        if continue_operation(model_modified(), msg) {
+                            menu_item_selected.set(Some(MenuSelection::Quit));
+                        }
+                    }
                 }
             }
         }

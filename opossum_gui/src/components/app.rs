@@ -18,6 +18,7 @@ use std::path::PathBuf;
 
 #[component]
 pub fn App() -> Element {
+    #[allow(unused_variables)]
     let backend_handle = use_context::<ProcessHandle>();
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> =
         use_signal(|| None::<NodeEditorCommand>);
