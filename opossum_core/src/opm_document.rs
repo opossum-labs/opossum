@@ -580,4 +580,10 @@ mod test {
         fs::remove_file("./files_for_testing/dot/scenery.dot").unwrap();
         fs::remove_file("./files_for_testing/dot/scenery.svg").unwrap();
     }
+    #[test]
+    fn analyzer_info_set_analyzer_type() {
+        let mut at = AnalyzerInfo::new(AnalyzerType::Energy, Uuid::nil(), Point2::new(1.0, 2.0));
+        at.set_analyzer_type(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
+        assert!(matches!(at.analyzer_type, AnalyzerType::GhostFocus(_)));
+    }
 }
