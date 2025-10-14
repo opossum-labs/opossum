@@ -6,9 +6,8 @@ use std::{fmt::Display, path::PathBuf};
 
 use super::LightData;
 use crate::{
-    degree, energy_distributions::EnergyDistType, error::OpmResult, joule, meter, nanometer,
-    position_distributions::PosDistType, rays::Rays, spectral_distribution::SpecDistType,
-    utils::default_from_name::DefaultFromName,
+    degree, energy_distributions::EnergyDistType, error::OpmResult, joule, meter, nanometer, position_distributions::PosDistType,
+    rays::Rays, spectral_distribution::SpecDistType, utils::default_from_name::DefaultFromName
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
@@ -32,6 +31,17 @@ pub enum RayDataBuilder {
     /// total energy.
     Image(ImageSrc),
 }
+
+// impl Validate for RayDataBuilder{
+//     fn validate(&self) -> OpmResult<()>{
+//         match self{
+//             RayDataBuilder::Raw(rays) => rays.validate(),
+//             RayDataBuilder::Collimated(collimated_src) => collimated_src.validate(),
+//             RayDataBuilder::PointSrc(point_src) => point_src.validate(),
+//             RayDataBuilder::Image(image_src) => image_src.validate(),
+//         }
+//     }
+// }
 
 impl From<ImageSrc> for RayDataBuilder {
     fn from(value: ImageSrc) -> Self {
@@ -163,6 +173,15 @@ impl CollimatedSrc {
         self.spect = spect_dist;
     }
 }
+
+// impl Validate for CollimatedSrc{
+//     fn validate(&self) -> OpmResult<()>{
+//         self.pos_dist().validate()?;
+//         self.energy_dist().validate()?;
+//         self.spect_dist().validate()?;
+//         Ok(())
+//     }
+// }
 
 /// Represents a point source for ray tracing,
 /// storing various distributions related to position, energy, and spectrum,

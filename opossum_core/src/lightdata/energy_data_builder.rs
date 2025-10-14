@@ -3,10 +3,7 @@
 //! This module provides a builder for the generation of energy spectra to be used in `LightData::Energy`.
 //! Using this builder allows easier serialization / deserialization in OPM files.
 use crate::{
-    error::{OpmResult, OpossumError},
-    joule, nanometer,
-    spectrum::Spectrum,
-    utils::default_from_name::DefaultFromName,
+    error::{OpmResult, OpossumError}, joule, nanometer, spectrum::Spectrum, utils::default_from_name::DefaultFromName
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf};
@@ -51,6 +48,16 @@ impl EnergyDataBuilder {
         }
     }
 }
+
+// impl Validate for EnergyDataBuilder{
+//     fn validate(&self) -> OpmResult<()> {
+//         match self{
+//             EnergyDataBuilder::Raw(spectrum) => spectrum.validate(),
+//             EnergyDataBuilder::FromFile(path_buf) => Spectrum::from_csv(path_buf)?.validate(),
+//             EnergyDataBuilder::LaserLines(energy_laser_lines) => energy_laser_lines.validate(),
+//         }
+//     }
+// }
 
 impl DefaultFromName for EnergyDataBuilder {}
 
@@ -123,32 +130,14 @@ impl EnergyLaserLines {
     /// * any energy is zero, negative or infinite,
     pub fn new(lines: Vec<(Length, Energy)>, spectral_resolution: Length) -> OpmResult<Self> {
         // Check if the lines are non-empty and contain valid data
-        if lines.is_empty() {
-            return Err(OpossumError::Other("Laser lines cannot be empty".into()));
-        }
-
-        if !spectral_resolution.is_normal() {
-            return Err(OpossumError::Other(
-                "Spectral resolution must be positive and finite".into(),
-            ));
-        }
-        for (wavelength, energy) in &lines {
-            if !wavelength.is_normal() || wavelength.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Wavelength must be positive and finite".into(),
-                ));
-            }
-            if !energy.is_normal() || energy.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Energy must be positive and finite".into(),
-                ));
-            }
-        }
-
-        Ok(Self {
+        let laser_lines = Self {
             lines,
             spectral_resolution,
-        })
+        };
+
+        let _ =laser_lines.validate()?;
+
+        Ok(laser_lines)
     }
 
     /// Creates a new, empty [`EnergyLaserLines`] distribution.
@@ -238,6 +227,34 @@ impl EnergyLaserLines {
         }
     }
 }
+
+// impl Validate for EnergyLaserLines{
+//     fn validate(&self) -> OpmResult<()>{
+//         if self.lines().is_empty() {
+//             return Err(OpossumError::Other("Laser lines cannot be empty".into()));
+//         }
+
+//         if !self.spectral_resolution().is_normal() {
+//             return Err(OpossumError::Other(
+//                 "Spectral resolution must be positive and finite".into(),
+//             ));
+//         }
+//         for (wavelength, energy) in self.lines() {
+//             if !wavelength.is_normal() || wavelength.is_sign_negative() {
+//                 return Err(OpossumError::Other(
+//                     "Wavelength must be positive and finite".into(),
+//                 ));
+//             }
+//             if !energy.is_normal() || energy.is_sign_negative() {
+//                 return Err(OpossumError::Other(
+//                     "Energy must be positive and finite".into(),
+//                 ));
+//             }
+//         }
+
+//         Ok(())
+//     }
+// }
 
 impl Default for EnergyLaserLines {
     fn default() -> Self {

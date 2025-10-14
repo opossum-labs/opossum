@@ -8,12 +8,8 @@ use strum::EnumIter;
 
 use super::{LightData, energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder};
 use crate::{
-    energy_distributions::EnergyDistType,
-    error::OpmResult,
-    lightdata::ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc},
-    position_distributions::PosDistType,
-    spectral_distribution::SpecDistType,
-    utils::default_from_name::DefaultFromName,
+    energy_distributions::EnergyDistType, error::OpmResult, lightdata::ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc}, 
+    position_distributions::PosDistType, spectral_distribution::SpecDistType, utils::default_from_name::DefaultFromName
 };
 
 /// Builder for the generation of [`LightData`].
@@ -26,6 +22,15 @@ pub enum LightDataBuilder {
     // /// Dummy Fourier
     // Fourier,
 }
+
+// impl Validate for LightDataBuilder{
+//     fn validate(&self) -> OpmResult<()> {
+//         match self{
+//             LightDataBuilder::Energy(energy_data_builder) => energy_data_builder.validate(),
+//             LightDataBuilder::Geometric(ray_data_builder) => ray_data_builder.validate(),
+//         }
+//     }
+// }
 
 impl DefaultFromName for LightDataBuilder {}
 

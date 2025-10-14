@@ -1,12 +1,13 @@
+use num::Zero;
 use serde::{Deserialize, Serialize};
-use uom::si::{angle::degree, f64::Angle};
+use uom::si::{angle::degree, f64::{Angle, Length}};
 
 use crate::{
-    error::{OpmResult, OpossumError},
-    nodes::{SplittingConfigBuilder, ideal_filter::FilterTypeBuilder},
-    properties::Proptype,
+    error::{OpmResult, OpossumError}, nodes::{ideal_filter::FilterTypeBuilder, SplittingConfigBuilder}, prelude::LightDataBuilder, properties::Proptype
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, marker::PhantomData};
+use strum::IntoEnumIterator;
+
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Validator {
@@ -241,3 +242,5 @@ impl Validator {
         }
     }
 }
+
+

@@ -543,6 +543,17 @@ impl Spectrum {
     }
 }
 
+// impl Validate for Spectrum{
+//     fn validate(&self) -> OpmResult<()>{
+//         if self.total_energy() > 0.{
+//             Ok(())
+//         }
+//         else{
+//             Err(OpossumError::Spectrum("Invalid Spectrum, Energy of Spectrum must be greater than 0!".into()))
+//         }
+//     }
+// }
+
 impl Plottable for Spectrum {
     fn get_plot_series(
         &self,
@@ -581,32 +592,7 @@ impl Plottable for Spectrum {
     }
 }
 
-// /// Builder for the generation of [`LightData`].
-// #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
-// pub enum SpectrumDataBuilder {
-//     Gaussian(Gaussian),
-//     FromFile(PathBuf),
-//     LaserLines(LaserLines),
-//     // SpectralFilter(SpectralFilterBuilder),
-//     // LowPass,
-//     // HighPass,
-// }
 
-// impl SpectrumDataBuilder {
-//     /// Create [`LightData`] from the builder definition.
-//     ///
-//     /// # Errors
-//     ///
-//     /// This function will return an error if the concrete implementation of the builder fails.
-//     pub fn build(self) -> OpmResult<Spectrum> {
-//         match self {
-//             Self::Energy(e) => e.build(),
-//             Self::Geometric(r) => r.build(),
-//             // Self::Fourier => Ok(LightData::Fourier),
-//         }
-//     }
-
-// }
 
 impl<'a> IntoIterator for &'a Spectrum {
     type IntoIter = std::slice::Iter<'a, (f64, f64)>;

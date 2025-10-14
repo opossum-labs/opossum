@@ -2,8 +2,7 @@
 //! Rectangular, uniform random distribution
 use super::PositionDistribution;
 use crate::{
-    error::{OpmResult, OpossumError},
-    millimeter,
+    error::OpmResult, generic_validators::{IsNormalAndPositive, NotZero, Validated}, millimeter
 };
 use nalgebra::{Point3, point};
 use num::Zero;
@@ -14,10 +13,35 @@ use uom::si::f64::Length;
 /// Rectangular, uniform random distribution
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub struct Random {
-    nr_of_points: usize,
-    side_length_x: Length,
-    side_length_y: Length,
+    nr_of_points: Validated<usize, NotZero>,
+    side_length_x: Validated<Length, IsNormalAndPositive<Length>>,
+    side_length_y: Validated<Length, IsNormalAndPositive<Length>>,
 }
+
+// impl Validate for Random{
+//     fn validate(&self) -> OpmResult<()>{
+//         if self.side_length_x().is_zero() && self.side_length_y().is_zero() {
+//             return Err(OpossumError::Other(
+//                 "At least one side length must be != zero".into(),
+//             ));
+//         }
+//         if self.side_length_x().is_sign_negative() || !self.side_length_x().is_normal() {
+//             return Err(OpossumError::Other(
+//                 "side_length_x must be >= zero and finite".into(),
+//             ));
+//         }
+//         if self.side_length_y().is_sign_negative() || !self.side_length_y().is_normal() {
+//             return Err(OpossumError::Other(
+//                 "side_length_y must be >= zero and finite".into(),
+//             ));
+//         }
+//         if self.nr_of_points().is_zero() {
+//             return Err(OpossumError::Other("nr_of_points must be >= 1.".into()));
+//         }
+//         Ok(())
+//     }
+// }
+
 impl Random {
     /// Create a new [`Random`] distribution generator.
     ///
@@ -32,29 +56,11 @@ impl Random {
         side_length_y: Length,
         nr_of_points: usize,
     ) -> OpmResult<Self> {
-        if side_length_x.is_zero() && side_length_y.is_zero() {
-            return Err(OpossumError::Other(
-                "At least one side length must be != zero".into(),
-            ));
-        }
-        if side_length_x.is_sign_negative() || !side_length_x.is_normal() {
-            return Err(OpossumError::Other(
-                "side_length_x must be >= zero and finite".into(),
-            ));
-        }
-        if side_length_y.is_sign_negative() || !side_length_y.is_normal() {
-            return Err(OpossumError::Other(
-                "side_length_y must be >= zero and finite".into(),
-            ));
-        }
-        if nr_of_points.is_zero() {
-            return Err(OpossumError::Other("nr_of_points must be >= 1.".into()));
-        }
-        Ok(Self {
-            nr_of_points,
-            side_length_x,
-            side_length_y,
-        })
+        let mut random = Self::default();
+        random.set_nr_of_points(nr_of_points)?;
+        random.set_side_length_x(side_length_x)?;
+        random.set_side_length_y(side_length_y)?;
+        Ok(random)
     }
 
     /// Returns the number of points in the random distribution.
@@ -63,8 +69,8 @@ impl Random {
     ///
     /// The number of points as a `usize`.
     #[must_use]
-    pub const fn nr_of_points(&self) -> usize {
-        self.nr_of_points
+    pub fn nr_of_points(&self) -> usize {
+        *self.nr_of_points.get()
     }
 
     /// Returns the side length along the X axis.
@@ -74,7 +80,7 @@ impl Random {
     /// The side length in the X direction of type `Length`.
     #[must_use]
     pub fn side_length_x(&self) -> Length {
-        self.side_length_x
+        *self.side_length_x.get()
     }
 
     /// Returns the side length along the Y axis.
@@ -84,7 +90,7 @@ impl Random {
     /// The side length in the Y direction of type `Length`.
     #[must_use]
     pub fn side_length_y(&self) -> Length {
-        self.side_length_y
+        *self.side_length_y.get()
     }
 
     /// Sets the number of points in the random distribution.
@@ -96,8 +102,9 @@ impl Random {
     /// # Side Effects
     ///
     /// Updates the current number of points.
-    pub const fn set_nr_of_points(&mut self, nr_of_points: usize) {
-        self.nr_of_points = nr_of_points;
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) -> OpmResult<()> {
+        self.nr_of_points.set(nr_of_points)?;
+        Ok(())
     }
 
     /// Sets the side length along the X axis.
@@ -109,8 +116,9 @@ impl Random {
     /// # Side Effects
     ///
     /// Updates the current side length in the X direction.
-    pub fn set_side_length_x(&mut self, side_length_x: Length) {
-        self.side_length_x = side_length_x;
+    pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()>  {
+        self.side_length_x.set(side_length_x);
+        Ok(())
     }
 
     /// Sets the side length along the Y axis.
@@ -122,28 +130,30 @@ impl Random {
     /// # Side Effects
     ///
     /// Updates the current side length in the Y direction.
-    pub fn set_side_length_y(&mut self, side_length_y: Length) {
-        self.side_length_y = side_length_y;
+    pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()>  {
+        self.side_length_y.set(side_length_y);
+        Ok(())
     }
 }
 
 impl Default for Random {
     fn default() -> Self {
         Self {
-            nr_of_points: 1000,
-            side_length_x: millimeter!(5.),
-            side_length_y: millimeter!(5.),
+            nr_of_points: Validated::new(1000_usize, NotZero).unwrap(),
+            side_length_x: Validated::new(millimeter!(5.),IsNormalAndPositive::new_normal_and_positive()).unwrap(),
+            side_length_y: Validated::new(millimeter!(5.),IsNormalAndPositive::new_normal_and_positive()).unwrap()
         }
     }
 }
 
 impl PositionDistribution for Random {
     fn generate(&self) -> Vec<nalgebra::Point3<Length>> {
-        let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_points);
+        let nr_of_points = *self.nr_of_points.get();
+        let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_points);
         let mut rng = rand::rng();
-        for _ in 0..self.nr_of_points {
-            let point_x = self.side_length_x * rng.random_range(-1.0..1.0);
-            let point_y = self.side_length_y * rng.random_range(-1.0..1.0);
+        for _ in 0..nr_of_points {
+            let point_x = self.side_length_x() * rng.random_range(-1.0..1.0);
+            let point_y = self.side_length_y() * rng.random_range(-1.0..1.0);
             points.push(point![point_x, point_y, Length::zero()]);
         }
         points

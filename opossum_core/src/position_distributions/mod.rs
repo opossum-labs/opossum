@@ -37,7 +37,7 @@ pub use hexapolar::Hexapolar;
 pub use random::Random;
 pub use sobol::SobolDist;
 
-use crate::utils::default_from_name::DefaultFromName;
+use crate::{error::OpmResult, utils::default_from_name::DefaultFromName};
 
 /// Trait for the generation of point distributions
 pub trait PositionDistribution {
@@ -65,6 +65,20 @@ pub enum PosDistType {
     /// Pseudo random Sobol distribution
     Sobol(sobol::SobolDist),
 }
+
+// impl Validate for PosDistType{
+//     fn validate(&self) -> OpmResult<()>{
+//         match self{
+//             PosDistType::Random(random) => random.validate(),
+//             PosDistType::Grid(grid) => grid.validate(),
+//             PosDistType::HexagonalTiling(hexagonal_tiling) => hexagonal_tiling.validate(),
+//             PosDistType::Hexapolar(hexapolar) => hexapolar.validate(),
+//             PosDistType::FibonacciRectangle(fibonacci_rectangle) => fibonacci_rectangle.validate(),
+//             PosDistType::FibonacciEllipse(fibonacci_ellipse) => fibonacci_ellipse.validate(),
+//             PosDistType::Sobol(sobol_dist) => sobol_dist.validate(),
+//         }
+//     }
+// }
 
 impl DefaultFromName for PosDistType {}
 
