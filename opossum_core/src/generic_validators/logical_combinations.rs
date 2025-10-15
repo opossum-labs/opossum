@@ -1,11 +1,8 @@
-use crate::{
-    error::OpmResult,
-    generic_validators::{IsFinite, IsNormal, IsPositive, Validate},
-};
+use crate::{error::OpmResult, generic_validators::Validate};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct OrValidator<T, V1: Validate<T>, V2: Validate<T>> {
     v1: V1,
     v2: V2,
@@ -23,7 +20,7 @@ where
 }
 
 impl<T, V1: Validate<T>, V2: Validate<T>> OrValidator<T, V1, V2> {
-    pub fn new(v1: V1, v2: V2) -> Self {
+    pub const fn new(v1: V1, v2: V2) -> Self {
         Self {
             v1,
             v2,
@@ -32,7 +29,7 @@ impl<T, V1: Validate<T>, V2: Validate<T>> OrValidator<T, V1, V2> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct AndValidator<T, V1: Validate<T>, V2: Validate<T>> {
     v1: V1,
     v2: V2,
@@ -51,7 +48,7 @@ where
 }
 
 impl<T, V1: Validate<T>, V2: Validate<T>> AndValidator<T, V1, V2> {
-    pub fn new(v1: V1, v2: V2) -> Self {
+    pub const fn new(v1: V1, v2: V2) -> Self {
         Self {
             v1,
             v2,
@@ -62,10 +59,10 @@ impl<T, V1: Validate<T>, V2: Validate<T>> AndValidator<T, V1, V2> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::generic_validators::{AndValidator, IsNotZero, OrValidator, Validate};
+    use crate::generic_validators::{
+        AndValidator, IsFinite, IsNotZero, IsPositive, OrValidator, Validate,
+    };
     use nalgebra::Point2;
-    use uom::si::f64::Length;
 
     #[test]
     fn test_or_validator_f64() {

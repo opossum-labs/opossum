@@ -3,7 +3,7 @@ use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct IsPositive;
 
 impl_validator!(IsPositive, |_self, v: &i32| *v >= 0, i32);

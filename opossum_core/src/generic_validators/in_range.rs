@@ -6,7 +6,14 @@ use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
+/// Validator that checks if a value is within a specified range.
+///
+/// `IsInRange` can be inclusive or exclusive of the boundaries.
+///
+/// # Type Parameters
+///
+/// * `T` - The type of the value to validate. Must implement `PartialOrd`.
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct IsInRange<T> {
     min: T,
     max: T,
@@ -14,6 +21,21 @@ pub struct IsInRange<T> {
 }
 
 impl<T: PartialOrd> IsInRange<T> {
+    /// Create a new `IsInRange` validator.
+    ///
+    /// # Arguments
+    ///
+    /// * `min` - Minimum boundary.
+    /// * `max` - Maximum boundary.
+    /// * `inclusive` - Whether the boundaries are inclusive.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(IsInRange)` if `min < max`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `OpossumError::Other` if `min >= max`.
     pub fn new(min: T, max: T, inclusive: bool) -> OpmResult<Self> {
         if min < max {
             Ok(Self {
@@ -27,19 +49,22 @@ impl<T: PartialOrd> IsInRange<T> {
             ))
         }
     }
+
+    /// Check if a value is within the range.
+    ///
+    /// # Arguments
+    ///
+    /// * `val` - The value to check.
+    ///
+    /// # Returns
+    ///
+    /// * `true` if `val` is within the range according to `inclusive`.
+    /// * `false` otherwise.
     pub fn is_in_range(&self, val: &T) -> bool {
         if self.inclusive {
-            if *val >= self.min && *val <= self.max {
-                true
-            } else {
-                false
-            }
+            *val >= self.min && *val <= self.max
         } else {
-            if *val > self.min && *val < self.max {
-                true
-            } else {
-                false
-            }
+            *val > self.min && *val < self.max
         }
     }
 }

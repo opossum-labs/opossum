@@ -1,12 +1,12 @@
 #[macro_export]
 macro_rules! impl_validator {
     ($validator:path, $func:expr,  $t:ty) => {
-        impl crate::generic_validators::Validate<$t> for $validator {
-            fn validate(&self, value: &$t) -> crate::error::OpmResult<()> {
+        impl $crate::generic_validators::Validate<$t> for $validator {
+            fn validate(&self, value: &$t) -> $crate::error::OpmResult<()> {
                 if $func(&self, &value) {
                     Ok(())
                 } else {
-                    Err(crate::error::OpossumError::Other(format!(
+                    Err($crate::error::OpossumError::Other(format!(
                         "Value must satisfy {}",
                         stringify!($func)
                     )))

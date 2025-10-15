@@ -4,7 +4,7 @@ use uom::si::f64::Length;
 use crate::impl_validator;
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct IsFinite;
 
 impl_validator!(IsFinite, |_self, v: &f64| v.is_finite(), f64);

@@ -46,7 +46,7 @@ impl Random {
     ///
     /// The number of points as a `usize`.
     #[must_use]
-    pub fn nr_of_points(&self) -> usize {
+    pub const fn nr_of_points(&self) -> usize {
         *self.nr_of_points.get()
     }
 
@@ -79,6 +79,9 @@ impl Random {
     /// # Side Effects
     ///
     /// Updates the current number of points.
+    ///
+    /// # Errors
+    /// Returns an error if validation of the passed value fails
     pub fn set_nr_of_points(&mut self, nr_of_points: usize) -> OpmResult<()> {
         self.nr_of_points.set(nr_of_points)?;
         Ok(())
@@ -93,6 +96,9 @@ impl Random {
     /// # Side Effects
     ///
     /// Updates the current side length in the X direction.
+    ///
+    /// # Errors
+    /// Returns an error if validation of the passed value fails
     pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()> {
         self.side_length
             .set(Point2::new(side_length_x, self.side_length_y()))?;
@@ -107,7 +113,10 @@ impl Random {
     ///
     /// # Side Effects
     ///
-    /// Updates the current side length in the Y direction.
+    /// Updates the current side length in the Y direction.    
+    ///
+    /// # Errors
+    /// Returns an error if validation of the passed value fails
     pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()> {
         self.side_length
             .set(Point2::new(self.side_length_x(), side_length_y))?;

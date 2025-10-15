@@ -3,7 +3,7 @@ use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct IsNormal;
 impl_validator!(IsNormal, |_self, v: &f64| v.is_normal(), f64);
 impl_validator!(IsNormal, |_self, v: &Length| v.is_normal(), Length);

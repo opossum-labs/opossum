@@ -3,7 +3,8 @@ use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct IsNotNaN;
 
 impl_validator!(IsNotNaN, |_self, v: &f64| !v.is_nan(), f64);

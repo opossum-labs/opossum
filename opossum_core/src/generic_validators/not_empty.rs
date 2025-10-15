@@ -3,7 +3,8 @@ use uom::si::f64::{Angle, Length};
 
 use crate::impl_validator;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct IsNotEmpty;
 
 impl_validator!(IsNotEmpty, |_self, v: &Vec<f64>| !v.is_empty(), Vec<f64>);
