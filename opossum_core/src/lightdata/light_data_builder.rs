@@ -8,8 +8,12 @@ use strum::EnumIter;
 
 use super::{LightData, energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder};
 use crate::{
-    energy_distributions::EnergyDistType, error::OpmResult, lightdata::ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc}, 
-    position_distributions::PosDistType, spectral_distribution::SpecDistType, utils::default_from_name::DefaultFromName
+    energy_distributions::EnergyDistType,
+    error::OpmResult,
+    lightdata::ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc},
+    position_distributions::PosDistType,
+    spectral_distribution::SpecDistType,
+    utils::default_from_name::DefaultFromName,
 };
 
 /// Builder for the generation of [`LightData`].

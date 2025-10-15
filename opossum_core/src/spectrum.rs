@@ -592,8 +592,6 @@ impl Plottable for Spectrum {
     }
 }
 
-
-
 impl<'a> IntoIterator for &'a Spectrum {
     type IntoIter = std::slice::Iter<'a, (f64, f64)>;
     type Item = &'a (f64, f64);

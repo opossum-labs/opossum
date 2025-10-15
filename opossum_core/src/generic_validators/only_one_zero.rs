@@ -1,26 +1,45 @@
+use crate::impl_validator;
 use nalgebra::Point2;
 use num::Zero;
-use uom::si::f64::{Angle, Length};
-use crate::impl_validator;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::{Angle, Length};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct OnlyOneZero;
-impl_validator!(OnlyOneZero, |_self, v: &Point2<usize>| !(v.x.is_zero() && v.y.is_zero()), Point2<usize>);
-impl_validator!(OnlyOneZero, |_self, v: &Point2<i32>| !(v.x.is_zero() && v.y.is_zero()), Point2<i32>);
-impl_validator!(OnlyOneZero, |_self, v: &Point2<Angle>| !(v.x.is_zero() && v.y.is_zero()), Point2<Angle>);
-impl_validator!(OnlyOneZero, |_self, v: &Point2<f64>| !(v.x.is_zero() && v.y.is_zero()), Point2<f64>);
-impl_validator!(OnlyOneZero, |_self, v: &Point2<Length>| !(v.x.is_zero() && v.y.is_zero()), Point2<Length>);
+impl_validator!(
+    OnlyOneZero,
+    |_self, v: &Point2<usize>| !(v.x.is_zero() && v.y.is_zero()),
+    Point2<usize>
+);
+impl_validator!(
+    OnlyOneZero,
+    |_self, v: &Point2<i32>| !(v.x.is_zero() && v.y.is_zero()),
+    Point2<i32>
+);
+impl_validator!(
+    OnlyOneZero,
+    |_self, v: &Point2<Angle>| !(v.x.is_zero() && v.y.is_zero()),
+    Point2<Angle>
+);
+impl_validator!(
+    OnlyOneZero,
+    |_self, v: &Point2<f64>| !(v.x.is_zero() && v.y.is_zero()),
+    Point2<f64>
+);
+impl_validator!(
+    OnlyOneZero,
+    |_self, v: &Point2<Length>| !(v.x.is_zero() && v.y.is_zero()),
+    Point2<Length>
+);
 
-
-    #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::generic_validators::Validate;
     use nalgebra::Point2;
-    use uom::si::f64::{Length, Angle};
-    use uom::si::length::meter;
     use uom::si::angle::radian;
+    use uom::si::f64::{Angle, Length};
+    use uom::si::length::meter;
 
     #[test]
     fn test_only_one_zero_usize() {

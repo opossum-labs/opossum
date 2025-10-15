@@ -7,17 +7,25 @@ use crate::impl_validator;
 pub struct IsNotEmpty;
 
 impl_validator!(IsNotEmpty, |_self, v: &Vec<f64>| !v.is_empty(), Vec<f64>);
-impl_validator!(IsNotEmpty, |_self, v: &Vec<Length>| !v.is_empty(), Vec<Length>);
-impl_validator!(IsNotEmpty, |_self, v: &Vec<Angle>| !v.is_empty(), Vec<Angle>);
+impl_validator!(
+    IsNotEmpty,
+    |_self, v: &Vec<Length>| !v.is_empty(),
+    Vec<Length>
+);
+impl_validator!(
+    IsNotEmpty,
+    |_self, v: &Vec<Angle>| !v.is_empty(),
+    Vec<Angle>
+);
 impl_validator!(IsNotEmpty, |_self, v: &String| !v.is_empty(), String);
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::generic_validators::Validate;
-    use uom::si::f64::{Length, Angle};
-    use uom::si::length::meter;
     use uom::si::angle::radian;
+    use uom::si::f64::{Angle, Length};
+    use uom::si::length::meter;
 
     #[test]
     fn test_is_not_empty_vec_f64() {

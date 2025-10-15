@@ -6,8 +6,9 @@ use std::{fmt::Display, path::PathBuf};
 
 use super::LightData;
 use crate::{
-    degree, energy_distributions::EnergyDistType, error::OpmResult, joule, meter, nanometer, position_distributions::PosDistType,
-    rays::Rays, spectral_distribution::SpecDistType, utils::default_from_name::DefaultFromName
+    degree, energy_distributions::EnergyDistType, error::OpmResult, joule, meter, nanometer,
+    position_distributions::PosDistType, rays::Rays, spectral_distribution::SpecDistType,
+    utils::default_from_name::DefaultFromName,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;

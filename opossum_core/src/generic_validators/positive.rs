@@ -1,8 +1,7 @@
-
-use nalgebra::Point2;
-use uom::si::f64::{Angle, Length};
 use crate::impl_validator;
+use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::{Angle, Length};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct IsPositive;
@@ -11,18 +10,25 @@ impl_validator!(IsPositive, |_self, v: &i32| *v >= 0, i32);
 impl_validator!(IsPositive, |_self, v: &f64| v.is_sign_positive(), f64);
 impl_validator!(IsPositive, |_self, v: &Angle| v.is_sign_positive(), Angle);
 impl_validator!(IsPositive, |_self, v: &Length| v.is_sign_positive(), Length);
-impl_validator!(IsPositive, |_self, v: &Point2<f64>| v.x.is_sign_positive() && v.y.is_sign_positive(), Point2<f64>);
-impl_validator!(IsPositive, |_self, v: &Point2<Length>| v.x.is_sign_positive() && v.y.is_sign_positive(), Point2<Length>);
+impl_validator!(
+    IsPositive,
+    |_self, v: &Point2<f64>| v.x.is_sign_positive() && v.y.is_sign_positive(),
+    Point2<f64>
+);
+impl_validator!(
+    IsPositive,
+    |_self, v: &Point2<Length>| v.x.is_sign_positive() && v.y.is_sign_positive(),
+    Point2<Length>
+);
 
-    #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::generic_validators::Validate;
     use nalgebra::Point2;
-    use uom::si::f64::{Length, Angle};
-    use uom::si::length::meter;
     use uom::si::angle::radian;
-
+    use uom::si::f64::{Angle, Length};
+    use uom::si::length::meter;
 
     #[test]
     fn test_is_positive_i32() {

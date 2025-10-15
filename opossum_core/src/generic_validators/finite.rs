@@ -9,8 +9,16 @@ pub struct IsFinite;
 
 impl_validator!(IsFinite, |_self, v: &f64| v.is_finite(), f64);
 impl_validator!(IsFinite, |_self, v: &Length| v.is_finite(), Length);
-impl_validator!(IsFinite, |_self, v: &Point2<f64>| v.x.is_finite() && v.y.is_finite(), Point2<f64>);
-impl_validator!(IsFinite, |_self, v: &Point2<Length>| v.x.is_finite() && v.y.is_finite(), Point2<Length>);
+impl_validator!(
+    IsFinite,
+    |_self, v: &Point2<f64>| v.x.is_finite() && v.y.is_finite(),
+    Point2<f64>
+);
+impl_validator!(
+    IsFinite,
+    |_self, v: &Point2<Length>| v.x.is_finite() && v.y.is_finite(),
+    Point2<Length>
+);
 
 #[cfg(test)]
 mod tests {
@@ -62,7 +70,10 @@ mod tests {
         let validator = IsFinite;
 
         let p = Point2::new(Length::new::<meter>(1.0), Length::new::<meter>(2.0));
-        let p_inf = Point2::new(Length::new::<meter>(f64::INFINITY), Length::new::<meter>(0.0));
+        let p_inf = Point2::new(
+            Length::new::<meter>(f64::INFINITY),
+            Length::new::<meter>(0.0),
+        );
         let p_nan = Point2::new(Length::new::<meter>(0.0), Length::new::<meter>(f64::NAN));
 
         assert!(validator.validate(&p).is_ok());

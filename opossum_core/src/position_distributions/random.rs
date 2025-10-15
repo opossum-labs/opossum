@@ -1,21 +1,23 @@
 #![warn(missing_docs)]
 //! Rectangular, uniform random distribution
 use super::PositionDistribution;
-use crate::{error::OpmResult, generic_validators::{IsFinite, IsNotZero, IsPositive, OnlyOneZero}, millimeter, validated, validated_type
+use crate::{
+    error::OpmResult,
+    generic_validators::{IsFinite, IsNotZero, IsPositive, OnlyOneZero},
+    millimeter, validated, validated_type,
 };
-use nalgebra::{point, Point2, Point3};
+use nalgebra::{Point2, Point3, point};
 use num::Zero;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, uniform random distribution
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, )]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub struct Random {
     nr_of_points: validated_type!(usize, IsNotZero),
     side_length: validated_type!(Point2<Length>, OnlyOneZero && IsFinite && IsPositive),
 }
-
 
 impl Random {
     /// Create a new [`Random`] distribution generator.
@@ -91,8 +93,9 @@ impl Random {
     /// # Side Effects
     ///
     /// Updates the current side length in the X direction.
-    pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()>  {
-        self.side_length.set(Point2::new(side_length_x, self.side_length_y()))?;
+    pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()> {
+        self.side_length
+            .set(Point2::new(side_length_x, self.side_length_y()))?;
         Ok(())
     }
 
@@ -105,18 +108,19 @@ impl Random {
     /// # Side Effects
     ///
     /// Updates the current side length in the Y direction.
-    pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()>  {
-        self.side_length.set(Point2::new(self.side_length_x(), side_length_y))?;
+    pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()> {
+        self.side_length
+            .set(Point2::new(self.side_length_x(), side_length_y))?;
         Ok(())
     }
 }
 
-
 impl Default for Random {
     fn default() -> Self {
-         Self {
+        Self {
             nr_of_points: validated!(1000_usize, IsNotZero).unwrap(),
-            side_length: validated!(millimeter!(5.,5.), OnlyOneZero && IsFinite && IsPositive).unwrap(),
+            side_length: validated!(millimeter!(5., 5.), OnlyOneZero && IsFinite && IsPositive)
+                .unwrap(),
         }
     }
 }
@@ -139,7 +143,6 @@ impl From<Random> for super::PosDistType {
         Self::Random(random)
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -182,7 +185,7 @@ mod test {
         assert!(random.set_side_length_y(millimeter!(-10.)).is_err());
         assert!(random.set_side_length_x(millimeter!(0.)).is_err());
 
-        let mut random = Random::new(Length::zero(), millimeter!(1.0),1).unwrap();
+        let mut random = Random::new(Length::zero(), millimeter!(1.0), 1).unwrap();
         assert!(random.set_nr_of_points(0).is_err());
         assert!(random.set_side_length_x(millimeter!(-10.)).is_err());
         assert!(random.set_side_length_y(millimeter!(-10.)).is_err());

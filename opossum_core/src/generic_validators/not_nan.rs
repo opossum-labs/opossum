@@ -1,7 +1,7 @@
-use nalgebra::Point2;
-use uom::si::f64::{Angle, Length};
 use crate::impl_validator;
+use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::{Angle, Length};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct IsNotNaN;
@@ -9,18 +9,25 @@ pub struct IsNotNaN;
 impl_validator!(IsNotNaN, |_self, v: &f64| !v.is_nan(), f64);
 impl_validator!(IsNotNaN, |_self, v: &Length| !v.is_nan(), Length);
 impl_validator!(IsNotNaN, |_self, v: &Angle| !v.is_nan(), Angle);
-impl_validator!(IsNotNaN, |_self, v: &Point2<f64>| !v.x.is_nan() && !v.y.is_nan(), Point2<f64>);
-impl_validator!(IsNotNaN, |_self, v: &Point2<Length>| !v.x.is_nan() && !v.y.is_nan(), Point2<Length>);
+impl_validator!(
+    IsNotNaN,
+    |_self, v: &Point2<f64>| !v.x.is_nan() && !v.y.is_nan(),
+    Point2<f64>
+);
+impl_validator!(
+    IsNotNaN,
+    |_self, v: &Point2<Length>| !v.x.is_nan() && !v.y.is_nan(),
+    Point2<Length>
+);
 
-
-    #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::generic_validators::Validate;
     use nalgebra::Point2;
-    use uom::si::f64::{Length, Angle};
-    use uom::si::length::meter;
     use uom::si::angle::radian;
+    use uom::si::f64::{Angle, Length};
+    use uom::si::length::meter;
 
     #[test]
     fn test_is_not_nan_f64() {

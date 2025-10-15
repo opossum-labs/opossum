@@ -2,10 +2,11 @@ use serde::{Deserialize, Serialize};
 use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
-    error::{OpmResult, OpossumError}, nodes::{ideal_filter::FilterTypeBuilder, SplittingConfigBuilder}, properties::Proptype
+    error::{OpmResult, OpossumError},
+    nodes::{SplittingConfigBuilder, ideal_filter::FilterTypeBuilder},
+    properties::Proptype,
 };
 use std::fmt::Debug;
-
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Validator {
@@ -240,5 +241,3 @@ impl Validator {
         }
     }
 }
-
-

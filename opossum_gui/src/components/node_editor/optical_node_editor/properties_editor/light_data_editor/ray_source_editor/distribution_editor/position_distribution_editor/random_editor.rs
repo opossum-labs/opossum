@@ -48,14 +48,14 @@ impl IntoInputData<f64, Random, PosDistType> for RandomParam {
 
     fn setter_from_obj(&self) -> impl FnMut(&mut Random, f64) {
         match self {
-            Self::SideLengthX => {
-                move |obj: &mut Random, val: f64| {obj.set_side_length_x(millimeter!(val));}
-            }
-            Self::SideLengthY => {
-                move |obj: &mut Random, val: f64| {obj.set_side_length_y(millimeter!(val));}
-            }
+            Self::SideLengthX => move |obj: &mut Random, val: f64| {
+                obj.set_side_length_x(millimeter!(val));
+            },
+            Self::SideLengthY => move |obj: &mut Random, val: f64| {
+                obj.set_side_length_y(millimeter!(val));
+            },
             Self::Points => move |obj: &mut Random, val: f64| {
-                if let Some(val) = try_f64_to_usize(val){
+                if let Some(val) = try_f64_to_usize(val) {
                     obj.set_nr_of_points(val);
                 }
             },

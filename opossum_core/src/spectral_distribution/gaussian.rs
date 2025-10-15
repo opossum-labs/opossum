@@ -57,9 +57,7 @@ impl Gaussian {
             ));
         }
         if num_points.is_zero() {
-            return Err(OpossumError::Other(
-                "number of points must be !=0".into(),
-            ));
+            return Err(OpossumError::Other("number of points must be !=0".into()));
         }
         if !mu.is_normal() || mu.is_sign_negative() {
             return Err(OpossumError::Other(
