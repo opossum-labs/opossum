@@ -17,7 +17,7 @@ macro_rules! impl_validator {
 
 #[macro_export]
 macro_rules! validator_expr {
-    // Klammern zuerst, rekursiv
+    // parentheses first, recursive zuerst
     (( $($inner:tt)+ )) => {
         $crate::validator_expr!($($inner)+)
     };
@@ -38,12 +38,16 @@ macro_rules! validator_expr {
         )
     };
     
-    // Einzelner Validator
+    // single
     ($v:expr) => { $v };
 }
 
 #[macro_export]
 macro_rules! validator_type_expr {
+    // Parentheses: unwrap and recurse
+    ($t:ty; ( $($inner:tt)+ )) => {
+        $crate::validator_type_expr!($t; $($inner)+)
+    };
     // AND
     ($t:ty; $left:tt && $($rest:tt)+) => {
         $crate::generic_validators::AndValidator<
@@ -62,7 +66,7 @@ macro_rules! validator_type_expr {
         >
     };
 
-    // Einzelner Validator
+    // single validator
     ($t:ty; $v:ty) => { $v };
 }
 
@@ -85,49 +89,149 @@ macro_rules! validated {
     }};
 }
 
-// #[macro_export]
-// macro_rules! validated {
-//     // Mehrere Validatoren als Liste mit Komma
-//     ($value:expr, $first:expr $(, $rest:expr)*) => {{
-//         let combined_validator = {
-//             let mut v = $first;
-//             $(
-//                 v = $crate::generic_validators::AndValidator::new(v, $rest);
-//             )*
-//             v
-//         };
-//         $crate::generic_validators::Validated::new($value, combined_validator)
-//     }};
 
-//     // Einzelner Validator
-//     ($value:expr, $validator:expr) => {{
-//         $crate::generic_validators::Validated::new($value, $validator)
-//     }};
-// }
+#[cfg(test)]
+mod macro_tests {
+    use crate::generic_validators::*;
+    use nalgebra::Point2;
+    use uom::si::f64::Length;
 
-// macro_rules! validated {
-//     // === Mehrere Validatoren mit &&
-//     ($value:expr, $left:ident && $right:ident) => {{
-//         let validator = $crate::generic_validators::AndValidator::<_, $left, $right>::new(
-//             $left::default(),
-//             $right::default(),
-//         );
-//         $crate::validated::Validated::new($value, validator)
-//     }};
+    #[test]
+    fn test_validated_macro_scalar() {
+        let value = 5.0f64;
 
-//     // Rekursiv für 3+ Validatoren: A && B && C && D …
-//     ($value:expr, $left:ident && $($rest:tt)+) => {{
-//         let next = validated!($value, $($rest)+)?;
-//         let validator = $crate::generic_validators::AndValidator::<_, $left, _>::new(
-//             $left::default(),
-//             next.validator().clone(),
-//         );
-//         $crate::validated::Validated::new($value, validator)
-//     }};
+        let manual_validator = AndValidator::new(IsPositive, IsFinite);
+        let mut validated_manual = Validated::new(value, manual_validator).unwrap();
 
-//     // === Nur ein einzelner Validator
-//     ($value:expr, $v:ident) => {{
-//         let validator = $v::default();
-//         $crate::validated::Validated::new($value, validator)
-//     }};
-// }
+        let mut validated_macro = validated!(value, IsPositive && IsFinite).unwrap();
+
+        assert_eq!(validated_manual.value, validated_macro.value);
+
+        assert!(validated_manual.set(5.).is_ok());
+        assert!(validated_macro.set(5.).is_ok());
+
+        let invalid_value = -1.0;
+        assert!(validated!(invalid_value, IsPositive && IsFinite).unwrap_err().to_string().contains("Value must satisfy"));
+    }
+
+    #[test]
+    fn test_validated_macro_point2() {
+        let value = Point2::new(2.0, 3.0);
+
+        let manual_validator = AndValidator::new(
+            AndValidator::new(IsPositive, IsFinite),
+            IsNotZero
+        );
+        let mut validated_manual = Validated::new(value, manual_validator).unwrap();
+
+        let mut validated_macro = validated!(value, IsPositive && IsFinite && IsNotZero).unwrap();
+
+        assert_eq!(validated_manual.value, validated_macro.value);
+        assert!(validated_manual.set(value).is_ok());
+        assert!(validated_macro.set(value).is_ok());
+
+        let invalid_value = Point2::new(0.0, 3.0); // zero in x
+        assert!(validated!(invalid_value, IsPositive && IsFinite && IsNotZero).unwrap_err().to_string().contains("Value must satisfy"));
+    }
+
+    #[test]
+    fn test_validated_type_macro_scalar() {
+        type ManualType = Validated<f64, AndValidator<f64, IsPositive, IsFinite>>;
+        let _manual: ManualType;
+
+        type MacroType = validated_type!(f64, IsPositive && IsFinite);
+        let _macro: MacroType;
+
+        // The types compile and are identical in structure
+    }
+
+    #[test]
+    fn test_validated_type_macro_point2() {
+        type ManualType = Validated<Point2<Length>, AndValidator<Point2<Length>, IsFinite, IsPositive>>;
+        let _manual: ManualType;
+
+        type MacroType = validated_type!(Point2<Length>, IsFinite && IsPositive);
+        let _macro: MacroType;
+    }
+
+
+    #[test]
+    fn test_or_validator_scalar() {
+        let value = 5.0f64;
+
+        let manual_validator = OrValidator::new(IsPositive, IsNotZero);
+        let mut validated_manual = Validated::new(value, manual_validator).unwrap();
+
+        let mut validated_macro = validated!(value, IsPositive || IsNotZero).unwrap();
+
+        assert_eq!(validated_manual.value, validated_macro.value);
+        assert!(validated_manual.set(value).is_ok());
+        assert!(validated_macro.set(value).is_ok());
+
+        let invalid_value = -0.0; // neither positive nor non-zero fails
+        assert!(validated!(invalid_value, IsPositive || IsNotZero).unwrap_err().to_string().contains("Value must satisfy"));
+    }
+
+    #[test]
+    fn test_and_or_mixed_scalar() {
+        let value = 5.0f64;
+
+        let manual_validator = AndValidator::new(
+            OrValidator::new(IsPositive, IsNotZero),
+            IsFinite
+        );
+        let mut validated_manual = Validated::new(value, manual_validator).unwrap();
+
+        let mut validated_macro = validated!(value, (IsPositive || IsNotZero) && IsFinite).unwrap();
+
+        assert_eq!(validated_manual.value, validated_macro.value);
+        assert!(validated_manual.set(value).is_ok());
+        assert!(validated_macro.set(value).is_ok());
+
+        let invalid_value = -0.0;
+        assert!(validated!(invalid_value, (IsPositive || IsNotZero) && IsFinite).unwrap_err().to_string().contains("Value must satisfy"));
+    }
+
+    #[test]
+    fn test_and_or_point2() {
+        let value = Point2::new(5.0, 2.0);
+
+        let manual_validator = AndValidator::new(
+            OrValidator::new(IsPositive, IsNotZero),
+            IsFinite
+        );
+        let mut validated_manual = Validated::new(value, manual_validator).unwrap();
+
+        let mut validated_macro = validated!(value, (IsPositive || IsNotZero) && IsFinite).unwrap();
+
+        assert_eq!(validated_manual.value, validated_macro.value);
+        assert!(validated_manual.set(value).is_ok());
+        assert!(validated_macro.set(value).is_ok());
+
+        let invalid_value = Point2::new(0.0, -3.0);
+        assert!(validated!(invalid_value, (IsPositive || IsNotZero) && IsFinite).unwrap_err().to_string().contains("Value must satisfy"));
+    }
+
+    #[test]
+    fn test_validated_type_and_or() {
+        type ManualType = Validated<f64, AndValidator<f64, OrValidator<f64, IsPositive, IsNotZero>, IsFinite>>;
+        let _manual: ManualType;
+
+        type MacroType = validated_type!(f64, (IsPositive || IsNotZero) && IsFinite);
+        let _macro: MacroType;
+
+        // Compiles correctly, structure identical
+    }
+
+    #[test]
+    fn test_validated_type_and_or_point2() {
+        type ManualType = Validated<Point2<Length>, AndValidator<Point2<Length>, OrValidator<Point2<Length>, IsPositive, IsNotZero>, IsFinite>>;
+        let _manual: ManualType;
+
+        type MacroType = validated_type!(Point2<Length>, (IsPositive || IsNotZero) && IsFinite);
+        let _macro: MacroType;
+    }
+}
+
+
+

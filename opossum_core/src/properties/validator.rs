@@ -1,12 +1,10 @@
-use num::Zero;
 use serde::{Deserialize, Serialize};
-use uom::si::{angle::degree, f64::{Angle, Length}};
+use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
-    error::{OpmResult, OpossumError}, nodes::{ideal_filter::FilterTypeBuilder, SplittingConfigBuilder}, prelude::LightDataBuilder, properties::Proptype
+    error::{OpmResult, OpossumError}, nodes::{ideal_filter::FilterTypeBuilder, SplittingConfigBuilder}, properties::Proptype
 };
-use std::{fmt::Debug, marker::PhantomData};
-use strum::IntoEnumIterator;
+use std::fmt::Debug;
 
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]

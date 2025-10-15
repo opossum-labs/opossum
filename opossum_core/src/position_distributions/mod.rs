@@ -37,7 +37,7 @@ pub use hexapolar::Hexapolar;
 pub use random::Random;
 pub use sobol::SobolDist;
 
-use crate::{error::OpmResult, utils::default_from_name::DefaultFromName};
+use crate:: utils::default_from_name::DefaultFromName;
 
 /// Trait for the generation of point distributions
 pub trait PositionDistribution {

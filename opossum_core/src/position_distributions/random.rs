@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Rectangular, uniform random distribution
 use super::PositionDistribution;
-use crate::{error::OpmResult, generic_validators::{AndValidator, IsFinite, IsFiniteAndPositive, IsNotZero, IsPositive, OnlyOneZero, Validate, Validated}, millimeter, validated, validated_type
+use crate::{error::OpmResult, generic_validators::{IsFinite, IsNotZero, IsPositive, OnlyOneZero}, millimeter, validated, validated_type
 };
 use nalgebra::{point, Point2, Point3};
 use num::Zero;
@@ -139,6 +139,8 @@ impl From<Random> for super::PosDistType {
         Self::Random(random)
     }
 }
+
+
 #[cfg(test)]
 mod test {
     use super::*;

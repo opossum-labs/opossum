@@ -14,9 +14,10 @@ mod impl_macro;
 pub use not_zero::IsNotZero;
 pub use finite::IsFinite;
 pub use normal::IsNormal;
-pub use logical_combinations::{ IsNormalAndPositive, IsFiniteAndPositive, AndValidator};
+pub use logical_combinations::{AndValidator, OrValidator};
 pub use positive::IsPositive;
 pub use only_one_zero::OnlyOneZero;
+pub use in_range::IsInRange;
 
 use serde::{Deserialize, Serialize};
 pub trait Validate<T> {

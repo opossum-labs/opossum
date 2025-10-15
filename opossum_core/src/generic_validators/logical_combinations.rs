@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
-use crate::{error::OpmResult, generic_validators::{IsFinite, IsNormal, IsPositive, OnlyOneZero, Validate}};
+use crate::{error::OpmResult, generic_validators::{IsFinite, IsNormal, IsPositive, Validate}};
 use serde::{Deserialize, Serialize};
-
 
 
 
@@ -46,35 +45,94 @@ impl<T, V1, V2> Validate<T> for AndValidator<T, V1, V2>
     }
 }
 
-
 impl<T, V1: Validate<T>, V2: Validate<T>>  AndValidator<T, V1, V2> {
     pub fn new(v1: V1, v2: V2) -> Self {
         Self { v1, v2, _marker: PhantomData }
     }
 }
 
-impl<T> AndValidator<T, IsNormal, IsPositive> 
-    where
-    IsNormal: Validate<T>,
-        IsPositive: Validate<T>,
-            {
 
-    pub fn new_normal_and_positive() -> Self {
-        AndValidator::new(IsNormal, IsPositive)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generic_validators::{AndValidator, IsNotZero, OrValidator, Validate};
+    use nalgebra::Point2;
+    use uom::si::f64::Length;
+
+    #[test]
+    fn test_or_validator_f64() {
+        let validator = OrValidator::new(IsPositive, IsNotZero);
+
+        // Positive and non-zero
+        assert!(validator.validate(&5.0).is_ok());
+
+        // Negative but non-zero
+        assert!(validator.validate(&-2.0).is_ok());
+
+        // Zero and non-positive
+        assert!(validator.validate(&0.0).is_ok());
+
+        assert!(validator.validate(&-0.0).is_err());
     }
 
-}
-impl<T> AndValidator<T, IsFinite, IsPositive> 
-    where
-    IsFinite: Validate<T>,
-        IsPositive: Validate<T>,
-            {
+    #[test]
+    fn test_and_validator_f64() {
+        let validator = AndValidator::new(IsPositive, IsFinite);
 
-    pub fn new_finite_and_positive() -> Self {
-        AndValidator::new(IsFinite, IsPositive)
+        // Positive and finite
+        assert!(validator.validate(&5.0).is_ok());
+
+        // Negative
+        assert!(validator.validate(&-2.0).is_err());
+
+        // Infinite
+        assert!(validator.validate(&f64::INFINITY).is_err());
+        assert!(validator.validate(&f64::NEG_INFINITY).is_err());
+    }
+
+    #[test]
+    fn test_or_validator_point2() {
+        let validator = OrValidator::new(IsFinite, IsPositive);
+
+        let p1 = Point2::new(1.0, -2.0);   // finite but one negative
+        let p2 = Point2::new(f64::INFINITY, 5.0); // not finite but positive
+        let p3 = Point2::new(f64::NAN, -1.0); // neither
+
+        assert!(validator.validate(&p1).is_ok());
+        assert!(validator.validate(&p2).is_ok());
+        assert!(validator.validate(&p3).is_err());
+    }
+
+    #[test]
+    fn test_and_validator_point2() {
+        let validator = AndValidator::new(IsPositive, IsFinite);
+
+        let p1 = Point2::new(2.0, 3.0); // positive and finite
+        let p2 = Point2::new(2.0, -1.0); // one negative
+        let p3 = Point2::new(f64::INFINITY, 1.0); // one infinite
+
+        assert!(validator.validate(&p1).is_ok());
+        assert!(validator.validate(&p2).is_err());
+        assert!(validator.validate(&p3).is_err());
+    }
+
+    #[test]
+    fn test_nested_validator_f64() {
+        // Nested validator: A && (B || C) && D
+        let inner_or = OrValidator::new(IsFinite, IsNotZero);
+        let outer_and = AndValidator::new(IsPositive, inner_or);
+        let full_validator = AndValidator::new(outer_and, IsNotZero);
+
+        // Should pass: positive, finite, not zero
+        assert!(full_validator.validate(&5.0).is_ok());
+
+        // Fail: negative value
+        assert!(full_validator.validate(&-2.0).is_err());
+
+        // Fail: zero value
+        assert!(full_validator.validate(&0.0).is_err());
+
+        // Pass: positive, not finite (Inf), not zero
+        assert!(full_validator.validate(&f64::INFINITY).is_ok());
     }
 }
-
-
-pub type IsNormalAndPositive<T> = AndValidator<T, IsNormal, IsPositive>;
-pub type IsFiniteAndPositive<T> = AndValidator<T, IsFinite, IsPositive>;
