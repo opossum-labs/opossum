@@ -1,8 +1,7 @@
 #![warn(missing_docs)]
 //! Rectangular, uniform random distribution
 use super::PositionDistribution;
-use crate::{
-    error::OpmResult, generic_validators::{AndValidator, IsFiniteAndPositive, IsNotZero, OnlyOneZero, Validated}, millimeter
+use crate::{error::OpmResult, generic_validators::{AndValidator, IsFinite, IsFiniteAndPositive, IsNotZero, IsPositive, OnlyOneZero, Validate, Validated}, millimeter, validated, validated_type
 };
 use nalgebra::{point, Point2, Point3};
 use num::Zero;
@@ -11,11 +10,12 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, uniform random distribution
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, )]
 pub struct Random {
-    nr_of_points: Validated<usize, IsNotZero>,
-    side_length: Validated<Point2<Length>, AndValidator<Point2<Length>, OnlyOneZero, IsFiniteAndPositive<Point2<Length>>>>,
+    nr_of_points: validated_type!(usize, IsNotZero),
+    side_length: validated_type!(Point2<Length>, OnlyOneZero && IsFinite && IsPositive),
 }
+
 
 impl Random {
     /// Create a new [`Random`] distribution generator.
@@ -111,11 +111,12 @@ impl Random {
     }
 }
 
+
 impl Default for Random {
     fn default() -> Self {
          Self {
-            nr_of_points: Validated::new(1000_usize, IsNotZero).unwrap(),
-            side_length: Validated::new(millimeter!(5.,5.), AndValidator::new(OnlyOneZero, IsFiniteAndPositive::new_finite_and_positive())).unwrap(),
+            nr_of_points: validated!(1000_usize, IsNotZero).unwrap(),
+            side_length: validated!(millimeter!(5.,5.), OnlyOneZero && IsFinite && IsPositive).unwrap(),
         }
     }
 }

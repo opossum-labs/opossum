@@ -5,7 +5,7 @@ members = [
     "opossum_backend",
     "opossum_gui",
     "opossum_core/opm_macros_lib",
-    "xtask",
+    "xtask", 
 ]
 default-members = ["opossum_backend", "opossum_cli", "opossum_gui"]
 resolver = "3"

@@ -1,61 +1,133 @@
 
 #[macro_export]
 macro_rules! impl_validator {   
-    // ($validator:ident, $func:expr, $(Point2<$t:ty>), *) => {
-    //     $(
-    //     impl crate::generic_validators::Validate<nalgebra::Point2<$t>> for $validator {
-    //         fn validate(&self, value: &nalgebra::Point2<$t>) -> crate::error::OpmResult<()> {
-    //             if $func(&value.x) && $func(&value.y) {
-    //                 Ok(())
-    //             } else {
-    //                 Err(crate::error::OpossumError::Other(format!("Value must satisfy {}", stringify!($func))))
-    //             }
-    //         }
-    //     }
-    // )*
-    // };
-    // // Für einfache Typen
-    ($validator:ident, $func:expr,  $($t:ty),*) => {
-        $(
-            impl crate::generic_validators::Validate<$t> for $validator {
-                fn validate(&self, value: &$t) -> crate::error::OpmResult<()> {
-                    if $func(&value) {
-                        Ok(())
-                    } else {
-                        Err(crate::error::OpossumError::Other(format!("Value must satisfy {}", stringify!($func))))
-                    }
+    ($validator:path, $func:expr,  $t:ty) => {
+        impl crate::generic_validators::Validate<$t> for $validator {
+            fn validate(&self, value: &$t) -> crate::error::OpmResult<()> {
+                if $func(&self, &value) {
+                    Ok(())
+                } else {
+                    Err(crate::error::OpossumError::Other(format!("Value must satisfy {}", stringify!($func))))
                 }
             }
-        )*
+        }
+    };
+}
+
+
+#[macro_export]
+macro_rules! validator_expr {
+    // Klammern zuerst, rekursiv
+    (( $($inner:tt)+ )) => {
+        $crate::validator_expr!($($inner)+)
+    };
+    
+    // AND
+    ($left:tt && $($rest:tt)+) => {
+        $crate::generic_validators::AndValidator::new(
+            $crate::validator_expr!($left),
+            $crate::validator_expr!($($rest)+)
+        )
+    };
+    
+    // OR
+    ($left:tt || $($rest:tt)+) => {
+        $crate::generic_validators::OrValidator::new(
+            $crate::validator_expr!($left),
+            $crate::validator_expr!($($rest)+)
+        )
+    };
+    
+    // Einzelner Validator
+    ($v:expr) => { $v };
+}
+
+#[macro_export]
+macro_rules! validator_type_expr {
+    // AND
+    ($t:ty; $left:tt && $($rest:tt)+) => {
+        $crate::generic_validators::AndValidator<
+            $t,
+            $crate::validator_type_expr!($t; $left),
+            $crate::validator_type_expr!($t; $($rest)+)
+        >
     };
 
+    // OR
+    ($t:ty; $left:tt || $($rest:tt)+) => {
+        $crate::generic_validators::OrValidator<
+            $t,
+            $crate::validator_type_expr!($t; $left),
+            $crate::validator_type_expr!($t; $($rest)+)
+        >
+    };
+
+    // Einzelner Validator
+    ($t:ty; $v:ty) => { $v };
 }
-// macro_rules! impl_validate_numeric {
-//     ($validator:ident, $check:expr) => {
-//         impl Validate<f64> for $validator {
-//             fn validate(&self, value: &f64) -> OpmResult<()> {
-//                 $check(*value)
-//             }
-//         }
 
-//         impl Validate<Length> for $validator {
-//             fn validate(&self, value: &Length) -> OpmResult<()> {
-//                 $check(*value)
-//             }
-//         }
+#[macro_export]
+macro_rules! validated_type {
+    ($t:ty, $($expr:tt)+) => {
+        $crate::generic_validators::Validated<
+            $t,
+            $crate::validator_type_expr!($t; $($expr)+)
+        >
+    };
+}
 
-//         impl Validate<Point2<f64>> for $validator {
-//             fn validate(&self, value: &Point2<f64>) -> OpmResult<()> {
-//                 $check(value.x)?;
-//                 $check(value.y)
-//             }
-//         }
 
-//         impl Validate<Point2<Length>> for $validator {
-//             fn validate(&self, value: &Point2<Length>) -> OpmResult<()> {
-//                 $check(value.x)?;
-//                 $check(value.y)
-//             }
-//         }
-//     };
+#[macro_export]
+macro_rules! validated {
+    ($value:expr, $($expr:tt)+) => {{
+        let validator = $crate::validator_expr!($($expr)+);
+        $crate::generic_validators::Validated::new($value, validator)
+    }};
+}
+
+// #[macro_export]
+// macro_rules! validated {
+//     // Mehrere Validatoren als Liste mit Komma
+//     ($value:expr, $first:expr $(, $rest:expr)*) => {{
+//         let combined_validator = {
+//             let mut v = $first;
+//             $(
+//                 v = $crate::generic_validators::AndValidator::new(v, $rest);
+//             )*
+//             v
+//         };
+//         $crate::generic_validators::Validated::new($value, combined_validator)
+//     }};
+
+//     // Einzelner Validator
+//     ($value:expr, $validator:expr) => {{
+//         $crate::generic_validators::Validated::new($value, $validator)
+//     }};
+// }
+
+// macro_rules! validated {
+//     // === Mehrere Validatoren mit &&
+//     ($value:expr, $left:ident && $right:ident) => {{
+//         let validator = $crate::generic_validators::AndValidator::<_, $left, $right>::new(
+//             $left::default(),
+//             $right::default(),
+//         );
+//         $crate::validated::Validated::new($value, validator)
+//     }};
+
+//     // Rekursiv für 3+ Validatoren: A && B && C && D …
+//     ($value:expr, $left:ident && $($rest:tt)+) => {{
+//         let next = validated!($value, $($rest)+)?;
+//         let validator = $crate::generic_validators::AndValidator::<_, $left, _>::new(
+//             $left::default(),
+//             next.validator().clone(),
+//         );
+//         $crate::validated::Validated::new($value, validator)
+//     }};
+
+//     // === Nur ein einzelner Validator
+//     ($value:expr, $v:ident) => {{
+//         let validator = $v::default();
+//         $crate::validated::Validated::new($value, validator)
+//     }};
 // }

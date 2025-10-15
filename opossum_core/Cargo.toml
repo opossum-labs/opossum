@@ -22,9 +22,9 @@ product-icon = "opossum/logo/Logo_square.ico"
 banner = "opossum/logo/Logo_InstallBanner.png"
 dialog = "opossum/logo/Logo_InstallDialog.png"
 
+
 [dependencies]
 opm_macros_lib = { workspace = true }
-
 approx.workspace = true
 chrono.workspace = true
 itertools.workspace = true
@@ -59,6 +59,7 @@ spade = "2.12"
 earcutr = "0.5"
 num-traits = "0.2"
 mutants = "0.0.3"
+
 
 [lints.rust]
 # missing_docs = "warn"

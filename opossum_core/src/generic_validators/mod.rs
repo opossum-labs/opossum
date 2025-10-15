@@ -9,7 +9,6 @@ mod positive;
 mod normal;
 mod not_nan;
 mod only_one_zero;
-// mod validate_macro;
 mod impl_macro;
 
 pub use not_zero::IsNotZero;
