@@ -135,7 +135,7 @@ impl EnergyLaserLines {
             spectral_resolution,
         };
 
-        let _ =laser_lines.validate()?;
+        // let _ =laser_lines.validate()?;
 
         Ok(laser_lines)
     }

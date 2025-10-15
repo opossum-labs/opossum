@@ -2,9 +2,9 @@
 //! Rectangular, uniform random distribution
 use super::PositionDistribution;
 use crate::{
-    error::OpmResult, generic_validators::{IsNormalAndPositive, NotZero, Validated}, millimeter
+    error::OpmResult, generic_validators::{AndValidator, IsFiniteAndPositive, IsNotZero, OnlyOneZero, Validated}, millimeter
 };
-use nalgebra::{Point3, point};
+use nalgebra::{point, Point2, Point3};
 use num::Zero;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -13,34 +13,9 @@ use uom::si::f64::Length;
 /// Rectangular, uniform random distribution
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub struct Random {
-    nr_of_points: Validated<usize, NotZero>,
-    side_length_x: Validated<Length, IsNormalAndPositive<Length>>,
-    side_length_y: Validated<Length, IsNormalAndPositive<Length>>,
+    nr_of_points: Validated<usize, IsNotZero>,
+    side_length: Validated<Point2<Length>, AndValidator<Point2<Length>, OnlyOneZero, IsFiniteAndPositive<Point2<Length>>>>,
 }
-
-// impl Validate for Random{
-//     fn validate(&self) -> OpmResult<()>{
-//         if self.side_length_x().is_zero() && self.side_length_y().is_zero() {
-//             return Err(OpossumError::Other(
-//                 "At least one side length must be != zero".into(),
-//             ));
-//         }
-//         if self.side_length_x().is_sign_negative() || !self.side_length_x().is_normal() {
-//             return Err(OpossumError::Other(
-//                 "side_length_x must be >= zero and finite".into(),
-//             ));
-//         }
-//         if self.side_length_y().is_sign_negative() || !self.side_length_y().is_normal() {
-//             return Err(OpossumError::Other(
-//                 "side_length_y must be >= zero and finite".into(),
-//             ));
-//         }
-//         if self.nr_of_points().is_zero() {
-//             return Err(OpossumError::Other("nr_of_points must be >= 1.".into()));
-//         }
-//         Ok(())
-//     }
-// }
 
 impl Random {
     /// Create a new [`Random`] distribution generator.
@@ -80,7 +55,7 @@ impl Random {
     /// The side length in the X direction of type `Length`.
     #[must_use]
     pub fn side_length_x(&self) -> Length {
-        *self.side_length_x.get()
+        self.side_length.get().x
     }
 
     /// Returns the side length along the Y axis.
@@ -90,7 +65,7 @@ impl Random {
     /// The side length in the Y direction of type `Length`.
     #[must_use]
     pub fn side_length_y(&self) -> Length {
-        *self.side_length_y.get()
+        self.side_length.get().y
     }
 
     /// Sets the number of points in the random distribution.
@@ -117,7 +92,7 @@ impl Random {
     ///
     /// Updates the current side length in the X direction.
     pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()>  {
-        self.side_length_x.set(side_length_x);
+        self.side_length.set(Point2::new(side_length_x, self.side_length_y()))?;
         Ok(())
     }
 
@@ -131,17 +106,16 @@ impl Random {
     ///
     /// Updates the current side length in the Y direction.
     pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()>  {
-        self.side_length_y.set(side_length_y);
+        self.side_length.set(Point2::new(self.side_length_x(), side_length_y))?;
         Ok(())
     }
 }
 
 impl Default for Random {
     fn default() -> Self {
-        Self {
-            nr_of_points: Validated::new(1000_usize, NotZero).unwrap(),
-            side_length_x: Validated::new(millimeter!(5.),IsNormalAndPositive::new_normal_and_positive()).unwrap(),
-            side_length_y: Validated::new(millimeter!(5.),IsNormalAndPositive::new_normal_and_positive()).unwrap()
+         Self {
+            nr_of_points: Validated::new(1000_usize, IsNotZero).unwrap(),
+            side_length: Validated::new(millimeter!(5.,5.), AndValidator::new(OnlyOneZero, IsFiniteAndPositive::new_finite_and_positive())).unwrap(),
         }
     }
 }
@@ -179,6 +153,37 @@ mod test {
         assert!(Random::new(millimeter!(1.0), millimeter!(f64::NAN), 1).is_err());
         assert!(Random::new(millimeter!(1.0), millimeter!(f64::INFINITY), 1).is_err());
         assert!(Random::new(millimeter!(1.0), millimeter!(1.0), 0).is_err());
+    }
+    #[test]
+    fn new_ok() {
+        assert!(Random::new(millimeter!(1.0), Length::zero(), 1).is_ok());
+        assert!(Random::new(Length::zero(), millimeter!(1.0), 1).is_ok());
+        assert!(Random::new(millimeter!(1.), millimeter!(1.0), 1).is_ok());
+    }
+    #[test]
+    fn set_ok() {
+        let mut random = Random::new(millimeter!(1.0), Length::zero(), 1).unwrap();
+
+        assert!(random.set_nr_of_points(10).is_ok());
+        assert!(random.set_nr_of_points(100).is_ok());
+        assert!(random.set_side_length_x(millimeter!(10.)).is_ok());
+        assert!(random.set_side_length_y(millimeter!(10.)).is_ok());
+        assert!(random.set_side_length_x(millimeter!(0.)).is_ok());
+    }
+    #[test]
+    fn set_err() {
+        let mut random = Random::new(millimeter!(1.0), Length::zero(), 1).unwrap();
+
+        assert!(random.set_nr_of_points(0).is_err());
+        assert!(random.set_side_length_x(millimeter!(-10.)).is_err());
+        assert!(random.set_side_length_y(millimeter!(-10.)).is_err());
+        assert!(random.set_side_length_x(millimeter!(0.)).is_err());
+
+        let mut random = Random::new(Length::zero(), millimeter!(1.0),1).unwrap();
+        assert!(random.set_nr_of_points(0).is_err());
+        assert!(random.set_side_length_x(millimeter!(-10.)).is_err());
+        assert!(random.set_side_length_y(millimeter!(-10.)).is_err());
+        assert!(random.set_side_length_y(millimeter!(0.)).is_err());
     }
     #[test]
     fn generate() {

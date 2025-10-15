@@ -1,19 +1,13 @@
 
-use num_traits::float::FloatCore;
+use nalgebra::Point2;
 use uom::si::f64::Length;
-use crate::{error::{OpmResult, OpossumError}, generic_validators::Validate};
+use crate::impl_validator;
 use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct IsPositive;
-impl Validate<f64> for IsPositive{
-    fn validate(&self, value: &f64) -> OpmResult<()> {
-        if (*value).is_sign_positive() {Ok(())  } else { Err(OpossumError::Other("Value must be positive".into())) }
-    }
-}
 
-impl Validate<Length> for IsPositive{
-    fn validate(&self, value: &Length) -> OpmResult<()> {
-        if (*value).is_sign_positive() {Ok(())  } else { Err(OpossumError::Other("Value must be positive".into())) }
-    }
-}
+impl_validator!(IsPositive, |v: &f64| v.is_sign_positive(), f64);
+impl_validator!(IsPositive, |v: &Length| v.is_sign_positive(), Length);
+impl_validator!(IsPositive, |v: &Point2<f64>| v.x.is_sign_positive() && v.y.is_sign_positive(), Point2<f64>);
+impl_validator!(IsPositive, |v: &Point2<Length>| v.x.is_sign_positive() && v.y.is_sign_positive(), Point2<Length>);

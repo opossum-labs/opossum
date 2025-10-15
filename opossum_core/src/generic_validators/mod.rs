@@ -8,12 +8,17 @@ mod in_range;
 mod positive;
 mod normal;
 mod not_nan;
+mod only_one_zero;
+// mod validate_macro;
+mod impl_macro;
 
-pub use not_zero::NotZero;
+pub use not_zero::IsNotZero;
 pub use finite::IsFinite;
 pub use normal::IsNormal;
-pub use logical_combinations::{ IsNormalAndPositive, AndValidator};
+pub use logical_combinations::{ IsNormalAndPositive, IsFiniteAndPositive, AndValidator};
 pub use positive::IsPositive;
+pub use only_one_zero::OnlyOneZero;
+
 use serde::{Deserialize, Serialize};
 pub trait Validate<T> {
     fn validate(&self, value: &T) -> OpmResult<()>;

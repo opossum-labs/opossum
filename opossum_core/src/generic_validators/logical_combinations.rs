@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use crate::{error::OpmResult, generic_validators::{IsNormal, IsPositive, Validate}};
+use crate::{error::OpmResult, generic_validators::{IsFinite, IsNormal, IsPositive, OnlyOneZero, Validate}};
 use serde::{Deserialize, Serialize};
 
 
@@ -58,10 +58,23 @@ impl<T> AndValidator<T, IsNormal, IsPositive>
     IsNormal: Validate<T>,
         IsPositive: Validate<T>,
             {
-                
+
     pub fn new_normal_and_positive() -> Self {
         AndValidator::new(IsNormal, IsPositive)
     }
+
+}
+impl<T> AndValidator<T, IsFinite, IsPositive> 
+    where
+    IsFinite: Validate<T>,
+        IsPositive: Validate<T>,
+            {
+
+    pub fn new_finite_and_positive() -> Self {
+        AndValidator::new(IsFinite, IsPositive)
+    }
 }
 
+
 pub type IsNormalAndPositive<T> = AndValidator<T, IsNormal, IsPositive>;
+pub type IsFiniteAndPositive<T> = AndValidator<T, IsFinite, IsPositive>;
