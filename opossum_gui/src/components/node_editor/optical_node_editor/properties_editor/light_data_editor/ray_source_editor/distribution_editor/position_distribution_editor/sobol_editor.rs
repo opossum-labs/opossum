@@ -48,14 +48,16 @@ impl IntoInputData<f64, SobolDist, PosDistType> for SobolParam {
 
     fn setter_from_obj(&self) -> impl FnMut(&mut SobolDist, f64) {
         match self {
-            Self::SideLengthX => {
-                move |obj: &mut SobolDist, val: f64| obj.set_side_length_x(millimeter!(val))
-            }
-            Self::SideLengthY => {
-                move |obj: &mut SobolDist, val: f64| obj.set_side_length_y(millimeter!(val))
-            }
+            Self::SideLengthX => move |obj: &mut SobolDist, val: f64| {
+                let _ = obj.set_side_length_x(millimeter!(val));
+            },
+            Self::SideLengthY => move |obj: &mut SobolDist, val: f64| {
+                let _ = obj.set_side_length_y(millimeter!(val));
+            },
             Self::Points => move |obj: &mut SobolDist, val: f64| {
-                obj.set_nr_of_points(try_f64_to_usize(val).unwrap());
+                if let Some(val) = try_f64_to_usize(val) {
+                    let _ = obj.set_nr_of_points(val);
+                }
             },
         }
     }

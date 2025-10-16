@@ -27,7 +27,7 @@ pub use positive::IsPositive;
 /// `OpmResult<()>`, which is `Ok(())` if validation passes or
 /// an error if it fails.
 use serde::{Deserialize, Serialize};
-pub trait Validate<T: Clone> {
+pub trait Validate<T> {
     /// Validate the given `value`.
     ///
     /// # Arguments
@@ -48,12 +48,12 @@ pub trait Validate<T: Clone> {
 /// `Validated` ensures that the value is always valid according
 /// to the validator.
 #[derive(Copy, Clone, PartialEq, Serialize, Deserialize, Debug, Eq)]
-pub struct Validated<T: Clone, V: Validate<T>> {
+pub struct Validated<T, V: Validate<T>> {
     value: T,
     validator: V,
 }
 
-impl<T: Clone, V: Validate<T>> Validated<T, V> {
+impl<T, V: Validate<T>> Validated<T, V> {
     /// Creates a new `Validated` value.
     ///
     /// # Arguments
@@ -103,12 +103,13 @@ impl<T: Clone, V: Validate<T>> Validated<T, V> {
     pub fn into_inner(self) -> T {
         self.value
     }
-
-    // pub fn get_mut(&mut self) -> ValidatedGuard<'_, T, V> {
-    //     ValidatedGuard::new(self)
-    // }
 }
 
+/// A wrapper around a value of type `Vec<T>` that enforces validation for all elements of Vec
+/// using a `ValidateVec<T>` implementor.
+///
+/// `ValidatedVec` ensures that the values are always valid according
+/// to the validator which is the same for all values.
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Eq)]
 pub struct ValidatedVec<T: Clone, V: Validate<T>> {
     values: Vec<T>,
@@ -116,6 +117,20 @@ pub struct ValidatedVec<T: Clone, V: Validate<T>> {
 }
 
 impl<T: Clone, V: Validate<T>> ValidatedVec<T, V> {
+    /// Creates a new `ValidatedVec` by validating all initial values.
+    ///
+    /// # Arguments
+    ///
+    /// * `values` - A vector of initial values to store.
+    /// * `validator` - The validator used to enforce rules for each element.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(ValidatedVec)` if all values pass validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(OpossumError)` if any value fails validation.
     pub fn new(values: Vec<T>, validator: V) -> OpmResult<Self> {
         for v in &values {
             validator.validate(v)?;
@@ -123,25 +138,62 @@ impl<T: Clone, V: Validate<T>> ValidatedVec<T, V> {
         Ok(Self { values, validator })
     }
 
-    pub fn get(&self) -> &Vec<T> {
+    /// Returns a reference to the internal vector.
+    ///
+    /// # Returns
+    ///
+    /// * `&Vec<T>` - Reference to the stored values.
+    pub const fn get(&self) -> &Vec<T> {
         &self.values
     }
 
+    /// Returns a mutable guard for the element at the given index.
+    ///
+    /// The guard allows modifying the element while ensuring validation and
+    /// automatic rollback on drop if commit is not successful.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - Index of the element to obtain a guard for.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(ValidatedItemGuard)` if the index is valid.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(OpossumError)` if the index is out of bounds.
     pub fn get_mut_at_index(&mut self, index: usize) -> OpmResult<ValidatedItemGuard<'_, T, V>> {
-        if let Some(backup) = self.values.get(index).cloned() {
-            Ok(ValidatedItemGuard {
-                parent: self,
-                index,
-                backup,
-                state: GuardState::Pending,
-            })
-        } else {
-            Err(OpossumError::Other(
-                "Index to create ValidatedItemGuard of vector out of bounds!".into(),
-            ))
-        }
+        self.values.get(index).cloned().map_or_else(
+            || {
+                Err(OpossumError::Other(
+                    "Index to create ValidatedItemGuard of vector out of bounds!".into(),
+                ))
+            },
+            |backup| {
+                Ok(ValidatedItemGuard {
+                    parent: self,
+                    index,
+                    backup,
+                    state: GuardState::Pending,
+                })
+            },
+        )
     }
 
+    /// Replaces all values in the vector with new values after validation.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_values` - A vector of new values to store.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if all new values pass validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(OpossumError)` if any new value fails validation.
     pub fn set(&mut self, new_values: Vec<T>) -> OpmResult<()> {
         for v in &new_values {
             self.validator.validate(v)?;
@@ -151,12 +203,21 @@ impl<T: Clone, V: Validate<T>> ValidatedVec<T, V> {
     }
 }
 
+/// Represents the validation state of a `ValidatedItemGuard`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GuardState {
+    /// Guard has been created but not yet committed.
     Pending,
+    /// Value has been successfully committed.
     Committed,
+    /// Commit has failed at least once.
     Failed,
 }
 
+/// A guard for a single element in a `ValidatedVec`.
+///
+/// Allows mutable access to an element while enforcing validation rules,
+/// and performs automatic rollback if commit is not successful.
 pub struct ValidatedItemGuard<'a, T: Clone, V: Validate<T>> {
     parent: &'a mut ValidatedVec<T, V>,
     index: usize,
@@ -164,20 +225,39 @@ pub struct ValidatedItemGuard<'a, T: Clone, V: Validate<T>> {
     state: GuardState,
 }
 
-impl<'a, T: Clone, V: Validate<T>> Deref for ValidatedItemGuard<'a, T, V> {
+impl<T: Clone, V: Validate<T>> Deref for ValidatedItemGuard<'_, T, V> {
     type Target = T;
+    /// Returns an immutable reference to the guarded element.
+    ///
+    /// # Returns
+    ///
+    /// * `&T` - Reference to the element.
     fn deref(&self) -> &Self::Target {
         &self.parent.values[self.index]
     }
 }
 
-impl<'a, T: Clone, V: Validate<T>> DerefMut for ValidatedItemGuard<'a, T, V> {
+impl<T: Clone, V: Validate<T>> DerefMut for ValidatedItemGuard<'_, T, V> {
+    /// Returns a mutable reference to the guarded element.
+    ///
+    /// # Returns
+    ///
+    /// * `&mut T` - Mutable reference to the element.
     fn deref_mut(&mut self) -> &mut T {
         &mut self.parent.values[self.index]
     }
 }
 
-impl<'a, T: Clone, V: Validate<T>> ValidatedItemGuard<'a, T, V> {
+impl<T: Clone, V: Validate<T>> ValidatedItemGuard<'_, T, V> {
+    /// Commits the current value, marking it as validated and final.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the value passes validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(OpossumError)` if the value fails validation.
     pub fn commit(mut self) -> OpmResult<()> {
         let val = &self.parent.values[self.index];
         match self.parent.validator.validate(val) {
@@ -192,6 +272,19 @@ impl<'a, T: Clone, V: Validate<T>> ValidatedItemGuard<'a, T, V> {
         }
     }
 
+    /// Validates the current value and updates the backup for rollback.
+    ///
+    /// This method does not mark the value as fully committed. It is useful
+    /// for previewing changes and ensuring the backup reflects the latest
+    /// valid state.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the value passes validation and backup is updated.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(OpossumError)` if the value fails validation.
     fn validate_and_update_backup(&mut self) -> OpmResult<()> {
         let val = &mut self.parent.values[self.index];
         match self.parent.validator.validate(val) {
@@ -205,7 +298,12 @@ impl<'a, T: Clone, V: Validate<T>> ValidatedItemGuard<'a, T, V> {
     }
 }
 
-impl<'a, T: Clone, V: Validate<T>> Drop for ValidatedItemGuard<'a, T, V> {
+impl<T: Clone, V: Validate<T>> Drop for ValidatedItemGuard<'_, T, V> {
+    /// Drop handler that enforces validation and performs rollback if necessary.
+    ///
+    /// If the guard is still pending and validation fails, the value is rolled
+    /// back to the last valid backup. If the guard previously failed commit,
+    /// the value is also rolled back. Committed values are not modified.
     fn drop(&mut self) {
         match self.state {
             GuardState::Pending => {
@@ -240,7 +338,6 @@ mod tests {
     use log::Level;
     use nalgebra::Point2;
 
-    // Hilfsfunktion, um den Logger einmal pro Test zu initialisieren
     fn setup_logger() {
         static INIT: std::sync::Once = std::sync::Once::new();
         INIT.call_once(|| testing_logger::setup());
