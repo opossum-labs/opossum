@@ -1,10 +1,9 @@
 //! Rectangluar, low-discrepancy quasirandom distribution
 use super::PositionDistribution;
 use crate::{
-    error::{OpmResult, OpossumError},
-    millimeter,
+    error::{OpmResult, OpossumError}, generic_validators::{IsFinite, IsNotZero, IsPositive, OnlyOneZero}, millimeter, validated, validated_type
 };
-use nalgebra::{Point3, point};
+use nalgebra::{point, Point2, Point3};
 use num::Zero;
 use serde::{Deserialize, Serialize};
 use sobol::{Sobol, params::JoeKuoD6};
@@ -15,9 +14,8 @@ use uom::si::f64::Length;
 /// For further details see [here](https://en.wikipedia.org/wiki/Sobol_sequence)
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct SobolDist {
-    nr_of_points: usize,
-    side_length_x: Length,
-    side_length_y: Length,
+    nr_of_points: validated_type!(usize, IsNotZero),
+    side_length: validated_type!(Point2<Length>, OnlyOneZero && IsFinite && IsPositive),
 }
 
 impl SobolDist {
@@ -34,29 +32,12 @@ impl SobolDist {
         side_length_y: Length,
         nr_of_points: usize,
     ) -> OpmResult<Self> {
-        if side_length_x.is_zero() && side_length_y.is_zero() {
-            return Err(OpossumError::Other(
-                "At least one side length must be != zero".into(),
-            ));
-        }
-        if side_length_x.is_sign_negative() || !side_length_x.is_finite() {
-            return Err(OpossumError::Other(
-                "side_length_x must be >= zero and finite".into(),
-            ));
-        }
-        if side_length_y.is_sign_negative() || !side_length_y.is_finite() {
-            return Err(OpossumError::Other(
-                "side_length_y must be >= zero and finite".into(),
-            ));
-        }
-        if nr_of_points.is_zero() {
-            return Err(OpossumError::Other("nr_of_points must be >= 1.".into()));
-        }
-        Ok(Self {
-            nr_of_points,
-            side_length_x,
-            side_length_y,
-        })
+        let mut random = Self::default();
+        random.set_nr_of_points(nr_of_points)?;
+        random.set_side_length_x(side_length_x)?;
+        random.set_side_length_y(side_length_y)?;
+        Ok(random)
+
     }
     /// Returns the number of points in the Sobol distribution.
     ///
@@ -65,7 +46,7 @@ impl SobolDist {
     /// The number of points as a `usize`.
     #[must_use]
     pub const fn nr_of_points(&self) -> usize {
-        self.nr_of_points
+        *self.nr_of_points.get()
     }
 
     /// Returns the side length along the X axis.
@@ -75,7 +56,7 @@ impl SobolDist {
     /// The side length in the X direction of type `Length`.
     #[must_use]
     pub fn side_length_x(&self) -> Length {
-        self.side_length_x
+        self.side_length.get().x
     }
 
     /// Returns the side length along the Y axis.
@@ -85,7 +66,7 @@ impl SobolDist {
     /// The side length in the Y direction of type `Length`.
     #[must_use]
     pub fn side_length_y(&self) -> Length {
-        self.side_length_y
+        self.side_length.get().y
     }
 
     /// Sets the number of points in the Sobol distribution.
@@ -97,8 +78,9 @@ impl SobolDist {
     /// # Side Effects
     ///
     /// Overwrites the current number of points.
-    pub const fn set_nr_of_points(&mut self, nr_of_points: usize) {
-        self.nr_of_points = nr_of_points;
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize)-> OpmResult<()> {
+        self.nr_of_points.set(nr_of_points)?;
+        Ok(())
     }
 
     /// Sets the side length along the X axis.
@@ -110,8 +92,9 @@ impl SobolDist {
     /// # Side Effects
     ///
     /// Overwrites the current side length in the X direction.
-    pub fn set_side_length_x(&mut self, side_length_x: Length) {
-        self.side_length_x = side_length_x;
+    pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()> {
+        self.side_length.set(Point2::new(side_length_x, self.side_length_y()))?;
+        Ok(())
     }
 
     /// Sets the side length along the Y axis.
@@ -123,29 +106,30 @@ impl SobolDist {
     /// # Side Effects
     ///
     /// Overwrites the current side length in the Y direction.
-    pub fn set_side_length_y(&mut self, side_length_y: Length) {
-        self.side_length_y = side_length_y;
+    pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()> {
+        self.side_length.set(Point2::new(self.side_length_x(), side_length_y))?;
+        Ok(())
     }
 }
 
 impl Default for SobolDist {
     fn default() -> Self {
         Self {
-            nr_of_points: 1000,
-            side_length_x: millimeter!(5.),
-            side_length_y: millimeter!(5.),
+            nr_of_points: validated!(1000_usize, IsNotZero).unwrap(),
+            side_length: validated!(millimeter!(5.,5.), OnlyOneZero && IsFinite && IsPositive).unwrap(),
         }
     }
 }
 
 impl PositionDistribution for SobolDist {
     fn generate(&self) -> Vec<nalgebra::Point3<Length>> {
-        let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_points);
+        let nr_of_points = *self.nr_of_points.get();
+        let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_points);
         let params = JoeKuoD6::minimal();
         let seq = Sobol::<f64>::new(2, &params);
-        for point in seq.take(self.nr_of_points) {
-            let point_x = self.side_length_x * (point[0] - 0.5);
-            let point_y = self.side_length_y * (point[1] - 0.5);
+        for point in seq.take(nr_of_points) {
+            let point_x = self.side_length_x() * (point[0] - 0.5);
+            let point_y = self.side_length_y() * (point[1] - 0.5);
             points.push(point!(point_x, point_y, Length::zero()));
         }
         points

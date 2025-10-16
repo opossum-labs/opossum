@@ -14,6 +14,16 @@ impl_validator!(IsNotZero, |_self, v: &Length| !v.is_zero(), Length);
 impl_validator!(IsNotZero, |_self, v: &Angle| !v.is_zero(), Angle);
 impl_validator!(
     IsNotZero,
+    |_self, v: &Point2<usize>| !v.x.is_zero() && !v.y.is_zero(),
+    Point2<usize>
+);
+impl_validator!(
+    IsNotZero,
+    |_self, v: &Point2<i32>| !v.x.is_zero() && !v.y.is_zero(),
+    Point2<i32>
+);
+impl_validator!(
+    IsNotZero,
     |_self, v: &Point2<f64>| !v.x.is_zero() && !v.y.is_zero(),
     Point2<f64>
 );
