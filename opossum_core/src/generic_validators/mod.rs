@@ -27,7 +27,7 @@ pub use positive::IsPositive;
 /// `OpmResult<()>`, which is `Ok(())` if validation passes or
 /// an error if it fails.
 use serde::{Deserialize, Serialize};
-pub trait Validate<T:Clone> {
+pub trait Validate<T: Clone> {
     /// Validate the given `value`.
     ///
     /// # Arguments
@@ -48,14 +48,12 @@ pub trait Validate<T:Clone> {
 /// `Validated` ensures that the value is always valid according
 /// to the validator.
 #[derive(Copy, Clone, PartialEq, Serialize, Deserialize, Debug, Eq)]
-pub struct Validated<T:Clone, V: Validate<T>> {
+pub struct Validated<T: Clone, V: Validate<T>> {
     value: T,
     validator: V,
 }
 
-
-
-impl<T:Clone, V: Validate<T>> Validated<T, V> {
+impl<T: Clone, V: Validate<T>> Validated<T, V> {
     /// Creates a new `Validated` value.
     ///
     /// # Arguments
@@ -97,7 +95,7 @@ impl<T:Clone, V: Validate<T>> Validated<T, V> {
         self.value = new_value;
         Ok(())
     }
-    
+
     /// Consume the `Validated` wrapper and return the inner value.
     ///
     /// This does not perform validation since the value is already guaranteed
@@ -105,19 +103,19 @@ impl<T:Clone, V: Validate<T>> Validated<T, V> {
     pub fn into_inner(self) -> T {
         self.value
     }
-    
+
     // pub fn get_mut(&mut self) -> ValidatedGuard<'_, T, V> {
-        //     ValidatedGuard::new(self) 
+    //     ValidatedGuard::new(self)
     // }
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Eq)]
-pub struct ValidatedVec<T:Clone, V: Validate<T>> {
+pub struct ValidatedVec<T: Clone, V: Validate<T>> {
     values: Vec<T>,
     validator: V,
 }
 
-impl<T:Clone, V: Validate<T>> ValidatedVec<T, V> {
+impl<T: Clone, V: Validate<T>> ValidatedVec<T, V> {
     pub fn new(values: Vec<T>, validator: V) -> OpmResult<Self> {
         for v in &values {
             validator.validate(v)?;
@@ -138,7 +136,9 @@ impl<T:Clone, V: Validate<T>> ValidatedVec<T, V> {
                 state: GuardState::Pending,
             })
         } else {
-            Err(OpossumError::Other("Index to create ValidatedItemGuard of vector out of bounds!".into()))
+            Err(OpossumError::Other(
+                "Index to create ValidatedItemGuard of vector out of bounds!".into(),
+            ))
         }
     }
 
@@ -152,32 +152,32 @@ impl<T:Clone, V: Validate<T>> ValidatedVec<T, V> {
 }
 
 enum GuardState {
-    Pending,       
-    Committed,     
-    Failed,        
+    Pending,
+    Committed,
+    Failed,
 }
 
-pub struct ValidatedItemGuard<'a, T:Clone, V: Validate<T>> {
+pub struct ValidatedItemGuard<'a, T: Clone, V: Validate<T>> {
     parent: &'a mut ValidatedVec<T, V>,
     index: usize,
     backup: T,
     state: GuardState,
 }
 
-impl<'a, T:Clone, V: Validate<T>> Deref for ValidatedItemGuard<'a, T, V> {
+impl<'a, T: Clone, V: Validate<T>> Deref for ValidatedItemGuard<'a, T, V> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.parent.values[self.index]
     }
 }
 
-impl<'a, T:Clone, V: Validate<T>> DerefMut for ValidatedItemGuard<'a, T, V> {
+impl<'a, T: Clone, V: Validate<T>> DerefMut for ValidatedItemGuard<'a, T, V> {
     fn deref_mut(&mut self) -> &mut T {
         &mut self.parent.values[self.index]
     }
 }
 
-impl<'a, T:Clone, V: Validate<T>> ValidatedItemGuard<'a, T, V> {
+impl<'a, T: Clone, V: Validate<T>> ValidatedItemGuard<'a, T, V> {
     pub fn commit(mut self) -> OpmResult<()> {
         let val = &self.parent.values[self.index];
         match self.parent.validator.validate(val) {
@@ -197,7 +197,7 @@ impl<'a, T:Clone, V: Validate<T>> ValidatedItemGuard<'a, T, V> {
         match self.parent.validator.validate(val) {
             Ok(()) => {
                 self.backup = val.clone();
-                self.state = GuardState::Pending; 
+                self.state = GuardState::Pending;
                 Ok(())
             }
             Err(e) => Err(e),
@@ -216,10 +216,14 @@ impl<'a, T: Clone, V: Validate<T>> Drop for ValidatedItemGuard<'a, T, V> {
                 } else {
                     log::info!("Forced committing was successful!");
                 }
-            }GuardState::Failed => {
+            }
+            GuardState::Failed => {
                 // commit failed → Rollback to Backup
                 self.parent.values[self.index] = self.backup.clone();
-                log::warn!("Commit failed earlier, rolled back element at index {}", self.index);
+                log::warn!(
+                    "Commit failed earlier, rolled back element at index {}",
+                    self.index
+                );
             }
             GuardState::Committed => {
                 // do nothing
@@ -228,51 +232,49 @@ impl<'a, T: Clone, V: Validate<T>> Drop for ValidatedItemGuard<'a, T, V> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-        use crate::utils::test_helper::test_helper::check_logs;
-    
-        use super::*;
-        use log::Level;
+    use crate::utils::test_helper::test_helper::check_logs;
+
+    use super::*;
+    use log::Level;
     use nalgebra::Point2;
 
     // Hilfsfunktion, um den Logger einmal pro Test zu initialisieren
     fn setup_logger() {
-            static INIT: std::sync::Once = std::sync::Once::new();
-            INIT.call_once(|| testing_logger::setup());
-        }
-    
-        #[test]
-        fn test_validated_new_and_set_is_positive() {
-                let mut v = Validated::new(5, IsPositive).unwrap();
-                assert_eq!(*v.get(), 5);
-
-                // Set valid value
-                assert!(v.set(10).is_ok());
-                assert_eq!(*v.get(), 10);
-        
-                // Set invalid value
-                assert!(v.set(-2).is_err());
-                assert_eq!(*v.get(), 10); // values remains 10
-            }
-
-               #[test]
-    fn test_validated_vec_guard_invalid_index() {
-        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], IsNotZero).unwrap();
-        
-        assert!(v.get_mut_at_index(1).is_err());
-
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| testing_logger::setup());
     }
 
-            #[test]
+    #[test]
+    fn test_validated_new_and_set_is_positive() {
+        let mut v = Validated::new(5, IsPositive).unwrap();
+        assert_eq!(*v.get(), 5);
+
+        // Set valid value
+        assert!(v.set(10).is_ok());
+        assert_eq!(*v.get(), 10);
+
+        // Set invalid value
+        assert!(v.set(-2).is_err());
+        assert_eq!(*v.get(), 10); // values remains 10
+    }
+
+    #[test]
+    fn test_validated_vec_guard_invalid_index() {
+        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], IsNotZero).unwrap();
+
+        assert!(v.get_mut_at_index(1).is_err());
+    }
+
+    #[test]
     fn test_validated_vec_guard_commit_is_err() -> OpmResult<()> {
         let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], IsNotZero)?;
 
         {
             let mut guard = v.get_mut_at_index(0)?;
             guard.x = 0;
-            guard.y = 1; 
+            guard.y = 1;
             assert!(guard.commit().is_err());
         }
 
@@ -283,14 +285,14 @@ mod tests {
         Ok(())
     }
 
-            #[test]
+    #[test]
     fn test_validated_vec_guard_commit_is_ok() -> OpmResult<()> {
         let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], IsNotZero)?;
 
         {
             let mut guard = v.get_mut_at_index(0)?;
             guard.x = 3;
-            guard.y = 1; 
+            guard.y = 1;
             assert!(guard.commit().is_ok());
         }
 
@@ -314,10 +316,13 @@ mod tests {
             // no commit → Drop calls try_commit() and creates warnings
         }
 
-        check_logs(Level::Warn, vec![
-            "Validation failed on drop for index 0: Opossum Error:Other:Value must satisfy |_self, v: &Point2<i32>| !v.x.is_zero() && !v.y.is_zero()",
-            "Rolled back element at index 0",
-        ]);
+        check_logs(
+            Level::Warn,
+            vec![
+                "Validation failed on drop for index 0: Opossum Error:Other:Value must satisfy |_self, v: &Point2<i32>| !v.x.is_zero() && !v.y.is_zero()",
+                "Rolled back element at index 0",
+            ],
+        );
 
         let val = &v.get()[0];
         assert_eq!(val.x, 1);
@@ -339,9 +344,7 @@ mod tests {
             // no commit → Drop calls try_commit() and creates info
         }
 
-        check_logs(Level::Info, vec![
-            "Forced committing was successful!",
-        ]);
+        check_logs(Level::Info, vec!["Forced committing was successful!"]);
 
         let val = &v.get()[0];
         assert_eq!(val.x, 3);

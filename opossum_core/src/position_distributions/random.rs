@@ -100,7 +100,8 @@ impl Random {
     /// # Errors
     /// Returns an error if validation of the passed value fails
     pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()> {
-        self.side_length.set(Point2::new(side_length_x, self.side_length_y()))?;
+        self.side_length
+            .set(Point2::new(side_length_x, self.side_length_y()))?;
 
         Ok(())
     }
@@ -118,7 +119,8 @@ impl Random {
     /// # Errors
     /// Returns an error if validation of the passed value fails
     pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()> {
-                self.side_length.set(Point2::new(self.side_length_x(), side_length_y))?;
+        self.side_length
+            .set(Point2::new(self.side_length_x(), side_length_y))?;
         Ok(())
     }
 }

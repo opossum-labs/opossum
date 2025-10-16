@@ -1,9 +1,11 @@
 //! Rectangluar, low-discrepancy quasirandom distribution
 use super::PositionDistribution;
 use crate::{
-    error::{OpmResult, OpossumError}, generic_validators::{IsFinite, IsNotZero, IsPositive, OnlyOneZero}, millimeter, validated, validated_type
+    error::{OpmResult, OpossumError},
+    generic_validators::{IsFinite, IsNotZero, IsPositive, OnlyOneZero},
+    millimeter, validated, validated_type,
 };
-use nalgebra::{point, Point2, Point3};
+use nalgebra::{Point2, Point3, point};
 use num::Zero;
 use serde::{Deserialize, Serialize};
 use sobol::{Sobol, params::JoeKuoD6};
@@ -37,7 +39,6 @@ impl SobolDist {
         random.set_side_length_x(side_length_x)?;
         random.set_side_length_y(side_length_y)?;
         Ok(random)
-
     }
     /// Returns the number of points in the Sobol distribution.
     ///
@@ -78,7 +79,7 @@ impl SobolDist {
     /// # Side Effects
     ///
     /// Overwrites the current number of points.
-    pub fn set_nr_of_points(&mut self, nr_of_points: usize)-> OpmResult<()> {
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) -> OpmResult<()> {
         self.nr_of_points.set(nr_of_points)?;
         Ok(())
     }
@@ -93,7 +94,8 @@ impl SobolDist {
     ///
     /// Overwrites the current side length in the X direction.
     pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()> {
-        self.side_length.set(Point2::new(side_length_x, self.side_length_y()))?;
+        self.side_length
+            .set(Point2::new(side_length_x, self.side_length_y()))?;
         Ok(())
     }
 
@@ -107,7 +109,8 @@ impl SobolDist {
     ///
     /// Overwrites the current side length in the Y direction.
     pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()> {
-        self.side_length.set(Point2::new(self.side_length_x(), side_length_y))?;
+        self.side_length
+            .set(Point2::new(self.side_length_x(), side_length_y))?;
         Ok(())
     }
 }
@@ -116,7 +119,8 @@ impl Default for SobolDist {
     fn default() -> Self {
         Self {
             nr_of_points: validated!(1000_usize, IsNotZero).unwrap(),
-            side_length: validated!(millimeter!(5.,5.), OnlyOneZero && IsFinite && IsPositive).unwrap(),
+            side_length: validated!(millimeter!(5., 5.), OnlyOneZero && IsFinite && IsPositive)
+                .unwrap(),
         }
     }
 }
