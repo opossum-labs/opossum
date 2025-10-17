@@ -41,6 +41,26 @@ pub fn try_f64_to_usize(value: f64) -> Option<usize> {
     }
 }
 
+/// Safely converts an `f64` value to a `usize`.
+///
+/// This function returns `Some(value)` if the `f64` is non-negative, finite, and
+/// fits within the bounds of `usize`. Otherwise, it returns `None`.
+/// This avoids unexpected truncation or panics from a direct `as` cast.
+#[must_use]
+#[inline]
+pub fn try_f64_to_u8(value: f64) -> Option<u8> {
+    #[allow(clippy::cast_precision_loss)]
+    if value.is_sign_positive() && value.is_finite() && value <= u8::MAX as f64 {
+        // This cast is now safe due to the checks above.
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        Some(value as u8)
+    } else {
+        None
+    }
+}
+
+
 /// Calculates the 2D Euclidean distance between two nalgebra points.
 #[must_use]
 pub fn distance_2d_point(point1: &Point2<Length>, point2: &Point2<Length>) -> Length {

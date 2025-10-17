@@ -3,7 +3,7 @@ use crate::components::{
     node_editor::inputs::{InputData, InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
-use opossum_backend::{HexagonalTiling, PosDistType, millimeter};
+use opossum_backend::{millimeter, try_f64_to_u8, HexagonalTiling, PosDistType};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::length::millimeter;
 
@@ -55,7 +55,11 @@ impl IntoInputData<f64, HexagonalTiling, PosDistType> for HexagonalTilingParam {
 
     fn setter_from_obj(&self) -> impl FnMut(&mut HexagonalTiling, f64) {
         match self {
-            Self::NrOfHex => move |_: &mut HexagonalTiling, _: f64| {},
+            Self::NrOfHex => move |obj: &mut HexagonalTiling, val: f64| {
+                if let Some(val) = try_f64_to_u8(val){
+                    obj.set_nr_of_hex_along_radius(val)
+                }
+            },
             Self::Radius => move |obj: &mut HexagonalTiling, val: f64| {
                 obj.set_radius(millimeter!(val))
                     .log_err_with_context("`set_radius` of hexagonal_tiling");
@@ -72,20 +76,6 @@ impl IntoInputData<f64, HexagonalTiling, PosDistType> for HexagonalTilingParam {
     }
 }
 
-impl IntoInputData<u8, HexagonalTiling, PosDistType> for HexagonalTilingParam {
-    fn parse_value(&self, e: Event<FormData>) -> Option<u8> {
-        let e_value = e.value();
-        e_value.parse::<u8>().ok()
-    }
-
-    fn setter_from_obj(&self) -> impl FnMut(&mut HexagonalTiling, u8) {
-        if self == &Self::NrOfHex {
-            move |obj: &mut HexagonalTiling, val: u8| obj.set_nr_of_hex_along_radius(val)
-        } else {
-            move |_: &mut HexagonalTiling, _: u8| {}
-        }
-    }
-}
 
 pub fn get_hexagonal_input_params(
     hexagonal: &HexagonalTiling,
@@ -93,24 +83,13 @@ pub fn get_hexagonal_input_params(
 ) -> Vec<InputData> {
     let mut input_data = Vec::<InputData>::new();
     for enum_variant in HexagonalTilingParam::iter() {
-        match enum_variant {
-            HexagonalTilingParam::NrOfHex => {
-                input_data.push(
-                    IntoInputData::<u8, HexagonalTiling, PosDistType>::to_input_data(
-                        &enum_variant,
-                        *hexagonal,
-                        pos_dist_type_sig,
-                    ),
-                );
-            }
-            _ => input_data.push(
-                IntoInputData::<f64, HexagonalTiling, PosDistType>::to_input_data(
-                    &enum_variant,
-                    *hexagonal,
-                    pos_dist_type_sig,
-                ),
+        input_data.push(
+            IntoInputData::<f64, HexagonalTiling, PosDistType>::to_input_data(
+                &enum_variant,
+                *hexagonal,
+                pos_dist_type_sig,
             ),
-        }
+        )
     }
     input_data
 }

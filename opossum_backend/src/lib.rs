@@ -45,6 +45,6 @@ pub use opossum_core::{
     utils::{
         default_from_name::DefaultFromName,
         geom_transformation::{AlignmentAxis, Isometry, RotationAxis, TranslationAxis},
-        math_utils::{to_f64, try_f64_to_usize},
+        math_utils::{to_f64, try_f64_to_usize, try_f64_to_u8},
     },
 };

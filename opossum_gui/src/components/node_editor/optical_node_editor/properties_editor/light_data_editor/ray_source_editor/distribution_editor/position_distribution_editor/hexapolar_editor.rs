@@ -1,8 +1,8 @@
-use crate::components::node_editor::inputs::{
+use crate::components::{logger::LogResultExt, node_editor::inputs::{
     InputData, InputParam, IntoInputData, IntoInputDataStrings,
-};
+}};
 use dioxus::prelude::*;
-use opossum_backend::{Hexapolar, PosDistType, millimeter};
+use opossum_backend::{millimeter, try_f64_to_u8, Hexapolar, PosDistType};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::length::millimeter;
 
@@ -38,19 +38,19 @@ impl IntoInputDataStrings<Hexapolar> for HexapolarParam {
     }
 }
 
-impl IntoInputData<u8, Hexapolar, PosDistType> for HexapolarParam {
-    fn parse_value(&self, e: Event<FormData>) -> Option<u8> {
-        let e_value = e.value();
-        e_value.parse::<u8>().ok()
-    }
+// impl IntoInputData<u8, Hexapolar, PosDistType> for HexapolarParam {
+//     fn parse_value(&self, e: Event<FormData>) -> Option<u8> {
+//         let e_value = e.value();
+//         e_value.parse::<u8>().ok()
+//     }
 
-    fn setter_from_obj(&self) -> impl FnMut(&mut Hexapolar, u8) {
-        match self {
-            Self::NrOfRings => move |obj: &mut Hexapolar, val: u8| obj.set_nr_of_rings(val),
-            Self::Radius => move |_: &mut Hexapolar, _: u8| {},
-        }
-    }
-}
+//     fn setter_from_obj(&self) -> impl FnMut(&mut Hexapolar, u8) {
+//         match self {
+//             Self::NrOfRings => move |obj: &mut Hexapolar, val: u8| obj.set_nr_of_rings(val),
+//             Self::Radius => move |_: &mut Hexapolar, _: u8| {},
+//         }
+//     }
+// }
 
 impl IntoInputData<f64, Hexapolar, PosDistType> for HexapolarParam {
     fn parse_value(&self, e: Event<FormData>) -> Option<f64> {
@@ -60,8 +60,12 @@ impl IntoInputData<f64, Hexapolar, PosDistType> for HexapolarParam {
 
     fn setter_from_obj(&self) -> impl FnMut(&mut Hexapolar, f64) {
         match self {
-            Self::NrOfRings => move |_: &mut Hexapolar, _: f64| {},
-            Self::Radius => move |obj: &mut Hexapolar, val: f64| obj.set_radius(millimeter!(val)),
+            Self::NrOfRings => move |obj: &mut Hexapolar, val: f64| {
+                if let Some(val) = try_f64_to_u8(val){
+                    obj.set_nr_of_rings(val)
+                }
+            },
+            Self::Radius => move |obj: &mut Hexapolar, val: f64| obj.set_radius(millimeter!(val)).log_err_with_context("`set_radius` of hexapolar")
         }
     }
 }
@@ -72,22 +76,22 @@ pub fn get_hexapolar_input_params(
 ) -> Vec<InputData> {
     let mut input_data = Vec::<InputData>::new();
     for enum_variant in HexapolarParam::iter() {
-        match enum_variant {
-            HexapolarParam::NrOfRings => {
-                input_data.push(IntoInputData::<u8, Hexapolar, PosDistType>::to_input_data(
-                    &enum_variant,
-                    *hexapolar,
-                    pos_dist_type_sig,
-                ));
-            }
-            HexapolarParam::Radius => {
-                input_data.push(IntoInputData::<f64, Hexapolar, PosDistType>::to_input_data(
-                    &enum_variant,
-                    *hexapolar,
-                    pos_dist_type_sig,
-                ));
-            }
-        }
+        input_data.push(IntoInputData::<f64, Hexapolar, PosDistType>::to_input_data(
+            &enum_variant,
+            *hexapolar,
+            pos_dist_type_sig,
+        ));
+        // input_data.push(IntoInputData::<u8, Hexapolar, PosDistType>::to_input_data(
+        //     &enum_variant,
+        //     *hexapolar,
+        //     pos_dist_type_sig,
+        // ));
+        // match enum_variant {
+        //     HexapolarParam::NrOfRings => {
+        //     }
+        //     HexapolarParam::Radius => {
+        //     }
+        // }
     }
     input_data
 }

@@ -1,7 +1,6 @@
 //! Circular, hexapolar distribution
 use crate::{
-    error::{OpmResult, OpossumError},
-    millimeter,
+    error::OpmResult, generic_validators::{AllFinite, AllPositive}, millimeter, validated, validated_type
 };
 
 use super::PositionDistribution;
@@ -14,7 +13,7 @@ use uom::si::f64::Length;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct Hexapolar {
     nr_of_rings: u8,
-    radius: Length,
+    radius: validated_type!(Length, AllPositive && AllFinite),
 }
 impl Hexapolar {
     /// Create a new [`Hexapolar`] distribution generator.
@@ -26,15 +25,10 @@ impl Hexapolar {
     /// This function will return an error if
     ///  - the given `radius` is negative or not finite.
     pub fn new(radius: Length, nr_of_rings: u8) -> OpmResult<Self> {
-        if radius.is_sign_negative() || !radius.is_finite() {
-            return Err(OpossumError::Other(
-                "radius must be positive and finite".into(),
-            ));
-        }
-        Ok(Self {
-            nr_of_rings,
-            radius,
-        })
+        let mut hexapolar = Self::default();
+        hexapolar.set_nr_of_rings(nr_of_rings);
+        hexapolar.set_radius(radius)?;
+        Ok(hexapolar)
     }
 
     /// Returns the radius of the hexapolar distribution.
@@ -44,7 +38,7 @@ impl Hexapolar {
     /// The radius as a `Length`.
     #[must_use]
     pub fn radius(&self) -> Length {
-        self.radius
+        *self.radius.get()
     }
 
     /// Returns the number of rings in the hexapolar distribution.
@@ -66,8 +60,12 @@ impl Hexapolar {
     /// # Side Effects
     ///
     /// Updates the current radius.
-    pub fn set_radius(&mut self, radius: Length) {
-        self.radius = radius;
+    /// 
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_radius(&mut self, radius: Length) -> OpmResult<()> {
+        self.radius.set(radius)?;
+        Ok(())
     }
 
     /// Sets the number of rings in the hexapolar distribution.
@@ -88,7 +86,7 @@ impl Default for Hexapolar {
     fn default() -> Self {
         Self {
             nr_of_rings: 7,
-            radius: millimeter!(5.),
+            radius: validated!(millimeter!(5.), AllPositive && AllFinite).unwrap(),
         }
     }
 }
@@ -99,8 +97,8 @@ impl PositionDistribution for Hexapolar {
         // Add center point
         points.push(Point3::origin());
         // add rings if radius > 0.0
-        if !self.radius.is_zero() {
-            let radius_step = self.radius / f64::from(self.nr_of_rings);
+        if !self.radius().is_zero() {
+            let radius_step = self.radius() / f64::from(self.nr_of_rings);
             for ring in 0..self.nr_of_rings {
                 let radius = f64::from(ring + 1) * radius_step;
                 let points_per_ring = 6 * u16::from(ring + 1);

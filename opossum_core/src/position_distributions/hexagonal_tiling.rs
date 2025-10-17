@@ -3,7 +3,7 @@ use std::f64::consts::PI;
 
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive},
+    generic_validators::{AllFinite, AllPositive},
     meter, millimeter, validated, validated_type,
 };
 
@@ -17,7 +17,7 @@ use uom::si::f64::Length;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct HexagonalTiling {
     nr_of_hex_along_radius: u8,
-    radius: validated_type!(Length, AllPositive && AllFinite && AllNotZero),
+    radius: validated_type!(Length, AllPositive && AllFinite ),
     center: validated_type!(Point2<Length>, AllFinite),
 }
 impl HexagonalTiling {
@@ -177,7 +177,7 @@ impl Default for HexagonalTiling {
     fn default() -> Self {
         Self {
             nr_of_hex_along_radius: 7,
-            radius: validated!(millimeter!(5.), AllPositive && AllFinite && AllNotZero).unwrap(),
+            radius: validated!(millimeter!(5.), AllPositive && AllFinite).unwrap(),
             center: validated!(millimeter!(0., 0.), AllFinite).unwrap(),
         }
     }
@@ -268,15 +268,6 @@ mod tests {
         let result = HexagonalTiling::new(radius, 5, center);
 
         assert!(result.is_err(), "infinite radius must be rejected");
-    }
-
-    #[test]
-    fn invalid_zero_radius_should_error() {
-        let radius = millimeter!(0.0);
-        let center = millimeter!(0.0, 0.0);
-        let result = HexagonalTiling::new(radius, 5, center);
-
-        assert!(result.is_err(), "zero radius must be rejected");
     }
 
     #[test]

@@ -11,4 +11,4 @@ pub mod test_helper;
 pub mod unit_format;
 pub mod uom_macros;
 pub use lock_ext::LockExt;
-pub use math_utils::{to_f64, try_f64_to_usize};
+pub use math_utils::{to_f64, try_f64_to_usize, try_f64_to_u8};
