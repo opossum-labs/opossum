@@ -2,7 +2,7 @@
 use super::PositionDistribution;
 use crate::{
     error::OpmResult,
-    generic_validators::{IsFinite, IsNotZero, IsPositive, OnlyOneZero},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero},
     millimeter, validated, validated_type,
 };
 use nalgebra::{Point2, Point3, point};
@@ -16,8 +16,8 @@ use uom::si::f64::Length;
 /// For further details see [here](https://en.wikipedia.org/wiki/Sobol_sequence)
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct SobolDist {
-    nr_of_points: validated_type!(usize, IsNotZero),
-    side_length: validated_type!(Point2<Length>, OnlyOneZero && IsFinite && IsPositive),
+    nr_of_points: validated_type!(usize, AllNotZero),
+    side_length: validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),
 }
 
 impl SobolDist {
@@ -127,8 +127,8 @@ impl SobolDist {
 impl Default for SobolDist {
     fn default() -> Self {
         Self {
-            nr_of_points: validated!(1000_usize, IsNotZero).unwrap(),
-            side_length: validated!(millimeter!(5., 5.), OnlyOneZero && IsFinite && IsPositive)
+            nr_of_points: validated!(1000_usize, AllNotZero).unwrap(),
+            side_length: validated!(millimeter!(5., 5.), OnlyOneZero && AllFinite && AllPositive)
                 .unwrap(),
         }
     }

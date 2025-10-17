@@ -13,13 +13,13 @@ mod not_zero;
 mod only_one_zero;
 mod positive;
 
-pub use finite::IsFinite;
-pub use in_range::IsInRange;
-pub use logical_combinations::{AndValidator, OrValidator};
-pub use normal::IsNormal;
-pub use not_zero::IsNotZero;
+pub use finite::AllFinite;
+pub use in_range::AllInRange;
+pub use logical_combinations::{AndValidator, NotValidator, OrValidator};
+pub use normal::AllNormal;
+pub use not_zero::AllNotZero;
 pub use only_one_zero::OnlyOneZero;
-pub use positive::IsPositive;
+pub use positive::AllPositive;
 
 /// Trait for types that can validate a value of type `T`.
 ///
@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn test_validated_new_and_set_is_positive() {
-        let mut v = Validated::new(5, IsPositive).unwrap();
+        let mut v = Validated::new(5, AllPositive).unwrap();
         assert_eq!(*v.get(), 5);
 
         // Set valid value
@@ -359,14 +359,14 @@ mod tests {
 
     #[test]
     fn test_validated_vec_guard_invalid_index() {
-        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], IsNotZero).unwrap();
+        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], AllNotZero).unwrap();
 
         assert!(v.get_mut_at_index(1).is_err());
     }
 
     #[test]
     fn test_validated_vec_guard_commit_is_err() -> OpmResult<()> {
-        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], IsNotZero)?;
+        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], AllNotZero)?;
 
         {
             let mut guard = v.get_mut_at_index(0)?;
@@ -384,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_validated_vec_guard_commit_is_ok() -> OpmResult<()> {
-        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], IsNotZero)?;
+        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], AllNotZero)?;
 
         {
             let mut guard = v.get_mut_at_index(0)?;
@@ -404,7 +404,7 @@ mod tests {
     fn test_validated_vec_guard_drop_logs_is_not_zero() -> OpmResult<()> {
         setup_logger();
 
-        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], IsNotZero)?;
+        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], AllNotZero)?;
 
         {
             let mut guard = v.get_mut_at_index(0)?;
@@ -432,7 +432,7 @@ mod tests {
     fn test_validated_vec_guard_drop_successful_logs_is_not_zero() -> OpmResult<()> {
         setup_logger();
 
-        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], IsNotZero)?;
+        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], AllNotZero)?;
 
         {
             let mut guard = v.get_mut_at_index(0)?;
@@ -452,7 +452,7 @@ mod tests {
 
     #[test]
     fn test_validated_vec_multiple_changes_try_validate_and_update_backup() -> OpmResult<()> {
-        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], IsNotZero)?;
+        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], AllNotZero)?;
 
         {
             let mut guard = v.get_mut_at_index(0)?;

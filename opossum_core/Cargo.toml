@@ -68,6 +68,7 @@ mutants = "0.0.3"
 doc-images = []
 
 [dev-dependencies]
+static_assertions = "1.1"
 regex = "1"
 assert_matches = "1"
 testing_logger = "0.1"

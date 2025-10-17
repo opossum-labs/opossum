@@ -5224,6 +5224,7 @@ dependencies = [
  "serde",
  "sobol",
  "spade",
+ "static_assertions",
  "strum",
  "strum_macros",
  "tempfile",

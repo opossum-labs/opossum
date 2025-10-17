@@ -5,17 +5,17 @@ use crate::impl_validator;
 use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
-pub struct IsFinite;
+pub struct AllFinite;
 
-impl_validator!(IsFinite, |_self, v: &f64| v.is_finite(), f64);
-impl_validator!(IsFinite, |_self, v: &Length| v.is_finite(), Length);
+impl_validator!(AllFinite, |_self, v: &f64| v.is_finite(), f64);
+impl_validator!(AllFinite, |_self, v: &Length| v.is_finite(), Length);
 impl_validator!(
-    IsFinite,
+    AllFinite,
     |_self, v: &Point2<f64>| v.x.is_finite() && v.y.is_finite(),
     Point2<f64>
 );
 impl_validator!(
-    IsFinite,
+    AllFinite,
     |_self, v: &Point2<Length>| v.x.is_finite() && v.y.is_finite(),
     Point2<Length>
 );
@@ -31,7 +31,7 @@ mod tests {
 
     #[test]
     fn test_is_finite_f64() {
-        let validator = IsFinite;
+        let validator = AllFinite;
 
         assert!(validator.validate(&1.23).is_ok());
         assert!(validator.validate(&0.0).is_ok());
@@ -42,7 +42,7 @@ mod tests {
 
     #[test]
     fn test_is_finite_length() {
-        let validator = IsFinite;
+        let validator = AllFinite;
         let l = Length::new::<meter>(1.0);
         let l_inf = Length::new::<meter>(f64::INFINITY);
 
@@ -54,7 +54,7 @@ mod tests {
 
     #[test]
     fn test_is_finite_point2_f64() {
-        let validator = IsFinite;
+        let validator = AllFinite;
 
         let p = Point2::new(1.0, 2.0);
         let p_inf = Point2::new(f64::INFINITY, 0.0);
@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn test_is_finite_point2_length() {
-        let validator = IsFinite;
+        let validator = AllFinite;
 
         let p = Point2::new(Length::new::<meter>(1.0), Length::new::<meter>(2.0));
         let p_inf = Point2::new(

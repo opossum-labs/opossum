@@ -14,13 +14,13 @@ use uom::si::f64::{Angle, Length};
 ///
 /// * `T` - The type of the value to validate. Must implement `PartialOrd`.
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
-pub struct IsInRange<T> {
+pub struct AllInRange<T> {
     min: T,
     max: T,
     inclusive: bool,
 }
 
-impl<T: PartialOrd> IsInRange<T> {
+impl<T: PartialOrd> AllInRange<T> {
     /// Create a new `IsInRange` validator.
     ///
     /// # Arguments
@@ -70,28 +70,28 @@ impl<T: PartialOrd> IsInRange<T> {
 }
 
 impl_validator!(
-    IsInRange<f64>,
-    |r: &IsInRange<f64>, v: &f64| r.is_in_range(v),
+    AllInRange<f64>,
+    |r: &AllInRange<f64>, v: &f64| r.is_in_range(v),
     f64
 );
 impl_validator!(
-    IsInRange<Length>,
-    |r: &IsInRange<Length>, v: &Length| r.is_in_range(v),
+    AllInRange<Length>,
+    |r: &AllInRange<Length>, v: &Length| r.is_in_range(v),
     Length
 );
 impl_validator!(
-    IsInRange<Angle>,
-    |r: &IsInRange<Angle>, v: &Angle| r.is_in_range(v),
+    AllInRange<Angle>,
+    |r: &AllInRange<Angle>, v: &Angle| r.is_in_range(v),
     Angle
 );
 impl_validator!(
-    IsInRange<f64>,
-    |r: &IsInRange<f64>, v: &Point2<f64>| r.is_in_range(&v.x) && r.is_in_range(&v.y),
+    AllInRange<f64>,
+    |r: &AllInRange<f64>, v: &Point2<f64>| r.is_in_range(&v.x) && r.is_in_range(&v.y),
     Point2<f64>
 );
 impl_validator!(
-    IsInRange<Length>,
-    |r: &IsInRange<Length>, v: &Point2<Length>| r.is_in_range(&v.x) && r.is_in_range(&v.y),
+    AllInRange<Length>,
+    |r: &AllInRange<Length>, v: &Point2<Length>| r.is_in_range(&v.x) && r.is_in_range(&v.y),
     Point2<Length>
 );
 
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_is_in_range_f64_inclusive() {
-        let validator = IsInRange::new(1.0, 5.0, true).unwrap();
+        let validator = AllInRange::new(1.0, 5.0, true).unwrap();
 
         assert!(validator.validate(&1.0).is_ok());
         assert!(validator.validate(&5.0).is_ok());
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_is_in_range_f64_exclusive() {
-        let validator = IsInRange::new(1.0, 5.0, false).unwrap();
+        let validator = AllInRange::new(1.0, 5.0, false).unwrap();
 
         assert!(validator.validate(&1.0).is_err());
         assert!(validator.validate(&5.0).is_err());
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn test_is_in_range_length() {
         let validator =
-            IsInRange::new(Length::new::<meter>(1.0), Length::new::<meter>(5.0), true).unwrap();
+            AllInRange::new(Length::new::<meter>(1.0), Length::new::<meter>(5.0), true).unwrap();
 
         assert!(validator.validate(&Length::new::<meter>(1.0)).is_ok());
         assert!(validator.validate(&Length::new::<meter>(5.0)).is_ok());
@@ -138,7 +138,7 @@ mod tests {
     #[test]
     fn test_is_in_range_angle() {
         let validator =
-            IsInRange::new(Angle::new::<radian>(0.0), Angle::new::<radian>(3.14), true).unwrap();
+            AllInRange::new(Angle::new::<radian>(0.0), Angle::new::<radian>(3.14), true).unwrap();
 
         assert!(validator.validate(&Angle::new::<radian>(0.0)).is_ok());
         assert!(validator.validate(&Angle::new::<radian>(3.14)).is_ok());
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_is_in_range_point2_f64() {
-        let validator = IsInRange::new(1.0, 5.0, true).unwrap();
+        let validator = AllInRange::new(1.0, 5.0, true).unwrap();
         let p_valid = Point2::new(2.0, 3.0);
         let p_invalid = Point2::new(0.0, 4.0);
 
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn test_is_in_range_point2_length() {
         let validator =
-            IsInRange::new(Length::new::<meter>(1.0), Length::new::<meter>(5.0), true).unwrap();
+            AllInRange::new(Length::new::<meter>(1.0), Length::new::<meter>(5.0), true).unwrap();
 
         let p_valid = Point2::new(Length::new::<meter>(2.0), Length::new::<meter>(3.0));
         let p_invalid = Point2::new(Length::new::<meter>(0.5), Length::new::<meter>(4.0));

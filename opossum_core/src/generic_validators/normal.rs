@@ -4,17 +4,17 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
-pub struct IsNormal;
-impl_validator!(IsNormal, |_self, v: &f64| v.is_normal(), f64);
-impl_validator!(IsNormal, |_self, v: &Length| v.is_normal(), Length);
-impl_validator!(IsNormal, |_self, v: &Angle| v.is_normal(), Angle);
+pub struct AllNormal;
+impl_validator!(AllNormal, |_self, v: &f64| v.is_normal(), f64);
+impl_validator!(AllNormal, |_self, v: &Length| v.is_normal(), Length);
+impl_validator!(AllNormal, |_self, v: &Angle| v.is_normal(), Angle);
 impl_validator!(
-    IsNormal,
+    AllNormal,
     |_self, v: &Point2<f64>| v.x.is_normal() && v.y.is_normal(),
     Point2<f64>
 );
 impl_validator!(
-    IsNormal,
+    AllNormal,
     |_self, v: &Point2<Length>| v.x.is_normal() && v.y.is_normal(),
     Point2<Length>
 );
@@ -30,7 +30,7 @@ mod tests {
 
     #[test]
     fn test_is_normal_f64() {
-        let validator = IsNormal;
+        let validator = AllNormal;
 
         // normal values
         assert!(validator.validate(&1.0).is_ok());
@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn test_is_normal_length() {
-        let validator = IsNormal;
+        let validator = AllNormal;
 
         let l_valid = Length::new::<meter>(1.0);
         let l_zero = Length::new::<meter>(0.0);
@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn test_is_normal_point2_f64() {
-        let validator = IsNormal;
+        let validator = AllNormal;
 
         let p_valid = Point2::new(1.0, 2.0);
         let p_invalid_zero = Point2::new(0.0, 1.0);
@@ -79,7 +79,7 @@ mod tests {
 
     #[test]
     fn test_is_normal_point2_length() {
-        let validator = IsNormal;
+        let validator = AllNormal;
 
         let p_valid = Point2::new(Length::new::<meter>(1.0), Length::new::<meter>(2.0));
         let p_invalid_zero = Point2::new(Length::new::<meter>(0.0), Length::new::<meter>(1.0));
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_is_normal_angle() {
-        let validator = IsNormal;
+        let validator = AllNormal;
 
         let a_valid = Angle::new::<radian>(1.0);
         let a_valid_neg = Angle::new::<radian>(-1.0);

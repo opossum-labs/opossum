@@ -4,19 +4,23 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
-pub struct IsPositive;
+pub struct AllPositive;
 
-impl_validator!(IsPositive, |_self, v: &i32| *v >= 0, i32);
-impl_validator!(IsPositive, |_self, v: &f64| v.is_sign_positive(), f64);
-impl_validator!(IsPositive, |_self, v: &Angle| v.is_sign_positive(), Angle);
-impl_validator!(IsPositive, |_self, v: &Length| v.is_sign_positive(), Length);
+impl_validator!(AllPositive, |_self, v: &i32| *v >= 0, i32);
+impl_validator!(AllPositive, |_self, v: &f64| v.is_sign_positive(), f64);
+impl_validator!(AllPositive, |_self, v: &Angle| v.is_sign_positive(), Angle);
 impl_validator!(
-    IsPositive,
+    AllPositive,
+    |_self, v: &Length| v.is_sign_positive(),
+    Length
+);
+impl_validator!(
+    AllPositive,
     |_self, v: &Point2<f64>| v.x.is_sign_positive() && v.y.is_sign_positive(),
     Point2<f64>
 );
 impl_validator!(
-    IsPositive,
+    AllPositive,
     |_self, v: &Point2<Length>| v.x.is_sign_positive() && v.y.is_sign_positive(),
     Point2<Length>
 );
@@ -32,7 +36,7 @@ mod tests {
 
     #[test]
     fn test_is_positive_i32() {
-        let validator = IsPositive;
+        let validator = AllPositive;
         assert!(validator.validate(&10_i32).is_ok());
         assert!(validator.validate(&-1_i32).is_err());
         assert!(validator.validate(&0_i32).is_ok());
@@ -40,7 +44,7 @@ mod tests {
 
     #[test]
     fn test_is_positive_f64() {
-        let validator = IsPositive;
+        let validator = AllPositive;
         assert!(validator.validate(&3.14).is_ok());
         assert!(validator.validate(&-2.7).is_err());
         assert!(validator.validate(&0.0).is_ok());
@@ -48,7 +52,7 @@ mod tests {
 
     #[test]
     fn test_is_positive_length() {
-        let validator = IsPositive;
+        let validator = AllPositive;
         assert!(validator.validate(&Length::new::<meter>(1.0)).is_ok());
         assert!(validator.validate(&Length::new::<meter>(-1.0)).is_err());
         assert!(validator.validate(&Length::new::<meter>(0.0)).is_ok());
@@ -56,7 +60,7 @@ mod tests {
 
     #[test]
     fn test_is_positive_angle() {
-        let validator = IsPositive;
+        let validator = AllPositive;
         assert!(validator.validate(&Angle::new::<radian>(2.0)).is_ok());
         assert!(validator.validate(&Angle::new::<radian>(-0.5)).is_err());
         assert!(validator.validate(&Angle::new::<radian>(0.0)).is_ok());
@@ -64,7 +68,7 @@ mod tests {
 
     #[test]
     fn test_is_positive_point2_f64() {
-        let validator = IsPositive;
+        let validator = AllPositive;
         let p_valid = Point2::new(1.0, 2.0);
         let p_invalid_x = Point2::new(0.0, 2.0);
         let p_invalid_y = Point2::new(1.0, -1.0);
@@ -76,7 +80,7 @@ mod tests {
 
     #[test]
     fn test_is_positive_point2_length() {
-        let validator = IsPositive;
+        let validator = AllPositive;
         let p_valid = Point2::new(Length::new::<meter>(1.0), Length::new::<meter>(2.0));
         let p_invalid_x = Point2::new(Length::new::<meter>(0.0), Length::new::<meter>(2.0));
         let p_invalid_y = Point2::new(Length::new::<meter>(1.0), Length::new::<meter>(-1.0));
