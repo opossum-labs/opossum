@@ -4,6 +4,7 @@ use opossum_core::{
     energy_distributions::UniformDist, position_distributions::Grid,
     spectral_distribution::LaserLines,
 };
+use nalgebra::Point2;
 use std::path::Path;
 use uom::si::f64::Length;
 
@@ -11,7 +12,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler chromatism");
     let light_data_builder =
         LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
-            Grid::new((Length::zero(), millimeter!(45.0)), (1, 9))?.into(),
+            Grid::new(Point2::new(Length::zero(), millimeter!(45.0)), Point2::new(1, 9))?.into(),
             UniformDist::new(joule!(1.0))?.into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0), (nanometer!(350.0), 1.0)])?.into(),
         )));

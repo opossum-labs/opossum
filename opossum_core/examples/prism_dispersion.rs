@@ -6,6 +6,7 @@ use opossum_core::{
 };
 use std::path::Path;
 use uom::si::f64::Length;
+use nalgebra::Point2;
 
 fn main() -> OpmResult<()> {
     let refr_index_hk9l = RefrIndexSellmeier1::new(
@@ -24,7 +25,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let light_data_builder =
         LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
-            Grid::new((Length::zero(), beam_size_y), (1, nr_of_rays))?.into(),
+            Grid::new(Point2::new(Length::zero(), beam_size_y), Point2::new(1, nr_of_rays))?.into(),
             UniformDist::new(joule!(1.0))?.into(),
             LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 1.0)])?.into(),
         )));
