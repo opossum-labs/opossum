@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Angle, Length};
+use uom::si::f64::{Angle, Energy, Length};
 
 use crate::impl_validator;
 
@@ -17,6 +17,11 @@ impl_validator!(
     AllNotEmpty,
     |_self, v: &Vec<Angle>| !v.is_empty(),
     Vec<Angle>
+);
+impl_validator!(
+    AllNotEmpty,
+    |_self, v: &Vec<Energy>| !v.is_empty(),
+    Vec<Energy>
 );
 impl_validator!(AllNotEmpty, |_self, v: &String| !v.is_empty(), String);
 

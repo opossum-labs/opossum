@@ -4,7 +4,7 @@ use crate::{
 };
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Angle, Length};
+use uom::si::f64::{Angle, Energy, Length};
 
 /// Validator that checks if a value is within a specified range.
 ///
@@ -83,6 +83,11 @@ impl_validator!(
     AllInRange<Angle>,
     |r: &AllInRange<Angle>, v: &Angle| r.is_in_range(v),
     Angle
+);
+impl_validator!(
+    AllInRange<Energy>,
+    |r: &AllInRange<Energy>, v: &Energy| r.is_in_range(v),
+    Energy
 );
 impl_validator!(
     AllInRange<f64>,

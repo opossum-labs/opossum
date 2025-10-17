@@ -2,7 +2,7 @@ use crate::impl_validator;
 use nalgebra::Point2;
 use num::Zero;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Angle, Length};
+use uom::si::f64::{Angle, Energy, Length};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct AllNotZero;
@@ -12,6 +12,7 @@ impl_validator!(AllNotZero, |_self, v: &i32| !v.is_zero(), i32);
 impl_validator!(AllNotZero, |_self, v: &f64| !v.is_zero(), f64);
 impl_validator!(AllNotZero, |_self, v: &Length| !v.is_zero(), Length);
 impl_validator!(AllNotZero, |_self, v: &Angle| !v.is_zero(), Angle);
+impl_validator!(AllNotZero, |_self, v: &Energy| !v.is_zero(), Energy);
 impl_validator!(
     AllNotZero,
     |_self, v: &Point2<usize>| !v.x.is_zero() && !v.y.is_zero(),

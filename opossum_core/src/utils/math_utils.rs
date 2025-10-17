@@ -50,7 +50,7 @@ pub fn try_f64_to_usize(value: f64) -> Option<usize> {
 #[inline]
 pub fn try_f64_to_u8(value: f64) -> Option<u8> {
     #[allow(clippy::cast_precision_loss)]
-    if value.is_sign_positive() && value.is_finite() && value <= u8::MAX as f64 {
+    if value.is_sign_positive() && value.is_finite() && value <= f64::from(u8::MAX) {
         // This cast is now safe due to the checks above.
         #[allow(clippy::cast_possible_truncation)]
         #[allow(clippy::cast_sign_loss)]
@@ -59,7 +59,6 @@ pub fn try_f64_to_u8(value: f64) -> Option<u8> {
         None
     }
 }
-
 
 /// Calculates the 2D Euclidean distance between two nalgebra points.
 #[must_use]

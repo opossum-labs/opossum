@@ -17,7 +17,7 @@ use uom::si::f64::Length;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct HexagonalTiling {
     nr_of_hex_along_radius: u8,
-    radius: validated_type!(Length, AllPositive && AllFinite ),
+    radius: validated_type!(Length, AllPositive && AllFinite),
     center: validated_type!(Point2<Length>, AllFinite),
 }
 impl HexagonalTiling {

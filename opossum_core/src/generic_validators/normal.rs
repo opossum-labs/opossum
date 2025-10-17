@@ -1,13 +1,15 @@
 use crate::impl_validator;
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Angle, Length};
+use uom::si::f64::{Angle, Energy, Length};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct AllNormal;
 impl_validator!(AllNormal, |_self, v: &f64| v.is_normal(), f64);
 impl_validator!(AllNormal, |_self, v: &Length| v.is_normal(), Length);
 impl_validator!(AllNormal, |_self, v: &Angle| v.is_normal(), Angle);
+impl_validator!(AllNormal, |_self, v: &Energy| v.is_normal(), Energy);
+
 impl_validator!(
     AllNormal,
     |_self, v: &Point2<f64>| v.x.is_normal() && v.y.is_normal(),

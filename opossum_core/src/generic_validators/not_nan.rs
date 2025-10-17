@@ -1,7 +1,7 @@
 use crate::impl_validator;
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Angle, Length};
+use uom::si::f64::{Angle, Energy, Length};
 
 #[allow(dead_code)]
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
@@ -10,6 +10,8 @@ pub struct AllNotNaN;
 impl_validator!(AllNotNaN, |_self, v: &f64| !v.is_nan(), f64);
 impl_validator!(AllNotNaN, |_self, v: &Length| !v.is_nan(), Length);
 impl_validator!(AllNotNaN, |_self, v: &Angle| !v.is_nan(), Angle);
+impl_validator!(AllNotNaN, |_self, v: &Energy| v.is_nan(), Energy);
+
 impl_validator!(
     AllNotNaN,
     |_self, v: &Point2<f64>| !v.x.is_nan() && !v.y.is_nan(),

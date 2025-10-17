@@ -1,5 +1,5 @@
 use nalgebra::Point2;
-use uom::si::f64::Length;
+use uom::si::f64::{Angle, Energy, Length};
 
 use crate::impl_validator;
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,9 @@ pub struct AllFinite;
 
 impl_validator!(AllFinite, |_self, v: &f64| v.is_finite(), f64);
 impl_validator!(AllFinite, |_self, v: &Length| v.is_finite(), Length);
+impl_validator!(AllFinite, |_self, v: &Energy| v.is_finite(), Energy);
+impl_validator!(AllFinite, |_self, v: &Angle| v.is_finite(), Angle);
+
 impl_validator!(
     AllFinite,
     |_self, v: &Point2<f64>| v.x.is_finite() && v.y.is_finite(),

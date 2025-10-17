@@ -1,6 +1,8 @@
 //! Circular, hexapolar distribution
 use crate::{
-    error::OpmResult, generic_validators::{AllFinite, AllPositive}, millimeter, validated, validated_type
+    error::OpmResult,
+    generic_validators::{AllFinite, AllPositive},
+    millimeter, validated, validated_type,
 };
 
 use super::PositionDistribution;
@@ -60,7 +62,7 @@ impl Hexapolar {
     /// # Side Effects
     ///
     /// Updates the current radius.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
     pub fn set_radius(&mut self, radius: Length) -> OpmResult<()> {

@@ -1,7 +1,7 @@
 use crate::impl_validator;
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Angle, Length};
+use uom::si::f64::{Angle, Energy, Length};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct AllPositive;
@@ -9,6 +9,11 @@ pub struct AllPositive;
 impl_validator!(AllPositive, |_self, v: &i32| *v >= 0, i32);
 impl_validator!(AllPositive, |_self, v: &f64| v.is_sign_positive(), f64);
 impl_validator!(AllPositive, |_self, v: &Angle| v.is_sign_positive(), Angle);
+impl_validator!(
+    AllPositive,
+    |_self, v: &Energy| v.is_sign_positive(),
+    Energy
+);
 impl_validator!(
     AllPositive,
     |_self, v: &Length| v.is_sign_positive(),

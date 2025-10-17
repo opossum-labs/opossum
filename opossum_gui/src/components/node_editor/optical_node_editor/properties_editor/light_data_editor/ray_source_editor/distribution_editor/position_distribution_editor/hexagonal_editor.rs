@@ -3,7 +3,7 @@ use crate::components::{
     node_editor::inputs::{InputData, InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
-use opossum_backend::{millimeter, try_f64_to_u8, HexagonalTiling, PosDistType};
+use opossum_backend::{HexagonalTiling, PosDistType, millimeter, try_f64_to_u8};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::length::millimeter;
 
@@ -56,8 +56,8 @@ impl IntoInputData<f64, HexagonalTiling, PosDistType> for HexagonalTilingParam {
     fn setter_from_obj(&self) -> impl FnMut(&mut HexagonalTiling, f64) {
         match self {
             Self::NrOfHex => move |obj: &mut HexagonalTiling, val: f64| {
-                if let Some(val) = try_f64_to_u8(val){
-                    obj.set_nr_of_hex_along_radius(val)
+                if let Some(val) = try_f64_to_u8(val) {
+                    obj.set_nr_of_hex_along_radius(val);
                 }
             },
             Self::Radius => move |obj: &mut HexagonalTiling, val: f64| {
@@ -76,7 +76,6 @@ impl IntoInputData<f64, HexagonalTiling, PosDistType> for HexagonalTilingParam {
     }
 }
 
-
 pub fn get_hexagonal_input_params(
     hexagonal: &HexagonalTiling,
     pos_dist_type_sig: Signal<PosDistType>,
@@ -89,7 +88,7 @@ pub fn get_hexagonal_input_params(
                 *hexagonal,
                 pos_dist_type_sig,
             ),
-        )
+        );
     }
     input_data
 }

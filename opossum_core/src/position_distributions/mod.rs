@@ -66,20 +66,6 @@ pub enum PosDistType {
     Sobol(sobol::SobolDist),
 }
 
-// impl Validate for PosDistType{
-//     fn validate(&self) -> OpmResult<()>{
-//         match self{
-//             PosDistType::Random(random) => random.validate(),
-//             PosDistType::Grid(grid) => grid.validate(),
-//             PosDistType::HexagonalTiling(hexagonal_tiling) => hexagonal_tiling.validate(),
-//             PosDistType::Hexapolar(hexapolar) => hexapolar.validate(),
-//             PosDistType::FibonacciRectangle(fibonacci_rectangle) => fibonacci_rectangle.validate(),
-//             PosDistType::FibonacciEllipse(fibonacci_ellipse) => fibonacci_ellipse.validate(),
-//             PosDistType::Sobol(sobol_dist) => sobol_dist.validate(),
-//         }
-//     }
-// }
-
 impl DefaultFromName for PosDistType {}
 
 impl Default for PosDistType {
