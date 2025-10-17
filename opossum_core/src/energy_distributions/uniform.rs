@@ -1,19 +1,19 @@
 //! Uniform energy distribution
 
-use crate::joule;
+use crate::{
+    generic_validators::{AllFinite, AllNotZero, AllPositive},
+    joule, validated, validated_type,
+};
 use nalgebra::Point2;
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
-use uom::si::{
-    energy::joule,
-    f64::{Energy, Length},
-};
+use uom::si::f64::{Energy, Length};
 
 use super::EnergyDistribution;
-use crate::error::{OpmResult, OpossumError};
+use crate::error::OpmResult;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub struct UniformDist {
-    total_energy: Energy,
+    total_energy: validated_type!(Energy, AllNotZero && AllFinite && AllPositive),
 }
 
 impl UniformDist {
@@ -34,14 +34,9 @@ impl UniformDist {
     /// - `total_energy` is not finite (NaN or infinite).
     /// - `total_energy` is zero or less than zero.
     pub fn new(total_energy: Energy) -> OpmResult<Self> {
-        if !total_energy.get::<joule>().is_normal()
-            || total_energy.get::<joule>().is_sign_negative()
-        {
-            return Err(OpossumError::Other(
-                "Energy must be greater than zero finite!".into(),
-            ));
-        }
-        Ok(Self { total_energy })
+        let mut uniform = Self::default();
+        uniform.set_energy(total_energy)?;
+        Ok(uniform)
     }
 
     /// Sets the total energy of this uniform distribution.
@@ -60,12 +55,7 @@ impl UniformDist {
     /// - `energy` is not finite (NaN or infinite).
     /// - `energy` is zero or negative.
     pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
-        if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
-            return Err(OpossumError::Other(
-                "Energy must be greater than zero finite!".into(),
-            ));
-        }
-        self.total_energy = energy;
+        self.total_energy.set(energy)?;
         Ok(())
     }
 
@@ -75,14 +65,14 @@ impl UniformDist {
     /// The current total [`Energy`] value of the distribution.
     #[must_use]
     pub fn energy(&self) -> Energy {
-        self.total_energy
+        *self.total_energy.get()
     }
 }
 
 impl Default for UniformDist {
     fn default() -> Self {
         Self {
-            total_energy: joule!(0.1),
+            total_energy: validated!(joule!(0.1), AllNotZero && AllFinite && AllPositive).unwrap(),
         }
     }
 }
@@ -90,12 +80,12 @@ impl Default for UniformDist {
 impl EnergyDistribution for UniformDist {
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy> {
         let input_len = input.len();
-        let energy_per_point = self.total_energy / input_len.to_f64().unwrap();
+        let energy_per_point = self.energy() / input_len.to_f64().unwrap();
         vec![energy_per_point; input_len]
     }
 
     fn get_total_energy(&self) -> Energy {
-        self.total_energy
+        self.energy()
     }
 }
 impl From<UniformDist> for super::EnergyDistType {

@@ -19,14 +19,6 @@ macro_rules! impl_validator {
 /// Expands a logical validator expression into nested validator instances.
 ///
 /// Supports parentheses, `&&`, `||`, and `!` (not) operators.
-///
-/// # Examples
-///
-/// ```rust
-/// use crate::generic_validators::{AllPositive, NotValidator, AndValidator};
-///
-/// let validator = validator_expr!(AllPositive && !AllPositive);
-/// ```
 #[macro_export]
 macro_rules! validator_expr {
     // parentheses first, recursive first
@@ -114,14 +106,6 @@ macro_rules! validator_expr {
 /// Expands a logical validator type expression into nested validator types.
 ///
 /// Supports parentheses, `&&`, `||`, and `!` operators.
-///
-/// # Examples
-///
-/// ```rust
-/// use crate::generic_validators::{AllPositive, NotValidator, AndValidator};
-///
-/// type ValidatorType = validator_type_expr!(f64; AllPositive && !AllPositive);
-/// ```
 #[macro_export]
 macro_rules! validator_type_expr {
     // Parentheses: unwrap and recurse
@@ -510,8 +494,11 @@ mod macro_type_tests {
 }
 #[cfg(test)]
 mod nested_macro_tests {
+    use core::f64;
+
     use crate::generic_validators::{
-        AllFinite, AllNotZero, AllPositive, AndValidator, NotValidator, OrValidator, Validated,
+        AllFinite, AllNormal, AllNotZero, AllPositive, AndValidator, NotValidator, OrValidator,
+        Validated,
     };
     use nalgebra::Point2;
     use static_assertions::assert_type_eq_all;
@@ -608,7 +595,7 @@ mod nested_macro_tests {
         // Manual equivalent: ((A || !B) && C) || D
         let manual_validator: OrValidator<f64, _, _> = OrValidator::new(
             AndValidator::new(
-                OrValidator::new(AllPositive, NotValidator::new(AllNotZero)),
+                OrValidator::new(AllPositive, NotValidator::new(AllNormal)),
                 AllFinite,
             ),
             AllNotZero,
@@ -620,16 +607,16 @@ mod nested_macro_tests {
         // Macro equivalent
         let macro_res = validated!(
             value,
-            ((AllPositive || !AllNotZero) && AllFinite) || AllNotZero
+            ((AllPositive || !AllNotZero) && AllFinite) || AllNormal
         );
         assert!(macro_res.is_ok());
         assert_eq!(macro_res.unwrap().value, value);
 
         // Invalid value (zero)
-        let invalid_value = 0.0;
+        let invalid_value = f64::NAN;
         let macro_err = validated!(
             invalid_value,
-            ((AllPositive || !AllNotZero) && AllFinite) || AllNotZero
+            ((AllPositive || !AllNotZero) && AllFinite) || AllNormal
         );
         assert!(macro_err.is_err());
     }
@@ -661,8 +648,7 @@ mod nested_macro_tests {
         assert!(macro_res.is_ok());
         assert_eq!(macro_res.unwrap().value, value);
 
-        // Invalid point (both zero)
-        let invalid_point = Point2::new(0.0, -0.0);
+        let invalid_point = Point2::new(f64::NAN, -0.0);
         let macro_err = validated!(
             invalid_point,
             ((!AllPositive || AllNotZero) && AllFinite) || AllNotZero

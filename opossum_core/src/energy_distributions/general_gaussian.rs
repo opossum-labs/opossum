@@ -467,7 +467,7 @@ mod test {
                 radian!(0.),
                 true
             )
-            .is_ok()
+            .is_err()
         );
         assert!(
             General2DGaussian::new(
