@@ -2,7 +2,11 @@
 //! Rectangular, evenly-sized grid distribution
 use super::PositionDistribution;
 use crate::{
-    error::{OpmResult, OpossumError}, generic_validators::*, millimeter, utils::to_f64, validated, validated_type
+    error::OpmResult,
+    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero},
+    millimeter,
+    utils::to_f64,
+    validated, validated_type,
 };
 use nalgebra::{Point2, Point3};
 use num::Zero;
@@ -13,7 +17,7 @@ use uom::si::f64::Length;
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy)]
 pub struct Grid {
     nr_of_points: validated_type!(Point2<usize>, AllNotZero),
-    side_length:  validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),
+    side_length: validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),
 }
 
 impl Grid {
@@ -31,7 +35,7 @@ impl Grid {
         grid.set_nr_of_points_y(nr_of_points.y)?;
         grid.set_side_length_x(side_length.x)?;
         grid.set_side_length_y(side_length.y)?;
-    
+
         Ok(grid)
     }
 
@@ -105,10 +109,10 @@ impl Grid {
     /// # Side Effects
     ///
     /// Overwrites the current number of points.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
-    pub fn set_nr_of_points(&mut self, nr_of_points: Point2<usize>)-> OpmResult<()> {
+    pub fn set_nr_of_points(&mut self, nr_of_points: Point2<usize>) -> OpmResult<()> {
         self.nr_of_points.set(nr_of_points)?;
         Ok(())
     }
@@ -122,11 +126,12 @@ impl Grid {
     /// # Side Effects
     ///
     /// Overwrites the current X direction points count.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
-    pub fn set_nr_of_points_x(&mut self, nr_of_points_x: usize) -> OpmResult<()>{
-        self.nr_of_points.set(Point2::new(nr_of_points_x, self.nr_of_points_y()))?;
+    pub fn set_nr_of_points_x(&mut self, nr_of_points_x: usize) -> OpmResult<()> {
+        self.nr_of_points
+            .set(Point2::new(nr_of_points_x, self.nr_of_points_y()))?;
         Ok(())
     }
 
@@ -139,11 +144,12 @@ impl Grid {
     /// # Side Effects
     ///
     /// Overwrites the current Y direction points count.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
     pub fn set_nr_of_points_y(&mut self, nr_of_points_y: usize) -> OpmResult<()> {
-        self.nr_of_points.set(Point2::new( self.nr_of_points_x(), nr_of_points_y))?;
+        self.nr_of_points
+            .set(Point2::new(self.nr_of_points_x(), nr_of_points_y))?;
         Ok(())
     }
 
@@ -156,10 +162,10 @@ impl Grid {
     /// # Side Effects
     ///
     /// Overwrites the current side lengths.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
-    pub fn set_side_length(&mut self, side_length: Point2<Length>) -> OpmResult<()>  {
+    pub fn set_side_length(&mut self, side_length: Point2<Length>) -> OpmResult<()> {
         self.side_length.set(side_length)?;
         Ok(())
     }
@@ -173,11 +179,12 @@ impl Grid {
     /// # Side Effects
     ///
     /// Overwrites the current side length in the X direction.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
-    pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()>  {
-        self.side_length.set(Point2::new(side_length_x, self.side_length_y()))?;
+    pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()> {
+        self.side_length
+            .set(Point2::new(side_length_x, self.side_length_y()))?;
         Ok(())
     }
 
@@ -190,11 +197,12 @@ impl Grid {
     /// # Side Effects
     ///
     /// Overwrites the current side length in the Y direction.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
-    pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()>  {
-        self.side_length.set(Point2::new(self.side_length_x(), side_length_y))?;
+    pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()> {
+        self.side_length
+            .set(Point2::new(self.side_length_x(), side_length_y))?;
         Ok(())
     }
 }
@@ -203,7 +211,8 @@ impl Default for Grid {
     fn default() -> Self {
         Self {
             nr_of_points: validated!(Point2::new(100_usize, 100_usize), AllNotZero).unwrap(),
-            side_length:  validated!(millimeter!(5., 5.), OnlyOneZero && AllFinite && AllPositive).unwrap(),
+            side_length: validated!(millimeter!(5., 5.), OnlyOneZero && AllFinite && AllPositive)
+                .unwrap(),
         }
     }
 }
@@ -257,23 +266,22 @@ mod test {
     use crate::millimeter;
     #[test]
     fn new_wrong() {
+        assert!(Grid::new(millimeter!(0.0, 0.0), Point2::new(1, 1)).is_err());
+        assert!(Grid::new(millimeter!(0.0, 1.0), Point2::new(1, 1)).is_ok());
+        assert!(Grid::new(millimeter!(1.0, 0.0), Point2::new(1, 1)).is_ok());
+        assert!(Grid::new(millimeter!(-0.1, 1.0), Point2::new(1, 1)).is_err());
+        assert!(Grid::new(millimeter!(f64::NAN, 1.0), Point2::new(1, 1)).is_err());
+        assert!(Grid::new(millimeter!(f64::INFINITY, 1.0), Point2::new(1, 1)).is_err());
 
-        assert!(Grid::new(millimeter!(0.0,0.0), Point2::new(1, 1)).is_err());
-        assert!(Grid::new(millimeter!(0.0,1.0), Point2::new(1, 1)).is_ok());
-        assert!(Grid::new(millimeter!(1.0,0.0), Point2::new(1, 1)).is_ok());
-        assert!(Grid::new(millimeter!(-0.1,1.0), Point2::new(1, 1)).is_err());
-        assert!(Grid::new(millimeter!(f64::NAN,1.0), Point2::new(1, 1)).is_err());
-        assert!(Grid::new(millimeter!(f64::INFINITY,1.0), Point2::new(1, 1)).is_err());
-
-        assert!(Grid::new(millimeter!(1.0,-0.1), Point2::new(1, 1)).is_err());
-        assert!(Grid::new(millimeter!(1.0,f64::NAN), Point2::new(1, 1)).is_err());
-        assert!(Grid::new(millimeter!(1.0,f64::INFINITY), Point2::new(1, 1)).is_err());
-        assert!(Grid::new(millimeter!(1.0,1.0), Point2::new(0, 1)).is_err());
-        assert!(Grid::new(millimeter!(1.0,1.0), Point2::new(1, 0)).is_err());
+        assert!(Grid::new(millimeter!(1.0, -0.1), Point2::new(1, 1)).is_err());
+        assert!(Grid::new(millimeter!(1.0, f64::NAN), Point2::new(1, 1)).is_err());
+        assert!(Grid::new(millimeter!(1.0, f64::INFINITY), Point2::new(1, 1)).is_err());
+        assert!(Grid::new(millimeter!(1.0, 1.0), Point2::new(0, 1)).is_err());
+        assert!(Grid::new(millimeter!(1.0, 1.0), Point2::new(1, 0)).is_err());
     }
     #[test]
     fn generate_symmetric() {
-        let strategy = Grid::new(millimeter!(1.0,1.0), Point2::new(2, 2)).unwrap();
+        let strategy = Grid::new(millimeter!(1.0, 1.0), Point2::new(2, 2)).unwrap();
         let points = strategy.generate();
         assert_eq!(points.len(), 4);
         assert_eq!(points[0], millimeter!(-0.5, -0.5, 0.));
@@ -283,14 +291,14 @@ mod test {
     }
     #[test]
     fn generate_size_one() {
-        let strategy = Grid::new(millimeter!(1.0,1.0), Point2::new(1, 1)).unwrap();
+        let strategy = Grid::new(millimeter!(1.0, 1.0), Point2::new(1, 1)).unwrap();
         let points = strategy.generate();
         assert_eq!(points.len(), 1);
         assert_eq!(points[0], millimeter!(0., 0., 0.));
     }
     #[test]
     fn generate_asymmetric() {
-        let strategy = Grid::new(millimeter!(1.0,1.0), Point2::new(1, 2)).unwrap();
+        let strategy = Grid::new(millimeter!(1.0, 1.0), Point2::new(1, 2)).unwrap();
         let points = strategy.generate();
         assert_eq!(points.len(), 2);
         assert_eq!(points[0], millimeter!(0., -0.5, 0.));

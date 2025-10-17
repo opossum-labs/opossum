@@ -3,11 +3,13 @@
 use std::f64::consts::PI;
 
 use crate::{
-    error::{OpmResult, OpossumError}, generic_validators::*, millimeter, validated, validated_type
+    error::OpmResult,
+    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero},
+    millimeter, validated, validated_type,
 };
 
 use super::PositionDistribution;
-use nalgebra::{point, Point2, Point3};
+use nalgebra::{Point2, Point3, point};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
@@ -30,7 +32,11 @@ impl FibonacciRectangle {
     /// This function will return an error if
     ///  - the given `side_length_x` or `side_length_y` is negative or not finite, or both are zero.
     ///  - the given `nr_of_points` is zero.
-    pub fn new(side_length_x: Length, side_length_y: Length, nr_of_points: usize) -> OpmResult<Self> {
+    pub fn new(
+        side_length_x: Length,
+        side_length_y: Length,
+        nr_of_points: usize,
+    ) -> OpmResult<Self> {
         let mut fibonacci_rect = Self::default();
         fibonacci_rect.set_nr_of_points(nr_of_points)?;
         fibonacci_rect.set_side_length_x(side_length_x)?;
@@ -53,7 +59,7 @@ impl FibonacciRectangle {
     /// # Returns
     ///
     /// The length of the side in the X direction as a `Length`.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
     #[must_use]
@@ -66,7 +72,7 @@ impl FibonacciRectangle {
     /// # Returns
     ///
     /// The length of the side in the Y direction as a `Length`.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
     #[must_use]
@@ -83,7 +89,7 @@ impl FibonacciRectangle {
     /// # Side Effects
     ///
     /// Updates the current number of rays.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
     pub fn set_nr_of_points(&mut self, nr_of_points: usize) -> OpmResult<()> {
@@ -100,7 +106,10 @@ impl FibonacciRectangle {
     /// # Side Effects
     ///
     /// Updates the current side length in the X direction.
-    pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()>  {
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()> {
         self.side_length
             .set(Point2::new(side_length_x, self.side_length_y()))?;
         Ok(())
@@ -115,9 +124,12 @@ impl FibonacciRectangle {
     /// # Side Effects
     ///
     /// Updates the current side length in the Y direction.
-    pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()>  {
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()> {
         self.side_length
-            .set(Point2::new( self.side_length_x(),side_length_y))?;
+            .set(Point2::new(self.side_length_x(), side_length_y))?;
         Ok(())
     }
 }
@@ -185,7 +197,7 @@ impl FibonacciEllipse {
     ///
     /// The number of points as a `usize`.
     #[must_use]
-    pub fn nr_of_points(&self) -> usize {
+    pub const fn nr_of_points(&self) -> usize {
         *self.nr_of_points.get()
     }
 
@@ -218,10 +230,10 @@ impl FibonacciEllipse {
     /// # Side Effects
     ///
     /// Updates the current number of rays.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
-    pub fn set_nr_of_points(&mut self, nr_of_points: usize) -> OpmResult<()>{
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) -> OpmResult<()> {
         self.nr_of_points.set(nr_of_points)?;
         Ok(())
     }
@@ -235,12 +247,11 @@ impl FibonacciEllipse {
     /// # Side Effects
     ///
     /// Updates the current `radius_x`.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
     pub fn set_radius_x(&mut self, radius_x: Length) -> OpmResult<()> {
-        self.radius
-            .set(Point2::new(radius_x, self.radius_y()))?;
+        self.radius.set(Point2::new(radius_x, self.radius_y()))?;
         Ok(())
     }
 
@@ -253,12 +264,11 @@ impl FibonacciEllipse {
     /// # Side Effects
     ///
     /// Updates the current `radius_y`.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if validation fails
     pub fn set_radius_y(&mut self, radius_y: Length) -> OpmResult<()> {
-        self.radius
-            .set(Point2::new(self.radius_x(), radius_y))?;
+        self.radius.set(Point2::new(self.radius_x(), radius_y))?;
         Ok(())
     }
 }

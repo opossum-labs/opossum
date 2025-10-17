@@ -1,16 +1,20 @@
+use nalgebra::Point2;
 use opossum_core::prelude::*;
 use opossum_core::{
     coatings::CoatingType, energy_distributions::UniformDist, optic_ports::PortType,
     position_distributions::Grid, spectral_distribution::LaserLines,
 };
 use std::path::Path;
-use nalgebra::Point2;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Fresnel coating example");
     let light_data_builder =
         LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
-            Grid::new(Point2::new(millimeter!(9.), millimeter!(9.)), Point2::new(100, 100))?.into(),
+            Grid::new(
+                Point2::new(millimeter!(9.), millimeter!(9.)),
+                Point2::new(100, 100),
+            )?
+            .into(),
             UniformDist::new(joule!(1.))?.into(),
             LaserLines::new(vec![(nanometer!(1000.), 1.0)])?.into(),
         )));

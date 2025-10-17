@@ -1,4 +1,7 @@
-use crate::components::{logger::LogResultExt, node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings}};
+use crate::components::{
+    logger::LogResultExt,
+    node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
+};
 use dioxus::prelude::*;
 use opossum_backend::{Grid, PosDistType, millimeter, try_f64_to_usize};
 use strum::EnumIter;
@@ -53,22 +56,25 @@ impl IntoInputData<f64, Grid, PosDistType> for GridParam {
     fn setter_from_obj(&self) -> impl FnMut(&mut Grid, f64) {
         match self {
             Self::NrOfPointsX => move |obj: &mut Grid, val: f64| {
-                if let Some(val) = try_f64_to_usize(val){
-                    obj.set_nr_of_points_x(val).log_err_with_context("`set_nr_of_points_x` of grid");
+                if let Some(val) = try_f64_to_usize(val) {
+                    obj.set_nr_of_points_x(val)
+                        .log_err_with_context("`set_nr_of_points_x` of grid");
                 }
-                
             },
             Self::NrOfPointsY => move |obj: &mut Grid, val: f64| {
-                if let Some(val) = try_f64_to_usize(val){
-                    obj.set_nr_of_points_y(val).log_err_with_context("`set_nr_of_points_y` of grid");
+                if let Some(val) = try_f64_to_usize(val) {
+                    obj.set_nr_of_points_y(val)
+                        .log_err_with_context("`set_nr_of_points_y` of grid");
                 }
             },
-            Self::LengthX => {
-                move |obj: &mut Grid, val: f64| obj.set_side_length_x(millimeter!(val)).log_err_with_context("`set_side_length_x` of fibonacci-ellipse")
-            }
-            Self::LengthY => {
-                move |obj: &mut Grid, val: f64| obj.set_side_length_y(millimeter!(val)).log_err_with_context("`set_side_length_y` of fibonacci-ellipse")
-            }
+            Self::LengthX => move |obj: &mut Grid, val: f64| {
+                obj.set_side_length_x(millimeter!(val))
+                    .log_err_with_context("`set_side_length_x` of fibonacci-ellipse");
+            },
+            Self::LengthY => move |obj: &mut Grid, val: f64| {
+                obj.set_side_length_y(millimeter!(val))
+                    .log_err_with_context("`set_side_length_y` of fibonacci-ellipse");
+            },
         }
     }
 }

@@ -1,5 +1,6 @@
-use crate::components::node_editor::inputs::{
-    InputData, InputParam, IntoInputData, IntoInputDataStrings,
+use crate::components::{
+    logger::LogResultExt,
+    node_editor::inputs::{InputData, InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
 use opossum_backend::{HexagonalTiling, PosDistType, millimeter};
@@ -55,15 +56,18 @@ impl IntoInputData<f64, HexagonalTiling, PosDistType> for HexagonalTilingParam {
     fn setter_from_obj(&self) -> impl FnMut(&mut HexagonalTiling, f64) {
         match self {
             Self::NrOfHex => move |_: &mut HexagonalTiling, _: f64| {},
-            Self::Radius => {
-                move |obj: &mut HexagonalTiling, val: f64| obj.set_radius(millimeter!(val))
-            }
-            Self::CenterX => {
-                move |obj: &mut HexagonalTiling, val: f64| obj.set_center_x(millimeter!(val))
-            }
-            Self::CenterY => {
-                move |obj: &mut HexagonalTiling, val: f64| obj.set_center_y(millimeter!(val))
-            }
+            Self::Radius => move |obj: &mut HexagonalTiling, val: f64| {
+                obj.set_radius(millimeter!(val))
+                    .log_err_with_context("`set_radius` of hexagonal_tiling");
+            },
+            Self::CenterX => move |obj: &mut HexagonalTiling, val: f64| {
+                obj.set_center_x(millimeter!(val))
+                    .log_err_with_context("`set_center_x` of hexagonal_tiling");
+            },
+            Self::CenterY => move |obj: &mut HexagonalTiling, val: f64| {
+                obj.set_center_y(millimeter!(val))
+                    .log_err_with_context("`set_center_y` of hexagonal_tiling");
+            },
         }
     }
 }

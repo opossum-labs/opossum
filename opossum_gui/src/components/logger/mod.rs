@@ -38,7 +38,6 @@ impl Logs {
     }
 }
 
-
 pub trait LogResultExt {
     fn log_err_with_context(self, context: &str);
     fn log_err(self);
@@ -58,9 +57,7 @@ where
 
     fn log_err(self) {
         if let Err(e) = self {
-            OPOSSUM_UI_LOGS
-                .write()
-                .add_log(&format!("Error: {e}"));
+            OPOSSUM_UI_LOGS.write().add_log(&format!("Error: {e}"));
         }
     }
 }

@@ -1,3 +1,4 @@
+use nalgebra::Point2;
 use nalgebra::Vector3;
 use num::Zero;
 use opossum_core::prelude::*;
@@ -5,7 +6,6 @@ use opossum_core::{
     energy_distributions::UniformDist, position_distributions::Grid, properties::Proptype,
     spectral_distribution::LaserLines,
 };
-use nalgebra::Point2;
 use std::path::Path;
 use uom::si::f64::Length;
 
@@ -13,7 +13,11 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("PHELIX MainAmp");
 
     let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
-        Grid::new(Point2::new(millimeter!(60.0), Length::zero()), Point2::new(5, 1))?.into(),
+        Grid::new(
+            Point2::new(millimeter!(60.0), Length::zero()),
+            Point2::new(5, 1),
+        )?
+        .into(),
         // pos_dist: Hexapolar::new(millimeter!(30.0), 3)?.into(),
         UniformDist::new(joule!(1.0))?.into(),
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),

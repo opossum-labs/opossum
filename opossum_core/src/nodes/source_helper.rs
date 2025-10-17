@@ -59,7 +59,11 @@ pub fn collimated_line_ray_source(
 ) -> OpmResult<Source> {
     let light_data_builder =
         LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
-            Grid::new(Point2::new(Length::zero(), size_y), Point2::new(1, nr_of_points_y))?.into(),
+            Grid::new(
+                Point2::new(Length::zero(), size_y),
+                Point2::new(1, nr_of_points_y),
+            )?
+            .into(),
             UniformDist::new(energy)?.into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         )));

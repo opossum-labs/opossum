@@ -2,8 +2,9 @@
 use std::f64::consts::PI;
 
 use crate::{
-    error::{OpmResult, OpossumError},
-    meter, millimeter,
+    error::OpmResult,
+    generic_validators::{AllFinite, AllPositive},
+    meter, millimeter, validated, validated_type,
 };
 
 use super::PositionDistribution;
@@ -16,8 +17,8 @@ use uom::si::f64::Length;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct HexagonalTiling {
     nr_of_hex_along_radius: u8,
-    radius: Length,
-    center: Point2<Length>,
+    radius: validated_type!(Length, AllPositive && AllFinite),
+    center: validated_type!(Point2<Length>, AllFinite),
 }
 impl HexagonalTiling {
     /// Create a new [`HexagonalTiling`] distribution generator.
@@ -33,21 +34,12 @@ impl HexagonalTiling {
         nr_of_hex_along_radius: u8,
         center: Point2<Length>,
     ) -> OpmResult<Self> {
-        if radius.is_sign_negative() || !radius.is_finite() {
-            return Err(OpossumError::Other(
-                "radius must be positive and finite".into(),
-            ));
-        }
-        if !center.x.is_finite() || !center.y.is_finite() {
-            return Err(OpossumError::Other(
-                "center coordinates must be finite".into(),
-            ));
-        }
-        Ok(Self {
-            nr_of_hex_along_radius,
-            radius,
-            center,
-        })
+        let mut hexagonal = Self::default();
+        hexagonal.set_radius(radius)?;
+        hexagonal.set_center_x(center.x)?;
+        hexagonal.set_center_y(center.y)?;
+        hexagonal.set_nr_of_hex_along_radius(nr_of_hex_along_radius);
+        Ok(hexagonal)
     }
     /// Returns the radius of the hexagonal tiling distribution.
     ///
@@ -56,7 +48,7 @@ impl HexagonalTiling {
     /// The radius as a `Length`.
     #[must_use]
     pub fn radius(&self) -> Length {
-        self.radius
+        *self.radius.get()
     }
 
     /// Returns the number of hexagons along the radius.
@@ -76,7 +68,27 @@ impl HexagonalTiling {
     /// The center as a `Point2<Length>`.
     #[must_use]
     pub fn center(&self) -> Point2<Length> {
-        self.center
+        *self.center.get()
+    }
+
+    /// Returns the x coordinate of center point of the hexagonal tiling.
+    ///
+    /// # Returns
+    ///
+    /// The center x as `Length`.
+    #[must_use]
+    pub fn center_x(&self) -> Length {
+        self.center.get().x
+    }
+
+    /// Returns the y coordinate of center point of the hexagonal tiling.
+    ///
+    /// # Returns
+    ///
+    /// The center y as `Length`.
+    #[must_use]
+    pub fn center_y(&self) -> Length {
+        self.center.get().y
     }
 
     /// Sets the radius of the hexagonal tiling distribution.
@@ -88,8 +100,12 @@ impl HexagonalTiling {
     /// # Side Effects
     ///
     /// Updates the current radius.
-    pub fn set_radius(&mut self, radius: Length) {
-        self.radius = radius;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_radius(&mut self, radius: Length) -> OpmResult<()> {
+        self.radius.set(radius)?;
+        Ok(())
     }
 
     /// Sets the number of hexagons along the radius.
@@ -114,8 +130,12 @@ impl HexagonalTiling {
     /// # Side Effects
     ///
     /// Updates the current center point.
-    pub fn set_center(&mut self, center: Point2<Length>) {
-        self.center = center;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_center(&mut self, center: Point2<Length>) -> OpmResult<()> {
+        self.center.set(center)?;
+        Ok(())
     }
 
     /// Sets the X coordinate of the center point.
@@ -127,8 +147,12 @@ impl HexagonalTiling {
     /// # Side Effects
     ///
     /// Updates the X coordinate of the center.
-    pub fn set_center_x(&mut self, center_x: Length) {
-        self.center.x = center_x;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_center_x(&mut self, center_x: Length) -> OpmResult<()> {
+        self.center.set(Point2::new(center_x, self.center_y()))?;
+        Ok(())
     }
 
     /// Sets the Y coordinate of the center point.
@@ -140,8 +164,12 @@ impl HexagonalTiling {
     /// # Side Effects
     ///
     /// Updates the Y coordinate of the center.
-    pub fn set_center_y(&mut self, center_y: Length) {
-        self.center.y = center_y;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_center_y(&mut self, center_y: Length) -> OpmResult<()> {
+        self.center.set(Point2::new(self.center_x(), center_y))?;
+        Ok(())
     }
 }
 
@@ -149,8 +177,8 @@ impl Default for HexagonalTiling {
     fn default() -> Self {
         Self {
             nr_of_hex_along_radius: 7,
-            radius: millimeter!(5.),
-            center: millimeter!(0., 0.),
+            radius: validated!(millimeter!(5.), AllPositive && AllFinite).unwrap(),
+            center: validated!(millimeter!(0., 0.), AllFinite).unwrap(),
         }
     }
 }
@@ -160,18 +188,18 @@ impl PositionDistribution for HexagonalTiling {
         let mut points: Vec<Point3<Length>> = Vec::new();
         // Add center point
         points.push(Point3::<Length>::new(
-            self.center.x,
-            self.center.y,
+            self.center_x(),
+            self.center_y(),
             meter!(0.),
         ));
 
-        let radius_step = self.radius / self.nr_of_hex_along_radius.to_f64().unwrap();
+        let radius_step = *self.radius.get() / self.nr_of_hex_along_radius.to_f64().unwrap();
         let mut i = 1;
-        let border_radius = self.radius * 5.0f64.mul_add(f64::EPSILON, 1.);
+        let border_radius = *self.radius.get() * 5.0f64.mul_add(f64::EPSILON, 1.);
         loop {
             let mut all_outside_radius = true;
-            let mut hex = Point3::<Length>::new(self.center.x, self.center.y, meter!(0.));
-            hex.x = radius_step * i.to_f64().unwrap() + self.center.x;
+            let mut hex = Point3::<Length>::new(self.center_x(), self.center_y(), meter!(0.));
+            hex.x = radius_step * i.to_f64().unwrap() + self.center_x();
             for j in 0_u8..6 {
                 let angle = PI / 3. * (2. + j.to_f64().unwrap());
                 let shift_vec = Vector3::new(
@@ -180,9 +208,9 @@ impl PositionDistribution for HexagonalTiling {
                     Length::zero(),
                 );
                 for _k in 0_u8..i {
-                    if ((hex.x - self.center.x) * (hex.x - self.center.x)
-                        + (hex.y - self.center.y) * (hex.y - self.center.y))
-                        .sqrt()
+                    if ((hex.x - self.center_x()) * (hex.x - self.center_x())
+                        + (hex.y - self.center_y()) * (hex.y - self.center_y()))
+                    .sqrt()
                         <= border_radius
                     {
                         points.push(hex);
