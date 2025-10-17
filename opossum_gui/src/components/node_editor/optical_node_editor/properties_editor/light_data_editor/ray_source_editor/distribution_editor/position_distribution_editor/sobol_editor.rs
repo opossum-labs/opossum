@@ -1,4 +1,4 @@
-use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
+use crate::components::{logger::LogResultExt, node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings}};
 use dioxus::prelude::*;
 use opossum_backend::{PosDistType, SobolDist, millimeter, try_f64_to_usize};
 use strum::EnumIter;
@@ -49,16 +49,17 @@ impl IntoInputData<f64, SobolDist, PosDistType> for SobolParam {
     fn setter_from_obj(&self) -> impl FnMut(&mut SobolDist, f64) {
         match self {
             Self::SideLengthX => move |obj: &mut SobolDist, val: f64| {
-                let _ = obj.set_side_length_x(millimeter!(val));
+                obj.set_side_length_x(millimeter!(val)).log_err_with_context("`set_side_length_x` of sobol");
             },
             Self::SideLengthY => move |obj: &mut SobolDist, val: f64| {
-                let _ = obj.set_side_length_y(millimeter!(val));
+                 obj.set_side_length_y(millimeter!(val)).log_err_with_context("`set_side_length_y` of sobol");
             },
             Self::Points => move |obj: &mut SobolDist, val: f64| {
                 if let Some(val) = try_f64_to_usize(val) {
-                    let _ = obj.set_nr_of_points(val);
+                    obj.set_nr_of_points(val).log_err_with_context("`set_nr_of_points` of sobol");
                 }
             },
         }
     }
 }
+

@@ -2,6 +2,8 @@ pub mod logger_component;
 use chrono::{self, Timelike};
 use dioxus::prelude::*;
 
+use crate::OPOSSUM_UI_LOGS;
+
 #[derive(Clone)]
 pub struct Logs {
     logs: Signal<Vec<String>>,
@@ -33,5 +35,32 @@ impl Logs {
             dt.second(),
             log_msg
         ));
+    }
+}
+
+
+pub trait LogResultExt {
+    fn log_err_with_context(self, context: &str);
+    fn log_err(self);
+}
+
+impl<T, E> LogResultExt for Result<T, E>
+where
+    E: std::fmt::Display,
+{
+    fn log_err_with_context(self, context: &str) {
+        if let Err(e) = self {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("Error in {context}: {e}"));
+        }
+    }
+
+    fn log_err(self) {
+        if let Err(e) = self {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("Error: {e}"));
+        }
     }
 }
