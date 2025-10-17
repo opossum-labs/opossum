@@ -1,22 +1,24 @@
-use num::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use super::SpectralDistribution;
-use crate::error::{OpmResult, OpossumError};
+use crate::error::OpmResult;
 use crate::utils::griddata::linspace;
 use crate::utils::math_distribution_functions::gaussian;
-use crate::{meter, nanometer};
-use itertools::Itertools;
+use crate::validated;
+use crate::{
+    generic_validators::{AllNormal, AllNotZero, AllPositive, SecondLarger},
+    meter, nanometer, validated_type,
+};
 use kahan::KahanSummator;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Copy)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Gaussian {
-    wvl_range: (Length, Length),
-    num_points: usize,
-    mu: Length,
-    fwhm: Length,
-    power: f64,
+    wvl_range: validated_type!((Length, Length), SecondLarger && AllPositive && AllNormal),
+    num_points: validated_type!(usize, AllNotZero),
+    mu: validated_type!(Length, AllPositive && AllNormal),
+    fwhm: validated_type!(Length, AllPositive && AllNormal),
+    power: validated_type!(f64, AllPositive && AllNormal),
 }
 
 impl Gaussian {
@@ -41,46 +43,14 @@ impl Gaussian {
         fwhm: Length,
         power: f64,
     ) -> OpmResult<Self> {
-        if !wvl_range.0.is_normal() || wvl_range.0.is_sign_negative() {
-            return Err(OpossumError::Other(
-                "range start must be positive and finite".into(),
-            ));
-        }
-        if !wvl_range.1.is_normal() || wvl_range.1.is_sign_negative() {
-            return Err(OpossumError::Other(
-                "range end must be positive and finite".into(),
-            ));
-        }
-        if wvl_range.1 <= wvl_range.0 {
-            return Err(OpossumError::Other(
-                "range end must be >= range start".into(),
-            ));
-        }
-        if num_points.is_zero() {
-            return Err(OpossumError::Other("number of points must be !=0".into()));
-        }
-        if !mu.is_normal() || mu.is_sign_negative() {
-            return Err(OpossumError::Other(
-                "mean value must be positive and finite!".into(),
-            ));
-        }
-        if !fwhm.is_normal() || fwhm.is_sign_negative() {
-            return Err(OpossumError::Other(
-                "fwhm must be greater than zero and finite!".into(),
-            ));
-        }
-        if !power.is_normal() || power.is_sign_negative() {
-            return Err(OpossumError::Other(
-                "power of the distribution must be positive and finite!".into(),
-            ));
-        }
-        Ok(Self {
-            wvl_range,
-            num_points,
-            mu,
-            fwhm,
-            power,
-        })
+        let mut spec_gaussian = Self::default();
+        spec_gaussian.set_fwhm(fwhm)?;
+        spec_gaussian.set_mu(mu)?;
+        spec_gaussian.set_num_points(num_points)?;
+        spec_gaussian.set_power(power)?;
+        spec_gaussian.set_wvl_start(wvl_range.0)?;
+        spec_gaussian.set_wvl_end(wvl_range.1)?;
+        Ok(spec_gaussian)
     }
 
     /// Returns the start wavelength of the distribution range.
@@ -90,16 +60,20 @@ impl Gaussian {
     /// # Returns
     /// A [`Length`] value representing the start of the wavelength range.
     #[must_use]
-    pub const fn wvl_start(&self) -> Length {
-        self.wvl_range.0
+    pub fn wvl_start(&self) -> Length {
+        self.wvl_range.get().0
     }
 
     /// Sets the start wavelength of the distribution range.
     ///
     /// # Parameters
     /// - `start`: A [`Length`] representing the new lower bound of the wavelength range.
-    pub fn set_wvl_start(&mut self, start: Length) {
-        self.wvl_range.0 = start;
+    ///
+    /// # Errors
+    /// Returns an error on validation fail
+    pub fn set_wvl_start(&mut self, start: Length) -> OpmResult<()> {
+        self.wvl_range.set((start, self.wvl_end()))?;
+        Ok(())
     }
 
     /// Returns the end wavelength of the distribution range.
@@ -109,16 +83,20 @@ impl Gaussian {
     /// # Returns
     /// A [`Length`] value representing the end of the wavelength range.
     #[must_use]
-    pub const fn wvl_end(&self) -> Length {
-        self.wvl_range.1
+    pub fn wvl_end(&self) -> Length {
+        self.wvl_range.get().1
     }
 
     /// Sets the end wavelength of the distribution range.
     ///
     /// # Parameters
     /// - `end`: A [`Length`] representing the new upper bound of the wavelength range.
-    pub fn set_wvl_end(&mut self, end: Length) {
-        self.wvl_range.1 = end;
+    ///
+    /// # Errors
+    /// Returns an error on validation fail
+    pub fn set_wvl_end(&mut self, end: Length) -> OpmResult<()> {
+        self.wvl_range.set((self.wvl_start(), end))?;
+        Ok(())
     }
 
     /// Returns the number of discrete wavelength points used in the distribution.
@@ -127,15 +105,19 @@ impl Gaussian {
     /// A `usize` indicating how many spectral samples are generated.
     #[must_use]
     pub const fn num_points(&self) -> usize {
-        self.num_points
+        *self.num_points.get()
     }
 
     /// Sets the number of discrete wavelength points in the distribution.
     ///
     /// # Parameters
     /// - `num_points`: The number of spectral samples to generate.
-    pub const fn set_num_points(&mut self, num_points: usize) {
-        self.num_points = num_points;
+    ///
+    /// # Errors
+    /// Returns an error on validation fail
+    pub fn set_num_points(&mut self, num_points: usize) -> OpmResult<()> {
+        self.num_points.set(num_points)?;
+        Ok(())
     }
 
     /// Returns the full width at half maximum (FWHM) of the Gaussian distribution.
@@ -146,15 +128,19 @@ impl Gaussian {
     /// A [`Length`] value representing the FWHM.
     #[must_use]
     pub const fn fwhm(&self) -> Length {
-        self.fwhm
+        *self.fwhm.get()
     }
 
     /// Sets the full width at half maximum (FWHM) of the Gaussian distribution.
     ///
     /// # Parameters
     /// - `fwhm`: A [`Length`] specifying the width of the spectral peak.
-    pub fn set_fwhm(&mut self, fwhm: Length) {
-        self.fwhm = fwhm;
+    ///
+    /// # Errors
+    /// Returns an error on validation fail
+    pub fn set_fwhm(&mut self, fwhm: Length) -> OpmResult<()> {
+        self.fwhm.set(fwhm)?;
+        Ok(())
     }
 
     /// Returns the mean (center wavelength) of the Gaussian distribution.
@@ -163,15 +149,19 @@ impl Gaussian {
     /// A [`Length`] value representing the center wavelength (`μ`).
     #[must_use]
     pub const fn mu(&self) -> Length {
-        self.mu
+        *self.mu.get()
     }
 
     /// Sets the mean (center wavelength) of the Gaussian distribution.
     ///
     /// # Parameters
     /// - `mu`: A [`Length`] representing the new center wavelength.
-    pub fn set_mu(&mut self, mu: Length) {
-        self.mu = mu;
+    ///
+    /// # Errors
+    /// Returns an error on validation fail
+    pub fn set_mu(&mut self, mu: Length) -> OpmResult<()> {
+        self.mu.set(mu)?;
+        Ok(())
     }
 
     /// Returns the total power of the spectral distribution.
@@ -180,26 +170,34 @@ impl Gaussian {
     /// A `f64` value representing the power (intensity scaling factor).
     #[must_use]
     pub const fn power(&self) -> f64 {
-        self.power
+        *self.power.get()
     }
 
     /// Sets the total power of the spectral distribution.
     ///
     /// # Parameters
     /// - `power`: A `f64` value representing the new power level.
-    pub const fn set_power(&mut self, power: f64) {
-        self.power = power;
+    ///
+    /// # Errors
+    /// Returns an error on validation fail
+    pub fn set_power(&mut self, power: f64) -> OpmResult<()> {
+        self.power.set(power)?;
+        Ok(())
     }
 }
 
 impl Default for Gaussian {
     fn default() -> Self {
         Self {
-            wvl_range: (nanometer!(1000.), nanometer!(1100.)),
-            num_points: 50,
-            mu: nanometer!(1054.),
-            fwhm: nanometer!(10.),
-            power: 1.,
+            wvl_range: validated!(
+                (nanometer!(1000.), nanometer!(1100.)),
+                SecondLarger && AllPositive && AllNormal
+            )
+            .unwrap(),
+            num_points: validated!(50_usize, AllNotZero).unwrap(),
+            mu: validated!(nanometer!(1054.), AllPositive && AllNormal).unwrap(),
+            fwhm: validated!(nanometer!(10.), AllPositive && AllNormal).unwrap(),
+            power: validated!(1., AllPositive && AllNormal).unwrap(),
         }
     }
 }
@@ -207,22 +205,22 @@ impl Default for Gaussian {
 impl SpectralDistribution for Gaussian {
     fn generate(&self) -> OpmResult<Vec<(Length, f64)>> {
         let wvls = linspace(
-            self.wvl_range.0.value,
-            self.wvl_range.1.value,
-            self.num_points,
+            self.wvl_start().value,
+            self.wvl_end().value,
+            self.num_points(),
         )?;
         let spectral_distribution = gaussian(
             wvls.data.as_slice(),
-            self.mu.value,
-            self.fwhm.value,
-            self.power,
+            self.mu().value,
+            self.fwhm().value,
+            self.power(),
         );
         let sum: f64 = spectral_distribution.iter().kahan_sum().sum();
         Ok(spectral_distribution
             .iter()
             .zip(wvls.iter())
             .map(|v| (meter!(*v.1), *v.0 / sum))
-            .collect_vec())
+            .collect::<Vec<(Length, f64)>>())
     }
 }
 
@@ -267,6 +265,7 @@ mod test {
         }
         let wvl_values: Vec<Length> = test_values.iter().map(|v| nanometer!(*v)).collect();
         for value in &wvl_values {
+            println!("{:?}", value);
             assert!(
                 Gaussian::new(
                     (*value, nanometer!(2000.0)),

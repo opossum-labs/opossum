@@ -3,7 +3,7 @@ use super::EnergyDistribution;
 use crate::{
     degree,
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive},
+    generic_validators::{AllFinite, AllNormal, AllNotZero, AllPositive},
     joule, millimeter,
     utils::math_distribution_functions::{
         general_2d_super_gaussian_point_elliptical, general_2d_super_gaussian_point_rectangular,
@@ -23,7 +23,7 @@ pub struct General2DGaussian {
     total_energy: validated_type!(Energy, AllNotZero && AllFinite && AllPositive),
     mu_xy: validated_type!(Point2<Length>, AllFinite),
     sigma_xy: validated_type!(Point2<Length>, AllNotZero && AllFinite && AllPositive),
-    power: validated_type!(f64, AllFinite && AllPositive),
+    power: validated_type!(f64, AllNormal && AllPositive),
     theta: validated_type!(Angle, AllFinite),
     rectangular: bool,
 }
@@ -271,7 +271,7 @@ impl Default for General2DGaussian {
             mu_xy: validated!(millimeter!(0., 0.), AllFinite).unwrap(),
             sigma_xy: validated!(millimeter!(5., 5.), AllNotZero && AllFinite && AllPositive)
                 .unwrap(),
-            power: validated!(1., AllFinite && AllPositive).unwrap(),
+            power: validated!(1., AllNormal && AllPositive).unwrap(),
             theta: validated!(degree!(0.), AllFinite).unwrap(),
             rectangular: false,
         }
@@ -456,7 +456,7 @@ mod test {
                 radian!(0.),
                 true
             )
-            .is_ok()
+            .is_err()
         );
         assert!(
             General2DGaussian::new(

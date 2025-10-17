@@ -21,6 +21,17 @@ impl_validator!(
     Point2<Length>
 );
 
+impl_validator!(
+    AllNormal,
+    |_self, v: &(f64, f64)| v.0.is_normal() && v.1.is_normal(),
+    (f64, f64)
+);
+impl_validator!(
+    AllNormal,
+    |_self, v: &(Length, Length)| v.0.is_normal() && v.1.is_normal(),
+    (Length, Length)
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,6 +101,39 @@ mod tests {
             Length::new::<meter>(1.0),
         );
         let p_invalid_nan = Point2::new(Length::new::<meter>(1.0), Length::new::<meter>(f64::NAN));
+
+        assert!(validator.validate(&p_valid).is_ok());
+        assert!(validator.validate(&p_invalid_zero).is_err());
+        assert!(validator.validate(&p_invalid_subnormal).is_err());
+        assert!(validator.validate(&p_invalid_nan).is_err());
+    }
+
+    #[test]
+    fn test_is_normal_tuple_f64() {
+        let validator = AllNormal;
+
+        let p_valid = (1.0, 2.0);
+        let p_invalid_zero = (0.0, 1.0);
+        let p_invalid_subnormal = (f64::MIN_POSITIVE / 2.0, 1.0);
+        let p_invalid_nan = (1.0, f64::NAN);
+
+        assert!(validator.validate(&p_valid).is_ok());
+        assert!(validator.validate(&p_invalid_zero).is_err());
+        assert!(validator.validate(&p_invalid_subnormal).is_err());
+        assert!(validator.validate(&p_invalid_nan).is_err());
+    }
+
+    #[test]
+    fn test_is_normal_tuple_length() {
+        let validator = AllNormal;
+
+        let p_valid = (Length::new::<meter>(1.0), Length::new::<meter>(2.0));
+        let p_invalid_zero = (Length::new::<meter>(0.0), Length::new::<meter>(1.0));
+        let p_invalid_subnormal = (
+            Length::new::<meter>(f64::MIN_POSITIVE / 2.0),
+            Length::new::<meter>(1.0),
+        );
+        let p_invalid_nan = (Length::new::<meter>(1.0), Length::new::<meter>(f64::NAN));
 
         assert!(validator.validate(&p_valid).is_ok());
         assert!(validator.validate(&p_invalid_zero).is_err());

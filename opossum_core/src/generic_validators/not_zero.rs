@@ -34,6 +34,27 @@ impl_validator!(
     Point2<Length>
 );
 
+impl_validator!(
+    AllNotZero,
+    |_self, v: &(usize, usize)| !v.0.is_zero() && !v.1.is_zero(),
+    (usize, usize)
+);
+impl_validator!(
+    AllNotZero,
+    |_self, v: &(i32, i32)| !v.0.is_zero() && !v.1.is_zero(),
+    (i32, i32)
+);
+impl_validator!(
+    AllNotZero,
+    |_self, v: &(f64, f64)| !v.0.is_zero() && !v.1.is_zero(),
+    (f64, f64)
+);
+impl_validator!(
+    AllNotZero,
+    |_self, v: &(Length, Length)| !v.0.is_zero() && !v.1.is_zero(),
+    (Length, Length)
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,6 +136,36 @@ mod tests {
         let p_zero_x = Point2::new(Length::new::<meter>(0.0), Length::new::<meter>(2.0));
         let p_zero_y = Point2::new(Length::new::<meter>(1.0), Length::new::<meter>(0.0));
         let p_zero_both = Point2::new(Length::new::<meter>(0.0), Length::new::<meter>(0.0));
+
+        assert!(validator.validate(&p_valid).is_ok());
+        assert!(validator.validate(&p_zero_x).is_err());
+        assert!(validator.validate(&p_zero_y).is_err());
+        assert!(validator.validate(&p_zero_both).is_err());
+    }
+
+    #[test]
+    fn test_is_not_zero_tuple_f64() {
+        let validator = AllNotZero;
+
+        let p_valid = (1.0, 2.0);
+        let p_zero_x = (0.0, 2.0);
+        let p_zero_y = (1.0, 0.0);
+        let p_zero_both = (0.0, 0.0);
+
+        assert!(validator.validate(&p_valid).is_ok());
+        assert!(validator.validate(&p_zero_x).is_err());
+        assert!(validator.validate(&p_zero_y).is_err());
+        assert!(validator.validate(&p_zero_both).is_err());
+    }
+
+    #[test]
+    fn test_is_not_zero_tuple_length() {
+        let validator = AllNotZero;
+
+        let p_valid = (Length::new::<meter>(1.0), Length::new::<meter>(2.0));
+        let p_zero_x = (Length::new::<meter>(0.0), Length::new::<meter>(2.0));
+        let p_zero_y = (Length::new::<meter>(1.0), Length::new::<meter>(0.0));
+        let p_zero_both = (Length::new::<meter>(0.0), Length::new::<meter>(0.0));
 
         assert!(validator.validate(&p_valid).is_ok());
         assert!(validator.validate(&p_zero_x).is_err());

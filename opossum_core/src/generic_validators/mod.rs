@@ -12,6 +12,7 @@ mod not_nan;
 mod not_zero;
 mod only_one_zero;
 mod positive;
+mod second_larger;
 
 pub use finite::AllFinite;
 pub use in_range::AllInRange;
@@ -20,6 +21,7 @@ pub use normal::AllNormal;
 pub use not_zero::AllNotZero;
 pub use only_one_zero::OnlyOneZero;
 pub use positive::AllPositive;
+pub use second_larger::SecondLarger;
 
 /// Trait for types that can validate a value of type `T`.
 ///

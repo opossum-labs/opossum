@@ -29,6 +29,16 @@ impl_validator!(
     |_self, v: &Point2<Length>| v.x.is_sign_positive() && v.y.is_sign_positive(),
     Point2<Length>
 );
+impl_validator!(
+    AllPositive,
+    |_self, v: &(f64, f64)| v.0.is_sign_positive() && v.1.is_sign_positive(),
+    (f64, f64)
+);
+impl_validator!(
+    AllPositive,
+    |_self, v: &(Length, Length)| v.0.is_sign_positive() && v.1.is_sign_positive(),
+    (Length, Length)
+);
 
 #[cfg(test)]
 mod tests {
@@ -89,6 +99,30 @@ mod tests {
         let p_valid = Point2::new(Length::new::<meter>(1.0), Length::new::<meter>(2.0));
         let p_invalid_x = Point2::new(Length::new::<meter>(0.0), Length::new::<meter>(2.0));
         let p_invalid_y = Point2::new(Length::new::<meter>(1.0), Length::new::<meter>(-1.0));
+
+        assert!(validator.validate(&p_valid).is_ok());
+        assert!(validator.validate(&p_invalid_x).is_ok());
+        assert!(validator.validate(&p_invalid_y).is_err());
+    }
+
+    #[test]
+    fn test_is_positive_tuple_length() {
+        let validator = AllPositive;
+        let p_valid = (Length::new::<meter>(1.0), Length::new::<meter>(2.0));
+        let p_invalid_x = (Length::new::<meter>(0.0), Length::new::<meter>(2.0));
+        let p_invalid_y = (Length::new::<meter>(1.0), Length::new::<meter>(-1.0));
+
+        assert!(validator.validate(&p_valid).is_ok());
+        assert!(validator.validate(&p_invalid_x).is_ok());
+        assert!(validator.validate(&p_invalid_y).is_err());
+    }
+
+    #[test]
+    fn test_is_positive_tuple_f64() {
+        let validator = AllPositive;
+        let p_valid = (1.0, 2.0);
+        let p_invalid_x = (0.0, 2.0);
+        let p_invalid_y = (1.0, -1.0);
 
         assert!(validator.validate(&p_valid).is_ok());
         assert!(validator.validate(&p_invalid_x).is_ok());
