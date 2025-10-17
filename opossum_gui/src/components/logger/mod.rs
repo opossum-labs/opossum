@@ -40,6 +40,7 @@ impl Logs {
 
 pub trait LogResultExt {
     fn log_err_with_context(self, context: &str);
+    #[allow(dead_code)]
     fn log_err(self);
 }
 

@@ -3,7 +3,7 @@ use std::f64::consts::PI;
 
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllPositive},
+    generic_validators::{AllFinite, AllNotZero, AllPositive},
     meter, millimeter, validated, validated_type,
 };
 
@@ -17,7 +17,7 @@ use uom::si::f64::Length;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
 pub struct HexagonalTiling {
     nr_of_hex_along_radius: u8,
-    radius: validated_type!(Length, AllPositive && AllFinite),
+    radius: validated_type!(Length, AllPositive && AllFinite && AllNotZero),
     center: validated_type!(Point2<Length>, AllFinite),
 }
 impl HexagonalTiling {
@@ -177,7 +177,7 @@ impl Default for HexagonalTiling {
     fn default() -> Self {
         Self {
             nr_of_hex_along_radius: 7,
-            radius: validated!(millimeter!(5.), AllPositive && AllFinite).unwrap(),
+            radius: validated!(millimeter!(5.), AllPositive && AllFinite && AllNotZero).unwrap(),
             center: validated!(millimeter!(0., 0.), AllFinite).unwrap(),
         }
     }
@@ -231,5 +231,139 @@ impl PositionDistribution for HexagonalTiling {
 impl From<HexagonalTiling> for super::PosDistType {
     fn from(hexagonal_tiling: HexagonalTiling) -> Self {
         Self::HexagonalTiling(hexagonal_tiling)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use approx::assert_relative_eq;
+
+    use crate::{millimeter, position_distributions::HexagonalTiling};
+
+    #[test]
+    fn valid_hexagonal_tiling_creation() {
+        let radius = millimeter!(10.0);
+        let center = millimeter!(0.0, 0.0);
+        let tiling = HexagonalTiling::new(radius, 5, center).unwrap();
+
+        assert_relative_eq!(tiling.radius().value, radius.value);
+        assert_eq!(tiling.nr_of_hex_along_radius(), 5);
+        assert_relative_eq!(tiling.center().x.value, millimeter!(0.0).value);
+        assert_relative_eq!(tiling.center().y.value, millimeter!(0.0).value);
+    }
+
+    #[test]
+    fn invalid_negative_radius_should_error() {
+        let radius = millimeter!(-1.0);
+        let center = millimeter!(0.0, 0.0);
+        let result = HexagonalTiling::new(radius, 5, center);
+
+        assert!(result.is_err(), "negative radius must be rejected");
+    }
+
+    #[test]
+    fn invalid_infinite_radius_should_error() {
+        let radius = millimeter!(f64::INFINITY);
+        let center = millimeter!(0.0, 0.0);
+        let result = HexagonalTiling::new(radius, 5, center);
+
+        assert!(result.is_err(), "infinite radius must be rejected");
+    }
+
+    #[test]
+    fn invalid_zero_radius_should_error() {
+        let radius = millimeter!(0.0);
+        let center = millimeter!(0.0, 0.0);
+        let result = HexagonalTiling::new(radius, 5, center);
+
+        assert!(result.is_err(), "zero radius must be rejected");
+    }
+
+    #[test]
+    fn invalid_nan_radius_should_error() {
+        let radius = millimeter!(f64::NAN);
+        let center = millimeter!(0.0, 0.0);
+        let result = HexagonalTiling::new(radius, 5, center);
+
+        assert!(result.is_err(), "NaN radius must be rejected");
+    }
+
+    #[test]
+    fn invalid_center_nan_should_error() {
+        let radius = millimeter!(5.0);
+        let center = millimeter!(f64::NAN, 0.0);
+        let result = HexagonalTiling::new(radius, 5, center);
+
+        assert!(result.is_err(), "NaN in center must be rejected");
+    }
+
+    #[test]
+    fn invalid_center_infinite_should_error() {
+        let radius = millimeter!(5.0);
+        let center = millimeter!(f64::INFINITY, 0.0);
+        let result = HexagonalTiling::new(radius, 5, center);
+
+        assert!(
+            result.is_err(),
+            "infinite center coordinate must be rejected"
+        );
+    }
+
+    // --- Setter Validierung ----------------------------------------------------
+
+    #[test]
+    fn set_radius_to_valid_value_should_succeed() {
+        let mut t = HexagonalTiling::default();
+        assert!(t.set_radius(millimeter!(20.0)).is_ok());
+        assert_relative_eq!(t.radius().value, millimeter!(20.0).value);
+    }
+
+    #[test]
+    fn set_radius_to_invalid_value_should_fail() {
+        let mut t = HexagonalTiling::default();
+        assert!(t.set_radius(millimeter!(-5.0)).is_err());
+    }
+
+    #[test]
+    fn set_center_to_valid_value_should_succeed() {
+        let mut t = HexagonalTiling::default();
+        assert!(t.set_center(millimeter!(2.0, 3.0)).is_ok());
+        assert_relative_eq!(t.center().x.value, millimeter!(2.0).value);
+        assert_relative_eq!(t.center().y.value, millimeter!(3.0).value);
+    }
+
+    #[test]
+    fn set_center_to_invalid_value_should_fail() {
+        let mut t = HexagonalTiling::default();
+        assert!(t.set_center(millimeter!(f64::NAN, 0.0)).is_err());
+    }
+
+    #[test]
+    fn set_center_x_to_invalid_value_should_fail() {
+        let mut t = HexagonalTiling::default();
+        assert!(t.set_center_x(millimeter!(f64::INFINITY)).is_err());
+    }
+
+    #[test]
+    fn set_center_y_to_invalid_value_should_fail() {
+        let mut t = HexagonalTiling::default();
+        assert!(t.set_center_y(millimeter!(f64::NAN)).is_err());
+    }
+
+    // --- Default Values --------------------------------------------------------
+
+    #[test]
+    fn getters_are_same() {
+        let t = HexagonalTiling::default();
+        assert_relative_eq!(t.center_x().value, t.center().x.value);
+        assert_relative_eq!(t.center_y().value, t.center().y.value);
+    }
+
+    #[test]
+    fn default_is_valid() {
+        let t = HexagonalTiling::default();
+        assert!(t.radius().is_finite());
+        assert!(t.center_x().is_finite());
+        assert!(t.center_y().is_finite());
     }
 }
