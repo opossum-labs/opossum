@@ -38,7 +38,7 @@ impl LaserLines {
     /// * the sum of intensities is zero.
     pub fn new(lines: Vec<(Length, f64)>) -> OpmResult<Self> {
         let mut laser_lines = Self::default();
-        laser_lines.add_lines(lines)?;
+        laser_lines.set_lines(lines)?;
         Ok(laser_lines)
     }
 
@@ -71,6 +71,38 @@ impl LaserLines {
         Ok(())
     }
 
+    /// Sets a list of laser lines to the [`LaserLines`] distribution.
+    ///
+    /// Each laser line is a tuple containing a [`Length`] representing the wavelength,
+    /// and a `f64` representing the intensity.
+    ///
+    /// # Parameters
+    /// * `lines` – A vector of `(Length, f64)` tuples, each representing a spectral line.
+    ///
+    /// # Returns
+    /// * `Ok(())` if all lines are valid and added successfully.
+    /// * `Err(OpossumError)` if validation fails.
+    ///
+    /// # Errors
+    /// This method returns an error if:
+    /// - The input list is empty.
+    /// - Any wavelength is negative or not finite.
+    /// - Any intensity is negative or not finite.
+    pub fn set_lines(&mut self, lines: Vec<(Length, f64)>) -> OpmResult<()> {
+        let mut validated_vec = Vec::<(
+            validated_type!(Length, AllNormal && AllPositive),
+            validated_type!(f64, AllNormal && AllPositive),
+        )>::new();
+        for (wvl, intensity) in lines {
+            validated_vec.push((
+                validated!(wvl, AllNormal && AllPositive)?,
+                validated!(intensity, AllNormal && AllPositive)?,
+            ));
+        }
+        self.lines.set(validated_vec)?;
+        Ok(())
+    }
+
     /// Returns an immutable reference to the list of laser lines stored in this [`LaserLines`] instance.
     ///
     /// Each line is represented as a tuple `(Length, f64)`, where the `Length` is the wavelength and
@@ -78,7 +110,6 @@ impl LaserLines {
     ///
     /// # Returns
     /// A reference to the vector of spectral lines.
-
     #[must_use]
     pub fn lines(&self) -> Vec<(&Length, &f64)> {
         // &Vec<(validated_type!(Length, AllNormal && AllPositive), validated_type!(f64, AllNormal && AllPositive))> {
@@ -90,7 +121,7 @@ impl LaserLines {
     }
 
     /// Deletes a line form `LaserLines`
-    /// 
+    ///
     /// # Errors
     /// Returns an error if setting the new lines fails. More of an esotheric error that should not happen as the other lines have all been validated before
     pub fn delete_line(&mut self, index: usize) -> OpmResult<()> {

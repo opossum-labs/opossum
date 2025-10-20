@@ -18,7 +18,7 @@ fn main() -> OpmResult<()> {
         UniformDist::new(joule!(1.0))?.into(),
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         millimeter!(75.0),
-    )));
+    )?));
     let src = Source::new("point ray source", light_data_builder);
     let i_src = scenery.add_node(src)?;
 

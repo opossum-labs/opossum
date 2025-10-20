@@ -189,6 +189,11 @@ macro_rules! validator_type_expr {
         >
     };
 
+    // generic validator type like AllInRange<Angle>
+    ($t:ty; $v:ident::< $($args:ty),+ >) => {
+        $v::<$($args),+>
+    };
+
     // single validator
     ($t:ty; $v:ty) => { $v };
 }

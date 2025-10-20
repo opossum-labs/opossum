@@ -22,7 +22,7 @@ fn main() -> OpmResult<()> {
         UniformDist::new(joule!(1.0))?.into(),
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         millimeter!(1000.0),
-    )));
+    )?));
 
     // let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
     //     pos_dist: Grid::new((millimeter!(60.0), Length::zero()), (5, 1))?.into(),

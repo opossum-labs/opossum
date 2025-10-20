@@ -1,7 +1,10 @@
 use std::path::Path;
 
-use crate::components::node_editor::inputs::{
-    InputData, InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
+use crate::components::{
+    logger::LogResultExt,
+    node_editor::inputs::{
+        InputData, InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
+    },
 };
 use dioxus::prelude::*;
 use opossum_backend::{
@@ -115,14 +118,22 @@ impl IntoInputData<f64, ImageSrc, RayDataBuilder> for ImageSrcParam {
     }
     fn setter_from_obj(&self) -> impl FnMut(&mut ImageSrc, f64) {
         match self {
-            Self::PxlSize => {
-                move |obj: &mut ImageSrc, val: f64| obj.set_pixel_size(micrometer!(val))
-            }
-            Self::Energy => move |obj: &mut ImageSrc, val: f64| obj.set_energy(joule!(val)),
-            Self::Wavelength => {
-                move |obj: &mut ImageSrc, val: f64| obj.set_wavelength(nanometer!(val))
-            }
-            Self::ConeAngle => move |obj: &mut ImageSrc, val: f64| obj.set_cone_angle(degree!(val)),
+            Self::PxlSize => move |obj: &mut ImageSrc, val: f64| {
+                obj.set_pixel_size(micrometer!(val))
+                    .log_err_with_context("validation failed in `set_pixel_size` of ImgSrc");
+            },
+            Self::Energy => move |obj: &mut ImageSrc, val: f64| {
+                obj.set_energy(joule!(val))
+                    .log_err_with_context("validation failed in `set_energy` of ImgSrc");
+            },
+            Self::Wavelength => move |obj: &mut ImageSrc, val: f64| {
+                obj.set_wavelength(nanometer!(val))
+                    .log_err_with_context("validation failed in `set_wavelength` of ImgSrc");
+            },
+            Self::ConeAngle => move |obj: &mut ImageSrc, val: f64| {
+                obj.set_cone_angle(degree!(val))
+                    .log_err_with_context("validation failed in `set_cone_angle` of ImgSrc");
+            },
             Self::FPath => move |_: &mut ImageSrc, _: f64| {},
         }
     }
@@ -141,7 +152,10 @@ impl IntoInputData<String, ImageSrc, RayDataBuilder> for ImageSrcParam {
     }
     fn setter_from_obj(&self) -> impl FnMut(&mut ImageSrc, String) {
         if *self == Self::FPath {
-            move |obj: &mut ImageSrc, val: String| obj.set_file_path(Path::new(&val).to_path_buf())
+            move |obj: &mut ImageSrc, val: String| {
+                obj.set_file_path(Path::new(&val).to_path_buf())
+                    .log_err_with_context("validation failed in `set_file_path` of ImgSrc");
+            }
         } else {
             move |_: &mut ImageSrc, _: String| {}
         }

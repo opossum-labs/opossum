@@ -11,6 +11,7 @@ mod not_empty;
 mod not_nan;
 mod not_zero;
 mod only_one_zero;
+mod path_valid;
 mod positive;
 mod second_larger;
 
@@ -21,6 +22,7 @@ pub use normal::AllNormal;
 pub use not_empty::AllNotEmpty;
 pub use not_zero::AllNotZero;
 pub use only_one_zero::OnlyOneZero;
+pub use path_valid::PathValid;
 pub use positive::AllPositive;
 pub use second_larger::SecondLarger;
 

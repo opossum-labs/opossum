@@ -93,7 +93,7 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
         UniformDist::new(energy)?.into(),
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         millimeter!(1000.),
-    )));
+    )?));
     let src = Source::new("point ray source", light_data_builder);
     Ok(src)
 }

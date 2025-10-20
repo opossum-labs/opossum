@@ -138,7 +138,7 @@ fn LaserLineList(laser_lines: LaserLines, spect_dist_type_sig: Signal<SpecDistTy
                                     let laser_lines = laser_lines.clone();
                                     move |_| {
                                         let mut laser_lines = laser_lines.clone();
-                                        laser_lines.delete_line(i);
+                                        laser_lines.delete_line(i).log_err_with_context("Deleting line failed");
                                         spect_dist_type_sig.set(SpecDistType::LaserLines(laser_lines));
                                     }
                                 },

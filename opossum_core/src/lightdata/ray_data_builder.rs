@@ -6,9 +6,16 @@ use std::{fmt::Display, path::PathBuf};
 
 use super::LightData;
 use crate::{
-    degree, energy_distributions::EnergyDistType, error::OpmResult, joule, meter, nanometer,
-    position_distributions::PosDistType, rays::Rays, spectral_distribution::SpecDistType,
+    degree,
+    energy_distributions::EnergyDistType,
+    error::OpmResult,
+    generic_validators::{AllFinite, AllInRange, AllNormal, AllPositive, PathValid},
+    joule, meter, nanometer,
+    position_distributions::PosDistType,
+    rays::Rays,
+    spectral_distribution::SpecDistType,
     utils::default_from_name::DefaultFromName,
+    validated, validated_type,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
@@ -175,15 +182,6 @@ impl CollimatedSrc {
     }
 }
 
-// impl Validate for CollimatedSrc{
-//     fn validate(&self) -> OpmResult<()>{
-//         self.pos_dist().validate()?;
-//         self.energy_dist().validate()?;
-//         self.spect_dist().validate()?;
-//         Ok(())
-//     }
-// }
-
 /// Represents a point source for ray tracing,
 /// storing various distributions related to position, energy, and spectrum,
 /// along with a reference length.
@@ -199,7 +197,7 @@ pub struct PointSrc {
     pos_dist: PosDistType,
     energy_dist: EnergyDistType,
     spect_dist: SpecDistType,
-    reference_length: Length,
+    reference_length: validated_type!(Length, AllPositive && AllNormal),
 }
 
 impl PointSrc {
@@ -215,19 +213,21 @@ impl PointSrc {
     /// # Returns
     ///
     /// A new instance of `PointSrc`.
-    #[must_use]
+    ///
+    /// # Errors
+    /// Returns an error if the validation of the reference length fails
     pub fn new(
         pos_dist: PosDistType,
         energy_dist: EnergyDistType,
         spect_dist: SpecDistType,
         reference_length: Length,
-    ) -> Self {
-        Self {
+    ) -> OpmResult<Self> {
+        Ok(Self {
             pos_dist,
             energy_dist,
             spect_dist,
-            reference_length,
-        }
+            reference_length: validated!(reference_length, AllPositive && AllNormal)?,
+        })
     }
 
     /// Returns a reference to the position distribution.
@@ -251,7 +251,7 @@ impl PointSrc {
     /// Returns a reference to the reference length.
     #[must_use]
     pub const fn reference_length(&self) -> &Length {
-        &self.reference_length
+        self.reference_length.get()
     }
 
     /// Returns a mutable reference to the position distribution.
@@ -270,7 +270,9 @@ impl PointSrc {
     }
 
     /// Returns a mutable reference to the reference length.
-    pub const fn reference_length_mut(&mut self) -> &mut Length {
+    pub const fn reference_length_mut(
+        &mut self,
+    ) -> &mut validated_type!(Length, AllPositive && AllNormal) {
         &mut self.reference_length
     }
 
@@ -322,8 +324,12 @@ impl PointSrc {
     /// # Side Effects
     ///
     /// Overwrites the current reference length.
-    pub fn set_reference_length(&mut self, ref_length: Length) {
-        self.reference_length = ref_length;
+    ///
+    /// # Errors
+    /// Returns an error ofthe validation of the reference length fails
+    pub fn set_reference_length(&mut self, ref_length: Length) -> OpmResult<()> {
+        self.reference_length.set(ref_length)?;
+        Ok(())
     }
 }
 
@@ -333,7 +339,7 @@ impl Default for PointSrc {
             pos_dist: PosDistType::default(),
             energy_dist: EnergyDistType::default(),
             spect_dist: SpecDistType::default(),
-            reference_length: meter!(1.),
+            reference_length: validated!(meter!(1.), AllPositive && AllNormal).unwrap(),
         }
     }
 }
@@ -355,15 +361,15 @@ impl Default for PointSrc {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ImageSrc {
     /// path to the image file
-    file_path: PathBuf,
+    file_path: validated_type!(PathBuf, PathValid),
     /// x & y dimensions of the image
-    pixel_size: Length,
+    pixel_size: validated_type!(Length, AllPositive && AllNormal),
     /// total energy
-    total_energy: Energy,
+    total_energy: validated_type!(Energy, AllPositive && AllNormal),
     /// wavelength
-    wave_length: Length,
+    wave_length: validated_type!(Length, AllPositive && AllNormal),
     /// cone angle of each point src per pixel
-    cone_angle: Angle,
+    cone_angle: validated_type!(Angle, AllFinite && AllInRange::<Angle>),
 }
 
 impl ImageSrc {
@@ -378,91 +384,113 @@ impl ImageSrc {
     ///
     /// # Returns
     /// A new [`ImageSrc`] instance.
-    #[must_use]
+    ///
+    /// # Errors
+    /// Returns in error if any of the input arguments are invalid
     pub fn new(
         file_path: PathBuf,
         pixel_size: Length,
         total_energy: Energy,
         wave_length: Length,
         cone_angle: Angle,
-    ) -> Self {
-        Self {
-            file_path,
-            pixel_size,
-            total_energy,
-            wave_length,
-            cone_angle,
-        }
+    ) -> OpmResult<Self> {
+        let mut img_src = Self::default();
+        img_src.set_file_path(file_path)?;
+        img_src.set_pixel_size(pixel_size)?;
+        img_src.set_energy(total_energy)?;
+        img_src.set_wavelength(wave_length)?;
+        img_src.set_cone_angle(cone_angle)?;
+        Ok(img_src)
     }
 
     /// Returns a reference to the file path of the image source.
     #[must_use]
     pub const fn file_path(&self) -> &PathBuf {
-        &self.file_path
+        self.file_path.get()
     }
 
     /// Sets a new file path for the image source.
     ///
     /// # Parameters
     /// - `f_path`: New path to the image.
-    pub fn set_file_path(&mut self, f_path: PathBuf) {
-        self.file_path = f_path;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_file_path(&mut self, f_path: PathBuf) -> OpmResult<()> {
+        self.file_path.set(f_path)?;
+        Ok(())
     }
 
     /// Returns the pixel size in physical units.
     #[must_use]
     pub fn pixel_size(&self) -> Length {
-        self.pixel_size
+        *self.pixel_size.get()
     }
 
     /// Sets the pixel size.
     ///
     /// # Parameters
     /// - `pixel_size`: New physical size of one pixel.
-    pub fn set_pixel_size(&mut self, pixel_size: Length) {
-        self.pixel_size = pixel_size;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_pixel_size(&mut self, pixel_size: Length) -> OpmResult<()> {
+        self.pixel_size.set(pixel_size)?;
+        Ok(())
     }
 
     /// Returns the total energy of the source.
     #[must_use]
     pub fn energy(&self) -> Energy {
-        self.total_energy
+        *self.total_energy.get()
     }
 
     /// Sets the total energy emitted by the source.
     ///
     /// # Parameters
     /// - `energy`: New total energy.
-    pub fn set_energy(&mut self, energy: Energy) {
-        self.total_energy = energy;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
+        self.total_energy.set(energy)?;
+        Ok(())
     }
 
     /// Returns the wavelength of the emitted rays.
     #[must_use]
     pub fn wavelength(&self) -> Length {
-        self.wave_length
+        *self.wave_length.get()
     }
 
     /// Sets the wavelength of the emitted rays.
     ///
     /// # Parameters
     /// - `wavelength`: New wavelength.
-    pub fn set_wavelength(&mut self, wavelength: Length) {
-        self.wave_length = wavelength;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_wavelength(&mut self, wavelength: Length) -> OpmResult<()> {
+        self.wave_length.set(wavelength)?;
+        Ok(())
     }
 
     /// Returns the cone angle of the rays emitted from each pixel.
     #[must_use]
     pub fn cone_angle(&self) -> Angle {
-        self.cone_angle
+        *self.cone_angle.get()
     }
 
     /// Sets the cone angle for the rays emitted from each pixel.
     ///
     /// # Parameters
     /// - `cone_angle`: New angular spread of rays.
-    pub fn set_cone_angle(&mut self, cone_angle: Angle) {
-        self.cone_angle = cone_angle;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_cone_angle(&mut self, cone_angle: Angle) -> OpmResult<()> {
+        self.cone_angle.set(cone_angle)?;
+        Ok(())
     }
 }
 
@@ -479,11 +507,19 @@ impl Default for ImageSrc {
     /// or tests, but they should be replaced with actual data for simulations.
     fn default() -> Self {
         Self {
-            file_path: PathBuf::new(),
-            pixel_size: nanometer!(5860.),
-            total_energy: joule!(0.1),
-            wave_length: nanometer!(1054.0),
-            cone_angle: degree!(5.0),
+            file_path: validated!(
+                PathBuf::new(),
+                PathValid::new(Some(vec!["jpg", "bmp", "png"]))
+            )
+            .unwrap(),
+            pixel_size: validated!(nanometer!(5860.), AllPositive && AllNormal).unwrap(),
+            total_energy: validated!(joule!(0.1), AllPositive && AllNormal).unwrap(),
+            wave_length: validated!(nanometer!(1054.0), AllPositive && AllNormal).unwrap(),
+            cone_angle: validated!(
+                degree!(5.0),
+                AllFinite && (AllInRange::new(degree!(0.0), degree!(180.0), false).unwrap())
+            )
+            .unwrap(),
         }
     }
 }
@@ -519,11 +555,11 @@ impl RayDataBuilder {
                 Ok(LightData::Geometric(rays))
             }
             Self::Image(image_src) => Ok(LightData::Geometric(Rays::from_image(
-                &image_src.file_path,
-                image_src.pixel_size,
-                image_src.total_energy,
-                image_src.wave_length,
-                image_src.cone_angle,
+                image_src.file_path.get(),
+                *image_src.pixel_size.get(),
+                *image_src.total_energy.get(),
+                *image_src.wave_length.get(),
+                *image_src.cone_angle.get(),
             )?)),
         }
     }
@@ -664,11 +700,11 @@ impl std::fmt::Debug for RayDataBuilder {
                 write!(
                     f,
                     "Image field({}, {:?}, {:?}, {:?}, {:?}",
-                    image_src.file_path.display(),
-                    image_src.pixel_size,
-                    image_src.total_energy,
-                    image_src.wave_length,
-                    image_src.cone_angle
+                    image_src.file_path.get().display(),
+                    image_src.pixel_size.get(),
+                    image_src.total_energy.get(),
+                    image_src.wave_length.get(),
+                    image_src.cone_angle.get()
                 )
             }
         }
@@ -689,5 +725,108 @@ impl Display for RayDataBuilder {
                 write!(f, "Image",)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        error::OpossumError,
+        generic_validators::{AllNormal, AllPositive, Validate},
+    };
+
+    fn get_length(src: &PointSrc) -> Length {
+        *src.reference_length()
+    }
+
+    #[test]
+    fn default_reference_length_is_valid_and_one_meter() {
+        let src = PointSrc::default();
+        let len = get_length(&src);
+
+        assert_eq!(len, meter!(1.0));
+
+        assert!(
+            AllPositive::validate(&AllPositive, &len).is_ok(),
+            "Default must be positive"
+        );
+        assert!(
+            AllNormal::validate(&AllNormal, &len).is_ok(),
+            "Default must be finite & normal"
+        );
+
+        let validated_value = validated!(len, AllPositive && AllNormal);
+        assert!(
+            validated_value.is_ok(),
+            "Default length must satisfy AllPositive && AllNormal"
+        );
+    }
+
+    #[test]
+    fn set_reference_length_to_valid_positive_value_succeeds() {
+        let mut src = PointSrc::default();
+
+        let res = src.set_reference_length(meter!(2.5));
+
+        assert!(
+            res.is_ok(),
+            "Setting a positive, finite length should succeed"
+        );
+        assert_eq!(get_length(&src), meter!(2.5));
+    }
+
+    #[test]
+    fn set_reference_length_to_zero_fails_if_zero_is_not_allowed() {
+        let mut src = PointSrc::default();
+
+        let res = src.set_reference_length(meter!(0.0));
+        assert!(
+            res.is_err(),
+            "Zero length should be rejected by AllNormal validator"
+        );
+    }
+
+    #[test]
+    fn set_reference_length_to_negative_value_fails() {
+        let mut src = PointSrc::default();
+
+        let res = src.set_reference_length(meter!(-1.0));
+        assert!(res.is_err(), "Negative length should be rejected");
+
+        if let Err(OpossumError::Other(msg)) = res {
+            assert!(
+                msg.contains("positive") || msg.contains("negative"),
+                "Error message should mention positivity: {}",
+                msg
+            );
+        }
+    }
+
+    #[test]
+    fn set_reference_length_to_nan_or_infinite_fails() {
+        let mut src = PointSrc::default();
+
+        // NaN
+        let res_nan = src.set_reference_length(meter!(f64::NAN));
+        assert!(res_nan.is_err(), "NaN should be rejected by AllNormal");
+
+        // +Inf
+        let res_inf = src.set_reference_length(meter!(f64::INFINITY));
+        assert!(res_inf.is_err(), "Infinity should be rejected by AllNormal");
+
+        // -Inf
+        let res_neg_inf = src.set_reference_length(meter!(f64::NEG_INFINITY));
+        assert!(res_neg_inf.is_err(), "Negative infinity should be rejected");
+    }
+
+    #[test]
+    fn validator_combination_is_stable() {
+        let value = meter!(1.0);
+        let v = validated!(value, AllPositive && AllNormal);
+        assert!(
+            v.is_ok(),
+            "Validator combination for reference_length should remain AllPositive && AllNormal"
+        );
     }
 }
