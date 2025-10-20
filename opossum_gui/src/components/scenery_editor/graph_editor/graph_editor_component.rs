@@ -21,9 +21,8 @@ use dioxus::{
     },
     prelude::*,
 };
+use opossum_backend::{AnalyzerType, nodes::NewRefNode};
 use std::{path::PathBuf, rc::Rc, time::Instant};
-
-use opossum_backend::{AnalyzerType, nodes::NewRefNode, scenery::NewAnalyzerInfo};
 use uuid::Uuid;
 #[derive(Debug)]
 pub enum NodeEditorCommand {
@@ -161,9 +160,7 @@ pub fn GraphEditor(
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
                     is_modified.set(true);
-                    let new_analyzer_info =
-                        NewAnalyzerInfo::new(analyzer_type.clone(), (100.0, 100.0));
-                    graph_processor.send(GraphStoreAction::AddAnalyzer(new_analyzer_info));
+                    graph_processor.send(GraphStoreAction::AddAnalyzer(analyzer_type.clone()));
                 }
                 NodeEditorCommand::AutoLayout => {
                     is_modified.set(true);
