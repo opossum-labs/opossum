@@ -21,3 +21,7 @@ pub const PORT_WIDTH: f64 = 13.0;
 // constants for GraphStore
 pub const SUGIYAMA_VERTEX_SPACING: usize = 250;
 pub const SUGIYAMA_VERT_PATH_FACTOR: f64 = 0.7;
+
+// constant for node positioning
+pub const MIN_NODE_DISTANCE_RADIUS: f64 = 50.0; // If placing a new node, this is the minimum distance from an already existing node in order to avoid complete overlapping.
+pub const NODE_PLACEMENT_MAX_ITERATIONS: usize = 100;
