@@ -48,7 +48,6 @@ opossum_core/src/dottable.rs:271:28: replace == with != in Dottable::create_node
 opossum_core/src/utils/math_distribution_functions.rs:81:24: replace / with * in general_2d_super_gaussian_point_rectangular
 opossum_core/src/plottable/mod.rs:762:53: replace / with * in PlotType::plot_color_mesh
 opossum_core/src/spectrum.rs:164:23: replace < with <= in Spectrum::from_laser_lines
-opossum_core/src/opm_document.rs:57:9: replace AnalyzerInfo::set_gui_position with ()
 opossum_core/src/surface/hit_map/rays_hit_map.rs:548:45: replace > with >= in RaysHitMap::calc_2d_bounding_box
 opossum_core/src/properties/property.rs:92:13: delete match arm Proptype::Spectrum(spectrum) in Property::export_data
 opossum_core/src/nodes/ideal_filter.rs:536:31: replace > with < in EdgeFilter::set_transmission_range
@@ -295,7 +294,6 @@ opossum_core/src/ray.rs:155:25: replace + with - in Ray::helper_ray_fluence
 opossum_core/src/position_distributions/grid.rs:191:32: replace / with * in <impl PositionDistribution for Grid>::generate
 opossum_core/src/utils/griddata.rs:153:63: replace < with <= in interpolate_3d_scatter_data
 opossum_core/src/position_distributions/hexagonal_tiling.rs:176:43: replace + with - in <impl PositionDistribution for HexagonalTiling>::generate
-opossum_core/src/opm_document.rs:222:9: replace OpmDocument::add_analyzer_with_position -> Uuid with Default::default()
 opossum_core/src/energy_distributions/mod.rs:40:59: replace / with * in EnergyDistribution::renormalize
 opossum_core/src/dottable.rs:304:58: replace && with || in Dottable::add_html_like_labels
 opossum_core/src/nodes/ideal_filter.rs:950:31: replace || with && in BandFilter::set_width
@@ -683,7 +681,6 @@ opossum_core/src/optic_node.rs:43:16: delete ! in OpticNode::hit_maps
 opossum_core/src/dottable.rs:304:75: replace > with < in Dottable::add_html_like_labels
 opossum_core/src/nodes/ideal_filter.rs:536:36: replace || with && in EdgeFilter::set_transmission_range
 opossum_core/src/properties/property.rs:96:13: delete match arm Proptype::RayPositionHistory(ray_hist) in Property::export_data
-opossum_core/src/opm_document.rs:53:9: replace AnalyzerInfo::gui_position -> Option<Point2<f64>> with None
 opossum_core/src/analyzers/ghostfocus.rs:357:82: replace < with <= in GhostFocusHistory::project_to_plane
 opossum_core/src/utils/griddata.rs:294:47: replace / with * in create_voronoi_cells
 opossum_core/src/position_distributions/hexagonal_tiling.rs:176:43: replace + with * in <impl PositionDistribution for HexagonalTiling>::generate
@@ -774,7 +771,6 @@ opossum_core/src/properties/validator.rs:98:13: delete match arm Proptype::F64(v
 opossum_core/src/nodes/ideal_filter.rs:939:9: replace BandFilter::width -> Length with Default::default()
 opossum_core/src/utils/geom_transformation.rs:741:39: replace - with + in project_points_to_plane
 opossum_core/src/nodes/spot_diagram.rs:339:23: replace *= with /= in <impl Plottable for SpotDiagram>::get_plot_series
-opossum_core/src/opm_document.rs:190:9: replace OpmDocument::analyzer_mut -> Option<&mut AnalyzerInfo> with None
 opossum_core/src/position_distributions/hexapolar.rs:57:9: replace Hexapolar::nr_of_rings -> u8 with 1
 opossum_core/src/nodes/spot_diagram.rs:258:48: replace - with + in <impl Plottable for SpotDiagram>::get_plot_series
 opossum_core/src/nodes/ideal_filter.rs:1215:52: replace / with * in <impl From<BandFilter> for Spectrum>::from
@@ -829,7 +825,6 @@ opossum_core/src/nodes/beam_splitter/mod.rs:65:9: replace <impl Display for Spli
 opossum_core/src/nodes/ideal_filter.rs:1216:33: replace * with / in <impl From<BandFilter> for Spectrum>::from
 opossum_core/src/spectrum.rs:505:43: replace - with / in Spectrum::split_by_spectrum
 opossum_core/src/dottable.rs:193:63: replace == with != in Dottable::create_spacer_cell
-opossum_core/src/opm_document.rs:66:9: replace AnalyzerInfo::set_analyzer_type with ()
 opossum_core/src/analyzers/ghostfocus.rs:367:36: replace - with + in GhostFocusHistory::project_to_plane
 opossum_core/src/opm_document.rs:263:9: replace OpmDocument::global_conf -> &Mutex<SceneryResources> with Box::leak(Box::new(Mutex::new(Default::default())))
 opossum_core/src/properties/validator.rs:117:13: delete match arm Proptype::F64(v) in Validator::validate_numeric_is_not_nan

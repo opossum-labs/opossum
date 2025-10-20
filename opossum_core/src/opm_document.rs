@@ -184,7 +184,9 @@ impl OpmDocument {
     pub fn analyzers(&self) -> HashMap<Uuid, AnalyzerInfo> {
         self.analyzers.clone()
     }
-    /// Returns the list of analyzers of this [`OpmDocument`].
+    /// Returns a mutable reference of the analyzer with the given [`Uuid`] of this [`OpmDocument`].
+    ///
+    /// If an analyzer with the given [`Uuid`] is not found, `None` is returned.
     #[must_use]
     pub fn analyzer_mut(&mut self, id: Uuid) -> Option<&mut AnalyzerInfo> {
         self.analyzers.get_mut(&id)
@@ -213,7 +215,7 @@ impl OpmDocument {
         };
         self.add_analyzer_info(&analyzer_info)
     }
-    /// Add an analyzer to this [`OpmDocument`].
+    /// Add an analyzer (with a GUI position) to this [`OpmDocument`].
     pub fn add_analyzer_with_position(
         &mut self,
         analyzer_type: AnalyzerType,
@@ -226,7 +228,7 @@ impl OpmDocument {
         };
         self.add_analyzer_info(&analyzer_info)
     }
-    /// Add an analyzer (with a GUI position) to this [`OpmDocument`].
+    /// Add an analyzer to this [`OpmDocument`].
     pub fn add_analyzer_info(&mut self, analyzer_info: &AnalyzerInfo) -> Uuid {
         self.analyzers
             .insert(analyzer_info.id, analyzer_info.clone());
@@ -392,6 +394,12 @@ mod test {
         assert_eq!(document.analyzers.len(), 1);
     }
     #[test]
+    fn add_analyzer_with_position() {
+        let mut document = OpmDocument::default();
+        let uuid = document.add_analyzer_with_position(AnalyzerType::Energy, None);
+        assert!(!uuid.is_nil());
+    }
+    #[test]
     fn analyzers() {
         let mut document = OpmDocument::default();
         document.add_analyzer(AnalyzerType::Energy);
@@ -407,6 +415,16 @@ mod test {
         assert!(document.analyzer(uuid1).is_ok());
         assert!(document.analyzer(uuid2).is_ok());
         assert!(document.analyzer(Uuid::nil()).is_err());
+    }
+    #[test]
+    fn analyzer_mut() {
+        let mut document = OpmDocument::default();
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+
+        assert!(document.analyzer_mut(uuid1).is_some());
+        assert!(document.analyzer_mut(uuid2).is_some());
+        assert!(document.analyzer_mut(Uuid::nil()).is_none());
     }
     #[test]
     fn remove_analyzer() {
@@ -585,5 +603,12 @@ mod test {
         let mut at = AnalyzerInfo::new(AnalyzerType::Energy, Uuid::nil(), Point2::new(1.0, 2.0));
         at.set_analyzer_type(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
         assert!(matches!(at.analyzer_type, AnalyzerType::GhostFocus(_)));
+    }
+    #[test]
+    fn analyzer_info_set_gui_position() {
+        let mut at = AnalyzerInfo::new(AnalyzerType::Energy, Uuid::nil(), Point2::new(1.0, 2.0));
+        let new_position = Point2::new(3.0, 4.0);
+        at.set_gui_position(Some(new_position));
+        assert_eq!(at.gui_position(), Some(new_position))
     }
 }
