@@ -3,7 +3,8 @@ use uom::si::f64::Length;
 
 use crate::{
     error::{OpmResult, OpossumError},
-    nanometer,
+    generic_validators::{AllNormal, AllNotEmpty, AllPositive},
+    nanometer, validated, validated_type,
 };
 
 use super::SpectralDistribution;
@@ -11,7 +12,13 @@ use super::SpectralDistribution;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// A struct representing a collection of laser lines with their respective wavelengths and relative intensities.
 pub struct LaserLines {
-    lines: Vec<(Length, f64)>,
+    lines: validated_type!(
+        Vec<(
+            validated_type!(Length, AllNormal && AllPositive),
+            validated_type!(f64, AllNormal && AllPositive)
+        )>,
+        AllNotEmpty
+    ),
 }
 impl LaserLines {
     /// Creates a new `LaserLines` instance with the given laser lines.
@@ -30,42 +37,9 @@ impl LaserLines {
     /// * any intensity is negative or infinite,
     /// * the sum of intensities is zero.
     pub fn new(lines: Vec<(Length, f64)>) -> OpmResult<Self> {
-        // Check if the lines are non-empty and contain valid data
-        if lines.is_empty() {
-            return Err(OpossumError::Other("Laser lines cannot be empty".into()));
-        }
-        for (wavelength, intensity) in &lines {
-            if !wavelength.is_normal() || wavelength.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Wavelength must be positive and finite".into(),
-                ));
-            }
-            if !intensity.is_normal() || intensity.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Intensity must be positive and finite".into(),
-                ));
-            }
-        }
-        let sum_intensity: f64 = lines.iter().map(|(_, intensity)| *intensity).sum();
-        if sum_intensity == 0.0 {
-            return Err(OpossumError::Other(
-                "Sum of intensities cannot be zero".into(),
-            ));
-        }
-        Ok(Self { lines })
-    }
-
-    /// Creates a new, empty [`LaserLines`] distribution.
-    ///
-    /// This initializes the internal storage without any spectral lines.
-    ///
-    /// # Returns
-    /// A new instance of [`LaserLines`] with an empty set of wavelength–intensity pairs.
-    #[must_use]
-    pub fn new_empty() -> Self {
-        Self {
-            lines: Vec::<(Length, f64)>::new(),
-        }
+        let mut laser_lines = Self::default();
+        laser_lines.add_lines(lines)?;
+        Ok(laser_lines)
     }
 
     /// Adds a list of laser lines to the [`LaserLines`] distribution.
@@ -86,25 +60,14 @@ impl LaserLines {
     /// - Any wavelength is negative or not finite.
     /// - Any intensity is negative or not finite.
     pub fn add_lines(&mut self, lines: Vec<(Length, f64)>) -> OpmResult<()> {
-        // Check if the lines are non-empty and contain valid data
-        if lines.is_empty() {
-            return Err(OpossumError::Other("Laser lines cannot be empty".into()));
+        let mut validated_vec = self.lines.get().clone();
+        for (wvl, intensity) in lines {
+            validated_vec.push((
+                validated!(wvl, AllNormal && AllPositive)?,
+                validated!(intensity, AllNormal && AllPositive)?,
+            ));
         }
-        for (wavelength, intensity) in &lines {
-            if !wavelength.is_normal() || wavelength.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Wavelength must be positive and finite".into(),
-                ));
-            }
-            if !intensity.is_normal() || intensity.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Intensity must be positive and finite".into(),
-                ));
-            }
-        }
-        for line in lines {
-            self.lines.push(line);
-        }
+        self.lines.set(validated_vec)?;
         Ok(())
     }
 
@@ -115,22 +78,39 @@ impl LaserLines {
     ///
     /// # Returns
     /// A reference to the vector of spectral lines.
+
     #[must_use]
-    pub fn lines(&self) -> &Vec<(Length, f64)> {
-        &self.lines
+    pub fn lines(&self) -> Vec<(&Length, &f64)> {
+        // &Vec<(validated_type!(Length, AllNormal && AllPositive), validated_type!(f64, AllNormal && AllPositive))> {
+        self.lines
+            .get()
+            .iter()
+            .map(|l| (l.0.get(), l.1.get()))
+            .collect::<Vec<(&Length, &f64)>>()
     }
 
-    pub fn delete_line(&mut self, index: usize) {
-        if index < self.lines.len() {
-            self.lines.remove(index);
+    /// Deletes a line form `LaserLines`
+    /// 
+    /// # Errors
+    /// Returns an error if setting the new lines fails. More of an esotheric error that should not happen as the other lines have all been validated before
+    pub fn delete_line(&mut self, index: usize) -> OpmResult<()> {
+        let lines = self.lines.get();
+        if index < lines.len() {
+            let mut lines = lines.clone();
+            lines.remove(index);
+            self.lines.set(lines)?;
         }
+        Ok(())
     }
 }
 
 impl Default for LaserLines {
     fn default() -> Self {
+        let validated_length = validated!(nanometer!(1054.), AllNormal && AllPositive).unwrap();
+        let validated_intensity = validated!(1., AllNormal && AllPositive).unwrap();
+
         Self {
-            lines: vec![(nanometer!(1054.), 1.)],
+            lines: validated!(vec![(validated_length, validated_intensity)], AllNotEmpty).unwrap(),
         }
     }
 }
@@ -143,7 +123,12 @@ impl SpectralDistribution for LaserLines {
     /// A vector of tuples containing the wavelength and intensity of each laser line.
     fn generate(&self) -> OpmResult<Vec<(Length, f64)>> {
         // Normalize the intensities to sum to 1.0
-        let sum_intensity: f64 = self.lines.iter().map(|(_, intensity)| *intensity).sum();
+        let sum_intensity: f64 = self
+            .lines
+            .get()
+            .iter()
+            .map(|(_, intensity)| *intensity.get())
+            .sum();
         if sum_intensity == 0.0 {
             return Err(OpossumError::Other(
                 "Sum of intensities cannot be zero".into(),
@@ -151,9 +136,9 @@ impl SpectralDistribution for LaserLines {
         }
         let lines: Vec<(Length, f64)> = self
             .lines
-            .clone()
-            .into_iter()
-            .map(|(wavelength, intensity)| (wavelength, intensity / sum_intensity))
+            .get()
+            .iter()
+            .map(|(wavelength, intensity)| (*wavelength.get(), *intensity.get() / sum_intensity))
             .collect();
         Ok(lines)
     }

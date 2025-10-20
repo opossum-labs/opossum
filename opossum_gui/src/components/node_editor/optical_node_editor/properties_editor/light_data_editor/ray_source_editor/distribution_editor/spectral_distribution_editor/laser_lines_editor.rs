@@ -1,7 +1,10 @@
 use crate::{
     OPOSSUM_UI_LOGS,
-    components::node_editor::inputs::{
-        InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
+    components::{
+        logger::LogResultExt,
+        node_editor::inputs::{
+            InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
+        },
     },
 };
 use dioxus::prelude::*;
@@ -78,12 +81,7 @@ pub fn LaserLineInput(
                             if let SpecDistType::LaserLines(ll) = &mut *spect_dist_type_sig
                                 .write()
                             {
-                                ll.add_lines(vec![(nanometer!(wvl), rel_int)])
-                                    .unwrap_or_else(|e| {
-                                        OPOSSUM_UI_LOGS
-                                            .write()
-                                            .add_log(format!("Error adding laser line: {e}").as_str());
-                                    });
+                                ll.add_lines(vec![(nanometer!(wvl), rel_int)]).log_err_with_context("Error adding laser line");
                             }
                         } else {
                             OPOSSUM_UI_LOGS

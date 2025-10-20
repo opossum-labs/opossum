@@ -18,6 +18,7 @@ pub use finite::AllFinite;
 pub use in_range::AllInRange;
 pub use logical_combinations::{AndValidator, NotValidator, OrValidator};
 pub use normal::AllNormal;
+pub use not_empty::AllNotEmpty;
 pub use not_zero::AllNotZero;
 pub use only_one_zero::OnlyOneZero;
 pub use positive::AllPositive;
