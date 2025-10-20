@@ -19,7 +19,6 @@ use crate::{
     surface::optic_surface::OpticSurface,
     utils::LockExt,
 };
-use num::Zero;
 use optic_graph::ConnectionInfo;
 pub use optic_graph::OpticGraph;
 use serde::{Deserialize, Serialize};
@@ -514,16 +513,11 @@ impl NodeGroup {
     pub fn toplevel_report(&self) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::default();
         analysis_report.add_scenery(self);
-        let mut section_number: usize = 0;
         for node_ref in self.graph.nodes() {
             let uuid = node_ref.uuid().as_simple().to_string();
             let node_report = node_ref.optical_ref.lock_opm()?.node_report(&uuid);
-            if let Some(mut node_report) = node_report {
-                if section_number.is_zero() {
-                    node_report.set_show_item(true);
-                }
+            if let Some(node_report) = node_report {
                 analysis_report.add_node_report(node_report);
-                section_number += 1;
             }
         }
         Ok(analysis_report)
