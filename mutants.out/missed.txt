@@ -67,7 +67,6 @@ opossum_core/src/plottable/mod.rs:2276:29: replace < with == in Plot::add_margin
 opossum_core/src/plottable/mod.rs:759:53: replace - with / in PlotType::plot_color_mesh
 opossum_core/src/ray.rs:776:13: replace || with && in Ray::define_up_direction
 opossum_core/src/rays.rs:114:50: replace + with * in Rays::from_image
-opossum_core/src/optic_ports.rs:248:9: replace OpticPorts::coating -> Option<&CoatingType> with None
 opossum_core/src/surface/parabola.rs:67:26: replace * with / in <impl GeoSurface for Parabola>::calc_intersect_and_normal_do
 opossum_core/src/position_distributions/grid.rs:75:9: replace Grid::side_length -> (Length, Length) with (Default::default(), Default::default())
 opossum_core/src/refractive_index/refr_index_conrady.rs:76:9: replace RefrIndexConrady::set_n0 with ()

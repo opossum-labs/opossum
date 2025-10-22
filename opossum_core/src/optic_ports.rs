@@ -282,7 +282,10 @@ impl Display for OpticPorts {
 }
 #[cfg(test)]
 mod test {
-    use crate::optic_ports::{OpticPorts, PortType};
+    use crate::{
+        coatings::CoatingType,
+        optic_ports::{OpticPorts, PortType},
+    };
     #[test]
     fn new() {
         let ports = OpticPorts::new();
@@ -397,5 +400,32 @@ mod test {
             ports.to_string(),
             "inputs:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: plane, lidt: 10000.0 kg^1 s^-2, .. }\noutput:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: plane, lidt: 10000.0 kg^1 s^-2, .. }\nports are inverted\n".to_owned()
         );
+    }
+    #[test]
+    fn coating() {
+        let mut ports = OpticPorts::new();
+        ports.add(&PortType::Input, "test1").unwrap();
+        assert!(matches!(
+            ports.coating(&PortType::Input, "test1").unwrap(),
+            CoatingType::IdealAR
+        ));
+        assert!(ports.coating(&PortType::Input, "wrong").is_none());
+    }
+    #[test]
+    fn set_coating() {
+        let mut ports = OpticPorts::new();
+        ports.add(&PortType::Input, "test1").unwrap();
+        assert!(matches!(
+            ports.coating(&PortType::Input, "test1").unwrap(),
+            CoatingType::IdealAR
+        ));
+        let coating = CoatingType::ConstantR { reflectivity: 0.5 };
+        ports
+            .set_coating(&PortType::Input, "test1", &coating)
+            .unwrap();
+        assert!(matches!(
+            ports.coating(&PortType::Input, "test1").unwrap(),
+            CoatingType::ConstantR { reflectivity: 0.5 }
+        ));
     }
 }
