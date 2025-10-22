@@ -335,6 +335,12 @@ impl<T: Clone, V: Validate<T>> Drop for ValidatedItemGuard<'_, T, V> {
     }
 }
 
+//helper trait for EnsureValidate Macro
+pub trait ValidateTrait {}
+
+impl<T, V: Validate<T>> ValidateTrait for Validated<T, V> {}
+impl<T: Clone, V: Validate<T>> ValidateTrait for ValidatedVec<T, V> {}
+
 #[cfg(test)]
 mod tests {
     use crate::utils::test_helper::test_helper::check_logs;
@@ -364,7 +370,8 @@ mod tests {
 
     #[test]
     fn test_validated_vec_guard_invalid_index() {
-        let mut v = ValidatedVec::new(vec![Point2::new(1, 2)], AllNotZero).unwrap();
+        let mut v: ValidatedVec<nalgebra::OPoint<i32, nalgebra::Const<2>>, AllNotZero> =
+            ValidatedVec::new(vec![Point2::new(1, 2)], AllNotZero).unwrap();
 
         assert!(v.get_mut_at_index(1).is_err());
     }
