@@ -1,120 +1,22 @@
+use crate::{
+    error::OpmResult,
+    generic_validators::{AllNotEmpty, AllPositive, ValidateTrait, XNormal, YFinite, YNotAllZero},
+    nanometer, validated_vec, validated_vec_type,
+};
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
-use opm_macros_lib::EnsureValidated;
-use crate::{
-    error::{OpmResult, OpossumError}, generic_validators::{AllFinite, AllNormal, AllNotEmpty, AllPositive, ValidateTrait, XNormal, YFinite, YNotAllZero}, nanometer, validated, validated_type, validated_vec, validated_vec_type
-};
 
 use super::SpectralDistribution;
-
-// #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnsureValidated)]
-// /// A struct representing a collection of laser lines with their respective wavelengths and relative intensities.
-// pub struct LaserLines {
-//     lines: validated_vec_type!(Vec<(Length, f64)>, XNormal && YFinite && AllPositive, AllNotEmpty && YNotAllZero)
-// }
-// impl LaserLines {
-//     /// Creates a new `LaserLines` instance with the given laser lines.
-//     ///
-//     /// The given intensities are normalized to sum to 1.0.
-//     ///
-//     /// # Arguments
-//     ///
-//     /// * `lines` - A vector of tuples containing the wavelength and intensity of each laser line.
-//     ///
-//     /// # Errors
-//     ///
-//     /// This function returns an error if
-//     /// * the vector is empty,
-//     /// * any wavelength is negative or infinite,
-//     /// * any intensity is negative or infinite,
-//     /// * the sum of intensities is zero.
-//     pub fn new(lines: Vec<(Length, f64)>) -> OpmResult<Self> {
-//         let mut laser_lines = Self::default();
-//         laser_lines.set_lines(lines)?;
-//         Ok(laser_lines)
-//     }
-
-//     /// Adds a list of laser lines to the [`LaserLines`] distribution.
-//     ///
-//     /// Each laser line is a tuple containing a [`Length`] representing the wavelength,
-//     /// and a `f64` representing the intensity.
-//     ///
-//     /// # Parameters
-//     /// * `lines` – A vector of `(Length, f64)` tuples, each representing a spectral line.
-//     ///
-//     /// # Returns
-//     /// * `Ok(())` if all lines are valid and added successfully.
-//     /// * `Err(OpossumError)` if validation fails.
-//     ///
-//     /// # Errors
-//     /// This method returns an error if:
-//     /// - The input list is empty.
-//     /// - Any wavelength is negative or not normal.
-//     /// - Any intensity is negative or not finite.
-//     pub fn add_lines(&mut self, lines: Vec<(Length, f64)>) -> OpmResult<()> {
-//         for line in lines {
-//             self.lines.push(line)?;
-//         }
-//         Ok(())
-//     }
-
-//     /// Sets a list of laser lines to the [`LaserLines`] distribution.
-//     ///
-//     /// Each laser line is a tuple containing a [`Length`] representing the wavelength,
-//     /// and a `f64` representing the intensity.
-//     ///
-//     /// # Parameters
-//     /// * `lines` – A vector of `(Length, f64)` tuples, each representing a spectral line.
-//     ///
-//     /// # Returns
-//     /// * `Ok(())` if all lines are valid and added successfully.
-//     /// * `Err(OpossumError)` if validation fails.
-//     ///
-//     /// # Errors
-//     /// This method returns an error if:
-//     /// - The input list is empty.
-//     /// - Any wavelength is negative or not normal.
-//     /// - Any intensity is negative or not finite.
-//     pub fn set_lines(&mut self, lines: Vec<(Length, f64)>) -> OpmResult<()> {
-//         self.lines.set(lines)?;
-//         Ok(())
-//     }
-
-//     /// Returns an immutable reference to the list of laser lines stored in this [`LaserLines`] instance.
-//     ///
-//     /// Each line is represented as a tuple `(Length, f64)`, where the `Length` is the wavelength and
-//     /// `f64` is the corresponding intensity.
-//     ///
-//     /// # Returns
-//     /// A reference to the vector of spectral lines.
-//     #[must_use]
-//     pub fn lines(&self) -> &Vec<(Length, f64)> {
-//         self.lines.get()            
-//     }
-
-//     /// Deletes a line form `LaserLines`
-//     ///
-//     /// # Errors
-//     /// Returns an error if setting the new lines fails. More of an esotheric error that should not happen as the other lines have all been validated before
-//     pub fn delete_line(&mut self, index: usize) -> OpmResult<()> {
-//         self.lines.remove(index)?;
-//         Ok(())
-//     }
-// }
-
-// impl Default for LaserLines {
-//     fn default() -> Self {
-//         Self {
-//             lines: validated_vec!(vec![(nanometer!(1054.), 1.)], XNormal && YFinite && AllPositive, AllNotEmpty && YNotAllZero).unwrap()
-//         }
-//     }
-// }
-
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnsureValidated)]
 /// A struct representing a collection of laser lines with their respective wavelengths and relative intensities.
 pub struct LaserLines {
-    lines: validated_vec_type!(Vec<(Length, f64)>, XNormal && YFinite && AllPositive, AllNotEmpty && YNotAllZero)
+    lines: validated_vec_type!(
+        Vec<(Length, f64)>,
+        XNormal && YFinite && AllPositive,
+        AllNotEmpty && YNotAllZero
+    ),
 }
 impl LaserLines {
     /// Creates a new `LaserLines` instance with the given laser lines.
@@ -193,7 +95,7 @@ impl LaserLines {
     /// A reference to the vector of spectral lines.
     #[must_use]
     pub fn lines(&self) -> &Vec<(Length, f64)> {
-        self.lines.get()            
+        self.lines.get()
     }
 
     /// Deletes a line form `LaserLines`
@@ -209,7 +111,12 @@ impl LaserLines {
 impl Default for LaserLines {
     fn default() -> Self {
         Self {
-            lines: validated_vec!(vec![(nanometer!(1054.), 1.)], XNormal && YFinite && AllPositive, AllNotEmpty && YNotAllZero).unwrap()
+            lines: validated_vec!(
+                vec![(nanometer!(1054.), 1.)],
+                XNormal && YFinite && AllPositive,
+                AllNotEmpty && YNotAllZero
+            )
+            .unwrap(),
         }
     }
 }
@@ -230,8 +137,11 @@ impl SpectralDistribution for LaserLines {
             .sum();
 
         Ok(self
-            .lines().clone().iter()
-            .map(|(wvl, intensity)| (*wvl,*intensity/sum_intensity)).collect::<Vec<(Length, f64)>>())
+            .lines()
+            .clone()
+            .iter()
+            .map(|(wvl, intensity)| (*wvl, *intensity / sum_intensity))
+            .collect::<Vec<(Length, f64)>>())
     }
 }
 impl From<LaserLines> for super::SpecDistType {
@@ -243,8 +153,7 @@ impl From<LaserLines> for super::SpecDistType {
 #[cfg(test)]
 mod laser_lines_tests {
     use super::*;
-    use uom::si::f64::{Angle, Length};
-
+    use uom::si::f64::Length;
 
     fn valid_line(wl: f64, intensity: f64) -> (Length, f64) {
         (nanometer!(wl), intensity)
@@ -261,10 +170,7 @@ mod laser_lines_tests {
 
     #[test]
     fn test_new_valid() {
-        let vec = vec![
-            valid_line(532.0, 0.5),
-            valid_line(1064.0, 0.5),
-        ];
+        let vec = vec![valid_line(532.0, 0.5), valid_line(1064.0, 0.5)];
         let laser = LaserLines::new(vec.clone()).unwrap();
         assert_eq!(laser.lines(), &vec);
     }
@@ -334,7 +240,8 @@ mod laser_lines_tests {
 
     #[test]
     fn test_delete_line() {
-        let mut laser = LaserLines::new(vec![valid_line(532.0, 0.5), valid_line(1064.0, 0.5)]).unwrap();
+        let mut laser =
+            LaserLines::new(vec![valid_line(532.0, 0.5), valid_line(1064.0, 0.5)]).unwrap();
 
         // Valid delete
         assert!(laser.delete_line(0).is_ok());
@@ -347,16 +254,12 @@ mod laser_lines_tests {
 
     #[test]
     fn test_generate_normalized() {
-        let laser = LaserLines::new(vec![
-            valid_line(532.0, 1.0),
-            valid_line(1064.0, 3.0),
-        ]).unwrap();
+        let laser = LaserLines::new(vec![valid_line(532.0, 1.0), valid_line(1064.0, 3.0)]).unwrap();
 
         let generated = laser.generate().unwrap();
 
         // Intensities normalized to sum 1.0
-        let sum: f64 = generated.iter().map(|(_, intensity)| *intensity)
-            .sum();
+        let sum: f64 = generated.iter().map(|(_, intensity)| *intensity).sum();
         assert!((sum - 1.0).abs() < 1e-12);
     }
 }

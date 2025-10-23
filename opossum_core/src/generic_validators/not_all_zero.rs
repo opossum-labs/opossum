@@ -1,20 +1,25 @@
+use crate::generic_validators::{Validate, ValidateVec};
 use crate::impl_validator;
+use crate::prelude::{OpmResult, OpossumError};
 use nalgebra::Point2;
 use num::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Energy, Length};
-use crate::prelude::{OpmResult, OpossumError};
-use crate::generic_validators::{ValidateVec, Validate};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct NotAllZero;
 
 impl Validate<Vec<(Length, f64)>> for NotAllZero {
     fn validate(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
-        if value_vec.iter().any(|val| !val.0.is_zero() || !val.1.is_zero()) {
+        if value_vec
+            .iter()
+            .any(|val| !val.0.is_zero() || !val.1.is_zero())
+        {
             Ok(())
         } else {
-            Err(OpossumError::Other("At least one entry must be non-zero!".to_string()))
+            Err(OpossumError::Other(
+                "At least one entry must be non-zero!".to_string(),
+            ))
         }
     }
 }
@@ -24,7 +29,9 @@ impl ValidateVec<(Length, f64)> for YNotAllZero {
         if value_vec.iter().any(|val| !val.1.is_zero()) {
             Ok(())
         } else {
-            Err(OpossumError::Other("At least one y-entry must be non-zero!".to_string()))
+            Err(OpossumError::Other(
+                "At least one y-entry must be non-zero!".to_string(),
+            ))
         }
     }
 }
@@ -34,12 +41,12 @@ impl ValidateVec<(Length, f64)> for XNotAllZero {
         if value_vec.iter().any(|val| !val.0.is_zero()) {
             Ok(())
         } else {
-            Err(OpossumError::Other("At least one x-entry must be non-zero!".to_string()))
+            Err(OpossumError::Other(
+                "At least one x-entry must be non-zero!".to_string(),
+            ))
         }
     }
 }
-
-
 
 impl_validator!(NotAllZero, |_self, v: &usize| !v.is_zero(), usize);
 impl_validator!(NotAllZero, |_self, v: &i32| !v.is_zero(), i32);
@@ -113,7 +120,6 @@ impl_validator!(
     Vec<Energy>
 );
 
-
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct YNotAllZero;
 
@@ -137,7 +143,6 @@ impl_validator!(
     |_self, v: &Point2<Length>| !v.y.is_zero(),
     Point2<Length>
 );
-
 
 impl_validator!(
     YNotAllZero,
@@ -163,7 +168,6 @@ impl_validator!(
     Vec<Point2<Energy>>
 );
 
-
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct XNotAllZero;
 
@@ -187,8 +191,6 @@ impl_validator!(
     |_self, v: &Point2<Length>| !v.x.is_zero(),
     Point2<Length>
 );
-
-
 
 impl_validator!(
     XNotAllZero,

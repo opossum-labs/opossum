@@ -15,7 +15,7 @@ use crate::{
     rays::Rays,
     spectral_distribution::SpecDistType,
     utils::default_from_name::DefaultFromName,
-    validated, validated_type
+    validated, validated_type,
 };
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};

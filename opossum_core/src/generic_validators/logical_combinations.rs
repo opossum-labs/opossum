@@ -45,7 +45,9 @@ where
     V2: ValidateVec<T>,
 {
     fn validate_vec(&self, values: &Vec<T>) -> OpmResult<()> {
-        self.v1.validate_vec(values).or_else(|_| self.v2.validate_vec(values))
+        self.v1
+            .validate_vec(values)
+            .or_else(|_| self.v2.validate_vec(values))
     }
 }
 
@@ -114,7 +116,6 @@ impl<T, V1: ValidateVec<T>, V2: ValidateVec<T>> AndValidatorVec<T, V1, V2> {
         }
     }
 }
-
 
 /// A validator that negates the result of another validator.
 ///
@@ -214,8 +215,6 @@ impl<T, V: ValidateVec<T>> ValidateVec<T> for NotValidatorVec<T, V> {
         }
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

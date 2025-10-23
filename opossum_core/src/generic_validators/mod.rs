@@ -1,32 +1,33 @@
-
 use crate::error::{OpmResult, OpossumError};
 
 mod finite;
-mod macros;
 mod in_range;
 mod logical_combinations;
+mod macros;
 mod normal;
+mod not_all_zero;
 mod not_empty;
 mod not_nan;
 mod not_zero;
 mod only_one_zero;
-mod not_all_zero;
+mod pass;
 mod path_valid;
 mod positive;
 mod second_larger;
-mod pass;
 
-pub use pass::Pass;
-pub use finite::{XFinite, YFinite, AllFinite};
-pub use not_all_zero::{XNotAllZero, YNotAllZero, NotAllZero};
+pub use finite::{AllFinite, XFinite, YFinite};
 pub use in_range::AllInRange;
-pub use logical_combinations::{AndValidator, NotValidator, OrValidator, AndValidatorVec, OrValidatorVec, NotValidatorVec};
-pub use normal::{XNormal, YNormal, AllNormal};
+pub use logical_combinations::{
+    AndValidator, AndValidatorVec, NotValidator, NotValidatorVec, OrValidator, OrValidatorVec,
+};
+pub use normal::{AllNormal, XNormal, YNormal};
+pub use not_all_zero::{NotAllZero, XNotAllZero, YNotAllZero};
 pub use not_empty::AllNotEmpty;
 pub use not_zero::AllNotZero;
 pub use only_one_zero::OnlyOneZero;
+pub use pass::Pass;
 pub use path_valid::PathValid;
-pub use positive::{XPositive, YPositive, AllPositive};
+pub use positive::{AllPositive, XPositive, YPositive};
 pub use second_larger::SecondLarger;
 
 /// Trait for types that can validate a value of type `T`.
@@ -153,11 +154,7 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
     /// # Errors
     ///
     /// Returns `Err(OpossumError)` if any element or the container fails validation.
-    pub fn new(
-        values: Vec<T>,
-        element_validator: EV,
-        container_validator: CV,
-    ) -> OpmResult<Self> {
+    pub fn new(values: Vec<T>, element_validator: EV, container_validator: CV) -> OpmResult<Self> {
         container_validator.validate_vec(&values)?;
         for v in &values {
             element_validator.validate(v)?;
@@ -219,12 +216,11 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
         let old_value = self.values[index].clone();
         self.mutate_vec_with_rollback(
             |vec| vec[index] = new_value,
-            |vec| vec[index] = old_value // undo replacement
+            |vec| vec[index] = old_value, // undo replacement
         )?;
         Ok(())
     }
 
-    
     /// Appends a new element to the vector after validation.
     ///
     /// # Arguments
@@ -242,12 +238,14 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
         self.element_validator.validate(&value)?;
         self.mutate_vec_with_rollback(
             |vec| vec.push(value),
-            |vec|  {let _ = vec.pop();}, // undo the push if container validation fails
+            |vec| {
+                let _ = vec.pop();
+            }, // undo the push if container validation fails
         )?;
         Ok(())
     }
 
-        /// Removes the last element of the vector.
+    /// Removes the last element of the vector.
     ///
     /// # Returns
     ///
@@ -258,13 +256,19 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
     /// Returns `Err(OpossumError)` if the vector is empty or container validation fails.
     pub fn pop(&mut self) -> OpmResult<()> {
         if self.values.is_empty() {
-            return Err(OpossumError::Other("Vector is already empty, cannot pop!".into()));
+            return Err(OpossumError::Other(
+                "Vector is already empty, cannot pop!".into(),
+            ));
         }
 
         let popped = self.values.last().cloned();
         self.mutate_vec_with_rollback(
             |vec| vec.pop(),
-            |vec| { if let Some(v) = popped { vec.push(v.clone()); } } // undo removal
+            |vec| {
+                if let Some(v) = popped {
+                    vec.push(v.clone());
+                }
+            }, // undo removal
         )?;
         Ok(())
     }
@@ -291,7 +295,9 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
         self.element_validator.validate(&value)?;
         self.mutate_vec_with_rollback(
             |vec| vec.insert(index, value),
-            |vec| { vec.remove(index); } // undo the insert
+            |vec| {
+                vec.remove(index);
+            }, // undo the insert
         )?;
         Ok(())
     }
@@ -315,8 +321,10 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
         }
         let removed = self.values[index].clone();
         self.mutate_vec_with_rollback(
-            |vec| {let _ = vec.remove(index);},
-            |vec|  vec.insert(index, removed) // undo removal
+            |vec| {
+                let _ = vec.remove(index);
+            },
+            |vec| vec.insert(index, removed), // undo removal
         )?;
         Ok(())
     }
@@ -491,13 +499,10 @@ pub trait ValidateTrait {}
 impl<T, V: Validate<T>> ValidateTrait for Validated<T, V> {}
 impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidateTrait for ValidatedVec<T, EV, CV> {}
 
-
-
-
 #[cfg(test)]
 mod tests {
-    use crate::generic_validators::{AllPositive, AllNotEmpty};
     use super::*;
+    use crate::generic_validators::{AllNotEmpty, AllPositive};
 
     #[test]
     fn test_validated_new_and_set_is_positive() {
@@ -609,9 +614,9 @@ mod tests {
     #[test]
     fn test_insert_index_out_of_bounds() {
         let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty).unwrap();
-        let val_vec_res = validated.insert(2,0);
+        let val_vec_res = validated.insert(2, 0);
         assert!(val_vec_res.is_err());
-        let val_vec_res = validated.insert(1,0);
+        let val_vec_res = validated.insert(1, 0);
         assert!(val_vec_res.is_ok());
     }
 
@@ -706,5 +711,4 @@ mod tests {
         assert!(validated.replace(1, -5).is_err());
         assert_eq!(validated.get(), &vec![10, 2, 20]); // only failed replacement rolled back
     }
-
 }

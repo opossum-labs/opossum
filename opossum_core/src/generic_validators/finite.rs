@@ -1,17 +1,22 @@
+use crate::prelude::*;
 use nalgebra::Point2;
 use uom::si::f64::{Angle, Energy, Length};
-use crate::prelude::*;
 
-use crate::impl_validator;
+use crate::generic_validators::{Validate, ValidateVec};
+use crate::{impl_validator, impl_vec_validator};
 use serde::{Deserialize, Serialize};
-use crate::generic_validators::{ValidateVec, Validate};
 
 impl Validate<Vec<(Length, f64)>> for AllFinite {
     fn validate(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
-        if value_vec.iter().all(|val| val.0.is_finite() && !val.1.is_finite()) {
+        if value_vec
+            .iter()
+            .all(|val| val.0.is_finite() && !val.1.is_finite())
+        {
             Ok(())
         } else {
-            Err(OpossumError::Other("All entries must be finite!".to_string()))
+            Err(OpossumError::Other(
+                "All entries must be finite!".to_string(),
+            ))
         }
     }
 }
@@ -21,21 +26,18 @@ impl ValidateVec<(Length, f64)> for XFinite {
         if value_vec.iter().all(|val| val.1.is_finite()) {
             Ok(())
         } else {
-            Err(OpossumError::Other("All x-entries must be finite!".to_string()))
+            Err(OpossumError::Other(
+                "All x-entries must be finite!".to_string(),
+            ))
         }
     }
 }
 
-impl ValidateVec<(Length, f64)> for YFinite {
-    fn validate_vec(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
-        if value_vec.iter().all(|val| val.1.is_finite()) {
-            Ok(())
-        } else {
-            Err(OpossumError::Other("All y-entries must be finite!".to_string()))
-        }
-    }
-}
-
+impl_vec_validator!(
+    YFinite,
+    |_self, v: &Vec<(Length, f64)>| v.iter().all(|val| val.1.is_finite()),
+    (Length, f64)
+);
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct AllFinite;
@@ -125,11 +127,7 @@ impl_validator!(
     (Length, f64)
 );
 
-impl_validator!(
-    YFinite,
-    |_self, v: &(f64, f64)| v.1.is_finite(),
-    (f64, f64)
-);
+impl_validator!(YFinite, |_self, v: &(f64, f64)| v.1.is_finite(), (f64, f64));
 
 #[cfg(test)]
 mod tests {

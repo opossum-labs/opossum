@@ -61,7 +61,9 @@ impl_validator!(
 
 impl_validator!(
     AllPositive,
-    |_self, v: &Vec<Point2<f64>>| v.iter().all(|val| val.x.is_sign_positive() && val.y.is_sign_positive()),
+    |_self, v: &Vec<Point2<f64>>| v
+        .iter()
+        .all(|val| val.x.is_sign_positive() && val.y.is_sign_positive()),
     Vec<Point2<f64>>
 );
 
@@ -140,7 +142,6 @@ impl_validator!(
     |_self, v: &Vec<Point2<Length>>| v.iter().all(|val| val.y.is_sign_positive()),
     Vec<Point2<Length>>
 );
-
 
 #[cfg(test)]
 mod tests {

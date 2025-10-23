@@ -2,10 +2,10 @@
 use std::fmt::Display;
 
 use crate::{error::OpmResult, utils::default_from_name::DefaultFromName};
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 use uom::si::f64::Length;
-use opm_macros_lib::EnsureValidated;
 
 pub mod gaussian;
 pub mod laser_lines;

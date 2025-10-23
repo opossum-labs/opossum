@@ -1,18 +1,23 @@
 use std::ops::Range;
 
+use crate::generic_validators::{Validate, ValidateVec};
 use crate::impl_validator;
+use crate::prelude::*;
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Energy, Length};
-use crate::prelude::*;
-use crate::generic_validators::{Validate, ValidateVec};
 
 impl Validate<Vec<(Length, f64)>> for AllNormal {
     fn validate(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
-        if value_vec.iter().all(|val| val.0.is_normal() && !val.1.is_normal()) {
+        if value_vec
+            .iter()
+            .all(|val| val.0.is_normal() && !val.1.is_normal())
+        {
             Ok(())
         } else {
-            Err(OpossumError::Other("All entries must be normal!".to_string()))
+            Err(OpossumError::Other(
+                "All entries must be normal!".to_string(),
+            ))
         }
     }
 }
@@ -22,7 +27,9 @@ impl ValidateVec<(Length, f64)> for XNormal {
         if value_vec.iter().all(|val| val.1.is_normal()) {
             Ok(())
         } else {
-            Err(OpossumError::Other("All x-entries must be normal!".to_string()))
+            Err(OpossumError::Other(
+                "All x-entries must be normal!".to_string(),
+            ))
         }
     }
 }
@@ -32,12 +39,12 @@ impl ValidateVec<(Length, f64)> for YNormal {
         if value_vec.iter().all(|val| val.1.is_normal()) {
             Ok(())
         } else {
-            Err(OpossumError::Other("All y-entries must be normal!".to_string()))
+            Err(OpossumError::Other(
+                "All y-entries must be normal!".to_string(),
+            ))
         }
     }
 }
-
-
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct AllNormal;
@@ -100,13 +107,7 @@ impl_validator!(
     (Length, f64)
 );
 
-impl_validator!(
-    XNormal,
-    |_self, v: &(f64, f64)| v.0.is_normal(),
-    (f64, f64)
-);
-
-
+impl_validator!(XNormal, |_self, v: &(f64, f64)| v.0.is_normal(), (f64, f64));
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct YNormal;
@@ -122,11 +123,7 @@ impl_validator!(
     Point2<Length>
 );
 
-impl_validator!(
-    YNormal,
-    |_self, v: &(f64,f64)| v.1.is_normal(),
-    (f64,f64)
-);
+impl_validator!(YNormal, |_self, v: &(f64, f64)| v.1.is_normal(), (f64, f64));
 
 impl_validator!(
     YNormal,

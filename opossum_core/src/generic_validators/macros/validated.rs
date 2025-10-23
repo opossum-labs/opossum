@@ -1,3 +1,14 @@
+/// Constructs a [`Validated`] instance from a value and validator expressions.
+///
+/// This macro provides a concise, expressive way to create a validated value, using your
+/// validator DSL syntax (e.g. `XNormal && YFinite && AllPositive`).
+///
+/// Validation is done on creation and on setting single parameters.
+///
+/// # Notes
+/// - The validator can use logical operators (`&&`, `||`, `!`) as defined by your validator DSL.
+/// - The macro returns a `Result<Validated<...>, ValidationError>` — so call `.unwrap()`, `.expect()`, or handle the error.
+/// - For the type-level equivalent, see [`validated_type!`].
 #[macro_export]
 macro_rules! validated_type {
     ($t:ty, $($expr:tt)+) => {
@@ -8,7 +19,17 @@ macro_rules! validated_type {
     };
 }
 
-
+/// Expands to the **type** of a [`Validated`] given a type and validator expression.
+///
+/// This macro defines the *type* corresponding to a validated value — it mirrors
+/// [`validated!`] but produces a type rather than constructing an instance.
+///
+/// It’s designed for use in struct definitions, type aliases, and generic type parameters.
+///
+/// # Notes
+/// - This macro only expands to a *type*; no runtime validation occurs.
+/// - It’s ideal for struct fields or type aliases where validation should be enforced at construction time.
+/// - Combine with [`validated!`] in your `impl Default` or builder patterns for clean, type-safe validation.
 #[macro_export]
 macro_rules! validated {
     ($value:expr, $($expr:tt)+) => {{
@@ -204,10 +225,12 @@ mod macro_tests {
 
 #[cfg(test)]
 mod macro_type_tests {
-    use crate::{generic_validators::{
-        AllFinite, AllNormal, AllNotZero, AllPositive, AndValidator, NotValidator, OrValidator,
-        Validated,
-    }, validator_type_expr};
+    use crate::{
+        generic_validators::{
+            AllFinite, AllNormal, AllNotZero, AllPositive, AndValidator, NotValidator, OrValidator,
+            Validated,
+        }, validator_type_expr,
+    };
     use static_assertions::assert_type_eq_all;
 
     #[test]

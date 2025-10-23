@@ -2,16 +2,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{OpmResult, OpossumError},
-    generic_validators::{Validate, ValidateVec},
+    generic_validators::ValidateVec,
     impl_validator,
 };
-    use uom::si::f64::{Angle, Length};
-
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct AllNotEmpty;
 
-impl<T:Clone> ValidateVec<T> for AllNotEmpty {
+impl<T: Clone> ValidateVec<T> for AllNotEmpty {
     fn validate_vec(&self, values: &Vec<T>) -> OpmResult<()> {
         if values.is_empty() {
             Err(OpossumError::Other("Vector must not empty!".to_string()))
@@ -21,39 +19,7 @@ impl<T:Clone> ValidateVec<T> for AllNotEmpty {
     }
 }
 
-
-// impl ValidateVec<(f64, f64)> for AllNotEmpty {
-//     fn validate_vec(&self, values: &Vec<(f64, f64)>) -> OpmResult<()> {
-//         if values.is_empty() {
-//             Err(OpossumError::Other("Vector must not empty!".to_string()))
-//         } else {
-//             Ok(())
-//         }
-//     }
-// }
-
-// impl ValidateVec<f64> for AllNotEmpty {
-//     fn validate_vec(&self, values: &Vec<f64>) -> OpmResult<()> {
-//         if values.is_empty() {
-//             Err(OpossumError::Other("Vector must not empty!".to_string()))
-//         } else {
-//             Ok(())
-//         }
-//     }
-// }
-
-// impl<T> Validate<Vec<T>> for AllNotEmpty {
-//     fn validate(&self, value_vec: &Vec<T>) -> OpmResult<()> {
-//         if value_vec.is_empty() {
-//             Err(OpossumError::Other("Vector must not empty!".to_string()))
-//         } else {
-//             Ok(())
-//         }
-//     }
-// }
-
 impl_validator!(AllNotEmpty, |_self, v: &String| !v.is_empty(), String);
-// impl_validator!(AllNotEmpty, |_self, v: &Vec<(Length, f64)>| !v.is_empty(), Vec<(Length, f64)>);
 
 #[cfg(test)]
 mod tests {
@@ -73,14 +39,22 @@ mod tests {
     #[test]
     fn test_is_not_empty_vec_length() {
         let validator = AllNotEmpty;
-        assert!(validator.validate_vec(&vec![Length::new::<meter>(1.0)]).is_ok());
+        assert!(
+            validator
+                .validate_vec(&vec![Length::new::<meter>(1.0)])
+                .is_ok()
+        );
         assert!(validator.validate_vec(&Vec::<Length>::new()).is_err());
     }
 
     #[test]
     fn test_is_not_empty_vec_angle() {
         let validator = AllNotEmpty;
-        assert!(validator.validate_vec(&vec![Angle::new::<radian>(1.0)]).is_ok());
+        assert!(
+            validator
+                .validate_vec(&vec![Angle::new::<radian>(1.0)])
+                .is_ok()
+        );
         assert!(validator.validate_vec(&Vec::<Angle>::new()).is_err());
     }
 
