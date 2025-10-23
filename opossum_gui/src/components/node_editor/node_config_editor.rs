@@ -21,11 +21,14 @@ pub enum NodeChangeAction {
 }
 
 #[component]
-pub fn NodeConfigEditor(active_node_opt: Memo<Option<(NodeType, Uuid)>>) -> Element {
+pub fn NodeConfigEditor(
+    active_node_opt: Memo<Option<(NodeType, Uuid)>>,
+    is_modified: Signal<bool>,
+) -> Element {
     let node_properties_sig = use_signal(Properties::default);
 
     use_context_provider(|| node_properties_sig);
-    use_node_config_processor(node_properties_sig);
+    use_node_config_processor(node_properties_sig, is_modified);
 
     (active_node_opt()).map_or_else(
         || {
@@ -47,8 +50,11 @@ pub fn NodeConfigEditor(active_node_opt: Memo<Option<(NodeType, Uuid)>>) -> Elem
         },
     )
 }
-
-fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
+#[allow(clippy::too_many_lines)]
+fn use_node_config_processor(
+    mut node_properties_sig: Signal<Properties>,
+    mut is_modified: Signal<bool>,
+) {
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
     let mut graph_store = use_context::<Signal<GraphStore>>();
     use_coroutine(move |mut rx: UnboundedReceiver<NodeChangeAction>| {
@@ -64,6 +70,7 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                                 } else {
+                                    is_modified.set(true);
                                     graph_store.write().set_name_of_node(active_node_id, name);
                                 }
                             });
@@ -74,6 +81,8 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                                     api::update_node_lidt(active_node_id, lidt).await
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                } else {
+                                    is_modified.set(true);
                                 }
                             });
                         }
@@ -83,6 +92,8 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                                     api::update_node_alignment(active_node_id, iso).await
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                } else {
+                                    is_modified.set(true);
                                 }
                             });
                         }
@@ -104,6 +115,7 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                                                 .add_log(&format!("Failed to set property: {key}"));
                                         },
                                     );
+                                    is_modified.set(true);
                                 }
                             });
                         }
@@ -113,6 +125,8 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                                     api::update_node_isometry(active_node_id, iso).await
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                } else {
+                                    is_modified.set(true);
                                 }
                             });
                         }
@@ -125,6 +139,7 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                                         graph_store
                                             .write()
                                             .set_node_inverted(active_node_id, inverted);
+                                        is_modified.set(true);
                                     }
                                     Err(err_str) => {
                                         OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -139,6 +154,8 @@ fn use_node_config_processor(mut node_properties_sig: Signal<Properties>) {
                                         .await
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                                } else {
+                                    is_modified.set(true);
                                 }
                             });
                         }

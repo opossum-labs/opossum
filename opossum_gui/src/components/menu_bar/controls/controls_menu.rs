@@ -9,7 +9,7 @@ use dioxus_free_icons::{
 #[component]
 pub fn ControlsMenu(
     mut maximize_symbol: Signal<Result<VNode, RenderError>>,
-    on_quit: EventHandler,
+    on_quit: EventHandler<()>,
 ) -> Element {
     let window = use_window();
     rsx! {
@@ -26,8 +26,10 @@ pub fn ControlsMenu(
             a {
                 class: "text-secondary me-2",
                 role: "button",
-                onclick: {
+                onclick:
                     move |_| {
+
+
                         if window.is_maximized() {
                             window.set_maximized(false);
                             maximize_symbol.set(rsx! {
@@ -39,8 +41,7 @@ pub fn ControlsMenu(
                                 Icon { width: 25, icon: FaWindowRestore }
                             });
                         }
-                    }
-                },
+                    }                ,
                 {maximize_symbol()}
             }
             a {

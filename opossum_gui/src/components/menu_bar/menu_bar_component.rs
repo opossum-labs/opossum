@@ -105,14 +105,15 @@ pub fn MenuBar(
                                             menu_item_selected.set(Some(MenuSelection::AddNode(node_name)));
                                             spawn(async {
                                                 let _ = eval(
-                                                    "const el = document.getElementById('navbarDropdownEditMenuLink');
-                                                                                            if (el) {
-                                                                                                const instance = mdb.Dropdown.getInstance(el);
-                                                                                                if (instance) instance.hide();
-                                                                                            }
-                                                                                        ",
-                                                )
-                                                .await;
+                                                        r"
+                                                            const el = document.getElementById('navbarDropdownEditMenuLink');
+                                                            if (el) {
+                                                                const instance = mdb.Dropdown.getInstance(el);
+                                                                if (instance) instance.hide();
+                                                            }
+                                                        ",
+                                                    )
+                                                    .await;
                                             });
                                         },
                                     }
@@ -131,14 +132,15 @@ pub fn MenuBar(
                                             menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_type)));
                                             spawn(async {
                                                 let _ = eval(
-                                                    "const el = document.getElementById('navbarDropdownEditMenuLink');
-                                                                                            if (el) {
-                                                                                                const instance = mdb.Dropdown.getInstance(el);
-                                                                                                if (instance) instance.hide();
-                                                                                            }
-                                                                                        ",
-                                                )
-                                                .await;
+                                                        r"
+                                                            const el = document.getElementById('navbarDropdownEditMenuLink');
+                                                            if (el) {
+                                                                const instance = mdb.Dropdown.getInstance(el);
+                                                                if (instance) instance.hide();
+                                                            }
+                                                        ",
+                                                    )
+                                                    .await;
                                             });
                                         },
                                     }
@@ -231,12 +233,12 @@ pub fn MenuBar(
                 }
                 ControlsMenu {
                     maximize_symbol,
-                    on_quit: move || {
+                    on_quit: move |()| {
                         let msg = "You have unsaved changes. Are you sure you want to quit?";
                         if continue_operation(model_modified(), msg) {
                             menu_item_selected.set(Some(MenuSelection::Quit));
                         }
-                    },
+                    }
                 }
             }
         }

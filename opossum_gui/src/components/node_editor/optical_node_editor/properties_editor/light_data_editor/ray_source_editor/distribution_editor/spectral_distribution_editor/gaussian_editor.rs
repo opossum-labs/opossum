@@ -84,9 +84,12 @@ impl IntoInputData<f64, Gaussian, SpecDistType> for GaussianSpectrumParam {
                     .log_err_with_context("`set_wvl_end` of spectral gaussian distribution");
             },
             Self::NumPoints => move |obj: &mut Gaussian, val: f64| {
+<<<<<<< HEAD
                 if let Some(val) = try_f64_to_usize(val) {
                     obj.set_num_points(val)
                         .log_err_with_context("`set_num_points` of spectral gaussian distribution");
+=======
+>>>>>>> main
                 }
             },
         }

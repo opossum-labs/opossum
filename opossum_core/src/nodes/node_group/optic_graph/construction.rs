@@ -341,7 +341,7 @@ impl OpticGraph {
             let edge_id = edge_ref.id();
             let edge = self.g.edge_weight_mut(edge_id);
             if let Some(edge) = edge {
-                edge.set_distance(distance);
+                edge.set_distance(distance)?;
             }
             Ok(())
         } else {

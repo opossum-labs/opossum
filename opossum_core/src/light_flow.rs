@@ -58,13 +58,21 @@ impl LightFlow {
     pub const fn distance(&self) -> &Length {
         &self.distance
     }
-    pub fn set_distance(&mut self, distance: Length) {
+    pub fn set_distance(&mut self, distance: Length) -> OpmResult<()> {
+        if !distance.is_finite() {
+            return Err(OpossumError::Other(
+                "distance between nodes must be finite".into(),
+            ));
+        }
         self.distance = distance;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod test {
+    use core::f64;
+
     use super::*;
     use crate::millimeter;
     use num::Zero;
@@ -94,5 +102,14 @@ mod test {
     fn distance() {
         let light = LightFlow::new("test1", "test2", millimeter!(100.0)).unwrap();
         assert_eq!(light.distance(), &millimeter!(100.0));
+    }
+    #[test]
+    fn set_distance() {
+        let mut light = LightFlow::new("test1", "test2", millimeter!(100.0)).unwrap();
+        assert!(light.set_distance(millimeter!(f64::NAN)).is_err());
+        assert!(light.set_distance(millimeter!(f64::INFINITY)).is_err());
+        assert!(light.set_distance(millimeter!(f64::NEG_INFINITY)).is_err());
+        light.set_distance(millimeter!(50.0)).unwrap();
+        assert_eq!(light.distance(), &millimeter!(50.0));
     }
 }

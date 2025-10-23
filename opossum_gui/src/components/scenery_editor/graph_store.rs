@@ -7,7 +7,8 @@ use crate::{
     api::{self, eval_action_run},
     components::scenery_editor::{
         constants::{
-            HEADER_HEIGHT, NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING,
+            HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
+            SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING,
         },
         graph_editor::graph_editor_component::EditorState,
     },
@@ -21,7 +22,7 @@ use dioxus::{
 };
 use futures_util::StreamExt;
 use opossum_backend::{
-    AnalyzerInfo,
+    AnalyzerInfo, AnalyzerType,
     nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     scenery::NewAnalyzerInfo,
     to_f64,
@@ -48,14 +49,15 @@ pub enum GraphStoreAction {
     SaveToFile(PathBuf),
     AddOpticNode(String),
     AddOpticReference(NewRefNode),
-    AddAnalyzer(NewAnalyzerInfo),
+    AddAnalyzer(AnalyzerType),
     SyncNodePosition(Uuid, Point2D<f64>),
     AddEdge(ConnectInfo),
     UpdateEdge(ConnectInfo),
     UpdateEdges(Vec<ConnectInfo>),
     DeleteEdge(ConnectInfo),
     DeleteNode(Uuid),
-    CopyNode((NodeType, Uuid, Point2D<f64>)),
+    CopyNode((NodeType, Uuid)),
+    PasteNode(Point2D<f64>),
     GetSceneryId,
     DeleteScenery,
     OptimizeLayout,
@@ -354,7 +356,10 @@ impl UuidRegistry {
         self.backward.get(&id).copied()
     }
 }
-pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<GraphStoreAction> {
+pub fn use_graph_processor(
+    mut graph_state: Signal<GraphState>,
+    is_modified: Signal<bool>,
+) -> Coroutine<GraphStoreAction> {
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         let mut graph_store = graph_state.write().graph_store;
         let mut editor_state = graph_state.write().editor_state;
@@ -386,8 +391,8 @@ pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<Gra
                     GraphStoreAction::AddOpticReference(new_ref_node) => {
                         process_add_reference_node(new_ref_node, graph_store).await;
                     }
-                    GraphStoreAction::AddAnalyzer(new_analyzer) => {
-                        process_add_analyzer(new_analyzer, graph_store).await;
+                    GraphStoreAction::AddAnalyzer(analyzer_type) => {
+                        process_add_analyzer(analyzer_type, graph_store, editor_state).await;
                     }
                     GraphStoreAction::AddEdge(connect_info) => {
                         process_add_edge(connect_info, graph_store).await;
@@ -398,8 +403,11 @@ pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<Gra
                     GraphStoreAction::DeleteEdge(connect_info) => {
                         process_delete_edge(connect_info, graph_store).await;
                     }
-                    GraphStoreAction::CopyNode((node_type, node_id, pos)) => {
-                        process_copy_node(node_type, node_id, pos, graph_store).await;
+                    GraphStoreAction::CopyNode((node_type, node_id)) => {
+                        process_copy_node(node_type, node_id).await;
+                    }
+                    GraphStoreAction::PasteNode(pos) => {
+                        process_paste_node(pos, graph_store, is_modified).await;
                     }
                     GraphStoreAction::DeleteScenery => {
                         process_delete_scenery(graph_store).await;
@@ -519,10 +527,16 @@ async fn process_add_optic_node(
     let view_port_center = editor_state.peek().get_view_port_center();
     let shift = *editor_state.peek().shift.peek();
 
-    let element_position = (
+    let proposed_element_position = (
         (view_port_center.x - shift.x) / zoom,
         (view_port_center.y - shift.y) / zoom,
     );
+    let existing_element_positions: Vec<(f64, f64)> = graph_store.peek().nodes()()
+        .values()
+        .map(|element| (element.pos().x, element.pos().y))
+        .collect();
+    let element_position =
+        find_suitable_element_position(proposed_element_position, &existing_element_positions);
     let new_node_info = NewNode::new(new_node_type_string.to_lowercase(), element_position);
     let scenery_id = graph_store.peek().scenery_id;
     eval_action_run(
@@ -532,7 +546,28 @@ async fn process_add_optic_node(
         }),
     );
 }
-
+fn find_suitable_element_position(
+    proposed_position: (f64, f64),
+    existing_element_positions: &[(f64, f64)],
+) -> (f64, f64) {
+    let mut final_position = proposed_position;
+    let min_dist_squared = MIN_NODE_DISTANCE_RADIUS.powi(2);
+    for _ in 0..NODE_PLACEMENT_MAX_ITERATIONS {
+        let has_collision = existing_element_positions.iter().any(|&(pos_x, pos_y)| {
+            let dist_x = final_position.0 - pos_x;
+            let dist_y = final_position.1 - pos_y;
+            let dist_sq = dist_x.mul_add(dist_x, dist_y * dist_y);
+            dist_sq < min_dist_squared
+        });
+        if has_collision {
+            final_position.0 += MIN_NODE_DISTANCE_RADIUS;
+            final_position.1 += MIN_NODE_DISTANCE_RADIUS;
+        } else {
+            return final_position;
+        }
+    }
+    final_position // fallback: return last position after reaching max iterations
+}
 #[allow(clippy::future_not_send)]
 async fn process_add_reference_node(new_ref_node: NewRefNode, mut graph_store: Signal<GraphStore>) {
     let scenery_id = graph_store.peek().scenery_id;
@@ -545,13 +580,33 @@ async fn process_add_reference_node(new_ref_node: NewRefNode, mut graph_store: S
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_add_analyzer(new_analyzer: NewAnalyzerInfo, mut graph_store: Signal<GraphStore>) {
+async fn process_add_analyzer(
+    analyzer_type: AnalyzerType,
+    mut graph_store: Signal<GraphStore>,
+    editor_state: Signal<EditorState>,
+) {
+    // calculate center of viewport (in graph coordinates)
+    let zoom = *editor_state.peek().zoom.peek();
+    let view_port_center = editor_state.peek().get_view_port_center();
+    let shift = *editor_state.peek().shift.peek();
+
+    let proposed_element_position = (
+        (view_port_center.x - shift.x) / zoom,
+        (view_port_center.y - shift.y) / zoom,
+    );
+    let existing_element_positions: Vec<(f64, f64)> = graph_store.peek().nodes()()
+        .values()
+        .map(|element| (element.pos().x, element.pos().y))
+        .collect();
+    let element_position =
+        find_suitable_element_position(proposed_element_position, &existing_element_positions);
+    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type, element_position);
     eval_action_run(
-        api::post_add_analyzer(new_analyzer.clone()).await,
+        api::post_add_analyzer(new_analyzer_info.clone()).await,
         Some(move |analyzer_id| {
             graph_store
                 .write()
-                .add_new_analyzer(new_analyzer, analyzer_id);
+                .add_new_analyzer(new_analyzer_info, analyzer_id);
         }),
     );
 }
@@ -583,28 +638,54 @@ async fn process_delete_edge(connect_info: ConnectInfo, mut graph_store: Signal<
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_copy_node(
-    node_type: NodeType,
-    node_id: Uuid,
-    pos: Point2D<f64>,
-    mut graph_store: Signal<GraphStore>,
-) {
+async fn process_copy_node(node_type: NodeType, node_id: Uuid) {
     match node_type {
         NodeType::Optical(_) => eval_action_run(
-            api::post_copy_optical_node(node_id, pos).await,
-            Some(move |node_info| {
-                graph_store.write().add_new_optical_node(&node_info);
-            }),
+            api::post_copy_optical_node(node_id).await,
+            None::<fn(String)>,
         ),
         NodeType::Analyzer(_) => eval_action_run(
-            api::post_copy_analyzer_node(node_id, pos).await,
-            Some(move |analyzer_info: AnalyzerInfo| {
-                let id = analyzer_info.id();
-                graph_store
-                    .write()
-                    .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);
-            }),
+            api::post_copy_analyzer_node(node_id).await,
+            None::<fn(String)>,
         ),
+    }
+}
+
+#[allow(clippy::future_not_send)]
+async fn process_paste_node(
+    pos: Point2D<f64>,
+    mut graph_store: Signal<GraphStore>,
+    mut is_modified: Signal<bool>,
+) {
+    let group_id = graph_store.read().scenery_id;
+    match api::get_copied_node_type().await {
+        Ok(node_type) => {
+            if node_type {
+                eval_action_run(
+                    api::post_paste_optical_node(group_id, pos).await,
+                    Some(move |node_info_opt| {
+                        if let Some(node_info) = node_info_opt {
+                            graph_store.write().add_new_optical_node(&node_info);
+                            is_modified.set(true);
+                        }
+                    }),
+                );
+            } else {
+                eval_action_run(
+                    api::post_paste_analyzer_node(pos).await,
+                    Some(move |analyzer_info: AnalyzerInfo| {
+                        let id = analyzer_info.id();
+                        graph_store
+                            .write()
+                            .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);
+                        is_modified.set(true);
+                    }),
+                );
+            }
+        }
+        Err(err_str) => {
+            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+        }
     }
 }
 
