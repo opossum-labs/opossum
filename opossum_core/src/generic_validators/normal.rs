@@ -1,7 +1,43 @@
+use std::ops::Range;
+
 use crate::impl_validator;
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Energy, Length};
+use crate::prelude::*;
+use crate::generic_validators::{Validate, ValidateVec};
+
+impl Validate<Vec<(Length, f64)>> for AllNormal {
+    fn validate(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+        if value_vec.iter().all(|val| val.0.is_normal() && !val.1.is_normal()) {
+            Ok(())
+        } else {
+            Err(OpossumError::Other("All entries must be normal!".to_string()))
+        }
+    }
+}
+
+impl ValidateVec<(Length, f64)> for XNormal {
+    fn validate_vec(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+        if value_vec.iter().all(|val| val.1.is_normal()) {
+            Ok(())
+        } else {
+            Err(OpossumError::Other("All x-entries must be normal!".to_string()))
+        }
+    }
+}
+
+impl ValidateVec<(Length, f64)> for YNormal {
+    fn validate_vec(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+        if value_vec.iter().all(|val| val.1.is_normal()) {
+            Ok(())
+        } else {
+            Err(OpossumError::Other("All y-entries must be normal!".to_string()))
+        }
+    }
+}
+
+
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct AllNormal;
@@ -30,6 +66,72 @@ impl_validator!(
     AllNormal,
     |_self, v: &(Length, Length)| v.0.is_normal() && v.1.is_normal(),
     (Length, Length)
+);
+
+impl_validator!(
+    AllNormal,
+    |_self, v: &Range<Length>| v.start.is_normal() && v.end.is_normal(),
+    Range<Length>
+);
+
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+pub struct XNormal;
+
+impl_validator!(
+    XNormal,
+    |_self, v: &Point2<f64>| v.x.is_normal(),
+    Point2<f64>
+);
+impl_validator!(
+    XNormal,
+    |_self, v: &Point2<Length>| v.x.is_normal(),
+    Point2<Length>
+);
+
+impl_validator!(
+    XNormal,
+    |_self, v: &Vec<Point2<Length>>| v.iter().all(|val| val.x.is_normal()),
+    Vec<Point2<Length>>
+);
+
+impl_validator!(
+    XNormal,
+    |_self, v: &(Length, f64)| v.0.is_normal(),
+    (Length, f64)
+);
+
+impl_validator!(
+    XNormal,
+    |_self, v: &(f64, f64)| v.0.is_normal(),
+    (f64, f64)
+);
+
+
+
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+pub struct YNormal;
+
+impl_validator!(
+    YNormal,
+    |_self, v: &Point2<f64>| v.y.is_normal(),
+    Point2<f64>
+);
+impl_validator!(
+    YNormal,
+    |_self, v: &Point2<Length>| v.y.is_normal(),
+    Point2<Length>
+);
+
+impl_validator!(
+    YNormal,
+    |_self, v: &(f64,f64)| v.1.is_normal(),
+    (f64,f64)
+);
+
+impl_validator!(
+    YNormal,
+    |_self, v: &Vec<Point2<Length>>| v.iter().all(|val| val.y.is_normal()),
+    Vec<Point2<Length>>
 );
 
 #[cfg(test)]

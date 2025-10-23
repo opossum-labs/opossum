@@ -1,6 +1,6 @@
 use crate::{
     error::{OpmResult, OpossumError},
-    generic_validators::Validate,
+    generic_validators::{Validate, ValidateVec},
 };
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
@@ -23,6 +23,33 @@ where
 }
 
 impl<T, V1: Validate<T>, V2: Validate<T>> OrValidator<T, V1, V2> {
+    pub const fn new(v1: V1, v2: V2) -> Self {
+        Self {
+            v1,
+            v2,
+            _marker: PhantomData,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+pub struct OrValidatorVec<T, V1: ValidateVec<T>, V2: ValidateVec<T>> {
+    v1: V1,
+    v2: V2,
+    _marker: PhantomData<T>,
+}
+
+impl<T, V1, V2> ValidateVec<T> for OrValidatorVec<T, V1, V2>
+where
+    V1: ValidateVec<T>,
+    V2: ValidateVec<T>,
+{
+    fn validate_vec(&self, values: &Vec<T>) -> OpmResult<()> {
+        self.v1.validate_vec(values).or_else(|_| self.v2.validate_vec(values))
+    }
+}
+
+impl<T, V1: ValidateVec<T>, V2: ValidateVec<T>> OrValidatorVec<T, V1, V2> {
     pub const fn new(v1: V1, v2: V2) -> Self {
         Self {
             v1,
@@ -59,6 +86,35 @@ impl<T, V1: Validate<T>, V2: Validate<T>> AndValidator<T, V1, V2> {
         }
     }
 }
+
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+pub struct AndValidatorVec<T, V1: ValidateVec<T>, V2: ValidateVec<T>> {
+    v1: V1,
+    v2: V2,
+    _marker: PhantomData<T>,
+}
+
+impl<T, V1, V2> ValidateVec<T> for AndValidatorVec<T, V1, V2>
+where
+    V1: ValidateVec<T>,
+    V2: ValidateVec<T>,
+{
+    fn validate_vec(&self, values: &Vec<T>) -> OpmResult<()> {
+        self.v1.validate_vec(values)?;
+        self.v2.validate_vec(values)
+    }
+}
+
+impl<T, V1: ValidateVec<T>, V2: ValidateVec<T>> AndValidatorVec<T, V1, V2> {
+    pub const fn new(v1: V1, v2: V2) -> Self {
+        Self {
+            v1,
+            v2,
+            _marker: PhantomData,
+        }
+    }
+}
+
 
 /// A validator that negates the result of another validator.
 ///
@@ -109,6 +165,57 @@ impl<T, V: Validate<T>> Validate<T> for NotValidator<T, V> {
         }
     }
 }
+/// A validator that negates the result of another validator.
+///
+/// # Type Parameters
+/// * `T` - The type of value to validate.
+/// * `V` - The inner validator to negate.
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+pub struct NotValidatorVec<T, V: ValidateVec<T>> {
+    inner: V,
+    _marker: PhantomData<T>,
+}
+
+impl<T, V: ValidateVec<T>> NotValidatorVec<T, V> {
+    /// Creates a new `NotValidator` wrapping a given validator.
+    ///
+    /// # Arguments
+    ///
+    /// * `validator` - The validator to negate.
+    ///
+    /// # Returns
+    ///
+    /// * A `NotValidator` instance.
+    pub const fn new(validator: V) -> Self {
+        Self {
+            inner: validator,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T, V: ValidateVec<T>> ValidateVec<T> for NotValidatorVec<T, V> {
+    /// Validates the value using the inner validator and negates its result.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The value to validate.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the inner validator fails.
+    /// * `Err(OpossumError)` if the inner validator succeeds.
+    fn validate_vec(&self, values: &Vec<T>) -> OpmResult<()> {
+        match self.inner.validate_vec(values) {
+            Ok(()) => Err(OpossumError::Other(
+                "Value failed NotValidator check: inner validator passed".into(),
+            )),
+            Err(_) => Ok(()),
+        }
+    }
+}
+
+
 
 #[cfg(test)]
 mod tests {

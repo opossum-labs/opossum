@@ -3,17 +3,18 @@
 use super::PositionDistribution;
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero, ValidateTrait},
     millimeter, validated, validated_type,
 };
 use nalgebra::{Point2, Point3, point};
 use num::Zero;
+use opm_macros_lib::EnsureValidated;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, uniform random distribution
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct Random {
     nr_of_points: validated_type!(usize, AllNotZero),
     side_length: validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),

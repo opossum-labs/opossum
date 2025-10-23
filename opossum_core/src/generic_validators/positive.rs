@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::impl_validator;
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
@@ -39,6 +41,106 @@ impl_validator!(
     |_self, v: &(Length, Length)| v.0.is_sign_positive() && v.1.is_sign_positive(),
     (Length, Length)
 );
+impl_validator!(
+    AllPositive,
+    |_self, v: &Range<Length>| v.start.is_sign_positive() && v.end.is_sign_positive(),
+    Range<Length>
+);
+
+impl_validator!(
+    AllPositive,
+    |_self, v: &(Length, Energy)| v.0.is_sign_positive() && v.1.is_sign_positive(),
+    (Length, Energy)
+);
+
+impl_validator!(
+    AllPositive,
+    |_self, v: &(Length, f64)| v.0.is_sign_positive() && v.1.is_sign_positive(),
+    (Length, f64)
+);
+
+impl_validator!(
+    AllPositive,
+    |_self, v: &Vec<Point2<f64>>| v.iter().all(|val| val.x.is_sign_positive() && val.y.is_sign_positive()),
+    Vec<Point2<f64>>
+);
+
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+pub struct XPositive;
+
+impl_validator!(
+    XPositive,
+    |_self, v: &Point2<f64>| v.x.is_sign_positive(),
+    Point2<f64>
+);
+impl_validator!(
+    XPositive,
+    |_self, v: &Point2<Length>| v.x.is_sign_positive(),
+    Point2<Length>
+);
+
+impl_validator!(
+    XPositive,
+    |_self, v: &(Length, f64)| v.0.is_sign_positive(),
+    (Length, f64)
+);
+
+impl_validator!(
+    XPositive,
+    |_self, v: &(Length, Energy)| v.0.is_sign_positive(),
+    (Length, Energy)
+);
+
+impl_validator!(
+    XPositive,
+    |_self, v: &Vec<(Length, Energy)>| v.iter().all(|val| val.0.is_sign_positive()),
+    Vec<(Length, Energy)>
+);
+
+impl_validator!(
+    XPositive,
+    |_self, v: &Vec<Point2<Length>>| v.iter().all(|val| val.x.is_sign_positive()),
+    Vec<Point2<Length>>
+);
+
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+pub struct YPositive;
+
+impl_validator!(
+    YPositive,
+    |_self, v: &Point2<f64>| v.y.is_sign_positive(),
+    Point2<f64>
+);
+impl_validator!(
+    YPositive,
+    |_self, v: &Point2<Length>| v.y.is_sign_positive(),
+    Point2<Length>
+);
+
+impl_validator!(
+    YPositive,
+    |_self, v: &(Length, Energy)| v.1.is_sign_positive(),
+    (Length, Energy)
+);
+
+impl_validator!(
+    YPositive,
+    |_self, v: &(Length, f64)| v.1.is_sign_positive(),
+    (Length, f64)
+);
+
+impl_validator!(
+    YPositive,
+    |_self, v: &Vec<(Length, Energy)>| v.iter().all(|val| val.1.is_sign_positive()),
+    Vec<(Length, Energy)>
+);
+
+impl_validator!(
+    YPositive,
+    |_self, v: &Vec<Point2<Length>>| v.iter().all(|val| val.y.is_sign_positive()),
+    Vec<Point2<Length>>
+);
+
 
 #[cfg(test)]
 mod tests {

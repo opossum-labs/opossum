@@ -209,6 +209,7 @@ fn process_field(
         return;
     }
 
+
     // Case 2: Field is a struct or enum → check its _ENSURE_VALIDATED_MARKER
     if let Type::Path(TypePath { path, .. }) = ty {
         checks.push(quote! {
@@ -273,6 +274,33 @@ fn contains_validated(ty: &Type) -> bool {
             }
             false
         }
+
+        Type::Macro(m) => {
+            let path_str = m.mac.path.segments
+                .iter()
+                .map(|s| s.ident.to_string())
+                .collect::<Vec<_>>()
+                .join("::");
+
+            if matches!(
+                path_str.as_str(),
+                "opossum_core::generic_validators::impl_macro::validated_type"
+                    | "generic_validators::impl_macro::validated_type"
+                    | "impl_macro::validated_type"
+                    | "validated_type"
+                    |"opossum_core::generic_validators::impl_macro::validated_vec_type"
+                    | "generic_validators::impl_macro::validated_vec_type"
+                    | "impl_macro::validated_vec_type"
+                    | "validated_vec_type"
+            )
+            {
+                // treat as Validated
+                return true;
+            }
+
+            false
+        }
+
         Type::Reference(r) => contains_validated(&r.elem),
         Type::Tuple(t) => t.elems.iter().any(contains_validated),
         Type::Array(a) => contains_validated(&a.elem),

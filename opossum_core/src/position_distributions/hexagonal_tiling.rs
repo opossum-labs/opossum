@@ -3,19 +3,21 @@ use std::f64::consts::PI;
 
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllPositive},
+    generic_validators::{AllFinite, AllPositive, ValidateTrait},
     meter, millimeter, validated, validated_type,
 };
 
 use super::PositionDistribution;
 use nalgebra::{Point2, Point3, Vector3};
 use num::{ToPrimitive, Zero};
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Circular, hexapolar distribution
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct HexagonalTiling {
+    #[validate(skip)]
     nr_of_hex_along_radius: u8,
     radius: validated_type!(Length, AllPositive && AllFinite),
     center: validated_type!(Point2<Length>, AllFinite),

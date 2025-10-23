@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::{
     error::{OpmResult, OpossumError},
-    generic_validators::Validate,
+    generic_validators::{Validate, Validated}, validated,
 };
 use serde::{Deserialize, Serialize};
 
@@ -69,6 +69,16 @@ impl Validate<PathBuf> for PathValid {
                 ))
             }
         })
+    }
+}
+
+impl Default for Validated<PathBuf, PathValid>{
+    fn default() -> Self{
+        validated!(
+                PathBuf::new(),
+                PathValid::new(None)
+            )
+            .unwrap()
     }
 }
 

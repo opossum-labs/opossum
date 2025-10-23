@@ -9,14 +9,15 @@ use crate::{
     degree,
     energy_distributions::EnergyDistType,
     error::OpmResult,
-    generic_validators::{AllFinite, AllInRange, AllNormal, AllPositive, PathValid},
+    generic_validators::{AllFinite, AllInRange, AllNormal, AllPositive, PathValid, ValidateTrait},
     joule, meter, nanometer,
     position_distributions::PosDistType,
     rays::Rays,
     spectral_distribution::SpecDistType,
     utils::default_from_name::DefaultFromName,
-    validated, validated_type,
+    validated, validated_type
 };
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 use uom::si::{
@@ -25,9 +26,10 @@ use uom::si::{
 };
 
 /// Builder for the generation of [`LightData::Geometric`].
-#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated)]
 pub enum RayDataBuilder {
     /// Raw [`Rays`] data.
+    #[validate(skip)]
     Raw(Rays),
     /// Collimated [`Rays`] data with a given [`PosDistType`], [`EnergyDistType`], and [`SpecDistType`].
     Collimated(CollimatedSrc),
@@ -85,7 +87,7 @@ impl DefaultFromName for RayDataBuilder {}
 /// * `pos` - Position distribution (`PosDistType`) describing spatial distribution.
 /// * `energy` - Energy distribution (`EnergyDistType`) describing energy values of the rays.
 /// * `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated)]
 pub struct CollimatedSrc {
     pos: PosDistType,
     energy: EnergyDistType,
@@ -192,7 +194,7 @@ impl CollimatedSrc {
 /// * `energy` - Energy distribution (`EnergyDistType`) describing energy values for the rays.
 /// * `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties of the rays.
 /// * `reference_length` - A length scale used as a reference in calculations (`Length`).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated)]
 pub struct PointSrc {
     pos_dist: PosDistType,
     energy_dist: EnergyDistType,
@@ -358,7 +360,7 @@ impl Default for PointSrc {
 /// - `wave_length`: Wavelength of emitted light.
 /// - `cone_angle`: Angular spread of rays emitted from each pixel.
 ///
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnsureValidated)]
 pub struct ImageSrc {
     /// path to the image file
     file_path: validated_type!(PathBuf, PathValid),

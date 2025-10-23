@@ -4,20 +4,21 @@ use std::f64::consts::PI;
 
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero, ValidateTrait},
     millimeter, validated, validated_type,
 };
 
 use super::PositionDistribution;
 use nalgebra::{Point2, Point3, point};
 use num::{ToPrimitive, Zero};
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular Fibonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct FibonacciRectangle {
     nr_of_points: validated_type!(usize, AllNotZero),
     side_length: validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),
@@ -169,7 +170,7 @@ impl From<FibonacciRectangle> for super::PosDistType {
 /// Rectangular Fibbonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct FibonacciEllipse {
     nr_of_points: validated_type!(usize, AllNotZero),
     radius: validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),

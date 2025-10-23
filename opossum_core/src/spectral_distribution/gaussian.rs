@@ -6,13 +6,14 @@ use crate::error::OpmResult;
 use crate::utils::griddata::linspace;
 use crate::utils::math_distribution_functions::gaussian;
 use crate::validated;
+use opm_macros_lib::EnsureValidated;
 use crate::{
-    generic_validators::{AllNormal, AllNotZero, AllPositive, SecondLarger},
+    generic_validators::{AllNormal, AllNotZero, AllPositive, SecondLarger, ValidateTrait},
     meter, nanometer, validated_type,
 };
 use kahan::KahanSummator;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnsureValidated)]
 pub struct Gaussian {
     wvl_range: validated_type!((Length, Length), SecondLarger && AllPositive && AllNormal),
     num_points: validated_type!(usize, AllNotZero),

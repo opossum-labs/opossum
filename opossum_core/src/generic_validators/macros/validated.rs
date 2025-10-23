@@ -1,204 +1,4 @@
 #[macro_export]
-macro_rules! impl_validator {
-    ($validator:path, $func:expr,  $t:ty) => {
-        impl $crate::generic_validators::Validate<$t> for $validator {
-            fn validate(&self, value: &$t) -> $crate::error::OpmResult<()> {
-                if $func(&self, &value) {
-                    Ok(())
-                } else {
-                    Err($crate::error::OpossumError::Other(format!(
-                        "Value must satisfy {}",
-                        stringify!($func)
-                    )))
-                }
-            }
-        }
-    };
-}
-
-/// Expands a logical validator expression into nested validator instances.
-///
-/// Supports parentheses, `&&`, `||`, and `!` (not) operators.
-#[macro_export]
-macro_rules! validator_expr {
-    // parentheses first, recursive first
-    (( $($inner:tt)+ )) => {
-        $crate::validator_expr!($($inner)+)
-    };
-
-    (!$left:tt && !$mid:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator::new(
-        $crate::generic_validators::AndValidator::new(
-            $crate::generic_validators::NotValidator::new($crate::validator_expr!($left)),
-            $crate::generic_validators::NotValidator::new($crate::validator_expr!($mid))
-        ),
-        $crate::validator_expr!($($rest)+))
-    };
-
-    (!$left:tt && $mid:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator::new(
-        $crate::generic_validators::AndValidator::new(
-            $crate::generic_validators::NotValidator::new($crate::validator_expr!($left)),
-            $crate::validator_expr!($mid)
-        ),
-        $crate::validator_expr!($($rest)+))
-    };
-
-    ($left:tt && !$mid:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator::new(
-        $crate::generic_validators::AndValidator::new(
-            $crate::validator_expr!($left)
-            $crate::generic_validators::NotValidator::new($crate::validator_expr!($mid)),
-        ),
-        $crate::validator_expr!($($rest)+))
-    };
-
-    ($left:tt && $mid:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator::new(
-        $crate::generic_validators::AndValidator::new(
-            $crate::validator_expr!($left),
-            $crate::validator_expr!($mid)
-        ),
-        $crate::validator_expr!($($rest)+))
-    };
-
-    // NOT + && operator
-    (! $inner:tt && $($rest:tt)+) => {
-        $crate::generic_validators::AndValidator::new(
-            $crate::generic_validators::NotValidator::new($crate::validator_expr!($inner)),
-            $crate::validator_expr!($($rest)+)
-        )
-    };
-
-    // NOT + || operator
-    (! $inner:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator::new(
-            $crate::generic_validators::NotValidator::new($crate::validator_expr!($inner)),
-            $crate::validator_expr!($($rest)+)
-        )
-    };
-
-    // NOT operator
-    (! $inner:tt) => {
-        $crate::generic_validators::NotValidator::new($crate::validator_expr!($inner))
-    };
-
-    // AND
-    ($left:tt && $($rest:tt)+) => {
-        $crate::generic_validators::AndValidator::new(
-            $crate::validator_expr!($left),
-            $crate::validator_expr!($($rest)+)
-        )
-    };
-
-    // OR
-    ($left:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator::new(
-            $crate::validator_expr!($left),
-            $crate::validator_expr!($($rest)+)
-        )
-    };
-
-    // single validator
-    ($v:expr) => { $v };
-}
-
-/// Expands a logical validator type expression into nested validator types.
-///
-/// Supports parentheses, `&&`, `||`, and `!` operators.
-#[macro_export]
-macro_rules! validator_type_expr {
-    // Parentheses: unwrap and recurse
-    ($t:ty; ( $($inner:tt)+ )) => {
-        $crate::validator_type_expr!($t; $($inner)+)
-    };
-
-
-    ($t:ty; !$left:tt && !$mid:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator<$t,
-        $crate::generic_validators::AndValidator<$t,
-            $crate::generic_validators::NotValidator<$t,$crate::validator_type_expr!($t; $left)>,
-            $crate::generic_validators::NotValidator<$t,$crate::validator_type_expr!($t; $mid)>
-        >,
-        $crate::validator_type_expr!($t; $($rest)+)>
-    };
-
-    ($t:ty; !$left:tt && $mid:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator<$t,
-        $crate::generic_validators::AndValidator<$t,
-            $crate::generic_validators::NotValidator<$t,$crate::validator_type_expr!($t; $left)>,
-            $crate::validator_type_expr!($t; $mid)
-        >,
-        $crate::validator_type_expr!($t; $($rest)+)>
-    };
-
-    ($t:ty; $left:tt && !$mid:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator<$t,
-        $crate::generic_validators::AndValidator<$t,
-            $crate::validator_type_expr!($t; $left)
-            $crate::generic_validators::NotValidator<$t,$crate::validator_type_expr!($t; $mid)>,
-        >,
-        $crate::validator_type_expr!($t; $($rest)+)>
-    };
-
-    ($t:ty; $left:tt && $mid:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator<$t,
-        $crate::generic_validators::AndValidator<$t,
-            $crate::validator_type_expr!($t; $left),
-            $crate::validator_type_expr!($t; $mid)
-        >,
-        $crate::validator_type_expr!($t; $($rest)+)>
-    };
-
-    // NOT + && operator
-    ($t:ty; ! $inner:tt && $($rest:tt)+) => {
-        $crate::generic_validators::AndValidator<$t,
-            $crate::generic_validators::NotValidator<$t,$crate::validator_type_expr!($t; $inner)>,
-            $crate::validator_type_expr!($t; $($rest)+)
-        >
-    };
-
-    // NOT + || operator
-    ($t:ty; ! $inner:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator<$t,
-            $crate::generic_validators::NotValidator<$t,$crate::validator_type_expr!($t; $inner)>,
-            $crate::validator_type_expr!($t; $($rest)+)
-        >
-    };
-
-    // NOT operator
-    ($t:ty; ! $inner:tt) => {
-        $crate::generic_validators::NotValidator<$t,$crate::validator_type_expr!($t; $inner)>
-    };
-
-    // AND
-    ($t:ty; $left:tt && $($rest:tt)+) => {
-        $crate::generic_validators::AndValidator<
-            $t,
-            $crate::validator_type_expr!($t; $left),
-            $crate::validator_type_expr!($t; $($rest)+)
-        >
-    };
-
-    // OR
-    ($t:ty; $left:tt || $($rest:tt)+) => {
-        $crate::generic_validators::OrValidator<
-            $t,
-            $crate::validator_type_expr!($t; $left),
-            $crate::validator_type_expr!($t; $($rest)+)
-        >
-    };
-
-    // generic validator type like AllInRange<Angle>
-    ($t:ty; $v:ident::< $($args:ty),+ >) => {
-        $v::<$($args),+>
-    };
-
-    // single validator
-    ($t:ty; $v:ty) => { $v };
-}
-
-#[macro_export]
 macro_rules! validated_type {
     ($t:ty, $($expr:tt)+) => {
         $crate::generic_validators::Validated<
@@ -207,6 +7,7 @@ macro_rules! validated_type {
         >
     };
 }
+
 
 #[macro_export]
 macro_rules! validated {
@@ -403,10 +204,10 @@ mod macro_tests {
 
 #[cfg(test)]
 mod macro_type_tests {
-    use crate::generic_validators::{
+    use crate::{generic_validators::{
         AllFinite, AllNormal, AllNotZero, AllPositive, AndValidator, NotValidator, OrValidator,
         Validated,
-    };
+    }, validator_type_expr};
     use static_assertions::assert_type_eq_all;
 
     #[test]

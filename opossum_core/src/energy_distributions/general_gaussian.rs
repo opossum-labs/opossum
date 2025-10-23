@@ -3,7 +3,7 @@ use super::EnergyDistribution;
 use crate::{
     degree,
     error::OpmResult,
-    generic_validators::{AllFinite, AllNormal, AllNotZero, AllPositive},
+    generic_validators::{AllFinite, AllNormal, AllNotZero, AllPositive, ValidateTrait},
     joule, millimeter,
     utils::math_distribution_functions::{
         general_2d_super_gaussian_point_elliptical, general_2d_super_gaussian_point_rectangular,
@@ -12,19 +12,21 @@ use crate::{
 };
 use kahan::KahanSummator;
 use nalgebra::Point2;
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     angle::radian,
     f64::{Angle, Energy, Length},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct General2DGaussian {
     total_energy: validated_type!(Energy, AllNotZero && AllFinite && AllPositive),
     mu_xy: validated_type!(Point2<Length>, AllFinite),
     sigma_xy: validated_type!(Point2<Length>, AllNotZero && AllFinite && AllPositive),
     power: validated_type!(f64, AllNormal && AllPositive),
     theta: validated_type!(Angle, AllFinite),
+    #[validate(skip)]
     rectangular: bool,
 }
 impl General2DGaussian {

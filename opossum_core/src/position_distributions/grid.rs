@@ -3,18 +3,19 @@
 use super::PositionDistribution;
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero, ValidateTrait},
     millimeter,
     utils::to_f64,
     validated, validated_type,
 };
 use nalgebra::{Point2, Point3};
 use num::Zero;
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, evenly-sized grid distribution
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated)]
 pub struct Grid {
     nr_of_points: validated_type!(Point2<usize>, AllNotZero),
     side_length: validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),

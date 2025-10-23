@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::{
     error::{OpmResult, OpossumError},
     impl_validator,
@@ -98,6 +100,12 @@ impl_validator!(
     AllInRange<Length>,
     |r: &AllInRange<Length>, v: &Point2<Length>| r.is_in_range(&v.x) && r.is_in_range(&v.y),
     Point2<Length>
+);
+
+impl_validator!(
+    AllInRange<Length>,
+    |r: &AllInRange<Length>, v: &Range<Length>| r.is_in_range(&v.start) && r.is_in_range(&v.end),
+    Range<Length>
 );
 
 #[cfg(test)]

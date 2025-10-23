@@ -1,8 +1,41 @@
 use nalgebra::Point2;
 use uom::si::f64::{Angle, Energy, Length};
+use crate::prelude::*;
 
 use crate::impl_validator;
 use serde::{Deserialize, Serialize};
+use crate::generic_validators::{ValidateVec, Validate};
+
+impl Validate<Vec<(Length, f64)>> for AllFinite {
+    fn validate(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+        if value_vec.iter().all(|val| val.0.is_finite() && !val.1.is_finite()) {
+            Ok(())
+        } else {
+            Err(OpossumError::Other("All entries must be finite!".to_string()))
+        }
+    }
+}
+
+impl ValidateVec<(Length, f64)> for XFinite {
+    fn validate_vec(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+        if value_vec.iter().all(|val| val.1.is_finite()) {
+            Ok(())
+        } else {
+            Err(OpossumError::Other("All x-entries must be finite!".to_string()))
+        }
+    }
+}
+
+impl ValidateVec<(Length, f64)> for YFinite {
+    fn validate_vec(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+        if value_vec.iter().all(|val| val.1.is_finite()) {
+            Ok(())
+        } else {
+            Err(OpossumError::Other("All y-entries must be finite!".to_string()))
+        }
+    }
+}
+
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct AllFinite;
@@ -32,6 +65,70 @@ impl_validator!(
     AllFinite,
     |_self, v: &(Length, Length)| v.0.is_finite() && v.1.is_finite(),
     (Length, Length)
+);
+
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+pub struct XFinite;
+
+impl_validator!(
+    XFinite,
+    |_self, v: &Point2<f64>| v.x.is_finite(),
+    Point2<f64>
+);
+impl_validator!(
+    XFinite,
+    |_self, v: &Point2<Length>| v.x.is_finite(),
+    Point2<Length>
+);
+
+impl_validator!(
+    XFinite,
+    |_self, v: &Vec<Point2<Length>>| v.iter().all(|val| val.x.is_finite()),
+    Vec<Point2<Length>>
+);
+
+impl_validator!(
+    XFinite,
+    |_self, v: &Vec<(Length, Energy)>| v.iter().all(|val| val.0.is_finite()),
+    Vec<(Length, Energy)>
+);
+
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+pub struct YFinite;
+
+impl_validator!(
+    YFinite,
+    |_self, v: &Point2<f64>| v.y.is_finite(),
+    Point2<f64>
+);
+impl_validator!(
+    YFinite,
+    |_self, v: &Point2<Length>| v.y.is_finite(),
+    Point2<Length>
+);
+
+impl_validator!(
+    YFinite,
+    |_self, v: &Vec<Point2<Length>>| v.iter().all(|val| val.y.is_finite()),
+    Vec<Point2<Length>>
+);
+
+impl_validator!(
+    YFinite,
+    |_self, v: &Vec<(Length, Energy)>| v.iter().all(|val| val.1.is_finite()),
+    Vec<(Length, Energy)>
+);
+
+impl_validator!(
+    YFinite,
+    |_self, v: &(Length, f64)| v.1.is_finite(),
+    (Length, f64)
+);
+
+impl_validator!(
+    YFinite,
+    |_self, v: &(f64, f64)| v.1.is_finite(),
+    (f64, f64)
 );
 
 #[cfg(test)]

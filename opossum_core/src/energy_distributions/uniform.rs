@@ -1,17 +1,18 @@
 //! Uniform energy distribution
 
 use crate::{
-    generic_validators::{AllFinite, AllNotZero, AllPositive},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
     joule, validated, validated_type,
 };
 use nalgebra::Point2;
 use num::ToPrimitive;
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Energy, Length};
 
 use super::EnergyDistribution;
 use crate::error::OpmResult;
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct UniformDist {
     total_energy: validated_type!(Energy, AllNotZero && AllFinite && AllPositive),
 }
