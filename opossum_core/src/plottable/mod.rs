@@ -151,6 +151,7 @@ impl PlotType {
                 Ok(Some(img))
             }
         }
+        // Ok(None)
     }
 
     fn draw_line_2d<'a, 'b, T: DrawingBackend + 'a + 'b>(

@@ -795,7 +795,7 @@ mod test_rays_ghost_focus_history {
 
     use crate::{
         analyzers::ghostfocus::RaysNodeCorrelation, joule, millimeter, nanometer,
-        position_distributions::Random, rays::Rays,
+        position_distributions::Grid, rays::Rays,
     };
 
     use super::GhostFocusHistory;
@@ -806,7 +806,7 @@ mod test_rays_ghost_focus_history {
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
+            &Grid::new((millimeter!(10.0), millimeter!(10.0)), (5, 4)).unwrap(),
         )
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
@@ -841,7 +841,7 @@ mod test_rays_ghost_focus_history {
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
+            &Grid::new((millimeter!(10.0), millimeter!(10.0)), (5, 4)).unwrap(),
         )
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
@@ -877,13 +877,13 @@ mod test_rays_ghost_focus_history {
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
+            &Grid::new((millimeter!(10.0), millimeter!(10.0)), (5, 4)).unwrap(),
         )
         .unwrap();
         let rays2 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
+            &Grid::new((millimeter!(10.0), millimeter!(10.0)), (5, 4)).unwrap(),
         )
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
@@ -992,7 +992,7 @@ mod test_rays_ghost_focus_history {
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Random::new(millimeter!(10.), millimeter!(10.), 20).unwrap(),
+            &Grid::new((millimeter!(10.0), millimeter!(10.0)), (5, 4)).unwrap(),
         )
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
