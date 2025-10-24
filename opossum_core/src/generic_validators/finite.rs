@@ -22,7 +22,7 @@ impl Validate<Vec<(Length, f64)>> for AllFinite {
 }
 
 impl ValidateVec<(Length, f64)> for XFinite {
-    fn validate_vec(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+    fn validate_vec(&self, value_vec: &[(Length, f64)]) -> OpmResult<()> {
         if value_vec.iter().all(|val| val.1.is_finite()) {
             Ok(())
         } else {
@@ -35,7 +35,7 @@ impl ValidateVec<(Length, f64)> for XFinite {
 
 impl_vec_validator!(
     YFinite,
-    |_self, v: &Vec<(Length, f64)>| v.iter().all(|val| val.1.is_finite()),
+    |_self, v: &[(Length, f64)]| v.iter().all(|val| val.1.is_finite()),
     (Length, f64)
 );
 
@@ -117,8 +117,8 @@ impl_validator!(
 
 impl_validator!(
     YFinite,
-    |_self, v: &Vec<(Length, Energy)>| v.iter().all(|val| val.1.is_finite()),
-    Vec<(Length, Energy)>
+    |_self, v: &(Length, Energy)| v.1.is_finite(),
+    (Length, Energy)
 );
 
 impl_validator!(

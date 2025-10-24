@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::impl_validator;
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
@@ -22,6 +24,12 @@ impl_validator!(
     SecondLarger,
     |_self, v: &Point2<Length>| v.x < v.y,
     Point2<Length>
+);
+
+impl_validator!(
+    SecondLarger,
+    |_self, v: &Range<Length>| v.start < v.end,
+    Range<Length>
 );
 
 #[cfg(test)]

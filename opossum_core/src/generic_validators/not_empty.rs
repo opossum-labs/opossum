@@ -10,7 +10,7 @@ use crate::{
 pub struct AllNotEmpty;
 
 impl<T: Clone> ValidateVec<T> for AllNotEmpty {
-    fn validate_vec(&self, values: &Vec<T>) -> OpmResult<()> {
+    fn validate_vec(&self, values: &[T]) -> OpmResult<()> {
         if values.is_empty() {
             Err(OpossumError::Other("Vector must not empty!".to_string()))
         } else {

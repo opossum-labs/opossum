@@ -16,6 +16,7 @@ use crate::{
     },
     plottable::AxLims,
     position_distributions::{Hexapolar, PositionDistribution},
+    prelude::EnergyLaserLines,
     properties::Proptype,
     ray::Ray,
     refractive_index::RefractiveIndexType,
@@ -1218,7 +1219,7 @@ impl Rays {
                 "ray bundle is empty - cannot create spectrum".into(),
             ));
         }
-        let spectrum = Spectrum::from_laser_lines(lines, *resolution)?;
+        let spectrum = Spectrum::from_laser_lines(&EnergyLaserLines::new(lines, *resolution)?)?;
         Ok(spectrum)
     }
     /// Set the refractive index of the medium all [`Rays`] are propagating in.

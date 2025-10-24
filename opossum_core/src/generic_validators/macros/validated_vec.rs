@@ -7,7 +7,7 @@
 /// The macro automatically splits the provided validator sequence at the first comma:
 /// - the **first part** defines the *element-level validator*,  
 /// - the **second part** defines the *container-level validator*.
-/// 
+///
 /// Validation is done on creation and on setting single parameters.
 ///
 /// # Notes
@@ -23,7 +23,7 @@ macro_rules! validated_vec {
     (@split $value:expr, [$($accum:tt)*] , $($tail:tt)+) => {{
         let elem_validator = $crate::validator_expr!($($accum)*);
         let cont_validator = $crate::validator_vec_expr!($($tail)+);
-        crate::generic_validators::ValidatedVec::new(
+        $crate::generic_validators::ValidatedVec::new(
             $value,
             elem_validator,
             cont_validator

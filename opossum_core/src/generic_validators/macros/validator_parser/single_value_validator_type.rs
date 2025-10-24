@@ -1,5 +1,3 @@
-
-
 /// Expands a logical validator type expression into nested validator types.
 ///
 /// Supports parentheses, `&&`, `||`, and `!` operators.

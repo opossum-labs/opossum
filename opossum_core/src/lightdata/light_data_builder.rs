@@ -21,7 +21,6 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated)]
 pub enum LightDataBuilder {
     /// Builder for the generation of [`LightData::Energy`].
-    #[validate(skip)]
     Energy(EnergyDataBuilder),
     /// Builder for the generation of [`LightData::Geometric`].
     Geometric(RayDataBuilder),

@@ -44,7 +44,7 @@ where
     V1: ValidateVec<T>,
     V2: ValidateVec<T>,
 {
-    fn validate_vec(&self, values: &Vec<T>) -> OpmResult<()> {
+    fn validate_vec(&self, values: &[T]) -> OpmResult<()> {
         self.v1
             .validate_vec(values)
             .or_else(|_| self.v2.validate_vec(values))
@@ -101,7 +101,7 @@ where
     V1: ValidateVec<T>,
     V2: ValidateVec<T>,
 {
-    fn validate_vec(&self, values: &Vec<T>) -> OpmResult<()> {
+    fn validate_vec(&self, values: &[T]) -> OpmResult<()> {
         self.v1.validate_vec(values)?;
         self.v2.validate_vec(values)
     }
@@ -206,7 +206,7 @@ impl<T, V: ValidateVec<T>> ValidateVec<T> for NotValidatorVec<T, V> {
     ///
     /// * `Ok(())` if the inner validator fails.
     /// * `Err(OpossumError)` if the inner validator succeeds.
-    fn validate_vec(&self, values: &Vec<T>) -> OpmResult<()> {
+    fn validate_vec(&self, values: &[T]) -> OpmResult<()> {
         match self.inner.validate_vec(values) {
             Ok(()) => Err(OpossumError::Other(
                 "Value failed NotValidator check: inner validator passed".into(),

@@ -229,7 +229,8 @@ mod macro_type_tests {
         generic_validators::{
             AllFinite, AllNormal, AllNotZero, AllPositive, AndValidator, NotValidator, OrValidator,
             Validated,
-        }, validator_type_expr,
+        },
+        validator_type_expr,
     };
     use static_assertions::assert_type_eq_all;
 

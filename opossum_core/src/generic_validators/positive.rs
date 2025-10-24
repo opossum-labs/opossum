@@ -1,12 +1,20 @@
 use std::ops::Range;
 
-use crate::impl_validator;
+use crate::{impl_validator, impl_vec_validator};
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Energy, Length};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct AllPositive;
+
+impl_vec_validator!(
+    AllPositive,
+    |_, v: &[(Length, Energy)]| v
+        .iter()
+        .all(|(w, e)| w.is_sign_positive() && e.is_sign_positive()),
+    (Length, Energy)
+);
 
 impl_validator!(AllPositive, |_self, v: &i32| *v >= 0, i32);
 impl_validator!(AllPositive, |_self, v: &f64| v.is_sign_positive(), f64);

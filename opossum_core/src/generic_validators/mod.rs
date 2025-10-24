@@ -57,7 +57,11 @@ pub trait Validate<T> {
 /// `OpmResult<()>`, which is `Ok(())` if validation passes or
 /// an error if it fails.
 pub trait ValidateVec<T> {
-    fn validate_vec(&self, values: &Vec<T>) -> OpmResult<()>;
+    /// Validate a vector
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    fn validate_vec(&self, values: &[T]) -> OpmResult<()>;
 }
 
 /// A wrapper around a value of type `T` that enforces validation
@@ -175,6 +179,48 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
         &self.values
     }
 
+    /// Returns an iterator over the elements.
+    ///
+    /// This provides immutable access to the underlying values.
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+        self.values.iter()
+    }
+
+    /// Returns an immutable reference to the underlying vector.
+    ///
+    /// # Returns
+    ///
+    /// * `&Vec<T>` - Reference to the stored values.
+    ///
+    /// # Errors
+    /// Returnas an error if the index is out of bounds
+    pub fn get_at_index(&self, index: usize) -> OpmResult<&T> {
+        if index >= self.values.len() {
+            return Err(OpossumError::Other("Index out of bounds".into()));
+        }
+        Ok(&self.values[index])
+    }
+
+    /// Returns the number of elements.
+    pub const fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    /// Returns true if the vector contains no elements.
+    pub const fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    /// Returns an immutable reference to the first element, if any.
+    pub fn first(&self) -> Option<&T> {
+        self.values.first()
+    }
+
+    /// Returns an immutable reference to the last element, if any.
+    pub fn last(&self) -> Option<&T> {
+        self.values.last()
+    }
+
     /// Internal helper to mutate the vector safely with rollback.
     ///
     /// # Arguments
@@ -208,6 +254,9 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
     /// # Returns
     ///
     /// Returns the result of the mutation closure or an error if container validation fails.
+    ///
+    /// # Errors
+    /// Returns an error if mutation fails due to invalid parameters
     pub fn replace(&mut self, index: usize, new_value: T) -> OpmResult<()> {
         if index >= self.values.len() {
             return Err(OpossumError::Other("Index out of bounds".into()));
@@ -263,10 +312,10 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
 
         let popped = self.values.last().cloned();
         self.mutate_vec_with_rollback(
-            |vec| vec.pop(),
+            std::vec::Vec::pop,
             |vec| {
                 if let Some(v) = popped {
-                    vec.push(v.clone());
+                    vec.push(v);
                 }
             }, // undo removal
         )?;
@@ -299,6 +348,51 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
                 vec.remove(index);
             }, // undo the insert
         )?;
+        Ok(())
+    }
+
+    /// Applies a closure to each element in the vector.
+    ///
+    /// Mutations are applied sequentially. After each mutation, the element
+    /// is validated immediately. If any element fails validation, all prior
+    /// modifications are rolled back.
+    ///
+    /// Finally, the container validator is run once after all mutations.
+    ///
+    /// # Errors
+    /// Returns an error if validation failed and values are rolled back
+    pub fn for_each<F>(&mut self, mut f: F) -> OpmResult<()>
+    where
+        F: FnMut(&mut T),
+    {
+        // Track old values for rollback of already-mutated items
+        let mut old_values: Vec<(usize, T)> = Vec::with_capacity(self.values.len());
+
+        for (i, elem) in self.values.iter_mut().enumerate() {
+            let old = elem.clone();
+            f(elem);
+
+            if let Err(e) = self.element_validator.validate(elem) {
+                // Roll back all modified elements up to this point
+                for (idx, old_val) in old_values {
+                    self.values[idx] = old_val;
+                }
+                self.values[i] = old; // also restore current failing element
+                return Err(e);
+            }
+
+            old_values.push((i, old));
+        }
+
+        // Validate container after all elements are successfully validated
+        if let Err(e) = self.container_validator.validate_vec(&self.values) {
+            // Rollback all changes if container validation fails
+            for (idx, old_val) in old_values {
+                self.values[idx] = old_val;
+            }
+            return Err(e);
+        }
+
         Ok(())
     }
 
@@ -349,6 +443,26 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {
         }
         self.values = new_values;
         Ok(())
+    }
+}
+
+impl<'a, T: Clone, EV: Validate<T>, CV: ValidateVec<T>> IntoIterator
+    for &'a ValidatedVec<T, EV, CV>
+{
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+use std::ops::Index;
+
+impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> Index<usize> for ValidatedVec<T, EV, CV> {
+    type Output = T;
+
+    /// Ermöglicht `vec[idx]` für immutable Zugriff.
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.values[index]
     }
 }
 

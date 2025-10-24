@@ -23,7 +23,7 @@ impl Validate<Vec<(Length, f64)>> for AllNormal {
 }
 
 impl ValidateVec<(Length, f64)> for XNormal {
-    fn validate_vec(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+    fn validate_vec(&self, value_vec: &[(Length, f64)]) -> OpmResult<()> {
         if value_vec.iter().all(|val| val.1.is_normal()) {
             Ok(())
         } else {
@@ -35,7 +35,7 @@ impl ValidateVec<(Length, f64)> for XNormal {
 }
 
 impl ValidateVec<(Length, f64)> for YNormal {
-    fn validate_vec(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+    fn validate_vec(&self, value_vec: &[(Length, f64)]) -> OpmResult<()> {
         if value_vec.iter().all(|val| val.1.is_normal()) {
             Ok(())
         } else {
@@ -105,6 +105,12 @@ impl_validator!(
     XNormal,
     |_self, v: &(Length, f64)| v.0.is_normal(),
     (Length, f64)
+);
+
+impl_validator!(
+    XNormal,
+    |_self, v: &(Length, Energy)| v.0.is_normal(),
+    (Length, Energy)
 );
 
 impl_validator!(XNormal, |_self, v: &(f64, f64)| v.0.is_normal(), (f64, f64));

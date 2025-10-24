@@ -1,6 +1,6 @@
-mod validator_parser;
 mod validated;
 mod validated_vec;
+mod validator_parser;
 
 /// Implements the [`Validate`] trait for a given validator type, function, and value type.
 ///
@@ -20,7 +20,7 @@ mod validated_vec;
 /// # Notes
 /// - This macro assumes that `$func` has the signature `fn(&Self, &T) -> bool`.
 /// - The generated error message includes the stringified name of `$func`.
-/// - Useful for scalar or single-value validators.  
+/// - Useful for scalar or single-value validators.
 ///   For collection-level validation, see [`impl_vec_validator!`].
 #[macro_export]
 macro_rules! impl_validator {
@@ -64,8 +64,8 @@ macro_rules! impl_validator {
 macro_rules! impl_vec_validator {
     ($validator:path, $func:expr,  $t:ty) => {
         impl $crate::generic_validators::ValidateVec<$t> for $validator {
-            fn validate_vec(&self, values: &Vec<$t>) -> $crate::error::OpmResult<()> {
-                if $func(&self, &values) {
+            fn validate_vec(&self, values: &[$t]) -> $crate::error::OpmResult<()> {
+                if $func(&self, values) {
                     Ok(())
                 } else {
                     Err($crate::error::OpossumError::Other(format!(
@@ -75,5 +75,13 @@ macro_rules! impl_vec_validator {
                 }
             }
         }
+        // #[allow(non_upper_case_globals)]
+        // #[warn(dead_code)]
+        // const _: &str = concat!(
+        //     "impl_validator_vec! unused for validator: ",
+        //     stringify!($validator),
+        //     ", type: ",
+        //     stringify!($t)
+        // );
     };
 }

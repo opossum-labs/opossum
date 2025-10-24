@@ -52,7 +52,10 @@ impl Validate<PathBuf> for PathValid {
     fn validate(&self, path_buf: &PathBuf) -> OpmResult<()> {
         let path = path_buf.as_path();
         // if !path.exists() {
-        //     return Err(OpossumError::Other(format!("Path to file \"{path:?}\" does not exist!")))
+        //     return Err(OpossumError::Other(format!(
+        //         "Path to file \"{}\" does not exist!",
+        //         path.display()
+        //     )));
         // }
 
         self.ext.as_ref().map_or(Ok(()), |ext_vec| {

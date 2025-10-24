@@ -14,7 +14,7 @@ impl<T: Clone> Validate<T> for Pass {
 }
 
 impl<T: Clone> ValidateVec<T> for Pass {
-    fn validate_vec(&self, _values: &Vec<T>) -> OpmResult<()> {
+    fn validate_vec(&self, _values: &[T]) -> OpmResult<()> {
         Ok(())
     }
 }

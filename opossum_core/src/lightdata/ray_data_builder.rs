@@ -701,8 +701,8 @@ impl std::fmt::Debug for RayDataBuilder {
             Self::Image(image_src) => {
                 write!(
                     f,
-                    "Image field({}, {:?}, {:?}, {:?}, {:?}",
-                    image_src.file_path.get().display(),
+                    "Image field({:?}, {:?}, {:?}, {:?}, {:?}",
+                    image_src.file_path.get(),
                     image_src.pixel_size.get(),
                     image_src.total_energy.get(),
                     image_src.wave_length.get(),

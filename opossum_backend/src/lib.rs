@@ -17,7 +17,7 @@ pub use opossum_core::{
     error::{OpmResult, OpossumError},
     joule,
     lightdata::{
-        energy_data_builder::{self, EnergyLaserLines},
+        energy_data_builder::{self, EnergyLaserLines, SpectrumFile},
         light_data_builder, ray_data_builder,
     },
     micrometer, millimeter, nanometer,

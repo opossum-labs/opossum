@@ -1,20 +1,21 @@
 use std::path::PathBuf;
 
+use crate::components::logger::LogResultExt;
 use crate::components::node_editor::inputs::{
     InputParam, IntoInputData, IntoInputDataStrings, input_components::InputParamLabeledInput,
 };
 use dioxus::prelude::*;
-use opossum_backend::energy_data_builder::EnergyDataBuilder;
+use opossum_backend::energy_data_builder::{EnergyDataBuilder, SpectrumFile};
 use strum::EnumIter;
 
 #[component]
 pub fn SpectrumFromFileEditor(
-    path_buf: PathBuf,
+    spec_file: SpectrumFile,
     energy_data_builder_sig: Signal<EnergyDataBuilder>,
 ) -> Element {
-    let input_data = IntoInputData::<String, PathBuf, EnergyDataBuilder>::to_input_data(
+    let input_data = IntoInputData::<String, SpectrumFile, EnergyDataBuilder>::to_input_data(
         &EnergySpectrumFromFileParam::FPath,
-        path_buf,
+        spec_file,
         energy_data_builder_sig,
     );
     rsx! {
@@ -33,12 +34,13 @@ impl From<EnergySpectrumFromFileParam> for InputParam {
     }
 }
 
-impl IntoInputDataStrings<PathBuf> for EnergySpectrumFromFileParam {
+impl IntoInputDataStrings<SpectrumFile> for EnergySpectrumFromFileParam {
     fn create_id_string(&self) -> String {
         "rayTypeEnergySrcfromFileInput".to_string()
     }
-    fn create_value_string(&self, obj: &PathBuf) -> String {
-        obj.file_name()
+    fn create_value_string(&self, obj: &SpectrumFile) -> String {
+        obj.f_path()
+            .file_name()
             .map_or("no file selected", |f| {
                 f.to_str().unwrap_or("no file selected")
             })
@@ -46,7 +48,7 @@ impl IntoInputDataStrings<PathBuf> for EnergySpectrumFromFileParam {
     }
 }
 
-impl IntoInputData<String, PathBuf, EnergyDataBuilder> for EnergySpectrumFromFileParam {
+impl IntoInputData<String, SpectrumFile, EnergyDataBuilder> for EnergySpectrumFromFileParam {
     fn parse_value(&self, e: Event<FormData>) -> Option<String> {
         e.files().and_then(|file_engine| {
             let files = file_engine.files();
@@ -57,7 +59,10 @@ impl IntoInputData<String, PathBuf, EnergyDataBuilder> for EnergySpectrumFromFil
             }
         })
     }
-    fn setter_from_obj(&self) -> impl FnMut(&mut PathBuf, String) {
-        move |obj: &mut PathBuf, val: String| *obj = PathBuf::from(val)
+    fn setter_from_obj(&self) -> impl FnMut(&mut SpectrumFile, String) {
+        move |obj: &mut SpectrumFile, val: String| {
+            obj.set_f_path(PathBuf::from(val))
+                .log_err_with_context("Validation failed in `set_f_path`");
+        }
     }
 }

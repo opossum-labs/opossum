@@ -1,6 +1,6 @@
 use crate::generic_validators::{Validate, ValidateVec};
-use crate::impl_validator;
 use crate::prelude::{OpmResult, OpossumError};
+use crate::{impl_validator, impl_vec_validator};
 use nalgebra::Point2;
 use num::Zero;
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ impl Validate<Vec<(Length, f64)>> for NotAllZero {
 }
 
 impl ValidateVec<(Length, f64)> for YNotAllZero {
-    fn validate_vec(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+    fn validate_vec(&self, value_vec: &[(Length, f64)]) -> OpmResult<()> {
         if value_vec.iter().any(|val| !val.1.is_zero()) {
             Ok(())
         } else {
@@ -36,8 +36,20 @@ impl ValidateVec<(Length, f64)> for YNotAllZero {
     }
 }
 
+impl_vec_validator!(
+    YNotAllZero,
+    |_, v: &[(Length, Energy)]| v.iter().any(|val| !val.1.is_zero()),
+    (Length, Energy)
+);
+
+impl_vec_validator!(
+    YNotAllZero,
+    |_, v: &[(f64, f64)]| v.iter().any(|val| !val.1.is_zero()),
+    (f64, f64)
+);
+
 impl ValidateVec<(Length, f64)> for XNotAllZero {
-    fn validate_vec(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
+    fn validate_vec(&self, value_vec: &[(Length, f64)]) -> OpmResult<()> {
         if value_vec.iter().any(|val| !val.0.is_zero()) {
             Ok(())
         } else {
