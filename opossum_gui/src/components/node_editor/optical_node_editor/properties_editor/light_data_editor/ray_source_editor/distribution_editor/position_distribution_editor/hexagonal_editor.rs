@@ -2,7 +2,8 @@ use crate::components::node_editor::inputs::{
     InputData, InputParam, IntoInputData, IntoInputDataStrings,
 };
 use dioxus::prelude::*;
-use opossum_backend::{HexagonalTiling, PosDistType, millimeter};
+use opossum_core::millimeter;
+use opossum_core::position_distributions::{HexagonalTiling, PosDistType};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::length::millimeter;
 

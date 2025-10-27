@@ -5,7 +5,8 @@ use crate::{
     },
 };
 use dioxus::prelude::*;
-use opossum_backend::{LaserLines, SpecDistType, nanometer};
+use opossum_core::nanometer;
+use opossum_core::spectral_distribution::{LaserLines, SpecDistType};
 use strum::EnumIter;
 use uom::si::length::nanometer;
 

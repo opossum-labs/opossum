@@ -5,7 +5,7 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::nanometer;
+use opossum_core::nanometer;
 use uom::si::{f64::Length, length::nanometer};
 
 #[component]

@@ -1,11 +1,7 @@
 //! General api calls
-
 use crate::HTTP_API_CLIENT;
-
-use opossum_backend::{
-    AnalyzerType,
-    general::{NodeType, VersionInfo},
-};
+use opossum_core::prelude::*;
+use opossum_core::types::api_types::{NodeType, VersionInfo};
 
 /// Send a request to check if the bace url is reachable and corresponds to the opossum backend.
 ///

@@ -21,11 +21,11 @@ use dioxus::{
     prelude::*,
 };
 use futures_util::StreamExt;
-use opossum_backend::{
-    AnalyzerInfo, AnalyzerType,
-    nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
-    scenery::NewAnalyzerInfo,
-    to_f64,
+use opossum_core::{
+    opm_document::AnalyzerInfo,
+    prelude::*,
+    types::api_types::{ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo},
+    utils::to_f64,
 };
 use rust_sugiyama::{configure::RankingType, from_edges};
 use std::{collections::HashMap, fs, path::PathBuf};

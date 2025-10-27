@@ -8,7 +8,10 @@ use crate::components::node_editor::{
 };
 pub use constant_transmission_editor::ConstantFilterTypeEditor;
 use dioxus::prelude::*;
-use opossum_backend::{DefaultFromName, FilterTypeBuilder, Property};
+use opossum_core::{
+    prelude::{FilterTypeBuilder, Property},
+    utils::default_from_name::DefaultFromName,
+};
 pub use spectral_transmission_editor::SpectralFilterTypeEditor;
 
 #[component]

@@ -1,8 +1,8 @@
 use crate::components::node_editor::{CallbackWrapper, inputs::input_components::LabeledInput};
 use dioxus::prelude::*;
-use opossum_backend::{
+use opossum_core::{
     millimeter,
-    ray_data_builder::{PointSrc, RayDataBuilder},
+    prelude::{PointSrc, RayDataBuilder},
 };
 use uom::si::length::millimeter;
 

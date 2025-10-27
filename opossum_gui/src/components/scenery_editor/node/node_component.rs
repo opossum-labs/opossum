@@ -12,7 +12,7 @@ use crate::components::scenery_editor::{
     ports::ports_component::NodePorts,
 };
 use dioxus::prelude::*;
-use opossum_backend::nodes::NewRefNode;
+use opossum_core::types::api_types::NewRefNode;
 
 #[component]
 pub fn Node(node: NodeElement, is_modified: Signal<bool>) -> Element {

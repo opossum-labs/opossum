@@ -16,6 +16,8 @@ use nalgebra::{
     DMatrix, DVector, DVectorView, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3, Vector3,
 };
 use num::ToPrimitive;
+#[cfg(not(target_arch = "wasm32"))]
+use plotters::prelude::SVGBackend;
 use plotters::{
     backend::DrawingBackend,
     backend::PixelFormat,
@@ -26,8 +28,6 @@ use plotters::{
     series::LineSeries,
     style::{BLACK, Color, IntoFont, RGBAColor, ShapeStyle, WHITE},
 };
-#[cfg(not(target_arch = "wasm32"))]
-use plotters::prelude::SVGBackend;
 
 use std::{collections::HashMap, env::current_dir, f64::consts::PI, path::Path, path::PathBuf};
 use strum::IntoEnumIterator;
@@ -105,15 +105,15 @@ impl PlotType {
         Ok(self)
     }
     /// This method creates a plot
-    /// 
+    ///
     /// # Attributes
     /// - `plt_series`: vector of plot series. See [`PlotSeries`]
     /// # Returns
     /// This method returns an [`OpmResult<Option<RgbImage>>`]. It is None if a new file (such as svg, png, bmp or jpg) is created.
     /// It is Some(RgbImage) if the image is written to a buffer.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// This method throws an error if
     /// - some plot parameters contradict each other
     /// - the file path can not be extracted
@@ -160,15 +160,15 @@ impl PlotType {
         }
     }
     /// This method creates a plot
-    /// 
+    ///
     /// # Attributes
     /// - `plt_series`: vector of plot series. See [`PlotSeries`]
     /// # Returns
     /// This method returns an [`OpmResult<Option<RgbImage>>`]. It is None if a new file (such as svg, png, bmp or jpg) is created.
     /// It is Some(RgbImage) if the image is written to a buffer.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// This method throws an error if
     /// - some plot parameters contradict each other
     /// - the file path can not be extracted

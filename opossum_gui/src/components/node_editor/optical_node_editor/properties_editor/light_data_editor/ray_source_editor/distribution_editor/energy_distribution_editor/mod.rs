@@ -13,7 +13,10 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use gaussian_editor::get_general_2d_gaussian_input_params;
-use opossum_backend::{DefaultFromName, EnergyDistType, ray_data_builder::RayDataBuilder};
+use opossum_core::{
+    energy_distributions::EnergyDistType, prelude::RayDataBuilder,
+    utils::default_from_name::DefaultFromName,
+};
 use uniform_editor::UniformParam;
 
 #[component]

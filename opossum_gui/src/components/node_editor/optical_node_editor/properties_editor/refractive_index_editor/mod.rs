@@ -5,12 +5,14 @@ mod sellmeier1_model_editor;
 
 use conrady_model_editor::ConradyParam;
 use const_model_editor::ConstRefParam;
+use opossum_core::{
+    refractive_index::RefractiveIndexType, utils::default_from_name::DefaultFromName,
+};
 use schott_model_editor::SchottParam;
 use sellmeier1_model_editor::Sellmeier1Param;
 
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::{DefaultFromName, RefractiveIndexType};
 
 use crate::components::node_editor::{
     inputs::{

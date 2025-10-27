@@ -3,9 +3,8 @@ use crate::{
     components::node_editor::inputs::{InputData, InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
-use opossum_backend::{
-    EnergyDistType, EnergyDistribution, General2DGaussian, degree, joule, millimeter,
-};
+use opossum_core::energy_distributions::{EnergyDistType, EnergyDistribution, General2DGaussian};
+use opossum_core::{degree, joule, millimeter};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::{angle::degree, energy::joule, length::millimeter};
 

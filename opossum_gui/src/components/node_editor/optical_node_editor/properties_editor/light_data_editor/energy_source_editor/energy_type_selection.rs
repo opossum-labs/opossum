@@ -1,10 +1,11 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-use dioxus::prelude::*;
-use opossum_backend::{DefaultFromName, Spectrum, energy_data_builder::EnergyDataBuilder};
-
 use crate::components::node_editor::inputs::{
     input_components::LabeledSelect, select_options_from_enum_iterator,
+};
+use dioxus::prelude::*;
+use opossum_core::{
+    prelude::EnergyDataBuilder, spectrum::Spectrum, utils::default_from_name::DefaultFromName,
 };
 
 #[component]

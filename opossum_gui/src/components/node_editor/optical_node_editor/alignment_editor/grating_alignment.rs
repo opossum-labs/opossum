@@ -12,8 +12,11 @@ use crate::{
     },
 };
 use dioxus::prelude::*;
-use opossum_backend::{
-    Isometry, Properties, Proptype, RotationAxis, degree, nanometer, radian, to_f64,
+use opossum_core::{
+    degree, nanometer,
+    prelude::{Isometry, Properties, Proptype},
+    radian,
+    utils::{geom_transformation::RotationAxis, to_f64},
 };
 use uom::si::{
     angle::degree,

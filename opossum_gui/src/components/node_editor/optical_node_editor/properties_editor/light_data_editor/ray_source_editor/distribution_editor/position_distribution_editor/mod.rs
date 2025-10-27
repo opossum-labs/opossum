@@ -13,6 +13,10 @@ use fibonacci_rectangle_editor::FibonacciRectParam;
 use grid_editor::GridParam;
 use hexagonal_editor::get_hexagonal_input_params;
 use hexapolar_editor::get_hexapolar_input_params;
+use opossum_core::{
+    position_distributions::PosDistType, prelude::RayDataBuilder,
+    utils::default_from_name::DefaultFromName,
+};
 use random_editor::RandomParam;
 use sobol_editor::SobolParam;
 
@@ -26,7 +30,6 @@ use crate::components::node_editor::{
     optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
-use opossum_backend::{DefaultFromName, PosDistType, ray_data_builder::RayDataBuilder};
 fn get_pos_dist_input_data(pos_dist_type_sig: Signal<PosDistType>) -> Vec<InputData> {
     match &*pos_dist_type_sig.read() {
         PosDistType::Random(r) => RandomParam::to_input_data_vec(r, pos_dist_type_sig),

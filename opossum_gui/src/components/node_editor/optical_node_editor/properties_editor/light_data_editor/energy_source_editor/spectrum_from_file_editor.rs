@@ -4,7 +4,7 @@ use crate::components::node_editor::inputs::{
     InputParam, IntoInputData, IntoInputDataStrings, input_components::InputParamLabeledInput,
 };
 use dioxus::prelude::*;
-use opossum_backend::energy_data_builder::EnergyDataBuilder;
+use opossum_core::prelude::EnergyDataBuilder;
 use strum::EnumIter;
 
 #[component]

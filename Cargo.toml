@@ -40,7 +40,6 @@ serde_json = "1.0"
 strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
 tempfile = "3.23"
-tokio = { version = "1", features = ["process"] }
 uom = { version = "0.37", features = ["serde"] }
 utoipa = { version = "5.4", features = ["actix_extras", "uuid"] }
 uuid = { version = "1", features = ["v4", "fast-rng", "serde", "js"] }

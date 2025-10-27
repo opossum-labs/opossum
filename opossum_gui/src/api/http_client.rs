@@ -1,4 +1,4 @@
-use opossum_backend::error::ErrorResponse;
+use opossum_core::types::api_types::ErrorResponse;
 use reqwest::{Client, Response, header::ACCEPT};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;

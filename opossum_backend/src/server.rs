@@ -2,18 +2,19 @@
 
 use actix_cors::Cors;
 use actix_web::{
-    App, HttpResponse, HttpServer, ResponseError, dev::Server, middleware::Logger, web,
+    App, HttpResponse, HttpServer, dev::Server, http::StatusCode, middleware::Logger, web,
 };
+use opossum_core::types::api_types::ErrorResponse;
 use std::net::Ipv4Addr;
 use utoipa::OpenApi;
 use utoipa_actix_web::AppExt;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{app_state::AppState, error::ErrorResponse, pages, routes, sse_logger::init_logger};
+use crate::{app_state::AppState, pages, routes, sse_logger::init_logger};
 
 async fn not_found() -> HttpResponse {
     let error = ErrorResponse::not_found();
-    let mut res = actix_web::HttpResponseBuilder::new(error.status_code());
+    let mut res = actix_web::HttpResponseBuilder::new(StatusCode::NOT_FOUND);
     res.json(error)
 }
 

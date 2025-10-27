@@ -5,9 +5,7 @@ mod spectrum_from_file_editor;
 use dioxus::prelude::*;
 use energy_type_selection::EnergyDataBuilderSelector;
 use laser_line_editor::EnergyLaserLineEditor;
-use opossum_backend::{
-    energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder,
-};
+use opossum_core::prelude::{EnergyDataBuilder, LightDataBuilder};
 use spectrum_from_file_editor::SpectrumFromFileEditor;
 
 use crate::components::node_editor::optical_node_editor::properties_editor::use_update_signal_with_reactive_prop;

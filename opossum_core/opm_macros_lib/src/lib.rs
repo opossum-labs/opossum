@@ -38,7 +38,7 @@ pub fn derive_opm_node(input: TokenStream) -> TokenStream {
     let attrs = struct_input
         .attrs
         .iter()
-        .find(|a| a.path.is_ident("opm_node") && a.style == AttrStyle::Outer);
+        .find(|a| a.path().is_ident("opm_node") && a.style == AttrStyle::Outer);
     if let Some(attr) = attrs {
         let args: LitStr = attr.parse_args().unwrap();
         let arg = args.value();

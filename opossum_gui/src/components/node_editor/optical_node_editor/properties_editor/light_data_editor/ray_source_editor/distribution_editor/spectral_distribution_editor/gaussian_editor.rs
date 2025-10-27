@@ -1,6 +1,10 @@
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
-use opossum_backend::{Gaussian, SpecDistType, nanometer, try_f64_to_usize};
+use opossum_core::{
+    nanometer,
+    spectral_distribution::{Gaussian, SpecDistType},
+    utils::try_f64_to_usize,
+};
 use strum::EnumIter;
 use uom::si::length::nanometer;
 

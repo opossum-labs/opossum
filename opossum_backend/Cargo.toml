@@ -25,7 +25,6 @@ nalgebra.workspace = true
 ron.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio.workspace = true
 uom.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
@@ -37,3 +36,4 @@ parking_lot = "0.12"
 tokio-stream = "0.1"
 utoipa-actix-web = "0.1"
 utoipa-swagger-ui = { version = "9", features = ["actix-web", "vendored"] }
+tokio = { version = "1", features = ["process"] }

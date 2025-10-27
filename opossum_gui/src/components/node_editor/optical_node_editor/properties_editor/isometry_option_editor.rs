@@ -8,7 +8,11 @@ use crate::{
     },
 };
 use dioxus::prelude::*;
-use opossum_backend::{AlignmentAxis, Isometry, RotationAxis, TranslationAxis, degree, millimeter};
+use opossum_core::{
+    degree, millimeter,
+    prelude::Isometry,
+    utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis},
+};
 use strum::IntoEnumIterator;
 use uom::si::{angle::degree, length::millimeter};
 
