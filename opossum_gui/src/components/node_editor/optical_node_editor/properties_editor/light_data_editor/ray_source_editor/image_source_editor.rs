@@ -7,10 +7,8 @@ use crate::components::{
     },
 };
 use dioxus::prelude::*;
-use opossum_backend::{
-    degree, joule, micrometer, nanometer,
-    ray_data_builder::{ImageSrc, RayDataBuilder},
-};
+use opossum_core::prelude::{ImageSrc, RayDataBuilder};
+use opossum_core::{degree, joule, micrometer, nanometer};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::{
     angle::degree,

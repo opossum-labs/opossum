@@ -10,7 +10,7 @@ use crate::components::node_editor::optical_node_editor::general_editor::General
 use crate::components::node_editor::optical_node_editor::properties_editor::PropertiesEditor;
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_backend::{Isometry, Properties};
+use opossum_core::prelude::{Isometry, Properties};
 use uuid::Uuid;
 
 #[component]

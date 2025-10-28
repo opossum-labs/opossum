@@ -1,7 +1,3 @@
-use approx::relative_ne;
-use dioxus::prelude::*;
-use opossum_backend::{Property, Proptype};
-
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
@@ -9,6 +5,9 @@ use crate::{
         optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
+use approx::relative_ne;
+use dioxus::prelude::*;
+use opossum_core::prelude::{Property, Proptype};
 
 #[component]
 pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Into<Proptype> + 'static>(

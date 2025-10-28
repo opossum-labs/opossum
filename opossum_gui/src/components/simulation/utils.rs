@@ -1,4 +1,4 @@
-use opossum_backend::{OpmResult, OpossumError};
+use opossum_core::prelude::*;
 use std::{env, path::PathBuf};
 
 pub fn find_cli_executable() -> OpmResult<PathBuf> {

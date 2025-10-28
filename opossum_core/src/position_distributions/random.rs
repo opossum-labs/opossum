@@ -9,7 +9,6 @@ use crate::{
 use nalgebra::{Point2, Point3, point};
 use num::Zero;
 use opm_macros_lib::EnsureValidated;
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
@@ -138,12 +137,12 @@ impl Default for Random {
 
 impl PositionDistribution for Random {
     fn generate(&self) -> Vec<nalgebra::Point3<Length>> {
-        let nr_of_points = *self.nr_of_points.get();
-        let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_points);
-        let mut rng = rand::rng();
-        for _ in 0..nr_of_points {
-            let point_x = self.side_length_x() * rng.random_range(-1.0..1.0);
-            let point_y = self.side_length_y() * rng.random_range(-1.0..1.0);
+        let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_points());
+        for _ in 0..self.nr_of_points() {
+            let rand_x = fastrand::f64().mul_add(2.0, -1.0);
+            let rand_y = fastrand::f64().mul_add(2.0, -1.0);
+            let point_x = self.side_length_x() * rand_x;
+            let point_y = self.side_length_y() * rand_y;
             points.push(point![point_x, point_y, Length::zero()]);
         }
         points

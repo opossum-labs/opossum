@@ -32,7 +32,7 @@ use crate::components::node_editor::{
     },
 };
 use dioxus::prelude::*;
-use opossum_backend::{Properties, Property, Proptype};
+use opossum_core::prelude::{Properties, Property, Proptype};
 
 #[component]
 pub fn PropertiesEditor(node_properties_sig: Signal<Properties>) -> Element {

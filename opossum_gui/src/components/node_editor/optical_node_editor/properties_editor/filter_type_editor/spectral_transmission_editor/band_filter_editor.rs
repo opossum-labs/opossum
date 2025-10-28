@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use opossum_backend::{BandFilter, BandFilterType, SpectralFilterBuilder, nanometer};
+use opossum_core::prelude::{BandFilter, BandFilterType, SpectralFilterBuilder, nanometer};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::length::nanometer;
 

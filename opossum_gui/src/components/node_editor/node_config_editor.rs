@@ -5,7 +5,8 @@ use crate::components::scenery_editor::{GraphStore, GraphStoreAction, NodeType};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use opossum_backend::{AnalyzerType, Fluence, Isometry, Properties, Proptype};
+use opossum_core::nodes::fluence_detector::Fluence;
+use opossum_core::prelude::{AnalyzerType, Isometry, Properties, Proptype};
 use uuid::Uuid;
 
 #[allow(dead_code)]
@@ -19,6 +20,8 @@ pub enum NodeChangeAction {
     Isometry(Option<Isometry>),
     AnalyzerType(AnalyzerType),
 }
+
+impl NodeChangeAction {}
 
 #[component]
 pub fn NodeConfigEditor(

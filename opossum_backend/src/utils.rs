@@ -1,7 +1,7 @@
 use opossum_core::nodes::NodeAttr;
 use serde_json::Value;
 
-use crate::error::ErrorResponse;
+use crate::error::BackEndErrorResponse;
 
 /// Update a given [`NodeAttr`] by a JSON object.
 ///
@@ -13,10 +13,10 @@ use crate::error::ErrorResponse;
 pub fn update_node_attr(
     node_attr: &NodeAttr,
     updates: &serde_json::Value,
-) -> Result<NodeAttr, ErrorResponse> {
+) -> Result<NodeAttr, BackEndErrorResponse> {
     let orig_uuid = node_attr.uuid();
     let mut node_attr_json = serde_json::to_value(node_attr).map_err(|e| {
-        ErrorResponse::new(
+        BackEndErrorResponse::new(
             400,
             "serialization error",
             &format!("error serializing NodeAttr: {e}"),
@@ -24,7 +24,7 @@ pub fn update_node_attr(
     })?;
     update_json(&mut node_attr_json, updates)?;
     let mut updated_node_attr: NodeAttr = serde_json::from_value(node_attr_json).map_err(|e| {
-        ErrorResponse::new(
+        BackEndErrorResponse::new(
             400,
             "deserialization error",
             &format!("error deserializing NodeAttr: {e}"),
@@ -35,7 +35,10 @@ pub fn update_node_attr(
     Ok(updated_node_attr)
 }
 
-fn update_json(original: &mut Value, updates: &serde_json::Value) -> Result<(), ErrorResponse> {
+fn update_json(
+    original: &mut Value,
+    updates: &serde_json::Value,
+) -> Result<(), BackEndErrorResponse> {
     if let (Value::Object(orig), Value::Object(upd)) = (original, updates) {
         for (key, value) in upd {
             if value.is_object() && orig.get(key).is_some_and(Value::is_object) {
@@ -46,7 +49,7 @@ fn update_json(original: &mut Value, updates: &serde_json::Value) -> Result<(), 
         }
         Ok(())
     } else {
-        Err(ErrorResponse::new(
+        Err(BackEndErrorResponse::new(
             400,
             "conversion error",
             "no JSON object found",

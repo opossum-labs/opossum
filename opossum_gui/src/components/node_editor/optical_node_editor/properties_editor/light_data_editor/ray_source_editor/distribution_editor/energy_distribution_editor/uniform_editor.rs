@@ -3,7 +3,8 @@ use crate::components::{
     node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
-use opossum_backend::{EnergyDistType, EnergyDistribution, UniformDist, joule};
+use opossum_core::energy_distributions::{EnergyDistType, EnergyDistribution, UniformDist};
+use opossum_core::joule;
 use strum::EnumIter;
 use uom::si::energy::joule;
 

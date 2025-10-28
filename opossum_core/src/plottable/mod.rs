@@ -16,16 +16,19 @@ use nalgebra::{
     DMatrix, DVector, DVectorView, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3, Vector3,
 };
 use num::ToPrimitive;
+#[cfg(not(target_arch = "wasm32"))]
+use plotters::prelude::SVGBackend;
 use plotters::{
     backend::DrawingBackend,
     backend::PixelFormat,
     chart::{ChartBuilder, ChartContext, LabelAreaPosition, MeshStyle, SeriesLabelPosition},
     coord::{Shift, cartesian::Cartesian2d, ranged3d::Cartesian3d, types::RangedCoordf64},
     element::{Circle, PathElement, Polygon, Rectangle},
-    prelude::{BitMapBackend, DrawingArea, IntoDrawingArea, SVGBackend},
+    prelude::{BitMapBackend, DrawingArea, IntoDrawingArea},
     series::LineSeries,
     style::{BLACK, Color, IntoFont, RGBAColor, ShapeStyle, WHITE},
 };
+
 use std::{collections::HashMap, env::current_dir, f64::consts::PI, path::Path, path::PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -101,19 +104,23 @@ impl PlotType {
 
         Ok(self)
     }
-
     /// This method creates a plot
+    ///
     /// # Attributes
     /// - `plt_series`: vector of plot series. See [`PlotSeries`]
     /// # Returns
-    /// This method returns an [`OpmResult<Option<RgbImage>>`]. It is None if a new file (such as svg, png, bmp or jpg) is created. It is Some(RgbImage) if the image is written to a buffer
+    /// This method returns an [`OpmResult<Option<RgbImage>>`]. It is None if a new file (such as svg, png, bmp or jpg) is created.
+    /// It is Some(RgbImage) if the image is written to a buffer.
+    ///
     /// # Errors
+    ///
     /// This method throws an error if
     /// - some plot parameters contradict each other
     /// - the file path can not be extracted
     /// - the plotting backend can not be extracted
     /// - the plot can not be created inside the `create_plot()` method
     /// - the image buffer is too small
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn plot(&self, plt_series: &Vec<PlotSeries>) -> OpmResult<Option<RgbImage>> {
         let params = self.get_plot_params();
         params.check_backend_file_ext_compatibility()?;
@@ -152,7 +159,54 @@ impl PlotType {
             }
         }
     }
+    /// This method creates a plot
+    ///
+    /// # Attributes
+    /// - `plt_series`: vector of plot series. See [`PlotSeries`]
+    /// # Returns
+    /// This method returns an [`OpmResult<Option<RgbImage>>`]. It is None if a new file (such as svg, png, bmp or jpg) is created.
+    /// It is Some(RgbImage) if the image is written to a buffer.
+    ///
+    /// # Errors
+    ///
+    /// This method throws an error if
+    /// - some plot parameters contradict each other
+    /// - the file path can not be extracted
+    /// - the plotting backend can not be extracted
+    /// - the plot can not be created inside the `create_plot()` method
+    /// - the image buffer is too small
+    #[cfg(target_arch = "wasm32")]
+    pub fn plot(&self, plt_series: &Vec<PlotSeries>) -> OpmResult<Option<RgbImage>> {
+        let params = self.get_plot_params();
+        // No need to check file/path compatibility on WASM
+        let mut plot = Plot::new(plt_series, params);
+        if plot.auto_size {
+            plot.auto_size();
+        }
+        plot.add_margin_to_figure_size(self);
 
+        match params.get_backend()? {
+        PltBackEnd::Buf => {
+            // This is the ONLY arm that should work on WASM
+            let mut image_buffer = vec![
+                0;
+                (plot.fig_size.0 * plot.fig_size.1) as usize
+                    * plotters::backend::RGBPixel::PIXEL_SIZE
+            ];
+            {
+                let backend = BitMapBackend::with_buffer(&mut image_buffer, plot.fig_size)
+                    .into_drawing_area();
+                self.create_plot(&backend, &mut plot);
+            }
+            let img = RgbImage::from_raw(plot.fig_size.0, plot.fig_size.1, image_buffer)
+                .ok_or_else(|| OpossumError::Other("image buffer size too small".into()))?;
+            Ok(Some(img))
+        }
+        PltBackEnd::Bitmap | PltBackEnd::SVG => Err(OpossumError::Other(
+            "File-based plotting (Bitmap/SVG) is not supported in a WASM environment. Use 'PltBackEnd::Buf' instead.".into(),
+        )),
+    }
+    }
     fn draw_line_2d<'a, 'b, T: DrawingBackend + 'a + 'b>(
         chart: &'a mut ChartContext<'b, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
         x: &DVectorView<'_, f64>,
@@ -2088,7 +2142,6 @@ impl PlotParameters {
             )))
         }
     }
-
     /// This method checks if compatibility between the chosen [`PltBackEnd`] and the file extension
     /// # Attributes
     /// - `path_fname`: name of the file
@@ -2096,6 +2149,7 @@ impl PlotParameters {
     /// # Returns
     /// Returns a tuple consisting of a boolean and a potential error message
     /// The boolean is true if the backend and fname are compatible. False if not
+    #[cfg(not(target_arch = "wasm32"))]
     fn check_backend_file_ext_compatibility(&self) -> OpmResult<()> {
         let backend = self.get_backend()?;
         let path_fname = self.get_fname()?;

@@ -1,8 +1,7 @@
 //! Scenery api calls
 
 use crate::HTTP_API_CLIENT;
-
-use opossum_backend::{AnalyzerInfo, scenery::NewAnalyzerInfo};
+use opossum_core::{opm_document::AnalyzerInfo, types::api_types::NewAnalyzerInfo};
 use uuid::Uuid;
 
 /// Send a request to delete the current scenery.

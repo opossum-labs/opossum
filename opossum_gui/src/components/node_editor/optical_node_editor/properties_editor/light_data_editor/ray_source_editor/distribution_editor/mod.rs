@@ -4,7 +4,7 @@ mod position_distribution_editor;
 mod spectral_distribution_editor;
 
 use energy_distribution_editor::EnergyDistributionEditor;
-use opossum_backend::ray_data_builder::RayDataBuilder;
+use opossum_core::prelude::RayDataBuilder;
 use position_distribution_editor::PositionDistributionEditor;
 use spectral_distribution_editor::SpectralDistributionEditor;
 

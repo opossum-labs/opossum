@@ -21,7 +21,7 @@ use dioxus::{
     },
     prelude::*,
 };
-use opossum_backend::{AnalyzerType, nodes::NewRefNode};
+use opossum_core::{prelude::*, types::api_types::NewRefNode};
 use std::{path::PathBuf, rc::Rc, time::Instant};
 use uuid::Uuid;
 #[derive(Debug)]

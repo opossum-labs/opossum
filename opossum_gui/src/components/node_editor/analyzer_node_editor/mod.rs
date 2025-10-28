@@ -7,10 +7,11 @@ use crate::components::node_editor::node_config_editor::NodeChangeAction;
 use crate::components::node_editor::optical_node_editor::general_editor::NodeTypeInput;
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_backend::{
-    AnalyzerType, DefaultFromName, FluenceEstimator, GhostFocusConfig, MissedSurfaceStrategy,
-    RayTraceConfig, picojoule,
-};
+use opossum_core::analyzers::raytrace::MissedSurfaceStrategy;
+use opossum_core::picojoule;
+use opossum_core::prelude::*;
+use opossum_core::surface::hit_map::fluence_estimator::FluenceEstimator;
+use opossum_core::utils::default_from_name::DefaultFromName;
 use uom::si::energy::picojoule;
 use uuid::Uuid;
 

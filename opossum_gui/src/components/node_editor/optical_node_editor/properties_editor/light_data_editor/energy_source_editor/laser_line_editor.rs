@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use dioxus::prelude::*;
-use opossum_backend::{EnergyLaserLines, energy_data_builder::EnergyDataBuilder, joule, nanometer};
+use opossum_core::prelude::{EnergyDataBuilder, EnergyLaserLines, joule, nanometer};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::{energy::joule, length::nanometer};
 

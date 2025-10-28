@@ -17,7 +17,7 @@ use dioxus::{
     html::{geometry::euclid::default::Point2D, input_data::MouseButton},
     prelude::*,
 };
-use opossum_backend::{PortType, nodes::ConnectInfo};
+use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 
 pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl FnMut(WheelEvent) {
     let editor_status = use_context::<Signal<EditorState>>();

@@ -3,7 +3,11 @@ use crate::components::{
     node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
-use opossum_backend::{FibonacciRectangle, PosDistType, millimeter, try_f64_to_usize};
+use opossum_core::{
+    millimeter,
+    position_distributions::{FibonacciRectangle, PosDistType},
+    utils::try_f64_to_usize,
+};
 use strum::EnumIter;
 use uom::si::length::millimeter;
 

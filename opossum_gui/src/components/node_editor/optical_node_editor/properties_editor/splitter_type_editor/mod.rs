@@ -1,6 +1,3 @@
-use dioxus::prelude::*;
-use opossum_backend::{DefaultFromName, Property, SplittingConfigBuilder};
-
 use crate::components::node_editor::{
     accordion::ElementList,
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
@@ -8,6 +5,10 @@ use crate::components::node_editor::{
         filter_type_editor::{ConstantFilterTypeEditor, SpectralFilterTypeEditor},
         use_set_node_change_property,
     },
+};
+use dioxus::prelude::*;
+use opossum_core::{
+    nodes::SplittingConfigBuilder, prelude::Property, utils::default_from_name::DefaultFromName,
 };
 
 #[component]

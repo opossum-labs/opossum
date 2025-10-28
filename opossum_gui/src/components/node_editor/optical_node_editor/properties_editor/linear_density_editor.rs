@@ -4,7 +4,7 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::num_per_mm;
+use opossum_core::num_per_mm;
 use uom::si::{f64::LinearNumberDensity, linear_number_density::per_millimeter};
 
 #[component]

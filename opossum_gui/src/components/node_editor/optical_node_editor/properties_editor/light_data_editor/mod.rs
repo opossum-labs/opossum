@@ -11,7 +11,7 @@ use crate::components::node_editor::{
     },
 };
 use light_data_builder_selection::SourceLightDataBuilderSelector;
-use opossum_backend::light_data_builder::LightDataBuilder;
+use opossum_core::prelude::LightDataBuilder;
 use ray_source_editor::RaySourceEditor;
 
 use dioxus::prelude::*;

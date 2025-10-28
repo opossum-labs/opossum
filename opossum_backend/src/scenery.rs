@@ -3,7 +3,7 @@ use std::{path::PathBuf, str::FromStr};
 
 use crate::{
     app_state::AppState,
-    error::ErrorResponse,
+    error::BackEndErrorResponse,
     nodes::{self},
     sse_logger::SENDER,
 };
@@ -20,6 +20,7 @@ use opossum_core::{
     analyzers::AnalyzerType,
     opm_document::{AnalyzerInfo, OpmDocument},
     optic_node::OpticNode,
+    types::api_types::NewAnalyzerInfo,
     utils::file_utils::recreate_data_dir,
 };
 use serde::{Deserialize, Serialize};
@@ -115,33 +116,7 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
         .collect();
     web::Json(analyzers)
 }
-#[derive(Serialize, Deserialize, ToSchema, Clone)]
-pub struct NewAnalyzerInfo {
-    pub analyzer_type: AnalyzerType,
-    pub gui_position: (f64, f64),
-}
 
-impl From<AnalyzerInfo> for NewAnalyzerInfo {
-    fn from(value: AnalyzerInfo) -> Self {
-        let pos = value
-            .gui_position()
-            .map_or_else(|| (0., 0.), |p| (p.x, p.y));
-        Self {
-            analyzer_type: value.analyzer_type().clone(),
-            gui_position: pos,
-        }
-    }
-}
-
-impl NewAnalyzerInfo {
-    #[must_use]
-    pub const fn new(analyzer_type: AnalyzerType, gui_position: (f64, f64)) -> Self {
-        Self {
-            analyzer_type,
-            gui_position,
-        }
-    }
-}
 #[utoipa::path(tag = "scenery", 
     responses((status = 200, description = "Analyzer", body = AnalyzerType))
 )]
@@ -152,7 +127,7 @@ impl NewAnalyzerInfo {
 async fn get_analyzer(
     data: web::Data<AppState>,
     id: web::Path<Uuid>,
-) -> Result<Json<AnalyzerInfo>, ErrorResponse> {
+) -> Result<Json<AnalyzerInfo>, BackEndErrorResponse> {
     let analyzer_info = data.document.lock().analyzer(*id)?;
     Ok(Json(analyzer_info))
 }
@@ -188,7 +163,7 @@ async fn add_analyzer(
 async fn delete_analyzer(
     data: web::Data<AppState>,
     index: web::Path<Uuid>,
-) -> Result<Json<Uuid>, ErrorResponse> {
+) -> Result<Json<Uuid>, BackEndErrorResponse> {
     let uuid = index.into_inner();
     data.document.lock().remove_analyzer(uuid)?;
     Ok(Json(uuid))
@@ -200,7 +175,7 @@ async fn delete_analyzer(
     responses((status = 200, description = "OPM file", body = String, content_type=RON_MEDIA_TYPE))
 )]
 #[get("/opmfile")]
-async fn get_opmfile(data: web::Data<AppState>) -> Result<impl Responder, ErrorResponse> {
+async fn get_opmfile(data: web::Data<AppState>) -> Result<impl Responder, BackEndErrorResponse> {
     let document = data.document.lock();
     Ok(HttpResponse::Ok()
         .content_type(RON_MEDIA_TYPE)
@@ -221,7 +196,7 @@ async fn get_opmfile(data: web::Data<AppState>) -> Result<impl Responder, ErrorR
 async fn post_opmfile(
     data: web::Data<AppState>,
     opm_file_string: String,
-) -> Result<&'static str, ErrorResponse> {
+) -> Result<&'static str, BackEndErrorResponse> {
     let mut document = data.document.lock();
     *document = OpmDocument::from_string(&opm_file_string)?;
     drop(document);
