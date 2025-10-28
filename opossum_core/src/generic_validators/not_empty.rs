@@ -2,8 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{OpmResult, OpossumError},
-    generic_validators::ValidateVec,
-    impl_validator,
+    generic_validators::{Validate, ValidateVec},
 };
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
@@ -19,7 +18,15 @@ impl<T: Clone> ValidateVec<T> for AllNotEmpty {
     }
 }
 
-impl_validator!(AllNotEmpty, |_self, v: &String| !v.is_empty(), String);
+impl Validate<String> for AllNotEmpty {
+    fn validate(&self, value: &String) -> OpmResult<()> {
+        if value.is_empty() {
+            Err(OpossumError::Other("String must not empty!".to_string()))
+        } else {
+            Ok(())
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

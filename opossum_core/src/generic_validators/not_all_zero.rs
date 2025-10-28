@@ -1,229 +1,121 @@
-use crate::generic_validators::{Validate, ValidateVec};
-use crate::prelude::{OpmResult, OpossumError};
-use crate::{impl_validator, impl_vec_validator};
+use crate::{
+    error::{OpmResult, OpossumError},
+    generic_validators::{Target, Validate, ValidateVec, numlike::NumLike},
+};
 use nalgebra::Point2;
-use num::Zero;
+use opm_macros_lib::ValidateNumeric;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Angle, Energy, Length};
+use std::ops::Range;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[rule(
+    normal,
+    message = "At least one value must be non-zero!",
+    target = "both",
+    mode = "any"
+)]
 pub struct NotAllZero;
 
-impl Validate<Vec<(Length, f64)>> for NotAllZero {
-    fn validate(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
-        if value_vec
-            .iter()
-            .any(|val| !val.0.is_zero() || !val.1.is_zero())
-        {
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "At least one entry must be non-zero!".to_string(),
-            ))
-        }
-    }
-}
-
-impl ValidateVec<(Length, f64)> for YNotAllZero {
-    fn validate_vec(&self, value_vec: &[(Length, f64)]) -> OpmResult<()> {
-        if value_vec.iter().any(|val| !val.1.is_zero()) {
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "At least one y-entry must be non-zero!".to_string(),
-            ))
-        }
-    }
-}
-
-impl_vec_validator!(
-    YNotAllZero,
-    |_, v: &[(Length, Energy)]| v.iter().any(|val| !val.1.is_zero()),
-    (Length, Energy)
-);
-
-impl_vec_validator!(
-    YNotAllZero,
-    |_, v: &[(f64, f64)]| v.iter().any(|val| !val.1.is_zero()),
-    (f64, f64)
-);
-
-impl ValidateVec<(Length, f64)> for XNotAllZero {
-    fn validate_vec(&self, value_vec: &[(Length, f64)]) -> OpmResult<()> {
-        if value_vec.iter().any(|val| !val.0.is_zero()) {
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "At least one x-entry must be non-zero!".to_string(),
-            ))
-        }
-    }
-}
-
-impl_validator!(NotAllZero, |_self, v: &usize| !v.is_zero(), usize);
-impl_validator!(NotAllZero, |_self, v: &i32| !v.is_zero(), i32);
-impl_validator!(NotAllZero, |_self, v: &f64| !v.is_zero(), f64);
-impl_validator!(NotAllZero, |_self, v: &Length| !v.is_zero(), Length);
-impl_validator!(NotAllZero, |_self, v: &Angle| !v.is_zero(), Angle);
-impl_validator!(NotAllZero, |_self, v: &Energy| !v.is_zero(), Energy);
-impl_validator!(
-    NotAllZero,
-    |_self, v: &Point2<usize>| !(v.x.is_zero() && v.y.is_zero()),
-    Point2<usize>
-);
-impl_validator!(
-    NotAllZero,
-    |_self, v: &Point2<i32>| !(v.x.is_zero() && v.y.is_zero()),
-    Point2<i32>
-);
-impl_validator!(
-    NotAllZero,
-    |_self, v: &Point2<f64>| !(v.x.is_zero() && v.y.is_zero()),
-    Point2<f64>
-);
-impl_validator!(
-    NotAllZero,
-    |_self, v: &Point2<Length>| !(v.x.is_zero() && v.y.is_zero()),
-    Point2<Length>
-);
-
-impl_validator!(
-    NotAllZero,
-    |_self, v: &(usize, usize)| !(v.0.is_zero() && v.1.is_zero()),
-    (usize, usize)
-);
-impl_validator!(
-    NotAllZero,
-    |_self, v: &(i32, i32)| !(v.0.is_zero() && v.1.is_zero()),
-    (i32, i32)
-);
-impl_validator!(
-    NotAllZero,
-    |_self, v: &(f64, f64)| !(v.0.is_zero() && v.1.is_zero()),
-    (f64, f64)
-);
-impl_validator!(
-    NotAllZero,
-    |_self, v: &(Length, Length)| !(v.0.is_zero() && v.1.is_zero()),
-    (Length, Length)
-);
-
-impl_validator!(
-    NotAllZero,
-    |_self, v: &Vec<Length>| v.iter().any(|val| !val.is_zero()),
-    Vec<Length>
-);
-
-impl_validator!(
-    NotAllZero,
-    |_self, v: &Vec<f64>| v.iter().any(|val| !val.is_zero()),
-    Vec<f64>
-);
-
-impl_validator!(
-    NotAllZero,
-    |_self, v: &Vec<Angle>| v.iter().any(|val| !val.is_zero()),
-    Vec<Angle>
-);
-
-impl_validator!(
-    NotAllZero,
-    |_self, v: &Vec<Energy>| v.iter().any(|val| !val.is_zero()),
-    Vec<Energy>
-);
-
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
-pub struct YNotAllZero;
-
-impl_validator!(
-    YNotAllZero,
-    |_self, v: &Point2<usize>| !v.y.is_zero(),
-    Point2<usize>
-);
-impl_validator!(
-    YNotAllZero,
-    |_self, v: &Point2<i32>| !v.y.is_zero(),
-    Point2<i32>
-);
-impl_validator!(
-    YNotAllZero,
-    |_self, v: &Point2<f64>| !v.y.is_zero(),
-    Point2<f64>
-);
-impl_validator!(
-    YNotAllZero,
-    |_self, v: &Point2<Length>| !v.y.is_zero(),
-    Point2<Length>
-);
-
-impl_validator!(
-    YNotAllZero,
-    |_self, v: &Vec<Point2<Length>>| v.iter().any(|val| !val.y.is_zero()),
-    Vec<Point2<Length>>
-);
-
-impl_validator!(
-    YNotAllZero,
-    |_self, v: &Vec<Point2<f64>>| v.iter().any(|val| !val.y.is_zero()),
-    Vec<Point2<f64>>
-);
-
-impl_validator!(
-    YNotAllZero,
-    |_self, v: &Vec<Point2<Angle>>| v.iter().any(|val| !val.y.is_zero()),
-    Vec<Point2<Angle>>
-);
-
-impl_validator!(
-    YNotAllZero,
-    |_self, v: &Vec<Point2<Energy>>| v.iter().any(|val| !val.y.is_zero()),
-    Vec<Point2<Energy>>
-);
-
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[rule(
+    normal,
+    message = "At least one x-value must be normal!",
+    target = "x",
+    mode = "any"
+)]
 pub struct XNotAllZero;
 
-impl_validator!(
-    XNotAllZero,
-    |_self, v: &Point2<usize>| !v.x.is_zero(),
-    Point2<usize>
-);
-impl_validator!(
-    XNotAllZero,
-    |_self, v: &Point2<i32>| !v.x.is_zero(),
-    Point2<i32>
-);
-impl_validator!(
-    XNotAllZero,
-    |_self, v: &Point2<f64>| !v.x.is_zero(),
-    Point2<f64>
-);
-impl_validator!(
-    XNotAllZero,
-    |_self, v: &Point2<Length>| !v.x.is_zero(),
-    Point2<Length>
-);
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[rule(
+    normal,
+    message = "At least one y-value must be normal!",
+    target = "y",
+    mode = "any"
+)]
+pub struct YNotAllZero;
 
-impl_validator!(
-    XNotAllZero,
-    |_self, v: &Vec<Point2<Length>>| v.iter().any(|val| !val.x.is_zero()),
-    Vec<Point2<Length>>
-);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generic_validators::Validate;
+    use nalgebra::Point2;
 
-impl_validator!(
-    XNotAllZero,
-    |_self, v: &Vec<Point2<f64>>| v.iter().any(|val| !val.x.is_zero()),
-    Vec<Point2<f64>>
-);
+    #[test]
+    fn test_not_all_zero_f64() {
+        let validator = NotAllZero;
 
-impl_validator!(
-    XNotAllZero,
-    |_self, v: &Vec<Point2<Angle>>| v.iter().any(|val| !val.x.is_zero()),
-    Vec<Point2<Angle>>
-);
+        let all_zero = [0.0, 0.0, 0.0];
+        let one_non_zero = [0.0, 1.0, 0.0];
 
-impl_validator!(
-    XNotAllZero,
-    |_self, v: &Vec<Point2<Energy>>| v.iter().any(|val| !val.x.is_zero()),
-    Vec<Point2<Energy>>
-);
+        assert!(validator.validate_vec(&one_non_zero).is_ok());
+        assert!(validator.validate_vec(&all_zero).is_err());
+    }
+
+    #[test]
+    fn test_not_all_zero_point2() {
+        let validator = NotAllZero;
+
+        let p_all_zero = Point2::new(0.0, 0.0);
+        let p_x_nonzero = Point2::new(1.0, 0.0);
+        let p_y_nonzero = Point2::new(0.0, -5.0);
+
+        assert!(validator.validate(&p_all_zero).is_err());
+        assert!(validator.validate(&p_x_nonzero).is_ok());
+        assert!(validator.validate(&p_y_nonzero).is_ok());
+    }
+
+    #[test]
+    fn test_not_all_zero_vec_point2() {
+        let validator = NotAllZero;
+
+        let v_all_zero = vec![Point2::new(0.0, 0.0), Point2::new(0.0, 0.0)];
+        let v_one_non_zero = vec![Point2::new(0.0, 0.0), Point2::new(2.0, 0.0)];
+
+        assert!(validator.validate_vec(&v_all_zero).is_err());
+        assert!(validator.validate_vec(&v_one_non_zero).is_ok());
+    }
+
+    #[test]
+    fn test_x_not_all_zero_point2() {
+        let validator = XNotAllZero;
+
+        let p_all_zero = Point2::new(0.0, 5.0);
+        let p_x_nonzero = Point2::new(1.0, 0.0);
+
+        assert!(validator.validate(&p_all_zero).is_err());
+        assert!(validator.validate(&p_x_nonzero).is_ok());
+    }
+
+    #[test]
+    fn test_y_not_all_zero_point2() {
+        let validator = YNotAllZero;
+
+        let p_all_zero = Point2::new(3.0, 0.0);
+        let p_y_nonzero = Point2::new(0.0, 1.0);
+
+        assert!(validator.validate(&p_all_zero).is_err());
+        assert!(validator.validate(&p_y_nonzero).is_ok());
+    }
+
+    #[test]
+    fn test_x_not_all_zero_vec_point2() {
+        let validator = XNotAllZero;
+
+        let v_all_zero = vec![Point2::new(0.0, 1.0), Point2::new(0.0, 2.0)];
+        let v_one_non_zero = vec![Point2::new(0.0, 1.0), Point2::new(3.0, 2.0)];
+
+        assert!(validator.validate_vec(&v_all_zero).is_err());
+        assert!(validator.validate_vec(&v_one_non_zero).is_ok());
+    }
+
+    #[test]
+    fn test_y_not_all_zero_vec_point2() {
+        let validator = YNotAllZero;
+
+        let v_all_zero = vec![Point2::new(1.0, 0.0), Point2::new(2.0, 0.0)];
+        let v_one_non_zero = vec![Point2::new(1.0, 0.0), Point2::new(2.0, 4.0)];
+
+        assert!(validator.validate_vec(&v_all_zero).is_err());
+        assert!(validator.validate_vec(&v_one_non_zero).is_ok());
+    }
+}

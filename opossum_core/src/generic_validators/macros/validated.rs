@@ -61,12 +61,7 @@ mod macro_tests {
         assert!(validated_macro.set(5.).is_ok());
 
         let invalid_value = -1.0;
-        assert!(
-            validated!(invalid_value, AllPositive && AllFinite)
-                .unwrap_err()
-                .to_string()
-                .contains("Value must satisfy")
-        );
+        assert!(validated!(invalid_value, AllPositive && AllFinite).is_err());
     }
 
     #[test]
@@ -85,12 +80,7 @@ mod macro_tests {
         assert!(validated_macro.set(value).is_ok());
 
         let invalid_value = Point2::new(0.0, 3.0); // zero in x
-        assert!(
-            validated!(invalid_value, AllPositive && AllFinite && AllNotZero)
-                .unwrap_err()
-                .to_string()
-                .contains("Value must satisfy")
-        );
+        assert!(validated!(invalid_value, AllPositive && AllFinite && AllNotZero).is_err());
     }
 
     #[test]
@@ -128,12 +118,7 @@ mod macro_tests {
         assert!(validated_macro.set(value).is_ok());
 
         let invalid_value = -0.0; // neither positive nor non-zero fails
-        assert!(
-            validated!(invalid_value, AllPositive || AllNotZero)
-                .unwrap_err()
-                .to_string()
-                .contains("Value must satisfy")
-        );
+        assert!(validated!(invalid_value, AllPositive || AllNotZero).is_err());
     }
 
     #[test]
@@ -152,12 +137,7 @@ mod macro_tests {
         assert!(validated_macro.set(value).is_ok());
 
         let invalid_value = -0.0;
-        assert!(
-            validated!(invalid_value, (AllPositive || AllNotZero) && AllFinite)
-                .unwrap_err()
-                .to_string()
-                .contains("Value must satisfy")
-        );
+        assert!(validated!(invalid_value, (AllPositive || AllNotZero) && AllFinite).is_err());
     }
 
     #[test]
@@ -176,12 +156,7 @@ mod macro_tests {
         assert!(validated_macro.set(value).is_ok());
 
         let invalid_value = Point2::new(0.0, -3.0);
-        assert!(
-            validated!(invalid_value, (AllPositive || AllNotZero) && AllFinite)
-                .unwrap_err()
-                .to_string()
-                .contains("Value must satisfy")
-        );
+        assert!(validated!(invalid_value, (AllPositive || AllNotZero) && AllFinite).is_err());
     }
 
     #[test]

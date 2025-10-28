@@ -9,6 +9,7 @@ mod not_all_zero;
 mod not_empty;
 mod not_nan;
 mod not_zero;
+mod numlike;
 mod only_one_zero;
 mod pass;
 mod path_valid;
@@ -24,11 +25,19 @@ pub use normal::{AllNormal, XNormal, YNormal};
 pub use not_all_zero::{NotAllZero, XNotAllZero, YNotAllZero};
 pub use not_empty::AllNotEmpty;
 pub use not_zero::AllNotZero;
+pub use numlike::NumLike;
 pub use only_one_zero::OnlyOneZero;
 pub use pass::Pass;
 pub use path_valid::PathValid;
 pub use positive::{AllPositive, XPositive, YPositive};
 pub use second_larger::SecondLarger;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target {
+    X,
+    Y,
+    Both,
+}
 
 /// Trait for types that can validate a value of type `T`.
 ///

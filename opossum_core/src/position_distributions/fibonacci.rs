@@ -4,7 +4,7 @@ use std::f64::consts::PI;
 
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero, ValidateTrait},
     millimeter, validated, validated_type,
 };
 
@@ -21,7 +21,7 @@ use uom::si::f64::Length;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct FibonacciRectangle {
     nr_of_points: validated_type!(usize, AllNotZero),
-    side_length: validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),
+    side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 impl FibonacciRectangle {
     /// Create a new [`FibonacciRectangle`] distribution generator.
@@ -139,7 +139,7 @@ impl Default for FibonacciRectangle {
     fn default() -> Self {
         Self {
             nr_of_points: validated!(1000_usize, AllNotZero).unwrap(),
-            side_length: validated!(millimeter!(5., 5.), OnlyOneZero && AllFinite && AllPositive)
+            side_length: validated!(millimeter!(5., 5.), NotAllZero && AllFinite && AllPositive)
                 .unwrap(),
         }
     }
@@ -173,7 +173,7 @@ impl From<FibonacciRectangle> for super::PosDistType {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct FibonacciEllipse {
     nr_of_points: validated_type!(usize, AllNotZero),
-    radius: validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),
+    radius: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 impl FibonacciEllipse {
     /// Create a new [`FibonacciEllipse`] distribution generator.
@@ -278,7 +278,7 @@ impl Default for FibonacciEllipse {
     fn default() -> Self {
         Self {
             nr_of_points: validated!(1000_usize, AllNotZero).unwrap(),
-            radius: validated!(millimeter!(5., 5.), OnlyOneZero && AllFinite && AllPositive)
+            radius: validated!(millimeter!(5., 5.), NotAllZero && AllFinite && AllPositive)
                 .unwrap(),
         }
     }

@@ -1,141 +1,38 @@
+use crate::{
+    error::{OpmResult, OpossumError},
+    generic_validators::{Target, Validate, ValidateVec, numlike::NumLike},
+};
+use nalgebra::Point2;
+use opm_macros_lib::ValidateNumeric;
+use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-use crate::generic_validators::{Validate, ValidateVec};
-use crate::impl_validator;
-use crate::prelude::*;
-use nalgebra::Point2;
-use serde::{Deserialize, Serialize};
-use uom::si::f64::{Angle, Energy, Length};
-
-impl Validate<Vec<(Length, f64)>> for AllNormal {
-    fn validate(&self, value_vec: &Vec<(Length, f64)>) -> OpmResult<()> {
-        if value_vec
-            .iter()
-            .all(|val| val.0.is_normal() && !val.1.is_normal())
-        {
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "All entries must be normal!".to_string(),
-            ))
-        }
-    }
-}
-
-impl ValidateVec<(Length, f64)> for XNormal {
-    fn validate_vec(&self, value_vec: &[(Length, f64)]) -> OpmResult<()> {
-        if value_vec.iter().all(|val| val.1.is_normal()) {
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "All x-entries must be normal!".to_string(),
-            ))
-        }
-    }
-}
-
-impl ValidateVec<(Length, f64)> for YNormal {
-    fn validate_vec(&self, value_vec: &[(Length, f64)]) -> OpmResult<()> {
-        if value_vec.iter().all(|val| val.1.is_normal()) {
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "All y-entries must be normal!".to_string(),
-            ))
-        }
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[rule(
+    normal,
+    message = "All value must be normal!",
+    target = "both",
+    mode = "all"
+)]
 pub struct AllNormal;
-impl_validator!(AllNormal, |_self, v: &f64| v.is_normal(), f64);
-impl_validator!(AllNormal, |_self, v: &Length| v.is_normal(), Length);
-impl_validator!(AllNormal, |_self, v: &Angle| v.is_normal(), Angle);
-impl_validator!(AllNormal, |_self, v: &Energy| v.is_normal(), Energy);
 
-impl_validator!(
-    AllNormal,
-    |_self, v: &Point2<f64>| v.x.is_normal() && v.y.is_normal(),
-    Point2<f64>
-);
-impl_validator!(
-    AllNormal,
-    |_self, v: &Point2<Length>| v.x.is_normal() && v.y.is_normal(),
-    Point2<Length>
-);
-
-impl_validator!(
-    AllNormal,
-    |_self, v: &(f64, f64)| v.0.is_normal() && v.1.is_normal(),
-    (f64, f64)
-);
-impl_validator!(
-    AllNormal,
-    |_self, v: &(Length, Length)| v.0.is_normal() && v.1.is_normal(),
-    (Length, Length)
-);
-
-impl_validator!(
-    AllNormal,
-    |_self, v: &Range<Length>| v.start.is_normal() && v.end.is_normal(),
-    Range<Length>
-);
-
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[rule(
+    normal,
+    message = "X-value must be normal!",
+    target = "x",
+    mode = "all"
+)]
 pub struct XNormal;
 
-impl_validator!(
-    XNormal,
-    |_self, v: &Point2<f64>| v.x.is_normal(),
-    Point2<f64>
-);
-impl_validator!(
-    XNormal,
-    |_self, v: &Point2<Length>| v.x.is_normal(),
-    Point2<Length>
-);
-
-impl_validator!(
-    XNormal,
-    |_self, v: &Vec<Point2<Length>>| v.iter().all(|val| val.x.is_normal()),
-    Vec<Point2<Length>>
-);
-
-impl_validator!(
-    XNormal,
-    |_self, v: &(Length, f64)| v.0.is_normal(),
-    (Length, f64)
-);
-
-impl_validator!(
-    XNormal,
-    |_self, v: &(Length, Energy)| v.0.is_normal(),
-    (Length, Energy)
-);
-
-impl_validator!(XNormal, |_self, v: &(f64, f64)| v.0.is_normal(), (f64, f64));
-
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[rule(
+    normal,
+    message = "Y-value must be normal!",
+    target = "y",
+    mode = "all"
+)]
 pub struct YNormal;
-
-impl_validator!(
-    YNormal,
-    |_self, v: &Point2<f64>| v.y.is_normal(),
-    Point2<f64>
-);
-impl_validator!(
-    YNormal,
-    |_self, v: &Point2<Length>| v.y.is_normal(),
-    Point2<Length>
-);
-
-impl_validator!(YNormal, |_self, v: &(f64, f64)| v.1.is_normal(), (f64, f64));
-
-impl_validator!(
-    YNormal,
-    |_self, v: &Vec<Point2<Length>>| v.iter().all(|val| val.y.is_normal()),
-    Vec<Point2<Length>>
-);
 
 #[cfg(test)]
 mod tests {
@@ -145,6 +42,89 @@ mod tests {
     use uom::si::angle::radian;
     use uom::si::f64::{Angle, Length};
     use uom::si::length::meter;
+
+    #[test]
+    fn test_all_normal_f64() {
+        let validator = AllNormal;
+
+        assert!(validator.validate(&1.0).is_ok());
+        assert!(validator.validate(&0.0).is_err());
+        assert!(validator.validate(&-42.0).is_ok());
+
+        assert!(validator.validate(&f64::INFINITY).is_err());
+        assert!(validator.validate(&f64::NEG_INFINITY).is_err());
+        assert!(validator.validate(&f64::NAN).is_err());
+    }
+
+    #[test]
+    fn test_x_normal_point2() {
+        let validator = XNormal;
+
+        let p_valid = Point2::new(1.0, f64::INFINITY);
+        let p_invalid = Point2::new(f64::NAN, 5.0);
+
+        assert!(validator.validate(&p_valid).is_ok());
+        assert!(validator.validate(&p_invalid).is_err());
+    }
+
+    #[test]
+    fn test_y_normal_point2() {
+        let validator = YNormal;
+
+        let p_valid = Point2::new(f64::INFINITY, 2.0);
+        let p_invalid = Point2::new(1.0, f64::NAN);
+
+        assert!(validator.validate(&p_valid).is_ok());
+        assert!(validator.validate(&p_invalid).is_err());
+    }
+
+    #[test]
+    fn test_all_normal_point2() {
+        let validator = AllNormal;
+
+        let p_valid = Point2::new(1.0, 2.0);
+        let p_invalid_x = Point2::new(f64::NAN, 2.0);
+        let p_invalid_y = Point2::new(1.0, f64::INFINITY);
+        let p_invalid_both = Point2::new(f64::NAN, f64::INFINITY);
+
+        assert!(validator.validate(&p_valid).is_ok());
+        assert!(validator.validate(&p_invalid_x).is_err());
+        assert!(validator.validate(&p_invalid_y).is_err());
+        assert!(validator.validate(&p_invalid_both).is_err());
+    }
+
+    #[test]
+    fn test_vec_all_normal() {
+        let validator = AllNormal;
+
+        let v_valid = vec![1.0, 2.0, 3.0];
+        let v_invalid = vec![1.0, f64::NAN, 3.0];
+
+        assert!(validator.validate_vec(&v_valid).is_ok());
+        assert!(validator.validate_vec(&v_invalid).is_err());
+    }
+
+    #[test]
+    fn test_vec_point2_xnormal() {
+        let validator = XNormal;
+
+        let v_valid = vec![Point2::new(1.0, f64::INFINITY), Point2::new(1.0, -42.0)];
+        let v_invalid = vec![Point2::new(f64::NAN, 5.0), Point2::new(1.0, 2.0)];
+
+        assert!(validator.validate_vec(&v_valid).is_ok());
+        assert!(validator.validate_vec(&v_invalid).is_err());
+    }
+
+    #[test]
+    fn test_vec_point2_ynormal() {
+        let validator = YNormal;
+
+        let v_valid = vec![Point2::new(f64::INFINITY, 1.0), Point2::new(-42.0, 1.0)];
+        let v_invalid = vec![Point2::new(1.0, f64::NAN), Point2::new(2.0, 3.0)];
+
+        assert!(validator.validate_vec(&v_valid).is_ok());
+        assert!(validator.validate_vec(&v_invalid).is_err());
+    }
 
     #[test]
     fn test_is_normal_f64() {

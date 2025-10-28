@@ -1,36 +1,49 @@
 use std::ops::Range;
 
-use crate::impl_validator;
+use crate::{
+    error::{OpmResult, OpossumError},
+    generic_validators::{NumLike, Validate},
+};
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::Length;
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
 pub struct SecondLarger;
 
-impl_validator!(SecondLarger, |_self, v: &(f64, f64)| v.0 < v.1, (f64, f64));
-impl_validator!(
-    SecondLarger,
-    |_self, v: &(Length, Length)| v.0 < v.1,
-    (Length, Length)
-);
+impl<T: NumLike> Validate<(T, T)> for SecondLarger {
+    fn validate(&self, val: &(T, T)) -> OpmResult<()> {
+        if val.0.smaller_than(&val.1) {
+            Ok(())
+        } else {
+            Err(OpossumError::Other(
+                "Second value must be larger than first!".into(),
+            ))
+        }
+    }
+}
+impl<T: NumLike + 'static> Validate<Point2<T>> for SecondLarger {
+    fn validate(&self, val: &Point2<T>) -> OpmResult<()> {
+        if val.x.smaller_than(&val.y) {
+            Ok(())
+        } else {
+            Err(OpossumError::Other(
+                "Second value must be larger than first!".into(),
+            ))
+        }
+    }
+}
 
-impl_validator!(
-    SecondLarger,
-    |_self, v: &Point2<f64>| v.x < v.y,
-    Point2<f64>
-);
-impl_validator!(
-    SecondLarger,
-    |_self, v: &Point2<Length>| v.x < v.y,
-    Point2<Length>
-);
-
-impl_validator!(
-    SecondLarger,
-    |_self, v: &Range<Length>| v.start < v.end,
-    Range<Length>
-);
+impl<T: NumLike> Validate<Range<T>> for SecondLarger {
+    fn validate(&self, val: &Range<T>) -> OpmResult<()> {
+        if val.start.smaller_than(&val.end) {
+            Ok(())
+        } else {
+            Err(OpossumError::Other(
+                "Second value must be larger than first!".into(),
+            ))
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

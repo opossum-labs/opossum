@@ -3,7 +3,7 @@
 use super::PositionDistribution;
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero, ValidateTrait},
     millimeter,
     utils::to_f64,
     validated, validated_type,
@@ -18,7 +18,7 @@ use uom::si::f64::Length;
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated)]
 pub struct Grid {
     nr_of_points: validated_type!(Point2<usize>, AllNotZero),
-    side_length: validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),
+    side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 
 impl Grid {
@@ -212,7 +212,7 @@ impl Default for Grid {
     fn default() -> Self {
         Self {
             nr_of_points: validated!(Point2::new(100_usize, 100_usize), AllNotZero).unwrap(),
-            side_length: validated!(millimeter!(5., 5.), OnlyOneZero && AllFinite && AllPositive)
+            side_length: validated!(millimeter!(5., 5.), NotAllZero && AllFinite && AllPositive)
                 .unwrap(),
         }
     }

@@ -3,7 +3,7 @@
 use super::PositionDistribution;
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, OnlyOneZero, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero, ValidateTrait},
     millimeter, validated, validated_type,
 };
 use nalgebra::{Point2, Point3, point};
@@ -17,7 +17,7 @@ use uom::si::f64::Length;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct Random {
     nr_of_points: validated_type!(usize, AllNotZero),
-    side_length: validated_type!(Point2<Length>, OnlyOneZero && AllFinite && AllPositive),
+    side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 
 impl Random {
@@ -130,7 +130,7 @@ impl Default for Random {
     fn default() -> Self {
         Self {
             nr_of_points: validated!(1000_usize, AllNotZero).unwrap(),
-            side_length: validated!(millimeter!(5., 5.), OnlyOneZero && AllFinite && AllPositive)
+            side_length: validated!(millimeter!(5., 5.), NotAllZero && AllFinite && AllPositive)
                 .unwrap(),
         }
     }
