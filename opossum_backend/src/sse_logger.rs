@@ -1,4 +1,4 @@
-use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
+use log::{Level, LevelFilter, Log, Metadata, Record};
 use std::{cell::RefCell, sync::Once};
 use tokio::sync::mpsc;
 
@@ -51,15 +51,10 @@ static INIT: Once = Once::new();
 /// # Panics
 ///
 /// Panics if the logger could not be initialized.
-///
-/// # Errors
-///
-/// This function will return an error if a logger could not be initialized.
-pub fn init_logger() -> Result<(), SetLoggerError> {
+pub fn init_logger() {
     INIT.call_once(|| {
         log::set_logger(&LOGGER)
             .map(|()| log::set_max_level(LevelFilter::Info))
             .expect("Failed to set logger");
     });
-    Ok(())
 }

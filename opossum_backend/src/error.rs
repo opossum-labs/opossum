@@ -11,6 +11,7 @@ impl BackEndErrorResponse {
     pub fn new(status: u16, category: &str, message: &str) -> Self {
         Self(ErrorResponse::new(status, category, message))
     }
+    #[allow(dead_code)] // this function is only used in a test, hence a false positive
     #[must_use]
     pub fn error_response(&self) -> ErrorResponse {
         self.0.clone()

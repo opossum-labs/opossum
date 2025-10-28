@@ -92,7 +92,11 @@ impl SpectrumFile {
 impl Default for SpectrumFile {
     fn default() -> Self {
         Self {
-            f_path: validated!(PathBuf::from("empty.csv"), PathValid::new(Some(vec!["csv"]))).unwrap(),
+            f_path: validated!(
+                PathBuf::from("empty.csv"),
+                PathValid::new(Some(vec!["csv"]))
+            )
+            .unwrap(),
         }
     }
 }
