@@ -19,6 +19,7 @@ mod dottable;
 pub mod energy_distributions;
 pub mod error;
 pub mod fluence_distributions;
+pub mod generic_validators;
 mod kde;
 mod light_flow;
 mod light_result;

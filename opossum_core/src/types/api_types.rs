@@ -116,10 +116,12 @@ impl NewRefNode {
             gui_position,
         }
     }
-    pub fn gui_position(&self) -> (f64, f64) {
+    #[must_use]
+    pub const fn gui_position(&self) -> (f64, f64) {
         self.gui_position
     }
-    pub fn referring_node(&self) -> Uuid {
+    #[must_use]
+    pub const fn referring_node(&self) -> Uuid {
         self.referring_node
     }
 }
@@ -193,10 +195,12 @@ impl NewNode {
             gui_position,
         }
     }
+    #[must_use]
     pub fn node_type(&self) -> &str {
         &self.node_type
     }
-    pub fn gui_position(&self) -> (f64, f64) {
+    #[must_use]
+    pub const fn gui_position(&self) -> (f64, f64) {
         self.gui_position
     }
 }

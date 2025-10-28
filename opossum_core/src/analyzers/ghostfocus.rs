@@ -789,7 +789,7 @@ mod test_rays_ghost_focus_history {
     use std::collections::HashMap;
 
     use approx::assert_relative_eq;
-    use nalgebra::{MatrixXx3, Vector3};
+    use nalgebra::{MatrixXx3, Vector3, point};
     use uom::si::f64::Length;
     use uuid::Uuid;
 
@@ -806,7 +806,7 @@ mod test_rays_ghost_focus_history {
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Grid::new((millimeter!(10.0), millimeter!(10.0)), (5, 4)).unwrap(),
+            &Grid::new(millimeter!(10.0, 10.0), point![5, 4]).unwrap(),
         )
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
@@ -841,7 +841,7 @@ mod test_rays_ghost_focus_history {
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Grid::new((millimeter!(10.0), millimeter!(10.0)), (5, 4)).unwrap(),
+            &Grid::new(millimeter!(10.0, 10.0), point![5, 4]).unwrap(),
         )
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
@@ -877,13 +877,13 @@ mod test_rays_ghost_focus_history {
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Grid::new((millimeter!(10.0), millimeter!(10.0)), (5, 4)).unwrap(),
+            &Grid::new(millimeter!(10.0, 10.0), point![5, 4]).unwrap(),
         )
         .unwrap();
         let rays2 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Grid::new((millimeter!(10.0), millimeter!(10.0)), (5, 4)).unwrap(),
+            &Grid::new(millimeter!(10.0, 10.0), point![5, 4]).unwrap(),
         )
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
@@ -992,7 +992,7 @@ mod test_rays_ghost_focus_history {
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Grid::new((millimeter!(10.0), millimeter!(10.0)), (5, 4)).unwrap(),
+            &Grid::new(millimeter!(10.0, 10.0), point![5, 4]).unwrap(),
         )
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();

@@ -17,7 +17,7 @@ pub use opossum_core::{
     error::{OpmResult, OpossumError},
     joule,
     lightdata::{
-        energy_data_builder::{self, EnergyLaserLines},
+        energy_data_builder::{self, EnergyLaserLines, SpectrumFile},
         light_data_builder, ray_data_builder,
     },
     micrometer, millimeter, nanometer,
@@ -45,6 +45,6 @@ pub use opossum_core::{
     utils::{
         default_from_name::DefaultFromName,
         geom_transformation::{AlignmentAxis, Isometry, RotationAxis, TranslationAxis},
-        math_utils::{to_f64, try_f64_to_usize},
+        math_utils::{to_f64, try_f64_to_u8, try_f64_to_usize},
     },
 };

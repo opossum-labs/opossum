@@ -6,6 +6,7 @@ pub mod uniform;
 use std::fmt::Display;
 
 pub use general_gaussian::General2DGaussian;
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 pub use uniform::UniformDist;
@@ -48,7 +49,7 @@ impl Default for EnergyDistType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Copy, EnsureValidated)]
 pub enum EnergyDistType {
     Uniform(UniformDist),
     General2DGaussian(general_gaussian::General2DGaussian),

@@ -36,8 +36,8 @@ pub fn EnergySourceEditor(
 pub fn EnergyDataEditor(energy_data_builder_sig: Signal<EnergyDataBuilder>) -> Element {
     match energy_data_builder_sig() {
         EnergyDataBuilder::Raw(_) => rsx! {},
-        EnergyDataBuilder::FromFile(path_buf) => rsx! {
-            SpectrumFromFileEditor { path_buf, energy_data_builder_sig }
+        EnergyDataBuilder::FromFile(spec_file) => rsx! {
+            SpectrumFromFileEditor { spec_file, energy_data_builder_sig }
         },
         EnergyDataBuilder::LaserLines(energy_laser_lines) => rsx! {
             EnergyLaserLineEditor { energy_laser_lines, energy_data_builder_sig }

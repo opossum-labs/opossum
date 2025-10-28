@@ -2,28 +2,31 @@
 use super::EnergyDistribution;
 use crate::{
     degree,
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
+    generic_validators::{AllFinite, AllNormal, AllNotZero, AllPositive, ValidateTrait},
     joule, millimeter,
     utils::math_distribution_functions::{
         general_2d_super_gaussian_point_elliptical, general_2d_super_gaussian_point_rectangular,
     },
+    validated, validated_type,
 };
 use kahan::KahanSummator;
 use nalgebra::Point2;
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     angle::radian,
-    energy::joule,
     f64::{Angle, Energy, Length},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct General2DGaussian {
-    total_energy: Energy,
-    mu_xy: Point2<Length>,
-    sigma_xy: Point2<Length>,
-    power: f64,
-    theta: Angle,
+    total_energy: validated_type!(Energy, AllNotZero && AllFinite && AllPositive),
+    mu_xy: validated_type!(Point2<Length>, AllFinite),
+    sigma_xy: validated_type!(Point2<Length>, AllNotZero && AllFinite && AllPositive),
+    power: validated_type!(f64, AllNormal && AllPositive),
+    theta: validated_type!(Angle, AllFinite),
+    #[validate(skip)]
     rectangular: bool,
 }
 impl General2DGaussian {
@@ -52,43 +55,17 @@ impl General2DGaussian {
         theta: Angle,
         rectangular: bool,
     ) -> OpmResult<Self> {
-        if !total_energy.get::<joule>().is_normal()
-            || total_energy.get::<joule>().is_sign_negative()
-        {
-            return Err(OpossumError::Other(
-                "Energy must be greater than zero finite!".into(),
-            ));
-        }
-        if !mu_xy.x.is_finite() || !mu_xy.y.is_finite() {
-            return Err(OpossumError::Other("Mean values must be finite!".into()));
-        }
-        if !sigma_xy.x.is_normal()
-            || !sigma_xy.y.is_normal()
-            || sigma_xy.x.is_sign_negative()
-            || sigma_xy.y.is_sign_negative()
-        {
-            return Err(OpossumError::Other(
-                "Standard deviations must be greater than zero and finite!".into(),
-            ));
-        }
-        if !power.is_finite() {
-            return Err(OpossumError::Other(
-                "Power of the distribution must be positive and finite!".into(),
-            ));
-        }
-        if !theta.is_finite() {
-            return Err(OpossumError::Other(
-                "Angle the distribution must be finite!".into(),
-            ));
-        }
-        Ok(Self {
-            total_energy,
-            mu_xy,
-            sigma_xy,
-            power,
-            theta,
-            rectangular,
-        })
+        let mut gaussian = Self::default();
+        gaussian.set_energy(total_energy)?;
+        gaussian.set_center_x(mu_xy.x)?;
+        gaussian.set_center_y(mu_xy.y)?;
+        gaussian.set_sigma_x(sigma_xy.x)?;
+        gaussian.set_sigma_y(sigma_xy.y)?;
+        gaussian.set_power(power)?;
+        gaussian.set_theta(theta)?;
+        gaussian.set_rectangular(rectangular);
+
+        Ok(gaussian)
     }
 
     /// Sets the total energy of this [`General2DGaussian`] distribution.
@@ -107,16 +84,9 @@ impl General2DGaussian {
     /// - `Err(OpossumError)` if the energy is invalid.
     ///
     /// # Errors
-    /// Returns an error if:
-    /// - The energy is not finite (e.g., NaN or infinite).
-    /// - The energy is zero or negative.
+    /// Returns an error if validation fails
     pub fn set_energy(&mut self, energy: Energy) -> OpmResult<()> {
-        if !energy.get::<joule>().is_normal() || energy.get::<joule>().is_sign_negative() {
-            return Err(OpossumError::Other(
-                "Energy must be greater than zero finite!".into(),
-            ));
-        }
-        self.total_energy = energy;
+        self.total_energy.set(energy)?;
         Ok(())
     }
 
@@ -126,7 +96,7 @@ impl General2DGaussian {
     /// An [`Energy`] value representing the total integrated energy of the distribution.
     #[must_use]
     pub const fn energy(&self) -> Energy {
-        self.total_energy
+        *self.total_energy.get()
     }
 
     /// Returns the center of the 2D Gaussian in the x-y plane.
@@ -135,23 +105,49 @@ impl General2DGaussian {
     /// A [`Point2<Length>`] representing the mean (μₓ, μᵧ) of the distribution.
     #[must_use]
     pub const fn center(&self) -> Point2<Length> {
-        self.mu_xy
+        *self.mu_xy.get()
+    }
+
+    /// Returns the x-coordinate of the center of the 2D Gaussian.
+    ///
+    /// # Returns
+    /// The X-coordinate as `Length` representing the mean (μₓ) of the distribution.
+    #[must_use]
+    pub fn center_x(&self) -> Length {
+        self.mu_xy.get().x
+    }
+
+    /// Returns the y-coordinate of the center of the 2D Gaussian.
+    ///
+    /// # Returns
+    /// The Y-coordinate as `Length` representing the mean (μᵧ) of the distribution.
+    #[must_use]
+    pub fn center_y(&self) -> Length {
+        self.mu_xy.get().y
     }
 
     /// Sets the x-coordinate of the center of the 2D Gaussian distribution.
     ///
     /// # Parameters
     /// - `x`: A [`Length`] value for the new μₓ (horizontal center).
-    pub fn set_center_x(&mut self, x: Length) {
-        self.mu_xy.x = x;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_center_x(&mut self, x: Length) -> OpmResult<()> {
+        self.mu_xy.set(Point2::new(x, self.center_y()))?;
+        Ok(())
     }
 
     /// Sets the y-coordinate of the center of the 2D Gaussian distribution.
     ///
     /// # Parameters
     /// - `y`: A [`Length`] value for the new μᵧ (vertical center).
-    pub fn set_center_y(&mut self, y: Length) {
-        self.mu_xy.y = y;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_center_y(&mut self, y: Length) -> OpmResult<()> {
+        self.mu_xy.set(Point2::new(self.center_x(), y))?;
+        Ok(())
     }
 
     /// Returns the standard deviation along the x and y axes.
@@ -160,23 +156,49 @@ impl General2DGaussian {
     /// A [`Point2<Length>`] containing the standard deviations (σₓ, σᵧ).
     #[must_use]
     pub const fn sigma(&self) -> Point2<Length> {
-        self.sigma_xy
+        *self.sigma_xy.get()
+    }
+
+    /// Returns the x standard deviation of the 2D Gaussian.
+    ///
+    /// # Returns
+    /// A `Length` representing the standard deviation (σₓ) of the distribution.
+    #[must_use]
+    pub fn sigma_x(&self) -> Length {
+        self.sigma_xy.get().x
+    }
+
+    /// Returns the y standard deviation of the 2D Gaussian.
+    ///
+    /// # Returns
+    /// A `Length` representing the standard deviation (σᵧ) of the distribution.
+    #[must_use]
+    pub fn sigma_y(&self) -> Length {
+        self.sigma_xy.get().y
     }
 
     /// Sets the standard deviation σₓ of the 2D Gaussian distribution.
     ///
     /// # Parameters
     /// - `x`: A [`Length`] value for the horizontal spread.
-    pub fn set_sigma_x(&mut self, x: Length) {
-        self.sigma_xy.x = x;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_sigma_x(&mut self, x: Length) -> OpmResult<()> {
+        self.sigma_xy.set(Point2::new(x, self.sigma_y()))?;
+        Ok(())
     }
 
     /// Sets the standard deviation σᵧ of the 2D Gaussian distribution.
     ///
     /// # Parameters
     /// - `y`: A [`Length`] value for the vertical spread.
-    pub fn set_sigma_y(&mut self, y: Length) {
-        self.sigma_xy.y = y;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_sigma_y(&mut self, y: Length) -> OpmResult<()> {
+        self.sigma_xy.set(Point2::new(self.sigma_x(), y))?;
+        Ok(())
     }
 
     /// Returns the normalized power scaling factor of the distribution.
@@ -187,15 +209,19 @@ impl General2DGaussian {
     /// A `f64` value representing the power multiplier.
     #[must_use]
     pub const fn power(&self) -> f64 {
-        self.power
+        *self.power.get()
     }
 
     /// Sets the normalized power scaling factor of the distribution.
     ///
     /// # Parameters
     /// - `power`: A `f64` value for the new intensity multiplier.
-    pub const fn set_power(&mut self, power: f64) {
-        self.power = power;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_power(&mut self, power: f64) -> OpmResult<()> {
+        self.power.set(power)?;
+        Ok(())
     }
 
     /// Returns the rotation angle θ of the distribution in the x-y plane.
@@ -206,15 +232,19 @@ impl General2DGaussian {
     /// An [`Angle`] representing the orientation of the Gaussian ellipse.
     #[must_use]
     pub const fn theta(&self) -> Angle {
-        self.theta
+        *self.theta.get()
     }
 
     /// Sets the rotation angle θ of the distribution in the x-y plane.
     ///
     /// # Parameters
     /// - `angle`: An [`Angle`] specifying the orientation.
-    pub fn set_theta(&mut self, angle: Angle) {
-        self.theta = angle;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_theta(&mut self, angle: Angle) -> OpmResult<()> {
+        self.theta.set(angle)?;
+        Ok(())
     }
 
     /// Returns whether the distribution has rectangular or elliptical shape.
@@ -236,15 +266,15 @@ impl General2DGaussian {
         self.rectangular = rectangular;
     }
 }
-
 impl Default for General2DGaussian {
     fn default() -> Self {
         Self {
-            total_energy: joule!(0.1),
-            mu_xy: millimeter!(0., 0.),
-            sigma_xy: millimeter!(5., 5.),
-            power: 1.,
-            theta: degree!(0.),
+            total_energy: validated!(joule!(0.1), AllNotZero && AllFinite && AllPositive).unwrap(),
+            mu_xy: validated!(millimeter!(0., 0.), AllFinite).unwrap(),
+            sigma_xy: validated!(millimeter!(5., 5.), AllNotZero && AllFinite && AllPositive)
+                .unwrap(),
+            power: validated!(1., AllNormal && AllPositive).unwrap(),
+            theta: validated!(degree!(0.), AllFinite).unwrap(),
             rectangular: false,
         }
     }
@@ -253,21 +283,31 @@ impl Default for General2DGaussian {
 impl EnergyDistribution for General2DGaussian {
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy> {
         let mut energy_distribution = Vec::<f64>::with_capacity(input.len());
-        let (sin_theta, cos_theta) = self.theta.get::<radian>().sin_cos();
-        let mu_xy = Point2::new(self.mu_xy.x.value, self.mu_xy.y.value);
-        let sigma_xy = Point2::new(self.sigma_xy.x.value, self.sigma_xy.y.value);
+        let (sin_theta, cos_theta) = self.theta().get::<radian>().sin_cos();
+        let mu_xy = Point2::new(self.center_x().value, self.center_y().value);
+        let sigma_xy = Point2::new(self.sigma_x().value, self.sigma_y().value);
         if self.rectangular {
             for p in input {
                 let p_m = Point2::new(p.x.value, p.y.value);
                 energy_distribution.push(general_2d_super_gaussian_point_rectangular(
-                    &p_m, mu_xy, sigma_xy, self.power, sin_theta, cos_theta,
+                    &p_m,
+                    mu_xy,
+                    sigma_xy,
+                    self.power(),
+                    sin_theta,
+                    cos_theta,
                 ));
             }
         } else {
             for p in input {
                 let p_m = Point2::new(p.x.value, p.y.value);
                 energy_distribution.push(general_2d_super_gaussian_point_elliptical(
-                    &p_m, mu_xy, sigma_xy, self.power, sin_theta, cos_theta,
+                    &p_m,
+                    mu_xy,
+                    sigma_xy,
+                    self.power(),
+                    sin_theta,
+                    cos_theta,
                 ));
             }
         }
@@ -276,12 +316,12 @@ impl EnergyDistribution for General2DGaussian {
 
         energy_distribution
             .iter()
-            .map(|x| self.total_energy * *x / current_energy)
+            .map(|x| self.energy() * *x / current_energy)
             .collect::<Vec<Energy>>()
     }
 
     fn get_total_energy(&self) -> Energy {
-        self.total_energy
+        self.energy()
     }
 }
 impl From<General2DGaussian> for super::EnergyDistType {
@@ -418,7 +458,7 @@ mod test {
                 radian!(0.),
                 true
             )
-            .is_ok()
+            .is_err()
         );
         assert!(
             General2DGaussian::new(
@@ -429,7 +469,7 @@ mod test {
                 radian!(0.),
                 true
             )
-            .is_ok()
+            .is_err()
         );
         assert!(
             General2DGaussian::new(

@@ -674,7 +674,7 @@ impl From<EdgeFilter> for Spectrum {
     fn from(edge_filter: EdgeFilter) -> Self {
         let mut spectrum =
             Self::new(edge_filter.range().clone(), edge_filter.resolution()).unwrap();
-
+        let mut spectrum_data = spectrum.data().clone();
         let (before_edge_wvl, after_edge_wvl, angle_sign) = match edge_filter.edge_filter_type() {
             EdgeFilterType::LongPass => (
                 edge_filter.transmission_range().start,
@@ -688,29 +688,43 @@ impl From<EdgeFilter> for Spectrum {
             ),
         };
         if let Some(width) = edge_filter.smooth_step_width() {
-            spectrum.map_mut(|(lambda, _)| {
-                (
-                    *lambda,
-                    edge_filter.smooth_step_transmission(
-                        micrometer!(*lambda),
-                        width,
-                        before_edge_wvl,
-                        after_edge_wvl,
-                        angle_sign,
-                    ),
+            spectrum
+                .set_data(
+                    spectrum_data
+                        .iter_mut()
+                        .map(|(lambda, _)| {
+                            (
+                                *lambda,
+                                edge_filter.smooth_step_transmission(
+                                    micrometer!(*lambda),
+                                    width,
+                                    before_edge_wvl,
+                                    after_edge_wvl,
+                                    angle_sign,
+                                ),
+                            )
+                        })
+                        .collect::<Vec<(f64, f64)>>(),
                 )
-            });
+                .unwrap();
         } else {
-            spectrum.map_mut(|(lambda, _)| {
-                (
-                    *lambda,
-                    edge_filter.step_transmission(
-                        micrometer!(*lambda),
-                        before_edge_wvl,
-                        after_edge_wvl,
-                    ),
+            spectrum
+                .set_data(
+                    spectrum_data
+                        .iter_mut()
+                        .map(|(lambda, _)| {
+                            (
+                                *lambda,
+                                edge_filter.step_transmission(
+                                    micrometer!(*lambda),
+                                    before_edge_wvl,
+                                    after_edge_wvl,
+                                ),
+                            )
+                        })
+                        .collect::<Vec<(f64, f64)>>(),
                 )
-            });
+                .unwrap();
         }
         spectrum
     }
@@ -1165,7 +1179,7 @@ impl From<BandFilter> for Spectrum {
     fn from(band_filter: BandFilter) -> Self {
         let mut spectrum =
             Self::new(band_filter.range().clone(), band_filter.resolution()).unwrap();
-
+        let mut spectrum_data = spectrum.data().clone();
         let center_wavelength_in_um = band_filter.center_wavelength().get::<micrometer>();
         let width_in_um = band_filter.width().get::<micrometer>();
         let (in_band, out_of_band, angle_sign) = match band_filter.band_filter_type() {
@@ -1196,38 +1210,59 @@ impl From<BandFilter> for Spectrum {
             let upper_end = half_band + transition;
             let transmission_diff =
                 band_filter.transmission_range().end - band_filter.transmission_range().start;
-            spectrum.map_mut(|(lambda, _)| {
-                let wvl_diff = *lambda - band_filter.center_wavelength().get::<micrometer>();
+            spectrum
+                .set_data(
+                    spectrum_data
+                        .iter_mut()
+                        .map(|(lambda, _)| {
+                            let wvl_diff =
+                                *lambda - band_filter.center_wavelength().get::<micrometer>();
 
-                let amp = if wvl_diff <= lower_start || wvl_diff >= upper_end {
-                    out_of_band
-                } else if wvl_diff >= lower_end && wvl_diff <= upper_start {
-                    in_band
-                } else if wvl_diff > lower_start && wvl_diff < lower_end {
-                    // Lower transition
-                    let x = (wvl_diff - lower_start) / (2.0 * transition);
-                    (angle_sign * 0.5 * transmission_diff).mul_add(
-                        (std::f64::consts::PI * x).cos(),
-                        0.5f64.mul_add(transmission_diff, band_filter.transmission_range().start),
-                    )
-                } else {
-                    // Upper transition
-                    let x = (upper_end - wvl_diff) / (2.0 * transition);
-                    (angle_sign * 0.5 * transmission_diff).mul_add(
-                        (std::f64::consts::PI * x).cos(),
-                        0.5f64.mul_add(transmission_diff, band_filter.transmission_range().start),
-                    )
-                };
-                (*lambda, amp)
-            });
+                            let amp = if wvl_diff <= lower_start || wvl_diff >= upper_end {
+                                out_of_band
+                            } else if wvl_diff >= lower_end && wvl_diff <= upper_start {
+                                in_band
+                            } else if wvl_diff > lower_start && wvl_diff < lower_end {
+                                // Lower transition
+                                let x = (wvl_diff - lower_start) / (2.0 * transition);
+                                (angle_sign * 0.5 * transmission_diff).mul_add(
+                                    (std::f64::consts::PI * x).cos(),
+                                    0.5f64.mul_add(
+                                        transmission_diff,
+                                        band_filter.transmission_range().start,
+                                    ),
+                                )
+                            } else {
+                                // Upper transition
+                                let x = (upper_end - wvl_diff) / (2.0 * transition);
+                                (angle_sign * 0.5 * transmission_diff).mul_add(
+                                    (std::f64::consts::PI * x).cos(),
+                                    0.5f64.mul_add(
+                                        transmission_diff,
+                                        band_filter.transmission_range().start,
+                                    ),
+                                )
+                            };
+                            (*lambda, amp)
+                        })
+                        .collect::<Vec<(f64, f64)>>(),
+                )
+                .unwrap();
         } else {
-            spectrum.map_mut(|(lambda, _)| {
-                if (*lambda - center_wavelength_in_um).abs() >= width_in_um / 2. {
-                    (*lambda, out_of_band)
-                } else {
-                    (*lambda, in_band)
-                }
-            });
+            spectrum
+                .set_data(
+                    spectrum_data
+                        .iter_mut()
+                        .map(|(lambda, _)| {
+                            if (*lambda - center_wavelength_in_um).abs() >= width_in_um / 2. {
+                                (*lambda, out_of_band)
+                            } else {
+                                (*lambda, in_band)
+                            }
+                        })
+                        .collect::<Vec<(f64, f64)>>(),
+                )
+                .unwrap();
         }
         spectrum
     }

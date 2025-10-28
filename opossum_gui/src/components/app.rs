@@ -178,7 +178,7 @@ pub fn App() -> Element {
             div {
                 class: "resize-handle-bottom-right",
                 onmousedown: {
-                    let window = window.clone();
+                    // let window = window.clone();
                     move |_| { let _ = window.drag_resize_window(ResizeDirection::SouthEast); }
                 },
             }

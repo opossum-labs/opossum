@@ -340,7 +340,7 @@ async fn post_subnode(
     node_type: web::Json<NewNode>,
 ) -> Result<Json<NodeInfo>, BackEndErrorResponse> {
     let new_node_info = node_type.into_inner();
-    let new_node_ref = create_node_ref(&new_node_info.node_type())?;
+    let new_node_ref = create_node_ref(new_node_info.node_type())?;
     let mut node = new_node_ref.optical_ref.lock_opm()?;
     let node_attr = node.node_attr_mut();
     node_attr.set_gui_position(Some(Point2::new(
@@ -981,9 +981,9 @@ async fn post_connection(
     let scenery = document.scenery_mut();
     scenery.connect_nodes(
         connect_info.src_uuid(),
-        &connect_info.src_port(),
+        connect_info.src_port(),
         connect_info.target_uuid(),
-        &connect_info.target_port(),
+        connect_info.target_port(),
         meter!(connect_info.distance()),
     )?;
     drop(document);
@@ -998,7 +998,7 @@ async fn delete_connection(
 ) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    scenery.disconnect_nodes(connect_info.src_uuid(), &connect_info.src_port())?;
+    scenery.disconnect_nodes(connect_info.src_uuid(), connect_info.src_port())?;
     drop(document);
     Ok(connect_info)
 }
@@ -1013,7 +1013,7 @@ async fn update_distance(
     let scenery = document.scenery_mut();
     scenery.update_connection_distance(
         connect_info.src_uuid(),
-        &connect_info.src_port(),
+        connect_info.src_port(),
         meter!(connect_info.distance()),
     )?;
     drop(document);

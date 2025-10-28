@@ -1,4 +1,7 @@
-use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
+use crate::components::{
+    logger::LogResultExt,
+    node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
+};
 use dioxus::prelude::*;
 use opossum_core::{
     millimeter,
@@ -52,14 +55,19 @@ impl IntoInputData<f64, Random, PosDistType> for RandomParam {
 
     fn setter_from_obj(&self) -> impl FnMut(&mut Random, f64) {
         match self {
-            Self::SideLengthX => {
-                move |obj: &mut Random, val: f64| obj.set_side_length_x(millimeter!(val))
-            }
-            Self::SideLengthY => {
-                move |obj: &mut Random, val: f64| obj.set_side_length_y(millimeter!(val))
-            }
+            Self::SideLengthX => move |obj: &mut Random, val: f64| {
+                obj.set_side_length_x(millimeter!(val))
+                    .log_err_with_context("`set_side_length_x` of random");
+            },
+            Self::SideLengthY => move |obj: &mut Random, val: f64| {
+                obj.set_side_length_y(millimeter!(val))
+                    .log_err_with_context("`set_side_length_y` of random");
+            },
             Self::Points => move |obj: &mut Random, val: f64| {
-                obj.set_nr_of_points(try_f64_to_usize(val).unwrap());
+                if let Some(val) = try_f64_to_usize(val) {
+                    obj.set_nr_of_points(val)
+                        .log_err_with_context("`set_nr_of_points` of random");
+                }
             },
         }
     }

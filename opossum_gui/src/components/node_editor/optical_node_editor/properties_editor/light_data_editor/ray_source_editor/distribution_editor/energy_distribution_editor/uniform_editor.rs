@@ -1,6 +1,6 @@
-use crate::{
-    OPOSSUM_UI_LOGS,
-    components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
+use crate::components::{
+    logger::LogResultExt,
+    node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
 use opossum_core::energy_distributions::{EnergyDistType, EnergyDistribution, UniformDist};
@@ -37,11 +37,8 @@ impl IntoInputData<f64, UniformDist, EnergyDistType> for UniformParam {
 
     fn setter_from_obj(&self) -> impl FnMut(&mut UniformDist, f64) {
         move |obj: &mut UniformDist, val: f64| {
-            obj.set_energy(joule!(val)).unwrap_or_else(|_| {
-                OPOSSUM_UI_LOGS
-                    .write()
-                    .add_log(&format!("Invalid energy value: {val}"));
-            });
+            obj.set_energy(joule!(val))
+                .log_err_with_context("`set_energy` of gaussian energy distribution");
         }
     }
 }

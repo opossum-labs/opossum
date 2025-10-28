@@ -7,9 +7,11 @@ use utoipa::ToSchema;
 pub struct BackEndErrorResponse(ErrorResponse);
 
 impl BackEndErrorResponse {
+    #[must_use]
     pub fn new(status: u16, category: &str, message: &str) -> Self {
-        BackEndErrorResponse(ErrorResponse::new(status, category, message))
+        Self(ErrorResponse::new(status, category, message))
     }
+    #[must_use]
     pub fn error_response(&self) -> ErrorResponse {
         self.0.clone()
     }
