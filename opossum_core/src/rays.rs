@@ -16,6 +16,7 @@ use crate::{
     },
     plottable::AxLims,
     position_distributions::{Hexapolar, PositionDistribution},
+    prelude::EnergyLaserLines,
     properties::Proptype,
     ray::Ray,
     refractive_index::RefractiveIndexType,
@@ -474,6 +475,7 @@ impl Rays {
             ));
         }
         let ray_pos = pos_strategy.generate();
+
         let dist = spectral_distribution.generate()?;
 
         //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
@@ -487,6 +489,7 @@ impl Rays {
 
         //create rays
         let nr_of_rays = ray_pos.len();
+
         let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
         for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
             let direction = Vector3::new(
@@ -1216,7 +1219,7 @@ impl Rays {
                 "ray bundle is empty - cannot create spectrum".into(),
             ));
         }
-        let spectrum = Spectrum::from_laser_lines(lines, *resolution)?;
+        let spectrum = Spectrum::from_laser_lines(&EnergyLaserLines::new(lines, *resolution)?)?;
         Ok(spectrum)
     }
     /// Set the refractive index of the medium all [`Rays`] are propagating in.

@@ -2,6 +2,7 @@
 //!
 //! This module provides a builder for the generation of [`LightData`] to be used in `Source`.
 //! This builder allows easier serialization / deserialization in OPM files.
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
@@ -17,7 +18,7 @@ use crate::{
 };
 
 /// Builder for the generation of [`LightData`].
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated)]
 pub enum LightDataBuilder {
     /// Builder for the generation of [`LightData::Energy`].
     Energy(EnergyDataBuilder),
@@ -26,6 +27,15 @@ pub enum LightDataBuilder {
     // /// Dummy Fourier
     // Fourier,
 }
+
+// impl Validate for LightDataBuilder{
+//     fn validate(&self) -> OpmResult<()> {
+//         match self{
+//             LightDataBuilder::Energy(energy_data_builder) => energy_data_builder.validate(),
+//             LightDataBuilder::Geometric(ray_data_builder) => ray_data_builder.validate(),
+//         }
+//     }
+// }
 
 impl DefaultFromName for LightDataBuilder {}
 
@@ -48,7 +58,6 @@ impl LightDataBuilder {
             // Self::Fourier => Ok(LightData::Fourier),
         }
     }
-
     /// Get the position distribution type, if applicable.
     ///
     /// Returns the [`PosDistType`] used in the ray-based (geometric) light source,

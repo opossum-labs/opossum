@@ -1,3 +1,4 @@
+use nalgebra::Point2;
 use num::Zero;
 use opossum_core::prelude::*;
 use opossum_core::{
@@ -12,7 +13,11 @@ fn main() -> OpmResult<()> {
 
     let light_data_builder =
         LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
-            Grid::new((Length::zero(), millimeter!(60.0)), (1, 5))?.into(),
+            Grid::new(
+                Point2::new(Length::zero(), millimeter!(60.0)),
+                Point2::new(1, 5),
+            )?
+            .into(),
             UniformDist::new(joule!(1.0))?.into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         )));

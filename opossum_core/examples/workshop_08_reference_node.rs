@@ -1,3 +1,4 @@
+use nalgebra::Point2;
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::UniformDist, position_distributions::Grid,
@@ -9,11 +10,15 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
 
     let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
-        Grid::new((millimeter!(0.0), millimeter!(5.0)), (1, 5))?.into(),
+        Grid::new(
+            Point2::new(millimeter!(0.0), millimeter!(5.0)),
+            Point2::new(1, 5),
+        )?
+        .into(),
         UniformDist::new(joule!(1.0))?.into(),
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         millimeter!(75.0),
-    )));
+    )?));
     let src = Source::new("point ray source", light_data_builder);
     let i_src = scenery.add_node(src)?;
 

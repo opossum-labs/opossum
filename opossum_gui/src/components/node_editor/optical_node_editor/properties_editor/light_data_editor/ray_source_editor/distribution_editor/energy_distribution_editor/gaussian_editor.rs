@@ -1,6 +1,6 @@
-use crate::{
-    OPOSSUM_UI_LOGS,
-    components::node_editor::inputs::{InputData, InputParam, IntoInputData, IntoInputDataStrings},
+use crate::components::{
+    logger::LogResultExt,
+    node_editor::inputs::{InputData, InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
 use opossum_backend::{
@@ -73,27 +73,34 @@ impl IntoInputData<f64, General2DGaussian, EnergyDistType> for General2DGaussian
 
     fn setter_from_obj(&self) -> impl FnMut(&mut General2DGaussian, f64) {
         match self {
-            Self::CenterX => {
-                move |obj: &mut General2DGaussian, val: f64| obj.set_center_x(millimeter!(val))
-            }
-            Self::CenterY => {
-                move |obj: &mut General2DGaussian, val: f64| obj.set_center_y(millimeter!(val))
-            }
-            Self::SigmaX => {
-                move |obj: &mut General2DGaussian, val: f64| obj.set_sigma_x(millimeter!(val))
-            }
-            Self::SigmaY => {
-                move |obj: &mut General2DGaussian, val: f64| obj.set_sigma_y(millimeter!(val))
-            }
-            Self::Energy => move |obj: &mut General2DGaussian, val: f64| {
-                obj.set_energy(joule!(val)).unwrap_or_else(|_| {
-                    OPOSSUM_UI_LOGS
-                        .write()
-                        .add_log(&format!("Invalid energy value: {val}"));
-                });
+            Self::CenterX => move |obj: &mut General2DGaussian, val: f64| {
+                obj.set_center_x(millimeter!(val))
+                    .log_err_with_context("`set_center_x` of gaussian energy distribution");
             },
-            Self::Power => move |obj: &mut General2DGaussian, val: f64| obj.set_power(val),
-            Self::Theta => move |obj: &mut General2DGaussian, val: f64| obj.set_theta(degree!(val)),
+            Self::CenterY => move |obj: &mut General2DGaussian, val: f64| {
+                obj.set_center_y(millimeter!(val))
+                    .log_err_with_context("`set_center_y` of gaussian energy distribution");
+            },
+            Self::SigmaX => move |obj: &mut General2DGaussian, val: f64| {
+                obj.set_sigma_x(millimeter!(val))
+                    .log_err_with_context("`set_sigma_x` of gaussian energy distribution");
+            },
+            Self::SigmaY => move |obj: &mut General2DGaussian, val: f64| {
+                obj.set_sigma_y(millimeter!(val))
+                    .log_err_with_context("`set_sigma_y` of gaussian energy distribution");
+            },
+            Self::Energy => move |obj: &mut General2DGaussian, val: f64| {
+                obj.set_energy(joule!(val))
+                    .log_err_with_context("`set_energy` of gaussian energy distribution");
+            },
+            Self::Power => move |obj: &mut General2DGaussian, val: f64| {
+                obj.set_power(val)
+                    .log_err_with_context("`set_power` of gaussian energy distribution");
+            },
+            Self::Theta => move |obj: &mut General2DGaussian, val: f64| {
+                obj.set_theta(degree!(val))
+                    .log_err_with_context("`set_theta` of gaussian energy distribution");
+            },
             Self::Rectangular => move |_: &mut General2DGaussian, _: f64| {},
         }
     }

@@ -3,24 +3,25 @@
 use std::f64::consts::PI;
 
 use crate::{
-    error::{OpmResult, OpossumError},
-    millimeter,
+    error::OpmResult,
+    generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero, ValidateTrait},
+    millimeter, validated, validated_type,
 };
 
 use super::PositionDistribution;
-use nalgebra::{Point3, point};
+use nalgebra::{Point2, Point3, point};
 use num::{ToPrimitive, Zero};
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular Fibonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct FibonacciRectangle {
-    nr_of_rays: usize,
-    side_length_x: Length,
-    side_length_y: Length,
+    nr_of_points: validated_type!(usize, AllNotZero),
+    side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 impl FibonacciRectangle {
     /// Create a new [`FibonacciRectangle`] distribution generator.
@@ -31,25 +32,17 @@ impl FibonacciRectangle {
     ///
     /// This function will return an error if
     ///  - the given `side_length_x` or `side_length_y` is negative or not finite, or both are zero.
-    ///  - the given `nr_of_rays` is zero.
-    pub fn new(side_length_x: Length, side_length_y: Length, nr_of_rays: usize) -> OpmResult<Self> {
-        if side_length_x.is_sign_negative()
-            || !side_length_x.is_finite()
-            || side_length_y.is_sign_negative()
-            || !side_length_y.is_finite()
-            || nr_of_rays.is_zero()
-            || (side_length_x.is_zero() && side_length_y.is_zero())
-        {
-            return Err(OpossumError::Other(
-                "side length must be positive and finite and the number of rays greater than zero!"
-                    .into(),
-            ));
-        }
-        Ok(Self {
-            nr_of_rays,
-            side_length_x,
-            side_length_y,
-        })
+    ///  - the given `nr_of_points` is zero.
+    pub fn new(
+        side_length_x: Length,
+        side_length_y: Length,
+        nr_of_points: usize,
+    ) -> OpmResult<Self> {
+        let mut fibonacci_rect = Self::default();
+        fibonacci_rect.set_nr_of_points(nr_of_points)?;
+        fibonacci_rect.set_side_length_x(side_length_x)?;
+        fibonacci_rect.set_side_length_y(side_length_y)?;
+        Ok(fibonacci_rect)
     }
 
     /// Returns the number of points (rays) in the Fibonacci rectangle distribution.
@@ -59,7 +52,7 @@ impl FibonacciRectangle {
     /// The number of points as a `usize`.
     #[must_use]
     pub const fn nr_of_points(&self) -> usize {
-        self.nr_of_rays
+        *self.nr_of_points.get()
     }
 
     /// Returns the side length along the X axis of the rectangle.
@@ -67,9 +60,12 @@ impl FibonacciRectangle {
     /// # Returns
     ///
     /// The length of the side in the X direction as a `Length`.
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
     #[must_use]
     pub fn side_length_x(&self) -> Length {
-        self.side_length_x
+        self.side_length.get().x
     }
 
     /// Returns the side length along the Y axis of the rectangle.
@@ -77,9 +73,12 @@ impl FibonacciRectangle {
     /// # Returns
     ///
     /// The length of the side in the Y direction as a `Length`.
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
     #[must_use]
     pub fn side_length_y(&self) -> Length {
-        self.side_length_y
+        self.side_length.get().y
     }
 
     /// Sets the number of points (rays) in the Fibonacci rectangle distribution.
@@ -91,8 +90,12 @@ impl FibonacciRectangle {
     /// # Side Effects
     ///
     /// Updates the current number of rays.
-    pub const fn set_nr_of_points(&mut self, nr_of_points: usize) {
-        self.nr_of_rays = nr_of_points;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) -> OpmResult<()> {
+        self.nr_of_points.set(nr_of_points)?;
+        Ok(())
     }
 
     /// Sets the side length along the X axis of the rectangle.
@@ -104,8 +107,13 @@ impl FibonacciRectangle {
     /// # Side Effects
     ///
     /// Updates the current side length in the X direction.
-    pub fn set_side_length_x(&mut self, side_length_x: Length) {
-        self.side_length_x = side_length_x;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()> {
+        self.side_length
+            .set(Point2::new(side_length_x, self.side_length_y()))?;
+        Ok(())
     }
 
     /// Sets the side length along the Y axis of the rectangle.
@@ -117,30 +125,37 @@ impl FibonacciRectangle {
     /// # Side Effects
     ///
     /// Updates the current side length in the Y direction.
-    pub fn set_side_length_y(&mut self, side_length_y: Length) {
-        self.side_length_y = side_length_y;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_side_length_y(&mut self, side_length_y: Length) -> OpmResult<()> {
+        self.side_length
+            .set(Point2::new(self.side_length_x(), side_length_y))?;
+        Ok(())
     }
 }
 
 impl Default for FibonacciRectangle {
     fn default() -> Self {
         Self {
-            nr_of_rays: 1000,
-            side_length_x: millimeter!(5.),
-            side_length_y: millimeter!(5.),
+            nr_of_points: validated!(1000_usize, AllNotZero).unwrap(),
+            side_length: validated!(millimeter!(5., 5.), NotAllZero && AllFinite && AllPositive)
+                .unwrap(),
         }
     }
 }
 
 impl PositionDistribution for FibonacciRectangle {
     fn generate(&self) -> Vec<Point3<Length>> {
-        let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_rays);
+        let nr_of_rays = *self.nr_of_points.get();
+        let nr_of_rays_f64 = nr_of_rays.to_f64().unwrap();
+        let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_rays);
         let golden_ratio = f64::midpoint(1., f64::sqrt(5.));
-        for i in 0_usize..self.nr_of_rays {
+        for i in 0_usize..nr_of_rays {
             let i_f64 = i.to_f64().unwrap();
             points.push(point![
-                self.side_length_x * ((i_f64 / golden_ratio).fract() - 0.5),
-                self.side_length_y * ((i_f64 / self.nr_of_rays.to_f64().unwrap()) - 0.5),
+                self.side_length_x() * ((i_f64 / golden_ratio).fract() - 0.5),
+                self.side_length_y() * ((i_f64 / nr_of_rays_f64) - 0.5),
                 Length::zero()
             ]);
         }
@@ -155,11 +170,10 @@ impl From<FibonacciRectangle> for super::PosDistType {
 /// Rectangular Fibbonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct FibonacciEllipse {
-    nr_of_rays: usize,
-    radius_x: Length,
-    radius_y: Length,
+    nr_of_points: validated_type!(usize, AllNotZero),
+    radius: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 impl FibonacciEllipse {
     /// Create a new [`FibonacciEllipse`] distribution generator.
@@ -172,23 +186,11 @@ impl FibonacciEllipse {
     ///  - the given `side_length_x` or `side_length_y` is negative or not finite, or both are zero.
     ///  - the given `nr_of_rays` is zero.
     pub fn new(radius_x: Length, radius_y: Length, nr_of_rays: usize) -> OpmResult<Self> {
-        if radius_x.is_sign_negative()
-            || !radius_x.is_finite()
-            || radius_y.is_sign_negative()
-            || !radius_y.is_finite()
-            || nr_of_rays.is_zero()
-            || (radius_x.is_zero() && radius_y.is_zero())
-        {
-            return Err(OpossumError::Other(
-                "radius must be positive and finite and the number of rays greater than zero!"
-                    .into(),
-            ));
-        }
-        Ok(Self {
-            nr_of_rays,
-            radius_x,
-            radius_y,
-        })
+        let mut fibonacci_ell = Self::default();
+        fibonacci_ell.set_nr_of_points(nr_of_rays)?;
+        fibonacci_ell.set_radius_x(radius_x)?;
+        fibonacci_ell.set_radius_y(radius_y)?;
+        Ok(fibonacci_ell)
     }
     /// Returns the number of points (rays) in the Fibonacci ellipse distribution.
     ///
@@ -197,7 +199,7 @@ impl FibonacciEllipse {
     /// The number of points as a `usize`.
     #[must_use]
     pub const fn nr_of_points(&self) -> usize {
-        self.nr_of_rays
+        *self.nr_of_points.get()
     }
 
     /// Returns the radius along the X axis of the ellipse.
@@ -207,7 +209,7 @@ impl FibonacciEllipse {
     /// The radius in the X direction as a `Length`.
     #[must_use]
     pub fn radius_x(&self) -> Length {
-        self.radius_x
+        self.radius.get().x
     }
 
     /// Returns the radius along the Y axis of the ellipse.
@@ -217,7 +219,7 @@ impl FibonacciEllipse {
     /// The radius in the Y direction as a `Length`.
     #[must_use]
     pub fn radius_y(&self) -> Length {
-        self.radius_y
+        self.radius.get().y
     }
 
     /// Sets the number of points (rays) in the Fibonacci ellipse distribution.
@@ -229,8 +231,12 @@ impl FibonacciEllipse {
     /// # Side Effects
     ///
     /// Updates the current number of rays.
-    pub const fn set_nr_of_points(&mut self, nr_of_points: usize) {
-        self.nr_of_rays = nr_of_points;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_nr_of_points(&mut self, nr_of_points: usize) -> OpmResult<()> {
+        self.nr_of_points.set(nr_of_points)?;
+        Ok(())
     }
 
     /// Sets the radius along the X axis of the ellipse.
@@ -242,8 +248,12 @@ impl FibonacciEllipse {
     /// # Side Effects
     ///
     /// Updates the current `radius_x`.
-    pub fn set_radius_x(&mut self, radius_x: Length) {
-        self.radius_x = radius_x;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_radius_x(&mut self, radius_x: Length) -> OpmResult<()> {
+        self.radius.set(Point2::new(radius_x, self.radius_y()))?;
+        Ok(())
     }
 
     /// Sets the radius along the Y axis of the ellipse.
@@ -255,31 +265,37 @@ impl FibonacciEllipse {
     /// # Side Effects
     ///
     /// Updates the current `radius_y`.
-    pub fn set_radius_y(&mut self, radius_y: Length) {
-        self.radius_y = radius_y;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_radius_y(&mut self, radius_y: Length) -> OpmResult<()> {
+        self.radius.set(Point2::new(self.radius_x(), radius_y))?;
+        Ok(())
     }
 }
 
 impl Default for FibonacciEllipse {
     fn default() -> Self {
         Self {
-            nr_of_rays: 1000,
-            radius_x: millimeter!(5.),
-            radius_y: millimeter!(5.),
+            nr_of_points: validated!(1000_usize, AllNotZero).unwrap(),
+            radius: validated!(millimeter!(5., 5.), NotAllZero && AllFinite && AllPositive)
+                .unwrap(),
         }
     }
 }
 
 impl PositionDistribution for FibonacciEllipse {
     fn generate(&self) -> Vec<Point3<Length>> {
-        let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_rays);
+        let nr_of_points = *self.nr_of_points.get();
+        let nr_of_points_f64 = nr_of_points.to_f64().unwrap();
+        let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_points);
         let golden_ratio = f64::midpoint(1., f64::sqrt(5.));
-        for i in 0_usize..self.nr_of_rays {
+        for i in 0_usize..nr_of_points {
             let sin_cos = f64::sin_cos(2. * PI * (i.to_f64().unwrap() / golden_ratio).fract());
-            let sqrt_r = f64::sqrt(i.to_f64().unwrap() / self.nr_of_rays.to_f64().unwrap());
+            let sqrt_r = f64::sqrt(i.to_f64().unwrap() / nr_of_points_f64);
             points.push(point![
-                self.radius_x * sin_cos.0 * sqrt_r,
-                self.radius_y * sin_cos.1 * sqrt_r,
+                self.radius_x() * sin_cos.0 * sqrt_r,
+                self.radius_y() * sin_cos.1 * sqrt_r,
                 Length::zero()
             ]);
         }

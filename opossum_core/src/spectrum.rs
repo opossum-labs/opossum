@@ -2,16 +2,22 @@
 //! Module for creation and handling of optical spectra
 use crate::{
     error::{OpmResult, OpossumError},
+    generic_validators::{
+        AllNormal, AllNotEmpty, AllPositive, SecondLarger, ValidateTrait, XNormal, YFinite,
+    },
     lightdata::energy_data_builder::EnergyDataBuilder,
     micrometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    prelude::EnergyLaserLines,
     properties::Proptype,
     utils::{to_f64, try_f64_to_usize},
+    validated, validated_type, validated_vec, validated_vec_type,
 };
 use csv::ReaderBuilder;
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::MatrixXx2;
+use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -21,20 +27,33 @@ use std::{
     ops::Range,
     path::Path,
 };
-use uom::num_traits::Zero;
 use uom::si::{f64::Length, length::micrometer, length::nanometer};
-use uom::{
-    fmt::DisplayStyle::Abbreviation,
-    si::{energy::joule, f64::Energy},
-};
+use uom::{fmt::DisplayStyle::Abbreviation, si::energy::joule};
 
 /// Structure for handling spectral data.
 ///
 /// This structure handles an array of values over a given wavelength range. Although the interface
 /// is still limited, the structure is prepared for handling also non-equidistant wavelength slots.  
-#[derive(Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, EnsureValidated)]
 pub struct Spectrum {
-    data: Vec<(f64, f64)>, // (wavelength in micrometers, data in 1/micrometers)
+    data: validated_vec_type!(
+        Vec<(f64, f64)>,
+        AllPositive && XNormal && YFinite,
+        AllNotEmpty
+    ), // (wavelength in micrometers, data in 1/micrometers)
+}
+
+impl Default for Spectrum {
+    fn default() -> Self {
+        Self {
+            data: validated_vec!(
+                vec![(1054., 1.)],
+                AllPositive && XNormal && YFinite,
+                AllNotEmpty
+            )
+            .unwrap(),
+        }
+    }
 }
 impl Spectrum {
     /// Create a new (empty) spectrum of a given wavelength range and (equidistant) resolution.
@@ -46,34 +65,51 @@ impl Spectrum {
     ///   - the wavelength limits are not both positive
     ///   - the resolution is not positive
     pub fn new(range: Range<Length>, resolution: Length) -> OpmResult<Self> {
-        if resolution <= Length::zero() {
-            return Err(OpossumError::Spectrum("resolution must be positive".into()));
-        }
-        if range.start >= range.end {
-            return Err(OpossumError::Spectrum(
-                "wavelength range must be in ascending order and not empty".into(),
-            ));
-        }
-        if range.start.is_sign_negative() || range.end.is_sign_negative() {
-            return Err(OpossumError::Spectrum(
-                "wavelength range limits must both be positive".into(),
-            ));
-        }
-        let Some(number_of_elements) =
-            try_f64_to_usize(((range.end - range.start) / resolution).value.round())
-        else {
+        let resolution = Self::validated_resolution(resolution)?;
+        let range = Self::validated_range(range)?;
+
+        let Some(number_of_elements) = try_f64_to_usize(
+            ((range.get().end - range.get().start) / *resolution.get())
+                .value
+                .round(),
+        ) else {
             return Err(OpossumError::Spectrum(
                 "cannot determine number of wavelength slots".into(),
             ));
         };
-        let start = range.start.get::<micrometer>();
-        let step = resolution.get::<micrometer>();
+        let start = range.get().start.get::<micrometer>();
+        let step = resolution.get().get::<micrometer>();
         let mut lambdas: Vec<f64> = Vec::new();
         for i in 0..number_of_elements {
             lambdas.push(to_f64(i).mul_add(step, start));
         }
         let data = lambdas.iter().map(|lambda| (*lambda, 0.0)).collect();
-        Ok(Self { data })
+        let mut spec = Self::default();
+        spec.set_data(data)?;
+        Ok(spec)
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn validated_resolution(
+        resolution: Length,
+    ) -> OpmResult<validated_type!(Length, AllNormal && AllPositive)> {
+        validated!(resolution, AllNormal && AllPositive)
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn validated_range(
+        range: Range<Length>,
+    ) -> OpmResult<validated_type!(Range<Length>, AllNormal && AllPositive && SecondLarger)> {
+        validated!(range, AllNormal && AllPositive && SecondLarger)
+    }
+
+    /// Set the data Vector of this [`Spectrum`]
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_data(&mut self, data: Vec<(f64, f64)>) -> OpmResult<()> {
+        self.data.set(data)?;
+        Ok(())
     }
     /// Create a new [`Spectrum`] from a CSV (comma-separated values) file.
     ///
@@ -121,7 +157,9 @@ impl Spectrum {
                 "no csv data was found in file".into(),
             ));
         }
-        Ok(Self { data: datas })
+        let mut spec = Self::default();
+        spec.set_data(datas)?;
+        Ok(spec)
     }
 
     ///Normalizes a spectrum such that its maximum value corresponds to 1
@@ -133,8 +171,7 @@ impl Spectrum {
             .iter()
             .fold(0., |init, (_, val)| if *val > init { *val } else { init });
         if max_value > 0. {
-            self.data.iter_mut().for_each(|(_, val)| *val /= max_value);
-            Ok(())
+            self.data.for_each(|(_, val)| *val /= max_value)
         } else {
             Err(OpossumError::Other(
                 "Cannot normalize spectrum to its maximum value with a maximum value of zero!"
@@ -143,7 +180,7 @@ impl Spectrum {
         }
     }
 
-    /// Generate a spectrum from a list of narrow laser lines (center wavelength, Energy) and a spectrum resolution.
+    /// Generate a spectrum from a list of narrow [`EnergyLaserLines`].
     ///
     /// # Errors
     ///
@@ -152,13 +189,10 @@ impl Spectrum {
     /// - the wavelength is negative
     /// - the energy is negative
     /// - the list of lines is empty
-    pub fn from_laser_lines(lines: Vec<(Length, Energy)>, resolution: Length) -> OpmResult<Self> {
-        if lines.is_empty() {
-            return Err(OpossumError::Spectrum("no laser lines provided".into()));
-        }
-        if resolution <= Length::zero() {
-            return Err(OpossumError::Spectrum("resolution must be positive".into()));
-        }
+    pub fn from_laser_lines(lines: &EnergyLaserLines) -> OpmResult<Self> {
+        //EnergyLaserLines is already a validated struct, no validation necessary
+        let resolution = lines.spectral_resolution();
+        let lines = lines.lines();
         let mut min_lambda = lines[0].0;
         let mut max_lambda = lines[0].0;
         for line in &lines {
@@ -169,12 +203,20 @@ impl Spectrum {
                 max_lambda = line.0;
             }
         }
-        let mut s = Self::new(min_lambda..max_lambda + 2.0 * resolution, resolution)?;
+        let mut s = Self::new(min_lambda..max_lambda + 2.0 * *resolution, *resolution)?;
         for line in lines {
             s.add_single_peak(line.0, line.1.get::<joule>())?;
         }
         Ok(s)
     }
+    /// Get the data vector
+    ///
+    /// This is a convenience function for testing.
+    #[must_use]
+    pub const fn data(&self) -> &Vec<(f64, f64)> {
+        self.data.get()
+    }
+
     fn lambda_vec(&self) -> Vec<f64> {
         self.data.iter().map(|data| data.0).collect()
     }
@@ -237,7 +279,9 @@ impl Spectrum {
         if let Some(idx) = idx {
             if idx == 0 {
                 let delta = lambdas[1] - lambdas[0];
-                self.data[0].1 += value / delta;
+                let mut dat1 = *self.data.get_at_index(idx)?;
+                dat1.1 += value / delta;
+                self.data.replace(idx, dat1)?;
             } else {
                 let lower_lambda = lambdas[idx - 1];
                 let upper_lambda = lambdas[idx];
@@ -245,8 +289,12 @@ impl Spectrum {
                 let energy_per_micrometer = value / delta;
                 let energy_part =
                     energy_per_micrometer * (wavelength_in_micrometers - lower_lambda) / delta;
-                self.data[idx].1 += energy_part;
-                self.data[idx - 1].1 += energy_per_micrometer - energy_part;
+                let mut dat1 = *self.data.get_at_index(idx)?;
+                dat1.1 += energy_part;
+                self.data.replace(idx, dat1)?;
+                let mut dat2 = *self.data.get_at_index(idx - 1)?;
+                dat2.1 += energy_per_micrometer - energy_part;
+                self.data.replace(idx - 1, dat2)?;
             }
             Ok(())
         } else {
@@ -302,20 +350,12 @@ impl Spectrum {
         }
         let wavelength_in_micrometers = center.get::<micrometer>();
         let width_in_micrometers = width.get::<micrometer>();
-        let spectrum: Vec<(f64, f64)> = self
-            .data
-            .iter()
-            .map(|data| {
-                (
-                    data.0,
-                    energy.mul_add(
-                        lorentz(wavelength_in_micrometers, width_in_micrometers, data.0),
-                        data.1,
-                    ),
-                )
-            })
-            .collect();
-        self.data = spectrum;
+        self.data.for_each(|data| {
+            data.1 = energy.mul_add(
+                lorentz(wavelength_in_micrometers, width_in_micrometers, data.0),
+                data.1,
+            );
+        })?;
         Ok(())
     }
     /// Returns the total energy of this [`Spectrum`].
@@ -324,7 +364,7 @@ impl Spectrum {
     /// way it also works for non-equidistant spectra.
     #[must_use]
     pub fn total_energy(&self) -> f64 {
-        let lambda_deltas = self.data.windows(2).map(|l| l[1].0 - l[0].0);
+        let lambda_deltas = self.data.get().windows(2).map(|l| l[1].0 - l[0].0);
         let energies: Vec<f64> = lambda_deltas
             .zip(self.data.iter())
             .map(|d| d.0 * d.1.1)
@@ -341,7 +381,7 @@ impl Spectrum {
     pub fn center_wavelength(&self) -> Length {
         let mut weighted_sum = 0.0;
         let mut total_weight = 0.0;
-        for bin in self.data.windows(2) {
+        for bin in self.data.get().windows(2) {
             let bin_width = bin[1].0 - bin[0].0;
             let bin_center = bin[0].0;
             let bin_weight = bin[0].1 * bin_width;
@@ -399,8 +439,8 @@ impl Spectrum {
             .data
             .iter()
             .map(|data| (data.0, data.1 * factor))
-            .collect();
-        self.data = spectrum;
+            .collect::<Vec<(f64, f64)>>();
+        self.set_data(spectrum)?;
         Ok(())
     }
     /// Resample a provided [`Spectrum`] to match the given one.
@@ -412,7 +452,7 @@ impl Spectrum {
     ///
     /// Panics if ???.
     pub fn resample(&mut self, spectrum: &Self) {
-        let mut src_it = spectrum.data.windows(2);
+        let mut src_it = spectrum.data.get().windows(2);
         let src_interval = src_it.next();
         if src_interval.is_none() {
             return;
@@ -429,7 +469,9 @@ impl Spectrum {
         let mut bucket_lower = bucket_interval.unwrap()[0];
         let mut bucket_upper = bucket_interval.unwrap()[1];
         let mut bucket_idx: usize = 0;
-        self.data[bucket_idx].1 = 0.0;
+        self.data
+            .replace(bucket_idx, (self.data[bucket_idx].0, 0.0))
+            .unwrap();
         #[allow(clippy::while_float)]
         while src_upper < bucket_lower {
             if let Some(src_interval) = src_it.next() {
@@ -444,7 +486,15 @@ impl Spectrum {
             let ratio = calc_ratio(bucket_lower, bucket_upper, src_lower, src_upper);
             let bucket_value = spectrum.data[src_idx].1 * ratio * (src_upper - src_lower)
                 / (bucket_upper - bucket_lower);
-            self.data[bucket_idx].1 += bucket_value;
+            self.data
+                .replace(
+                    bucket_idx,
+                    (
+                        self.data[bucket_idx].0,
+                        self.data[bucket_idx].1 + bucket_value,
+                    ),
+                )
+                .unwrap();
             if src_upper < bucket_upper {
                 if let Some(src_interval) = src_it.next() {
                     src_lower = src_interval[0].0;
@@ -457,7 +507,9 @@ impl Spectrum {
                 bucket_lower = bucket_interval[0];
                 bucket_upper = bucket_interval[1];
                 bucket_idx += 1;
-                self.data[bucket_idx].1 = 0.0;
+                self.data
+                    .replace(bucket_idx, (self.data[bucket_idx].0, 0.0))
+                    .unwrap();
                 continue;
             }
             break;
@@ -467,12 +519,13 @@ impl Spectrum {
     pub fn filter(&mut self, filter_spectrum: &Self) {
         let mut resampled_spec = self.clone();
         resampled_spec.resample(filter_spectrum);
-        self.data = self
-            .data
-            .iter()
-            .zip(resampled_spec.data.iter())
-            .map(|d| (d.0.0, d.0.1 * d.1.1))
-            .collect();
+        let _ = self.set_data(
+            self.data
+                .iter()
+                .zip(resampled_spec.data.iter())
+                .map(|d| (d.0.0, d.0.1 * d.1.1))
+                .collect::<Vec<(f64, f64)>>(),
+        );
     }
     /// Filter a spectrum with a given filter type.
     ///
@@ -493,39 +546,44 @@ impl Spectrum {
     pub fn split_by_spectrum(&mut self, filter_spectrum: &Self) -> Self {
         let mut resampled_spec = self.clone();
         resampled_spec.resample(filter_spectrum);
-        let mut split_data = self.data.clone();
-        self.data = self
-            .data
-            .iter()
-            .zip(resampled_spec.data.iter())
-            .map(|d| (d.0.0, d.0.1 * d.1.1))
-            .collect();
-        split_data = split_data
-            .iter()
-            .zip(resampled_spec.data.iter())
-            .map(|d| (d.0.0, d.0.1 * (1.0 - d.1.1)))
-            .collect();
-        Self { data: split_data }
+        let mut split_data = self.clone();
+        let _ = self.set_data(
+            self.data
+                .iter()
+                .zip(resampled_spec.data.iter())
+                .map(|d| (d.0.0, d.0.1 * d.1.1))
+                .collect::<Vec<(f64, f64)>>(),
+        );
+        let _ = split_data.set_data(
+            split_data
+                .iter()
+                .zip(resampled_spec.data.iter())
+                .map(|d| (d.0.0, d.0.1 * (1.0 - d.1.1)))
+                .collect::<Vec<(f64, f64)>>(),
+        );
+
+        split_data
     }
-    /// Modify the spectrum by a given function or closure.
-    pub fn map_mut<F>(&mut self, f: F)
-    where
-        F: FnMut(&mut (f64, f64)) -> (f64, f64),
-    {
-        self.data = self.data.iter_mut().map(f).collect();
-    }
+    // /// Modify the spectrum by a given function or closure.
+    // pub fn map_mut<F>(&mut self, f: F)
+    // where
+    //     F: FnMut(&mut (f64, f64)) -> (f64, f64),
+    // {
+    //     self.data = self.data.iter_mut().map(f).collect();
+    // }
     /// Add a given spectrum.
     ///
     /// The given spectrum might be resampled in order to match self.
     pub fn add(&mut self, spectrum_to_be_added: &Self) {
         let mut resampled_spec = self.clone();
         resampled_spec.resample(spectrum_to_be_added);
-        self.data = self
-            .data
-            .iter()
-            .zip(resampled_spec.data.iter())
-            .map(|d| (d.0.0, d.0.1 + d.1.1))
-            .collect();
+        let _ = self.set_data(
+            self.data
+                .iter()
+                .zip(resampled_spec.data.iter())
+                .map(|d| (d.0.0, d.0.1 + d.1.1))
+                .collect::<Vec<(f64, f64)>>(),
+        );
     }
     /// Subtract a given spectrum.
     ///
@@ -534,12 +592,13 @@ impl Spectrum {
     pub fn sub(&mut self, spectrum_to_be_subtracted: &Self) {
         let mut resampled_spec = self.clone();
         resampled_spec.resample(spectrum_to_be_subtracted);
-        self.data = self
-            .data
-            .iter()
-            .zip(resampled_spec.data.iter())
-            .map(|d| (d.0.0, (d.0.1 - d.1.1).clamp(0.0, f64::abs(d.0.1 - d.1.1))))
-            .collect();
+        let _ = self.set_data(
+            self.data
+                .iter()
+                .zip(resampled_spec.data.iter())
+                .map(|d| (d.0.0, (d.0.1 - d.1.1).clamp(0.0, f64::abs(d.0.1 - d.1.1))))
+                .collect::<Vec<(f64, f64)>>(),
+        );
     }
 }
 
@@ -581,33 +640,6 @@ impl Plottable for Spectrum {
     }
 }
 
-// /// Builder for the generation of [`LightData`].
-// #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
-// pub enum SpectrumDataBuilder {
-//     Gaussian(Gaussian),
-//     FromFile(PathBuf),
-//     LaserLines(LaserLines),
-//     // SpectralFilter(SpectralFilterBuilder),
-//     // LowPass,
-//     // HighPass,
-// }
-
-// impl SpectrumDataBuilder {
-//     /// Create [`LightData`] from the builder definition.
-//     ///
-//     /// # Errors
-//     ///
-//     /// This function will return an error if the concrete implementation of the builder fails.
-//     pub fn build(self) -> OpmResult<Spectrum> {
-//         match self {
-//             Self::Energy(e) => e.build(),
-//             Self::Geometric(r) => r.build(),
-//             // Self::Fourier => Ok(LightData::Fourier),
-//         }
-//     }
-
-// }
-
 impl<'a> IntoIterator for &'a Spectrum {
     type IntoIter = std::slice::Iter<'a, (f64, f64)>;
     type Item = &'a (f64, f64);
@@ -630,7 +662,7 @@ impl From<Spectrum> for Proptype {
 impl Display for Spectrum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_length = Length::format_args(nanometer, Abbreviation);
-        for value in &self.data {
+        for value in self.data() {
             writeln!(
                 f,
                 "{:7.2} -> {}",
@@ -646,7 +678,7 @@ impl Display for Spectrum {
 impl Debug for Spectrum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_length = Length::format_args(nanometer, Abbreviation);
-        for value in &self.data {
+        for value in self.data() {
             writeln!(
                 f,
                 "{:7.2} -> {}",
@@ -735,8 +767,8 @@ mod test {
         let s = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5));
         assert!(s.is_ok());
         assert_eq!(
-            s.as_ref().unwrap().data,
-            vec![
+            s.as_ref().unwrap().data.get(),
+            &vec![
                 (1.0, 0.0),
                 (1.5, 0.0),
                 (2.0, 0.0),
@@ -797,8 +829,10 @@ mod test {
     }
     #[test]
     fn from_laser_lines_single() {
-        let s = Spectrum::from_laser_lines(vec![(micrometer!(1.0), joule!(1.0))], nanometer!(1.0))
-            .unwrap();
+        let s = Spectrum::from_laser_lines(
+            &EnergyLaserLines::new(vec![(micrometer!(1.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
+        )
+        .unwrap();
         assert_eq!(s.total_energy(), 1.0);
         assert_abs_diff_eq!(s.data[0].0, 1.0);
         assert_abs_diff_eq!(s.data[1].0, 1.001);
@@ -808,11 +842,14 @@ mod test {
     #[test]
     fn from_laser_lines_double() {
         let s = Spectrum::from_laser_lines(
-            vec![
-                (micrometer!(1.0), joule!(1.0)),
-                (micrometer!(1.010), joule!(0.5)),
-            ],
-            nanometer!(1.0),
+            &EnergyLaserLines::new(
+                vec![
+                    (micrometer!(1.0), joule!(1.0)),
+                    (micrometer!(1.010), joule!(0.5)),
+                ],
+                nanometer!(1.0),
+            )
+            .unwrap(),
         )
         .unwrap();
         assert_abs_diff_eq!(s.total_energy(), 1.5, epsilon = 1.0E-9);
@@ -958,9 +995,9 @@ mod test {
     }
     #[test]
     fn get_value() {
-        let s = Spectrum {
-            data: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 4.0)],
-        };
+        let mut s = Spectrum::default();
+        let data = vec![(1.0, 1.0), (2.0, 2.0), (3.0, 4.0)];
+        s.set_data(data).unwrap();
         assert_eq!(s.get_value(&micrometer!(0.9)), None);
         assert_eq!(s.get_value(&micrometer!(1.0)), Some(1.0));
         assert_eq!(s.get_value(&micrometer!(1.2)), Some(1.2));
@@ -970,15 +1007,16 @@ mod test {
         assert_eq!(s.get_value(&micrometer!(3.1)), None);
     }
     #[test]
+    #[ignore] //cannot be empty
     fn get_value_empty() {
-        let s = Spectrum { data: vec![] };
-        assert_eq!(s.get_value(&micrometer!(1.0)), None);
-        let s = Spectrum {
-            data: vec![(1.0, 1.0)],
-        };
-        assert_eq!(s.get_value(&micrometer!(0.9)), None);
-        assert_eq!(s.get_value(&micrometer!(1.0)), Some(1.0));
-        assert_eq!(s.get_value(&micrometer!(1.1)), None);
+        // let s = Spectrum { data: vec![] };
+        // assert_eq!(s.get_value(&micrometer!(1.0)), None);
+        // let s = Spectrum {
+        //     data: vec![(1.0, 1.0)],
+        // };
+        // assert_eq!(s.get_value(&micrometer!(0.9)), None);
+        // assert_eq!(s.get_value(&micrometer!(1.0)), Some(1.0));
+        // assert_eq!(s.get_value(&micrometer!(1.1)), None);
     }
     #[test]
     fn scale_vertical() {
@@ -1108,17 +1146,64 @@ mod test {
         let s = prep();
         let s_ron =
             ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).unwrap();
-        assert_eq!(s_ron,
-        "(\n    data: [\n        (1.0, 0.0),\n        (1.5, 0.0),\n        (2.0, 0.0),\n        (2.5, 0.0),\n        (3.0, 0.0),\n        (3.5, 0.0),\n    ],\n)".to_string());
+        println!("{}", s_ron);
+        assert_eq!(
+            s_ron,
+            "(
+    data: (
+        values: [
+            (1.0, 0.0),
+            (1.5, 0.0),
+            (2.0, 0.0),
+            (2.5, 0.0),
+            (3.0, 0.0),
+            (3.5, 0.0),
+        ],
+        element_validator: (
+            v1: (),
+            v2: (
+                v1: (),
+                v2: (),
+                _marker: (),
+            ),
+            _marker: (),
+        ),
+        container_validator: (),
+    ),
+)"
+            .to_string()
+        );
     }
     #[test]
     fn deserialize() {
-        let s: Spectrum =
-            ron::from_str("(data:[(1.0, 0.1),(1.5,0.2),(2.0,0.3),(2.5,0.4),(3.0,0.5),(3.5,0.6)])")
-                .unwrap();
+        let s: Spectrum = ron::from_str(
+            "(
+    data: (
+        values: [
+            (1.0, 0.1),
+            (1.5, 0.2),
+            (2.0, 0.3),
+            (2.5, 0.4),
+            (3.0, 0.5),
+            (3.5, 0.6),
+        ],
+        element_validator: (
+            v1: (),
+            v2: (
+                v1: (),
+                v2: (),
+                _marker: (),
+            ),
+            _marker: (),
+        ),
+        container_validator: (),
+    ),
+)",
+        )
+        .unwrap();
         assert_eq!(
-            s.data,
-            vec![
+            s.data.get(),
+            &vec![
                 (1.0, 0.1),
                 (1.5, 0.2),
                 (2.0, 0.3),

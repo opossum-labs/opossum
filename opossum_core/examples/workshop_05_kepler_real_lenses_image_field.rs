@@ -10,7 +10,7 @@ fn main() -> OpmResult<()> {
         joule!(1.0),
         nanometer!(1000.0),
         degree!(1.0),
-    )));
+    )?));
     let src = Source::new("image source", light_data_builder);
     let i_src = scenery.add_node(src)?;
     let mut fluence_det = FluenceDetector::new("Object Plane");
