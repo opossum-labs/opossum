@@ -510,7 +510,7 @@ impl Default for ImageSrc {
     fn default() -> Self {
         Self {
             file_path: validated!(
-                PathBuf::new(),
+                PathBuf::from("empty.jpg"),
                 PathValid::new(Some(vec!["jpg", "bmp", "png"]))
             )
             .unwrap(),
