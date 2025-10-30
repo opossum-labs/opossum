@@ -59,7 +59,7 @@ fn start_backend() -> ProcessHandle {
     #[cfg(target_os = "windows")]
     let backend_path = gui_exe_dir.join("opossum_backend.exe");
     #[cfg(target_os = "linux")]
-    let backend_path = gui_exe_dir.join("../lib/OpossumGui/opossum_backend");
+    let backend_path = gui_exe_dir.join("opossum_backend");
     println!("Starting backend server... at {}", backend_path.display());
     let mut command = Command::new(backend_path);
     // On Windows, you might need to prevent a new console window from opening.

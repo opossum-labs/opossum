@@ -103,8 +103,8 @@ silent = false
 
 [bundle.windows.wix]
 language = []
-component_group_refs = [] # ["HelperBinariesComponentGroup"]
-fragment_paths = [] # ["packaging/extra_binaries.wxs"]
+component_group_refs = []
+fragment_paths = []
 component_refs = []
 feature_group_refs = []
 feature_refs = []
@@ -115,7 +115,3 @@ fips_compliant = false
 banner_path = "../opossum_core/logo/Logo_InstallBanner.png"
 dialog_image_path = "../opossum_core/logo/Logo_InstallDialog.png"
 license_path = "../LICENSE"
-
-# [bundle.deb]
-# # bundle the helper binaries
-# files = { "usr/lib/OpossumGui/opossum_backend" = "../target/release/opossum_backend", "usr/lib/OpossumGui/opossum_core" = "../target/release/opossum_cli"}
