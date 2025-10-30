@@ -81,7 +81,6 @@ pub fn App() -> Element {
                     }));
                 }
                 MenuSelection::NewProject => {
-                    model_modified.set(true);
                     model_file_path.set(None);
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
                 }
