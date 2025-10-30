@@ -17,8 +17,10 @@ use crate::{
 };
 use dioxus::prelude::*;
 use grating_alignment::GratingAlignmentInputs;
-use opossum_backend::{
-    AlignmentAxis, Isometry, Properties, RotationAxis, TranslationAxis, degree, millimeter,
+use opossum_core::{
+    degree, millimeter,
+    prelude::{Isometry, Properties},
+    utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis},
 };
 use strum::IntoEnumIterator;
 use uom::si::{angle::degree, length::millimeter};

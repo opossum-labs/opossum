@@ -1,5 +1,5 @@
 use actix_web::{Responder, get, web::Html};
-use utoipa_actix_web::service_config::ServiceConfig;
+// use utoipa_actix_web::service_config::ServiceConfig;
 
 /// Return a welcome message
 ///
@@ -49,9 +49,9 @@ async fn welcome() -> impl Responder {
 </html>")
 }
 
-pub fn config(cfg: &mut ServiceConfig<'_>) {
-    cfg.service(welcome);
-}
+// pub fn config(cfg: &mut ServiceConfig<'_>) {
+//     cfg.service(welcome);
+// }
 #[cfg(test)]
 mod test {
     use actix_web::{App, dev::Service, http::StatusCode, test};

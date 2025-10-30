@@ -1,6 +1,13 @@
-use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
+use crate::components::{
+    logger::LogResultExt,
+    node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
+};
 use dioxus::prelude::*;
-use opossum_backend::{FibonacciEllipse, PosDistType, millimeter, try_f64_to_usize};
+use opossum_core::{
+    millimeter,
+    position_distributions::{FibonacciEllipse, PosDistType},
+    utils::try_f64_to_usize,
+};
 use strum::EnumIter;
 use uom::si::length::millimeter;
 
@@ -47,14 +54,19 @@ impl IntoInputData<f64, FibonacciEllipse, PosDistType> for FibonacciEllipseParam
 
     fn setter_from_obj(&self) -> impl FnMut(&mut FibonacciEllipse, f64) {
         match self {
-            Self::MajorAxis => {
-                move |obj: &mut FibonacciEllipse, val: f64| obj.set_radius_x(millimeter!(val))
-            }
-            Self::MinorAxis => {
-                move |obj: &mut FibonacciEllipse, val: f64| obj.set_radius_y(millimeter!(val))
-            }
+            Self::MajorAxis => move |obj: &mut FibonacciEllipse, val: f64| {
+                obj.set_radius_x(millimeter!(val))
+                    .log_err_with_context("`set_radius_x` of fibonacci-ellipse.");
+            },
+            Self::MinorAxis => move |obj: &mut FibonacciEllipse, val: f64| {
+                obj.set_radius_y(millimeter!(val))
+                    .log_err_with_context("`set_radius_y` of fibonacci-ellipse.");
+            },
             Self::Points => move |obj: &mut FibonacciEllipse, val: f64| {
-                obj.set_nr_of_points(try_f64_to_usize(val).unwrap());
+                if let Some(val) = try_f64_to_usize(val) {
+                    obj.set_nr_of_points(val)
+                        .log_err_with_context("`set_nr_of_points` of fibonacci-ellipse.");
+                }
             },
         }
     }

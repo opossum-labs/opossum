@@ -12,7 +12,8 @@ publish = true
 readme = "README.md"
 
 [dependencies]
-opossum_backend = { workspace = true }
+# opossum_backend = { workspace = true }
+opossum_core = { workspace = true }
 
 approx.workspace = true
 chrono.workspace = true
@@ -26,11 +27,10 @@ serde_json.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 tempfile.workspace = true
-tokio.workspace = true
 uom.workspace = true
 uuid.workspace = true
 
-dioxus = { version = "0.6"}
+dioxus = { version = "0.6" }
 dioxus-free-icons = { version = "0.9", features = ["font-awesome-solid"] }
 directories = "6.0.0"
 futures-util = "0.3.31"
@@ -40,9 +40,12 @@ reqwest = { version = "0.12.14", features = ["json", "stream"] }
 rfd = "0.15.3"
 rust-sugiyama = "0.3"
 
-# wasm-bindgen = "0.2"
-# wasm-bindgen-futures = "0.4.50"
-# serde-wasm-bindgen = "0.6.5"
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", features = ["process"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1", default-features = false }
+web-sys = "0.3"
 
 [build-dependencies]
 winres = "0.1"

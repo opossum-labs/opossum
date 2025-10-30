@@ -1,3 +1,4 @@
+#[cfg(not(target_arch = "wasm32"))]
 pub mod controls;
 pub mod edit;
 pub mod help;

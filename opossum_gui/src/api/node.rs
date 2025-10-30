@@ -1,8 +1,9 @@
 use dioxus::html::geometry::euclid::default::Point2D;
-use opossum_backend::{
-    AnalyzerInfo, AnalyzerType, Fluence, Isometry, NodeAttr, Proptype,
-    nodes::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
-};
+use opossum_core::nodes::NodeAttr;
+use opossum_core::nodes::fluence_detector::Fluence;
+use opossum_core::opm_document::AnalyzerInfo;
+use opossum_core::prelude::*;
+use opossum_core::types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo};
 use uuid::Uuid;
 
 use crate::HTTP_API_CLIENT;

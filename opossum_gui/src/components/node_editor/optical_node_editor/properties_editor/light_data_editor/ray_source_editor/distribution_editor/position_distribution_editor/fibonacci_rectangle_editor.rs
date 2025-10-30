@@ -1,6 +1,13 @@
-use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
+use crate::components::{
+    logger::LogResultExt,
+    node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
+};
 use dioxus::prelude::*;
-use opossum_backend::{FibonacciRectangle, PosDistType, millimeter, try_f64_to_usize};
+use opossum_core::{
+    millimeter,
+    position_distributions::{FibonacciRectangle, PosDistType},
+    utils::try_f64_to_usize,
+};
 use strum::EnumIter;
 use uom::si::length::millimeter;
 
@@ -49,13 +56,18 @@ impl IntoInputData<f64, FibonacciRectangle, PosDistType> for FibonacciRectParam 
     fn setter_from_obj(&self) -> impl FnMut(&mut FibonacciRectangle, f64) {
         match self {
             Self::SideLengthX => move |obj: &mut FibonacciRectangle, val: f64| {
-                obj.set_side_length_x(millimeter!(val));
+                obj.set_side_length_x(millimeter!(val))
+                    .log_err_with_context("`set_side_length_x` of fibonacci-rectangle.");
             },
             Self::SideLengthY => move |obj: &mut FibonacciRectangle, val: f64| {
-                obj.set_side_length_y(millimeter!(val));
+                obj.set_side_length_y(millimeter!(val))
+                    .log_err_with_context("`set_side_length_y` of fibonacci-rectangle.");
             },
             Self::Points => move |obj: &mut FibonacciRectangle, val: f64| {
-                obj.set_nr_of_points(try_f64_to_usize(val).unwrap());
+                if let Some(val) = try_f64_to_usize(val) {
+                    obj.set_nr_of_points(val)
+                        .log_err_with_context("`set_nr_of_points` of fibonacci-rectangle.");
+                }
             },
         }
     }

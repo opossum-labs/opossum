@@ -22,9 +22,11 @@ product-icon = "opossum/logo/Logo_square.ico"
 banner = "opossum/logo/Logo_InstallBanner.png"
 dialog = "opossum/logo/Logo_InstallDialog.png"
 
+# [lib]
+# crate-type = ["cdylib", "rlib"] # Necessary for WASM build
+
 [dependencies]
 opm_macros_lib = { workspace = true }
-
 approx.workspace = true
 chrono.workspace = true
 itertools.workspace = true
@@ -46,7 +48,7 @@ plotters = "0.3"
 libm = { version = "0.2" }
 embed-doc-image = "0.1"                                  # allows for embedded images in the rust API doc
 image = "0.25"
-rand = "0.9"
+fastrand = "2.3"
 sobol = "1"
 colorous = "1"
 delaunator = "1"
@@ -60,6 +62,7 @@ earcutr = "0.5"
 num-traits = "0.2"
 mutants = "0.0.3"
 
+
 [lints.rust]
 # missing_docs = "warn"
 
@@ -67,6 +70,7 @@ mutants = "0.0.3"
 doc-images = []
 
 [dev-dependencies]
+static_assertions = "1.1"
 regex = "1"
 assert_matches = "1"
 testing_logger = "0.1"

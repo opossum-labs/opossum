@@ -1,12 +1,11 @@
-use dioxus::prelude::*;
-use opossum_backend::PortType;
-
 use crate::components::scenery_editor::{
     constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
     edges::edges_component::{EdgePort, NewEdgeCreationStart},
     graph_editor::graph_editor_component::{DragStatus, EditorState},
     node::NodeElement,
 };
+use dioxus::prelude::*;
+use opossum_core::prelude::*;
 #[derive(Clone, Eq, PartialEq, Default, Debug)]
 pub struct Ports {
     input_ports: Vec<String>,

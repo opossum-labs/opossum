@@ -14,7 +14,10 @@ use crate::components::node_editor::{
 use dioxus::prelude::*;
 use gaussian_editor::GaussianSpectrumParam;
 use laser_lines_editor::LaserLineInput;
-use opossum_backend::{DefaultFromName, SpecDistType, ray_data_builder::RayDataBuilder};
+use opossum_core::{
+    prelude::RayDataBuilder, spectral_distribution::SpecDistType,
+    utils::default_from_name::DefaultFromName,
+};
 
 #[component]
 pub fn RaySpectralDistributionEditor(spect_dist_type_sig: Signal<SpecDistType>) -> Element {

@@ -8,7 +8,7 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::{Proptype, millimeter};
+use opossum_core::prelude::{Proptype, millimeter};
 use uom::si::{f64::Length, length::millimeter};
 
 #[component]

@@ -8,42 +8,6 @@ use crate::{
 };
 use std::fmt::Debug;
 
-// pub trait DynClone {
-//     fn dyn_clone(&self) -> Box<dyn Validator>;
-// }
-// impl<T> DynClone for T
-// where
-//     T: 'static + Validator + Clone,
-// {
-//     fn dyn_clone(&self) -> Box<dyn Validator> {
-//         Box::new(self.clone())
-//     }
-// }
-// // Implement Clone for Box<dyn Validator>
-// impl Clone for Box<dyn Validator> {
-//     fn clone(&self) -> Self {
-//         self.dyn_clone()
-//     }
-// }
-// pub trait Validator: DynClone + Debug + Send + Sync {
-//     /// Validate a given `Proptype`.
-//     ///
-//     /// # Errors
-//     ///
-//     /// This function will return an error if the validation was not successful.
-//     fn validate(&self, prop: &Proptype) -> OpmResult<()>;
-// }
-
-// impl<F> Validator for F
-// where
-//     F: Fn(&Proptype) -> OpmResult<()> + Clone + Debug + Send + Sync + 'static,
-// {
-//     fn validate(&self, prop: &Proptype) -> OpmResult<()> {
-//         // Just call the closure.
-//         self(prop)
-//     }
-// }
-
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Validator {
     NumericIsFinite,
@@ -66,6 +30,7 @@ pub enum Validator {
     AndValidator {
         validators: Vec<Self>,
     },
+    LightDataBuilderValidator,
 }
 
 impl Validator {
@@ -91,6 +56,7 @@ impl Validator {
             Self::StringIsNotEmpty => Self::validate_string_is_not_empty(prop),
             Self::OrValidator { validators } => Self::validate_or_validator(prop, validators),
             Self::AndValidator { validators } => Self::validate_and_validator(prop, validators),
+            Self::LightDataBuilderValidator => Self::validate_light_data_builder(prop),
         }
     }
     fn validate_numeric_is_finite(prop: &Proptype) -> OpmResult<()> {
@@ -244,7 +210,6 @@ impl Validator {
             Ok(())
         }
     }
-
     fn validate_or_validator(prop: &Proptype, validators: &Vec<Self>) -> OpmResult<()> {
         let mut result = Ok(());
         for validator in validators {
@@ -255,11 +220,24 @@ impl Validator {
         }
         result
     }
-
     fn validate_and_validator(prop: &Proptype, validators: &Vec<Self>) -> OpmResult<()> {
         for validator in validators {
             validator.validate(prop)?;
         }
         Ok(())
+    }
+    fn validate_light_data_builder(prop: &Proptype) -> OpmResult<()> {
+        if let Proptype::LightDataBuilder(ldb) = prop {
+            match ldb.clone().build() {
+                Err(e) => Err(OpossumError::Properties(format!(
+                    "light_data_builder validation failed: {e}"
+                ))),
+                Ok(_) => Ok(()),
+            }
+        } else {
+            Err(OpossumError::Properties(
+                "lightdatabuilder validator is only for Proptype::LightDataBuilder".into(),
+            ))
+        }
     }
 }

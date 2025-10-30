@@ -1,7 +1,8 @@
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
-use opossum_backend::{RefractiveIndexType, nanometer, refr_index_schott::RefrIndexSchott};
+use opossum_core::{nanometer, prelude::RefrIndexSchott, refractive_index::RefractiveIndexType};
 use strum::EnumIter;
+use strum::IntoEnumIterator;
 use uom::si::length::nanometer;
 
 #[derive(Clone, Copy, PartialEq, Eq, EnumIter)]
@@ -84,5 +85,46 @@ impl IntoInputData<f64, RefrIndexSchott, RefractiveIndexType> for SchottParam {
             Self::E => move |obj: &mut RefrIndexSchott, val: f64| obj.set_a4(val),
             Self::F => move |obj: &mut RefrIndexSchott, val: f64| obj.set_a5(val),
         }
+    }
+
+    fn create_callback(
+        &self,
+        mut obj: RefrIndexSchott,
+        mut sig: Signal<RefractiveIndexType>,
+    ) -> crate::components::node_editor::CallbackWrapper {
+        let this = *self;
+
+        crate::components::node_editor::CallbackWrapper::new(move |e: Event<FormData>| {
+            if let Some(value) = this.parse_value(e) {
+                let mut setter = this.setter_from_obj();
+                setter(&mut obj, value);
+                sig.set(obj.clone().into());
+            }
+        })
+    }
+
+    fn to_input_data(
+        &self,
+        obj: RefrIndexSchott,
+        sig: Signal<RefractiveIndexType>,
+    ) -> crate::components::node_editor::inputs::InputData {
+        let value_str = self.create_value_string(&obj);
+        crate::components::node_editor::inputs::InputData::new(
+            Into::<InputParam>::into(*self),
+            self.create_id_string().as_str(),
+            self.create_callback(obj, sig),
+            value_str,
+        )
+    }
+
+    fn to_input_data_vec(
+        obj: &RefrIndexSchott,
+        sig: Signal<RefractiveIndexType>,
+    ) -> Vec<crate::components::node_editor::inputs::InputData> {
+        let mut input_data = Vec::<crate::components::node_editor::inputs::InputData>::new();
+        for enum_variant in Self::iter() {
+            input_data.push(enum_variant.to_input_data(obj.clone(), sig));
+        }
+        input_data
     }
 }

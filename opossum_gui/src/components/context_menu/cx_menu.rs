@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{CONTEXT_MENU, components::context_menu::sub_menu_item::MenuItem};
 use dioxus::prelude::*;
-use opossum_backend::nodes::NewRefNode;
+use opossum_core::types::api_types::NewRefNode;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CxtCommand {

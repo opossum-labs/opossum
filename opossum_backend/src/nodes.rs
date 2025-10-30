@@ -1,6 +1,6 @@
 use crate::{
     app_state::{AppState, NodeCacheItem},
-    error::ErrorResponse,
+    error::BackEndErrorResponse,
     utils::update_node_attr,
 };
 use actix_web::{
@@ -19,75 +19,12 @@ use opossum_core::{
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
     properties::Proptype,
+    types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     utils::{LockExt, geom_transformation::Isometry},
 };
-use serde::{Deserialize, Serialize};
 use uom::si::length::meter;
-use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
-
-#[derive(Serialize, Deserialize, ToSchema, Clone, Debug, PartialEq)]
-pub struct NodeInfo {
-    uuid: Uuid,
-    name: String,
-    inverted: bool,
-    node_type: String,
-    input_ports: Vec<String>,
-    output_ports: Vec<String>,
-    gui_position: Option<(f64, f64)>,
-}
-
-impl NodeInfo {
-    #[must_use]
-    pub const fn new(
-        uuid: Uuid,
-        name: String,
-        inverted: bool,
-        node_type: String,
-        input_ports: Vec<String>,
-        output_ports: Vec<String>,
-        gui_position: Option<(f64, f64)>,
-    ) -> Self {
-        Self {
-            uuid,
-            name,
-            inverted,
-            node_type,
-            input_ports,
-            output_ports,
-            gui_position,
-        }
-    }
-    #[must_use]
-    pub const fn uuid(&self) -> Uuid {
-        self.uuid
-    }
-    #[must_use]
-    pub const fn inverted(&self) -> bool {
-        self.inverted
-    }
-    #[must_use]
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-    #[must_use]
-    pub fn node_type(&self) -> &str {
-        &self.node_type
-    }
-    #[must_use]
-    pub const fn gui_position(&self) -> Option<(f64, f64)> {
-        self.gui_position
-    }
-    #[must_use]
-    pub fn input_ports(&self) -> Vec<String> {
-        self.input_ports.clone()
-    }
-    #[must_use]
-    pub fn output_ports(&self) -> Vec<String> {
-        self.output_ports.clone()
-    }
-}
 
 /// helper function for checking the ACCEPT header.
 fn wants_ron_guard(ctx: &GuardContext<'_>) -> bool {
@@ -110,14 +47,14 @@ fn wants_ron_guard(ctx: &GuardContext<'_>) -> bool {
     ),
     responses(
         (status = OK, description = "get all nodes of the group", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
     )
 )]
 #[get("/{uuid}/nodes")]
 async fn get_subnodes(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<Json<Vec<NodeInfo>>, ErrorResponse> {
+) -> Result<Json<Vec<NodeInfo>>, BackEndErrorResponse> {
     let document = data.document.lock();
     let scenery = document.scenery().clone();
     drop(document);
@@ -134,15 +71,15 @@ async fn get_subnodes(
                 let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = node.gui_position().map(|position| (position.x, position.y));
                 drop(node);
-                NodeInfo {
-                    uuid: n.uuid(),
+                NodeInfo::new(
+                    n.uuid(),
                     name,
                     inverted,
                     node_type,
                     input_ports,
                     output_ports,
                     gui_position,
-                }
+                )
             })
             .collect::<Vec<NodeInfo>>()
     })?;
@@ -154,14 +91,14 @@ async fn get_subnodes(
     ),
     responses(
         (status = OK, description = "all connections of the group", body= Vec<ConnectInfo>, content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
     )
 )]
 #[get("/{uuid}/connections")]
 pub async fn get_connections(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<Json<Vec<ConnectInfo>>, ErrorResponse> {
+) -> Result<Json<Vec<ConnectInfo>>, BackEndErrorResponse> {
     let document = data.document.lock();
     let scenery = document.scenery().clone();
     drop(document);
@@ -182,22 +119,6 @@ pub async fn get_connections(
     })?;
     Ok(Json(connect_infos))
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
-pub struct NewNode {
-    node_type: String,
-    gui_position: (f64, f64),
-}
-
-impl NewNode {
-    #[must_use]
-    pub const fn new(node_type: String, gui_position: (f64, f64)) -> Self {
-        Self {
-            node_type,
-            gui_position,
-        }
-    }
-}
-
 /// Paste a copied node
 ///
 /// This function sends an already copied optical node to the frontend
@@ -208,14 +129,14 @@ impl NewNode {
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully pasted", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/node_paste")]
 async fn post_paste_node(
     data: web::Data<AppState>,
     node_paste_info: web::Json<(Uuid, (f64, f64))>,
-) -> Result<Json<Option<NodeInfo>>, ErrorResponse> {
+) -> Result<Json<Option<NodeInfo>>, BackEndErrorResponse> {
     let (group_id, node_pos) = node_paste_info.into_inner();
 
     //get optic ref of node that should be copied
@@ -240,15 +161,15 @@ async fn post_paste_node(
 
         let node = new_node_ref.optical_ref.lock_opm()?;
 
-        let node_info = NodeInfo {
-            uuid: new_node_uuid,
-            name: node.name(),
-            inverted: node.inverted(),
-            node_type: node.node_type(),
-            input_ports: node.ports().names(&PortType::Input),
-            output_ports: node.ports().names(&PortType::Output),
+        let node_info = NodeInfo::new(
+            new_node_uuid,
+            node.name(),
+            node.inverted(),
+            node.node_type(),
+            node.ports().names(&PortType::Input),
+            node.ports().names(&PortType::Output),
             gui_position,
-        };
+        );
         drop(node);
         Some(node_info)
     } else {
@@ -269,14 +190,14 @@ async fn post_paste_node(
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/node_copy")]
 async fn post_copy_node(
     data: web::Data<AppState>,
     node_id: web::Json<Uuid>,
-) -> Result<(), ErrorResponse> {
+) -> Result<(), BackEndErrorResponse> {
     let node_id_to_copy = node_id.into_inner();
 
     //get optic ref of nde that should be copied
@@ -300,14 +221,14 @@ async fn post_copy_node(
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/analyzer_copy")]
 async fn post_copy_analyzer(
     data: web::Data<AppState>,
     analyzer_id: web::Json<Uuid>,
-) -> Result<(), ErrorResponse> {
+) -> Result<(), BackEndErrorResponse> {
     let analyzer_id_to_copy = analyzer_id.into_inner();
     let document = data.document.lock();
     if let Some(analyzer) = document.analyzers().get(&analyzer_id_to_copy).cloned() {
@@ -318,7 +239,7 @@ async fn post_copy_analyzer(
         drop(node_cache);
         Ok(())
     } else {
-        Err(ErrorResponse::new(
+        Err(BackEndErrorResponse::new(
             404,
             "Opossum",
             "Analyzer to be copied was not found in document",
@@ -336,14 +257,14 @@ async fn post_copy_analyzer(
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/analyzer_paste")]
 async fn post_paste_analyzer(
     data: web::Data<AppState>,
     analyzer_pos: web::Json<(f64, f64)>,
-) -> Result<Json<AnalyzerInfo>, ErrorResponse> {
+) -> Result<Json<AnalyzerInfo>, BackEndErrorResponse> {
     let analyzer_pos = analyzer_pos.into_inner();
     let analyzer_cache = data.node_copy_cache.lock();
 
@@ -359,7 +280,7 @@ async fn post_paste_analyzer(
         drop(document);
         Ok(Json(new_analyzer))
     } else {
-        Err(ErrorResponse::new(
+        Err(BackEndErrorResponse::new(
             404,
             "Opossum",
             "No analyzer stored in copy-cache",
@@ -373,17 +294,19 @@ async fn post_paste_analyzer(
 #[utoipa::path(tag = "node",
     responses(
         (status = OK, body= NodeInfo, description = "Node type successfully sent", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "No node stored in copy cache", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "No node stored in copy cache", content_type="application/json")
     )
 )]
 #[get("/copied_node_type")]
-async fn get_copied_node_type(data: web::Data<AppState>) -> Result<Json<bool>, ErrorResponse> {
+async fn get_copied_node_type(
+    data: web::Data<AppState>,
+) -> Result<Json<bool>, BackEndErrorResponse> {
     let node_cache = data.node_copy_cache.lock();
 
     match node_cache.as_ref() {
         Some(NodeCacheItem::Analyzer(_)) => Ok(Json(false)),
         Some(NodeCacheItem::Optical(_)) => Ok(Json(true)),
-        None => Err(ErrorResponse::new(
+        None => Err(BackEndErrorResponse::new(
             404,
             "Opossum",
             "No node stored in copy-cache",
@@ -407,7 +330,7 @@ async fn get_copied_node_type(data: web::Data<AppState>) -> Result<Json<bool>, E
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "Node of the given type not found, UUID not found, no group node", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "Node of the given type not found, UUID not found, no group node", content_type="application/json")
     )
 )]
 #[post("/{uuid}/nodes")]
@@ -415,14 +338,14 @@ async fn post_subnode(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     node_type: web::Json<NewNode>,
-) -> Result<Json<NodeInfo>, ErrorResponse> {
+) -> Result<Json<NodeInfo>, BackEndErrorResponse> {
     let new_node_info = node_type.into_inner();
-    let new_node_ref = create_node_ref(&new_node_info.node_type)?;
+    let new_node_ref = create_node_ref(new_node_info.node_type())?;
     let mut node = new_node_ref.optical_ref.lock_opm()?;
     let node_attr = node.node_attr_mut();
     node_attr.set_gui_position(Some(Point2::new(
-        new_node_info.gui_position.0,
-        new_node_info.gui_position.1,
+        new_node_info.gui_position().0,
+        new_node_info.gui_position().1,
     )));
     drop(node);
     let mut document = data.document.lock();
@@ -435,31 +358,17 @@ async fn post_subnode(
     drop(document);
     let node = new_node_ref.optical_ref.lock_opm()?;
     let gui_position = node.gui_position().map(|position| (position.x, position.y));
-    let node_info = NodeInfo {
-        uuid: new_node_uuid,
-        name: node.name(),
-        inverted: node.inverted(),
-        node_type: node.node_type(),
-        input_ports: node.ports().names(&PortType::Input),
-        output_ports: node.ports().names(&PortType::Output),
+    let node_info = NodeInfo::new(
+        new_node_uuid,
+        node.name(),
+        node.inverted(),
+        node.node_type(),
+        node.ports().names(&PortType::Input),
+        node.ports().names(&PortType::Output),
         gui_position,
-    };
+    );
     drop(node);
     Ok(Json(node_info))
-}
-#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
-pub struct NewRefNode {
-    referring_node: Uuid,
-    gui_position: (f64, f64),
-}
-impl NewRefNode {
-    #[must_use]
-    pub const fn new(referring_node: Uuid, gui_position: (f64, f64)) -> Self {
-        Self {
-            referring_node,
-            gui_position,
-        }
-    }
 }
 /// Add a new reference node to a group node
 ///
@@ -488,7 +397,7 @@ impl NewRefNode {
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found, no group node", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found, no group node", content_type="application/json")
     )
 )]
 #[post("/{uuid}/references")]
@@ -496,7 +405,7 @@ async fn post_subreference(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     ref_node_info: web::Json<NewRefNode>,
-) -> Result<Json<NodeInfo>, ErrorResponse> {
+) -> Result<Json<NodeInfo>, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
     let ref_node_info = ref_node_info.into_inner();
 
@@ -504,12 +413,12 @@ async fn post_subreference(
     let mut node = new_node_ref.optical_ref.lock_opm()?;
     let node_attr = node.node_attr_mut();
     node_attr.set_gui_position(Some(Point2::new(
-        ref_node_info.gui_position.0,
-        ref_node_info.gui_position.1,
+        ref_node_info.gui_position().0,
+        ref_node_info.gui_position().1,
     )));
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    let (referring_node, _) = scenery.node_recursive(ref_node_info.referring_node)?;
+    let (referring_node, _) = scenery.node_recursive(ref_node_info.referring_node())?;
     let ref_node = node.as_refnode_mut().unwrap();
     ref_node.assign_reference(&referring_node);
     drop(referring_node);
@@ -520,15 +429,15 @@ async fn post_subreference(
     drop(document);
     let node = new_node_ref.optical_ref.lock_opm()?;
     let gui_position = node.gui_position().map(|position| (position.x, position.y));
-    let node_info = NodeInfo {
-        uuid: new_node_uuid,
-        name: node.name(),
-        inverted: node.inverted(),
-        node_type: node.node_type(),
-        input_ports: node.ports().names(&PortType::Input),
-        output_ports: node.ports().names(&PortType::Output),
+    let node_info = NodeInfo::new(
+        new_node_uuid,
+        node.name(),
+        node.inverted(),
+        node.node_type(),
+        node.ports().names(&PortType::Input),
+        node.ports().names(&PortType::Output),
         gui_position,
-    };
+    );
     drop(node);
     Ok(Json(node_info))
 }
@@ -544,7 +453,7 @@ async fn post_subreference(
     ),
     responses(
         (status = OK, description = "Node position successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/position/{uuid}")]
@@ -552,7 +461,7 @@ async fn post_node_position(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     position: web::Json<(f64, f64)>,
-) -> Result<(), ErrorResponse> {
+) -> Result<(), BackEndErrorResponse> {
     let uuid = path.into_inner();
     let position = position.into_inner();
     let position = Point2::new(position.0, position.1);
@@ -568,7 +477,7 @@ async fn post_node_position(
         }
         _ => document.analyzers_mut().get_mut(&uuid).map_or_else(
             || {
-                Err(ErrorResponse::new(
+                Err(BackEndErrorResponse::new(
                     404,
                     "Opossum",
                     "uuid not found in nodes or analyzers",
@@ -594,7 +503,7 @@ async fn post_node_position(
     ),
     responses(
         (status = OK, description = "Node name successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/name/{uuid}")]
@@ -602,7 +511,7 @@ async fn post_node_name(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     name: web::Json<String>,
-) -> Result<(), ErrorResponse> {
+) -> Result<(), BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let name = name.into_inner();
     let document = data.document.lock();
@@ -614,7 +523,7 @@ async fn post_node_name(
             .set_name(&name);
         Ok(())
     } else {
-        Err(ErrorResponse::new(
+        Err(BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in nodes",
@@ -633,7 +542,7 @@ async fn post_node_name(
     ),
     responses(
         (status = OK, description = "Node LIDT successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/lidt/{uuid}")]
@@ -641,7 +550,7 @@ async fn post_node_lidt(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     lidt: web::Json<Fluence>,
-) -> Result<(), ErrorResponse> {
+) -> Result<(), BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let lidt = lidt.into_inner();
     let document = data.document.lock();
@@ -653,7 +562,7 @@ async fn post_node_lidt(
             .set_lidt(&lidt);
         Ok(())
     } else {
-        Err(ErrorResponse::new(
+        Err(BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in nodes",
@@ -672,7 +581,7 @@ async fn post_node_lidt(
     ),
     responses(
         (status = OK, description = "Node alignment isometry successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/alignmentisometry/{uuid}")]
@@ -680,7 +589,7 @@ async fn post_node_alignment_isometry(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     isometry_from_gui: web::Json<Isometry>,
-) -> Result<(), ErrorResponse> {
+) -> Result<(), BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let isometry = isometry_from_gui.into_inner();
     let document = data.document.lock();
@@ -692,7 +601,7 @@ async fn post_node_alignment_isometry(
             .set_alignment(isometry);
         Ok(())
     } else {
-        Err(ErrorResponse::new(
+        Err(BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in nodes",
@@ -712,7 +621,7 @@ async fn post_node_alignment_isometry(
     ),
     responses(
         (status = OK, description = "Node property successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/ron")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/ron")
     )
 )]
 #[post("/property/{uuid}")]
@@ -720,12 +629,12 @@ async fn post_node_property(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     body: String,
-) -> Result<HttpResponse, ErrorResponse> {
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let (prop_key, prop_value): (String, Proptype) = match ron::de::from_str(body.as_str()) {
         Ok((key, proptype)) => (key, proptype),
         Err(e) => {
-            return Err(ErrorResponse::new(
+            return Err(BackEndErrorResponse::new(
                 400,
                 "Opossum",
                 &format!("Failed to deserialize property value: {e}"),
@@ -743,10 +652,14 @@ async fn post_node_property(
             Ok(()) => Ok(HttpResponse::Ok()
                 .content_type("application/ron")
                 .body(ron::ser::to_string("").unwrap())),
-            Err(e) => Err(ErrorResponse::new(400, "Opossum", e.to_string().as_str())),
+            Err(e) => Err(BackEndErrorResponse::new(
+                400,
+                "Opossum",
+                e.to_string().as_str(),
+            )),
         }
     } else {
-        Err(ErrorResponse::new(
+        Err(BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in nodes",
@@ -765,7 +678,7 @@ async fn post_node_property(
     ),
     responses(
         (status = OK, description = "Node isometry successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/isometry/{uuid}")]
@@ -773,7 +686,7 @@ async fn post_node_isometry(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     iso: web::Json<Option<Isometry>>,
-) -> Result<(), ErrorResponse> {
+) -> Result<(), BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let iso_opt = iso.into_inner();
     let document = data.document.lock();
@@ -785,7 +698,7 @@ async fn post_node_isometry(
             .set_isometry_option(iso_opt);
         Ok(())
     } else {
-        Err(ErrorResponse::new(
+        Err(BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in nodes",
@@ -804,7 +717,7 @@ async fn post_node_isometry(
     ),
     responses(
         (status = OK, description = "Node inverted status successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/inversion/{uuid}")]
@@ -812,7 +725,7 @@ async fn post_node_inversion(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     inverted: web::Json<bool>,
-) -> Result<Json<Vec<ConnectInfo>>, ErrorResponse> {
+) -> Result<Json<Vec<ConnectInfo>>, BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let inverted = inverted.into_inner();
     let mut document = data.document.lock();
@@ -845,10 +758,14 @@ async fn post_node_inversion(
                 drop(document);
                 Ok(Json(connect_infos))
             }
-            Err(e) => Err(ErrorResponse::new(400, "Opossum", e.to_string().as_str())),
+            Err(e) => Err(BackEndErrorResponse::new(
+                400,
+                "Opossum",
+                e.to_string().as_str(),
+            )),
         }
     } else {
-        Err(ErrorResponse::new(
+        Err(BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in nodes",
@@ -863,13 +780,13 @@ async fn post_node_inversion(
 #[utoipa::path(tag = "node",
 responses(
     (status = OK, body= Vec<Uuid>, description = "UUIDs of the deleted nodes", content_type="application/json"),
-    (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
 ))]
 #[delete("/{uuid}/nodes")]
 async fn delete_subnode(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<Json<Vec<Uuid>>, ErrorResponse> {
+) -> Result<Json<Vec<Uuid>>, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
@@ -881,7 +798,7 @@ async fn delete_subnode(
 fn get_node_attr_from_state(
     uuid: Uuid,
     data: &web::Data<AppState>,
-) -> Result<NodeAttr, ErrorResponse> {
+) -> Result<NodeAttr, BackEndErrorResponse> {
     let document = data.document.lock();
     let node_attr = document
         .scenery()
@@ -899,12 +816,12 @@ fn get_node_attr_from_state(
 fn get_node_analyzer_attr_from_state(
     uuid: Uuid,
     data: &web::Data<AppState>,
-) -> Result<AnalyzerInfo, ErrorResponse> {
+) -> Result<AnalyzerInfo, BackEndErrorResponse> {
     let document = data.document.lock().clone();
     let analyzer_info = document
         .analyzers()
         .get(&uuid)
-        .ok_or_else(|| ErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?
+        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?
         .clone();
     // The lock is dropped automatically when `document` goes out of scope here
     Ok(analyzer_info)
@@ -932,14 +849,14 @@ fn get_node_analyzer_attr_from_state(
     ),
     responses(
         (status = OK, description = "get all node properties", content(("application/json"),("application/ron"))),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[get("/{uuid}/properties", guard = "wants_ron_guard")]
 async fn get_properties_ron(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<impl Responder, ErrorResponse> {
+) -> Result<impl Responder, BackEndErrorResponse> {
     let node_attr = get_node_attr_from_state(path.into_inner(), &data)?;
 
     let body = ron::ser::to_string_pretty(&node_attr, ron::ser::PrettyConfig::new().new_line("\n"))
@@ -955,14 +872,14 @@ async fn get_properties_ron(
     ),
     responses(
         (status = OK, description = "get all node properties", content(("application/json"),("application/ron"))),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[get("/{uuid}/properties")]
 async fn get_properties_json(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<Json<NodeAttr>, ErrorResponse> {
+) -> Result<Json<NodeAttr>, BackEndErrorResponse> {
     let node_attr = get_node_attr_from_state(path.into_inner(), &data)?;
     Ok(Json(node_attr))
 }
@@ -984,14 +901,14 @@ async fn get_properties_json(
     ),
     responses(
         (status = OK, description = "get all analyzer information", content(("application/json"),("application/ron"))),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[get("/{uuid}/analyzer_info", guard = "wants_ron_guard")]
 async fn get_analyzer_info_ron(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<impl Responder, ErrorResponse> {
+) -> Result<impl Responder, BackEndErrorResponse> {
     let analyzer_info = get_node_analyzer_attr_from_state(path.into_inner(), &data)?;
 
     let body =
@@ -1008,14 +925,14 @@ async fn get_analyzer_info_ron(
     ),
     responses(
         (status = OK, description = "get all analyzer information", content(("application/json"),("application/ron"))),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[get("/{uuid}/analyzer_info")]
 async fn get_analyzer_info_json(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<Json<AnalyzerInfo>, ErrorResponse> {
+) -> Result<Json<AnalyzerInfo>, BackEndErrorResponse> {
     let analyzer_info = get_node_analyzer_attr_from_state(path.into_inner(), &data)?;
     Ok(Json(analyzer_info))
 }
@@ -1027,7 +944,7 @@ async fn get_analyzer_info_json(
 #[utoipa::path(tag = "node",
     responses(
         (status = OK, description = "node properties updated", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[patch("/{uuid}/properties")]
@@ -1036,7 +953,7 @@ async fn patch_properties(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     updated_props: Json<serde_json::Value>,
-) -> Result<Json<NodeAttr>, ErrorResponse> {
+) -> Result<Json<NodeAttr>, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let document = data.document.lock();
     let (node, _) = document.scenery().node_recursive(uuid)?;
@@ -1050,63 +967,7 @@ async fn patch_properties(
     };
     Ok(web::Json(final_attr))
 }
-/// Connection Information
-#[derive(ToSchema, Clone, PartialEq, Serialize, Deserialize, Debug)]
-pub struct ConnectInfo {
-    /// UUID of the source node
-    src_uuid: Uuid,
-    /// name of the (outgoing) source port
-    src_port: String,
-    /// UUID of the target node
-    target_uuid: Uuid,
-    /// name of the (incoming) target port
-    target_port: String,
-    /// geometric distance between nodes (optical axis) in meters.
-    distance: f64,
-}
-impl ConnectInfo {
-    #[must_use]
-    pub const fn new(
-        src_uuid: Uuid,
-        src_port: String,
-        target_uuid: Uuid,
-        target_port: String,
-        distance: f64,
-    ) -> Self {
-        Self {
-            src_uuid,
-            src_port,
-            target_uuid,
-            target_port,
-            distance,
-        }
-    }
-    #[must_use]
-    pub const fn src_uuid(&self) -> Uuid {
-        self.src_uuid
-    }
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn src_port(&self) -> &str {
-        &self.src_port
-    }
-    #[must_use]
-    pub const fn target_uuid(&self) -> Uuid {
-        self.target_uuid
-    }
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn target_port(&self) -> &str {
-        &self.target_port
-    }
-    #[must_use]
-    pub const fn distance(&self) -> f64 {
-        self.distance
-    }
-    pub const fn set_distance(&mut self, distance: f64) {
-        self.distance = distance;
-    }
-}
+
 /// Connect two nodes
 ///
 /// Connect to optical nodes by the given connection info.
@@ -1115,15 +976,15 @@ impl ConnectInfo {
 async fn post_connection(
     data: web::Data<AppState>,
     connect_info: Json<ConnectInfo>,
-) -> Result<Json<ConnectInfo>, ErrorResponse> {
+) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
     scenery.connect_nodes(
-        connect_info.src_uuid,
-        &connect_info.src_port,
-        connect_info.target_uuid,
-        &connect_info.target_port,
-        meter!(connect_info.distance),
+        connect_info.src_uuid(),
+        connect_info.src_port(),
+        connect_info.target_uuid(),
+        connect_info.target_port(),
+        meter!(connect_info.distance()),
     )?;
     drop(document);
     Ok(connect_info)
@@ -1134,10 +995,10 @@ async fn post_connection(
 async fn delete_connection(
     data: web::Data<AppState>,
     connect_info: Json<ConnectInfo>,
-) -> Result<Json<ConnectInfo>, ErrorResponse> {
+) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    scenery.disconnect_nodes(connect_info.src_uuid, &connect_info.src_port)?;
+    scenery.disconnect_nodes(connect_info.src_uuid(), connect_info.src_port())?;
     drop(document);
     Ok(connect_info)
 }
@@ -1147,13 +1008,13 @@ async fn delete_connection(
 async fn update_distance(
     data: web::Data<AppState>,
     connect_info: Json<ConnectInfo>,
-) -> Result<Json<ConnectInfo>, ErrorResponse> {
+) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
     scenery.update_connection_distance(
-        connect_info.src_uuid,
-        &connect_info.src_port,
-        meter!(connect_info.distance),
+        connect_info.src_uuid(),
+        connect_info.src_port(),
+        meter!(connect_info.distance()),
     )?;
     drop(document);
     Ok(connect_info)
@@ -1171,7 +1032,7 @@ async fn update_distance(
     ),
     responses(
         (status = OK, description = "Analyzer config successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/ron")
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/ron")
     )
 )]
 #[post("/analyzer/{uuid}")]
@@ -1179,12 +1040,12 @@ async fn post_analyzer_config(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     body: String,
-) -> Result<HttpResponse, ErrorResponse> {
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let analyzer_type: AnalyzerType = match ron::de::from_str(body.as_str()) {
         Ok(analyzer_type) => analyzer_type,
         Err(e) => {
-            return Err(ErrorResponse::new(
+            return Err(BackEndErrorResponse::new(
                 400,
                 "Opossum",
                 &format!("Failed to deserialize property value: {e}"),
@@ -1196,7 +1057,7 @@ async fn post_analyzer_config(
         analyzer_info.set_analyzer_type(analyzer_type);
         drop(document);
     } else {
-        return Err(ErrorResponse::new(
+        return Err(BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in analyzers",
@@ -1238,13 +1099,13 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(update_distance);
 
     cfg.app_data(PathConfig::default().error_handler(|err, _req| {
-        ErrorResponse::new(400, "parse error", &err.to_string()).into()
+        BackEndErrorResponse::new(400, "parse error", &err.to_string()).into()
     }));
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{app_state::AppState, error::ErrorResponse};
+    use crate::{app_state::AppState, error::BackEndErrorResponse};
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use uuid::Uuid;
 
@@ -1261,8 +1122,8 @@ mod test {
             .uri(&format!("/{}/properties", Uuid::new_v4()))
             .to_request();
         let resp = app.call(req).await.unwrap();
-        let e: ErrorResponse = test::read_body_json(resp).await;
-        assert_eq!(e.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(e.category(), "OpticScenery");
+        let e: BackEndErrorResponse = test::read_body_json(resp).await;
+        assert_eq!(e.error_response().status(), StatusCode::BAD_REQUEST);
+        assert_eq!(e.error_response().category(), "OpticScenery");
     }
 }

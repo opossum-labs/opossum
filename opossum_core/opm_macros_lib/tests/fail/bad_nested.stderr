@@ -1,0 +1,7 @@
+error[E0599]: no associated item named `_ENSURE_VALIDATED_MARKER` found for struct `String` in the current scope
+ --> tests/fail/bad_nested.rs:3:10
+  |
+3 | #[derive(EnsureValidated)]
+  |          ^^^^^^^^^^^^^^^ associated item not found in `String`
+  |
+  = note: this error originates in the derive macro `EnsureValidated` (in Nightly builds, run with -Z macro-backtrace for more info)

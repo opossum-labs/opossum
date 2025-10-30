@@ -2,7 +2,9 @@ use approx::relative_eq;
 use dioxus::prelude::*;
 use inflector::Inflector;
 use nalgebra::Vector2;
-use opossum_backend::{DefaultFromName, TranslationAxis};
+use opossum_core::utils::{
+    default_from_name::DefaultFromName, geom_transformation::TranslationAxis,
+};
 use std::fmt::Display;
 use strum::EnumIter;
 

@@ -7,7 +7,7 @@ use band_filter_editor::BandFilterEditor;
 use edge_filter_editor::EdgeFilterEditor;
 
 use dioxus::prelude::*;
-use opossum_backend::{DefaultFromName, SpectralFilterBuilder};
+use opossum_core::{prelude::SpectralFilterBuilder, utils::default_from_name::DefaultFromName};
 use strum::EnumIter;
 
 use crate::components::node_editor::{

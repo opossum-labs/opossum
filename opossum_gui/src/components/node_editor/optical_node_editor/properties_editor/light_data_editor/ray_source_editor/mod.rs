@@ -4,9 +4,8 @@ mod distribution_editor;
 mod image_source_editor;
 mod point_source_editor;
 mod ray_type_selection;
-
 use dioxus::prelude::*;
-use opossum_backend::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder};
+use opossum_core::prelude::{LightDataBuilder, RayDataBuilder};
 use ray_type_selection::RayDataBuilderSelector;
 
 use crate::components::node_editor::{

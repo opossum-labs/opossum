@@ -1,7 +1,6 @@
 pub mod input_components;
-
 use dioxus::prelude::*;
-use opossum_backend::{RotationAxis, TranslationAxis};
+use opossum_core::utils::geom_transformation::{RotationAxis, TranslationAxis};
 use strum::IntoEnumIterator;
 
 use crate::components::node_editor::CallbackWrapper;

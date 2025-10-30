@@ -3,11 +3,17 @@
 //! This module provides a builder for the generation of energy spectra to be used in `LightData::Energy`.
 //! Using this builder allows easier serialization / deserialization in OPM files.
 use crate::{
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
+    generic_validators::{
+        AllNormal, AllNotEmpty, AllPositive, PathValid, ValidateTrait, XNormal, YFinite,
+        YNotAllZero,
+    },
     joule, nanometer,
     spectrum::Spectrum,
     utils::default_from_name::DefaultFromName,
+    validated, validated_type, validated_vec, validated_vec_type,
 };
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf};
 use strum::EnumIter;
@@ -22,12 +28,13 @@ use uom::{
 use super::LightData;
 
 /// Builder for the generation of energy spectra.
-#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated)]
 pub enum EnergyDataBuilder {
     /// Build a spectrum from raw data.
     Raw(Spectrum),
     /// Build a spectrum from a (CSV) file.
-    FromFile(PathBuf),
+    FromFile(SpectrumFile),
+    // FromFile(PathBuf),
     /// Build a spectrum from a set of (narrow) laser lines (center wavelength, energy) and a given spectrum resolution.
     LaserLines(EnergyLaserLines),
 }
@@ -40,14 +47,56 @@ impl EnergyDataBuilder {
         match self {
             Self::Raw(s) => Ok(LightData::Energy(s.clone())),
             Self::FromFile(p) => {
-                let spectrum = Spectrum::from_csv(p)?;
+                let spectrum = Spectrum::from_csv(p.f_path())?;
                 Ok(LightData::Energy(spectrum))
             }
             Self::LaserLines(e) => {
-                let spectrum =
-                    Spectrum::from_laser_lines(e.lines().clone(), *e.spectral_resolution())?;
+                let spectrum = Spectrum::from_laser_lines(e)?;
                 Ok(LightData::Energy(spectrum))
             }
+        }
+    }
+}
+
+/// Struct to store a path to read a spectrum from file
+#[derive(Clone, Serialize, Deserialize, PartialEq, EnsureValidated, Debug, Eq)]
+pub struct SpectrumFile {
+    f_path: validated_type!(PathBuf, PathValid),
+}
+
+impl SpectrumFile {
+    ///Create a new [`SpectrumFile`]
+    ///
+    /// # Errors
+    /// Returns an error if path validation fails
+    pub fn new(f_path: PathBuf) -> OpmResult<Self> {
+        let mut spec_file = Self::default();
+        spec_file.set_f_path(f_path)?;
+        Ok(spec_file)
+    }
+    /// Return the path to a spectrum file if defined
+    #[must_use]
+    pub const fn f_path(&self) -> &PathBuf {
+        self.f_path.get()
+    }
+    /// set the path to spectrum file
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_f_path(&mut self, f_path: PathBuf) -> OpmResult<()> {
+        self.f_path.set(f_path)?;
+        Ok(())
+    }
+}
+
+impl Default for SpectrumFile {
+    fn default() -> Self {
+        Self {
+            f_path: validated!(
+                PathBuf::from("empty.csv"),
+                PathValid::new(Some(vec!["csv"]))
+            )
+            .unwrap(),
         }
     }
 }
@@ -64,7 +113,7 @@ impl std::fmt::Debug for EnergyDataBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Raw(s) => write!(f, "Raw({s:?})"),
-            Self::FromFile(p) => write!(f, "FromFile({:?})", p.display()),
+            Self::FromFile(p) => write!(f, "FromFile({})", p.f_path().display()),
             Self::LaserLines(e) => {
                 write!(
                     f,
@@ -94,17 +143,21 @@ impl From<EnergyLaserLines> for EnergyDataBuilder {
     }
 }
 
-impl From<PathBuf> for EnergyDataBuilder {
-    fn from(value: PathBuf) -> Self {
+impl From<SpectrumFile> for EnergyDataBuilder {
+    fn from(value: SpectrumFile) -> Self {
         Self::FromFile(value)
     }
 }
 
 /// A struct that contains laser line information for the [`EnergyDataBuilder`] variant `LaserLines`
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated)]
 pub struct EnergyLaserLines {
-    lines: Vec<(Length, Energy)>,
-    spectral_resolution: Length,
+    lines: validated_vec_type!(
+        Vec<(Length, Energy)>,
+        AllPositive && XNormal && YFinite,
+        AllNotEmpty && YNotAllZero
+    ),
+    spectral_resolution: validated_type!(Length, AllNormal && AllPositive),
 }
 
 impl EnergyLaserLines {
@@ -122,47 +175,10 @@ impl EnergyLaserLines {
     /// * any wavelength is negative or infinite,
     /// * any energy is zero, negative or infinite,
     pub fn new(lines: Vec<(Length, Energy)>, spectral_resolution: Length) -> OpmResult<Self> {
-        // Check if the lines are non-empty and contain valid data
-        if lines.is_empty() {
-            return Err(OpossumError::Other("Laser lines cannot be empty".into()));
-        }
-
-        if !spectral_resolution.is_normal() {
-            return Err(OpossumError::Other(
-                "Spectral resolution must be positive and finite".into(),
-            ));
-        }
-        for (wavelength, energy) in &lines {
-            if !wavelength.is_normal() || wavelength.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Wavelength must be positive and finite".into(),
-                ));
-            }
-            if !energy.is_normal() || energy.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Energy must be positive and finite".into(),
-                ));
-            }
-        }
-
-        Ok(Self {
-            lines,
-            spectral_resolution,
-        })
-    }
-
-    /// Creates a new, empty [`EnergyLaserLines`] distribution.
-    ///
-    /// This initializes the internal storage without any spectral lines and a spectral resolution of 0.1 nm.
-    ///
-    /// # Returns
-    /// A new instance of [`EnergyLaserLines`] with an empty set of wavelength–intensity pairs.
-    #[must_use]
-    pub fn new_empty() -> Self {
-        Self {
-            lines: Vec::<(Length, Energy)>::new(),
-            spectral_resolution: nanometer!(0.1),
-        }
+        let mut laser_lines = Self::default();
+        laser_lines.set_lines(lines)?;
+        laser_lines.set_spectral_resolution(spectral_resolution)?;
+        Ok(laser_lines)
     }
 
     /// Adds a list of laser lines to the [`EnergyLaserLines`] distribution.
@@ -180,28 +196,34 @@ impl EnergyLaserLines {
     /// # Errors
     /// This method returns an error if:
     /// - The input list is empty.
-    /// - Any wavelength is negative or not finite.
+    /// - Any wavelength is negative or not normal.
     /// - Any Energy is negative or not finite.
     pub fn add_lines(&mut self, lines: Vec<(Length, Energy)>) -> OpmResult<()> {
-        // Check if the lines are non-empty and contain valid data
-        if lines.is_empty() {
-            return Err(OpossumError::Other("Laser lines cannot be empty".into()));
-        }
-        for (wavelength, energy) in &lines {
-            if !wavelength.is_normal() || wavelength.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Wavelength must be positive and finite".into(),
-                ));
-            }
-            if !energy.is_normal() || energy.is_sign_negative() {
-                return Err(OpossumError::Other(
-                    "Energy must be positive and finite".into(),
-                ));
-            }
-        }
         for line in lines {
-            self.lines.push(line);
+            self.lines.push(line)?;
         }
+        Ok(())
+    }
+
+    /// Sets a list of energy laser lines to the [`EnergyLaserLines`] distribution.
+    ///
+    /// Each laser line is a tuple containing a [`Length`] representing the wavelength,
+    /// and a [`Energy`] representing the energy.
+    ///
+    /// # Parameters
+    /// * `lines` – A vector of `(Length, Energy)` tuples, each representing an energy laser line.
+    ///
+    /// # Returns
+    /// * `Ok(())` if all lines are valid and added successfully.
+    /// * `Err(OpossumError)` if validation fails.
+    ///
+    /// # Errors
+    /// This method returns an error if:
+    /// - The input list is empty.
+    /// - Any wavelength is negative or not normal.
+    /// - Any energy is negative or not finite.
+    pub fn set_lines(&mut self, lines: Vec<(Length, Energy)>) -> OpmResult<()> {
+        self.lines.set(lines)?;
         Ok(())
     }
 
@@ -213,8 +235,12 @@ impl EnergyLaserLines {
     /// # Returns
     /// A reference to the vector of spectral lines.
     #[must_use]
-    pub fn lines(&self) -> &Vec<(Length, Energy)> {
-        &self.lines
+    pub fn lines(&self) -> Vec<(Length, Energy)> {
+        self.lines
+            .get()
+            .iter()
+            .map(|l| (l.0, l.1))
+            .collect::<Vec<(Length, Energy)>>()
     }
 
     /// Returns an immutable reference to the `spectral_resolution` stored in this [`EnergyLaserLines`] instance.
@@ -223,27 +249,42 @@ impl EnergyLaserLines {
     /// A reference to the `spectral_resolution` of thes spectral lines.
     #[must_use]
     pub fn spectral_resolution(&self) -> &Length {
-        &self.spectral_resolution
+        self.spectral_resolution.get()
     }
 
     /// Sets the `spectral_resolution`
-    pub fn set_spectral_resolution(&mut self, spectral_resolution: Length) {
-        self.spectral_resolution = spectral_resolution;
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_spectral_resolution(&mut self, spectral_resolution: Length) -> OpmResult<()> {
+        self.spectral_resolution.set(spectral_resolution)?;
+        Ok(())
     }
 
     /// removes a laser line from [`EnergyLaserLines`] at a specific index
-    pub fn delete_line(&mut self, index: usize) {
-        if index < self.lines.len() {
-            self.lines.remove(index);
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn delete_line(&mut self, index: usize) -> OpmResult<()> {
+        let lines = self.lines.get();
+        if index < lines.len() {
+            let mut lines = lines.clone();
+            lines.remove(index);
+            self.lines.set(lines)?;
         }
+        Ok(())
     }
 }
 
 impl Default for EnergyLaserLines {
     fn default() -> Self {
         Self {
-            lines: vec![(nanometer!(1054.), joule!(1.))],
-            spectral_resolution: nanometer!(0.1),
+            lines: validated_vec!(
+                vec![(nanometer!(1054.), joule!(1.))],
+                AllPositive && XNormal && YFinite,
+                AllNotEmpty && YNotAllZero
+            )
+            .unwrap(),
+            spectral_resolution: validated!(nanometer!(0.1), AllNormal && AllPositive).unwrap(),
         }
     }
 }

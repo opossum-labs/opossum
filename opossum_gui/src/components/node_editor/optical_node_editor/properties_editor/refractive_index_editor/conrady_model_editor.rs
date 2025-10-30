@@ -1,6 +1,7 @@
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
-use opossum_backend::{RefrIndexConrady, RefractiveIndexType, nanometer};
+use opossum_core::nanometer;
+use opossum_core::refractive_index::{RefrIndexConrady, RefractiveIndexType};
 use strum::EnumIter;
 use uom::si::length::nanometer;
 

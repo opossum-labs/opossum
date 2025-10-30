@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_backend::AnalyzerType;
+use opossum_core::prelude::*;
 
 #[component]
 pub fn AnalyzersMenu(on_analyzer_selected: EventHandler<AnalyzerType>) -> Element {

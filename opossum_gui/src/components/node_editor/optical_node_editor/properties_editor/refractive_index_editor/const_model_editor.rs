@@ -1,6 +1,6 @@
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
-use opossum_backend::{RefrIndexConst, RefractiveIndexType};
+use opossum_core::{prelude::RefrIndexConst, refractive_index::RefractiveIndexType};
 use strum::EnumIter;
 
 #[derive(Clone, Copy, PartialEq, Eq, EnumIter)]

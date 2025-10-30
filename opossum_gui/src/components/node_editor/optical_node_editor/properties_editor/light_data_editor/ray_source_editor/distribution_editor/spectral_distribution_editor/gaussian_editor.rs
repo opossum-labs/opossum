@@ -1,6 +1,13 @@
-use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
+use crate::components::{
+    logger::LogResultExt,
+    node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
+};
 use dioxus::prelude::*;
-use opossum_backend::{Gaussian, SpecDistType, nanometer, try_f64_to_usize};
+use opossum_core::{
+    nanometer,
+    spectral_distribution::{Gaussian, SpecDistType},
+    utils::try_f64_to_usize,
+};
 use strum::EnumIter;
 use uom::si::length::nanometer;
 
@@ -60,23 +67,30 @@ impl IntoInputData<f64, Gaussian, SpecDistType> for GaussianSpectrumParam {
 
     fn setter_from_obj(&self) -> impl FnMut(&mut Gaussian, f64) {
         match self {
-            Self::CenterWavelength => {
-                move |obj: &mut Gaussian, val: f64| obj.set_mu(nanometer!(val))
-            }
-            Self::Fwhm => move |obj: &mut Gaussian, val: f64| obj.set_fwhm(nanometer!(val)),
-            Self::Power => move |obj: &mut Gaussian, val: f64| obj.set_power(val),
-            Self::WavelengthStart => {
-                move |obj: &mut Gaussian, val: f64| obj.set_wvl_start(nanometer!(val))
-            }
-            Self::WavelengthEnd => {
-                move |obj: &mut Gaussian, val: f64| obj.set_wvl_end(nanometer!(val))
-            }
+            Self::CenterWavelength => move |obj: &mut Gaussian, val: f64| {
+                obj.set_mu(nanometer!(val))
+                    .log_err_with_context("`set_mu` of spectral gaussian distribution");
+            },
+            Self::Fwhm => move |obj: &mut Gaussian, val: f64| {
+                obj.set_fwhm(nanometer!(val))
+                    .log_err_with_context("`set_fwhm` of spectral gaussian distribution");
+            },
+            Self::Power => move |obj: &mut Gaussian, val: f64| {
+                obj.set_power(val)
+                    .log_err_with_context("`set_power` of spectral gaussian distribution");
+            },
+            Self::WavelengthStart => move |obj: &mut Gaussian, val: f64| {
+                obj.set_wvl_start(nanometer!(val))
+                    .log_err_with_context("`set_wvl_start` of spectral gaussian distribution");
+            },
+            Self::WavelengthEnd => move |obj: &mut Gaussian, val: f64| {
+                obj.set_wvl_end(nanometer!(val))
+                    .log_err_with_context("`set_wvl_end` of spectral gaussian distribution");
+            },
             Self::NumPoints => move |obj: &mut Gaussian, val: f64| {
-                let old_val = obj.num_points();
-                if let Some(new_val) = try_f64_to_usize(val) {
-                    obj.set_num_points(new_val);
-                } else {
-                    obj.set_num_points(old_val);
+                if let Some(val) = try_f64_to_usize(val) {
+                    obj.set_num_points(val)
+                        .log_err_with_context("`set_num_points` of spectral gaussian distribution");
                 }
             },
         }

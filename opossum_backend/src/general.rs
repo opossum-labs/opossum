@@ -1,40 +1,16 @@
 //! General endpoints
-use std::fmt::Display;
 
+use crate::{app_state::AppState, error::BackEndErrorResponse};
 use actix_web::{
     HttpResponse, Responder, get, post,
     web::{self, Json},
 };
-use opossum_core::{analyzers::AnalyzerType, reporting::analysis_report::AnalysisReport};
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use opossum_core::{
+    analyzers::AnalyzerType,
+    reporting::analysis_report::AnalysisReport,
+    types::api_types::{NodeType, VersionInfo},
+};
 use utoipa_actix_web::service_config::ServiceConfig;
-
-use crate::{app_state::AppState, error::ErrorResponse};
-
-/// Structure holding the version information
-#[derive(ToSchema, Serialize, Deserialize)]
-pub struct VersionInfo {
-    /// version of the OPOSSUM API backend
-    #[schema(example = "0.1.0")]
-    backend_version: String,
-    /// version of the OPOSSUM library (possibly including the git hash)
-    #[schema(example = "0.6.0-18-g80cb67f (2025/02/19 15:29)")]
-    opossum_version: String,
-}
-
-impl VersionInfo {
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn backend_version(&self) -> &str {
-        &self.backend_version
-    }
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn opossum_version(&self) -> &str {
-        &self.opossum_version
-    }
-}
 
 /// Return a welcome message
 ///
@@ -56,22 +32,13 @@ async fn get_version() -> impl Responder {
         opossum_version: opossum_core::get_version(),
     })
 }
-#[derive(Deserialize, Serialize, ToSchema)]
-pub struct NodeType {
-    node_type: String,
-    description: String,
-}
-impl Display for NodeType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.node_type)
-    }
-}
+
 /// Return a list of all available node types of OPOSSUM
 ///
 /// Return a list of strings of available node types from the OPOSSUM library.
 #[utoipa::path(get, responses((status = OK, description = "success", body = Vec<NodeType>)), tag="general")]
 #[get("/node_types")]
-async fn get_node_types() -> Result<Json<Vec<NodeType>>, ErrorResponse> {
+async fn get_node_types() -> Result<Json<Vec<NodeType>>, BackEndErrorResponse> {
     let types = opossum_core::nodes::node_types();
     let node_types: Vec<NodeType> = types
         .iter()
@@ -87,7 +54,7 @@ async fn get_node_types() -> Result<Json<Vec<NodeType>>, ErrorResponse> {
 /// Return a list of all available analyzer types from the OPOSSUM library.
 #[utoipa::path(get, responses((status = OK, description = "success", body = Vec<AnalyzerType>)), tag="general")]
 #[get("/analyzer_types")]
-async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, ErrorResponse> {
+async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, BackEndErrorResponse> {
     let analyzer_types = opossum_core::analyzers::AnalyzerType::analyzer_types();
     Ok(Json(analyzer_types))
 }
@@ -107,13 +74,13 @@ async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
 /// Analyze current setup and eturn a vector of analysisreports
 #[utoipa::path(get, responses(
     (status = OK, description = "success", content_type="application/json"),
-    (status = BAD_REQUEST, body = ErrorResponse, description = "Error during analysis", content_type="application/json")
+    (status = BAD_REQUEST, body = BackEndErrorResponse, description = "Error during analysis", content_type="application/json")
 
 ), tag="general")]
 #[get("/analyze")]
 async fn get_analyze(
     data: web::Data<AppState>,
-) -> Result<Json<Vec<AnalysisReport>>, ErrorResponse> {
+) -> Result<Json<Vec<AnalysisReport>>, BackEndErrorResponse> {
     let mut document = data.document.lock();
     let reports = document.analyze()?;
     drop(document);

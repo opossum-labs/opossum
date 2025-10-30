@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use opossum_backend::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder, nanometer};
+use opossum_core::prelude::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder, nanometer};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::length::nanometer;
 

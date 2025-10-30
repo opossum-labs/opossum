@@ -4,7 +4,10 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::{DefaultFromName, FluenceEstimator};
+use opossum_core::{
+    surface::hit_map::fluence_estimator::FluenceEstimator,
+    utils::default_from_name::DefaultFromName,
+};
 
 #[component]
 pub fn FluenceEstimatorEditor(

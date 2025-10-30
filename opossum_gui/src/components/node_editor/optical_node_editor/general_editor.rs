@@ -6,7 +6,7 @@ use crate::components::node_editor::{
     node_config_editor::NodeChangeAction,
 };
 use dioxus::prelude::*;
-use opossum_backend::{Fluence, J_per_cm2};
+use opossum_core::{J_per_cm2, nodes::fluence_detector::Fluence};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 
 #[component]

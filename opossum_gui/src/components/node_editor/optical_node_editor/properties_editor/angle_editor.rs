@@ -4,7 +4,7 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::degree;
+use opossum_core::degree;
 use uom::si::{angle::degree, f64::Angle};
 
 #[component]

@@ -7,7 +7,7 @@ use crate::{
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_backend::{Property, Proptype};
+use opossum_core::prelude::{Property, Proptype};
 
 #[component]
 pub fn F64Editor(float64: f64, property_key: String, property: Property) -> Element {

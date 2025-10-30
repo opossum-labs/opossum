@@ -2,7 +2,7 @@ use super::NodeType;
 use crate::components::scenery_editor::constants::BORDER_WIDTH;
 use crate::components::scenery_editor::node::{HEADER_HEIGHT, NODE_WIDTH};
 use dioxus::prelude::*;
-use opossum_backend::to_f64;
+use opossum_core::utils::to_f64;
 
 #[component]
 pub fn GraphNodeContent(node_name: String, node_type: NodeType, node_body: Element) -> Element {

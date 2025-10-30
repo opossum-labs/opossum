@@ -1,11 +1,23 @@
-#![windows_subsystem = "windows"]
+// Dieses Attribut ist nur für Windows-Release-Builds relevant.
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
 #![allow(clippy::items_after_statements)]
-use dioxus::{desktop::tao::window::Icon, prelude::*};
-use opossum_gui::App;
-#[cfg(feature = "desktop")]
-use opossum_gui::ProcessHandle;
-use std::io::Cursor;
 
+use dioxus::prelude::*;
+use opossum_gui::App;
+
+// --- Desktop-spezifische Importe ---
+#[cfg(not(target_arch = "wasm32"))]
+use {
+    dioxus::desktop::{WindowBuilder, tao::window::Icon},
+    directories::ProjectDirs,
+    opossum_gui::ProcessHandle,
+    std::io::Cursor,
+};
+
+// --- Gemeinsame Asset-Importe ---
 const MAIN_CSS: Asset = asset!("./assets/main.css");
 // const PLOTLY_JS: Asset = asset!("./assets/plotly.js");
 // const THREE_MOD_JS: Asset = asset!("./assets/three_mod.js");
@@ -15,6 +27,9 @@ const MDB_JS: Asset = asset!("./assets/mdb.umd.min.js");
 const MDB_SUB_CSS: Asset = asset!("./assets/mdb_submenu.css");
 const MDB_ACC_CSS: Asset = asset!("./assets/mdb_accordion.css");
 
+// --- Nur Desktop-Funktionen ---
+
+#[cfg(not(target_arch = "wasm32"))]
 fn read_icon() -> Option<Icon> {
     let icon_bytes: &[u8] = include_bytes!("../../opossum_core/logo/Logo_square.ico");
     let mut reader = Cursor::new(icon_bytes);
@@ -34,7 +49,8 @@ fn read_icon() -> Option<Icon> {
         },
     )
 }
-#[cfg(not(debug_assertions))]
+
+#[cfg(all(not(debug_assertions), not(target_arch = "wasm32")))]
 fn start_backend() -> ProcessHandle {
     use std::env;
     let gui_exe_path = env::current_exe().expect("could not get current executable path: {e}");
@@ -57,16 +73,17 @@ fn start_backend() -> ProcessHandle {
     ProcessHandle::new(child_process)
 }
 
+// --- Desktop Main ---
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    #[cfg(feature = "desktop")]
+    // Diese innere Funktion startet die Desktop-App mit der Fensterkonfiguration
     fn launch_app(backend_handle: ProcessHandle) {
         println!("Launching GUI...");
-        use directories::ProjectDirs;
         let data_dir = ProjectDirs::from("org", "OpossumLabs", "OpossumGui").map_or_else(
             || std::env::current_dir().unwrap_or_default(),
             |proj_dirs| proj_dirs.data_local_dir().to_path_buf(),
         );
-        let window = dioxus::desktop::WindowBuilder::new()
+        let window = WindowBuilder::new()
             .with_decorations(false)
             .with_window_icon(read_icon())
             .with_title("Opossum");
@@ -76,27 +93,37 @@ fn main() {
                     .with_window(window)
                     .with_data_directory(data_dir),
             )
-            .with_context(backend_handle)
+            .with_context(backend_handle) // Stellt das Handle für die App bereit
             .launch(MainApp);
     }
-    #[cfg(not(feature = "desktop"))]
-    fn launch_app() {
-        dioxus::launch(MainApp);
-    }
+
+    // Release-Build: Backend starten und Handle übergeben
     #[cfg(not(debug_assertions))]
     {
         let backend_handle = start_backend();
         launch_app(backend_handle);
     }
+
+    // Debug-Build: Dummy-Handle übergeben
     #[cfg(debug_assertions)]
     {
         launch_app(ProcessHandle::default());
     }
 }
 
+// --- WASM Main ---
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    // Einfacher Start für WASM, kein Backend, keine Fensterkonfiguration
+    dioxus::launch(MainApp);
+}
+
 #[component]
 fn MainApp() -> Element {
-    #[cfg(not(debug_assertions))]
+    // Dieser Block wird nur für Desktop-Release-Builds kompiliert.
+    // Er holt das Backend-Handle und stellt sicher, dass es beim Beenden
+    // der App ebenfalls beendet wird.
+    #[cfg(all(not(target_arch = "wasm32"), not(debug_assertions)))]
     {
         let backend_handle = use_context::<ProcessHandle>();
         use_drop(move || {
@@ -104,6 +131,8 @@ fn MainApp() -> Element {
             println!("Stopping app...")
         });
     }
+
+    // Das RSX ist für alle Plattformen gleich
     rsx! {
         document::Stylesheet { href: MAIN_CSS }
         document::Stylesheet { href: MDB_CSS }

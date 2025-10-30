@@ -1,12 +1,15 @@
 use crate::{
     OPOSSUM_UI_LOGS,
-    components::node_editor::inputs::{
-        InputData, InputParam, IntoInputData, IntoInputDataStrings,
-        input_components::{InputParamLabeledInput, RowedInputs},
+    components::{
+        logger::LogResultExt,
+        node_editor::inputs::{
+            InputData, InputParam, IntoInputData, IntoInputDataStrings,
+            input_components::{InputParamLabeledInput, RowedInputs},
+        },
     },
 };
 use dioxus::prelude::*;
-use opossum_backend::{EnergyLaserLines, energy_data_builder::EnergyDataBuilder, joule, nanometer};
+use opossum_core::prelude::{EnergyDataBuilder, EnergyLaserLines, joule, nanometer};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::{energy::joule, length::nanometer};
 
@@ -61,7 +64,10 @@ impl IntoInputData<f64, EnergyLaserLines, EnergyDataBuilder> for EnergyLaserLine
 
     fn setter_from_obj(&self) -> impl FnMut(&mut EnergyLaserLines, f64) {
         if self == &Self::SpectralResolution {
-            move |obj: &mut EnergyLaserLines, val: f64| obj.set_spectral_resolution(nanometer!(val))
+            move |obj: &mut EnergyLaserLines, val: f64| {
+                obj.set_spectral_resolution(nanometer!(val))
+                    .log_err_with_context("Validation failed in `set_spectral_resolution`");
+            }
         } else {
             move |_: &mut EnergyLaserLines, _: f64| {}
         }
@@ -76,7 +82,10 @@ impl IntoInputData<f64, EnergyLaserLines, EnergyLaserLines> for EnergyLaserLines
 
     fn setter_from_obj(&self) -> impl FnMut(&mut EnergyLaserLines, f64) {
         if self == &Self::SpectralResolution {
-            move |obj: &mut EnergyLaserLines, val: f64| obj.set_spectral_resolution(nanometer!(val))
+            move |obj: &mut EnergyLaserLines, val: f64| {
+                obj.set_spectral_resolution(nanometer!(val))
+                    .log_err_with_context("Validation failed in `set_spectral_resolution`");
+            }
         } else {
             move |_: &mut EnergyLaserLines, _: f64| {}
         }
@@ -186,8 +195,10 @@ fn LaserLineList(
                                     let laser_lines = laser_lines.clone();
                                     move |_| {
                                         let mut laser_lines = laser_lines.clone();
-                                        laser_lines.delete_line(i);
-                                        energy_data_builder_sig.set(EnergyDataBuilder::LaserLines(laser_lines));
+                                        if laser_lines.delete_line(i).is_ok()
+                                         {
+                                            energy_data_builder_sig.set(EnergyDataBuilder::LaserLines(laser_lines));
+                                         }
                                     }
                                 },
                                 role: "button",
