@@ -28,6 +28,14 @@ pub struct AllInRange<T: NumLike> {
     inclusive: bool,
 }
 
+impl<T: NumLike> Default for AllInRange<T> {
+    fn default() -> Self {
+        panic!(
+            "AllInRange::default() is a dummy implementation to facilitate using serde(skip) on Validator fields in the Validated struct!\nAlways implement Deserialize a manually for every struct that holds a validated type with an AllInRange Validator to ensure that all parameters are set correctly!"
+        );
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
 #[rule(
     is_in_range,
@@ -41,6 +49,13 @@ pub struct XInRange<T: NumLike> {
     min: T,
     max: T,
     inclusive: bool,
+}
+impl<T: NumLike> Default for XInRange<T> {
+    fn default() -> Self {
+        panic!(
+            "XInRange::default() is a dummy implementation to facilitate using serde(skip) on Validator fields in the Validated struct! Always\nimplement Deserialize a manually for every struct that holds a validated type with an AllInRange Validator to ensure that all parameters are set correctly!"
+        );
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
@@ -56,6 +71,13 @@ pub struct YInRange<T: NumLike> {
     min: T,
     max: T,
     inclusive: bool,
+}
+impl<T: NumLike> Default for YInRange<T> {
+    fn default() -> Self {
+        panic!(
+            "YInRange::default() is a dummy implementation to facilitate using serde(skip) on Validator fields in the Validated struct!\nAlways implement Deserialize a manually for every struct that holds a validated type with an AllInRange Validator to ensure that all parameters are set correctly!"
+        );
+    }
 }
 
 impl<T: NumLike> AllInRange<T> {
@@ -395,5 +417,21 @@ mod tests {
 
         assert!(validator.validate(&p_valid).is_ok());
         assert!(validator.validate(&p_invalid).is_err());
+    }
+
+    #[test]
+    #[should_panic]
+    fn all_in_range_default_panic() {
+        AllInRange::<f64>::default();
+    }
+    #[test]
+    #[should_panic]
+    fn x_in_range_default_panic() {
+        XInRange::<f64>::default();
+    }
+    #[test]
+    #[should_panic]
+    fn y_in_range_default_panic() {
+        YInRange::<f64>::default();
     }
 }

@@ -8,7 +8,7 @@ use nalgebra::Point2;
 use opm_macros_lib::ValidateNumeric;
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     sign_positive,
     message = "All value must be positive!",
@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 )]
 pub struct AllPositive;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     sign_positive,
     message = "X-value must be positive!",
@@ -26,7 +26,7 @@ pub struct AllPositive;
 )]
 pub struct XPositive;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     sign_positive,
     message = "Y-value must be positive!",

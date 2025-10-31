@@ -1159,16 +1159,6 @@ mod test {
             (3.0, 0.0),
             (3.5, 0.0),
         ],
-        element_validator: (
-            v1: (),
-            v2: (
-                v1: (),
-                v2: (),
-                _marker: (),
-            ),
-            _marker: (),
-        ),
-        container_validator: (),
     ),
 )"
             .to_string()
@@ -1187,16 +1177,6 @@ mod test {
             (3.0, 0.5),
             (3.5, 0.6),
         ],
-        element_validator: (
-            v1: (),
-            v2: (
-                v1: (),
-                v2: (),
-                _marker: (),
-            ),
-            _marker: (),
-        ),
-        container_validator: (),
     ),
 )",
         )

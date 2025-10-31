@@ -4,7 +4,7 @@ use num::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default)]
 pub struct OnlyOneZero;
 impl_validator!(
     OnlyOneZero,

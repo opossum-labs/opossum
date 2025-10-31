@@ -256,7 +256,8 @@ fn contains_validated(ty: &Type) -> bool {
                     | "opossum_core::ValidatedVec"
                     | "Validated"
                     | "ValidatedVec"
-            ) {
+            ) || full_path.contains("Validated")
+            {
                 return true;
             }
             // Check all segments for nested generics

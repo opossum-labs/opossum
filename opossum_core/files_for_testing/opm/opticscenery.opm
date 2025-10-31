@@ -8,7 +8,7 @@
                 inputs: {},
                 outputs: {},
             ),
-            uuid: "891d00fc-7aa3-4db1-93c3-421816121e37",
+            uuid: "1a2535c2-c92a-44ae-8728-2513f6c26ba8",
             lidt: 10000.0,
             props: {
                 "expand view": Bool(false),
@@ -47,7 +47,7 @@
                                 ),
                             },
                         ),
-                        uuid: "5af36fb2-eff9-43ed-9465-61605e0ad599",
+                        uuid: "a5c33eff-fa6f-48f7-88ae-3b2ad8fbbb80",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -83,7 +83,7 @@
                                 ),
                             },
                         ),
-                        uuid: "1f0d5cda-44b8-4864-beb4-2aebd7bd1d20",
+                        uuid: "635063d1-682e-402d-993d-b0f2231cc688",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -92,9 +92,9 @@
             ],
             edges: [
                 (
-                    src_id: "5af36fb2-eff9-43ed-9465-61605e0ad599",
+                    src_id: "a5c33eff-fa6f-48f7-88ae-3b2ad8fbbb80",
                     src_port: "output_1",
-                    target_id: "1f0d5cda-44b8-4864-beb4-2aebd7bd1d20",
+                    target_id: "635063d1-682e-402d-993d-b0f2231cc688",
                     target_port: "input_1",
                     distance: 0.0,
                 ),
@@ -107,14 +107,14 @@
         )),
     ),
     analyzers: {
-        "4576104e-71f0-4543-b931-9d768d0654fc": (
+        "45c1cb0d-7b7e-4e1c-902d-d564b9e10e42": (
             analyzer_type: RayTrace((
                 min_energy_per_ray: 0.000000000001,
                 max_number_of_bounces: 1000,
                 max_number_of_refractions: 1000,
                 missed_surface_strategy: Stop,
             )),
-            id: "4576104e-71f0-4543-b931-9d768d0654fc",
+            id: "45c1cb0d-7b7e-4e1c-902d-d564b9e10e42",
             gui_position: None,
         ),
     },

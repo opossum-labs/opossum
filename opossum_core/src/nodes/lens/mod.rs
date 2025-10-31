@@ -365,42 +365,102 @@ mod test {
         assert_eq!((*index).get_refractive_index(Length::zero()).unwrap(), 1.5);
     }
     #[test]
-    fn set_front_curvature(){
+    fn set_front_curvature() {
         let mut lens = Lens::default();
-        assert!(lens.node_attr
-            .set_property("front curvature", Proptype::Curvature(Length::zero())).is_err());
-        assert!(lens.node_attr
-            .set_property("front curvature", Proptype::Curvature(millimeter!(f64::NAN))).is_err());
-        assert!(lens.node_attr
-            .set_property("front curvature", Proptype::Curvature(millimeter!(f64::INFINITY))).is_ok());
-        assert!(lens.node_attr
-            .set_property("front curvature", Proptype::Curvature(millimeter!(f64::NEG_INFINITY))).is_ok());
+        assert!(
+            lens.node_attr
+                .set_property("front curvature", Proptype::Curvature(Length::zero()))
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property(
+                    "front curvature",
+                    Proptype::Curvature(millimeter!(f64::NAN))
+                )
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property(
+                    "front curvature",
+                    Proptype::Curvature(millimeter!(f64::INFINITY))
+                )
+                .is_ok()
+        );
+        assert!(
+            lens.node_attr
+                .set_property(
+                    "front curvature",
+                    Proptype::Curvature(millimeter!(f64::NEG_INFINITY))
+                )
+                .is_ok()
+        );
     }
     #[test]
-    fn set_rear_curvature(){
+    fn set_rear_curvature() {
         let mut lens = Lens::default();
-        assert!(lens.node_attr
-            .set_property("rear curvature", Proptype::Curvature(Length::zero())).is_err());
-        assert!(lens.node_attr
-            .set_property("rear curvature", Proptype::Curvature(millimeter!(f64::NAN))).is_err());
-        assert!(lens.node_attr
-            .set_property("rear curvature", Proptype::Curvature(millimeter!(f64::INFINITY))).is_ok());
-        assert!(lens.node_attr
-            .set_property("rear curvature", Proptype::Curvature(millimeter!(f64::NEG_INFINITY))).is_ok());
+        assert!(
+            lens.node_attr
+                .set_property("rear curvature", Proptype::Curvature(Length::zero()))
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property("rear curvature", Proptype::Curvature(millimeter!(f64::NAN)))
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property(
+                    "rear curvature",
+                    Proptype::Curvature(millimeter!(f64::INFINITY))
+                )
+                .is_ok()
+        );
+        assert!(
+            lens.node_attr
+                .set_property(
+                    "rear curvature",
+                    Proptype::Curvature(millimeter!(f64::NEG_INFINITY))
+                )
+                .is_ok()
+        );
     }
     #[test]
-    fn set_center_thickness(){
+    fn set_center_thickness() {
         let mut lens = Lens::default();
-        assert!(lens.node_attr
-            .set_property("center thickness", Proptype::Length(millimeter!(-0.1))).is_err());
-        assert!(lens.node_attr
-            .set_property("center thickness", Proptype::Length(millimeter!(0.0))).is_ok());
-        assert!(lens.node_attr
-            .set_property("center thickness", Proptype::Length(millimeter!(f64::NAN))).is_err());
-        assert!(lens.node_attr
-            .set_property("center thickness", Proptype::Length(millimeter!(f64::INFINITY))).is_err());
-        assert!(lens.node_attr
-            .set_property("center thickness", Proptype::Length(millimeter!(f64::NEG_INFINITY))).is_err());
+        assert!(
+            lens.node_attr
+                .set_property("center thickness", Proptype::Length(millimeter!(-0.1)))
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property("center thickness", Proptype::Length(millimeter!(0.0)))
+                .is_ok()
+        );
+        assert!(
+            lens.node_attr
+                .set_property("center thickness", Proptype::Length(millimeter!(f64::NAN)))
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property(
+                    "center thickness",
+                    Proptype::Length(millimeter!(f64::INFINITY))
+                )
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property(
+                    "center thickness",
+                    Proptype::Length(millimeter!(f64::NEG_INFINITY))
+                )
+                .is_err()
+        );
     }
     #[test]
     fn new() {

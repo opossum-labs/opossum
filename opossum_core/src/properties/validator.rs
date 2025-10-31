@@ -66,8 +66,7 @@ impl Validator {
             Proptype::Angle(a) => a.is_finite(),
             Proptype::Energy(e) => e.is_finite(),
             Proptype::Fluence(f) => f.is_finite(),
-            Proptype::Curvature(l) => l.is_finite(),
-            Proptype::Length(l) => l.is_finite(),
+            Proptype::Length(l) | Proptype::Curvature(l) => l.is_finite(),
             Proptype::LinearDensity(d) => d.is_finite(),
             Proptype::WfLambda(l, _) => l.is_finite(),
             _ => true, // Silently ignore if not numeric or I32 which is always finite
@@ -86,8 +85,7 @@ impl Validator {
             Proptype::Angle(a) => !a.is_nan(),
             Proptype::Energy(e) => !e.is_nan(),
             Proptype::Fluence(f) => !f.is_nan(),
-            Proptype::Curvature(l) => !l.is_nan(),
-            Proptype::Length(l) => !l.is_nan(),
+            Proptype::Length(l) | Proptype::Curvature(l) => !l.is_nan(),
             Proptype::LinearDensity(d) => !d.is_nan(),
             Proptype::WfLambda(l, _) => !l.is_nan(),
             _ => true, // Silently ignore if not numeric or I32 which is always not NaN
@@ -102,15 +100,14 @@ impl Validator {
     }
     fn validate_numeric_is_not_zero(prop: &Proptype) -> OpmResult<()> {
         let is_valid = match prop {
-            Proptype::F64(v) => relative_ne!(*v ,0.0),
-            Proptype::Angle(a) => relative_ne!(a.value , 0.0),
-            Proptype::Energy(e) => relative_ne!(e.value , 0.0),
-            Proptype::Fluence(f) => relative_ne!(f.value , 0.0),
+            Proptype::F64(v) => relative_ne!(*v, 0.0),
+            Proptype::Angle(a) => relative_ne!(a.value, 0.0),
+            Proptype::Energy(e) => relative_ne!(e.value, 0.0),
+            Proptype::Fluence(f) => relative_ne!(f.value, 0.0),
             Proptype::I32(i) => *i != 0,
-            Proptype::Length(l) => relative_ne!(l.value , 0.0),
-            Proptype::Curvature(l) => relative_ne!(l.value , 0.0),
-            Proptype::LinearDensity(d) => relative_ne!(d.value , 0.0),
-            Proptype::WfLambda(l, _) => relative_ne!(*l , 0.0),
+            Proptype::Length(l) | Proptype::Curvature(l) => relative_ne!(l.value, 0.0),
+            Proptype::LinearDensity(d) => relative_ne!(d.value, 0.0),
+            Proptype::WfLambda(l, _) => relative_ne!(*l, 0.0),
             _ => true, // Silently ignore if not numeric
         };
         if is_valid {
@@ -129,8 +126,7 @@ impl Validator {
             Proptype::Energy(e) => e.is_sign_positive(),
             Proptype::Fluence(f) => f.is_sign_positive(),
             Proptype::I32(i) => i.is_positive(),
-            Proptype::Length(l) => l.is_sign_positive(),
-            Proptype::Curvature(l) => l.is_sign_positive(),
+            Proptype::Length(l) | Proptype::Curvature(l) => l.is_sign_positive(),
             Proptype::LinearDensity(d) => d.is_sign_positive(),
             Proptype::WfLambda(l, _) => l.is_sign_positive(),
             _ => true, // Silently ignore if not numeric
@@ -152,8 +148,7 @@ impl Validator {
             Proptype::Energy(e) => allowed_range.contains(&e.value),
             Proptype::Fluence(f) => allowed_range.contains(&f.value),
             Proptype::I32(i) => allowed_range.contains(&f64::from(*i)),
-            Proptype::Length(l) => allowed_range.contains(&l.value),
-            Proptype::Curvature(l) => allowed_range.contains(&l.value),
+            Proptype::Length(l) | Proptype::Curvature(l) => allowed_range.contains(&l.value),
             Proptype::LinearDensity(d) => allowed_range.contains(&d.value),
             Proptype::WfLambda(l, _) => allowed_range.contains(l),
             Proptype::FilterTypeBuilder(ftb) => match ftb {

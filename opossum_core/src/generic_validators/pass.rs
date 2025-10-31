@@ -4,7 +4,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default)]
 pub struct Pass;
 
 impl<T: Clone> Validate<T> for Pass {

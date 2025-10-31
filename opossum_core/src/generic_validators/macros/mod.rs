@@ -1,7 +1,6 @@
 mod validated;
 mod validated_vec;
 mod validator_parser;
-
 /// Implements the [`Validate`] trait for a given validator type, function, and value type.
 ///
 /// This macro provides a concise way to define validation logic without manually
@@ -75,13 +74,5 @@ macro_rules! impl_vec_validator {
                 }
             }
         }
-        // #[allow(non_upper_case_globals)]
-        // #[warn(dead_code)]
-        // const _: &str = concat!(
-        //     "impl_validator_vec! unused for validator: ",
-        //     stringify!($validator),
-        //     ", type: ",
-        //     stringify!($t)
-        // );
     };
 }

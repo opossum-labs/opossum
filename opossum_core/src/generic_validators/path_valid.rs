@@ -2,8 +2,7 @@ use std::path::PathBuf;
 
 use crate::{
     error::{OpmResult, OpossumError},
-    generic_validators::{Validate, Validated},
-    validated,
+    generic_validators::Validate,
 };
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +13,13 @@ use serde::{Deserialize, Serialize};
 pub struct PathValid {
     ext: Option<Vec<String>>,
 }
-
+impl Default for PathValid {
+    fn default() -> Self {
+        panic!(
+            "PathValid::default() is a dummy implementation to facilitate using serde(skip) on Validator fields in the Validated struct!\nAlways implement Deserialize a manually for every struct that holds a validated type with an PathValid Validator to ensure that all parameters are set correctly!"
+        );
+    }
+}
 impl PathValid {
     /// Create a new `PathValid` validator.
     ///
@@ -51,12 +56,6 @@ impl PathValid {
 impl Validate<PathBuf> for PathValid {
     fn validate(&self, path_buf: &PathBuf) -> OpmResult<()> {
         let path = path_buf.as_path();
-        // if !path.exists() {
-        //     return Err(OpossumError::Other(format!(
-        //         "Path to file \"{}\" does not exist!",
-        //         path.display()
-        //     )));
-        // }
 
         self.ext.as_ref().map_or(Ok(()), |ext_vec| {
             if let Some(Some(extension)) = path.extension().map(|s| s.to_str()) {
@@ -73,12 +72,6 @@ impl Validate<PathBuf> for PathValid {
                 ))
             }
         })
-    }
-}
-
-impl Default for Validated<PathBuf, PathValid> {
-    fn default() -> Self {
-        validated!(PathBuf::new(), PathValid::new(None)).unwrap()
     }
 }
 

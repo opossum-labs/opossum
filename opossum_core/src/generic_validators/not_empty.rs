@@ -5,7 +5,7 @@ use crate::{
     generic_validators::{Validate, ValidateVec},
 };
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default)]
 pub struct AllNotEmpty;
 
 impl<T: Clone> ValidateVec<T> for AllNotEmpty {
