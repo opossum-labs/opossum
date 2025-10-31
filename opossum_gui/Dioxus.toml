@@ -90,6 +90,7 @@ short_description = "Open-source optic simulation system and unified modeler"
 long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
 category = "Utility"
 icon = ["assets/Logo_square.png"]
+external_bin = ["../target/release/opossum_backend", "../target/release/opossum_cli"]
 
 [bundle.windows]
 icon_path = "assets/favicon.ico"
@@ -102,8 +103,8 @@ silent = false
 
 [bundle.windows.wix]
 language = []
-fragment_paths = ["packaging/extra_binaries.wxs"]
-component_group_refs = ["HelperBinariesComponentGroup"]
+component_group_refs = []
+fragment_paths = []
 component_refs = []
 feature_group_refs = []
 feature_refs = []
@@ -114,7 +115,3 @@ fips_compliant = false
 banner_path = "../opossum_core/logo/Logo_InstallBanner.png"
 dialog_image_path = "../opossum_core/logo/Logo_InstallDialog.png"
 license_path = "../LICENSE"
-
-[bundle.deb]
-# bundle the helper binaries
-files = { "usr/lib/OpossumGui/opossum_backend" = "../target/release/opossum_backend", "usr/lib/OpossumGui/opossum_core" = "../target/release/opossum_cli"}
