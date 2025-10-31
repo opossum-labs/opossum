@@ -7,7 +7,7 @@ use opm_macros_lib::ValidateNumeric;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     normal,
     message = "At least one value must be non-zero!",
@@ -16,7 +16,7 @@ use std::ops::Range;
 )]
 pub struct NotAllZero;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     normal,
     message = "At least one x-value must be normal!",
@@ -25,7 +25,7 @@ pub struct NotAllZero;
 )]
 pub struct XNotAllZero;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     normal,
     message = "At least one y-value must be normal!",

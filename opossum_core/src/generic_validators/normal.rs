@@ -7,7 +7,7 @@ use opm_macros_lib::ValidateNumeric;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     normal,
     message = "All value must be normal!",
@@ -16,7 +16,7 @@ use std::ops::Range;
 )]
 pub struct AllNormal;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     normal,
     message = "X-value must be normal!",
@@ -25,7 +25,7 @@ pub struct AllNormal;
 )]
 pub struct XNormal;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     normal,
     message = "Y-value must be normal!",

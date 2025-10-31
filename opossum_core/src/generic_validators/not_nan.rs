@@ -7,7 +7,7 @@ use opm_macros_lib::ValidateNumeric;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     not_nan,
     message = "All value must not be nan!",
@@ -17,7 +17,7 @@ use std::ops::Range;
 #[allow(dead_code)]
 pub struct AllNotNan;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     not_nan,
     message = "X-value must not be nan!",
@@ -27,7 +27,7 @@ pub struct AllNotNan;
 #[allow(dead_code)]
 pub struct XNotNan;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     not_nan,
     message = "Y-value must not be nan!",

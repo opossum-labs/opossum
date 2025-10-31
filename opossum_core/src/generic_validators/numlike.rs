@@ -1,8 +1,10 @@
 use num::Zero;
-use std::fmt::Debug;
+use std::{fmt::Debug, marker::PhantomData};
 use uom::si::{Dimension, Quantity};
 
 pub trait NumLike: Clone + PartialEq + Debug + PartialOrd {
+    fn min_value() -> Self;
+    fn max_value() -> Self;
     fn normal(&self) -> bool;
     fn finite(&self) -> bool;
     fn zero(&self) -> bool;
@@ -19,6 +21,12 @@ pub trait NumLike: Clone + PartialEq + Debug + PartialOrd {
 }
 
 impl NumLike for f64 {
+    fn min_value() -> Self {
+        Self::MIN
+    }
+    fn max_value() -> Self {
+        Self::MAX
+    }
     fn normal(&self) -> bool {
         self.is_normal()
     }
@@ -48,6 +56,12 @@ impl NumLike for f64 {
 }
 
 impl NumLike for i32 {
+    fn min_value() -> Self {
+        Self::MIN
+    }
+    fn max_value() -> Self {
+        Self::MAX
+    }
     fn normal(&self) -> bool {
         *self != 0
     }
@@ -77,6 +91,12 @@ impl NumLike for i32 {
 }
 
 impl NumLike for usize {
+    fn min_value() -> Self {
+        Self::MIN
+    }
+    fn max_value() -> Self {
+        Self::MAX
+    }
     fn normal(&self) -> bool {
         *self != 0
     }
@@ -110,6 +130,20 @@ where
     D: Dimension + ?Sized,
     U: uom::si::Units<f64> + ?Sized,
 {
+    fn min_value() -> Self {
+        Self {
+            dimension: PhantomData,
+            units: PhantomData,
+            value: f64::MIN,
+        }
+    }
+    fn max_value() -> Self {
+        Self {
+            dimension: PhantomData,
+            units: PhantomData,
+            value: f64::MAX,
+        }
+    }
     fn normal(&self) -> bool {
         self.value.is_normal()
     }

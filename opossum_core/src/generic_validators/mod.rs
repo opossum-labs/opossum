@@ -1,4 +1,7 @@
 use crate::error::{OpmResult, OpossumError};
+use serde::{Deserialize, Serialize};
+use std::{borrow::Cow, ops::Index};
+use utoipa::openapi::{RefOr, Schema};
 
 mod finite;
 mod in_range;
@@ -44,7 +47,6 @@ pub enum Target {
 /// A validator checks a value against some condition and returns
 /// `OpmResult<()>`, which is `Ok(())` if validation passes or
 /// an error if it fails.
-use serde::{Deserialize, Serialize};
 pub trait Validate<T> {
     /// Validate the given `value`.
     ///
@@ -78,9 +80,11 @@ pub trait ValidateVec<T> {
 ///
 /// `Validated` ensures that the value is always valid according
 /// to the validator.
-#[derive(Copy, Clone, PartialEq, Serialize, Deserialize, Debug, Eq)]
+#[derive(Copy, Clone, PartialEq, Deserialize, Serialize, Debug, Eq)]
+#[serde(transparent)]
 pub struct Validated<T, V: Validate<T>> {
     value: T,
+    #[serde(skip)]
     validator: V,
 }
 
@@ -136,6 +140,26 @@ impl<T, V: Validate<T>> Validated<T, V> {
     }
 }
 
+impl<T, V: Validate<T>> utoipa::ToSchema for Validated<T, V>
+where
+    T: utoipa::ToSchema,
+{
+    fn name() -> Cow<'static, str> {
+        // delegiere einfach den Schema-Namen an T
+        T::name()
+    }
+}
+
+impl<T, V: Validate<T>> utoipa::PartialSchema for Validated<T, V>
+where
+    T: utoipa::PartialSchema,
+{
+    fn schema() -> RefOr<Schema> {
+        // delegiere das tatsächliche Schema an T
+        T::schema()
+    }
+}
+
 /// A wrapper around a value of type `Vec<T>` that enforces validation for all elements of Vec
 /// using a `ValidateVec<T>` implementor.
 ///
@@ -144,7 +168,9 @@ impl<T, V: Validate<T>> Validated<T, V> {
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Eq)]
 pub struct ValidatedVec<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> {
     values: Vec<T>,
+    #[serde(skip)]
     element_validator: EV,
+    #[serde(skip)]
     container_validator: CV,
 }
 
@@ -464,7 +490,6 @@ impl<'a, T: Clone, EV: Validate<T>, CV: ValidateVec<T>> IntoIterator
         self.iter()
     }
 }
-use std::ops::Index;
 
 impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> Index<usize> for ValidatedVec<T, EV, CV> {
     type Output = T;
@@ -474,133 +499,6 @@ impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> Index<usize> for ValidatedVe
         &self.values[index]
     }
 }
-
-// /// Represents the validation state of a `ValidatedItemGuard`.
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// enum GuardState {
-//     /// Guard has been created but not yet committed.
-//     Pending,
-//     /// Value has been successfully committed.
-//     Committed,
-//     /// Commit has failed at least once.
-//     Failed,
-// }
-
-// /// A guard for a single element in a `ValidatedVec`.
-// ///
-// /// Allows mutable access to an element while enforcing validation rules,
-// /// and performs automatic rollback if commit is not successful.
-// pub struct ValidatedItemGuard<'a, T: Clone, EV: Validate<T>, CV: ValidateVec<T>> {
-//     parent: &'a mut ValidatedVec<T, EV, CV>,
-//     index: usize,
-//     backup: T,
-//     state: GuardState,
-// }
-
-// impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> Deref for ValidatedItemGuard<'_, T, EV, CV> {
-//     type Target = T;
-//     /// Returns an immutable reference to the guarded element.
-//     ///
-//     /// # Returns
-//     ///
-//     /// * `&T` - Reference to the element.
-//     fn deref(&self) -> &Self::Target {
-//         &self.parent.values[self.index]
-//     }
-// }
-
-// impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> DerefMut for ValidatedItemGuard<'_, T, EV, CV> {
-//     /// Returns a mutable reference to the guarded element.
-//     ///
-//     /// # Returns
-//     ///
-//     /// * `&mut T` - Mutable reference to the element.
-//     fn deref_mut(&mut self) -> &mut T {
-//         &mut self.parent.values[self.index]
-//     }
-// }
-
-// impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedItemGuard<'_, T, EV, CV> {
-//     /// Commits the current value, marking it as validated and final.
-//     ///
-//     /// # Returns
-//     ///
-//     /// * `Ok(())` if the value passes validation.
-//     ///
-//     /// # Errors
-//     ///
-//     /// Returns `Err(OpossumError)` if the value fails validation.
-//     pub fn commit(mut self) -> OpmResult<()> {
-//         let val = &self.parent.values[self.index];
-//         match self.parent.element_validator.validate(val) {
-//             Ok(()) => {
-//                 self.state = GuardState::Committed;
-//                 Ok(())
-//             }
-//             Err(e) => {
-//                 self.state = GuardState::Failed;
-//                 Err(e)
-//             }
-//         }
-//     }
-
-//     /// Validates the current value and updates the backup for rollback.
-//     ///
-//     /// This method does not mark the value as fully committed. It is useful
-//     /// for previewing changes and ensuring the backup reflects the latest
-//     /// valid state.
-//     ///
-//     /// # Returns
-//     ///
-//     /// * `Ok(())` if the value passes validation and backup is updated.
-//     ///
-//     /// # Errors
-//     ///
-//     /// Returns `Err(OpossumError)` if the value fails validation.
-//     fn validate_and_update_backup(&mut self) -> OpmResult<()> {
-//         let val = &mut self.parent.values[self.index];
-//         match self.parent.element_validator.validate(val) {
-//             Ok(()) => {
-//                 self.backup = val.clone();
-//                 self.state = GuardState::Pending;
-//                 Ok(())
-//             }
-//             Err(e) => Err(e),
-//         }
-//     }
-// }
-
-// impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> Drop for ValidatedItemGuard<'_, T, EV, CV> {
-//     /// Drop handler that enforces validation and performs rollback if necessary.
-//     ///
-//     /// If the guard is still pending and validation fails, the value is rolled
-//     /// back to the last valid backup. If the guard previously failed commit,
-//     /// the value is also rolled back. Committed values are not modified.
-//     fn drop(&mut self) {
-//         match self.state {
-//             GuardState::Pending => {
-//                 if let Err(e) = self.validate_and_update_backup() {
-//                     log::warn!("Validation failed on drop for index {}: {}", self.index, e);
-//                     self.parent.values[self.index] = self.backup.clone();
-//                     log::warn!("Rolled back element at index {}", self.index);
-//                 } else {
-//                     log::info!("Forced committing was successful!");
-//                 }
-//             }
-//             GuardState::Failed => {
-//                 // commit failed → Rollback to Backup
-//                 self.parent.values[self.index] = self.backup.clone();
-//                 log::warn!(
-//                     "Commit failed earlier, rolled back element at index {}",
-//                     self.index
-//                 );
-//             }
-//             GuardState::Committed => {
-//                 // do nothing
-//             }
-//         }
-//     }
-// }
 
 /// Marker trait used internally by the derive/validation macros to detect
 /// whether a type represents a validated value.

@@ -1,4 +1,7 @@
-use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
+use crate::components::{
+    logger::LogResultExt,
+    node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
+};
 use dioxus::prelude::*;
 use opossum_core::{prelude::RefrIndexConst, refractive_index::RefractiveIndexType};
 use strum::EnumIter;
@@ -30,6 +33,10 @@ impl IntoInputData<f64, RefrIndexConst, RefractiveIndexType> for ConstRefParam {
     }
 
     fn setter_from_obj(&self) -> impl FnMut(&mut RefrIndexConst, f64) {
-        move |obj: &mut RefrIndexConst, val: f64| obj.set_refractive_index(val)
+        move |obj: &mut RefrIndexConst, val: f64| {
+            obj.set_refractive_index(val).log_err_with_context(
+                "validation failed in `set_refractive_index` of RefrIndexConst",
+            );
+        }
     }
 }

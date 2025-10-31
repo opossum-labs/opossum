@@ -360,7 +360,7 @@ impl Default for PointSrc {
 /// - `wave_length`: Wavelength of emitted light.
 /// - `cone_angle`: Angular spread of rays emitted from each pixel.
 ///
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnsureValidated)]
+#[derive(Debug, Clone, PartialEq, Serialize, EnsureValidated)]
 pub struct ImageSrc {
     /// path to the image file
     file_path: validated_type!(PathBuf, PathValid),
@@ -372,6 +372,50 @@ pub struct ImageSrc {
     wave_length: validated_type!(Length, AllPositive && AllNormal),
     /// cone angle of each point src per pixel
     cone_angle: validated_type!(Angle, AllFinite && AllInRange::<Angle>),
+}
+#[derive(Deserialize)]
+struct NonValidatedImageSrc {
+    pub file_path: PathBuf,
+    pub pixel_size: Length,
+    pub total_energy: Energy,
+    pub wave_length: Length,
+    pub cone_angle: Angle,
+}
+impl<'de> serde::Deserialize<'de> for ImageSrc {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        //deserialize non validated struct
+        let helper = NonValidatedImageSrc::deserialize(deserializer)?;
+        //get correct validators from default
+        Self::new(
+            helper.file_path,
+            helper.pixel_size,
+            helper.total_energy,
+            helper.wave_length,
+            helper.cone_angle,
+        )
+        .map_err(serde::de::Error::custom)
+    }
+}
+
+// helper function to deserialize the correct AllInRange validator
+fn default_cone_angle() -> validated_type!(Angle, AllFinite && AllInRange::<Angle>) {
+    validated!(
+        degree!(5.0),
+        AllFinite && (AllInRange::new(degree!(0.0), degree!(180.0), false).unwrap())
+    )
+    .unwrap()
+}
+
+// helper function to deserialize the correct AllInRange validator
+fn default_file_path() -> validated_type!(PathBuf, PathValid) {
+    validated!(
+        PathBuf::from("empty.jpg"),
+        PathValid::new(Some(vec!["jpg", "bmp", "png"]))
+    )
+    .unwrap()
 }
 
 impl ImageSrc {
@@ -509,19 +553,11 @@ impl Default for ImageSrc {
     /// or tests, but they should be replaced with actual data for simulations.
     fn default() -> Self {
         Self {
-            file_path: validated!(
-                PathBuf::from("empty.jpg"),
-                PathValid::new(Some(vec!["jpg", "bmp", "png"]))
-            )
-            .unwrap(),
+            file_path: default_file_path(),
             pixel_size: validated!(nanometer!(5860.), AllPositive && AllNormal).unwrap(),
             total_energy: validated!(joule!(0.1), AllPositive && AllNormal).unwrap(),
             wave_length: validated!(nanometer!(1054.0), AllPositive && AllNormal).unwrap(),
-            cone_angle: validated!(
-                degree!(5.0),
-                AllFinite && (AllInRange::new(degree!(0.0), degree!(180.0), false).unwrap())
-            )
-            .unwrap(),
+            cone_angle: default_cone_angle(),
         }
     }
 }

@@ -7,7 +7,7 @@ use opm_macros_lib::ValidateNumeric;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     finite,
     message = "All value must be finite!",
@@ -16,7 +16,7 @@ use std::ops::Range;
 )]
 pub struct AllFinite;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     finite,
     message = "X-value must be finite!",
@@ -25,7 +25,7 @@ pub struct AllFinite;
 )]
 pub struct XFinite;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     finite,
     message = "Y-value must be finite!",

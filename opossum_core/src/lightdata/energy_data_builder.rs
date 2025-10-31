@@ -58,10 +58,28 @@ impl EnergyDataBuilder {
     }
 }
 
+#[derive(Deserialize)]
+struct NonValidatedSpectrumFile {
+    pub f_path: PathBuf,
+}
+
 /// Struct to store a path to read a spectrum from file
-#[derive(Clone, Serialize, Deserialize, PartialEq, EnsureValidated, Debug, Eq)]
+#[derive(Clone, Serialize, PartialEq, EnsureValidated, Debug, Eq)]
 pub struct SpectrumFile {
     f_path: validated_type!(PathBuf, PathValid),
+}
+
+impl<'de> serde::Deserialize<'de> for SpectrumFile {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        //deserialize non validated struct
+        let helper = NonValidatedSpectrumFile::deserialize(deserializer)?;
+
+        //get correct validators from default
+        Self::new(helper.f_path).map_err(serde::de::Error::custom)
+    }
 }
 
 impl SpectrumFile {
@@ -286,5 +304,17 @@ impl Default for EnergyLaserLines {
             .unwrap(),
             spectral_resolution: validated!(nanometer!(0.1), AllNormal && AllPositive).unwrap(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::lightdata::energy_data_builder::SpectrumFile;
+    #[test]
+    fn spectrum_file_deserialize() {
+        let s = SpectrumFile::default();
+        let serialized =
+            ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).unwrap();
+        assert!(ron::from_str::<SpectrumFile>(&serialized).is_ok());
     }
 }

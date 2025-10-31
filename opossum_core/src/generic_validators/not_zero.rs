@@ -8,7 +8,7 @@ use nalgebra::Point2;
 use opm_macros_lib::ValidateNumeric;
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     not_zero,
     message = "All value must be non-zero!",
@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 )]
 pub struct AllNotZero;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     not_zero,
     message = "X-value must be non-zero!",
@@ -27,7 +27,7 @@ pub struct AllNotZero;
 #[allow(dead_code)]
 pub struct XNotZero;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, ValidateNumeric)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default, ValidateNumeric)]
 #[rule(
     not_zero,
     message = "Y-value must be non-zero!",

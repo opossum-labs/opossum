@@ -7,7 +7,7 @@ use crate::{
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default)]
 pub struct SecondLarger;
 
 impl<T: NumLike> Validate<(T, T)> for SecondLarger {

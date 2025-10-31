@@ -5,7 +5,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default)]
 pub struct OrValidator<T, V1: Validate<T>, V2: Validate<T>> {
     v1: V1,
     v2: V2,
@@ -32,7 +32,7 @@ impl<T, V1: Validate<T>, V2: Validate<T>> OrValidator<T, V1, V2> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default)]
 pub struct OrValidatorVec<T, V1: ValidateVec<T>, V2: ValidateVec<T>> {
     v1: V1,
     v2: V2,
@@ -61,7 +61,7 @@ impl<T, V1: ValidateVec<T>, V2: ValidateVec<T>> OrValidatorVec<T, V1, V2> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default)]
 pub struct AndValidator<T, V1: Validate<T>, V2: Validate<T>> {
     v1: V1,
     v2: V2,
@@ -89,7 +89,7 @@ impl<T, V1: Validate<T>, V2: Validate<T>> AndValidator<T, V1, V2> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default)]
 pub struct AndValidatorVec<T, V1: ValidateVec<T>, V2: ValidateVec<T>> {
     v1: V1,
     v2: V2,
@@ -122,7 +122,7 @@ impl<T, V1: ValidateVec<T>, V2: ValidateVec<T>> AndValidatorVec<T, V1, V2> {
 /// # Type Parameters
 /// * `T` - The type of value to validate.
 /// * `V` - The inner validator to negate.
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default)]
 pub struct NotValidator<T, V: Validate<T>> {
     inner: V,
     _marker: PhantomData<T>,
@@ -171,7 +171,7 @@ impl<T, V: Validate<T>> Validate<T> for NotValidator<T, V> {
 /// # Type Parameters
 /// * `T` - The type of value to validate.
 /// * `V` - The inner validator to negate.
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Default)]
 pub struct NotValidatorVec<T, V: ValidateVec<T>> {
     inner: V,
     _marker: PhantomData<T>,
