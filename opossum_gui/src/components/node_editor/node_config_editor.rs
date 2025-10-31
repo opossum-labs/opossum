@@ -78,10 +78,10 @@ fn use_node_config_processor(
                                 }
                             });
                         }
-                        NodeChangeAction::Lidt(lidt) => {
+                        NodeChangeAction::Lidt(lidt_new) => {
                             spawn(async move {
                                 if let Err(err_str) =
-                                    api::update_node_lidt(active_node_id, lidt).await
+                                    api::update_node_lidt(active_node_id, lidt_new).await
                                 {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                                 } else {

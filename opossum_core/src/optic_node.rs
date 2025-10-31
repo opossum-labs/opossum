@@ -300,7 +300,10 @@ pub trait OpticNode: Dottable {
     /// Get the mutable[`NodeAttr`] (common attributes) of an [`OpticNode`].
     fn node_attr_mut(&mut self) -> &mut NodeAttr;
     /// Update node attributes of this [`OpticNode`] from given [`NodeAttr`].
-    fn set_node_attr(&mut self, node_attributes: NodeAttr) {
+    ///
+    /// # Errors
+    /// Returns an error if validation fails.
+    fn set_node_attr(&mut self, node_attributes: NodeAttr) -> OpmResult<()> {
         let node_attr_mut = self.node_attr_mut();
         if let Some(iso) = node_attributes.isometry() {
             let () = node_attr_mut.set_isometry(iso);
@@ -318,8 +321,9 @@ pub trait OpticNode: Dottable {
         node_attr_mut.set_ports(node_attributes.ports().clone());
 
         node_attr_mut.set_uuid(node_attributes.uuid());
-        node_attr_mut.set_lidt(node_attributes.lidt());
+        node_attr_mut.set_lidt(node_attributes.lidt())?;
         node_attr_mut.set_gui_position(node_attributes.gui_position());
+        Ok(())
     }
     /// Get the node type of this [`OpticNode`]
     fn node_type(&self) -> String {
@@ -495,7 +499,7 @@ pub trait LIDT: OpticNode + Analyzable + Sized {
                 surf.set_lidt(lidt)?;
             }
         }
-        self.node_attr_mut().set_lidt(&lidt);
+        self.node_attr_mut().set_lidt(&lidt)?;
         Ok(self)
     }
 }

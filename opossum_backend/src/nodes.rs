@@ -559,8 +559,8 @@ async fn post_node_lidt(
             .optical_ref
             .lock_opm()?
             .node_attr_mut()
-            .set_lidt(&lidt);
-        Ok(())
+            .set_lidt(&lidt)
+            .map_err(|e| BackEndErrorResponse::new(404, "Opossum", &e.to_string()))
     } else {
         Err(BackEndErrorResponse::new(
             404,

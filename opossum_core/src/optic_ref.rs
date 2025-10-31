@@ -111,7 +111,8 @@ impl<'de> Deserialize<'de> for OpticRef {
             .optical_ref
             .lock_opm()
             .unwrap()
-            .set_node_attr(intermediate.attributes);
+            .set_node_attr(intermediate.attributes)
+            .map_err(|e| de::Error::custom(e.to_string()))?;
 
         // If the node is a group node, set its graph.
         // The 'intermediate.graph' will always contain a valid OpticGraph
