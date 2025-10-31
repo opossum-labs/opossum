@@ -146,7 +146,7 @@ pub fn GraphEditor(
         if let Some(command) = command.read().as_ref() {
             match command {
                 NodeEditorCommand::DeleteAll => {
-                    is_modified.set(true);
+                    is_modified.set(false);
                     graph_processor.send(GraphStoreAction::DeleteScenery);
                     graph_processor.send(GraphStoreAction::GetSceneryId);
                 }

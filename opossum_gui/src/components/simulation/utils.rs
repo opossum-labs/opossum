@@ -3,8 +3,8 @@ use std::{env, path::PathBuf};
 
 pub fn find_cli_executable() -> OpmResult<PathBuf> {
     let possible_cli_paths = vec![
-        "opossum_core",
-        "opossum_core.exe",
+        "opossum_cli",
+        "opossum_cli.exe",
         "../../../../../debug/opossum_cli",
         "../../../../../debug/opossum_cli.exe",
     ];
