@@ -29,7 +29,14 @@
             },
         ),
         uuid: "98248e7f-dc4c-4131-8710-f3d5be2ff087",
-        lidt: 10000.0,
+        lidt: (
+                value: 10000.0,
+                validator: (
+                    v1: (),
+                    v2: (),
+                    _marker: (),
+                ),
+            ),
         props: {},
         inverted: false,
     ),

@@ -4,6 +4,7 @@ use crate::components::node_editor::{
     accordion::AccordionItem,
     inputs::input_components::{LabeledCheckboxInput, LabeledInput},
     node_config_editor::NodeChangeAction,
+    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
 use opossum_core::{J_per_cm2, nodes::fluence_detector::Fluence};
@@ -57,22 +58,34 @@ pub fn name_onchange(node_config_processor: Coroutine<NodeChangeAction>) -> Call
 #[component]
 pub fn NodeLIDTInput(node_lidt: Fluence) -> Element {
     let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+    let val_sig = use_signal(|| node_lidt);
+    use_update_signal_with_reactive_prop(node_lidt, val_sig);
+
     rsx! {
         LabeledInput {
             id: "inputNodeLIDT",
             label: "LIDT in J/cm²",
-            value: format!("{:.2}", node_lidt.get::<joule_per_square_centimeter>()),
-            onchange: lidt_onchange(node_config_processor),
+            value: format!("{:.2}", val_sig.read().get::<joule_per_square_centimeter>()),
+            onchange: lidt_onchange(node_config_processor, val_sig),
             r#type: "number",
+            min: Some("0.0"),
         }
     }
 }
 
 #[must_use]
-pub fn lidt_onchange(node_config_processor: Coroutine<NodeChangeAction>) -> CallbackWrapper {
+pub fn lidt_onchange(
+    node_config_processor: Coroutine<NodeChangeAction>,
+    mut old_lidt: Signal<Fluence>,
+) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(lidt) = e.data.parsed::<f64>() {
-            node_config_processor.send(NodeChangeAction::Lidt(J_per_cm2!(lidt)));
+            if lidt >= 0. {
+                node_config_processor.send(NodeChangeAction::Lidt(J_per_cm2!(lidt)));
+            } else {
+                let val = *old_lidt.read();
+                old_lidt.set(val);
+            }
         }
     })
 }

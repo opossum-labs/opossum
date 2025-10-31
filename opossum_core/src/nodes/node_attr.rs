@@ -12,10 +12,12 @@ use super::fluence_detector::Fluence;
 use crate::{
     J_per_cm2,
     error::{OpmResult, OpossumError},
+    generic_validators::{AllFinite, AllPositive},
     optic_ports::OpticPorts,
     optic_scenery_rsc::SceneryResources,
     properties::{Properties, Proptype, validator::Validator},
     utils::geom_transformation::Isometry,
+    validated, validated_type,
 };
 
 /// Struct for storing common attributes of optical nodes.
@@ -31,7 +33,7 @@ pub struct NodeAttr {
     ports: OpticPorts,
     /// Universally unique identifier for this node.
     uuid: Uuid,
-    lidt: Fluence,
+    lidt: validated_type!(Fluence, AllPositive && AllFinite),
     #[serde(default)]
     props: Properties,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -81,7 +83,7 @@ impl NodeAttr {
             alignment: None,
             align_like_node_at_distance: None,
             uuid: Uuid::new_v4(),
-            lidt: J_per_cm2!(1.),
+            lidt: validated!(J_per_cm2!(1.), AllPositive && AllFinite).unwrap(),
             gui_position: None,
         }
     }
@@ -253,11 +255,15 @@ impl NodeAttr {
     /// Returns a reference to the lidt of this [`NodeAttr`].
     #[must_use]
     pub const fn lidt(&self) -> &Fluence {
-        &self.lidt
+        self.lidt.get()
     }
     ///Sets the lidt of this [`NodeAttr`].
-    pub fn set_lidt(&mut self, lidt: &Fluence) {
-        self.lidt = *lidt;
+    ///
+    /// # Errors
+    /// Returns an error if validation fails
+    pub fn set_lidt(&mut self, lidt: &Fluence) -> OpmResult<()> {
+        self.lidt.set(*lidt)?;
+        Ok(())
     }
 
     /// set the nodeindex and distance of the node to which this node should be aligned to
