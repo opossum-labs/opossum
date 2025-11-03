@@ -30,8 +30,8 @@ tempfile.workspace = true
 uom.workspace = true
 uuid.workspace = true
 
-dioxus = { version = "0.6" }
-dioxus-free-icons = { version = "0.9", features = ["font-awesome-solid"] }
+dioxus = { version = "0.7.0" }
+dioxus-free-icons = { version = "0.10.0", features = ["font-awesome-solid"] }
 directories = "6.0.0"
 futures-util = "0.3.31"
 ico = "0.4"
@@ -60,9 +60,9 @@ default = ["desktop"]
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
-server = ["dioxus/server"]
+# server = ["dioxus/server"]
 # This feature flag is used by build.rs to trigger the backend build
 bundle-backend = []
 
-[lib]
-crate-type = ["cdylib", "rlib"]
+#[lib]
+#crate-type = ["cdylib", "rlib"]

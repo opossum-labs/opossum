@@ -2,7 +2,7 @@
 use crate::api;
 use dioxus::prelude::*;
 
-const LOGO: Asset = asset!("./assets/LogoBanner.svg");
+const LOGO: Asset = asset!("/assets/LogoBanner.svg");
 
 #[component]
 pub fn About(mut show_about: Signal<bool>) -> Element {

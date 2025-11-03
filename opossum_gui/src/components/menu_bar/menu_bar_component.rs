@@ -24,7 +24,7 @@ use crate::components::{
 #[cfg(not(target_arch = "wasm32"))]
 use crate::components::menu_bar::controls::controls_menu::ControlsMenu;
 
-const FAVICON: Asset = asset!("./assets/favicon.ico");
+const FAVICON: Asset = asset!("/assets/favicon.ico");
 
 #[derive(Debug)]
 pub enum MenuSelection {

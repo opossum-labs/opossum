@@ -116,14 +116,11 @@ impl IntoInputDataStrings<SpectralFilterBuilder> for FilterFromFileParam {
 
 impl IntoInputData<String, SpectralFilterBuilder, SpectralFilterBuilder> for FilterFromFileParam {
     fn parse_value(&self, e: Event<FormData>) -> Option<String> {
-        e.files().and_then(|file_engine| {
-            let files = file_engine.files();
-            if files.is_empty() {
-                None
-            } else {
-                Some(files[0].clone())
-            }
-        })
+        if e.files().is_empty() {
+            None
+        } else {
+            Some(e.files()[0].name().clone())
+        }
     }
 
     fn setter_from_obj(&self) -> impl FnMut(&mut SpectralFilterBuilder, String) {

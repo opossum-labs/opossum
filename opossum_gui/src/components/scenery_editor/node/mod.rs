@@ -12,24 +12,24 @@ use crate::components::scenery_editor::constants::{
 use super::ports::ports_component::Ports;
 pub use node_component::Node;
 
-const NODE_BEAMSPLITTER: Asset = asset!("./assets/icons/node_beamsplitter.svg");
-const NODE_CYLINDRIC_LENS: Asset = asset!("./assets/icons/node_cylindric_lens.svg");
-const NODE_ENERGY_METER: Asset = asset!("./assets/icons/node_energymeter.svg");
-const NODE_FILTER: Asset = asset!("./assets/icons/node_filter.svg");
-const NODE_FLUENCE: Asset = asset!("./assets/icons/node_fluence.svg");
-const NODE_GRATING: Asset = asset!("./assets/icons/node_grating.svg");
-const NODE_GROUP: Asset = asset!("./assets/icons/node_group.svg");
-const NODE_LENS: Asset = asset!("./assets/icons/node_lens.svg");
-const NODE_MIRROR: Asset = asset!("./assets/icons/node_mirror.svg");
-const NODE_PARABOLA: Asset = asset!("./assets/icons/node_parabola.svg");
-const NODE_PARAXIAL: Asset = asset!("./assets/icons/node_paraxial.svg");
-const NODE_PROPAGATION: Asset = asset!("./assets/icons/node_propagation.svg");
-const NODE_SOURCE: Asset = asset!("./assets/icons/node_source.svg");
-const NODE_SPECTROMETER: Asset = asset!("./assets/icons/node_spectrometer.svg");
-const NODE_WAVEFRONT: Asset = asset!("./assets/icons/node_wavefront.svg");
-const NODE_SPOTDIAGRAM: Asset = asset!("./assets/icons/node_spotdiagram.svg");
-const NODE_UNKNOWN: Asset = asset!("./assets/icons/node_unknown.svg");
-const NODE_WEDGE: Asset = asset!("./assets/icons/node_wedge.svg");
+const NODE_BEAMSPLITTER: Asset = asset!("/assets/icons/node_beamsplitter.svg");
+const NODE_CYLINDRIC_LENS: Asset = asset!("/assets/icons/node_cylindric_lens.svg");
+const NODE_ENERGY_METER: Asset = asset!("/assets/icons/node_energymeter.svg");
+const NODE_FILTER: Asset = asset!("/assets/icons/node_filter.svg");
+const NODE_FLUENCE: Asset = asset!("/assets/icons/node_fluence.svg");
+const NODE_GRATING: Asset = asset!("/assets/icons/node_grating.svg");
+const NODE_GROUP: Asset = asset!("/assets/icons/node_group.svg");
+const NODE_LENS: Asset = asset!("/assets/icons/node_lens.svg");
+const NODE_MIRROR: Asset = asset!("/assets/icons/node_mirror.svg");
+const NODE_PARABOLA: Asset = asset!("/assets/icons/node_parabola.svg");
+const NODE_PARAXIAL: Asset = asset!("/assets/icons/node_paraxial.svg");
+const NODE_PROPAGATION: Asset = asset!("/assets/icons/node_propagation.svg");
+const NODE_SOURCE: Asset = asset!("/assets/icons/node_source.svg");
+const NODE_SPECTROMETER: Asset = asset!("/assets/icons/node_spectrometer.svg");
+const NODE_WAVEFRONT: Asset = asset!("/assets/icons/node_wavefront.svg");
+const NODE_SPOTDIAGRAM: Asset = asset!("/assets/icons/node_spotdiagram.svg");
+const NODE_UNKNOWN: Asset = asset!("/assets/icons/node_unknown.svg");
+const NODE_WEDGE: Asset = asset!("/assets/icons/node_wedge.svg");
 
 // Constants for node dimensions and port positions
 const GOLDEN_RATIO: f64 = 1.618_033_988_7;
