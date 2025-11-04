@@ -120,11 +120,11 @@ pub fn EnergyLaserLineEditor(
                 move |e: Event<FormData>| {
                     let wvl_opt = e.data().get_first(&form_inputs[0].id);
                     let energy_opt = e.data().get_first(&form_inputs[1].id);
-                    if let (Some(FormValue::Text(wvl_val)), Some(FormValue::Text(energy_val))) = (wvl_opt.clone(), energy_opt.clone()) {
-                        if let (Ok(wvl), Ok(energy)) = (
-                            wvl_val.parse(),
-                            energy_val.parse(),
-                        ) {
+                    if let (Some(FormValue::Text(wvl_val)), Some(FormValue::Text(energy_val))) = (
+                        wvl_opt.clone(),
+                        energy_opt.clone(),
+                    ) {
+                        if let (Ok(wvl), Ok(energy)) = (wvl_val.parse(), energy_val.parse()) {
                             if let EnergyDataBuilder::LaserLines(ll) = &mut *energy_data_builder_sig
                                 .write()
                             {
@@ -140,7 +140,7 @@ pub fn EnergyLaserLineEditor(
                                 .write()
                                 .add_log(
                                     format!(
-                                        "Could not parse laser line inputs! Wavelength: {wvl_opt:?}. Energy: {energy_opt:?}"
+                                        "Could not parse laser line inputs! Wavelength: {wvl_opt:?}. Energy: {energy_opt:?}",
                                     )
                                         .as_str(),
                                 );
@@ -194,10 +194,9 @@ fn LaserLineList(
                                     let laser_lines = laser_lines.clone();
                                     move |_| {
                                         let mut laser_lines = laser_lines.clone();
-                                        if laser_lines.delete_line(i).is_ok()
-                                         {
+                                        if laser_lines.delete_line(i).is_ok() {
                                             energy_data_builder_sig.set(EnergyDataBuilder::LaserLines(laser_lines));
-                                         }
+                                        }
                                     }
                                 },
                                 role: "button",

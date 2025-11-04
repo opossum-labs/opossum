@@ -26,22 +26,20 @@ pub fn ControlsMenu(
             a {
                 class: "text-secondary me-2",
                 role: "button",
-                onclick:
-                    move |_| {
+                onclick: move |_| {
 
-
-                        if window.is_maximized() {
-                            window.set_maximized(false);
-                            maximize_symbol.set(rsx! {
-                                Icon { width: 25, icon: FaWindowMaximize }
-                            });
-                        } else {
-                            window.set_maximized(true);
-                            maximize_symbol.set(rsx! {
-                                Icon { width: 25, icon: FaWindowRestore }
-                            });
-                        }
-                    }                ,
+                    if window.is_maximized() {
+                        window.set_maximized(false);
+                        maximize_symbol.set(rsx! {
+                            Icon { width: 25, icon: FaWindowMaximize }
+                        });
+                    } else {
+                        window.set_maximized(true);
+                        maximize_symbol.set(rsx! {
+                            Icon { width: 25, icon: FaWindowRestore }
+                        });
+                    }
+                },
                 {maximize_symbol()}
             }
             a {

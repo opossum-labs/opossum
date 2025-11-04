@@ -129,56 +129,72 @@ pub fn App() -> Element {
                 class: "resize-handle-top",
                 onmousedown: {
                     let window = window.clone();
-                    move |_| { let _ = window.drag_resize_window(ResizeDirection::North); }
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::North);
+                    }
                 },
             }
             div {
                 class: "resize-handle-bottom",
                 onmousedown: {
                     let window = window.clone();
-                    move |_| { let _ = window.drag_resize_window(ResizeDirection::South); }
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::South);
+                    }
                 },
             }
             div {
                 class: "resize-handle-left",
                 onmousedown: {
                     let window = window.clone();
-                    move |_| { let _ = window.drag_resize_window(ResizeDirection::West); }
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::West);
+                    }
                 },
             }
             div {
                 class: "resize-handle-right",
                 onmousedown: {
                     let window = window.clone();
-                    move |_| { let _ = window.drag_resize_window(ResizeDirection::East); }
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::East);
+                    }
                 },
             }
             div {
                 class: "resize-handle-top-left",
                 onmousedown: {
                     let window = window.clone();
-                    move |_| { let _ = window.drag_resize_window(ResizeDirection::NorthWest); }
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::NorthWest);
+                    }
                 },
             }
             div {
                 class: "resize-handle-top-right",
                 onmousedown: {
                     let window = window.clone();
-                    move |_| { let _ = window.drag_resize_window(ResizeDirection::NorthEast); }
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::NorthEast);
+                    }
                 },
             }
             div {
                 class: "resize-handle-bottom-left",
                 onmousedown: {
                     let window = window.clone();
-                    move |_| { let _ = window.drag_resize_window(ResizeDirection::SouthWest); }
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::SouthWest);
+                    }
                 },
             }
             div {
                 class: "resize-handle-bottom-right",
                 onmousedown: {
                     // let window = window.clone();
-                    move |_| { let _ = window.drag_resize_window(ResizeDirection::SouthEast); }
+                    move |_| {
+                        let _ = window.drag_resize_window(ResizeDirection::SouthEast);
+                    }
                 },
             }
             CommonAppLayout {

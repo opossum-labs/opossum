@@ -71,17 +71,18 @@ pub fn LaserLineInput(
         form {
             onsubmit: {
                 move |e: Event<FormData>| {
-                    let wvl_opt =  e.data().get_first(&inputs[0].id);
-                    let rel_int_opt =  e.data().get_first(&inputs[1].id);
-                     if let (Some(FormValue::Text(wvl_val)), Some(FormValue::Text(rel_int_val))) = (wvl_opt.clone(), rel_int_opt.clone()) {
-                        if let (Ok(wvl), Ok(rel_int)) = (
-                            wvl_val.parse(),
-                            rel_int_val.parse(),
-                        ) {
+                    let wvl_opt = e.data().get_first(&inputs[0].id);
+                    let rel_int_opt = e.data().get_first(&inputs[1].id);
+                    if let (
+                        Some(FormValue::Text(wvl_val)),
+                        Some(FormValue::Text(rel_int_val)),
+                    ) = (wvl_opt.clone(), rel_int_opt.clone()) {
+                        if let (Ok(wvl), Ok(rel_int)) = (wvl_val.parse(), rel_int_val.parse()) {
                             if let SpecDistType::LaserLines(ll) = &mut *spect_dist_type_sig
                                 .write()
                             {
-                                ll.add_lines(vec![(nanometer!(wvl), rel_int)]).log_err_with_context("Error adding laser line");
+                                ll.add_lines(vec![(nanometer!(wvl), rel_int)])
+                                    .log_err_with_context("Error adding laser line");
                             }
                         } else {
                             OPOSSUM_UI_LOGS
