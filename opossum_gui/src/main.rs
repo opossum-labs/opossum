@@ -1,6 +1,6 @@
-// Dieses Attribut ist nur für Windows-Release-Builds relevant.
+// Workaround dioxus 0.7.0
 #![cfg_attr(
-    all(not(debug_assertions), target_os = "windows"),
+    target_os = "windows",
     windows_subsystem = "windows"
 )]
 #![allow(clippy::items_after_statements)]
@@ -18,14 +18,14 @@ use {
 };
 
 // --- Gemeinsame Asset-Importe ---
-const MAIN_CSS: Asset = asset!("./assets/main.css");
-// const PLOTLY_JS: Asset = asset!("./assets/plotly.js");
-// const THREE_MOD_JS: Asset = asset!("./assets/three_mod.js");
-// const ORBIT_CTRLS: Asset = asset!("./assets/orbitControls.js");
-const MDB_CSS: Asset = asset!("./assets/mdb.min.css");
-const MDB_JS: Asset = asset!("./assets/mdb.umd.min.js");
-const MDB_SUB_CSS: Asset = asset!("./assets/mdb_submenu.css");
-const MDB_ACC_CSS: Asset = asset!("./assets/mdb_accordion.css");
+const MAIN_CSS: Asset = asset!("/assets/main.css");
+// const PLOTLY_JS: Asset = asset!("/assets/plotly.js");
+// const THREE_MOD_JS: Asset = asset!("/assets/three_mod.js");
+// const ORBIT_CTRLS: Asset = asset!("/assets/orbitControls.js");
+const MDB_CSS: Asset = asset!("/assets/mdb.min.css");
+const MDB_JS: Asset = asset!("/assets/mdb.umd.min.js");
+const MDB_SUB_CSS: Asset = asset!("/assets/mdb_submenu.css");
+const MDB_ACC_CSS: Asset = asset!("/assets/mdb_accordion.css");
 
 // --- Nur Desktop-Funktionen ---
 

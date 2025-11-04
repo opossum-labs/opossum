@@ -118,13 +118,12 @@ pub fn EnergyLaserLineEditor(
         form {
             onsubmit: {
                 move |e: Event<FormData>| {
-                    let values = e.data().values();
-                    let wvl_opt = values.get(&form_inputs[0].id);
-                    let energy_opt = values.get(&form_inputs[1].id);
-                    if let (Some(wvl_val), Some(energy_val)) = (wvl_opt, energy_opt) {
+                    let wvl_opt = e.data().get_first(&form_inputs[0].id);
+                    let energy_opt = e.data().get_first(&form_inputs[1].id);
+                    if let (Some(FormValue::Text(wvl_val)), Some(FormValue::Text(energy_val))) = (wvl_opt.clone(), energy_opt.clone()) {
                         if let (Ok(wvl), Ok(energy)) = (
-                            wvl_val.as_value().parse::<f64>(),
-                            energy_val.as_value().parse::<f64>(),
+                            wvl_val.parse(),
+                            energy_val.parse(),
                         ) {
                             if let EnergyDataBuilder::LaserLines(ll) = &mut *energy_data_builder_sig
                                 .write()
@@ -141,7 +140,7 @@ pub fn EnergyLaserLineEditor(
                                 .write()
                                 .add_log(
                                     format!(
-                                        "Could not parse laser line inputs! Wavelength: {wvl_opt:?}. Energy: {energy_opt:?}",
+                                        "Could not parse laser line inputs! Wavelength: {wvl_opt:?}. Energy: {energy_opt:?}"
                                     )
                                         .as_str(),
                                 );

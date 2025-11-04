@@ -132,7 +132,7 @@ fn get_editor(property: Property, property_key: String) -> Option<Element> {
     }
 }
 
-pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone>(
+pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone + 'static>(
     property_key: &str,
     prop_type_value: T,
     prop_type_value_sig: Signal<T>,
@@ -152,7 +152,7 @@ pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone>(
     });
 }
 
-pub fn use_update_signal_with_reactive_prop<T: PartialEq + Clone>(
+pub fn use_update_signal_with_reactive_prop<T: PartialEq + Clone + 'static>(
     prop: T,
     mut prop_signal: Signal<T>,
 ) {

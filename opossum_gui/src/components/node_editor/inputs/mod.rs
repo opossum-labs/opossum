@@ -6,7 +6,7 @@ use strum::IntoEnumIterator;
 use crate::components::node_editor::CallbackWrapper;
 use std::{fmt::Display, str::FromStr};
 
-pub trait IntoInputData<T, D, B>: Into<InputParam>
+pub trait IntoInputData<T, D, B: 'static>: Into<InputParam>
 where
     D: Into<B> + Clone + 'static,
     T: Clone + FromStr + 'static,

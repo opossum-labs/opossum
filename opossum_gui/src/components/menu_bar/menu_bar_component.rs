@@ -24,7 +24,7 @@ use crate::components::{
 #[cfg(not(target_arch = "wasm32"))]
 use crate::components::menu_bar::controls::controls_menu::ControlsMenu;
 
-const FAVICON: Asset = asset!("./assets/favicon.ico");
+const FAVICON: Asset = asset!("/assets/favicon.ico");
 
 #[derive(Debug)]
 pub enum MenuSelection {
@@ -43,8 +43,8 @@ pub enum MenuSelection {
 pub fn MenuBar(
     menu_item_selected: Signal<Option<MenuSelection>>,
     project_directory: Signal<Option<PathBuf>>,
-    model_file_path: ReadOnlySignal<Option<PathBuf>>,
-    model_modified: ReadOnlySignal<bool>,
+    model_file_path: ReadSignal<Option<PathBuf>>,
+    model_modified: ReadSignal<bool>,
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
     let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| {
