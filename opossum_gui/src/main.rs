@@ -1,4 +1,4 @@
-// Workaround dioxus 0.7.0
+// Workaround for dioxus 0.7.0
 #![cfg_attr(
     target_os = "windows",
     windows_subsystem = "windows"
@@ -8,7 +8,7 @@
 use dioxus::prelude::*;
 use opossum_gui::App;
 
-// --- Desktop-spezifische Importe ---
+// --- dektop specific imports ---
 #[cfg(not(target_arch = "wasm32"))]
 use {
     dioxus::desktop::{WindowBuilder, tao::window::Icon},
@@ -17,7 +17,8 @@ use {
     std::io::Cursor,
 };
 
-// --- Gemeinsame Asset-Importe ---
+// --- common asset imports ---
+
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 // const PLOTLY_JS: Asset = asset!("/assets/plotly.js");
 // const THREE_MOD_JS: Asset = asset!("/assets/three_mod.js");
@@ -27,8 +28,7 @@ const MDB_JS: Asset = asset!("/assets/mdb.umd.min.js");
 const MDB_SUB_CSS: Asset = asset!("/assets/mdb_submenu.css");
 const MDB_ACC_CSS: Asset = asset!("/assets/mdb_accordion.css");
 
-// --- Nur Desktop-Funktionen ---
-
+// --- desktop only functions ---
 #[cfg(not(target_arch = "wasm32"))]
 fn read_icon() -> Option<Icon> {
     let icon_bytes: &[u8] = include_bytes!("../../opossum_core/logo/Logo_square.ico");
@@ -76,7 +76,6 @@ fn start_backend() -> ProcessHandle {
 // --- Desktop Main ---
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    // Diese innere Funktion startet die Desktop-App mit der Fensterkonfiguration
     fn launch_app(backend_handle: ProcessHandle) {
         println!("Launching GUI...");
         let data_dir = ProjectDirs::from("org", "OpossumLabs", "OpossumGui").map_or_else(
@@ -93,18 +92,18 @@ fn main() {
                     .with_window(window)
                     .with_data_directory(data_dir),
             )
-            .with_context(backend_handle) // Stellt das Handle für die App bereit
+            .with_context(backend_handle)
             .launch(MainApp);
     }
 
-    // Release-Build: Backend starten und Handle übergeben
+    // Release-Build: start backend an return handle
     #[cfg(not(debug_assertions))]
     {
         let backend_handle = start_backend();
         launch_app(backend_handle);
     }
 
-    // Debug-Build: Dummy-Handle übergeben
+    // Debug-Build: return dummy handle
     #[cfg(debug_assertions)]
     {
         launch_app(ProcessHandle::default());
@@ -114,25 +113,21 @@ fn main() {
 // --- WASM Main ---
 #[cfg(target_arch = "wasm32")]
 fn main() {
-    // Einfacher Start für WASM, kein Backend, keine Fensterkonfiguration
+    // simple start for WASM builds (no backend)
     dioxus::launch(MainApp);
 }
 
 #[component]
 fn MainApp() -> Element {
-    // Dieser Block wird nur für Desktop-Release-Builds kompiliert.
-    // Er holt das Backend-Handle und stellt sicher, dass es beim Beenden
-    // der App ebenfalls beendet wird.
     #[cfg(all(not(target_arch = "wasm32"), not(debug_assertions)))]
     {
+        use crate::dioxus_core::use_drop;
         let backend_handle = use_context::<ProcessHandle>();
         use_drop(move || {
             backend_handle.kill();
             println!("Stopping app...")
         });
     }
-
-    // Das RSX ist für alle Plattformen gleich
     rsx! {
         document::Stylesheet { href: MAIN_CSS }
         document::Stylesheet { href: MDB_CSS }
