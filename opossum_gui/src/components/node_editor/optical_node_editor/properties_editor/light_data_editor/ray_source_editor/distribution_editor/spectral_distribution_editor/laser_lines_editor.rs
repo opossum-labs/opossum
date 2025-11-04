@@ -71,13 +71,12 @@ pub fn LaserLineInput(
         form {
             onsubmit: {
                 move |e: Event<FormData>| {
-                    let values = e.data().values();
-                    let wvl_opt = values.get(&inputs[0].id);
-                    let rel_int_opt = values.get(&inputs[1].id);
-                    if let (Some(wvl_val), Some(rel_int_val)) = (wvl_opt, rel_int_opt) {
+                    let wvl_opt =  e.data().get_first(&inputs[0].id);
+                    let rel_int_opt =  e.data().get_first(&inputs[1].id);
+                     if let (Some(FormValue::Text(wvl_val)), Some(FormValue::Text(rel_int_val))) = (wvl_opt.clone(), rel_int_opt.clone()) {
                         if let (Ok(wvl), Ok(rel_int)) = (
-                            wvl_val.as_value().parse::<f64>(),
-                            rel_int_val.as_value().parse::<f64>(),
+                            wvl_val.parse(),
+                            rel_int_val.parse(),
                         ) {
                             if let SpecDistType::LaserLines(ll) = &mut *spect_dist_type_sig
                                 .write()
