@@ -76,3 +76,9 @@ inherits = "dev"
 
 [profile.android-dev]
 inherits = "dev"
+
+[profile.release.package.opossum_gui]
+strip = false
+
+[profile.dist.package.opossum_gui]
+strip = false

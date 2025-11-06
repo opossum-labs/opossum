@@ -12,7 +12,6 @@ publish = true
 readme = "README.md"
 
 [dependencies]
-# opossum_backend = { workspace = true }
 opossum_core = { workspace = true }
 
 approx.workspace = true
@@ -49,9 +48,6 @@ web-sys = "0.3"
 
 [build-dependencies]
 winres = "0.1"
-
-[profile.release]
-strip = false # workaround...necessary because assets are not found within linux bundles
 
 # [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # plotly = { version = "0.13.5", features = ["kaleido"] }
