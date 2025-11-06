@@ -248,7 +248,7 @@ fn CommonAppLayout(
                     }
                 }
             }
-            GraphEditor { command: node_editor_command, is_modified: model_modified }
+            GraphEditor { command: node_editor_command, model_modified: model_modified }
             div { class: "row footer",
                 div { class: "col", Logger {} }
             }

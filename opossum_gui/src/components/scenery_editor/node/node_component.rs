@@ -15,7 +15,7 @@ use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
 
 #[component]
-pub fn Node(node: NodeElement, is_modified: Signal<bool>) -> Element {
+pub fn Node(node: NodeElement) -> Element {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
@@ -57,7 +57,6 @@ pub fn Node(node: NodeElement, is_modified: Signal<bool>) -> Element {
                 if event.data().key() == Key::Delete {
                     if !is_active.is_empty() {
                         graph_processor.send(GraphStoreAction::DeleteNode(id));
-                        is_modified.set(true);
                     }
                     event.stop_propagation();
                 }

@@ -7,7 +7,7 @@ use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 
 #[component]
-pub fn EdgeComponent(edge: ConnectInfo, is_modified: Signal<bool>) -> Element {
+pub fn EdgeComponent(edge: ConnectInfo) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
 
@@ -32,7 +32,7 @@ pub fn EdgeComponent(edge: ConnectInfo, is_modified: Signal<bool>) -> Element {
         let edge = edge.clone();
         move || {
             graph_store
-                .read()
+                .peek()
                 .nodes()
                 .read()
                 .get(&edge.target_uuid())
@@ -50,13 +50,12 @@ pub fn EdgeComponent(edge: ConnectInfo, is_modified: Signal<bool>) -> Element {
         path {
             d: new_path,
             tabindex: 0,
-            pointer_events: "auto", 
+            pointer_events: "auto",
             onkeydown: {
                 let edge = edge.clone();
                 move |event: Event<KeyboardData>| {
                     if event.data().key() == Key::Delete {
                         graph_processor.send(GraphStoreAction::DeleteEdge(edge.clone()));
-                        is_modified.set(true);
                     }
                     event.stop_propagation();
                 }
@@ -84,7 +83,6 @@ pub fn EdgeComponent(edge: ConnectInfo, is_modified: Signal<bool>) -> Element {
                                 edge.set_distance(new_distance);
                                 let edge = edge.clone();
                                 graph_processor.send(GraphStoreAction::UpdateEdge(edge));
-                                is_modified.set(true);
                             }
                         }
                     },

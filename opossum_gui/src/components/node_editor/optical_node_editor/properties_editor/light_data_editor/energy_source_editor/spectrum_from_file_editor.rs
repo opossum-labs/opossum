@@ -53,7 +53,7 @@ impl IntoInputData<String, SpectrumFile, EnergyDataBuilder> for EnergySpectrumFr
         if e.files().is_empty() {
             None
         } else {
-            Some(e.files()[0].name().clone())
+            Some(e.files()[0].name())
         }
     }
     fn setter_from_obj(&self) -> impl FnMut(&mut SpectrumFile, String) {

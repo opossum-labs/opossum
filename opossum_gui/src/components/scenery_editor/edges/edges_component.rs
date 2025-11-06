@@ -86,11 +86,16 @@ impl EdgeCreation {
     }
 }
 #[component]
-pub fn EdgesComponent(is_modified: Signal<bool>) -> Element {
+pub fn EdgesComponent() -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
+    let edges_signal = graph_store.peek().edges(); // do not subscribe to the graph_store signal itself but only to the edges signal therein
+
     rsx! {
-        for edge in graph_store().edges()() {
-            EdgeComponent { edge, is_modified }
+        for edge in edges_signal() {
+            EdgeComponent {
+                key: "{edge.src_uuid()}-{edge.src_port()}-{edge.target_uuid()}-{edge.target_port()}",
+                edge,
+            }
         }
     }
 }

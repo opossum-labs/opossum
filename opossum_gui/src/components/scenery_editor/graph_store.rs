@@ -42,6 +42,7 @@ pub struct GraphStore {
     nodes: Signal<HashMap<Uuid, NodeElement>>,
     edges: Signal<Vec<ConnectInfo>>,
     active_node: Signal<Option<Uuid>>,
+    needs_saving: Signal<bool>,
     scenery_id: Uuid,
 }
 pub enum GraphStoreAction {
@@ -77,18 +78,18 @@ impl GraphStore {
             .write()
             .extend(analyzers.iter().map(|node| (node.id(), node.into())));
     }
-    pub fn set_name_of_node(&self, node_id: Uuid, name: String) {
+    pub fn set_name_of_node(&mut self, node_id: Uuid, name: String) {
         if let Some(node) = self.nodes().write().get_mut(&node_id) {
             node.set_name(name);
+            self.needs_saving.set(true);
         }
     }
-
-    pub fn set_node_inverted(&self, node_id: Uuid, inverted: bool) {
+    pub fn set_node_inverted(&mut self, node_id: Uuid, inverted: bool) {
         if let Some(node) = self.nodes().write().get_mut(&node_id) {
             node.set_inverted(inverted);
+            self.needs_saving.set(true);
         }
     }
-
     #[must_use]
     pub const fn nodes(&self) -> Signal<HashMap<Uuid, NodeElement>> {
         self.nodes
@@ -200,7 +201,6 @@ impl GraphStore {
             }
         }
     }
-
     /// Adds a new reference node to the graph store.
     /// This function creates a new `NodeElement` for the reference node and inserts it into the store.
     /// It also sets the z-index based on the current number of nodes to ensure proper layering.
@@ -226,7 +226,6 @@ impl GraphStore {
         self.set_node_active(id, node_element.z_index());
         node_element
     }
-
     /// Removes nodes by their IDs from the graph store.
     /// This function iterates through the provided list of node IDs,
     /// removes each node from the store, and updates the edges accordingly.
@@ -242,7 +241,6 @@ impl GraphStore {
         }
         self.set_active_node_none();
     }
-
     /// Adds a new optical node to the graph store.
     /// This function creates a new `NodeElement` for the optical node and inserts it into the store.
     /// It also sets the z-index based on the current number of nodes to ensure proper layering.
@@ -263,7 +261,6 @@ impl GraphStore {
             .insert(node_info.uuid(), node_element.clone());
         self.set_node_active(node_info.uuid(), node_element.z_index());
     }
-
     /// Adds a new analyzer to the graph store.
     /// This function creates a new `NodeElement` for the analyzer and inserts it into the store.
     /// It also sets the z-index based on the current number of nodes to ensure proper layering.
@@ -284,6 +281,9 @@ impl GraphStore {
         node_element.set_z_index(nr_of_nodes + 1);
         self.nodes.write().insert(analyzer_id, node_element.clone());
         self.set_node_active(analyzer_id, node_element.z_index());
+    }
+    pub fn needs_saving(&self) -> Signal<bool, UnsyncStorage> {
+        self.needs_saving
     }
 }
 
@@ -356,73 +356,87 @@ impl UuidRegistry {
         self.backward.get(&id).copied()
     }
 }
-pub fn use_graph_processor(
-    mut graph_state: Signal<GraphState>,
-    is_modified: Signal<bool>,
-) -> Coroutine<GraphStoreAction> {
+pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<GraphStoreAction> {
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
-        let mut graph_store = graph_state.write().graph_store;
-        let mut editor_state = graph_state.write().editor_state;
         async move {
             // This loop runs forever in the background, waiting for actions.
             while let Some(action) = rx.next().await {
                 match action {
                     GraphStoreAction::UpdateEdges(connect_infos) => {
-                        graph_store.write().edges.set(connect_infos.clone());
+                        graph_state
+                            .write()
+                            .graph_store
+                            .write()
+                            .edges
+                            .set(connect_infos.clone());
+                        graph_state
+                            .write()
+                            .graph_store
+                            .write()
+                            .needs_saving
+                            .set(true);
                     }
                     GraphStoreAction::LoadFromFile(path) => {
-                        process_load_from_file(path, graph_store).await;
+                        process_load_from_file(path, graph_state).await;
                     }
                     GraphStoreAction::SaveToFile(path) => {
-                        process_save_to_file(path).await;
+                        process_save_to_file(path, graph_state).await;
                     }
                     GraphStoreAction::SyncNodePosition(node_id, pos) => {
                         eval_action_run(
                             api::update_gui_position(node_id, pos).await,
-                            None::<fn(String)>,
+                            Some(move |_| {
+                                let mut graph_store = graph_state.read().graph_store;
+                                graph_store.write().needs_saving.set(true);
+                            }),
                         );
                     }
                     GraphStoreAction::DeleteNode(node_id) => {
-                        process_delete_node(node_id, graph_store).await;
+                        process_delete_node(node_id, graph_state).await;
                     }
                     GraphStoreAction::AddOpticNode(new_node) => {
-                        process_add_optic_node(&new_node, graph_store, editor_state).await;
+                        process_add_optic_node(&new_node, graph_state).await;
                     }
                     GraphStoreAction::AddOpticReference(new_ref_node) => {
-                        process_add_reference_node(new_ref_node, graph_store).await;
+                        process_add_reference_node(new_ref_node, graph_state).await;
                     }
                     GraphStoreAction::AddAnalyzer(analyzer_type) => {
-                        process_add_analyzer(analyzer_type, graph_store, editor_state).await;
+                        process_add_analyzer(analyzer_type, graph_state).await;
                     }
                     GraphStoreAction::AddEdge(connect_info) => {
-                        process_add_edge(connect_info, graph_store).await;
+                        process_add_edge(connect_info, graph_state).await;
                     }
                     GraphStoreAction::UpdateEdge(connect_info) => {
-                        process_update_edge(connect_info, graph_store).await;
+                        process_update_edge(connect_info, graph_state).await;
                     }
                     GraphStoreAction::DeleteEdge(connect_info) => {
-                        process_delete_edge(connect_info, graph_store).await;
+                        process_delete_edge(connect_info, graph_state).await;
                     }
                     GraphStoreAction::CopyNode((node_type, node_id)) => {
                         process_copy_node(node_type, node_id).await;
                     }
                     GraphStoreAction::PasteNode(pos) => {
-                        process_paste_node(pos, graph_store, is_modified).await;
+                        process_paste_node(pos, graph_state).await;
                     }
                     GraphStoreAction::DeleteScenery => {
-                        process_delete_scenery(graph_store).await;
+                        process_delete_scenery(graph_state).await;
                     }
                     GraphStoreAction::OptimizeLayout => {
-                        process_optimize_layout(graph_store).await;
+                        process_optimize_layout(graph_state).await;
                     }
                     GraphStoreAction::GetSceneryId => eval_action_run(
                         api::get_scenery_uuid().await,
-                        Some(move |id| graph_store.write().set_scenery_id(id)),
+                        Some(move |id| {
+                            let mut graph_store_signal = graph_state.read().graph_store;
+                            graph_store_signal.write().set_scenery_id(id);
+                        }),
                     ),
                     GraphStoreAction::CenterGraph { zoom_to_fit } => {
-                        editor_state
+                        let mut editor_state_signal = graph_state.read().editor_state;
+                        let bounding_box = graph_state.read().graph_store.read().get_bounding_box();
+                        editor_state_signal
                             .write()
-                            .center_graph(graph_store.read().get_bounding_box(), zoom_to_fit);
+                            .center_graph(bounding_box, zoom_to_fit);
                     }
                 }
             }
@@ -432,7 +446,8 @@ pub fn use_graph_processor(
 // this flag is set because clippy expects Signal<GraphStore> to be Send.
 // However graphstore is only used locally and not within another async thread
 #[allow(clippy::future_not_send)]
-async fn process_load_from_file(path: PathBuf, mut graph_store: Signal<GraphStore>) {
+async fn process_load_from_file(path: PathBuf, graph_state: Signal<GraphState>) {
+    let mut graph_store = graph_state.read().graph_store;
     let opm_string = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -462,33 +477,38 @@ async fn process_load_from_file(path: PathBuf, mut graph_store: Signal<GraphStor
         api::get_connections(scenery_id).await,
         Some(move |connect_infos: Vec<ConnectInfo>| {
             graph_store.write().edges.set(connect_infos);
+            graph_store.write().needs_saving.set(false);
         }),
     );
 }
 
-async fn process_save_to_file(path: PathBuf) {
+async fn process_save_to_file(path: PathBuf, graph_state: Signal<GraphState>) {
+    let mut graph_store = graph_state.read().graph_store;
     eval_action_run(
         api::get_opm_file().await,
         Some(move |opm_string| {
             if let Err(err_str) = fs::write(path, opm_string) {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
             }
+            graph_store.write().needs_saving.set(false);
         }),
     );
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_delete_node(node_id: Uuid, graph_store: Signal<GraphStore>) {
+async fn process_delete_node(node_id: Uuid, graph_state: Signal<GraphState>) {
+    let mut graph_store = graph_state.read().graph_store;
     let node_type_opt = graph_store.read().get_node_type(node_id);
     if let Some(node_type) = node_type_opt {
         match node_type {
             NodeType::Optical(_) => {
-                process_delete_optical_node(node_id, graph_store).await;
+                process_delete_optical_node(node_id, graph_state).await;
             }
             NodeType::Analyzer(_) => {
-                process_delete_analyzer_node(node_id, graph_store).await;
+                process_delete_analyzer_node(node_id, graph_state).await;
             }
         }
+        graph_store.write().needs_saving.set(true);
     } else {
         OPOSSUM_UI_LOGS
             .write()
@@ -497,31 +517,32 @@ async fn process_delete_node(node_id: Uuid, graph_store: Signal<GraphStore>) {
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_delete_analyzer_node(analyzer_id: Uuid, mut graph_store: Signal<GraphStore>) {
+async fn process_delete_analyzer_node(analyzer_id: Uuid, graph_state: Signal<GraphState>) {
     eval_action_run(
         api::delete_analyzer(analyzer_id).await,
         Some(move |deleted_id| {
+            let mut graph_store = graph_state.read().graph_store;
             graph_store.write().remove_nodes_by_id(vec![deleted_id]);
         }),
     );
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_delete_optical_node(node_id: Uuid, mut graph_store: Signal<GraphStore>) {
+async fn process_delete_optical_node(node_id: Uuid, graph_state: Signal<GraphState>) {
     eval_action_run(
         api::delete_node(node_id).await,
         Some(move |deleted_ids| {
+            let mut graph_store = graph_state.read().graph_store;
             graph_store.write().remove_nodes_by_id(deleted_ids);
         }),
     );
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_add_optic_node(
-    new_node_type_string: &str,
-    mut graph_store: Signal<GraphStore>,
-    editor_state: Signal<EditorState>,
-) {
+async fn process_add_optic_node(new_node_type_string: &str, graph_state: Signal<GraphState>) {
+    let editor_state = graph_state.read().editor_state;
+    let mut graph_store = graph_state.read().graph_store;
+
     // calculate center of viewport (in graph coordinates)
     let zoom = *editor_state.peek().zoom.peek();
     let view_port_center = editor_state.peek().get_view_port_center();
@@ -542,7 +563,9 @@ async fn process_add_optic_node(
     eval_action_run(
         api::post_add_node(new_node_info, scenery_id).await,
         Some(move |node_info| {
+            // `graph_store` wird hier in die Closure "gemoved"
             graph_store.write().add_new_optical_node(&node_info);
+            graph_store.write().needs_saving.set(true);
         }),
     );
 }
@@ -569,22 +592,23 @@ fn find_suitable_element_position(
     final_position // fallback: return last position after reaching max iterations
 }
 #[allow(clippy::future_not_send)]
-async fn process_add_reference_node(new_ref_node: NewRefNode, mut graph_store: Signal<GraphStore>) {
+async fn process_add_reference_node(new_ref_node: NewRefNode, graph_state: Signal<GraphState>) {
+    let mut graph_store = graph_state.read().graph_store;
     let scenery_id = graph_store.peek().scenery_id;
     eval_action_run(
         api::post_add_ref_node(new_ref_node, scenery_id).await,
         Some(move |node_info| {
             graph_store.write().add_new_reference_node(&node_info);
+            graph_store.write().needs_saving.set(true);
         }),
     );
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_add_analyzer(
-    analyzer_type: AnalyzerType,
-    mut graph_store: Signal<GraphStore>,
-    editor_state: Signal<EditorState>,
-) {
+async fn process_add_analyzer(analyzer_type: AnalyzerType, graph_state: Signal<GraphState>) {
+    let editor_state = graph_state.read().editor_state;
+    let mut graph_store = graph_state.read().graph_store;
+
     // calculate center of viewport (in graph coordinates)
     let zoom = *editor_state.peek().zoom.peek();
     let view_port_center = editor_state.peek().get_view_port_center();
@@ -607,12 +631,14 @@ async fn process_add_analyzer(
             graph_store
                 .write()
                 .add_new_analyzer(new_analyzer_info, analyzer_id);
+            graph_store.write().needs_saving.set(true);
         }),
     );
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_update_edge(connect_info: ConnectInfo, mut graph_store: Signal<GraphStore>) {
+async fn process_update_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
+    let mut graph_store = graph_state.read().graph_store;
     eval_action_run(
         api::update_distance(connect_info).await,
         Some(move |ci: ConnectInfo| {
@@ -628,15 +654,23 @@ async fn process_update_edge(connect_info: ConnectInfo, mut graph_store: Signal<
         }),
     );
 }
-
 #[allow(clippy::future_not_send)]
-async fn process_delete_edge(connect_info: ConnectInfo, mut graph_store: Signal<GraphStore>) {
+async fn process_delete_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
+    let mut graph_store = graph_state.read().graph_store;
+    let edge_to_delete = connect_info.clone();
+
     eval_action_run(
         api::delete_connection(connect_info).await,
-        Some(move |ci| graph_store.write().edges.write().retain(|e| e != &ci)),
+        Some(move |_| {
+            graph_store
+                .write()
+                .edges
+                .write()
+                .retain(|e| e != &edge_to_delete);
+            graph_store.write().needs_saving.set(true);
+        }),
     );
 }
-
 #[allow(clippy::future_not_send)]
 async fn process_copy_node(node_type: NodeType, node_id: Uuid) {
     match node_type {
@@ -650,13 +684,9 @@ async fn process_copy_node(node_type: NodeType, node_id: Uuid) {
         ),
     }
 }
-
 #[allow(clippy::future_not_send)]
-async fn process_paste_node(
-    pos: Point2D<f64>,
-    mut graph_store: Signal<GraphStore>,
-    mut is_modified: Signal<bool>,
-) {
+async fn process_paste_node(pos: Point2D<f64>, graph_state: Signal<GraphState>) {
+    let mut graph_store = graph_state.read().graph_store;
     let group_id = graph_store.read().scenery_id;
     match api::get_copied_node_type().await {
         Ok(node_type) => {
@@ -666,7 +696,7 @@ async fn process_paste_node(
                     Some(move |node_info_opt| {
                         if let Some(node_info) = node_info_opt {
                             graph_store.write().add_new_optical_node(&node_info);
-                            is_modified.set(true);
+                            graph_store.write().needs_saving.set(true);
                         }
                     }),
                 );
@@ -678,7 +708,7 @@ async fn process_paste_node(
                         graph_store
                             .write()
                             .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);
-                        is_modified.set(true);
+                        graph_store.write().needs_saving.set(true);
                     }),
                 );
             }
@@ -690,29 +720,37 @@ async fn process_paste_node(
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_add_edge(connect_info: ConnectInfo, mut graph_store: Signal<GraphStore>) {
+async fn process_add_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
+    let mut graph_store = graph_state.read().graph_store;
     eval_action_run(
         api::post_add_connection(connect_info).await,
         Some(move |ci| {
             graph_store.write().edges_mut().write().push(ci);
+            graph_store.write().needs_saving.set(true);
         }),
     );
 }
 
 #[allow(clippy::future_not_send)]
-async fn process_optimize_layout(mut graph_store: Signal<GraphStore>) {
+async fn process_optimize_layout(graph_state: Signal<GraphState>) {
+    let mut graph_store = graph_state.read().graph_store;
     let edges = graph_store.read().edges().read().clone();
     eval_action_run(
         optimize_layout_and_sync(edges).await,
         Some(move |new_positions| {
             graph_store.write().update_node_positions(new_positions);
+            graph_store.write().needs_saving.set(true);
         }),
     );
 }
 #[allow(clippy::future_not_send)]
-async fn process_delete_scenery(mut graph_store: Signal<GraphStore>) {
+async fn process_delete_scenery(graph_state: Signal<GraphState>) {
+    let mut graph_store = graph_state.read().graph_store;
     eval_action_run(
         api::delete_scenery().await,
-        Some(move |_| graph_store.write().clear()),
+        Some(move |_| {
+            graph_store.write().clear();
+            graph_store.write().needs_saving.set(false);
+        }),
     );
 }

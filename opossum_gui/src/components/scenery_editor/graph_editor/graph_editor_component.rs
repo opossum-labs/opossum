@@ -105,13 +105,13 @@ pub enum DragStatus {
 #[component]
 pub fn GraphEditor(
     mut command: Signal<Option<NodeEditorCommand>>,
-    is_modified: Signal<bool>,
+    model_modified: Signal<bool>
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
 
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
     let graph_processor: Coroutine<GraphStoreAction> =
-        use_graph_processor(graph_state, is_modified);
+        use_graph_processor(graph_state);
 
     let active_node_opt = use_memo(move || {
         graph_state
@@ -130,13 +130,20 @@ pub fn GraphEditor(
     let onwheel_handler = use_zoom(on_mounted);
     let onmousedown_handler = use_on_mouse_down(current_mouse_pos, last_auxiliary_click);
     let onmousemove_handler = use_drag(current_mouse_pos);
-    let onmouseup_handler = use_drag_end(is_modified);
-    let onmouseleave_handler = use_drag_end(is_modified);
+    let onmouseup_handler = use_drag_end();
+    let onmouseleave_handler = use_drag_end();
     let onkeydownhandler = use_on_key_down(current_mouse_pos);
     let onresizehandler = use_on_resize(on_mounted);
 
     let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
     let zoom = use_memo(move || *graph_state.read().editor_state.read().zoom.read());
+
+    // synchronize the needs_saving signal from graph_store to model_modified
+    use_effect(move || {
+        let graph_store=graph_state.peek().graph_store;
+        let needs_saving= graph_store.peek().needs_saving();
+        model_modified.set(*needs_saving.read());
+    });
 
     use_effect(move || {
         graph_processor.send(GraphStoreAction::GetSceneryId);
@@ -146,24 +153,19 @@ pub fn GraphEditor(
         if let Some(command) = command.read().as_ref() {
             match command {
                 NodeEditorCommand::DeleteAll => {
-                    is_modified.set(false);
                     graph_processor.send(GraphStoreAction::DeleteScenery);
                     graph_processor.send(GraphStoreAction::GetSceneryId);
                 }
                 NodeEditorCommand::AddNode(node_type) => {
-                    is_modified.set(true);
                     graph_processor.send(GraphStoreAction::AddOpticNode(node_type.clone()));
                 }
                 NodeEditorCommand::AddNodeRef(new_ref_node) => {
-                    is_modified.set(true);
                     graph_processor.send(GraphStoreAction::AddOpticReference(*new_ref_node));
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                    is_modified.set(true);
                     graph_processor.send(GraphStoreAction::AddAnalyzer(analyzer_type.clone()));
                 }
                 NodeEditorCommand::AutoLayout => {
-                    is_modified.set(true);
                     graph_processor.send(GraphStoreAction::OptimizeLayout);
                     graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: true });
                 }
@@ -185,7 +187,7 @@ pub fn GraphEditor(
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { active_node_opt, is_modified }
+                NodeConfigEditor { active_node_opt, is_modified:graph_state.peek().graph_store.peek().needs_saving() }
             }
             div {
                 class: "col px-0 graph-editor-container",
@@ -211,7 +213,7 @@ pub fn GraphEditor(
                             shift().y,
                             zoom(),
                         ),
-                        Nodes { is_modified }
+                        Nodes {}
                         svg {
                             width: "100%",
                             height: "100%",
@@ -219,7 +221,7 @@ pub fn GraphEditor(
                             tabindex: 0,
                             {
                                 rsx! {
-                                    EdgesComponent { is_modified }
+                                    EdgesComponent {}
                                     EdgeCreationComponent {}
                                 }
                             }

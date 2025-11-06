@@ -142,7 +142,7 @@ impl IntoInputData<String, ImageSrc, RayDataBuilder> for ImageSrcParam {
         if e.files().is_empty() {
             None
         } else {
-            Some(e.files()[0].name().clone())
+            Some(e.files()[0].name())
         }
     }
     fn setter_from_obj(&self) -> impl FnMut(&mut ImageSrc, String) {

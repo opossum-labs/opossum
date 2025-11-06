@@ -1,8 +1,5 @@
 // Workaround for dioxus 0.7.0
-#![cfg_attr(
-    target_os = "windows",
-    windows_subsystem = "windows"
-)]
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 #![allow(clippy::items_after_statements)]
 
 use dioxus::prelude::*;
