@@ -2,5 +2,6 @@
 /coverage
 /.vscode
 /doc/book/book/
+/opossum_core/playground
 .VSCodeCounter
 *.wxs
