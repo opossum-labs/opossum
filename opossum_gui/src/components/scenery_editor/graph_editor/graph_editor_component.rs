@@ -205,7 +205,6 @@ pub fn GraphEditor(
                     onmounted: move |event| { on_mounted.set(Some(event.data)) },
                     div {
                         draggable: false,
-                        pointer_events: "none",
                         style: format!(
                             "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
                             shift().x,

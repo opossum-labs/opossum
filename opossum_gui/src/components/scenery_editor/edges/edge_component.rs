@@ -50,6 +50,7 @@ pub fn EdgeComponent(edge: ConnectInfo, is_modified: Signal<bool>) -> Element {
         path {
             d: new_path,
             tabindex: 0,
+            pointer_events: "auto", 
             onkeydown: {
                 let edge = edge.clone();
                 move |event: Event<KeyboardData>| {
@@ -60,16 +61,16 @@ pub fn EdgeComponent(edge: ConnectInfo, is_modified: Signal<bool>) -> Element {
                     event.stop_propagation();
                 }
             },
-            stroke: "black",
             fill: "transparent",
-            stroke_width: format!("{}", 2.),
         }
         foreignObject {
+            pointer_events: "none",
             x: distance_field_position.x,
             y: distance_field_position.y,
             width: EDGE_DISTANCE_FIELD_WIDTH,
             height: EDGE_DISTANCE_FIELD_HEIGHT,
             div {
+                pointer_events: "auto",
                 class: "input-with-unit",
                 style: "display: flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; box-sizing: border-box;",
                 input {

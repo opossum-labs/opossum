@@ -215,19 +215,18 @@ body {
 }
 
 path {
-    /* stroke-width: 2; */
-    transition: stroke-width 0.1s, filter 0.1s;
+    stroke: black;
+    stroke-width: 2;
+    transition: stroke-width 0.15s, stroke 0.15s;
     outline: none;
     /* prevents a white frame if node receives keyboard focus */
 }
 
 path:hover {
-    /* stroke-width: 3; */
+    stroke-width: 3;
+    stroke: rgb(4, 126, 44);
     cursor: pointer;
-    filter: drop-shadow(0px 0px 4px rgba(47, 197, 10, 0.5));
 }
-
-
 
 svg {
     outline: none;
