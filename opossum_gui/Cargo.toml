@@ -37,7 +37,7 @@ futures-util = "0.3.31"
 ico = "0.4"
 Inflector = "0.11.4"
 reqwest = { version = "0.12.14", features = ["json", "stream"] }
-rfd = "0.15.3"
+rfd = { version= "0.15.4", default-features = false }
 rust-sugiyama = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -50,6 +50,9 @@ web-sys = "0.3"
 [build-dependencies]
 winres = "0.1"
 
+[profile.release]
+strip = false # workaround...necessary because assets are not found within linux bundles
+
 # [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # plotly = { version = "0.13.5", features = ["kaleido"] }
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -61,8 +64,6 @@ web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
 # server = ["dioxus/server"]
+
 # This feature flag is used by build.rs to trigger the backend build
 bundle-backend = []
-
-#[lib]
-#crate-type = ["cdylib", "rlib"]
