@@ -29,7 +29,7 @@ tempfile.workspace = true
 uom.workspace = true
 uuid.workspace = true
 
-dioxus = { version = "0.7.0" }
+dioxus = { version = "0.7.1" }
 dioxus-free-icons = { version = "0.10.0", features = ["font-awesome-solid"] }
 directories = "6.0.0"
 futures-util = "0.3.31"
