@@ -106,8 +106,8 @@ impl ShortCutAction {
     pub fn run(
         self,
         mut menu_item_selected: Signal<Option<MenuSelection>>,
-        model_modified: Signal<bool>,
-        model_file_path: Signal<Option<std::path::PathBuf>>,
+        model_modified: ReadSignal<bool>,
+        model_file_path: ReadSignal<Option<std::path::PathBuf>>,
     ) {
         match self {
             Self::Center => {
@@ -149,15 +149,15 @@ pub const fn primary_modifier_label() -> &'static str {
 #[derive(Clone, Copy)]
 pub struct ShortcutHandler {
     menu_item_selected: Signal<Option<MenuSelection>>,
-    model_modified: Signal<bool>,
-    model_file_path: Signal<Option<std::path::PathBuf>>,
+    model_modified: ReadSignal<bool>,
+    model_file_path: ReadSignal<Option<std::path::PathBuf>>,
 }
 
 impl ShortcutHandler {
     pub const fn new(
         menu_item_selected: Signal<Option<MenuSelection>>,
-        model_modified: Signal<bool>,
-        model_file_path: Signal<Option<std::path::PathBuf>>,
+        model_modified: ReadSignal<bool>,
+        model_file_path: ReadSignal<Option<std::path::PathBuf>>,
     ) -> Self {
         Self {
             menu_item_selected,

@@ -68,11 +68,6 @@ body {
     z-index: 100000000000000;
 }
 
-/* #node_drop_down_menu {
-    max-height: 500px;
-    overflow-y: scroll;
-} */
-
 /* width */
 ::-webkit-scrollbar {
     width: 10px;
