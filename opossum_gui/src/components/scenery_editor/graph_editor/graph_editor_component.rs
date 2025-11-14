@@ -105,13 +105,13 @@ pub enum DragStatus {
 #[component]
 pub fn GraphEditor(
     mut command: Signal<Option<NodeEditorCommand>>,
-    model_modified: Signal<bool>
+    model_modified: Signal<bool>,
+    model_file_path: Signal<Option<PathBuf>>,
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
 
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
-    let graph_processor: Coroutine<GraphStoreAction> =
-        use_graph_processor(graph_state);
+    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(graph_state);
 
     let active_node_opt = use_memo(move || {
         graph_state
@@ -140,9 +140,11 @@ pub fn GraphEditor(
 
     // synchronize the needs_saving signal from graph_store to model_modified
     use_effect(move || {
-        let graph_store=graph_state.peek().graph_store;
-        let needs_saving= graph_store.peek().needs_saving();
-        model_modified.set(*needs_saving.read());
+        let graph_store = graph_state.peek().graph_store;
+        let needs_saving_signal = graph_store.peek().needs_saving();
+        model_modified.set(*needs_saving_signal.read());
+        let file_path_signal = graph_store.peek().file_path();
+        model_file_path.set((*file_path_signal.read()).clone());
     });
 
     use_effect(move || {
@@ -187,7 +189,10 @@ pub fn GraphEditor(
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { active_node_opt, is_modified:graph_state.peek().graph_store.peek().needs_saving() }
+                NodeConfigEditor {
+                    active_node_opt,
+                    is_modified: graph_state.peek().graph_store.peek().needs_saving(),
+                }
             }
             div {
                 class: "col px-0 graph-editor-container",

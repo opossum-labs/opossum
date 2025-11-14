@@ -42,6 +42,7 @@ pub struct GraphStore {
     nodes: Signal<HashMap<Uuid, NodeElement>>,
     edges: Signal<Vec<ConnectInfo>>,
     active_node: Signal<Option<Uuid>>,
+    file_path: Signal<Option<PathBuf>>,
     needs_saving: Signal<bool>,
     scenery_id: Uuid,
 }
@@ -171,6 +172,8 @@ impl GraphStore {
     pub fn clear(&mut self) {
         self.nodes().write().clear();
         self.edges().write().clear();
+        self.file_path.set(None);
+        self.needs_saving.set(false);
         let mut active_node = self.active_node.write();
         *active_node = None;
     }
@@ -282,8 +285,11 @@ impl GraphStore {
         self.nodes.write().insert(analyzer_id, node_element.clone());
         self.set_node_active(analyzer_id, node_element.z_index());
     }
-    pub fn needs_saving(&self) -> Signal<bool, UnsyncStorage> {
+    pub const fn needs_saving(&self) -> Signal<bool, UnsyncStorage> {
         self.needs_saving
+    }
+    pub const fn file_path(&self) -> Signal<Option<PathBuf>, UnsyncStorage> {
+        self.file_path
     }
 }
 
@@ -424,13 +430,9 @@ pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<Gra
                     GraphStoreAction::OptimizeLayout => {
                         process_optimize_layout(graph_state).await;
                     }
-                    GraphStoreAction::GetSceneryId => eval_action_run(
-                        api::get_scenery_uuid().await,
-                        Some(move |id| {
-                            let mut graph_store_signal = graph_state.read().graph_store;
-                            graph_store_signal.write().set_scenery_id(id);
-                        }),
-                    ),
+                    GraphStoreAction::GetSceneryId => {
+                        process_get_scenery_id(graph_state).await;
+                    }
                     GraphStoreAction::CenterGraph { zoom_to_fit } => {
                         let mut editor_state_signal = graph_state.read().editor_state;
                         let bounding_box = graph_state.read().graph_store.read().get_bounding_box();
@@ -443,54 +445,75 @@ pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<Gra
         }
     })
 }
+#[allow(clippy::future_not_send)]
+async fn process_get_scenery_id(graph_state: Signal<GraphState>) {
+    eval_action_run(
+        api::get_scenery_uuid().await,
+        Some(move |id| {
+            let mut graph_store_signal = graph_state.read().graph_store;
+            graph_store_signal.write().set_scenery_id(id);
+        }),
+    );
+}
 // this flag is set because clippy expects Signal<GraphStore> to be Send.
 // However graphstore is only used locally and not within another async thread
 #[allow(clippy::future_not_send)]
 async fn process_load_from_file(path: PathBuf, graph_state: Signal<GraphState>) {
+    process_delete_scenery(graph_state).await;
+    process_get_scenery_id(graph_state).await;
     let mut graph_store = graph_state.read().graph_store;
-    let opm_string = match fs::read_to_string(path) {
+    let mut file_path_signal = graph_store.peek().file_path;
+    file_path_signal.set(None);
+    let opm_string = match fs::read_to_string(&path) {
         Ok(s) => s,
         Err(e) => {
             OPOSSUM_UI_LOGS.write().add_log(&e.to_string());
             return;
         }
     };
-    graph_store.write().clear();
-    eval_action_run(api::post_opm_file(opm_string).await, None::<fn(String)>);
-    eval_action_run(
-        api::get_scenery_uuid().await,
-        Some(move |id| graph_store.write().set_scenery_id(id)),
-    );
-    let scenery_id = graph_store.peek().scenery_id;
-
-    eval_action_run(
-        api::get_nodes(scenery_id).await,
-        Some(move |nodes: Vec<NodeInfo>| graph_store.write().add_nodes(&nodes)),
-    );
-    eval_action_run(
-        api::get_analyzers().await,
-        Some(move |analyzers: Vec<AnalyzerInfo>| {
-            graph_store.write().add_analyzers(&analyzers);
-        }),
-    );
-    eval_action_run(
-        api::get_connections(scenery_id).await,
-        Some(move |connect_infos: Vec<ConnectInfo>| {
-            graph_store.write().edges.set(connect_infos);
-            graph_store.write().needs_saving.set(false);
-        }),
-    );
+    match api::post_opm_file(opm_string).await {
+        Ok(_) => {
+            process_get_scenery_id(graph_state).await;
+            let mut needs_saving_signal = graph_store.peek().needs_saving;
+            needs_saving_signal.set(false);
+            file_path_signal.set(Some(path));
+            let scenery_id = graph_store.peek().scenery_id;
+            eval_action_run(
+                api::get_nodes(scenery_id).await,
+                Some(move |nodes: Vec<NodeInfo>| graph_store.write().add_nodes(&nodes)),
+            );
+            eval_action_run(
+                api::get_analyzers().await,
+                Some(move |analyzers: Vec<AnalyzerInfo>| {
+                    graph_store.write().add_analyzers(&analyzers);
+                }),
+            );
+            eval_action_run(
+                api::get_connections(scenery_id).await,
+                Some(move |connect_infos: Vec<ConnectInfo>| {
+                    graph_store.write().edges.set(connect_infos);
+                }),
+            );
+        }
+        Err(err_str) => {
+            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+        }
+    }
 }
-
+#[allow(clippy::future_not_send)]
 async fn process_save_to_file(path: PathBuf, graph_state: Signal<GraphState>) {
-    let mut graph_store = graph_state.read().graph_store;
     eval_action_run(
         api::get_opm_file().await,
         Some(move |opm_string| {
-            if let Err(err_str) = fs::write(path, opm_string) {
+            if let Err(err_str) = fs::write(&path, opm_string) {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
+            } else {
+                let graph_store = graph_state.read().graph_store;
+                let mut file_path_signal = graph_store.peek().file_path;
+                file_path_signal.set(Some(path));
+                let mut needs_saving_signal = graph_store.peek().needs_saving;
+                needs_saving_signal.set(false);
             }
-            graph_store.write().needs_saving.set(false);
         }),
     );
 }
@@ -750,7 +773,7 @@ async fn process_delete_scenery(graph_state: Signal<GraphState>) {
         api::delete_scenery().await,
         Some(move |_| {
             graph_store.write().clear();
-            graph_store.write().needs_saving.set(false);
+            // graph_store.write().needs_saving.set(false);
         }),
     );
 }

@@ -113,12 +113,12 @@ pub fn MenuBar(
                                             spawn(async {
                                                 let _ = eval(
                                                         r"
-                                                    const el = document.getElementById('navbarDropdownEditMenuLink');
-                                                    if (el) {
-                                                        const instance = mdb.Dropdown.getInstance(el);
-                                                        if (instance) instance.hide();
-                                                    }
-                                                ",
+                                                                                        const el = document.getElementById('navbarDropdownEditMenuLink');
+                                                                                        if (el) {
+                                                                                            const instance = mdb.Dropdown.getInstance(el);
+                                                                                            if (instance) instance.hide();
+                                                                                        }
+                                                                                    ",
                                                     )
                                                     .await;
                                             });
@@ -140,12 +140,12 @@ pub fn MenuBar(
                                             spawn(async {
                                                 let _ = eval(
                                                         r"
-                                                                                            const el = document.getElementById('navbarDropdownEditMenuLink');
-                                                                                            if (el) {
-                                                                                                const instance = mdb.Dropdown.getInstance(el);
-                                                                                                if (instance) instance.hide();
-                                                                                            }
-                                                                                        ",
+                                                                                                                                const el = document.getElementById('navbarDropdownEditMenuLink');
+                                                                                                                                if (el) {
+                                                                                                                                    const instance = mdb.Dropdown.getInstance(el);
+                                                                                                                                    if (instance) instance.hide();
+                                                                                                                                }
+                                                                                                                            ",
                                                     )
                                                     .await;
                                             });
@@ -198,7 +198,7 @@ pub fn MenuBar(
                             }
                         }
                     }
-                    // --- Dateipfad-Anzeige (gemeinsam) ---
+                    // display file path
                     {
                         let (display_path, full_path) = model_file_path()
                             .map_or_else(
@@ -222,7 +222,7 @@ pub fn MenuBar(
             // --- Fenster-Drag-Bereich (Desktop) / Leerer Platz (WASM) ---
             ExpandOnClick { maximize_symbol }
 
-            // --- Desktop-spezifische Steuerelemente (Simulate & Quit) ---
+            // --- Desktop-specific window controls (Simulate & Quit) ---
             {
                 #[cfg(not(target_arch = "wasm32"))]
                 rsx! {
@@ -246,7 +246,7 @@ pub fn MenuBar(
                             },
                             "Simulate"
                         }
-                        // "ControlsMenu" (Min/Max/Close - nur Desktop)
+                        // "ControlsMenu" (Min/Max/Close - Desktop only)
                         ControlsMenu {
                             maximize_symbol,
                             on_quit: move |()| {
@@ -260,7 +260,6 @@ pub fn MenuBar(
                 }
             }
         }
-        // --- "About"-Fenster (gemeinsam) ---
         {
             if *about_window.read() {
                 rsx! {
@@ -291,13 +290,9 @@ fn MenuListItemShortCut(short_cut_action: ShortCutAction) -> Element {
         }
     }
 }
-
-// --- Desktop-Version von ExpandOnClick ---
-// Geändert von 'feature = "desktop"' zu 'not(target_arch = "wasm32")' für Konsistenz
 #[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
-    // Importiere 'use_window' nur hier, wo es gebraucht wird
     use dioxus::desktop::use_window;
     use std::time::{Duration, Instant};
 
@@ -336,13 +331,8 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
         }
     }
 }
-
-// --- WASM-Version von ExpandOnClick ---
-// Stellt sicher, dass die Komponente auf WASM existiert, aber nichts rendert.
-// Geändert von 'not(feature = "desktop")' zu 'target_arch = "wasm32"'
 #[cfg(target_arch = "wasm32")]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
-    // Rendert nichts auf WASM
     rsx! {}
 }
