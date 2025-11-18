@@ -63,7 +63,7 @@ pub struct Ray {
 impl Ray {
     /// Creates a new [`Ray`] with the specified position, direction, wavelength, and energy.
     ///
-    /// The direction vector is normalized and thus stored as (`direction cosine`)[`https://en.wikipedia.org/wiki/Direction_cosine`]
+    /// The direction vector is normalized and thus stored as [`direction cosine`](`https://en.wikipedia.org/wiki/Direction_cosine`)
     ///
     /// # Errors
     ///

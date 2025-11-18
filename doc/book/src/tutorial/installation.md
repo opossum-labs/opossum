@@ -30,6 +30,16 @@ git clone [https://github.com/opossum-labs/opossum.git](https://github.com/oposs
 cd opossum
 ```
 
+### Prerequisities
+
+Before building, some tools need to be installed first. Since the OPOSSUM frontend GUI is based on the dioxus framework we need to install the dioxus CLI. The easiest
+is to install the binary directly. For this, `cargo-binstall` must be installed first.
+
+```bash
+cargo install cargo-binstall
+cargo binstall dioxus-cli
+```
+
 ### Option A: Build Development Version
 
 Use this method if you want to develop or debug OPOSSUM. The executables will be unoptimized (debug build), and the backend and frontend must be run in separate terminals.
@@ -95,4 +105,40 @@ cd opossum_gui
 dx bundle --release --features "bundle-backend"
 ```
 
-Depending on your platform (Windows or Linux), the final installation packages will be generated in: `opossum/target/dx/bundle/opossum_gui/`.
+Depending on your platform (Windows or Linux), the final installation packages will be generated in: `<target dir>/dx/bundle/opossum_gui/`.
+
+## 3. Build the documentation (optional)
+
+The OPOSSUM suite has three locations of documentation:
+
+* The book ... this is what you are currently reading `:-)`
+* The library API documentation
+* The REST API documentation of the backend server
+
+### Build the book
+
+The book uses [`mdbook`](https://rust-lang.github.io/mdBook/) as documentation system. A book can be compiled with the following commands:
+
+```bash
+cargo binstall mdbook
+cd opossum/doc/book
+mdbook build
+```
+
+The generated documentation can be found at `opossum/doc/book/book/index.hml` which can be opened in a web browser.
+
+### Build the library API documentation
+
+The API documentation uses the standard `rustdoc` system. To generate the documentation follow these steps:
+
+```bash
+cd opossum_core
+cargo doc --no-deps --features "doc-images"
+```
+
+The resulting HTML documentation is found at `<target dir>/doc/opossum_core/index.html`.
+
+### REST API backend documentation
+
+The backend documentation is automatically provided the the backend server itself. If the backend server is running, use the following URL in your
+browser: [`localhost:8001/`](http://localhost:8001) and click the `View API Documentation` button.

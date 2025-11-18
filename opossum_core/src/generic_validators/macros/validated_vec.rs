@@ -1,4 +1,4 @@
-/// Constructs a [`ValidatedVec`] instance from a vector and validator expressions.
+/// Constructs a [`ValidatedVec`](crate::generic_validators::ValidatedVec) instance from a vector and validator expressions.
 ///
 /// This macro provides a concise, expressive way to create a validated vector
 /// that checks both individual elements and the vector as a whole, using your
@@ -13,7 +13,7 @@
 /// # Notes
 /// - The validators can use logical operators (`&&`, `||`, `!`) as defined by your validator DSL.
 /// - The macro returns a `Result<ValidatedVec<...>, ValidationError>` — so call `.unwrap()`, `.expect()`, or handle the error.
-/// - For the type-level equivalent, see [`validated_vec_type!`].
+/// - For the type-level equivalent, see [`validated_vec_type!`](crate::validated_vec_type).
 #[macro_export]
 macro_rules! validated_vec {
     ($value:expr, $($rest:tt)+) => {
@@ -36,7 +36,7 @@ macro_rules! validated_vec {
     };
 }
 
-/// Expands to the **type** of a [`ValidatedVec`] given an inner vector type and validator expressions.
+/// Expands to the **type** of a [`ValidatedVec`](crate::generic_validators::ValidatedVec) given an inner vector type and validator expressions.
 ///
 /// This macro defines the *type* corresponding to a validated vector — it mirrors
 /// [`validated_vec!`] but produces a type rather than constructing an instance.
