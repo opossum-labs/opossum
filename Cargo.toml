@@ -1,6 +1,7 @@
 [package]
 name = "opossum"
 readme = "README.md"
+edition = "2024"
 
 [dependencies] # of the opossum meta pacakge
 opossum_core = { workspace = true }
