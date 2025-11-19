@@ -107,38 +107,66 @@ dx bundle --release --features "bundle-backend"
 
 Depending on your platform (Windows or Linux), the final installation packages will be generated in: `<target dir>/dx/bundle/opossum_gui/`.
 
-## 3. Build the documentation (optional)
+## 📚 Building the OPOSSUM Documentation (Optional)
 
-The OPOSSUM suite has three locations of documentation:
+The **OPOSSUM suite** has three main sources of documentation:
 
-* The book ... this is what you are currently reading `:-)`
-* The library API documentation
-* The REST API documentation of the backend server
+1. **The Book:** The comprehensive guide you are currently reading.
+2. **Library API Documentation:** For the core Rust library.
+3. **REST API Documentation:** For the backend server interface.
 
-### Build the book
+---
 
-The book uses [`mdbook`](https://rust-lang.github.io/mdBook/) as documentation system. A book can be compiled with the following commands:
+### 1. 📖 Build the Documentation Book
 
-```bash
-cargo binstall mdbook
-cd opossum/doc/book
-mdbook build
-```
+The book is built using [`mdBook`](https://rust-lang.github.io/mdBook/). This system compiles the Markdown source files into a static, readable website.
 
-The generated documentation can be found at `opossum/doc/book/book/index.hml` which can be opened in a web browser.
+1. **Install `mdBook`:**
 
-### Build the library API documentation
+   ```bash
+   cargo binstall mdbook
+   ```
 
-The API documentation uses the standard `rustdoc` system. To generate the documentation follow these steps:
+2. **Navigate and Build:**
 
-```bash
-cd opossum_core
-cargo doc --no-deps --features "doc-images"
-```
+    ```bash
+    cd opossum/doc/book
+    mdbook build
+    ```
 
-The resulting HTML documentation is found at `<target dir>/doc/opossum_core/index.html`.
+The generated documentation website is located at: **`<target dir>/doc/book/book/index.html`**. You can open this file directly in any web browser.
 
-### REST API backend documentation
+---
 
-The backend documentation is automatically provided the the backend server itself. If the backend server is running, use the following URL in your
-browser: [`localhost:8001/`](http://localhost:8001) and click the `View API Documentation` button.
+### 2. 🦀 Build the Library API Documentation
+
+The API documentation for the Rust core library is generated using **`rustdoc`**, the standard tool for Rust projects.
+
+1. **Navigate to the Core Library:**
+
+    ```bash
+    cd opossum_core
+    ```
+
+2. **Generate Documentation:**
+
+    ```bash
+    cargo doc --no-deps --features "doc-images"
+    ```
+
+    > *The `--no-deps` flag speeds up the process by excluding documentation for dependencies.*
+
+The resulting HTML documentation can be found in your target directory, typically at:
+**`<target dir>/doc/opossum_core/index.html`**
+
+---
+
+### 3. 🌐 Access the REST API Documentation
+
+The documentation for the backend's REST API is **automatically served** by the backend application itself when it is running.
+
+1. Ensure the **backend server is running** (e.g., in a separate terminal).
+2. Open the following URL in your web browser:
+    [`http://localhost:8001`](http://localhost:8001)
+
+Once the page loads, click the **`View API Documentation`** button to see the interactive Swagger UI.
