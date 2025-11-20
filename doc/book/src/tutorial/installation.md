@@ -21,6 +21,9 @@ Run the installer following the standard procedure for your operating system.
 
 To build OPOSSUM, you must have the **Rust** programming language installed. If you have not installed Rust yet, please follow the instructions on the [official Rust installation page](https://www.rust-lang.org/tools/install).
 
+> If you build OPOSSUM on Linux it might be necessary to install some necessary tools first. On Debian based systems this can be achieved
+> in the following way with the following command `sudo apt install build-essential cmake libfontconfig1-dev`.
+
 ### Get the Code
 
 Clone the repository to get the latest (potentially unstable) version, or download a stable source archive from the releases page.
@@ -107,7 +110,7 @@ dx bundle --release --features "bundle-backend"
 
 Depending on your platform (Windows or Linux), the final installation packages will be generated in: `<target dir>/dx/bundle/opossum_gui/`.
 
-## 📚 Building the OPOSSUM Documentation (Optional)
+## 3. Build documentation (Optional)
 
 The **OPOSSUM suite** has three main sources of documentation:
 
