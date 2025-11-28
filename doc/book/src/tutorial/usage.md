@@ -1,111 +1,119 @@
 # Usage
 
-The following section describes the usage of the OPOSSUM suite through the graphical user interface (GUI).
+The following section describes how to use the OPOSSUM suite via the graphical user interface (GUI).
 
 ## Starting the GUI
 
-In the following we will assume that the software has been installed through one ot the onstallers for the specific platform.
+We assume that the software has already been installed using the appropriate installer for your platform.
 
 ### Windows
 
-On the windows platform, both the MSI and the EXE installers provide an entry in the start menu and a desktop icon `Opossum_GUI`.
+On Windows, both the MSI and EXE installers create an entry in the Start Menu and a desktop icon named `Opossum_GUI`.
 
 ### Linux
 
-For Linux it depends on the type of the installation package. Debian and Redhat packages (`.deb` & `.rpm`) install an icon in the menu system. Furthermore, the OPOSSUM GUI
-can be started directly on the command line:
+On Linux, the launch method depends on the installation package type. Debian and Redhat packages (`.deb` & `.rpm`) install an icon in the system menu. Alternatively, the OPOSSUM GUI can be launched directly from the command line:
 
 ```bash
 opossum_gui
 ```
 
-For the AppImage package you can directly execute the package itself by double clicking on the file in the file manager or through the command line e.g.:
+For the AppImage package, you can execute the file directly by double-clicking it in your file manager or running it via the command line. You may need to mark the file as executable first:
 
 ```bash
-OpossumGui-0.7.0.AppImage
+cd <path to AppImage>
+chmod u+x OpossumGui-0.7.0.AppImage
+./OpossumGui-0.7.0.AppImage
 ```
 
-Starting the GUI leads to this window to appear:
+Once started, the main window will appear:
 
 ![opossum_gui empty](../images/opossum_gui_empty.PNG)
 
-## First steps
+## First Steps
 
-The top menu bar shows the typical menu entries for file handling and the window buttons on the right side. We recommended to use the GUI with a maximized window in order
-to have enough space on the canvas to model your optical system.
+The top menu bar contains standard file handling options, while the window controls are located on the right. We recommend maximizing the window to ensure sufficient space on the canvas for modeling your optical system.
 
-### Adding an optical node and using the canvas
+In this tutorial, we will model a simple Kepler telescope consisting of a source and two convex lenses.
 
-Using the `Edit` menu we can add either an optic node or an analyzer node. Let us first select an optical node. We start with a `Source` node representing the start of our
-optical system.
+### Adding an Optical Node and Using the Canvas
 
-After selecting, the source node appears on the canvas. The node can be moved on the canvas by simply clicking and dragging it. Let's add two additional `Lens` nodes and place them on the canvas.
+Use the `Edit` menu to add either an optical node or an analyzer node. Let's start by selecting an optical node: a `Source` node, which represents the starting point of our optical system.
+
+Once selected, the source node appears on the canvas. You can move the node by simply clicking and dragging it. Next, add two `Lens` nodes and place them on the canvas as well.
 
 ![first step](../images/opossum_gui_first_steps_1.PNG)
 
-The canvas istself is (almost) infinitely large. The view port can be moved by clicking and dragging on the canvs itself. Furthmore, the view port can be zoomed in an out using the mouse wheel.
+The canvas itself is virtually infinite. You can pan the viewport by clicking and dragging on the background, and zoom in or out using the mouse wheel.
 
 ![second step](../images/opossum_gui_first_steps_2.PNG)
 
-### Connecting nodes
+### Connecting Nodes
 
-In order to form an optical network, the nodes have to be connected. This can simply be achieved by clicking on an output port of a node (the light green square on the right side of a node) and drag a line to the input port of another node. Do this now in the order `Source -> Lens -> Lens`. It should look similar to this screen:
+To form an optical network, the nodes must be connected. Click on an output port (the light green square on the right side of a node) and drag a line to the input port of another node. Connect them in this order: `Source -> Lens -> Lens`. Your screen should look similar to this:
 
 ![third step](../images/opossum_gui_first_steps_3.PNG)
 
-Each connection contains a numeric entry which defines the spatial seperation between two connected nodes. Here, it corresponds to the distance of the elements on the optical axis. For an in-depth discussion, how optical elements can be placed, check the [concepts](../concepts/concepts.md) section. For now, we choose a distance of 10 mm between the source and the first lens and 200 mm between both lenses.
+Each connection displays a numeric value representing the spatial separation between the connected nodes (the distance along the optical axis). For a detailed discussion on element placement, please refer to the [Concepts](../concepts/concepts.md) section. For this example, set the distance between the source and the first lens to **10 mm**, and the distance between the two lenses to **200 mm**.
 
-One can clean up the layout of the nodes with an auto layout function: Select `Auto Layout` fron the `Layout` menu or press `Ctrl + Shift + A`. You should end up with a screen similar to:
+You can tidy up the node arrangement using the auto-layout function: Select `Auto Layout` from the `Layout` menu or press `Ctrl + Shift + A`. The result should look like this:
 
 ![fourth step](../images/opossum_gui_first_steps_4.PNG)
 
-### Configure nodes
+### Configuring Nodes
 
-Now that we have set up or optical system we must define the parameters of each component. For this tutorial we keep it simple and only configure the most important parameters.
-We start with the first lens. Click the first lens node, such that it is highlighted. The properties of this lens are displayed on the left side in the `Node Eitor` panel. Depending on the node type it consists of different (collapsed) sections. For now we will only concentrate on the `Properties` section. It shows the center thickness of the lens as well as the front and back radii of curvature. Select a center thickness of 3mm. A front radius curvature of 60 mm and a plane back surface by clicking the check box. The refractive index remains at 1.5. Hence we configured it as a convex-plano lens.
+Now that the optical system structure is set, we need to define the parameters for each component. For this tutorial, we will configure only the essential parameters.
+
+Start with the first lens. Click on the node to highlight it. Its properties are displayed in the `Node Editor` panel on the left. Focus on the `Properties` section, which shows the center thickness and the radii of curvature.
+Set the **Center Thickness** to **3 mm**, the **Front Radius** to **60 mm**, and check the box for a **Plane Back Surface**. Leave the refractive index at **1.5**. This configures the component as a convex-plano lens.
 
 ![fifth step](../images/opossum_gui_first_steps_5.PNG)
 
-Repeat this step with the second lens. Use again 3 mm as center thickness, front surface flat, back surface -40 mm. Then select the source node and configure the spectral
-properties of the simulated rays: Select `Properties -> Light definition -> Spectral distribution`. Then change the field `Rays spectral disribution` from "Gaussian" to 
-"Laser Lines". This setting generates a source emitting rays with exactly one wavelength (1054 nm by default).
+Repeat this step for the second lens: Set the **Center Thickness** to **3 mm**, the **Front Surface** to **Flat** (Plane), and the **Back Surface** to **-40 mm**.
 
-### Adding an analyzer
+Finally, select the `Source` node to configure the spectral properties. Navigate to `Properties -> Light definition -> Spectral distribution`. Change the `Rays spectral distribution` from "Gaussian" to "Laser Lines". This generates a monochromatic source (defaulting to 1054 nm) instead of a broad spectrum.
 
-While our optical setup is (almost) finished, we have to define, what kind of analysis should be performed during the simulation. For this, we have to select an analyzer node.
-Simply select `Add Analyzer` from the `Edit` menu and choose "RayTracing". As the name says, this will perform a ray tracing calculation. An analyzer can also be configured as shown on the left panel. For this tutorial, we simply keep the default values.
+### Adding an Analyzer
+
+Although the optical setup is complete, we must define the analysis method. Select `Add Analyzer` from the `Edit` menu and choose **RayTracing**. As implied, this node performs the ray tracing calculations. We will keep the default settings for this tutorial.
 
 ![sixth step](../images/opossum_gui_first_steps_6.PNG)
 
-### Adding detector nodes
+### Adding Detector Nodes
 
-In princle we are all set to start a simulation...but we won't get almost no output. Why? Well, we did not specify any *detector nodes*. OPOSSUM has quite a bunch of detector nodes which are treated in the same way as normal optical nodes.
+Technically, we could start the simulation now, but we would see almost no output because we haven't specified any *Detector Nodes*.
 
-First we want to see the spot diagram at the end of the optical setup and of course we want to get a diagram of the beam propagation through the entire system. For this we add the detector nodes "Spot diagram" and "Ray propagation" and connect them at the end of our lens system. We can keep the default configuration of these detector nodes.
+We want to visualize the spot diagram at the end of the system and see the beam propagation path. Add the **Spot Diagram** and **Ray Propagation** detector nodes. Connect them to the end of the lens system.
 
-Detector nodes normally are "transparent" nodes. They do not have a thickness and pass through incoming light without any modification. Hence, several detector nodes can be chained (with a zero distance to each other) to monitor different aspects of the beam at the same position. For now, extend our system with the two nodes and enter a distance of 50 mm between the last lens and the spot diagram. We want the light propagate a bit after the second lens. This should look similar to:
+Detector nodes are typically "transparent"—they have no thickness and do not alter the light passing through them. This allows you to chain multiple detectors with zero distance between them to monitor different aspects of the beam at the same location.
+For now, connect the detectors and set a distance of **50 mm** between the last lens and the spot diagram, so we can see the light propagate slightly beyond the second lens.
 
 ![seventh step](../images/opossum_gui_first_steps_7.PNG)
 
-### Performing simulation
+### Performing the Simulation
 
-Now we are ready for a simulation run. It is recommended to save your model first. Select `File -> Save` to save your work to disk as an `.opm` File (OPOSSUM model). Then start the actual simulation run by clicking on the green `Simulate` button on the top. Since this is the first run, one has to select a report directory. This folder will be used to output the report files. **Note**: You should use an directory not containing any other files (e.g. the model file itself), since files might deleted / overwritten between two simulation runs.
+We are now ready to run the simulation. First, save your model by selecting `File -> Save` (saved as an `.opm` file).
 
-After selecting a report directory the simulation starts in a separate window (this will change in later version of OPOSSUM...).
+Start the simulation by clicking the green **Simulate** button at the top. On the first run, you will be asked to select a report directory where the output files will be stored.
+
+**Note:** Use a dedicated directory that does not contain other important files (like your model file), as the contents may be overwritten or deleted between simulation runs.
+
+After selecting the directory, the simulation will start in a separate window.
 
 ![eighth step](../images/opossum_gui_first_steps_8.PNG)
 
-When the simulation run has finished the simulation window can be closed.
+Once the simulation finishes, you can close the simulation window.
 
-### View the report
+### Viewing the Report
 
-The analysis report data has been written to the report directory. In particular, OPOSSUM generated an HTML report. You can simply open this file with a web browser. In
-our case this file is `<report dir>/report_0.html`. It should look similar to:
+The analysis data has been written to your selected report directory. OPOSSUM generates an HTML report (e.g., `<report dir>/report_0.html`) which you can open in any web browser. It should look similar to this:
 
-![nineth step](../images/opossum_gui_first_steps_9.PNG)
+![ninth step](../images/opossum_gui_first_steps_9.PNG)
 
-## Further reading
+## Further Reading
 
-Now, we have built a simple (not perfectly collimated) Kepler telescope as our first project. Check the [reference](../reference/reference.md) documentation about
-all available optical components, detector nodes and analyzers. Ssome specific tasks are described in the [how-to guides](../howto%20guides/howto%20guide.md) section. For
-information about general concepts consult the [concepts](../concepts/concepts.md) section.
+You have now built a simple (albeit not perfectly collimated) Kepler telescope.
+
+* Check the [Reference](../reference/reference.md) documentation for details on all available optical components, detectors, and analyzers.
+* Specific tasks are described in the [How-to Guides](../howto%20guides/howto%20guide.md).
+* For general background information, consult the [Concepts](../concepts/concepts.md) section.
