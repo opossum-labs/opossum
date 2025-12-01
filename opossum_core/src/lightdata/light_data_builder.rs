@@ -157,7 +157,7 @@ mod tests {
         spectral_distribution::LaserLines,
     };
     #[test]
-    fn light_data_builder_default() {
+    fn default() {
         let ldb = LightDataBuilder::default();
         assert_eq!(
             ldb.get_energy_distribution_type(),
@@ -171,6 +171,50 @@ mod tests {
             ldb.get_spectral_distribution_type(),
             Some(LaserLines::default().into())
         );
+    }
+    #[test]
+    fn get_energy_distribution_type() {
+        let edb = EnergyDataBuilder::default();
+        let ldb: LightDataBuilder = edb.into();
+        assert!(ldb.get_energy_distribution_type().is_none());
+        let ldb: LightDataBuilder = PointSrc::default().into();
+        assert!(ldb.get_energy_distribution_type().is_some());
+    }
+    #[test]
+    fn get_position_distribution_type() {
+        let edb = EnergyDataBuilder::default();
+        let ldb: LightDataBuilder = edb.into();
+        assert!(ldb.get_position_distribution_type().is_none());
+        let ldb: LightDataBuilder = PointSrc::default().into();
+        assert!(ldb.get_position_distribution_type().is_some());
+    }
+    #[test]
+    fn get_spectral_distribution_type() {
+        let edb = EnergyDataBuilder::default();
+        let ldb: LightDataBuilder = edb.into();
+        assert!(ldb.get_spectral_distribution_type().is_none());
+        let ldb: LightDataBuilder = PointSrc::default().into();
+        assert!(ldb.get_spectral_distribution_type().is_some());
+    }
+    #[test]
+    fn from_energy_data_builder() {
+        let ldb: LightDataBuilder = EnergyDataBuilder::default().into();
+        assert!(matches!(ldb, LightDataBuilder::Energy(_)));
+    }
+    #[test]
+    fn from_img_src() {
+        let ldb: LightDataBuilder = ImageSrc::default().into();
+        assert!(matches!(ldb, LightDataBuilder::Geometric(_)));
+    }
+    #[test]
+    fn from_point_src() {
+        let ldb: LightDataBuilder = PointSrc::default().into();
+        assert!(matches!(ldb, LightDataBuilder::Geometric(_)));
+    }
+    #[test]
+    fn from_collimated_src() {
+        let ldb: LightDataBuilder = CollimatedSrc::default().into();
+        assert!(matches!(ldb, LightDataBuilder::Geometric(_)));
     }
     #[test]
     fn from_light_data_builder_to_proptype() {
