@@ -3,7 +3,7 @@
 //! This module provides a builder for the generation of energy spectra to be used in `LightData::Energy`.
 //! Using this builder allows easier serialization / deserialization in OPM files.
 use crate::{
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     generic_validators::{
         AllNormal, AllNotEmpty, AllPositive, PathValid, ValidateTrait, XNormal, YFinite,
         YNotAllZero,
@@ -20,6 +20,7 @@ use strum::EnumIter;
 use uom::{
     fmt::DisplayStyle::Abbreviation,
     si::{
+        energy::joule,
         f64::{Energy, Length},
         length::nanometer,
     },
@@ -133,10 +134,19 @@ impl std::fmt::Debug for EnergyDataBuilder {
             Self::Raw(s) => write!(f, "Raw({s:?})"),
             Self::FromFile(p) => write!(f, "FromFile({})", p.f_path().display()),
             Self::LaserLines(e) => {
+                write!(f, "LaserLines([").unwrap();
+                for (wvl, energy) in &e.lines() {
+                    write!(
+                        f,
+                        "({:.3}, {:.3})",
+                        wvl.into_format_args(nanometer, Abbreviation),
+                        energy.into_format_args(joule, Abbreviation)
+                    )
+                    .unwrap();
+                }
                 write!(
                     f,
-                    "LaserLines({:?}, {:.3})",
-                    e.lines,
+                    "] resolution: {:.3})",
                     e.spectral_resolution()
                         .into_format_args(nanometer, Abbreviation)
                 )
@@ -281,15 +291,18 @@ impl EnergyLaserLines {
     /// removes a laser line from [`EnergyLaserLines`] at a specific index
     ///
     /// # Errors
-    /// Returns an error if validation fails
+    /// Returns an error if
+    /// - validation fails
+    /// - given line index is out of bounds
     pub fn delete_line(&mut self, index: usize) -> OpmResult<()> {
         let lines = self.lines.get();
         if index < lines.len() {
             let mut lines = lines.clone();
             lines.remove(index);
             self.lines.set(lines)?;
+            return Ok(());
         }
-        Ok(())
+        Err(OpossumError::Other("line index out of bounds".into()))
     }
 }
 
@@ -309,12 +322,203 @@ impl Default for EnergyLaserLines {
 
 #[cfg(test)]
 mod test {
-    use crate::lightdata::energy_data_builder::SpectrumFile;
+    use super::*;
+    #[test]
+    fn spectrum_file_new() {
+        assert!(
+            SpectrumFile::new("path.csv".into()).is_ok(),
+            // "SpectrumFile must have the suffix *.csv"
+        );
+        assert!(
+            SpectrumFile::new("path.txt".into()).is_err(),
+            // "SpectrumFile must have the suffix *.csv"
+        );
+    }
+    #[test]
+    fn spectrum_file_default() {
+        let s = SpectrumFile::default();
+        assert_eq!(s.f_path(), "empty.csv");
+    }
+    #[test]
+    fn spectrum_file_file_path() {
+        let s = SpectrumFile::new("path.csv".into()).unwrap();
+        assert_eq!(s.f_path(), "path.csv");
+    }
     #[test]
     fn spectrum_file_deserialize() {
         let s = SpectrumFile::default();
         let serialized =
             ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).unwrap();
         assert!(ron::from_str::<SpectrumFile>(&serialized).is_ok());
+    }
+    #[test]
+    fn energy_laser_lines_new() {
+        assert!(
+            EnergyLaserLines::new(vec![(nanometer!(500.0), joule!(0.1))], nanometer!(1.0)).is_ok(),
+            // "reasonable values should be OK"
+        );
+        assert!(
+            EnergyLaserLines::new(vec![(nanometer!(500.0), joule!(0.1))], nanometer!(0.0)).is_err(),
+            // "resolution <=0.0 nm is an error"
+        );
+        assert!(
+            EnergyLaserLines::new(vec![(nanometer!(500.0), joule!(-0.1))], nanometer!(1.0))
+                .is_err(),
+            // "negative line energy is an error"
+        );
+        assert!(
+            EnergyLaserLines::new(vec![(nanometer!(0.0), joule!(0.1))], nanometer!(1.0)).is_err(),
+            // "zero wavelength line is an error"
+        );
+        assert!(
+            EnergyLaserLines::new(
+                vec![
+                    (nanometer!(500.0), joule!(0.1)),
+                    (nanometer!(510.0), joule!(0.0))
+                ],
+                nanometer!(1.0)
+            )
+            .is_ok(),
+            // "at least one laser line must have a non-zero energy"
+        );
+        assert!(
+            EnergyLaserLines::new(vec![], nanometer!(1.0)).is_err(),
+            // "empty laser lines is an error"
+        );
+    }
+    #[test]
+    fn energy_laser_lines_default() {
+        let ell = EnergyLaserLines::default();
+        assert_eq!(ell.lines(), vec![(nanometer!(1054.0), joule!(1.0))]);
+        assert_eq!(ell.spectral_resolution(), &nanometer!(0.1));
+    }
+    #[test]
+    fn energy_laser_lines_add_lines() {
+        let mut ell = EnergyLaserLines::default();
+        assert!(
+            ell.add_lines(vec![(nanometer!(500.0), joule!(0.1))])
+                .is_ok()
+        );
+        assert_eq!(
+            ell.lines(),
+            vec![
+                (nanometer!(1054.0), joule!(1.0)),
+                (nanometer!(500.0), joule!(0.1))
+            ]
+        );
+        assert!(
+            ell.add_lines(vec![(nanometer!(500.0), joule!(-0.1))])
+                .is_err(),
+            // "a line with negative energy is an error"
+        );
+        assert!(
+            ell.add_lines(vec![(nanometer!(0.0), joule!(0.1))]).is_err(),
+            // "a zero-wavelength line is an error"
+        );
+        assert!(
+            ell.add_lines(vec![]).is_ok(),
+            // "It OK to add an empty line entry (but does it make sense?)"
+        );
+        assert!(
+            ell.add_lines(vec![(nanometer!(500.0), joule!(0.1))])
+                .is_ok()
+        )
+    }
+    #[test]
+    fn energy_laser_lines_set_lines() {
+        let mut ell = EnergyLaserLines::default();
+        assert!(
+            ell.set_lines(vec![
+                (nanometer!(500.0), joule!(0.5)),
+                (nanometer!(505.0), joule!(1.5))
+            ])
+            .is_ok()
+        );
+        assert_eq!(
+            ell.lines(),
+            vec![
+                (nanometer!(500.0), joule!(0.5)),
+                (nanometer!(505.0), joule!(1.5))
+            ]
+        );
+        assert!(
+            ell.set_lines(vec![]).is_err(),
+            // "Setting an empty array is an error"
+        );
+        assert!(
+            ell.set_lines(vec![(nanometer!(0.0), joule!(0.5))]).is_err(),
+            // "zero wavelength line is an error"
+        );
+        assert!(
+            ell.set_lines(vec![(nanometer!(500.0), joule!(-0.5))])
+                .is_err(),
+            // "negative energy line is an error"
+        );
+    }
+    #[test]
+    fn energy_laser_lines_delete_line() {
+        let mut ell = EnergyLaserLines::default();
+        ell.set_lines(vec![
+            (nanometer!(500.0), joule!(0.5)),
+            (nanometer!(505.0), joule!(1.5)),
+        ])
+        .unwrap();
+        assert!(
+            ell.delete_line(2).is_err(),
+            // "deleting out of bounds index is an error"
+        );
+        assert!(ell.delete_line(0).is_ok());
+        assert_eq!(ell.lines(), vec![(nanometer!(505.0), joule!(1.5))]);
+        assert!(
+            ell.delete_line(0).is_err(),
+            // "deleting the last remaining line is an error"
+        );
+        assert_eq!(ell.lines(), vec![(nanometer!(505.0), joule!(1.5))]);
+    }
+    #[test]
+    fn energy_data_builder_from_energy_laser_lines() {
+        let ell = EnergyLaserLines::default();
+        let edb: EnergyDataBuilder = ell.into();
+        assert!(matches!(edb, EnergyDataBuilder::LaserLines(_)));
+    }
+    #[test]
+    fn energy_data_builder_from_file() {
+        let sf = SpectrumFile::default();
+        let edb: EnergyDataBuilder = sf.into();
+        assert!(matches!(edb, EnergyDataBuilder::FromFile(_)));
+    }
+    #[test]
+    fn energy_data_builder_from_raw() {
+        let s = Spectrum::new(nanometer!(500.0)..nanometer!(550.0), nanometer!(1.0)).unwrap();
+        let edb: EnergyDataBuilder = s.into();
+        assert!(matches!(edb, EnergyDataBuilder::Raw(_)));
+    }
+    #[test]
+    fn energy_data_builder_build_display() {
+        let ell = EnergyLaserLines::default();
+        let edb: EnergyDataBuilder = ell.into();
+        assert!(edb.build().is_ok());
+        assert_eq!(format!("{edb}"), "LaserLines");
+        assert_eq!(
+            format!("{edb:?}"),
+            "LaserLines([(1054.000 nm, 1.000 J)] resolution: 0.100 nm)"
+        );
+        let sf = SpectrumFile::new("./files_for_testing/spectrum/spec_to_csv_test_01.csv".into())
+            .unwrap();
+        let edb: EnergyDataBuilder = sf.into();
+        assert!(edb.build().is_ok());
+        assert_eq!(format!("{edb}"), "From File");
+        assert_eq!(
+            format!("{edb:?}"),
+            "FromFile(./files_for_testing/spectrum/spec_to_csv_test_01.csv)"
+        );
+        let s = Spectrum::new(nanometer!(500.0)..nanometer!(503.0), nanometer!(1.0)).unwrap();
+        let edb: EnergyDataBuilder = s.into();
+        assert!(edb.build().is_ok());
+        assert_eq!(format!("{edb}"), "Raw");
+        assert_eq!(
+            format!("{edb:?}"),
+            "Raw( 500.00 nm -> 0\n 501.00 nm -> 0\n 502.00 nm -> 0\n)"
+        );
     }
 }

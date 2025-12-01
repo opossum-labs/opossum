@@ -77,8 +77,8 @@ impl AnalysisGhostFocus for BeamSplitter {
             surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
         }
         let mut out_light_rays = LightRays::default();
-        out_light_rays.insert(out1_port.to_string(), light_data_out1);
-        out_light_rays.insert(out2_port.to_string(), light_data_out2);
+        out_light_rays.insert(out1_port.clone(), light_data_out1);
+        out_light_rays.insert(out2_port.clone(), light_data_out2);
         Ok(out_light_rays)
     }
 }

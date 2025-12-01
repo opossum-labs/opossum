@@ -247,8 +247,7 @@ impl AnalysisRayTrace for Source {
 
                 let mut new_rays = Rays::default();
                 new_rays.add_ray(axis_ray);
-                new_outgoing_edges
-                    .insert(outgoing_edge.0.to_string(), LightData::Geometric(new_rays));
+                new_outgoing_edges.insert(outgoing_edge.0.clone(), LightData::Geometric(new_rays));
             } else {
                 return Err(OpossumError::Analysis(
                     "did not receive LightData:Geometric for conversion into OpticalAxis data"

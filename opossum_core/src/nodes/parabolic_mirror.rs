@@ -442,7 +442,7 @@ impl AnalysisGhostFocus for ParabolicMirror {
         }
 
         let mut out_light_rays = LightRays::default();
-        out_light_rays.insert(out_port.to_string(), rays_bundle.clone());
+        out_light_rays.insert(out_port.clone(), rays_bundle.clone());
         Ok(out_light_rays)
     }
 }
