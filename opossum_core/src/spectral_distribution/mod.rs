@@ -41,7 +41,7 @@ impl DefaultFromName for SpecDistType {}
 
 impl Default for SpecDistType {
     fn default() -> Self {
-        Self::Gaussian(Gaussian::default())
+        Self::LaserLines(LaserLines::default())
     }
 }
 
