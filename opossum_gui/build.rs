@@ -96,9 +96,5 @@ fn main() {
             &target_profile_dir,
             exe_suffix,
         );
-    } else {
-        println!(
-            "cargo:warning=Skipping external binary builds. (Enable 'bundle-backend' feature to build)."
-        );
     }
 }
