@@ -57,7 +57,7 @@ strum_macros = "0.27.1"
 tempfile = "3.23"
 uom = { version = "0.37", features = ["serde"] }
 utoipa = { version = "5.4", features = ["actix_extras", "uuid"] }
-uuid = { version = "1", features = ["v4", "fast-rng", "serde", "js"] }
+uuid = { version = "1.19.0", features = ["v4", "fast-rng", "serde", "js"] }
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
