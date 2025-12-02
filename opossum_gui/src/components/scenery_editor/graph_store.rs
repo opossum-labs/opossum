@@ -27,7 +27,7 @@ use opossum_core::{
     types::api_types::{ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo},
     utils::to_f64,
 };
-use rust_sugiyama::{configure::RankingType, from_edges};
+use rust_sugiyama::{configure::Config, from_edges};
 use std::{collections::HashMap, fs, path::PathBuf};
 use uuid::Uuid;
 
@@ -296,6 +296,10 @@ impl GraphStore {
 pub async fn optimize_layout_and_sync(
     edges: Vec<ConnectInfo>,
 ) -> Result<HashMap<Uuid, Point2D<f64>>, String> {
+    let sugiyama_config = Config {
+        vertex_spacing: SUGIYAMA_VERTEX_SPACING,
+        ..Default::default()
+    };
     let mut reg = UuidRegistry::new();
     let edges_u32: Vec<(u32, u32)> = edges
         .iter()
@@ -306,18 +310,14 @@ pub async fn optimize_layout_and_sync(
         })
         .collect();
 
-    let layouts = from_edges(&edges_u32)
-        .vertex_spacing(SUGIYAMA_VERTEX_SPACING)
-        .layering_type(RankingType::Original)
-        .build();
-
+    let layouts = from_edges(&edges_u32, &sugiyama_config);
     let mut new_positions = HashMap::new();
     let mut height = 0f64;
     for (layout, group_height, _) in layouts {
         for l in layout {
             if let Some(uuid) = reg.get_uuid(u32::try_from(l.0).unwrap()) {
                 let pos = Point2D::new(
-                    -to_f64(l.1.1),
+                    to_f64(l.1.1),
                     SUGIYAMA_VERT_PATH_FACTOR.mul_add(to_f64(l.1.0), height),
                 );
                 new_positions.insert(uuid, pos);
