@@ -100,7 +100,10 @@ impl OpticNode for FluenceDetector {
         else {
             return None;
         };
-        if let Ok(fluence_data) = hit_map.calc_fluence_map((95, 83), estimator) {
+
+        let fl_data = hit_map.calc_fluence_map((95, 83), estimator);
+
+        if let Ok(ref fluence_data) = fl_data {
             props
                 .create(
                     &format!("Fluence ({})", fluence_data.estimator()),
@@ -134,6 +137,7 @@ impl OpticNode for FluenceDetector {
             }
         }
         else{
+            fl_data.err().map(|e| println!("Error calculating fluence map: {}", e));
             warn!("Error while trying to calculate the fluence map with the defined estimator. Plot is omitted.");
             props
                 .create(
