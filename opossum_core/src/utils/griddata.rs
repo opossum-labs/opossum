@@ -143,7 +143,7 @@ pub fn calc_closed_poly_area(poly_coords: &[Point2<f64>]) -> OpmResult<f64> {
 /// This function errors if
 /// - The Axlimits can not be created
 /// - The triangulation (voronoi diagram) generation fails
-pub fn interpolate_3d_scatter_data(
+pub fn grid_interpolate_3d_scatter_data(
     scattered_data: &MatrixXx3<f64>,
     x_interp: &DVector<f64>,
     y_interp: &DVector<f64>,
@@ -162,7 +162,61 @@ pub fn interpolate_3d_scatter_data(
     }
     let voronoi_data = create_valued_voronoi_cells(scattered_data)?;
 
-    interpolate_3d_triangulated_scatter_data(&voronoi_data, &x_interp_filtered, &y_interp_filtered)
+    grid_interpolate_3d_triangulated_scatter_data(
+        &voronoi_data,
+        &x_interp_filtered,
+        &y_interp_filtered,
+    )
+}
+
+/// - The triangulation (voronoi diagram) generation fails
+///
+/// # Errors
+/// Returns an error if coronoi cell creation fails
+pub fn vec_interpolate_3d_scatter_data(
+    scattered_data: &MatrixXx3<f64>,
+    xy_interp: &MatrixXx2<f64>,
+) -> OpmResult<(DVector<f64>, DVector<f64>)> {
+    let filtered_rows: Vec<[f64; 2]> = xy_interp
+        .row_iter()
+        .filter_map(|row| {
+            let x = row[0];
+            let y = row[1];
+            if x.is_finite() && y.is_finite() {
+                Some([x, y])
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let n = filtered_rows.len();
+
+    // column-major: first all x, then all y
+    let mut col_major: Vec<f64> = Vec::with_capacity(2 * n);
+    for r in &filtered_rows {
+        col_major.push(r[0]);
+    } // all x
+    for r in &filtered_rows {
+        col_major.push(r[1]);
+    } // alle y
+
+    // Variante A: mit from_vec (rows, cols, vec) — nalgebra erwartet column-major
+    let xy_interp_filtered = MatrixXx2::<f64>::from_column_slice(&col_major);
+
+    if xy_interp_filtered.column(0).len() < 2 {
+        return Err(OpossumError::Other(
+            "Length of interpolation ranges must be larger than 1 to define the interpolation bounds".into(),
+        ));
+    }
+    if scattered_data.column(0).len() < 3 {
+        return Err(OpossumError::Other(
+            "Number of scattered data points must be at least 3 to define a triangle, which is necessary to interpolate!".into(),
+        ));
+    }
+    let voronoi_data = create_valued_voronoi_cells(scattered_data)?;
+
+    vec_interpolate_3d_triangulated_scatter_data(&voronoi_data, &xy_interp_filtered)
 }
 
 /// Creation of arrays from `x` and `y` coordinates
@@ -368,9 +422,9 @@ pub fn create_valued_voronoi_cells(xyz_data: &MatrixXx3<f64>) -> OpmResult<Voron
     VoronoiedData::combine_data_with_voronoi_diagram(voronoi_diagram, z_data_voronoi)
 }
 
-/// Interpolation of scattered 3d data
+/// Interpolation of scattered 3d data onto a grid
 ///
-/// Interpolation of scattered 3d data  (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
+/// Interpolation of scattered 3d data (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
 /// The interpolation is done via delaunay triangulation (retrieved from a voronoi diagram, created with voronator) of the data points and interpolating on the desired points (`x_interp`, `y_interp`) using barycentric coordinates of the triangles
 /// # Attributes
 /// `voronoi`: Reference to a `VoronoiDiagram` struct
@@ -384,7 +438,7 @@ pub fn create_valued_voronoi_cells(xyz_data: &MatrixXx3<f64>) -> OpmResult<Voron
 /// # Panics
 /// This function panics if the conversion from usize to f64 fails. May be the case for extremely large numbers.
 #[allow(clippy::too_many_lines)]
-pub fn interpolate_3d_triangulated_scatter_data(
+pub fn grid_interpolate_3d_triangulated_scatter_data(
     voronoi: &VoronoiedData,
     x_interp: &DVector<f64>,
     y_interp: &DVector<f64>,
@@ -429,6 +483,66 @@ pub fn interpolate_3d_triangulated_scatter_data(
                 interp_data[(y_index, x_index)] = p;
                 mask[(y_index, x_index)] = 1.;
             }
+        }
+    }
+    Ok((interp_data, mask))
+}
+
+/// Interpolation of scattered 3d data at specific points
+///
+/// Interpolation of scattered 3d data (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
+/// The interpolation is done via delaunay triangulation (retrieved from a voronoi diagram, created with voronator) of the data points and interpolating on the desired points (`x_interp`, `y_interp`) using barycentric coordinates of the triangles
+/// # Attributes
+/// `voronoi`: Reference to a `VoronoiDiagram` struct
+/// `z_data`: values referring to the voronoi cell
+/// `x_interp`: x-coordinates of the points on which this function should interpolate
+/// `y_interp`: y-coordinates of the points on which this function should interpolate
+/// # Returns
+/// This function returns the interpolated data and a mask that marks the points that have been interpolated.
+/// # Errors
+/// This function errors if any of the interpolation vectors have zero length.
+/// # Panics
+/// This function panics if the conversion from usize to f64 fails. May be the case for extremely large numbers.
+pub fn vec_interpolate_3d_triangulated_scatter_data(
+    voronoi: &VoronoiedData,
+    x_y_interp: &MatrixXx2<f64>,
+) -> OpmResult<(DVector<f64>, DVector<f64>)> {
+    let num_axes_points = x_y_interp.column(0).len();
+    let Some(z_data) = voronoi.get_z_data() else {
+        return Err(OpossumError::Other(
+            "No data defined! Cannot interpolate!".into(),
+        ));
+    };
+    if num_axes_points < 1 {
+        return Err(OpossumError::Other(
+            "Cannot interpolate data, as one of the interpolation vectors have zero length".into(),
+        ));
+    }
+    let mut triangulation: DelaunayTriangulation<PointWithHeight> = DelaunayTriangulation::new();
+    //copy points of voronoi diag into spade triangulation
+    for (p, z) in voronoi.voronoi_diagram.sites.iter().zip(z_data.iter()) {
+        if z.is_finite() {
+            triangulation
+                .insert(PointWithHeight {
+                    position: SpadeP::new(p.x, p.y),
+                    height: *z,
+                    // normal
+                })
+                .map_err(|e| {
+                    OpossumError::Other(format!(
+                        "Inserting Point into Spade triangulation failed: {e}"
+                    ))
+                })?;
+        }
+    }
+    let mut interp_data = DVector::<f64>::from_element(num_axes_points, f64::NAN);
+    let mut mask = DVector::from_element(num_axes_points, 0.);
+    let mm = triangulation.natural_neighbor();
+    for (index, row) in x_y_interp.row_iter().enumerate() {
+        let interp_point = mm.interpolate(|v| v.data().height, SpadeP::new(row[0], row[1]));
+        if let Some(p) = interp_point {
+            interp_data[index] = p;
+            mask[index] = 1.;
         }
     }
     Ok((interp_data, mask))
@@ -590,7 +704,7 @@ mod test {
         let x_interp = linspace(-0.5, 1., 4).unwrap();
         let y_interp = linspace(-0.5, 1., 4).unwrap();
         let (interp_data, _) =
-            interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
+            grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
 
         assert!(interp_data[(0, 0)].is_nan());
         assert!(interp_data[(0, 1)].is_nan());
@@ -617,7 +731,7 @@ mod test {
         let x_interp = linspace(-0.5, 1., 4).unwrap();
         let y_interp = linspace(-0.5, 1., 4).unwrap();
         let (_data, mask) =
-            interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
+            grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
 
         assert_abs_diff_eq!(mask[(0, 0)], 0.);
         assert_abs_diff_eq!(mask[(0, 1)], 0.);
@@ -644,15 +758,23 @@ mod test {
         let x_interp = linspace(-0.5, 1., 4).unwrap();
         let y_interp = linspace(-0.5, 1., 4).unwrap();
         assert!(
-            interpolate_3d_scatter_data(&scattered_data, &DVector::from_vec(vec![0.]), &y_interp)
-                .is_err()
+            grid_interpolate_3d_scatter_data(
+                &scattered_data,
+                &DVector::from_vec(vec![0.]),
+                &y_interp
+            )
+            .is_err()
         );
         assert!(
-            interpolate_3d_scatter_data(&scattered_data, &x_interp, &DVector::from_vec(vec![0.]))
-                .is_err()
+            grid_interpolate_3d_scatter_data(
+                &scattered_data,
+                &x_interp,
+                &DVector::from_vec(vec![0.])
+            )
+            .is_err()
         );
         assert!(
-            interpolate_3d_scatter_data(
+            grid_interpolate_3d_scatter_data(
                 &scattered_data,
                 &DVector::from_vec(vec![0.]),
                 &DVector::from_vec(vec![0.])
@@ -661,7 +783,7 @@ mod test {
         );
 
         let scattered_data = Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0.]).transpose();
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
     }
     #[test]
     fn interpolate_3d_scatter_data_finite_values_test() {
@@ -670,20 +792,20 @@ mod test {
 
         let scattered_data =
             Matrix3xX::from_vec(vec![-1., 0., f64::NAN, 1., 0., 0., 0., 1., 0.]).transpose();
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
 
         let scattered_data =
             Matrix3xX::from_vec(vec![-1., 0., f64::NEG_INFINITY, 1., 0., 0., 0., 1., 0.])
                 .transpose();
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
 
         let scattered_data =
             Matrix3xX::from_vec(vec![-1., 0., f64::INFINITY, 1., 0., 0., 0., 1., 0.]).transpose();
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
 
         let scattered_data =
             Matrix3xX::from_vec(vec![-1., 0., -1., 1., 0., 0., 0., 1., 0.]).transpose();
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
     }
     #[test]
     fn interpolate_3d_scatter_data_finite_coordinates_test() {
@@ -691,24 +813,24 @@ mod test {
         let y_interp = linspace(-0.5, 1., 4).unwrap();
         let scattered_data =
             Matrix3xX::from_vec(vec![f64::NAN, 0., 0., 1., 0., 0., 0., 1., 0.]).transpose();
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
         let scattered_data =
             Matrix3xX::from_vec(vec![f64::NEG_INFINITY, 0., 0., 1., 0., 0., 0., 1., 0.])
                 .transpose();
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
         let scattered_data =
             Matrix3xX::from_vec(vec![f64::INFINITY, 0., 0., 1., 0., 0., 0., 1., 0.]).transpose();
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
 
         let scattered_data =
             Matrix3xX::from_vec(vec![-1., 0., 0., 1., 0., 0., 0., 1., 0.]).transpose();
 
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
 
         let scattered_data =
             Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 0.]).transpose();
 
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
     }
     #[test]
     fn interpolate_3d_triangulated_scatter_data_test() {
@@ -719,13 +841,13 @@ mod test {
         let x_interp = linspace(0.5, 1., 1).unwrap();
         let y_interp = linspace(0.5, 1., 1).unwrap();
         let (interp_data, _) =
-            interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp).unwrap();
+            grid_interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp).unwrap();
         assert_relative_eq!(interp_data[(0, 0)], 0.5);
 
         let x_interp = linspace(0., 1., 3).unwrap();
         let y_interp = linspace(0., 1., 3).unwrap();
         let (interp_data, _interp_mask) =
-            interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp).unwrap();
+            grid_interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp).unwrap();
 
         assert_relative_eq!(interp_data[(0, 0)], 0.);
         assert_relative_eq!(interp_data[(0, 1)], 0.);
