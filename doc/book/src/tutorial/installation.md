@@ -79,36 +79,15 @@ dx serve
 
 ### Option B: Build Installation Packages
 
-Use this method to create optimized release bundles. The components must be compiled separately.
-
-### Step 1: Build CLI (Release)
-
-```bash
-cd opossum_cli
-cargo build --release
-cd ..
-```
-
-### Step 2: Build Backend (Release)
-
-For bundling, the backend only needs to be compiled, not run.
+Use this method to create optimized release bundles. Fortunately, there is a preconfigured process for the entire bundling process
+(based on `xtask`). To build installation packages for the respective platform simply use:
 
 ```bash
-cd opossum_backend
-cargo build --release
-cd ..
+cargo xtask bundle
 ```
 
-### Step 3: Bundle the GUI
-
-Finally, run the bundling command.
-
-```bash
-cd opossum_gui
-dx bundle --release --features "bundle-backend"
-```
-
-Depending on your platform (Windows or Linux), the final installation packages will be generated in: `<target dir>/dx/bundle/opossum_gui/`.
+This does the entire job of compiling the backend, CLI and GUI as well as creating the installer packages. Depending on your
+platform (Windows or Linux), the final installation packages will be generated in: `<target dir>/dx/bundle/opossum_gui/`.
 
 ## 3. Build documentation (Optional)
 
