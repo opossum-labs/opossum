@@ -3,7 +3,7 @@
 //! This module also conatins the routines for genearating a fluence map using different estimator strategies.
 use core::f64;
 use std::ops::Range;
-
+use approx::relative_eq;
 use crate::{
     J_per_cm2, centimeter,
     error::{OpmResult, OpossumError},
@@ -239,6 +239,14 @@ impl RaysHitMap {
                         self.y_lims.0 = energy_hit_point.position.y.min(self.y_lims.0);
                         self.y_lims.1 = energy_hit_point.position.y.max(self.y_lims.1);
                     }
+                    for hp in v.iter_mut() {
+                        if relative_eq!(hp.position.x.value, energy_hit_point.position.x.value) 
+                        && relative_eq!(hp.position.y.value, energy_hit_point.position.y.value) 
+                        && relative_eq!(hp.position.z.value, energy_hit_point.position.z.value) {
+                            hp.value += energy_hit_point.value;
+                            return Ok(());
+                        }
+                    }
                     v.push(energy_hit_point);
                 } else {
                     return Err(OpossumError::Analysis(
@@ -258,6 +266,14 @@ impl RaysHitMap {
                         self.x_lims.1 = fluence_hit_point.position.x.max(self.x_lims.1);
                         self.y_lims.0 = fluence_hit_point.position.y.min(self.y_lims.0);
                         self.y_lims.1 = fluence_hit_point.position.y.max(self.y_lims.1);
+                    }
+                    for hp in v.iter_mut() {
+                        if relative_eq!(hp.position.x.value, fluence_hit_point.position.x.value) 
+                        && relative_eq!(hp.position.y.value, fluence_hit_point.position.y.value) 
+                        && relative_eq!(hp.position.z.value, fluence_hit_point.position.z.value) {
+                            hp.value += fluence_hit_point.value;
+                            return Ok(());
+                        }
                     }
                     v.push(fluence_hit_point);
                 } else {
