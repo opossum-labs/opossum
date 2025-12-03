@@ -353,21 +353,9 @@ impl RaysHitMap {
                 if let (Some(range_1), Some(range_2)) = (ax_1_range, ax_2_range) {
                     (range_1.start, range_1.end, range_2.start, range_2.end)
                 } else {
-                    self.calc_2d_bounding_box(Length::zero())?
+                    self.calc_2d_bounding_box(micrometer!(10.0))?
                 };
             
-            let min_dist = micrometer!(10.0);
-            if relative_eq!(left.value, right.value)
-            {
-                left -= min_dist;
-                right += min_dist;
-            }
-
-            if relative_eq!(top.value, bottom.value)
-            {
-                top += min_dist;
-                bottom -= min_dist;
-            }
             let bin_width: Length = (right - left) / to_f64(nr_of_points.0);
             let bin_height: Length = (top - bottom) / to_f64(nr_of_points.1);
 
@@ -618,7 +606,10 @@ impl RaysHitMap {
                 .map(|p| (p.position.xy(), p.value))
                 .collect();
             kde.set_hit_map(hitmap_2d);
-            let est_bandwidth = kde.bandwidth_estimate();
+            let mut est_bandwidth = kde.bandwidth_estimate();
+            if !est_bandwidth.is_normal(){
+                est_bandwidth = micrometer!(10.0);
+            }
             kde.set_band_width(est_bandwidth)?;
             let (left, right, top, bottom) =
                 if let (Some(range_1), Some(range_2)) = (ax_1_range, ax_2_range) {
