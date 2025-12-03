@@ -340,30 +340,34 @@ impl Plottable for WaveFrontErrorMap {
         _plt_type: &mut PlotType,
         _legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let (x_interp, _) =
-            create_linspace_axes(DVectorView::from(&DVector::from_vec(self.x.clone())), 100)?;
-        let (y_interp, _) =
-            create_linspace_axes(DVectorView::from(&DVector::from_vec(self.y.clone())), 100)?;
-        let scattered_data = MatrixXx3::from_columns(&[
-            DVector::from_vec(self.x.clone()),
-            DVector::from_vec(self.y.clone()),
-            DVector::from_vec(self.wf_map.clone()),
-        ]);
-        if let Ok((interp_dat, _)) =
-            grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp)
-        {
-            let plt_data = PlotData::ColorMesh {
-                x_dat_n: x_interp,
-                y_dat_m: y_interp,
-                z_dat_nxm: interp_dat,
-            };
-            let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
-            Ok(Some(vec![plt_series]))
-        } else {
+        if let (Ok((x_interp, _)), Ok((y_interp, _))) = ( create_linspace_axes(DVectorView::from(&DVector::from_vec(self.x.clone())), 100), create_linspace_axes(DVectorView::from(&DVector::from_vec(self.y.clone())), 100)){
+            let scattered_data = MatrixXx3::from_columns(&[
+                DVector::from_vec(self.x.clone()),
+                DVector::from_vec(self.y.clone()),
+                DVector::from_vec(self.wf_map.clone()),
+            ]);
+            if let Ok((interp_dat, _)) =
+                grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp)
+            {
+                let plt_data = PlotData::ColorMesh {
+                    x_dat_n: x_interp,
+                    y_dat_m: y_interp,
+                    z_dat_nxm: interp_dat,
+                };
+                let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
+                Ok(Some(vec![plt_series]))
+            } else {
+                warn!(
+                    "Could not create interpolated wavefront map for plotting! Returning no plot data."
+                );
+                Ok(None)
+            }
+        }
+        else{
             warn!(
-                "Could not create interpolated wavefront map for plotting! Returning no plot data."
-            );
-            Ok(None)
+                    "Could not create axes from provided data! Returning no plot data."
+                );
+                Ok(None)
         }
     }
 }
