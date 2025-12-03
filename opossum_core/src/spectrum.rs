@@ -180,6 +180,20 @@ impl Spectrum {
         }
     }
 
+    ///Normalizes a spectrum such that its sum corresponds to 1
+    /// # Errors
+    /// This function errors if the sum is smaller or equal to zero
+    pub fn normalize_to_sum(&mut self) -> OpmResult<()> {
+        let sum = self.data.iter().fold(0., |init, (_, val)| init + *val);
+        if sum > 0. {
+            self.data.for_each(|(_, val)| *val /= sum)
+        } else {
+            Err(OpossumError::Other(
+                "Cannot normalize spectrum to its sum value with a sum value of zero!".into(),
+            ))
+        }
+    }
+
     /// Generate a spectrum from a list of narrow [`EnergyLaserLines`].
     ///
     /// # Errors
@@ -217,7 +231,9 @@ impl Spectrum {
         self.data.get()
     }
 
-    fn lambda_vec(&self) -> Vec<f64> {
+    /// Get a 1D vector of all wavelength values.
+    #[must_use]
+    pub fn lambda_vec(&self) -> Vec<f64> {
         self.data.iter().map(|data| data.0).collect()
     }
     /// Get a 1D vector of all y values.

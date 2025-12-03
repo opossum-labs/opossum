@@ -1199,7 +1199,6 @@ impl PlotData {
             },
             |z_data| Ok(DVector::from(z_data.column(0))),
         )?;
-            // let (x, y): (Vec<f64>, Vec<f64>) = voronoi.get_voronoi_diagram().sites.iter().cloned().map(|p| (p.x, p.y)).unzip();
             let triangles = voronoi.get_voronoi_diagram().delaunay.triangles.clone();
             let mut filtered_triangles = Vec::<usize>::with_capacity(triangles.len());
             let triangle_idx = Matrix3xX::from_vec(triangles).transpose();

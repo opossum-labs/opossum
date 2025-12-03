@@ -53,7 +53,11 @@ fn task_bundle() -> Result<(), anyhow::Error> {
     {
         println!("\n🎨 Build & Bundle opossum_gui...");
         let _dir = sh.push_dir("opossum_gui");
-        cmd!(sh, "dx bundle --release --package-types msi --features bundle-backend").run()?;
+        cmd!(
+            sh,
+            "dx bundle --release --package-types msi --features bundle-backend"
+        )
+        .run()?;
     }
 
     println!("\n✅ Bundle sucessfully created!");
