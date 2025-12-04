@@ -340,7 +340,10 @@ impl Plottable for WaveFrontErrorMap {
         _plt_type: &mut PlotType,
         _legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        if let (Ok((x_interp, _)), Ok((y_interp, _))) = ( create_linspace_axes(DVectorView::from(&DVector::from_vec(self.x.clone())), 100), create_linspace_axes(DVectorView::from(&DVector::from_vec(self.y.clone())), 100)){
+        if let (Ok((x_interp, _)), Ok((y_interp, _))) = (
+            create_linspace_axes(DVectorView::from(&DVector::from_vec(self.x.clone())), 100),
+            create_linspace_axes(DVectorView::from(&DVector::from_vec(self.y.clone())), 100),
+        ) {
             let scattered_data = MatrixXx3::from_columns(&[
                 DVector::from_vec(self.x.clone()),
                 DVector::from_vec(self.y.clone()),
@@ -362,12 +365,9 @@ impl Plottable for WaveFrontErrorMap {
                 );
                 Ok(None)
             }
-        }
-        else{
-            warn!(
-                    "Could not create axes from provided data! Returning no plot data."
-                );
-                Ok(None)
+        } else {
+            warn!("Could not create axes from provided data! Returning no plot data.");
+            Ok(None)
         }
     }
 }

@@ -23,5 +23,4 @@ pub fn Logger(drag_handler: EventHandler<f64>, height: Signal<f64>) -> Element {
             }
         }
     }
-    }
-
+}

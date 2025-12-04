@@ -228,12 +228,9 @@ fn CommonAppLayout(
     model_modified: Signal<bool>,
     node_editor_command: Signal<Option<NodeEditorCommand>>,
 ) -> Element {
-
-        let height = use_signal(|| 100.0); // Start-Höhe (px)
+    let height = use_signal(|| 100.0); // Start-Höhe (px)
     let dragging = use_signal(|| false);
     let last_y = use_signal(|| 0.0);
-
-
 
     let on_mousemove = {
         let dragging = dragging.clone();
@@ -244,7 +241,7 @@ fn CommonAppLayout(
             if *dragging.read() {
                 let hiegh_val = *height.read();
                 let dy = evt.client_coordinates().y as f64 - *last_y.read();
-                height.set((hiegh_val - dy).max(100.0)); 
+                height.set((hiegh_val - dy).max(100.0));
                 last_y.set(evt.client_coordinates().y as f64);
             }
         }
