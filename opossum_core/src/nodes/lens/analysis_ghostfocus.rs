@@ -44,7 +44,7 @@ impl AnalysisGhostFocus for Lens {
         )?;
 
         let mut out_light_rays = LightRays::default();
-        out_light_rays.insert(out_port.to_string(), rays_bundle);
+        out_light_rays.insert(out_port.clone(), rays_bundle);
         Ok(out_light_rays)
     }
 }

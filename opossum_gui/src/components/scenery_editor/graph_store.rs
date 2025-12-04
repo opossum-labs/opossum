@@ -282,7 +282,7 @@ impl GraphStore {
         self.nodes.write().insert(analyzer_id, node_element.clone());
         self.set_node_active(analyzer_id, node_element.z_index());
     }
-    pub fn needs_saving(&self) -> Signal<bool, UnsyncStorage> {
+    pub const fn needs_saving(&self) -> Signal<bool, UnsyncStorage> {
         self.needs_saving
     }
 }
@@ -482,6 +482,7 @@ async fn process_load_from_file(path: PathBuf, graph_state: Signal<GraphState>) 
     );
 }
 
+#[allow(clippy::future_not_send)]
 async fn process_save_to_file(path: PathBuf, graph_state: Signal<GraphState>) {
     let mut graph_store = graph_state.read().graph_store;
     eval_action_run(

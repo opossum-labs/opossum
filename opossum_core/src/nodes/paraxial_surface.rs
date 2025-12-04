@@ -160,7 +160,7 @@ impl AnalysisGhostFocus for ParaxialSurface {
         }
 
         let mut out_light_rays = LightRays::default();
-        out_light_rays.insert(out_port.to_string(), rays);
+        out_light_rays.insert(out_port.clone(), rays);
         Ok(out_light_rays)
     }
 }

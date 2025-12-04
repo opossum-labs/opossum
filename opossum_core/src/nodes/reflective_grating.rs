@@ -187,7 +187,7 @@ impl AnalysisGhostFocus for ReflectiveGrating {
             surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
         }
         let mut out_light_rays = LightRays::default();
-        out_light_rays.insert(out_port.to_string(), rays_bundle.clone());
+        out_light_rays.insert(out_port.clone(), rays_bundle.clone());
         Ok(out_light_rays)
     }
 }

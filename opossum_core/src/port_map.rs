@@ -79,7 +79,7 @@ impl PortMap {
             .0
             .iter()
             .find(|p| p.1.0 == node_id && p.1.1 == internal_port_name);
-        p.map(|p| p.0.to_string())
+        p.map(|p| p.0.clone())
     }
     /// Check if this [`PortMap`] contains the given external port name.
     pub fn contains_external_name(&self, name: &str) -> bool {
@@ -94,7 +94,7 @@ impl PortMap {
         self.0
             .iter()
             .filter(|p| p.1.0 == node_id)
-            .map(|p| (p.0.to_string(), p.1.1.to_string()))
+            .map(|p| (p.0.clone(), p.1.1.clone()))
             .collect()
     }
     /// Returns the total number of external port mappings in this [`PortMap`].

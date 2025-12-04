@@ -105,13 +105,12 @@ pub enum DragStatus {
 #[component]
 pub fn GraphEditor(
     mut command: Signal<Option<NodeEditorCommand>>,
-    model_modified: Signal<bool>
+    model_modified: Signal<bool>,
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
 
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
-    let graph_processor: Coroutine<GraphStoreAction> =
-        use_graph_processor(graph_state);
+    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(graph_state);
 
     let active_node_opt = use_memo(move || {
         graph_state
@@ -140,8 +139,8 @@ pub fn GraphEditor(
 
     // synchronize the needs_saving signal from graph_store to model_modified
     use_effect(move || {
-        let graph_store=graph_state.peek().graph_store;
-        let needs_saving= graph_store.peek().needs_saving();
+        let graph_store = graph_state.peek().graph_store;
+        let needs_saving = graph_store.peek().needs_saving();
         model_modified.set(*needs_saving.read());
     });
 

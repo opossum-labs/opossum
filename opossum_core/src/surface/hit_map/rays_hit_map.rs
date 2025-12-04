@@ -1,14 +1,11 @@
 //! The structures for storing the actual hitmap.
 //!
 //! This module also conatins the routines for genearating a fluence map using different estimator strategies.
-use core::f64;
-use std::ops::Range;
-use approx::relative_eq;
 use crate::{
-    J_per_cm2, centimeter, micrometer,
+    J_per_cm2, centimeter,
     error::{OpmResult, OpossumError},
     kde::Kde,
-    meter,
+    meter, micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     plottable::AxLims,
     utils::{
@@ -19,12 +16,14 @@ use crate::{
         to_f64, try_f64_to_usize,
     },
 };
+use approx::relative_eq;
+use core::f64;
 use itertools::Itertools;
 use libm::modf;
 use log::warn;
 use nalgebra::{DMatrix, DVector, MatrixXx2, Point2, Point3};
-use num::Zero;
 use serde::{Deserialize, Serialize};
+use std::ops::Range;
 use uom::si::{
     energy::joule,
     f64::{Area, Energy, Length},
@@ -240,9 +239,10 @@ impl RaysHitMap {
                         self.y_lims.1 = energy_hit_point.position.y.max(self.y_lims.1);
                     }
                     for hp in v.iter_mut() {
-                        if relative_eq!(hp.position.x.value, energy_hit_point.position.x.value) 
-                        && relative_eq!(hp.position.y.value, energy_hit_point.position.y.value) 
-                        && relative_eq!(hp.position.z.value, energy_hit_point.position.z.value) {
+                        if relative_eq!(hp.position.x.value, energy_hit_point.position.x.value)
+                            && relative_eq!(hp.position.y.value, energy_hit_point.position.y.value)
+                            && relative_eq!(hp.position.z.value, energy_hit_point.position.z.value)
+                        {
                             hp.value += energy_hit_point.value;
                             return Ok(());
                         }
@@ -268,9 +268,10 @@ impl RaysHitMap {
                         self.y_lims.1 = fluence_hit_point.position.y.max(self.y_lims.1);
                     }
                     for hp in v.iter_mut() {
-                        if relative_eq!(hp.position.x.value, fluence_hit_point.position.x.value) 
-                        && relative_eq!(hp.position.y.value, fluence_hit_point.position.y.value) 
-                        && relative_eq!(hp.position.z.value, fluence_hit_point.position.z.value) {
+                        if relative_eq!(hp.position.x.value, fluence_hit_point.position.x.value)
+                            && relative_eq!(hp.position.y.value, fluence_hit_point.position.y.value)
+                            && relative_eq!(hp.position.z.value, fluence_hit_point.position.z.value)
+                        {
                             hp.value += fluence_hit_point.value;
                             return Ok(());
                         }
@@ -349,13 +350,19 @@ impl RaysHitMap {
         ax_2_range: Option<&Range<Length>>,
     ) -> OpmResult<FluenceData> {
         if let HitPoints::Energy(hit_points) = &self.hit_points {
-            let (mut left, mut right, mut top, mut bottom) =
+            let (left, right, top, bottom) =
                 if let (Some(range_1), Some(range_2)) = (ax_1_range, ax_2_range) {
                     (range_1.start, range_1.end, range_2.start, range_2.end)
                 } else {
-                    self.calc_2d_bounding_box(micrometer!(10.0))?
+                    let min_margin = micrometer!(10.0);
+                    let (left, right, top, bottom) = self.calc_2d_bounding_box(micrometer!(0.0))?;
+                    if (left - right).abs() < min_margin || (top - bottom).abs() < min_margin {
+                        self.calc_2d_bounding_box(min_margin)?
+                    } else {
+                        (left, right, top, bottom)
+                    }
                 };
-            
+
             let bin_width: Length = (right - left) / to_f64(nr_of_points.0);
             let bin_height: Length = (top - bottom) / to_f64(nr_of_points.1);
 
@@ -607,7 +614,7 @@ impl RaysHitMap {
                 .collect();
             kde.set_hit_map(hitmap_2d);
             let mut est_bandwidth = kde.bandwidth_estimate();
-            if !est_bandwidth.is_normal(){
+            if !est_bandwidth.is_normal() {
                 est_bandwidth = micrometer!(10.0);
             }
             kde.set_band_width(est_bandwidth)?;

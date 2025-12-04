@@ -135,10 +135,10 @@ impl OpticNode for FluenceDetector {
                     )
                     .unwrap();
             }
-        }
-        else{
-            fl_data.err().map(|e| println!("Error calculating fluence map: {}", e));
-            warn!("Error while trying to calculate the fluence map with the defined estimator. Plot is omitted.");
+        } else {
+            warn!(
+                "Error while trying to calculate the fluence map with the defined estimator. Plot is omitted."
+            );
             props
                 .create(
                     "Warning",
