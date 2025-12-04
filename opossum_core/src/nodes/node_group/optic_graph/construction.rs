@@ -91,7 +91,6 @@ impl OpticGraph {
             if !processed_uuids.insert(current_id_to_check) {
                 continue;
             }
-
             // This inner loop finds all nodes that are or reference the current_id_to_check
             while let Some(node_idx) = self.find_first_node_with_uuid(current_id_to_check) {
                 // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
@@ -113,8 +112,9 @@ impl OpticGraph {
         for node_ref in self.nodes() {
             let mut node = node_ref.optical_ref.lock_opm()?;
             if let Ok(group) = node.as_group_mut() {
-                let deleted_nodes_in_group = group.graph.delete_node(node_id)?;
-                nodes_deleted.extend(deleted_nodes_in_group);
+                if let Ok(deleted_nodes_in_group) = group.graph.delete_node(node_id) {
+                    nodes_deleted.extend(deleted_nodes_in_group);
+                }
             }
         }
         if nodes_deleted.is_empty() {
