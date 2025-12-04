@@ -127,7 +127,7 @@ fn PositioningInputs(position_opt_sig: Signal<Option<Isometry>>) -> Element {
     let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
 
     use_effect(move || {
-        node_config_processor.send(NodeChangeAction::Isometry(Some(*position_sig.read())));
+        position_opt_sig.set(Some(*position_sig.read()));
     });
 
     rsx! {
