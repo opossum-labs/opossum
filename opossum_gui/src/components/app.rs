@@ -228,9 +228,48 @@ fn CommonAppLayout(
     model_modified: Signal<bool>,
     node_editor_command: Signal<Option<NodeEditorCommand>>,
 ) -> Element {
+
+        let height = use_signal(|| 100.0); // Start-Höhe (px)
+    let dragging = use_signal(|| false);
+    let last_y = use_signal(|| 0.0);
+
+
+
+    let on_mousemove = {
+        let dragging = dragging.clone();
+        let mut height = height.clone();
+
+        let mut last_y = last_y.clone();
+        move |evt: MouseEvent| {
+            if *dragging.read() {
+                let hiegh_val = *height.read();
+                let dy = evt.client_coordinates().y as f64 - *last_y.read();
+                height.set((hiegh_val - dy).max(100.0)); 
+                last_y.set(evt.client_coordinates().y as f64);
+            }
+        }
+    };
+
+    let on_mouseup = {
+        let mut dragging = dragging.clone();
+        move |_| dragging.set(false)
+    };
+
+    let on_mousedown = {
+        let mut dragging = dragging.clone();
+        let mut last_y = last_y.clone();
+        move |evt: f64| {
+            dragging.set(true);
+            last_y.set(evt);
+        }
+    };
+
     rsx! {
         ContextMenu { command: cxt_command }
-        div { class: "container-fluid text-bg-dark",
+        div {
+            class: "container-fluid text-bg-dark",
+            onmousemove: on_mousemove,
+            onmouseup: on_mouseup,
             div { class: "row",
                 div { class: "col",
                     MenuBar {
@@ -246,9 +285,7 @@ fn CommonAppLayout(
                 model_modified,
                 model_file_path,
             }
-            div { class: "row footer",
-                div { class: "col", Logger {} }
-            }
+            Logger { drag_handler: on_mousedown, height }
         }
     }
 }

@@ -94,7 +94,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
     let graph_store = use_context::<Signal<GraphStore>>();
 
     move |event| {
-        event.stop_propagation();
+        // event.stop_propagation();
         let current_shift = *editor_status().shift.read();
         let current_zoom = *editor_status().zoom.read();
         let drag_status = editor_status.read().drag_status.read().clone();
