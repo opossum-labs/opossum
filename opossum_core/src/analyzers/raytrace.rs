@@ -282,7 +282,7 @@ pub trait AnalysisRayTrace: OpticNode {
 }
 
 /// Strategy to use if a [`Ray`](crate::ray::Ray) misses a surface
-#[derive(PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize, EnumIter, Default)]
+#[derive(Default, PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize, EnumIter)]
 pub enum MissedSurfaceStrategy {
     /// The [`Ray`](crate::ray::Ray) it is set as invalid and does no longer propagate.
     #[default]

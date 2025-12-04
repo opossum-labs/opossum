@@ -35,7 +35,7 @@ pub fn save_project_as(mut menu_item_selected: Signal<Option<MenuSelection>>) {
 /// Saves a project under the given path
 /// (Works for WASM only if `model_file_path` exists).
 pub fn save_project(
-    model_file_path: Signal<Option<PathBuf>>,
+    model_file_path: ReadSignal<Option<PathBuf>>,
     mut menu_item_selected: Signal<Option<MenuSelection>>,
 ) {
     if let Some(path) = model_file_path().or_else(get_save_file_path) {
@@ -46,7 +46,7 @@ pub fn save_project(
 /// Shows an `File Open` Dialog.
 pub fn open_project(
     mut menu_item_selected: Signal<Option<MenuSelection>>,
-    model_modified: Signal<bool>,
+    model_modified: ReadSignal<bool>,
 ) {
     let msg = "You have unsaved changes. Are you sure you want to open a new project?";
     if continue_operation(*model_modified.peek(), msg) {
@@ -61,7 +61,6 @@ pub fn open_project(
                 menu_item_selected.set(Some(MenuSelection::OpenProject(path)));
             }
         }
-
         #[cfg(target_arch = "wasm32")]
         {}
     }
@@ -87,7 +86,7 @@ pub fn set_report_directory(mut menu_item_selected: Signal<Option<MenuSelection>
 /// (not platform-indepenedent).
 pub fn new_project(
     mut menu_item_selected: Signal<Option<MenuSelection>>,
-    model_modified: Signal<bool>,
+    model_modified: ReadSignal<bool>,
 ) {
     let msg = "You have unsaved changes. Are you sure you want to open a new project?";
     if continue_operation(*model_modified.peek(), msg) {

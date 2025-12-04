@@ -1,7 +1,3 @@
-// Workaround for dioxus 0.7.0
-#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
-#![allow(clippy::items_after_statements)]
-
 use dioxus::prelude::*;
 use opossum_gui::App;
 
@@ -13,8 +9,6 @@ use {
     opossum_gui::ProcessHandle,
     std::io::Cursor,
 };
-
-// --- common asset imports ---
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 // const PLOTLY_JS: Asset = asset!("/assets/plotly.js");

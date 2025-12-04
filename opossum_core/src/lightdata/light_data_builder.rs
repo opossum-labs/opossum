@@ -125,6 +125,11 @@ impl Display for LightDataBuilder {
     }
 }
 
+impl From<EnergyDataBuilder> for LightDataBuilder {
+    fn from(value: EnergyDataBuilder) -> Self {
+        Self::Energy(value)
+    }
+}
 impl From<ImageSrc> for LightDataBuilder {
     fn from(value: ImageSrc) -> Self {
         Self::Geometric(RayDataBuilder::Image(value))
@@ -147,10 +152,70 @@ impl From<CollimatedSrc> for LightDataBuilder {
 mod tests {
     use super::*;
     use crate::{
-        joule, lightdata::energy_data_builder::EnergyLaserLines, nanometer, properties::Proptype,
-        rays::Rays,
+        energy_distributions::UniformDist, joule, lightdata::energy_data_builder::EnergyLaserLines,
+        nanometer, position_distributions::Hexapolar, properties::Proptype, rays::Rays,
+        spectral_distribution::LaserLines,
     };
-
+    #[test]
+    fn default() {
+        let ldb = LightDataBuilder::default();
+        assert_eq!(
+            ldb.get_energy_distribution_type(),
+            Some(UniformDist::default().into())
+        );
+        assert_eq!(
+            ldb.get_position_distribution_type(),
+            Some(Hexapolar::default().into())
+        );
+        assert_eq!(
+            ldb.get_spectral_distribution_type(),
+            Some(LaserLines::default().into())
+        );
+    }
+    #[test]
+    fn get_energy_distribution_type() {
+        let edb = EnergyDataBuilder::default();
+        let ldb: LightDataBuilder = edb.into();
+        assert!(ldb.get_energy_distribution_type().is_none());
+        let ldb: LightDataBuilder = PointSrc::default().into();
+        assert!(ldb.get_energy_distribution_type().is_some());
+    }
+    #[test]
+    fn get_position_distribution_type() {
+        let edb = EnergyDataBuilder::default();
+        let ldb: LightDataBuilder = edb.into();
+        assert!(ldb.get_position_distribution_type().is_none());
+        let ldb: LightDataBuilder = PointSrc::default().into();
+        assert!(ldb.get_position_distribution_type().is_some());
+    }
+    #[test]
+    fn get_spectral_distribution_type() {
+        let edb = EnergyDataBuilder::default();
+        let ldb: LightDataBuilder = edb.into();
+        assert!(ldb.get_spectral_distribution_type().is_none());
+        let ldb: LightDataBuilder = PointSrc::default().into();
+        assert!(ldb.get_spectral_distribution_type().is_some());
+    }
+    #[test]
+    fn from_energy_data_builder() {
+        let ldb: LightDataBuilder = EnergyDataBuilder::default().into();
+        assert!(matches!(ldb, LightDataBuilder::Energy(_)));
+    }
+    #[test]
+    fn from_img_src() {
+        let ldb: LightDataBuilder = ImageSrc::default().into();
+        assert!(matches!(ldb, LightDataBuilder::Geometric(_)));
+    }
+    #[test]
+    fn from_point_src() {
+        let ldb: LightDataBuilder = PointSrc::default().into();
+        assert!(matches!(ldb, LightDataBuilder::Geometric(_)));
+    }
+    #[test]
+    fn from_collimated_src() {
+        let ldb: LightDataBuilder = CollimatedSrc::default().into();
+        assert!(matches!(ldb, LightDataBuilder::Geometric(_)));
+    }
     #[test]
     fn from_light_data_builder_to_proptype() {
         let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
@@ -176,9 +241,6 @@ mod tests {
         ));
         let light_data = light_data_builder.build().unwrap();
         assert!(matches!(light_data, LightData::Energy(_)));
-        // let light_data_builder = LightDataBuilder::Fourier;
-        // let light_data = light_data_builder.build().unwrap();
-        // assert!(matches!(light_data, LightData::Fourier));
         let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(Rays::default()));
         let light_data = light_data_builder.build().unwrap();
         assert!(matches!(light_data, LightData::Geometric(_)));

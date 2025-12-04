@@ -1,7 +1,7 @@
 mod validated;
 mod validated_vec;
 mod validator_parser;
-/// Implements the [`Validate`] trait for a given validator type, function, and value type.
+/// Implements the [`Validate`](crate::generic_validators::Validate) trait for a given validator type, function, and value type.
 ///
 /// This macro provides a concise way to define validation logic without manually
 /// writing repetitive boilerplate for error handling and `Result` wrapping.
@@ -9,10 +9,10 @@ mod validator_parser;
 /// The generated implementation automatically:
 /// - Calls the provided function `($func)` with `(&self, &value)`.
 /// - Returns `Ok(())` if the function returns `true`.
-/// - Returns an [`OpossumError::Other`] with a descriptive message if the function returns `false`.
+/// - Returns an [`OpossumError::Other`](crate::error::OpossumError) with a descriptive message if the function returns `false`.
 ///
 /// # Parameters
-/// - `$validator`: The path to the validator type implementing [`Validate`].
+/// - `$validator`: The path to the validator type implementing [`Validate`](crate::generic_validators::Validate).
 /// - `$func`: A function or closure reference that performs the validation check.
 /// - `$t`: The type of value to validate.
 ///
@@ -20,7 +20,7 @@ mod validator_parser;
 /// - This macro assumes that `$func` has the signature `fn(&Self, &T) -> bool`.
 /// - The generated error message includes the stringified name of `$func`.
 /// - Useful for scalar or single-value validators.
-///   For collection-level validation, see [`impl_vec_validator!`].
+///   For collection-level validation, see [`impl_vec_validator!`](crate::impl_vec_validator).
 #[macro_export]
 macro_rules! impl_validator {
     ($validator:path, $func:expr,  $t:ty) => {
@@ -39,7 +39,7 @@ macro_rules! impl_validator {
     };
 }
 
-/// Implements the [`ValidateVec`] trait for a given validator type, function, and element type.
+/// Implements the [`ValidateVec`](crate::generic_validators::ValidatedVec) trait for a given validator type, function, and element type.
 ///
 /// This macro defines collection-level validation logic in a compact form, automatically
 /// handling result wrapping and error reporting for vector-based checks.
@@ -47,10 +47,10 @@ macro_rules! impl_validator {
 /// The generated implementation:
 /// - Calls the provided function `($func)` with `(&self, &values)`.
 /// - Returns `Ok(())` if the function returns `true`.
-/// - Returns an [`OpossumError::Other`] with a descriptive message if the function returns `false`.
+/// - Returns an [`OpossumError::Other`](crate::error::OpossumError) with a descriptive message if the function returns `false`.
 ///
 /// # Parameters
-/// - `$validator`: The path to the validator type implementing [`ValidateVec`].
+/// - `$validator`: The path to the validator type implementing [`ValidateVec`](crate::generic_validators::ValidatedVec).
 /// - `$func`: A function or closure reference performing validation across the entire vector.
 /// - `$t`: The type of each element in the vector being validated.
 ///
@@ -58,7 +58,7 @@ macro_rules! impl_validator {
 /// - This macro assumes `$func` has the signature `fn(&Self, &Vec<T>) -> bool`.
 /// - Intended for validators operating on vector-wide conditions
 ///   (e.g. "non-empty", "sum > 0", "no NaNs").
-/// - For per-element validation, use [`impl_validator!`].
+/// - For per-element validation, use [`impl_validator!`](crate::impl_validator).
 #[macro_export]
 macro_rules! impl_vec_validator {
     ($validator:path, $func:expr,  $t:ty) => {

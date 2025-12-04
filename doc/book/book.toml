@@ -2,7 +2,6 @@
 authors = ["Udo Eisenbarth <u.eisenbarth@gsi.de>", "Yannik Zobus <y.zobus@gsi.de>"]
 description = "User guide and reference of the OPOSSUM optical design software"
 language = "en"
-multilingual = false
 src = "src"
 title = "OPOSSUM Handbook"
 
@@ -11,3 +10,4 @@ edition = "2021"
 
 [preprocessor.katex]
 after = ["links"]
+optional = true

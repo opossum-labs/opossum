@@ -8,7 +8,7 @@ use crate::{
     energy_distributions::EnergyDistribution,
     error::{OpmResult, OpossumError},
     fluence_distributions::FluenceDistribution,
-    joule, meter, micrometer, millimeter, nanometer,
+    joule, meter, millimeter, nanometer,
     nodes::{
         FilterType, SplittingConfig, WaveFrontData, WaveFrontErrorMap,
         fluence_detector::{Fluence, fluence_data::FluenceData},
@@ -28,7 +28,7 @@ use crate::{
         geom_transformation::Isometry,
         griddata::{
             VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
-            interpolate_3d_triangulated_scatter_data, linspace,
+            grid_interpolate_3d_triangulated_scatter_data, linspace,
         },
         to_f64,
     },
@@ -43,7 +43,6 @@ use nalgebra::{
     DMatrix, DVector, Matrix2xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3, distance,
     vector,
 };
-use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Range, path::Path};
 use uom::{
@@ -52,7 +51,7 @@ use uom::{
         area::square_centimeter,
         energy::joule,
         f64::{Angle, Area, Energy, Length},
-        length::{centimeter, micrometer, millimeter, nanometer},
+        length::{centimeter, millimeter, nanometer},
     },
 };
 use uuid::Uuid;
@@ -699,11 +698,28 @@ impl Rays {
             sum_dist_sq.sqrt()
         })
     }
+
+    /// Returns the center wavelength of this [`Rays`].
+    /// ///
+    /// This function calculates the energy-weighted center wavelength of the ray bundle. If the ray bundle is empty, `None` is returned.
+    #[must_use]
+    pub fn get_center_wavelength(&self) -> Option<Length> {
+        if self.nr_of_rays(true) == 0 {
+            return None;
+        }
+        let mut center_wvl = Length::zero();
+        for ray in &self.ray_bundle {
+            if ray.valid() {
+                center_wvl += ray.wavelength() * ray.energy().value;
+            }
+        }
+        center_wvl /= self.total_energy().value;
+        Some(center_wvl)
+    }
     /// Returns the wavefront of the bundle of [`Rays`] at the center wavelength or at each band of the spectrum with a defined resolution.
     /// This function calculates the wavefront of a ray bundle as multiple of its wavelength with reference to the ray that is closest to the optical axis.
     /// # Attributes
     /// - `center_wavelength_flag`: flag to define if the center wavelength should be used for calculation or if a wavefront for all spectral components should be analyzed
-    /// - `spec_res`: spectral resolution to calculate the center wavelength or for individal spectral analysis
     ///
     /// # Errors
     /// This function errors for the moment if `center_wavelength_flag` is set to false
@@ -713,45 +729,99 @@ impl Rays {
     pub fn get_wavefront_data_in_units_of_wvl(
         &self,
         center_wavelength_flag: bool,
-        spec_res: Length,
+        average_flag: bool,
         monitor_isometry: &Isometry,
     ) -> OpmResult<WaveFrontData> {
-        let spec = self.to_spectrum(&spec_res)?;
         if center_wavelength_flag {
-            let center_wavelength = spec.center_wavelength();
-            let wf_err =
-                self.wavefront_error_at_pos_in_units_of_wvl(center_wavelength, monitor_isometry);
-            Ok(WaveFrontData {
-                wavefront_error_maps: vec![WaveFrontErrorMap::new(&wf_err, center_wavelength)?],
-            })
+            // calculate coherent wavefront average with the assumption of the center wavelength only
+            let center_wavelength = self.get_center_wavelength().ok_or_else(|| {
+                OpossumError::Other("Cannot determine center wavelength of empty ray bundle".into())
+            })?;
+            let wvls = self.get_unique_wavelengths(true);
+
+            if average_flag {
+                warn!(
+                    "Averaging wavefronts over the spectrum is not yet implemented. Using the center wavelength only is an approximation that assumes all wavefronts are similar in shape. This may not be accurate for broad spectra or systems with significant chromatic aberrations."
+                );
+                Err(OpossumError::Other(
+                    "Averaging wavefronts over the spectrum is not yet implemented".into(),
+                ))
+                // spec.normalize_to_sum()?;
+                // if let Some(center_wavelength_index) = ((center_wavelength - spec_start)/ spec_res_micro)
+                //     .floor()
+                //     .to_usize(){
+                //         let center_wavelength_data = &wf_error[center_wavelength_index];
+
+                //         // interpolate all other wavefront data to the positions of the center wavelength data
+                //         let xy_coord = MatrixXx2::<f64>::from_columns(&[center_wavelength_data.column(0), center_wavelength_data.column(1)]);
+                //         let mut averaged_wavefront_data = DVector::from_element(
+                //             center_wavelength_data.nrows(),
+                //             0.,
+                //         );
+                //         for (wf_map, (wvl, spec_int)) in wf_error.iter().zip(wvls.iter().zip(spec_int.iter())) {
+                //             println!("{:?}", wf_map);
+                //             println!("{:?}", xy_coord);
+                //             let (interp_dat, _) = vec_interpolate_3d_scatter_data(&wf_map, &xy_coord)?;
+                //             println!("{:?}", interp_dat);
+                //             averaged_wavefront_data += interp_dat; // * *spec_int*center_wavelength/ *wvl;
+                //         }
+                //         let dat = MatrixXx3::from_columns(&[
+                //             xy_coord.column(0),
+                //             xy_coord.column(1),
+                //             averaged_wavefront_data.as_slice().into(),
+                //         ]);
+                //         Ok(WaveFrontData {
+                //             wavefront_error_maps: vec![WaveFrontErrorMap::new(&dat, micrometer!(center_wavelength))?],
+                //         })
+                // }
+                // else{
+                //     Err(OpossumError::Other("Center wavelength is outside of spectral range".into()))
+                // }
+            } else {
+                let closest_wvl = wvls.iter().fold(wvls[0], |a, &b| {
+                    if (b - center_wavelength).abs() < (a - center_wavelength).abs() {
+                        b
+                    } else {
+                        a
+                    }
+                });
+
+                let mut rays_at_closest_wvl = Self::default();
+
+                //sort rays into spectral resolution fields
+                for ray in &self.ray_bundle {
+                    if relative_eq!(
+                        ray.wavelength().value,
+                        closest_wvl.value,
+                        epsilon = 10. * f64::EPSILON
+                    ) {
+                        rays_at_closest_wvl.add_ray(ray.clone());
+                    }
+                }
+
+                let wf_err = rays_at_closest_wvl
+                    .wavefront_error_at_pos_in_units_of_wvl(closest_wvl, monitor_isometry);
+                Ok(WaveFrontData {
+                    wavefront_error_maps: vec![WaveFrontErrorMap::new(&wf_err, closest_wvl)?],
+                })
+            }
         } else {
-            let spec_start = spec.range().start.get::<micrometer>();
-            let spec_res_micro = spec_res.get::<micrometer>();
-            let mut rays_sorted_by_spectrum = vec![Vec::<Ray>::new(); spec.data_vec().len()];
-            //sort rays into spectral resolution fields
-            for ray in &self.ray_bundle {
-                let index_opt = ((ray.wavelength().get::<micrometer>() - spec_start)
-                    / spec_res_micro)
-                    .floor()
-                    .to_usize();
-                if let Some(idx) = index_opt {
-                    rays_sorted_by_spectrum[idx].push(ray.clone());
+            // get wavefront data for every spectral component
+            let (rays_sorted_by_spectrum, wvls) =
+                self.split_ray_bundle_by_wavelength(nanometer!(10. * f64::EPSILON), true)?;
+
+            let mut wf_error = Vec::<MatrixXx3<f64>>::with_capacity(rays_sorted_by_spectrum.len());
+            for (rays, wvl) in rays_sorted_by_spectrum.iter().zip(wvls.iter()) {
+                if !rays.ray_bundle.is_empty() {
+                    wf_error
+                        .push(rays.wavefront_error_at_pos_in_units_of_wvl(*wvl, monitor_isometry));
                 }
             }
 
             let mut wf_error_maps =
                 Vec::<WaveFrontErrorMap>::with_capacity(rays_sorted_by_spectrum.len());
-            for (idx, rays) in rays_sorted_by_spectrum.iter().enumerate() {
-                if !rays.is_empty() {
-                    let wvl = idx.to_f64().unwrap().mul_add(spec_res_micro, spec_start);
-                    wf_error_maps.push(WaveFrontErrorMap::new(
-                        &Self::from(rays.clone()).wavefront_error_at_pos_in_units_of_wvl(
-                            micrometer!(wvl),
-                            monitor_isometry,
-                        ),
-                        micrometer!(wvl),
-                    )?);
-                }
+            for (wf_map, wvl) in wf_error.iter().zip(wvls.iter()) {
+                wf_error_maps.push(WaveFrontErrorMap::new(wf_map, *wvl)?);
             }
 
             Ok(WaveFrontData {
@@ -903,8 +973,11 @@ impl Rays {
         let co_ax2 = linspace(co_ax2_lim.min, co_ax2_lim.max, num_axes_points)?;
 
         //currently only interpolation. voronoid data for plotting must still be implemented
-        let (interp_fluence, _) =
-            interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter, &co_ax1, &co_ax2)?;
+        let (interp_fluence, _) = grid_interpolate_3d_triangulated_scatter_data(
+            &voronoi_fluence_scatter,
+            &co_ax1,
+            &co_ax2,
+        )?;
 
         Ok(FluenceData::new(
             DMatrix::from_iterator(
@@ -2485,8 +2558,7 @@ mod test {
     fn get_wavefront_data_in_units_of_wvl() {
         //empty rays vector
         let rays = Rays::from(Vec::<Ray>::new());
-        let wf_data =
-            rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(10.), &Isometry::identity());
+        let wf_data = rays.get_wavefront_data_in_units_of_wvl(true, false, &Isometry::identity());
         assert!(wf_data.is_err());
 
         let mut rays = Rays::new_hexapolar_point_source(
@@ -2499,7 +2571,7 @@ mod test {
         .unwrap();
         let _ = propagate(&mut rays, millimeter!(1.0));
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(true, nanometer!(10.), &Isometry::identity())
+            .get_wavefront_data_in_units_of_wvl(true, false, &Isometry::identity())
             .unwrap();
         assert!(wf_data.wavefront_error_maps.len() == 1);
         rays.add_ray(
@@ -2512,13 +2584,7 @@ mod test {
             .unwrap(),
         );
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, nanometer!(10.), &Isometry::identity())
-            .unwrap();
-
-        assert!(wf_data.wavefront_error_maps.len() == 1);
-
-        let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, nanometer!(3.), &Isometry::identity())
+            .get_wavefront_data_in_units_of_wvl(false, false, &Isometry::identity())
             .unwrap();
 
         assert!(wf_data.wavefront_error_maps.len() == 2);
@@ -2533,7 +2599,7 @@ mod test {
         );
 
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, nanometer!(3.), &Isometry::identity())
+            .get_wavefront_data_in_units_of_wvl(false, false, &Isometry::identity())
             .unwrap();
 
         assert!(wf_data.wavefront_error_maps.len() == 3);

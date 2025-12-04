@@ -15,8 +15,6 @@ There might be different analyzers available such as:
 
 ## Sequential Analyzer
 
-
-
 **Note**: Also in this case the model might contain inconsistent values such as a wavefront that does not fit the set of rays defined. [How do we deal with this?](https://git.gsi.de/phelix/rust/opossum/-/issues/9)
 
 ## Non-sequential Analyzer

@@ -74,7 +74,7 @@ static_assertions = "1.1"
 regex = "1"
 assert_matches = "1"
 testing_logger = "0.1"
-criterion = { version = "0.7.0", features = ["html_reports"] }
+criterion = { version = "0.8.0", features = ["html_reports"] }
 
 [build-dependencies]
 vergen-git2 = { version = "1" } # get git version infos compiled in binary

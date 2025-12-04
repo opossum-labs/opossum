@@ -34,11 +34,14 @@ pub fn App() -> Element {
     let cxt_command = use_signal(|| None::<CxtCommand>);
     let menu_item_selected: Signal<Option<MenuSelection>> = use_signal(|| None::<MenuSelection>);
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
-    let mut model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
-    let mut model_modified: Signal<bool> = use_signal(|| false);
+    let model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
+    let model_modified: Signal<bool> = use_signal(|| false);
 
-    let short_cut_handler =
-        ShortcutHandler::new(menu_item_selected, model_modified, model_file_path);
+    let short_cut_handler = ShortcutHandler::new(
+        menu_item_selected,
+        model_modified.into(),
+        model_file_path.into(),
+    );
     use_context_provider(|| short_cut_handler);
     use_effect(|| {
         spawn(async move {
@@ -61,18 +64,15 @@ pub fn App() -> Element {
         if let Some(menu_item) = &*(menu_item) {
             match menu_item {
                 MenuSelection::AddNode(node_selected) => {
-                    model_modified.set(true);
                     node_editor_command
                         .set(Some(NodeEditorCommand::AddNode(node_selected.clone())));
                 }
                 MenuSelection::AddAnalyzer(analyzer_selected) => {
-                    model_modified.set(true);
                     node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(
                         analyzer_selected.clone(),
                     )));
                 }
                 MenuSelection::AutoLayout => {
-                    model_modified.set(true);
                     node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
                 }
                 MenuSelection::CenterGraph { zoom_to_fit } => {
@@ -81,20 +81,13 @@ pub fn App() -> Element {
                     }));
                 }
                 MenuSelection::NewProject => {
-                    model_file_path.set(None);
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
                 }
                 MenuSelection::OpenProject(path) => {
-                    let path = path.to_owned();
                     node_editor_command.set(Some(NodeEditorCommand::LoadFile(path.clone())));
-                    model_file_path.set(Some(path));
-                    model_modified.set(false);
                 }
                 MenuSelection::SaveProject(path) => {
-                    let path = path.to_owned();
                     node_editor_command.set(Some(NodeEditorCommand::SaveFile(path.clone())));
-                    model_file_path.set(Some(path));
-                    model_modified.set(false);
                 }
                 MenuSelection::SetReportDir(path) => {
                     project_directory.set(Some(path.clone()));
@@ -248,7 +241,11 @@ fn CommonAppLayout(
                     }
                 }
             }
-            GraphEditor { command: node_editor_command, model_modified: model_modified }
+            GraphEditor {
+                command: node_editor_command,
+                model_modified,
+                model_file_path,
+            }
             div { class: "row footer",
                 div { class: "col", Logger {} }
             }
