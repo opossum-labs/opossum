@@ -118,7 +118,6 @@ pub fn PositioningEditor(
 #[component]
 fn PositioningInputs(position_opt_sig: Signal<Option<Isometry>>) -> Element {
     let position_sig = use_signal(|| position_opt_sig.read().unwrap_or_default());
-
     use_effect(move || {
         position_opt_sig.set(Some(*position_sig.read()));
     });
