@@ -180,11 +180,33 @@ body {
     background-color: rgba(197, 216, 255,1);
 }
 
-.log-container {
+.height_resizer{
+    width: 100%;
+    height: 2px;
+    cursor: ns-resize; 
+    background-color: gray;
+}
+.height_resizer:hover{
+    width: 100%;
+    height: 4px;
+    background-color: rgb(128, 128, 128);
+    margin-bottom: -1px;
+}
+
+.noselect {
+  -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Old versions of Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome, Edge, Opera and Firefox */
+}
+/* .log-container {
     z-index: 99999;
     height: 100px;
     overflow-y: scroll;
-}
+} */
 
 /* .log-info {
     color: rgb(1, 201, 1);
