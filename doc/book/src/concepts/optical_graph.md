@@ -1,33 +1,65 @@
-# Modelling optical systems
+# Modelling Optical Systems
 
-In general, optical systems consist of light sources which provide a more or less complex light field (time invariant or time dependent) and optical components, which modify this light field.  Furthermore, there are light sinks such as simple beam dumps, targets or detectors. These are the elements which produce a "result" (e.g. measurable signal) and thus make a system "productive". The components - light sources (such as a laser) or optical elements (e.g. Faraday isolators) - might itself consist of sub components. In principle, these components again might consist of sub components with an unlimited nesting level.
+In general, optical systems consist of **light sources**, which provide a more or less complex light field (time-invariant or time-dependent), and **optical components**, which modify this light field.
 
-Of course for a full system description, it would be sufficient to simply place the mechanical model of the optical components together with the knowlegde of its optical properties in a 3D space along with their particular orientation. For certain tasks, such as illumination or straylight analysis this would be an appropriate approach (and thus will be supported by our model). While this approach fully describes a system it still might miss an important point in optical system design: The design idea.
+A typical system includes the following elements:
 
-If one places a light source and two lenses in a setup. They are, well, just this. The design idea however would be different: For example, the two lenses are meant to form a Kepler or Galilei telescope which is used to image an object or simply act as a beam expander. So, the design idea is, that the light from the source is *intended* to hit the first lens and then the second lens.
+* **Light Sources:** Elements that generate light (e.g., lasers).
+* **Optical Components:** Elements that modify the light field (e.g., lenses, mirrors, Faraday isolators).
+* **Light Sinks:** Elements that produce a "result" or measurable signal (e.g., beam dumps, targets, or detectors).
 
-Hence in general typical systems mostly cast optical rays or light fields in a directed way from one component to the next one. Optical systems can thus be rather decribed in network- or most often in tree-like structures.
+Components may consist of sub-components with an unlimited nesting level.
 
-## Directed graphs as primary model structure
+## The "Design Idea" vs. Physical Layout
 
-For the above mentioned networks of optical components, well-established structures could be used which already exist for a long time: [directed graphs](https://en.wikipedia.org/wiki/Directed_graph). A directed graph consists of so-called *[nodes](nodes.md)* and *[edges](edges.md)*. For our purposes nodes respresent the optical components, while edges represent the information about the light (energy, wavelength, wavefront, nearfield distribution, etc.) to be handed from one node to the next one.
+For a full physical description, it would be sufficient to place the mechanical model of the optical components—along with their optical properties—into a 3D space with specific orientations. This approach is appropriate for tasks such as straylight analysis and is supported by our model.
 
-A node has one or more *ports* where edges can be connected to. We thereby strictly distinguish between incoming and outgoing ports. A node with no input ports represents a light source. Nodes with no output ports are detectors. An ideal lens has one input and one output port. Furthermore, an ideal beam splitter has one input port and two or more output ports. More realistic components such as a real lens could also have more than one input and output ports e.g for simulating ghost reflections from lens surfaces.
+However, a purely physical layout often misses the **design idea**.
 
-There are different node types representing various optical components (ideal / real lenses, beam splitters, waveplates, etc.). Each node has, depending on its node type, various attributes, which describe component parameters such as a center thickness (e.g. for a simple glass plate), focal length (ideal lenses), radii of curvature (real lenses) etc. In addition, there are *group nodes* which represent a set of other nodes. These nodes are also arranged in a directed graph. In this case non-conected ports form the "externally visible" ports of the group. Of course, the nodes of such a group itself can be group nodes thus allowing for setting up hierarchic, nested structures.
+For example, if one places a light source and two lenses in a setup, a physical model simply sees three objects. The *design idea*, however, specifies the intent: the two lenses form a Kepler or Galilei telescope to image an object or act as a beam expander. The light is *intended* to hit the first lens and then the second lens.
 
-## Loops for modelling resonators
+Therefore, optical systems are best described as networks or tree-like structures where optical rays or light fields are cast in a specific direction from one component to the next.
 
-A directed graph can also model optical resonators by forming loops. This works well for ring resonators but might lead to problems for linear resonators. Let us assume we have the most simple linear cavity consisting of a mirror node, a propagation node, and a second mirror node. Forming a loop here might introduce some ambiguities. While the intented loop would consist of all nodes, a simple "reverse" edge from the second mirror back to the propagation node and then further to the first mirror would actually form three loops: The intended large loop from mirror to mirror ans two smaller loops directly between each mirror and the propagation node (which does not make sense in a real world setup). This becomes even worse for more complex resonators containing additional components (lenses, amplifier rods, etc.).
+## Directed Graphs as Primary Model Structure
 
-One way out might be the introduction of *reference nodes*. A referenece node, as the name says, only contains a reference to another node. So this node exactly behaves like the node it references. This way, a linear resonator could be translated into a corresponding ring resonator.
+To model these networks of optical components, OPOSSUM uses [directed graphs](https://en.wikipedia.org/wiki/Directed_graph). A directed graph consists of **[nodes](nodes.md)** and **[edges](edges.md)**:
 
-**Note**: Strictly speaking, light in a ring resonator can propagate in both directions (if not suppressed by optical components). Since we have a directed graph, only one direction can be modelled so far. Solutions need to be further [investigated](https://git.gsi.de/phelix/rust/opossum/-/issues/2).
+* **Nodes:** Represent the optical components.
+* **Edges:** Represent the information about the light (energy, wavelength, wavefront, nearfield distribution, etc.) being handed from one node to the next.
 
-## Intermediate data format
+### Ports and Connections
 
-While being not yet clear at this stage how to fully describe an optical system using the described graph system we would propose to use simple text files for storing optical models. For this the YAML format seems to be appropriate since it is more or less human readable and allows for comments (in contrast to the JSON format). Furthermore, the standard rust serialization library `serde` already supports this format. As the software progresses, new features will be added or changed. For this, a version system should be considered stright from the beginning.
+A node has one or more **ports** where edges can be connected. We strictly distinguish between incoming and outgoing ports:
 
-A graphical representation could be the usage of the [graphviz software](https://graphviz.org/) package. While the proposed rust graph library `petgraph` already provides some basic export to the graphviz [.dot files](https://graphviz.org/doc/info/lang.html) this needs to be extended.
+* **Light Source:** A node with no input ports.
+* **Detector:** A node with no output ports.
+* **Ideal Lens:** Typically has one input and one output port.
+* **Beam Splitter:** Typically has one input port and two or more output ports.
 
-On the long run a graphical (drag & drop) editor would of course the favorable option.
+*Note: Realistic components may have additional ports, for example, to simulate ghost reflections from lens surfaces.*
+
+### Node Types and Groups
+
+There are different node types representing various optical components (ideal/real lenses, beam splitters, waveplates, etc.). Each node has attributes describing its parameters, such as center thickness (for glass plates), focal length (ideal lenses), or radii of curvature (real lenses).
+
+Additionally, **Group Nodes** represent a set of other nodes arranged in a subgraph. Non-connected ports within the group form the "externally visible" ports of the group node. This allows for the creation of hierarchical, nested structures.
+
+## Loops for Modelling Resonators
+
+Directed graphs can model optical resonators by forming loops. While this works well for ring resonators, it can create ambiguities for linear resonators.
+
+Consider a simple linear cavity consisting of: `Mirror 1 -> Propagation -> Mirror 2`.
+
+Creating a simple "reverse" edge from *Mirror 2* back to *Mirror 1* would technically form three loops:
+
+1. The intended large loop (Mirror 1 to Mirror 2 and back).
+2. A small loop between Mirror 1 and Propagation.
+3. A small loop between Mirror 2 and Propagation.
+
+This structure is physically nonsensical and becomes unmanageable with complex resonators containing additional components (lenses, amplifier rods, etc.).
+
+### Reference Nodes
+
+To solve this, OPOSSUM uses **Reference Nodes**. A reference node contains only a reference to another existing node and behaves exactly like the node it references. This allows a linear resonator to be "unrolled" in the graph, effectively translating it into a ring resonator structure without topological ambiguity.
+
+> **Note:** Strictly speaking, light in a ring resonator can propagate in both directions (unless suppressed by optical components). Since we use a directed graph, only one direction can be modelled at a time. Solutions for bidirectional propagation are currently being [investigated](https://git.gsi.de/phelix/rust/opossum/-/issues/2).
