@@ -535,6 +535,13 @@ mod test_bounced_hit_map {
             uuid1,
         )
         .unwrap();
+        assert_eq!(bhm.hit_map.get(&uuid1).unwrap().hit_map().len(), 1);
+        assert!(bhm.hit_map.get(&uuid2).is_none());
+        bhm.add_to_hitmap(
+            HitPoint::Energy(EnergyHitPoint::new(meter!(1.0, 0.0, 0.0), joule!(1.0)).unwrap()),
+            uuid1,
+        )
+        .unwrap();
         assert_eq!(bhm.hit_map.get(&uuid1).unwrap().hit_map().len(), 2);
         assert!(bhm.hit_map.get(&uuid2).is_none());
         bhm.add_to_hitmap(
@@ -565,7 +572,7 @@ mod test_bounced_hit_map {
             uuid2,
         )
         .unwrap();
-        assert_eq!(bhm.get_rays_hit_map(uuid1).unwrap().hit_map().len(), 2);
+        assert_eq!(bhm.get_rays_hit_map(uuid1).unwrap().hit_map().len(), 1);
         assert_eq!(bhm.get_rays_hit_map(uuid2).unwrap().hit_map().len(), 1);
         assert!(bhm.get_rays_hit_map(Uuid::nil()).is_none());
     }

@@ -300,6 +300,7 @@ impl Display for MissedSurfaceStrategy {
         }
     }
 }
+
 #[derive(PartialEq, Debug, Clone, Copy, Serialize, Deserialize)]
 /// Configuration data for a rays tracing analysis.
 ///
