@@ -24,7 +24,7 @@ use crate::{
     reporting::node_report::NodeReport,
     utils::{
         geom_transformation::Isometry,
-        griddata::{create_linspace_axes, interpolate_3d_scatter_data},
+        griddata::{create_linspace_axes, grid_interpolate_3d_scatter_data},
         to_f64,
     },
 };
@@ -106,11 +106,24 @@ pub struct WaveFrontErrorMap {
     wf_map: Vec<f64>,
 }
 
+impl Default for WaveFrontErrorMap {
+    fn default() -> Self {
+        Self {
+            wavelength: nanometer!(1054.),
+            ptv: 0.0,
+            rms: 0.0,
+            x: vec![0.0],
+            y: vec![0.],
+            wf_map: vec![0.0],
+        }
+    }
+}
+
 impl WaveFrontErrorMap {
     /// Creates a new [`WaveFrontErrorMap`]
     /// # Attributes
     /// - `wf_dat`: wavefront data as Matrix with 3 columns and dynamix number of rows. Columns are used as 1:x, 2:y, 3:z
-    /// - `wavelength`: wave length that is used for this `WavefrontErrorMap`
+    /// - `wavelength`: wavelength that is used for this `WavefrontErrorMap`
     ///
     /// # Returns
     /// This method returns a [`WaveFrontErrorMap`] struct
@@ -177,36 +190,39 @@ impl OpticNode for WaveFront {
             let iso = self
                 .effective_surface_iso("input_1")
                 .unwrap_or_else(|_| Isometry::identity());
-            let wf_data_opt = rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(1.), &iso);
+            let wf_data_opt = rays.get_wavefront_data_in_units_of_wvl(true, false, &iso);
 
-            if let Ok(wf_data) = wf_data_opt
+            if let Ok(ref wf_data) = wf_data_opt
                 && !wf_data.wavefront_error_maps.is_empty()
             {
-                props
-                .create(
-                    "Wavefront Map",
-                    "Wavefront error mapwith respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
-                    wf_data.clone().into(),
-                )
-                .unwrap();
+                for wf_error_map in &wf_data.wavefront_error_maps {
+                    props
+                    .create(
+                        &format!("Wavefront Map at {:.3} nm", wf_error_map.wavelength.get::<uom::si::length::nanometer>()),
+                        "Wavefront error map with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
+                        wf_error_map.clone().into(),
+                    )
+                    .unwrap();
 
-                //todo for all error maps at every wavelength!
-                props
-                .create(
-                    "Wavefront PtV",
-                    "Wavefront Peak-to-Valley value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
-                    Proptype::WfLambda(wf_data.wavefront_error_maps[0].ptv, wf_data.wavefront_error_maps[0].wavelength),
-                )
-                .unwrap();
+                    //todo for all error maps at every wavelength!
+                    props
+                    .create(
+                        &format!("Wavefront PtV at {:.3} nm", wf_error_map.wavelength.get::<uom::si::length::nanometer>()),
+                        "Wavefront Peak-to-Valley value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
+                        Proptype::WfLambda(wf_error_map.ptv, wf_error_map.wavelength),
+                    )
+                    .unwrap();
 
-                //todo for all error maps at every wavelength!
-                props
-                .create(
-                    "Wavefront RMS",
-                    "Wavefront root mean square value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
-                    Proptype::WfLambda(wf_data.wavefront_error_maps[0].rms, wf_data.wavefront_error_maps[0].wavelength),
-                )
-                .unwrap();
+                    //todo for all error maps at every wavelength!
+                    props
+                    .create(
+                        &format!("Wavefront RMS at {:.3} nm", wf_error_map.wavelength.get::<uom::si::length::nanometer>()),
+                        "Wavefront root mean square value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
+                        Proptype::WfLambda(wf_error_map.rms, wf_error_map.wavelength),
+                    )
+                    .unwrap();
+                }
+
                 if self.apodization_warning {
                     props
                 .create(
@@ -216,6 +232,14 @@ impl OpticNode for WaveFront {
                 )
                 .unwrap();
                 }
+            } else {
+                props
+                .create(
+                    "Warning",
+                    "warning during wavefront calculation",
+                    "This warning might have been created if the Wavefront monitor was used with zero distance from Source or with multiple wavelengths in a completely paraxial setup.".into(),
+                )
+                .unwrap();
             }
 
             Some(NodeReport::new(
@@ -239,8 +263,8 @@ impl OpticNode for WaveFront {
         self.reset_optic_surfaces();
     }
 }
-impl From<WaveFrontData> for Proptype {
-    fn from(value: WaveFrontData) -> Self {
+impl From<WaveFrontErrorMap> for Proptype {
+    fn from(value: WaveFrontErrorMap) -> Self {
         Self::WaveFrontData(value)
     }
 }
@@ -316,24 +340,35 @@ impl Plottable for WaveFrontErrorMap {
         _plt_type: &mut PlotType,
         _legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let (x_interp, _) =
-            create_linspace_axes(DVectorView::from(&DVector::from_vec(self.x.clone())), 100)?;
-        let (y_interp, _) =
-            create_linspace_axes(DVectorView::from(&DVector::from_vec(self.y.clone())), 100)?;
-        let scattered_data = MatrixXx3::from_columns(&[
-            DVector::from_vec(self.x.clone()),
-            DVector::from_vec(self.y.clone()),
-            DVector::from_vec(self.wf_map.clone()),
-        ]);
-        let (interp_dat, _) = interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp)?;
-
-        let plt_data = PlotData::ColorMesh {
-            x_dat_n: x_interp,
-            y_dat_m: y_interp,
-            z_dat_nxm: interp_dat,
-        };
-        let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
-        Ok(Some(vec![plt_series]))
+        if let (Ok((x_interp, _)), Ok((y_interp, _))) = ( create_linspace_axes(DVectorView::from(&DVector::from_vec(self.x.clone())), 100), create_linspace_axes(DVectorView::from(&DVector::from_vec(self.y.clone())), 100)){
+            let scattered_data = MatrixXx3::from_columns(&[
+                DVector::from_vec(self.x.clone()),
+                DVector::from_vec(self.y.clone()),
+                DVector::from_vec(self.wf_map.clone()),
+            ]);
+            if let Ok((interp_dat, _)) =
+                grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp)
+            {
+                let plt_data = PlotData::ColorMesh {
+                    x_dat_n: x_interp,
+                    y_dat_m: y_interp,
+                    z_dat_nxm: interp_dat,
+                };
+                let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
+                Ok(Some(vec![plt_series]))
+            } else {
+                warn!(
+                    "Could not create interpolated wavefront map for plotting! Returning no plot data."
+                );
+                Ok(None)
+            }
+        }
+        else{
+            warn!(
+                    "Could not create axes from provided data! Returning no plot data."
+                );
+                Ok(None)
+        }
     }
 }
 
@@ -507,9 +542,21 @@ mod test {
         let node_report = wf.node_report("").unwrap();
         assert_eq!(node_report.node_type(), "wavefront monitor");
         assert_eq!(node_report.name(), "wavefront monitor");
-        assert!(node_report.properties().contains("Wavefront Map"));
-        assert!(node_report.properties().contains("Wavefront RMS"));
-        assert!(node_report.properties().contains("Wavefront PtV"));
+        assert!(
+            node_report
+                .properties()
+                .contains("Wavefront Map at 1053.000 nm")
+        );
+        assert!(
+            node_report
+                .properties()
+                .contains("Wavefront RMS at 1053.000 nm")
+        );
+        assert!(
+            node_report
+                .properties()
+                .contains("Wavefront PtV at 1053.000 nm")
+        );
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 3);

@@ -14,7 +14,7 @@ use crate::{
     utils::{
         griddata::{
             VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
-            interpolate_3d_triangulated_scatter_data, linspace,
+            grid_interpolate_3d_triangulated_scatter_data, linspace,
         },
         to_f64, try_f64_to_usize,
     },
@@ -501,7 +501,7 @@ impl RaysHitMap {
 
             //currently only interpolation. voronoid data for plotting must still be implemented
             let (interp_fluence, _) =
-                interpolate_3d_triangulated_scatter_data(&voronied_data, &co_ax1, &co_ax2)?;
+                grid_interpolate_3d_triangulated_scatter_data(&voronied_data, &co_ax1, &co_ax2)?;
             let fluence_matrix = DMatrix::from_iterator(
                 co_ax2.len(),
                 co_ax1.len(),
@@ -708,7 +708,7 @@ impl RaysHitMap {
                 VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence)?;
 
             //currently only interpolation. voronoid data for plotting must still be implemented
-            let (interp_fluence, _) = interpolate_3d_triangulated_scatter_data(
+            let (interp_fluence, _) = grid_interpolate_3d_triangulated_scatter_data(
                 &voronoi_fluence_scatter,
                 &co_ax1,
                 &co_ax2,

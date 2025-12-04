@@ -2,8 +2,13 @@ error[E0277]: the trait bound `Validated<std::string::String, AllNotEmpty>: Vali
   --> tests/fail/invalid_validate_struct.rs:10:13
    |
 10 |     street: Validated<String, AllNotEmpty>,
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `ValidateTrait` is not implemented for `Validated<std::string::String, AllNotEmpty>`
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
+help: the trait `ValidateTrait` is not implemented for `Validated<std::string::String, AllNotEmpty>`
+  --> tests/fail/invalid_validate_struct.rs:4:1
+   |
+ 4 | struct Validated<T, V>(T, V);
+   | ^^^^^^^^^^^^^^^^^^^^^^
    = help: the following other types implement trait `ValidateTrait`:
              opossum_core::generic_validators::Validated<T, V>
              opossum_core::generic_validators::ValidatedVec<T, EV, CV>
@@ -18,8 +23,13 @@ error[E0277]: the trait bound `Validated<std::string::String, AllNotEmpty>: Vali
   --> tests/fail/invalid_validate_struct.rs:11:11
    |
 11 |     city: Validated<String, AllNotEmpty>,
-   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `ValidateTrait` is not implemented for `Validated<std::string::String, AllNotEmpty>`
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
+help: the trait `ValidateTrait` is not implemented for `Validated<std::string::String, AllNotEmpty>`
+  --> tests/fail/invalid_validate_struct.rs:4:1
+   |
+ 4 | struct Validated<T, V>(T, V);
+   | ^^^^^^^^^^^^^^^^^^^^^^
    = help: the following other types implement trait `ValidateTrait`:
              opossum_core::generic_validators::Validated<T, V>
              opossum_core::generic_validators::ValidatedVec<T, EV, CV>
