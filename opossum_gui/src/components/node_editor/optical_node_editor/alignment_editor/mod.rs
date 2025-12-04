@@ -104,7 +104,6 @@ pub fn PositioningEditor(
             PositioningInputs { position_opt_sig }
         });
     }
-    
 
     rsx! {
         AccordionItem {
