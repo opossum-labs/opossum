@@ -4227,9 +4227,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.28"
+version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
+checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "longest-increasing-subsequence"
@@ -4950,7 +4950,7 @@ dependencies = [
 
 [[package]]
 name = "opm_macros_lib"
-version = "0.7.0-beta.2"
+version = "0.7.0-beta.3"
 dependencies = [
  "opossum_core",
  "proc-macro2",
@@ -4972,7 +4972,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_backend"
-version = "0.7.0-beta.2"
+version = "0.7.0-beta.3"
 dependencies = [
  "actix-cors",
  "actix-web",
@@ -4995,7 +4995,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_cli"
-version = "0.7.0-beta.2"
+version = "0.7.0-beta.3"
 dependencies = [
  "clap 4.5.53",
  "env_logger",
@@ -5006,7 +5006,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_core"
-version = "0.7.0-beta.2"
+version = "0.7.0-beta.3"
 dependencies = [
  "approx",
  "assert_matches",
@@ -5052,7 +5052,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_gui"
-version = "0.7.0-2"
+version = "0.7.0-3"
 dependencies = [
  "Inflector",
  "approx",

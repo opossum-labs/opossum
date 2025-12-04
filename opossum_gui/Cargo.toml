@@ -1,6 +1,6 @@
 [package]
 name = "opossum_gui"
-version = "0.7.0-2"
+version = "0.7.0-3"
 # version.workspace = true
 edition.workspace = true
 authors.workspace = true
