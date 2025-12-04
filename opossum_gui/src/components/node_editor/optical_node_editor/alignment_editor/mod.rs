@@ -81,34 +81,28 @@ pub fn PositioningEditor(
     });
 
     let mut accordion_content = Vec::<Result<VNode, RenderError>>::new();
-    if node_type == "source" {
+    accordion_content.push(rsx! {
+        LabeledSelect {
+            id: "nodePositioningSelector",
+            label: "Position Strategy",
+            options: vec![
+                (position_opt_sig.read().is_none(), "Relative".to_owned()),
+                (position_opt_sig.read().is_some(), "Absolute".to_owned()),
+            ],
+            onchange: move |_: Event<FormData>| {
+                if position_opt_sig.read().is_some() {
+                    position_opt_sig.set(None);
+                } else {
+                    position_opt_sig.set(Some(Isometry::default()));
+                }
+            },
+        }
+    });
+
+    if position_opt_sig.read().is_some() {
         accordion_content.push(rsx! {
             PositioningInputs { position_opt_sig }
         });
-    } else {
-        accordion_content.push(rsx! {
-            LabeledSelect {
-                id: "nodePositioningSelector",
-                label: "Position Strategy",
-                options: vec![
-                    (position_opt_sig.read().is_none(), "Relative".to_owned()),
-                    (position_opt_sig.read().is_some(), "Absolute".to_owned()),
-                ],
-                onchange: move |_: Event<FormData>| {
-                    if position_opt_sig.read().is_some() {
-                        position_opt_sig.set(None);
-                    } else {
-                        position_opt_sig.set(Some(Isometry::default()));
-                    }
-                },
-            }
-        });
-
-        if position_opt_sig.read().is_some() {
-            accordion_content.push(rsx! {
-                PositioningInputs { position_opt_sig }
-            });
-        }
     }
 
     rsx! {
@@ -127,7 +121,7 @@ fn PositioningInputs(position_opt_sig: Signal<Option<Isometry>>) -> Element {
     let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
 
     use_effect(move || {
-        node_config_processor.send(NodeChangeAction::Isometry(Some(*position_sig.read())));
+        position_opt_sig.set(Some(*position_sig.read()));
     });
 
     rsx! {
