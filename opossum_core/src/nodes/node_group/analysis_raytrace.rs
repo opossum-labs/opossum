@@ -4,6 +4,7 @@ use nalgebra::{Point3, Vector3};
 use num::Zero;
 use petgraph::graph::NodeIndex;
 use uom::si::f64::Length;
+use uuid::Uuid;
 
 use super::{NodeGroup, OpticGraph};
 use crate::{
@@ -94,14 +95,37 @@ impl AnalysisRayTrace for NodeGroup {
         let mut light_result = LightResult::default();
         let mut up_direction = Vector3::<f64>::y();
         for idx in sorted {
-            calculate_single_node_position(
-                &mut self.graph,
-                idx,
-                &incoming_data,
-                &mut up_direction,
-                config,
-                &mut light_result,
-            )?;
+            let node_id = self
+                .graph
+                .node_by_idx(idx)
+                .map_or_else(|_| Uuid::nil(), |node| node.uuid());
+            let has_no_input_connections = !self.graph.has_input_connections(node_id)?;
+            let already_placed = self
+                .graph
+                .node_by_idx(idx)?
+                .optical_ref
+                .lock_opm()?
+                .isometry()
+                .is_some();
+            if has_no_input_connections && !already_placed {
+                let node_info = if let Ok(node) = self.graph.node_by_idx(idx) {
+                    format!("{}", node.optical_ref.lock_opm()?)
+                } else {
+                    "unknown node".into()
+                };
+                warn!(
+                    "{node_info} has no incoming connections and can thus not being placed. Skipping"
+                );
+            } else {
+                calculate_single_node_position(
+                    &mut self.graph,
+                    idx,
+                    &incoming_data,
+                    &mut up_direction,
+                    config,
+                    &mut light_result,
+                )?;
+            }
         }
         self.reset_data();
         Ok(light_result)
@@ -126,9 +150,6 @@ fn calculate_single_node_position(
     drop(node);
     let incoming_edges: LightResult = graph.get_incoming(node_id, incoming_data)?;
     if node_isometry.is_none() {
-        if incoming_edges.is_empty() {
-            warn!("{node_info} has no incoming edges");
-        }
         if let Some((node_id, distance)) = node_attr.get_align_like_node_at_distance() {
             let align_ref_iso = graph.node(*node_id)?.optical_ref.lock_opm()?.isometry();
             if let Some(align_ref_iso) = align_ref_iso {

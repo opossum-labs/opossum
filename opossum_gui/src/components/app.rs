@@ -242,9 +242,7 @@ fn CommonAppLayout(
             }
         }
     };
-    let on_mouseup = {
-        move |_| dragging.set(false)
-    };
+    let on_mouseup = { move |_| dragging.set(false) };
     let on_mousedown = {
         move |evt: f64| {
             dragging.set(true);
