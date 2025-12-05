@@ -56,6 +56,15 @@ The project is broken down into several key components:
 
 5. Build and start the GUI:
 
+   First we have to install `dioxus-cli`.
+
+   ```bash
+   cargo install cargo-binstall
+   cargo binstall dioxus-cli
+   ```
+
+   Now we can build an start the actual frontend.
+
    ```bash
    cd opossum_gui # in a new terminal
    dx serve
