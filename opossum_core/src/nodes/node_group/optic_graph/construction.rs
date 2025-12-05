@@ -111,10 +111,10 @@ impl OpticGraph {
         // now check if subnodes exist and delete recusively
         for node_ref in self.nodes() {
             let mut node = node_ref.optical_ref.lock_opm()?;
-            if let Ok(group) = node.as_group_mut() {
-                if let Ok(deleted_nodes_in_group) = group.graph.delete_node(node_id) {
-                    nodes_deleted.extend(deleted_nodes_in_group);
-                }
+            if let Ok(group) = node.as_group_mut()
+                && let Ok(deleted_nodes_in_group) = group.graph.delete_node(node_id)
+            {
+                nodes_deleted.extend(deleted_nodes_in_group);
             }
         }
         if nodes_deleted.is_empty() {
