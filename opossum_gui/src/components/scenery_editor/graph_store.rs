@@ -384,7 +384,7 @@ pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<Gra
                     }
                     GraphStoreAction::LoadFromFile(path) => {
                         process_load_from_file(path, graph_state).await;
-                        process_center_graph(graph_state, false).await;
+                        process_center_graph(graph_state, false);
                     }
                     GraphStoreAction::SaveToFile(path) => {
                         process_save_to_file(path, graph_state).await;
@@ -435,14 +435,14 @@ pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<Gra
                         process_get_scenery_id(graph_state).await;
                     }
                     GraphStoreAction::CenterGraph { zoom_to_fit } => {
-                        process_center_graph(graph_state, zoom_to_fit).await;
+                        process_center_graph(graph_state, zoom_to_fit);
                     }
                 }
             }
         }
     })
 }
-async fn process_center_graph(graph_state: Signal<GraphState>, zoom_to_fit: bool) {
+fn process_center_graph(graph_state: Signal<GraphState>, zoom_to_fit: bool) {
     let mut editor_state_signal = graph_state.read().editor_state;
     let bounding_box = graph_state.read().graph_store.read().get_bounding_box();
     editor_state_signal

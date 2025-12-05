@@ -14,7 +14,21 @@ use uom::si::{f64::Length, length::millimeter};
 #[component]
 pub fn CurvatureEditor(curvature: Length, property_key: String) -> Element {
     let curvature_sig = use_signal(|| curvature);
+    let mut last_finite_curvature = use_signal(|| {
+        if curvature.is_finite() {
+            curvature
+        } else {
+            millimeter!(1000.)
+        }
+    });
+
     use_update_signal_with_reactive_prop(curvature, curvature_sig);
+    use_effect(move || {
+        let current_val = *curvature_sig.read();
+        if current_val.is_finite() {
+            last_finite_curvature.set(current_val);
+        }
+    });
 
     let node_change_handle = use_coroutine_handle::<NodeChangeAction>();
     use_effect({
@@ -28,17 +42,24 @@ pub fn CurvatureEditor(curvature: Length, property_key: String) -> Element {
             }
         }
     });
+
     rsx! {
         div { class: "row gy-1 gx-2",
             div { class: "col-sm",
                 CurvatureInput {
                     curvature,
                     curvature_sig,
+                    last_finite_curvature,
                     property_key: property_key.clone(),
                 }
             }
             div { class: "col-sm",
-                CurvatureSelector { curvature, curvature_sig, property_key }
+                CurvatureSelector {
+                    curvature,
+                    curvature_sig,
+                    last_finite_curvature,
+                    property_key
+                }
             }
         }
     }
@@ -48,6 +69,7 @@ pub fn CurvatureEditor(curvature: Length, property_key: String) -> Element {
 fn CurvatureSelector(
     curvature: Length,
     curvature_sig: Signal<Length>,
+    last_finite_curvature: Signal<Length>,
     property_key: String,
 ) -> Element {
     let checkbox_input = InputData::new(
@@ -55,7 +77,7 @@ fn CurvatureSelector(
         format!("curvatureSelectProperty{property_key}")
             .to_camel_case()
             .as_str(),
-        on_is_curved_input_change(curvature_sig),
+        on_is_curved_input_change(curvature_sig, last_finite_curvature),
         curvature_sig.read().is_finite().to_string(),
     );
 
@@ -68,6 +90,7 @@ fn CurvatureSelector(
 fn CurvatureInput(
     curvature: Length,
     curvature_sig: Signal<Length>,
+    last_finite_curvature: Signal<Length>,
     property_key: String,
 ) -> Element {
     let mut curvature_input = InputData::new(
@@ -75,7 +98,7 @@ fn CurvatureInput(
         format!("curvatureProperty{property_key}")
             .to_camel_case()
             .as_str(),
-        on_length_input_change(curvature_sig),
+        on_length_input_change(curvature_sig, last_finite_curvature),
         format!("{:.3}", curvature_sig.read().get::<millimeter>()),
     );
     curvature_input.readonly = curvature.is_infinite();
@@ -84,12 +107,14 @@ fn CurvatureInput(
         InputParamLabeledInput { input_data: curvature_input }
     }
 }
-
-fn on_is_curved_input_change(mut curvature_sig: Signal<Length>) -> CallbackWrapper {
+fn on_is_curved_input_change(
+    mut curvature_sig: Signal<Length>,
+    last_finite_curvature: Signal<Length>,
+) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(is_finite) = e.data.value().parse::<bool>() {
             if is_finite {
-                curvature_sig.set(millimeter!(1000.));
+                curvature_sig.set(*last_finite_curvature.read());
             } else {
                 curvature_sig.set(millimeter!(f64::INFINITY));
             }
@@ -97,10 +122,15 @@ fn on_is_curved_input_change(mut curvature_sig: Signal<Length>) -> CallbackWrapp
     })
 }
 
-fn on_length_input_change(mut signal: Signal<Length>) -> CallbackWrapper {
+fn on_length_input_change(
+    mut signal: Signal<Length>,
+    mut last_finite_curvature: Signal<Length>,
+) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(length) = e.data.value().parse::<f64>() {
-            signal.set(millimeter!(length));
+            let new_length = millimeter!(length);
+            signal.set(new_length);
+            last_finite_curvature.set(new_length);
         }
     })
 }

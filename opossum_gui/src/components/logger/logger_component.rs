@@ -8,7 +8,7 @@ pub fn Logger(drag_handler: EventHandler<f64>, height: Signal<f64>) -> Element {
             div {
                 class: "height_resizer",
                 onmousedown: move |e: MouseEvent| {
-                    drag_handler.call(e.client_coordinates().y.clone());
+                    drag_handler.call(e.client_coordinates().y);
                 },
             }
             div { class: "col",
