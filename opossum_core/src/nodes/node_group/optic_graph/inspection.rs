@@ -21,6 +21,20 @@ impl OpticGraph {
         let neighbors = self.g.neighbors_undirected(idx);
         Ok(neighbors.count() == 0 && !self.input_port_map.contains_node(node_id))
     }
+    /// Return `true` if the node with the given [`Uuid`] has no incoming connections.
+    ///
+    /// This is similiar to `is_stale_node` but only checks for incoming connection.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given `node_id` is not found.
+    pub fn has_input_connections(&self, node_id: Uuid) -> OpmResult<bool> {
+        let idx = self
+            .node_idx_by_uuid(node_id)
+            .ok_or_else(|| OpossumError::Analysis("uuid does not exist".into()))?;
+        let neighbors = self.g.neighbors_directed(idx, Direction::Incoming);
+        Ok(neighbors.count() != 0)
+    }
     /// Returns a node with the given [`Uuid`].
     ///
     /// # Errors
