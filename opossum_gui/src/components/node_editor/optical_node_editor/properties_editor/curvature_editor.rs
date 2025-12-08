@@ -58,7 +58,7 @@ pub fn CurvatureEditor(curvature: Length, property_key: String) -> Element {
                     curvature,
                     curvature_sig,
                     last_finite_curvature,
-                    property_key
+                    property_key,
                 }
             }
         }

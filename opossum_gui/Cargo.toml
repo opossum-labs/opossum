@@ -39,6 +39,7 @@ Inflector = "0.11.4"
 reqwest = { version = "0.12.14", features = ["json", "stream"] }
 rfd = { version= "0.16", default-features = false }
 rust-sugiyama = "0.4.0"
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["process"] }
