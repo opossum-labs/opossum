@@ -11,6 +11,7 @@ use {
 };
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
+const DX_COMPONENT_CSS: Asset = asset!("/assets/dx-components-theme.css");
 // const PLOTLY_JS: Asset = asset!("/assets/plotly.js");
 // const THREE_MOD_JS: Asset = asset!("/assets/three_mod.js");
 // const ORBIT_CTRLS: Asset = asset!("/assets/orbitControls.js");
@@ -120,6 +121,7 @@ fn MainApp() -> Element {
         });
     }
     rsx! {
+        document::Stylesheet { href: DX_COMPONENT_CSS }
         document::Stylesheet { href: MAIN_CSS }
         document::Stylesheet { href: MDB_CSS }
         document::Stylesheet { href: MDB_SUB_CSS }

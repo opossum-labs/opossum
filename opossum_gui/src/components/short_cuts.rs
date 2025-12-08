@@ -1,9 +1,15 @@
 use crate::components::menu_bar::{
-    menu_bar_component::MenuSelection, new_project, open_project, save_project, save_project_as,
-    set_report_directory,
+    menu_bar_component::MenuSelection, save_project, save_project_as, set_report_directory,
 };
 use dioxus::prelude::*;
 use std::{collections::HashMap, sync::LazyLock};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PendingAction {
+    NewProject,
+    OpenProject,
+    Quit,
+}
 
 pub static SHORTCUTS: LazyLock<HashMap<ShortCutAction, Shortcut>> = LazyLock::new(|| {
     let mut m = HashMap::new();
@@ -108,6 +114,8 @@ impl ShortCutAction {
         mut menu_item_selected: Signal<Option<MenuSelection>>,
         model_modified: ReadSignal<bool>,
         model_file_path: ReadSignal<Option<std::path::PathBuf>>,
+        mut pending_action: Signal<Option<PendingAction>>,
+        mut show_alert: Signal<bool>,
     ) {
         match self {
             Self::Center => {
@@ -117,11 +125,43 @@ impl ShortCutAction {
                 menu_item_selected.set(Some(MenuSelection::CenterGraph { zoom_to_fit: true }));
             }
             Self::AutoLayout => menu_item_selected.set(Some(MenuSelection::AutoLayout)),
-            Self::Save => save_project(model_file_path, menu_item_selected),
-            Self::SaveAs => save_project_as(menu_item_selected),
-            Self::Open => open_project(menu_item_selected, model_modified),
-            Self::New => new_project(menu_item_selected, model_modified),
-            Self::Report => set_report_directory(menu_item_selected),
+            Self::Save => {
+                spawn(async move {
+                    save_project(model_file_path, menu_item_selected).await;
+                });
+            }
+            Self::SaveAs => {
+                spawn(async move {
+                    save_project_as(menu_item_selected).await;
+                });
+            }
+            Self::Open => {
+                if *model_modified.read() {
+                    pending_action.set(Some(PendingAction::OpenProject));
+                    show_alert.set(true);
+                } else {
+                    // --- ÄNDERUNG ---
+                    spawn(async move {
+                        crate::components::menu_bar::project_helper::open_project(
+                            menu_item_selected,
+                        )
+                        .await;
+                    });
+                }
+            }
+            Self::New => {
+                if *model_modified.read() {
+                    pending_action.set(Some(PendingAction::NewProject));
+                    show_alert.set(true);
+                } else {
+                    menu_item_selected.set(Some(MenuSelection::NewProject));
+                }
+            }
+            Self::Report => {
+                spawn(async move {
+                    set_report_directory(menu_item_selected).await;
+                });
+            }
         }
     }
     pub const fn display(self) -> &'static str {
@@ -151,6 +191,8 @@ pub struct ShortcutHandler {
     menu_item_selected: Signal<Option<MenuSelection>>,
     model_modified: ReadSignal<bool>,
     model_file_path: ReadSignal<Option<std::path::PathBuf>>,
+    pending_action: Signal<Option<PendingAction>>,
+    show_alert: Signal<bool>,
 }
 
 impl ShortcutHandler {
@@ -158,11 +200,15 @@ impl ShortcutHandler {
         menu_item_selected: Signal<Option<MenuSelection>>,
         model_modified: ReadSignal<bool>,
         model_file_path: ReadSignal<Option<std::path::PathBuf>>,
+        pending_action: Signal<Option<PendingAction>>,
+        show_alert: Signal<bool>,
     ) -> Self {
         Self {
             menu_item_selected,
             model_modified,
             model_file_path,
+            pending_action,
+            show_alert,
         }
     }
 
@@ -173,6 +219,8 @@ impl ShortcutHandler {
                 self.menu_item_selected,
                 self.model_modified,
                 self.model_file_path,
+                self.pending_action,
+                self.show_alert,
             );
         }
     }
@@ -183,6 +231,8 @@ impl ShortcutHandler {
             self.menu_item_selected,
             self.model_modified,
             self.model_file_path,
+            self.pending_action,
+            self.show_alert,
         );
     }
 }

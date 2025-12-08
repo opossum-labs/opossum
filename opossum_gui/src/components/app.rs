@@ -6,7 +6,7 @@ use crate::{
         logger::logger_component::Logger,
         menu_bar::menu_bar_component::{MenuBar, MenuSelection},
         scenery_editor::{GraphEditor, NodeEditorCommand},
-        short_cuts::ShortcutHandler,
+        short_cuts::{PendingAction, ShortcutHandler},
     },
 };
 use dioxus::prelude::*;
@@ -36,11 +36,15 @@ pub fn App() -> Element {
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
     let model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
     let model_modified: Signal<bool> = use_signal(|| false);
+    let pending_action = use_signal(|| Option::<PendingAction>::None);
+    let show_alert = use_signal(|| false);
 
     let short_cut_handler = ShortcutHandler::new(
         menu_item_selected,
         model_modified.into(),
         model_file_path.into(),
+        pending_action,
+        show_alert,
     );
     use_context_provider(|| short_cut_handler);
     use_effect(|| {
@@ -48,7 +52,6 @@ pub fn App() -> Element {
             let _ = delete_scenery().await;
         });
     });
-
     use_effect(move || {
         let cxt_command = cxt_command.read();
         if let Some(cxt_command) = &*(cxt_command) {
@@ -197,6 +200,8 @@ pub fn App() -> Element {
                 model_file_path,
                 model_modified,
                 node_editor_command,
+                pending_action,
+                show_alert,
             }
             SimulationWindow { show_simulation: run_simulation, project_directory }
         }
@@ -214,6 +219,8 @@ pub fn App() -> Element {
                 model_file_path,
                 model_modified,
                 node_editor_command,
+                pending_action,
+                show_alert,
             }
         }
     }
@@ -227,6 +234,8 @@ fn CommonAppLayout(
     model_file_path: Signal<Option<PathBuf>>,
     model_modified: Signal<bool>,
     node_editor_command: Signal<Option<NodeEditorCommand>>,
+    pending_action: Signal<Option<PendingAction>>,
+    show_alert: Signal<bool>,
 ) -> Element {
     let mut height = use_signal(|| 100.0); // Start-Höhe (px)
     let mut dragging = use_signal(|| false);
@@ -262,6 +271,8 @@ fn CommonAppLayout(
                         project_directory,
                         model_file_path,
                         model_modified,
+                        pending_action,
+                        show_alert
                     }
                 }
             }

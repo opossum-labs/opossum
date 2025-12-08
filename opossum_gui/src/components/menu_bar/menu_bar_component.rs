@@ -12,13 +12,17 @@ use rfd::FileDialog;
 use std::path::PathBuf;
 
 use crate::components::{
+    alert_dialog::{
+        AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
+        AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
+    },
     menu_bar::{
         edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
         help::about::About,
+        open_project,
         path_helper::abbreviate_path,
-        project_helper::continue_operation,
     },
-    short_cuts::{SHORTCUTS, ShortCutAction, ShortcutHandler},
+    short_cuts::{PendingAction, SHORTCUTS, ShortCutAction, ShortcutHandler},
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -45,8 +49,76 @@ pub fn MenuBar(
     project_directory: Signal<Option<PathBuf>>,
     model_file_path: ReadSignal<Option<PathBuf>>,
     model_modified: ReadSignal<bool>,
+    mut pending_action: Signal<Option<PendingAction>>,
+    mut show_alert: Signal<bool>,
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
+
+    // Hilfs-Closure: Prüft auf Änderungen und triggert Dialog oder Aktion direkt
+    let mut request_action = move |action: PendingAction| {
+        if *model_modified.read() {
+            // Änderungen vorhanden -> Merken und Dialog zeigen
+            pending_action.set(Some(action));
+            show_alert.set(true);
+        } else {
+            // Keine Änderungen -> Sofort ausführen
+            match action {
+                PendingAction::NewProject => {
+                    menu_item_selected.set(Some(MenuSelection::NewProject));
+                }
+                PendingAction::Quit => menu_item_selected.set(Some(MenuSelection::Quit)),
+                // Hier rufen wir die NEUE Funktion aus project_helper auf
+                PendingAction::OpenProject => {
+                    // Wir spawnen einen Task.
+                    // Der Event-Handler hier kann sofort 'returnen',
+                    // der Dialog schließt sich, und dann geht der Filepicker auf.
+                    spawn(async move {
+                        // Optional: Ein kurzer Schlaf, um dem UI Zeit zum "Atmen" zu geben (meist nicht nötig, aber sicher)
+                        // use std::time::Duration;
+                        // use dioxus::prelude::* (für sleep/timers je nach version, meist reicht spawn allein)
+                        open_project(menu_item_selected).await;
+                    });
+                }
+            }
+        }
+    };
+
+    // Handler, wenn im Dialog auf "JA" geklickt wird
+    let on_alert_confirm = move |_| {
+        if let Some(action) = *pending_action.read() {
+            match action {
+                PendingAction::NewProject => {
+                    menu_item_selected.set(Some(MenuSelection::NewProject));
+                }
+                PendingAction::Quit => menu_item_selected.set(Some(MenuSelection::Quit)),
+                PendingAction::OpenProject => {
+                    // Wir spawnen einen Task.
+                    // Der Event-Handler hier kann sofort 'returnen',
+                    // der Dialog schließt sich, und dann geht der Filepicker auf.
+                    spawn(async move {
+                        // Optional: Ein kurzer Schlaf, um dem UI Zeit zum "Atmen" zu geben (meist nicht nötig, aber sicher)
+                        // use std::time::Duration;
+                        // use dioxus::prelude::* (für sleep/timers je nach version, meist reicht spawn allein)
+
+                        crate::components::menu_bar::project_helper::open_project(
+                            menu_item_selected,
+                        )
+                        .await;
+                    });
+                }
+            }
+        }
+        // Aufräumen
+        pending_action.set(None);
+        show_alert.set(false);
+    };
+
+    // Handler, wenn im Dialog auf "NEIN" geklickt wird
+    let on_alert_cancel = move |_| {
+        pending_action.set(None);
+        show_alert.set(false);
+    };
+
     let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| {
         rsx! {
             Icon { width: 25, icon: FaWindowMaximize }
@@ -113,12 +185,12 @@ pub fn MenuBar(
                                             spawn(async {
                                                 let _ = eval(
                                                         r"
-                                                                                                                                                                const el = document.getElementById('navbarDropdownEditMenuLink');
-                                                                                                                                                                if (el) {
-                                                                                                                                                                    const instance = mdb.Dropdown.getInstance(el);
-                                                                                                                                                                    if (instance) instance.hide();
-                                                                                                                                                                }
-                                                                                                                                                            ",
+                                                                                                                                                                                                    const el = document.getElementById('navbarDropdownEditMenuLink');
+                                                                                                                                                                                                    if (el) {
+                                                                                                                                                                                                        const instance = mdb.Dropdown.getInstance(el);
+                                                                                                                                                                                                        if (instance) instance.hide();
+                                                                                                                                                                                                    }
+                                                                                                                                                                                                ",
                                                     )
                                                     .await;
                                             });
@@ -139,13 +211,7 @@ pub fn MenuBar(
                                             menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_type)));
                                             spawn(async {
                                                 let _ = eval(
-                                                        r"
-                                                                                                                                                                                                        const el = document.getElementById('navbarDropdownEditMenuLink');
-                                                                                                                                                                                                        if (el) {
-                                                                                                                                                                                                            const instance = mdb.Dropdown.getInstance(el);
-                                                                                                                                                                                                            if (instance) instance.hide();
-                                                                                                                                                                                                        }
-                                                                                                                                                                                                    ",
+                                                        r"const el = document.getElementById('navbarDropdownEditMenuLink'); if (el) {const instance = mdb.Dropdown.getInstance(el);if (instance) instance.hide();}",
                                                     )
                                                     .await;
                                             });
@@ -250,10 +316,11 @@ pub fn MenuBar(
                         ControlsMenu {
                             maximize_symbol,
                             on_quit: move |()| {
-                                let msg = "You have unsaved changes. Are you sure you want to quit?";
-                                if continue_operation(model_modified(), msg) {
-                                    menu_item_selected.set(Some(MenuSelection::Quit));
-                                }
+                                request_action(PendingAction::Quit);
+                                // let msg = "You have unsaved changes. Are you sure you want to quit?";
+                                // if continue_operation(model_modified(), msg) {
+                                //     menu_item_selected.set(Some(MenuSelection::Quit));
+                                // }
                             },
                         }
                     }
@@ -269,6 +336,28 @@ pub fn MenuBar(
                 rsx! {}
             }
         }
+        AlertDialogRoot {
+        open: show_alert(),
+        on_open_change: move |v: bool| {
+            // Falls der Dialog durch Klick "daneben" geschlossen wird:
+            // if !v { pending_action.set(None); }
+            show_alert.set(v);
+        },
+        AlertDialogContent {
+            AlertDialogTitle { "Unsaved Changes" }
+            AlertDialogDescription { "You have unsaved changes. Do you really want to proceed and discard them?" }
+            AlertDialogActions {
+                AlertDialogCancel {
+                    on_click: on_alert_cancel,
+                    "No"
+                }
+                AlertDialogAction {
+                    on_click: on_alert_confirm, // Führt die gemerkte Aktion aus
+                    "Yes"
+                }
+            }
+        }
+    }
     }
 }
 
