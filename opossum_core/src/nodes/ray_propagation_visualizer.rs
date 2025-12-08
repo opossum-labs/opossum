@@ -138,7 +138,7 @@ impl OpticNode for RayPropagationVisualizer {
                 .create(
                     "Warning",
                     "warning during analysis",
-                    "A propagation plot can only be calculated for a ray source and a ray tracing analysis.".into(),
+                    "A propagation plot can only be calculated during a ray tracing or ghostfocus analysis.".into(),
                 )
                 .unwrap();
         }
@@ -178,12 +178,9 @@ impl AnalysisEnergy for RayPropagationVisualizer {
         let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
-        if let LightData::Geometric(rays) = data.clone() {
-            self.light_data = Some(LightData::Geometric(rays));
-        } else {
-            // this is only necessary to show a warning in the node report;
-            self.light_data = Some(LightData::Energy(Spectrum::default()));
-        }
+        // It does not make sense to use a RayPropagationVisualizer with energy analysis.
+        // The following is only necessary to show a warning in the node report;
+        self.light_data = Some(LightData::Energy(Spectrum::default()));
         Ok(LightResult::from([(out_port.into(), data.clone())]))
     }
 }
