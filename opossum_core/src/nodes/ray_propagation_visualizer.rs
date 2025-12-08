@@ -26,6 +26,7 @@ use crate::{
     properties::{Properties, Proptype, validator::Validator},
     rays::Rays,
     reporting::node_report::NodeReport,
+    spectrum::Spectrum,
 };
 /// A ray-propagation monitor
 ///
@@ -132,6 +133,15 @@ impl OpticNode for RayPropagationVisualizer {
                     .unwrap();
             }
         }
+        if let Some(LightData::Energy(_)) = data {
+            props
+                .create(
+                    "Warning",
+                    "warning during analysis",
+                    "A propagation plot can only be calculated during a ray tracing or ghostfocus analysis.".into(),
+                )
+                .unwrap();
+        }
         Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
@@ -168,9 +178,9 @@ impl AnalysisEnergy for RayPropagationVisualizer {
         let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
-        if let LightData::Geometric(rays) = data.clone() {
-            self.light_data = Some(LightData::Geometric(rays));
-        }
+        // It does not make sense to use a RayPropagationVisualizer with energy analysis.
+        // The following is only necessary to show a warning in the node report;
+        self.light_data = Some(LightData::Energy(Spectrum::default()));
         Ok(LightResult::from([(out_port.into(), data.clone())]))
     }
 }
