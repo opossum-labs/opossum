@@ -2,6 +2,8 @@
 /coverage
 /.vscode
 /doc/book/book/
-/opossum_core/playground
+/opossum_core/playground/*
+# exception to the rule
+!playground/.gitkeep 
 .VSCodeCounter
 *.wxs
