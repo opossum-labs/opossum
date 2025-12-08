@@ -33,20 +33,21 @@ async fn get_version() -> impl Responder {
     })
 }
 
-/// Return a list of all available node types of OPOSSUM
+/// Return a (aplhabetically sorted) list of all available node types of OPOSSUM
 ///
 /// Return a list of strings of available node types from the OPOSSUM library.
 #[utoipa::path(get, responses((status = OK, description = "success", body = Vec<NodeType>)), tag="general")]
 #[get("/node_types")]
 async fn get_node_types() -> Result<Json<Vec<NodeType>>, BackEndErrorResponse> {
     let types = opossum_core::nodes::node_types();
-    let node_types: Vec<NodeType> = types
+    let mut node_types: Vec<NodeType> = types
         .iter()
         .map(|t| NodeType {
             node_type: t.0.into(),
             description: t.1.into(),
         })
         .collect();
+    node_types.sort_by(|a, b| a.node_type.to_lowercase().cmp(&b.node_type.to_lowercase()));
     Ok(Json(node_types))
 }
 /// Return a list of available analyzer types of OPOSSUM
