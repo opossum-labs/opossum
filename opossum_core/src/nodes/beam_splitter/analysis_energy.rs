@@ -38,10 +38,16 @@ mod test {
 
     use crate::{
         analyzers::energy::AnalysisEnergy,
+        joule,
         light_result::LightResult,
         lightdata::LightData,
+        nanometer,
         nodes::{BeamSplitter, SplittingConfigBuilder},
         optic_node::OpticNode,
+        prelude::{
+            EdgeFilter, EdgeFilterType, EnergyDataBuilder, EnergyLaserLines, LightDataBuilder,
+            SpectralFilterBuilder,
+        },
         spectrum_helper::create_he_ne_spec,
     };
 
@@ -77,7 +83,7 @@ mod test {
         assert_eq!(energy, 0.4);
     }
     #[test]
-    fn analyze_two_input() {
+    fn analyze_two_input_fixed_ratio() {
         let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
         let mut input = LightResult::default();
         input.insert(
@@ -105,6 +111,36 @@ mod test {
             0.0
         };
         assert!(energy_output2.abs_diff_eq(&0.7, f64::EPSILON));
+    }
+    #[test]
+    fn analyze_one_input_longpass() {
+        let edge_filter = EdgeFilter::new(
+            EdgeFilterType::LongPass,
+            nanometer!(1000.0),
+            0.0..1.0,
+            Some(nanometer!(0.4)),
+            nanometer!(900.0)..nanometer!(1100.0),
+            nanometer!(0.2),
+        )
+        .unwrap();
+        let longpass = SpectralFilterBuilder::EdgeFilter(edge_filter);
+        let mut node =
+            BeamSplitter::new("test", &SplittingConfigBuilder::Spectrum(longpass)).unwrap();
+        let light_data = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+            EnergyLaserLines::new(vec![(nanometer!(1054.0), joule!(100.0))], nanometer!(5.0))
+                .unwrap(),
+        ));
+        let mut input = LightResult::default();
+        input.insert("input_1".into(), light_data.build().unwrap());
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let LightData::Energy(s1) = output.clone().get("out1_trans1_refl2").unwrap().clone() else {
+            panic!();
+        };
+        let LightData::Energy(s2) = output.clone().get("out2_trans2_refl1").unwrap().clone() else {
+            panic!();
+        };
+        assert_abs_diff_eq!(s1.total_energy(), 100.0, epsilon = 0.0001);
+        assert_abs_diff_eq!(s2.total_energy(), 0.0);
     }
     #[test]
     fn analyze_inverse() {
