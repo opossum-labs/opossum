@@ -272,7 +272,7 @@ fn CommonAppLayout(
                         model_file_path,
                         model_modified,
                         pending_action,
-                        show_alert
+                        show_alert,
                     }
                 }
             }
