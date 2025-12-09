@@ -1754,7 +1754,7 @@ mod test {
             micrometer!(3.0),
             (0.)..(1.),
             Some(micrometer!(1.0)),
-            range.clone(),
+            range,
             resolution,
         )
         .unwrap()

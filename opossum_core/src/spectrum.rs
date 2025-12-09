@@ -485,11 +485,16 @@ impl Spectrum {
         let mut bucket_lower = bucket_interval.unwrap()[0];
         let mut bucket_upper = bucket_interval.unwrap()[1];
         let mut bucket_idx: usize = 0;
+
+        // Initial reset of the first bucket
         self.data
             .replace(bucket_idx, (self.data[bucket_idx].0, 0.0))
             .unwrap();
+
+        // Skip source intervals that end before the first bucket starts
+        // Use a small epsilon to avoid skipping intervals that just barely touch/overlap
         #[allow(clippy::while_float)]
-        while src_upper < bucket_lower {
+        while src_upper <= bucket_lower + f64::EPSILON {
             if let Some(src_interval) = src_it.next() {
                 src_lower = src_interval[0].0;
                 src_upper = src_interval[1].0;
@@ -498,10 +503,13 @@ impl Spectrum {
                 break;
             }
         }
+
         loop {
             let ratio = calc_ratio(bucket_lower, bucket_upper, src_lower, src_upper);
             let bucket_value = spectrum.data[src_idx].1 * ratio * (src_upper - src_lower)
                 / (bucket_upper - bucket_lower);
+
+            // Add contribution to current bucket
             self.data
                 .replace(
                     bucket_idx,
@@ -511,24 +519,31 @@ impl Spectrum {
                     ),
                 )
                 .unwrap();
-            if src_upper < bucket_upper {
+
+            // Logic to advance Source or Bucket
+            // If source ends before (or at) bucket end, we are done with this source bin -> Advance Source
+            if src_upper < bucket_upper + f64::EPSILON {
                 if let Some(src_interval) = src_it.next() {
                     src_lower = src_interval[0].0;
                     src_upper = src_interval[1].0;
                     src_idx += 1;
                     continue;
                 }
-                break;
-            } else if let Some(bucket_interval) = bucket_it.next() {
+                break; // No more source
+            }
+            // If source extends beyond bucket, we are done with this bucket -> Advance Bucket
+            else if let Some(bucket_interval) = bucket_it.next() {
                 bucket_lower = bucket_interval[0];
                 bucket_upper = bucket_interval[1];
                 bucket_idx += 1;
+
+                // Reset the NEW bucket before adding to it
                 self.data
                     .replace(bucket_idx, (self.data[bucket_idx].0, 0.0))
                     .unwrap();
                 continue;
             }
-            break;
+            break; // No more buckets
         }
     }
     /// Filter the spectrum with another given spectrum by multiplying the data values. The given spectrum is resampled before the multiplication.
@@ -558,35 +573,42 @@ impl Spectrum {
         Ok(())
     }
     /// Modify and generate spectrum for a beamsplitter.
+    ///
+    /// Returns the reflected/split part as a new Spectrum.
+    /// Self is modified to represent the transmitted part.
+    ///
+    /// # Panics
+    ///
+    /// This function might theoretically panic if the calculated spectrum values
+    /// do not pass the validation.
     #[must_use]
     pub fn split_by_spectrum(&mut self, filter_spectrum: &Self) -> Self {
-        let mut resampled_spec = self.clone();
-        resampled_spec.resample(filter_spectrum);
-        let mut split_data = self.clone();
-        let _ = self.set_data(
-            self.data
-                .iter()
-                .zip(resampled_spec.data.iter())
-                .map(|d| (d.0.0, d.0.1 * d.1.1))
-                .collect::<Vec<(f64, f64)>>(),
-        );
-        let _ = split_data.set_data(
-            split_data
-                .iter()
-                .zip(resampled_spec.data.iter())
-                .map(|d| (d.0.0, d.0.1 * (1.0 - d.1.1)))
-                .collect::<Vec<(f64, f64)>>(),
-        );
+        // Resample to match the incoming spectrum
+        let mut transmission_factors = self.clone();
+        transmission_factors.resample(filter_spectrum);
+        let mut transmitted_data = Vec::with_capacity(self.data.len());
+        let mut reflected_data = Vec::with_capacity(self.data.len());
 
-        split_data
+        for (input_bin, filter_bin) in self.data.iter().zip(transmission_factors.data.iter()) {
+            let wavelength = input_bin.0;
+            let input_energy = input_bin.1;
+            let transmission = filter_bin.1.clamp(0.0, 1.0);
+            let reflection = 1.0 - transmission;
+            let transmitted_energy = input_energy * transmission;
+            let reflected_energy = input_energy * reflection;
+
+            transmitted_data.push((wavelength, transmitted_energy));
+            reflected_data.push((wavelength, reflected_energy));
+        }
+        self.set_data(transmitted_data)
+            .expect("Validation failed during split_by_spectrum update");
+        let mut split_spectrum = Self::default();
+        split_spectrum
+            .set_data(reflected_data)
+            .expect("Validation failed for split spectrum");
+
+        split_spectrum
     }
-    // /// Modify the spectrum by a given function or closure.
-    // pub fn map_mut<F>(&mut self, f: F)
-    // where
-    //     F: FnMut(&mut (f64, f64)) -> (f64, f64),
-    // {
-    //     self.data = self.data.iter_mut().map(f).collect();
-    // }
     /// Add a given spectrum.
     ///
     /// The given spectrum might be resampled in order to match self.
@@ -707,23 +729,16 @@ impl Debug for Spectrum {
     }
 }
 fn calc_ratio(bucket_left: f64, bucket_right: f64, source_left: f64, source_right: f64) -> f64 {
-    if bucket_left < source_left && bucket_right > source_left && bucket_right < source_right {
-        // bucket is left partly outside source
-        return (bucket_right - source_left) / (source_right - source_left);
+    let overlap_start = f64::max(bucket_left, source_left);
+    let overlap_end = f64::min(bucket_right, source_right);
+    let overlap_width = overlap_end - overlap_start;
+    let source_width = source_right - source_left;
+
+    if overlap_width > 0.0 && source_width > 0.0 {
+        overlap_width / source_width
+    } else {
+        0.0
     }
-    if bucket_left <= source_left && bucket_right >= source_right {
-        // bucket contains source
-        return 1.0;
-    }
-    if bucket_left >= source_left && bucket_right <= source_right {
-        // bucket is part of source
-        return (bucket_right - bucket_left) / (source_right - source_left);
-    }
-    if bucket_left > source_left && bucket_left < source_right && bucket_right > source_right {
-        // bucket is right partly outside source
-        return (source_right - bucket_left) / (source_right - source_left);
-    }
-    0.0
 }
 
 fn lorentz(center: f64, width: f64, x: f64) -> f64 {
@@ -766,6 +781,7 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::prelude::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder};
     use crate::{joule, nanometer};
     use crate::{
         spectrum_helper::{
@@ -1047,14 +1063,6 @@ mod test {
         let s2 = create_he_ne_spec(0.6).unwrap();
         s.scale_vertical(&0.6).unwrap();
         assert_eq!(s.total_energy(), s2.total_energy());
-        // let mut expected_spectrum = s2.iter();
-        // for value in s.iter() {
-        //     assert_abs_diff_eq!(
-        //         value.1,
-        //         expected_spectrum.next().unwrap().1,
-        //         epsilon = f64::EPSILON
-        //     );
-        // }
     }
     #[test]
     fn he_ne_spectrum() {
@@ -1162,7 +1170,6 @@ mod test {
         let s = prep();
         let s_ron =
             ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).unwrap();
-        println!("{}", s_ron);
         assert_eq!(
             s_ron,
             "(
@@ -1216,5 +1223,51 @@ mod test {
             format!("{:?}", s),
             "1000.00 nm -> 0\n2000.00 nm -> 0\n3000.00 nm -> 0\n"
         );
+    }
+    #[test]
+    fn split_by_spectrum() {
+        let edge_filter = EdgeFilter::new(
+            EdgeFilterType::LongPass,
+            nanometer!(1000.0),
+            0.0..1.0,
+            Some(nanometer!(0.4)),
+            nanometer!(900.0)..nanometer!(1100.0),
+            nanometer!(0.2),
+        )
+        .unwrap();
+        let longpass = SpectralFilterBuilder::EdgeFilter(edge_filter)
+            .build()
+            .unwrap();
+        let mut input_laser = Spectrum::from_laser_lines(
+            &EnergyLaserLines::new(vec![(nanometer!(1050.0), joule!(100.0))], nanometer!(5.0))
+                .unwrap(),
+        )
+        .unwrap();
+        let split_spectrum = input_laser.split_by_spectrum(&longpass);
+        assert_abs_diff_eq!(input_laser.total_energy(), 100.0);
+        assert_abs_diff_eq!(split_spectrum.total_energy(), 0.0);
+    }
+    #[test]
+    fn split_by_spectrum_at_longpass_edge() {
+        let edge_filter = EdgeFilter::new(
+            EdgeFilterType::LongPass,
+            nanometer!(1000.0),
+            0.0..1.0,
+            Some(nanometer!(1.0)),
+            nanometer!(900.0)..nanometer!(1100.0),
+            nanometer!(0.2),
+        )
+        .unwrap();
+        let longpass = SpectralFilterBuilder::EdgeFilter(edge_filter)
+            .build()
+            .unwrap();
+        let mut input_laser = Spectrum::from_laser_lines(
+            &EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(100.0))], nanometer!(0.2))
+                .unwrap(),
+        )
+        .unwrap();
+        let split_spectrum = input_laser.split_by_spectrum(&longpass);
+        assert_abs_diff_eq!(input_laser.total_energy(), 50.0, epsilon = 1.0e-8);
+        assert_abs_diff_eq!(split_spectrum.total_energy(), 50.0, epsilon = 1.0e-8);
     }
 }
