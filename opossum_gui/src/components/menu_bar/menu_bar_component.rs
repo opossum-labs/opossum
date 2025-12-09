@@ -1,12 +1,10 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-// 'use_window' wurde aus dieser Zeile entfernt, da es nur in 'ExpandOnClick' benötigt wird
 use dioxus::{document::eval, prelude::*};
 use dioxus_free_icons::{
     Icon,
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize},
 };
 use opossum_core::prelude::*;
-// 'FileDialog' wird nur auf dem Desktop (nicht-WASM) benötigt
 #[cfg(not(target_arch = "wasm32"))]
 use rfd::FileDialog;
 use std::path::PathBuf;
@@ -54,28 +52,18 @@ pub fn MenuBar(
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
 
-    // Hilfs-Closure: Prüft auf Änderungen und triggert Dialog oder Aktion direkt
     let mut request_action = move |action: PendingAction| {
         if *model_modified.read() {
-            // Änderungen vorhanden -> Merken und Dialog zeigen
             pending_action.set(Some(action));
             show_alert.set(true);
         } else {
-            // Keine Änderungen -> Sofort ausführen
             match action {
                 PendingAction::NewProject => {
                     menu_item_selected.set(Some(MenuSelection::NewProject));
                 }
                 PendingAction::Quit => menu_item_selected.set(Some(MenuSelection::Quit)),
-                // Hier rufen wir die NEUE Funktion aus project_helper auf
                 PendingAction::OpenProject => {
-                    // Wir spawnen einen Task.
-                    // Der Event-Handler hier kann sofort 'returnen',
-                    // der Dialog schließt sich, und dann geht der Filepicker auf.
                     spawn(async move {
-                        // Optional: Ein kurzer Schlaf, um dem UI Zeit zum "Atmen" zu geben (meist nicht nötig, aber sicher)
-                        // use std::time::Duration;
-                        // use dioxus::prelude::* (für sleep/timers je nach version, meist reicht spawn allein)
                         open_project(menu_item_selected).await;
                     });
                 }
@@ -83,7 +71,6 @@ pub fn MenuBar(
         }
     };
 
-    // Handler, wenn im Dialog auf "JA" geklickt wird
     let on_alert_confirm = move |_| {
         if let Some(action) = *pending_action.read() {
             match action {
@@ -92,14 +79,7 @@ pub fn MenuBar(
                 }
                 PendingAction::Quit => menu_item_selected.set(Some(MenuSelection::Quit)),
                 PendingAction::OpenProject => {
-                    // Wir spawnen einen Task.
-                    // Der Event-Handler hier kann sofort 'returnen',
-                    // der Dialog schließt sich, und dann geht der Filepicker auf.
                     spawn(async move {
-                        // Optional: Ein kurzer Schlaf, um dem UI Zeit zum "Atmen" zu geben (meist nicht nötig, aber sicher)
-                        // use std::time::Duration;
-                        // use dioxus::prelude::* (für sleep/timers je nach version, meist reicht spawn allein)
-
                         crate::components::menu_bar::project_helper::open_project(
                             menu_item_selected,
                         )
@@ -108,12 +88,10 @@ pub fn MenuBar(
                 }
             }
         }
-        // Aufräumen
         pending_action.set(None);
         show_alert.set(false);
     };
 
-    // Handler, wenn im Dialog auf "NEIN" geklickt wird
     let on_alert_cancel = move |_| {
         pending_action.set(None);
         show_alert.set(false);
@@ -141,7 +119,7 @@ pub fn MenuBar(
                     height: "40",
                 }
                 ul { class: "navbar-nav me-auto mt-lg-0",
-                    // --- File Menu (gemeinsam) ---
+                    // --- File Menu ---
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
@@ -159,7 +137,7 @@ pub fn MenuBar(
                             MenuListItemShortCut { short_cut_action: ShortCutAction::Report }
                         }
                     }
-                    // --- Edit Menu (gemeinsam) ---
+                    // --- Edit Menu  ---
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
@@ -185,12 +163,12 @@ pub fn MenuBar(
                                             spawn(async {
                                                 let _ = eval(
                                                         r"
-                                                                                                                                                                                                    const el = document.getElementById('navbarDropdownEditMenuLink');
-                                                                                                                                                                                                    if (el) {
-                                                                                                                                                                                                        const instance = mdb.Dropdown.getInstance(el);
-                                                                                                                                                                                                        if (instance) instance.hide();
-                                                                                                                                                                                                    }
-                                                                                                                                                                                                ",
+                                                            const el = document.getElementById('navbarDropdownEditMenuLink');
+                                                            if (el) {
+                                                                const instance = mdb.Dropdown.getInstance(el);
+                                                                if (instance) instance.hide();
+                                                            }
+                                                        ",
                                                     )
                                                     .await;
                                             });
@@ -221,7 +199,7 @@ pub fn MenuBar(
                             }
                         }
                     }
-                    // --- Layout Menu (gemeinsam) ---
+                    // --- Layout Menu ---
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
@@ -237,7 +215,7 @@ pub fn MenuBar(
                             MenuListItemShortCut { short_cut_action: ShortCutAction::AutoLayout }
                         }
                     }
-                    // --- Help Menu (gemeinsam) ---
+                    // --- Help Menu  ---
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
@@ -285,7 +263,6 @@ pub fn MenuBar(
                     }
                 }
             }
-            // --- Fenster-Drag-Bereich (Desktop) / Leerer Platz (WASM) ---
             ExpandOnClick { maximize_symbol }
 
             // --- Desktop-specific window controls (Simulate & Quit) ---
@@ -293,7 +270,6 @@ pub fn MenuBar(
                 #[cfg(not(target_arch = "wasm32"))]
                 rsx! {
                     div { class: "d-flex align-items-center",
-                        // "Simulate"-Button (nur Desktop, da er FileDialog und RunProject verwendet)
                         button {
                             class: "btn btn-success me-4",
                             onclick: move |_| {
@@ -312,15 +288,10 @@ pub fn MenuBar(
                             },
                             "Simulate"
                         }
-                        // "ControlsMenu" (Min/Max/Close - Desktop only)
                         ControlsMenu {
                             maximize_symbol,
                             on_quit: move |()| {
                                 request_action(PendingAction::Quit);
-                                // let msg = "You have unsaved changes. Are you sure you want to quit?";
-                                // if continue_operation(model_modified(), msg) {
-                                //     menu_item_selected.set(Some(MenuSelection::Quit));
-                                // }
                             },
                         }
                     }
@@ -337,27 +308,19 @@ pub fn MenuBar(
             }
         }
         AlertDialogRoot {
-        open: show_alert(),
-        on_open_change: move |v: bool| {
-            // Falls der Dialog durch Klick "daneben" geschlossen wird:
-            // if !v { pending_action.set(None); }
-            show_alert.set(v);
-        },
-        AlertDialogContent {
-            AlertDialogTitle { "Unsaved Changes" }
-            AlertDialogDescription { "You have unsaved changes. Do you really want to proceed and discard them?" }
-            AlertDialogActions {
-                AlertDialogCancel {
-                    on_click: on_alert_cancel,
-                    "No"
-                }
-                AlertDialogAction {
-                    on_click: on_alert_confirm, // Führt die gemerkte Aktion aus
-                    "Yes"
+            open: show_alert(),
+            on_open_change: move |v: bool| {
+                show_alert.set(v);
+            },
+            AlertDialogContent {
+                AlertDialogTitle { "Unsaved Changes" }
+                AlertDialogDescription { "You have unsaved changes. Do you really want to proceed and discard them?" }
+                AlertDialogActions {
+                    AlertDialogCancel { on_click: on_alert_cancel, "No" }
+                    AlertDialogAction { on_click: on_alert_confirm, "Yes" }
                 }
             }
         }
-    }
     }
 }
 

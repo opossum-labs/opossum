@@ -19,7 +19,7 @@ members = [
     "opossum_core/opm_macros_lib",
     "xtask", 
 ]
-#default-members = ["opossum_backend", "opossum_cli", "opossum_gui", "opossum_core", "opossum_core/opm_macros_lib"]
+default-members = ["opossum_backend", "opossum_cli", "opossum_gui", "opossum_core", "opossum_core/opm_macros_lib"]
 resolver = "3"
 
 [workspace.package]
