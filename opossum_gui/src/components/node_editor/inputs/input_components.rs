@@ -1,12 +1,11 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-use dioxus::prelude::*;
-use itertools::Itertools;
-
 use crate::components::node_editor::{
     CallbackWrapper,
     inputs::{InputData, InputParam},
 };
+use dioxus::prelude::*;
+use itertools::Itertools;
 
 #[component]
 pub fn LabeledCheckboxInput(
@@ -14,7 +13,6 @@ pub fn LabeledCheckboxInput(
     label: String,
     value: String,
     onchange: CallbackWrapper,
-
     #[props(default = false)] readonly: bool,
 ) -> Element {
     rsx! {
@@ -35,6 +33,7 @@ pub fn LabeledCheckboxInput(
         }
     }
 }
+
 #[component]
 pub fn LabeledFileInput(
     id: String,
@@ -44,22 +43,63 @@ pub fn LabeledFileInput(
     accept: String,
     #[props(default = false)] readonly: bool,
 ) -> Element {
+    let id_target = id.clone();
+    let onchange_input = onchange.clone();
     rsx! {
-        div {
-            class: "form-file border-start file-selection-wrapper",
-            "data-mdb-input-init": "",
-            input {
-                class: "form-input text-light",
-                id: id.clone(),
-                r#type: "file",
-                accept,
-                onchange: move |e| onchange.call(e),
+        div { class: "form-file border-start file-selection-wrapper",
+            div { class: "input-group",
+                div { class: "form-floating",
+                    input {
+                        class: "form-control bg-dark text-light form-control-sm",
+                        id: id.clone(),
+                        r#type: "text",
+                        value: "{value}",
+                        readonly: true,
+                        onchange: move |e| onchange.call(e),
+                        oninput: move |e| onchange_input.call(e),
+                    }
+                    label { class: "text-secondary", r#for: id, "{label}" }
+                }
+                button {
+                    class: "btn btn-secondary btn-sm",
+                    r#type: "button",
+                    disabled: readonly,
+                    onclick: move |_| {
+                        if readonly { return; }
+                        let filter = accept.clone();
+                        let target_id = id_target.clone();
+
+                        spawn(async move {
+                            let mut dialog = rfd::AsyncFileDialog::new().set_title("Select File");
+                            if !filter.is_empty() {
+                                let ext = filter.trim_start_matches('.');
+                                dialog = dialog.add_filter("File Type", &[ext]);
+                            }
+
+                            if let Some(handle) = dialog.pick_file().await {
+                                let path = handle.path().to_string_lossy().to_string();
+                                let safe_path = path.replace('\\', "\\\\").replace('\'', "\\'");
+                                let js = format!(r#"
+                                    let el = document.getElementById('{target_id}');
+                                    if (el) {{
+                                        let nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                                        nativeInputValueSetter.call(el, '{safe_path}');
+                                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                    }}
+                                "#);
+                                dioxus::document::eval(&js);
+                            }
+                        });
+                    },
+                    span { class: "fa-solid fa-folder-open", "" }
+                    " Select"
+                }
             }
-            a { {value} }
-            label { class: "text-secondary", r#for: id, "{label}" }
         }
     }
 }
+
 #[component]
 pub fn InputParamLabeledInput(input_data: InputData) -> Element {
     if let InputParam::Bool(label) = input_data.input_param {
@@ -139,15 +179,10 @@ pub fn LabeledInput(
     label: String,
     value: String,
     onchange: CallbackWrapper,
-
     #[props(default = "text")] r#type: &'static str,
-
     #[props(optional)] step: Option<&'static str>,
-
     #[props(optional)] min: Option<&'static str>,
-
     #[props(optional)] max: Option<&'static str>,
-
     #[props(default = false)] readonly: bool,
 ) -> Element {
     rsx! {
@@ -166,7 +201,6 @@ pub fn LabeledInput(
                 max: max.unwrap_or_default(),
                 onchange: move |e: Event<FormData>| onchange.call(e),
             }
-
             label { class: "form-label text-secondary", r#for: id, "{label}" }
         }
     }
