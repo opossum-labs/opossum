@@ -39,12 +39,13 @@ impl IntoInputDataStrings<SpectrumFile> for EnergySpectrumFromFileParam {
         "rayTypeEnergySrcfromFileInput".to_string()
     }
     fn create_value_string(&self, obj: &SpectrumFile) -> String {
-        obj.f_path()
-            .file_name()
-            .map_or("no file selected", |f| {
-                f.to_str().unwrap_or("no file selected")
-            })
-            .to_string()
+        let path = obj.f_path();
+        let path_str = path.to_string_lossy();
+        if path_str.is_empty() {
+            "no file selected".to_string()
+        } else {
+            path_str.to_string()
+        }
     }
 }
 
