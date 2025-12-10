@@ -50,11 +50,17 @@ impl IntoInputDataStrings<SpectrumFile> for EnergySpectrumFromFileParam {
 
 impl IntoInputData<String, SpectrumFile, EnergyDataBuilder> for EnergySpectrumFromFileParam {
     fn parse_value(&self, e: Event<FormData>) -> Option<String> {
-        if e.files().is_empty() {
-            None
-        } else {
-            Some(e.files()[0].name())
+        // 1. First, check if there is a text value (by using the rfd file selector)
+        let value = e.value();
+        if !value.is_empty() {
+            return Some(value);
         }
+        // 2. Fallback: Check for standard browser files (if used elsewhere)
+        let files = e.files();
+        if !files.is_empty() {
+            return Some(files[0].name());
+        }
+        None
     }
     fn setter_from_obj(&self) -> impl FnMut(&mut SpectrumFile, String) {
         move |obj: &mut SpectrumFile, val: String| {

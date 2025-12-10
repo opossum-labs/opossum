@@ -130,6 +130,7 @@ impl Spectrum {
     ///   - the file is empty.
     ///   - the file could not be parsed.
     pub fn from_csv(path: &Path) -> OpmResult<Self> {
+        println!("from_csv: {}",path.display());
         let file = File::open(path).map_err(|e| OpossumError::Spectrum(e.to_string()))?;
         let mut reader = ReaderBuilder::new()
             .has_headers(false)
