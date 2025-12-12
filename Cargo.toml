@@ -73,9 +73,13 @@ lto = true
 # Reduces parallelism in the compiler, allowing for better optimization.
 codegen-units = 1
 # Abort on panic rather than unwinding the stack.
-panic = "abort"
+#panic = "abort"
 # Automatically strip symbols from the binary.
-strip = true
+# strip = true
+strip=false
+debug=true
+opt-level=3
+
 
 # Disable debug symbols an link time optimization due to limitations of the Linux pipeline VM.
 [profile.test]

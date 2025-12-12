@@ -219,27 +219,55 @@ pub trait AnalysisRayTrace: OpticNode {
     /// This function errors if `pass_through_detector_surface` fails
     fn analyze_single_surface_node(
         &mut self,
-        incoming_data: LightResult,
+        mut incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let in_port = &self.ports().names(&PortType::Input)[0];
-        let out_port = &self.ports().names(&PortType::Output)[0];
+        // Find input & output port name
+        // We could also use self.ports().name() but this is much slower (memory allocation) ...
+        let (in_port_name, out_port_name) = {
+            // Wir holen uns kurz den Lese-Zugriff
+            let raw_ports = self.node_attr().ports();
+            let is_inverted = self.inverted();
+            let lookup_input_type = if is_inverted {
+                PortType::Output
+            } else {
+                PortType::Input
+            };
+            let lookup_output_type = if is_inverted {
+                PortType::Input
+            } else {
+                PortType::Output
+            };
+            let in_map = raw_ports.ports(&lookup_input_type);
+            let out_map = raw_ports.ports(&lookup_output_type);
 
-        let Some(data) = incoming_data.get(in_port) else {
+            let in_key = in_map
+                .keys()
+                .next()
+                .ok_or_else(|| OpossumError::Analysis("Node hat keinen Input-Port".into()))?;
+            let out_key = out_map
+                .keys()
+                .next()
+                .ok_or_else(|| OpossumError::Analysis("Node hat keinen Output-Port".into()))?;
+            (in_key.clone(), out_key.clone())
+        };
+
+        let Some(data) = incoming_data.remove(&in_port_name) else {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(rays) = data {
+            let mut rays_bundle = vec![rays];
             self.pass_through_detector_surface(
-                in_port,
-                &mut vec![rays.clone()],
+                &in_port_name,
+                &mut rays_bundle,
                 &AnalyzerType::RayTrace(*config),
             )?;
             Ok(LightResult::from([(
-                out_port.into(),
+                out_port_name,
                 self.get_light_data_mut().unwrap().clone(),
             )]))
         } else {
-            Ok(LightResult::from([(out_port.into(), data.clone())]))
+            Ok(LightResult::from([(out_port_name, data)]))
         }
     }
 
