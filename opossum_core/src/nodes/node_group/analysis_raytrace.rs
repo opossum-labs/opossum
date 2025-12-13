@@ -50,7 +50,7 @@ impl AnalysisRayTrace for NodeGroup {
             if self.graph.is_stale_node(node_id)? {
                 warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");
             } else {
-                let incoming_edges = self.graph.get_incoming(node_id, &incoming_data)?;
+                let incoming_edges = self.graph.take_incoming(node_id, &incoming_data)?;
                 let mut outgoing_edges =
                     AnalysisRayTrace::analyze(&mut *node_ref.lock_opm()?, incoming_edges, config)
                         .map_err(|e| {
@@ -73,7 +73,7 @@ impl AnalysisRayTrace for NodeGroup {
                 }
                 for outgoing_edge in outgoing_edges {
                     self.graph
-                        .set_outgoing_edge_data(idx, &outgoing_edge.0, &outgoing_edge.1);
+                        .set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
                 }
             }
         }
@@ -203,7 +203,7 @@ fn calculate_single_node_position(
             node.calc_new_up_direction(&outgoing_edge.1, up_direction)?;
         }
         drop(node);
-        graph.set_outgoing_edge_data(node_idx, &outgoing_edge.0, &outgoing_edge.1);
+        graph.set_outgoing_edge_data(node_idx, &outgoing_edge.0, outgoing_edge.1);
     }
     Ok(())
 }

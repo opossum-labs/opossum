@@ -29,11 +29,9 @@ impl AnalysisGhostFocus for NodeGroup {
         bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
         let mut current_bouncing_rays = incoming_data;
-
         if self.inverted() {
             self.graph.invert_graph()?;
         }
-
         if !self.graph.is_single_tree() {
             warn!("group contains unconnected sub-trees. Analysis might not be complete.");
         }
@@ -47,11 +45,10 @@ impl AnalysisGhostFocus for NodeGroup {
             if self.graph.is_stale_node(node_id)? {
                 warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");
             } else {
-                let incoming_edges = self.graph.get_incoming(
+                let incoming_edges = self.graph.take_incoming(
                     node_id,
                     &light_rays_to_light_result(current_bouncing_rays.clone()),
                 )?;
-
                 let mut outgoing_edges = AnalysisGhostFocus::analyze(
                     &mut *node_ref.lock_opm()?,
                     light_result_to_light_rays(incoming_edges)?,
@@ -80,13 +77,18 @@ impl AnalysisGhostFocus for NodeGroup {
                     }
                 }
                 let outgoing_edges = light_rays_to_light_result(outgoing_edges);
-
                 for outgoing_edge in outgoing_edges {
-                    let no_sink =
+                    // Wir versuchen, die Daten in den Graphen zu stecken.
+                    // Wenn es nicht klappt (kein Sink/Ausgang), bekommen wir sie zurück.
+                    let leftover_data =
                         self.graph
-                            .set_outgoing_edge_data(idx, &outgoing_edge.0, &outgoing_edge.1);
+                            .set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
 
-                    if !no_sink && let LightData::GhostFocus(rays) = outgoing_edge.1 {
+                    // Wenn leftover_data 'Some' ist, bedeutet das: Die Kante existiert nicht (Sackgasse).
+                    // Das entspricht dem alten '!no_sink'.
+                    if let Some(data) = leftover_data
+                        && let LightData::GhostFocus(rays) = data
+                    {
                         for r in rays {
                             ray_collection.push(r);
                         }

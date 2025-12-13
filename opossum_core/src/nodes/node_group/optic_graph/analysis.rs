@@ -52,6 +52,65 @@ impl OpticGraph {
             Ok(self.incoming_edges(node_id))
         }
     }
+    /// Moves out the incoming data of a node in this [`OpticGraph`].
+    ///
+    /// This function returns the incoming data of a node with the given [`Uuid`]. If the node is an external node, the
+    /// incoming data is mapped to the internal node names. This function is similar to `get_incoming` but it has move semantic.
+    ///
+    /// # Errors
+    ///
+    /// This functions returns an error if the given `node_id` does not exist.
+    pub fn take_incoming(
+        &mut self,
+        node_id: Uuid,
+        incoming_data: &LightResult,
+    ) -> OpmResult<LightResult> {
+        if self.is_incoming_node(node_id)? {
+            let portmap = if self.is_inverted() {
+                &self.output_port_map
+            } else {
+                &self.input_port_map
+            };
+            let mut mapped_light_result = LightResult::default();
+
+            // For external data we still to clone (since it might be reused)
+            // Maybe we can optimize that later
+            for incoming in incoming_data {
+                if let Some(mapping) = portmap.get(incoming.0)
+                    && node_id == mapping.0
+                {
+                    mapped_light_result.insert(mapping.1.clone(), incoming.1.clone());
+                }
+            }
+            let internal_data = self.take_incoming_edges(node_id);
+            for (port, data) in internal_data {
+                mapped_light_result.insert(port, data);
+            }
+
+            Ok(mapped_light_result)
+        } else {
+            Ok(self.take_incoming_edges(node_id))
+        }
+    }
+    // helper function: Move data out of an edge
+    fn take_incoming_edges(&mut self, node_id: Uuid) -> LightResult {
+        let node_idx = self.node_idx_by_uuid(node_id).unwrap();
+        let mut edges_data = LightResult::new();
+        let mut edge_indices = Vec::new();
+        for edge in self.g.edges_directed(node_idx, Direction::Incoming) {
+            edge_indices.push(edge.id());
+        }
+        for edge_idx in edge_indices {
+            if let Some(edge_weight) = self.g.edge_weight_mut(edge_idx)
+                && edge_weight.data().is_some()
+                && let Some(data) = edge_weight.data_mut().take()
+            {
+                edges_data.insert(edge_weight.target_port().to_owned(), data);
+            }
+        }
+
+        edges_data
+    }
     /// Clear the [`LightData`] stored in the edges of this [`OpticGraph`]. Useful for back-
     /// and forth-propagation in ghost focus analysis.
     pub fn clear_edges(&mut self) {
@@ -91,7 +150,7 @@ impl OpticGraph {
                     node.lock_opm()?
                 );
             } else {
-                let incoming_edges = self.get_incoming(node_id, incoming_data)?;
+                let incoming_edges = self.take_incoming(node_id, incoming_data)?;
                 let node_name = format!("{}", node.lock_opm()?);
                 let outgoing_edges = AnalysisEnergy::analyze(
                     &mut *node.lock_opm()?,
@@ -116,7 +175,7 @@ impl OpticGraph {
                     }
                 }
                 for outgoing_edge in outgoing_edges {
-                    self.set_outgoing_edge_data(idx, &outgoing_edge.0, &outgoing_edge.1);
+                    self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
                 }
             }
         }
@@ -230,23 +289,29 @@ impl OpticGraph {
     }
     /// Sets the outgoing edge data of this [`OpticGraph`].
     /// Returns true if data has been passed on, false otherwise
-    pub fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: &LightData) -> bool {
+    pub fn set_outgoing_edge_data(
+        &mut self,
+        idx: NodeIndex,
+        port: &str,
+        data: LightData,
+    ) -> Option<LightData> {
         let edges = self.g.edges_directed(idx, Direction::Outgoing);
-        let edge_ref = edges
-            .into_iter()
-            .filter(|idx| idx.weight().src_port() == port)
-            .last();
-        if let Some(edge_ref) = edge_ref {
-            let edge_idx = edge_ref.id();
-            let light = self.g.edge_weight_mut(edge_idx);
-            if let Some(light) = light {
-                light.set_data(Some(data.clone()));
+
+        let mut target_edge_idx = None;
+        for edge in edges {
+            if edge.weight().src_port() == port {
+                target_edge_idx = Some(edge.id());
+                break;
             }
-            true
         }
-        // else outgoing edge not connected -> data dropped
-        else {
-            false
+
+        if let Some(edge_idx) = target_edge_idx {
+            if let Some(light) = self.g.edge_weight_mut(edge_idx) {
+                light.set_data(Some(data));
+            }
+            None
+        } else {
+            Some(data)
         }
     }
 

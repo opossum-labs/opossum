@@ -49,6 +49,9 @@ impl LightFlow {
     pub const fn data(&self) -> Option<&LightData> {
         self.data.as_ref()
     }
+    pub const fn data_mut(&mut self) -> &mut Option<LightData> {
+        &mut self.data
+    }
     pub fn set_data(&mut self, data: Option<LightData>) {
         self.data = data;
     }
