@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Wavefront measurment node
 use log::warn;
-use nalgebra::{DVector, DVectorView, MatrixXx3};
+use nalgebra::{DVector, DVectorView, MatrixXx2, MatrixXx3};
 use opm_macros_lib::OpmNode;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
@@ -309,37 +309,135 @@ impl AnalysisRayTrace for WaveFront {
 
 impl Plottable for WaveFrontErrorMap {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("x position in mm".into()))?
-            .set(&PlotArgs::YLabel("y position in mm".into()))?
-            .set(&PlotArgs::CBarLabel("wavefront error in λ".into()))?
-            .set(&PlotArgs::ExpandBounds(false))?;
+        let min_x = self.x.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+        let max_x = self.x.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let range_x = max_x - min_x;
+
+        let min_y = self.y.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+        let max_y = self.y.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let range_y = max_y - min_y;
+
+        let eps = 1e-12;
+
+        if range_x > eps && range_y > eps {
+            // 2D Map Case
+            plt_params
+                .set(&PlotArgs::XLabel("x position in mm".into()))?
+                .set(&PlotArgs::YLabel("y position in mm".into()))?
+                .set(&PlotArgs::CBarLabel("wavefront error in λ".into()))?
+                .set(&PlotArgs::ExpandBounds(false))?;
+        } else if range_x > eps {
+            // 1D Line Cut (X varies)
+            plt_params
+                .set(&PlotArgs::XLabel("x position in mm".into()))?
+                .set(&PlotArgs::YLabel("wavefront error in λ".into()))?
+                .set(&PlotArgs::PlotSize((1200, 800)))?
+                .set(&PlotArgs::AxisEqual(false))?;
+        } else if range_y > eps {
+            // 1D Line Cut (Y varies)
+            plt_params
+                .set(&PlotArgs::XLabel("y position in mm".into()))?
+                .set(&PlotArgs::YLabel("wavefront error in λ".into()))?
+                .set(&PlotArgs::PlotSize((1200, 800)))?
+                .set(&PlotArgs::AxisEqual(false))?;
+        }
         Ok(())
     }
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        let mut plt_type = PlotType::ColorMesh(plt_params.clone());
-        let legend = plt_params.get_legend_flag().unwrap_or(false);
-        if let Some(plt_series) = &self.get_plot_series(&mut plt_type, legend).unwrap_or(None) {
-            let ranges = plt_series[0].define_data_based_axes_bounds(false);
-            let z_bounds = ranges
-                .get_z_bounds()
-                .unwrap_or_else(|| AxLims::new(-0.5e-3, 0.5e-3).unwrap());
-            if z_bounds.min > -1e-3 && z_bounds.max < 1e-3 {
-                _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
-                    min: -1e-3,
-                    max: 1e-3,
-                })));
+        let min_x = self.x.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+        let max_x = self.x.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let range_x = max_x - min_x;
+
+        let min_y = self.y.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+        let max_y = self.y.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let range_y = max_y - min_y;
+
+        let eps = 1e-12;
+
+        if range_x > eps && range_y > eps {
+            // 2D Map Case
+            let mut plt_type = PlotType::ColorMesh(plt_params.clone());
+            let legend = plt_params.get_legend_flag().unwrap_or(false);
+
+            // Adjust Z-axis bounds for 2D plots if data is nearly flat
+            if let Some(plt_series) = &self.get_plot_series(&mut plt_type, legend).unwrap_or(None) {
+                if !plt_series.is_empty() {
+                    let ranges = plt_series[0].define_data_based_axes_bounds(false);
+                    let z_bounds = ranges
+                        .get_z_bounds()
+                        .unwrap_or_else(|| AxLims::new(-0.5e-3, 0.5e-3).unwrap());
+                    if z_bounds.min > -1e-3 && z_bounds.max < 1e-3 {
+                        _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
+                            min: -1e-3,
+                            max: 1e-3,
+                        })));
+                    }
+                }
             }
+            plt_type
+        } else {
+            // 1D Line or Point Case
+            PlotType::Line2D(plt_params.clone())
         }
-
-        plt_type
     }
-
     fn get_plot_series(
         &self,
         _plt_type: &mut PlotType,
         _legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
+        let min_x = self.x.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+        let max_x = self.x.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let range_x = max_x - min_x;
+
+        let min_y = self.y.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+        let max_y = self.y.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let range_y = max_y - min_y;
+
+        let eps = 1e-12;
+
+        // Case 0: Single Point (0D)
+        if range_x <= eps && range_y <= eps {
+            warn!("Wavefront data has zero dimension in X and Y. Cannot plot.");
+            return Ok(None);
+        }
+
+        // Case 1: 1D Line Cut (One dimension is effectively zero)
+        if range_x <= eps || range_y <= eps {
+            // Select the varying axis and corresponding values
+            let mut data: Vec<(f64, f64)> = if range_x > eps {
+                // X varies, Y is constant
+                self.x
+                    .iter()
+                    .zip(self.wf_map.iter())
+                    .map(|(&x, &z)| (x, z))
+                    .collect()
+            } else {
+                // Y varies, X is constant
+                self.y
+                    .iter()
+                    .zip(self.wf_map.iter())
+                    .map(|(&y, &z)| (y, z))
+                    .collect()
+            };
+
+            // Sort data by the independent axis to ensure correct line plotting
+            data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+            let mut mat = MatrixXx2::zeros(data.len());
+            for (i, (coord, val)) in data.iter().enumerate() {
+                mat[(i, 0)] = *coord;
+                mat[(i, 1)] = *val;
+            }
+
+            let plt_series = PlotSeries::new(
+                &PlotData::Dim2 { xy_data: mat },
+                RGBAColor(255, 0, 0, 1.),
+                None,
+            );
+            return Ok(Some(vec![plt_series]));
+        }
+
+        // Case 2: 2D Map (Original Logic)
         if let (Ok((x_interp, _)), Ok((y_interp, _))) = (
             create_linspace_axes(DVectorView::from(&DVector::from_vec(self.x.clone())), 100),
             create_linspace_axes(DVectorView::from(&DVector::from_vec(self.y.clone())), 100),
