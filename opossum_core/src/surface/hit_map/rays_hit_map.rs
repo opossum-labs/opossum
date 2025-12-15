@@ -608,12 +608,12 @@ impl RaysHitMap {
     ) -> OpmResult<FluenceData> {
         if let HitPoints::Energy(hit_points) = &self.hit_points {
             let mut kde = Kde::default();
-            let hitmap_2d = hit_points
-                .iter()
-                .map(|p| (p.position.xy(), p.value))
-                .collect();
-            kde.set_hit_map(hitmap_2d);
-            let mut est_bandwidth = kde.bandwidth_estimate();
+            // Define Accessors
+            let accessor = |p: &EnergyHitPoint| (p.position.xy(), p.value);
+            let pos_accessor = |p: &EnergyHitPoint| p.position.xy();
+            // Estimate bandwidth
+            let mut est_bandwidth = Kde::bandwidth_estimate(hit_points, pos_accessor);
+
             if !est_bandwidth.is_normal() {
                 est_bandwidth = micrometer!(10.0);
             }
@@ -624,7 +624,13 @@ impl RaysHitMap {
                 } else {
                     self.calc_2d_bounding_box(3. * est_bandwidth)?
                 };
-            let fluence_matrix = kde.kde_2d(&(left..right, bottom..top), nr_of_points);
+            let fluence_matrix = kde.kde_2d(
+                hit_points,
+                accessor,
+                &(left..right, bottom..top),
+                nr_of_points,
+            );
+
             let fluence_data = FluenceData::new(
                 fluence_matrix,
                 left..right,

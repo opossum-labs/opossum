@@ -7,3 +7,5 @@
 !playground/.gitkeep 
 .VSCodeCounter
 *.wxs
+profile.json.*
+profile.kernel.etl

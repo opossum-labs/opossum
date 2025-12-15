@@ -1429,34 +1429,46 @@ impl Rays {
     /// # Errors
     /// This function errors when the splitting of the rays by their wavelengths fails. For more info see `split_ray_bundle_by_wavelength`
     pub fn get_rays_position_history(&self, with_current: bool) -> OpmResult<RayPositionHistories> {
-        let (rays_by_wavelength, wavelengths) =
-            self.split_ray_bundle_by_wavelength(nanometer!(1.), false)?;
-
-        let mut ray_pos_hists = Vec::<RayPositionHistorySpectrum>::with_capacity(wavelengths.len());
-        for (ray_bundle, wvl) in izip!(rays_by_wavelength, wavelengths) {
-            let mut rays_pos_history =
-                Vec::<MatrixXx3<Length>>::with_capacity(ray_bundle.ray_bundle.len());
-            for ray in &ray_bundle {
-                if with_current {
-                    rays_pos_history.push(ray.position_history_with_current());
-                } else {
-                    rays_pos_history.push(ray.position_history());
-                }
+        if self.ray_bundle.is_empty() {
+            return Err(OpossumError::Other(
+                "No rays in this bundle! Cannot calculate position history.".into(),
+            ));
+        }
+        let mut buckets: std::collections::BTreeMap<isize, (Length, Vec<MatrixXx3<Length>>)> =
+            std::collections::BTreeMap::new();
+        let valid_rays_iter = self.ray_bundle.iter().filter(|r| r.valid());
+        let wavelength_bin_size = nanometer!(1.0);
+        let bin_size_nm = wavelength_bin_size.get::<nanometer>();
+        for ray in valid_rays_iter {
+            let wvl = ray.wavelength();
+            let wvl_nm = wvl.get::<nanometer>();
+            #[allow(clippy::cast_possible_truncation)]
+            let bin_idx = (wvl_nm / bin_size_nm).floor() as isize;
+            let entry = buckets.entry(bin_idx).or_insert_with(|| {
+                let center_wvl_val = (to_f64(bin_idx) + 0.5) * bin_size_nm;
+                (nanometer!(center_wvl_val), Vec::new())
+            });
+            if with_current {
+                entry.1.push(ray.position_history_with_current());
+            } else {
+                entry.1.push(ray.position_history());
             }
+        }
+        let mut ray_pos_hists = Vec::with_capacity(buckets.len());
+        for (_, (center_wvl, history_list)) in buckets {
             ray_pos_hists.push(RayPositionHistorySpectrum::new(
-                rays_pos_history,
-                wvl,
-                nanometer!(1.),
+                history_list,
+                center_wvl,
+                wavelength_bin_size,
             )?);
         }
-
         Ok(RayPositionHistories {
             rays_pos_history: ray_pos_hists,
             plot_view_direction: None,
             ray_transparency: 0.4,
         })
     }
-    /// Invalide all rays that have a number of refractions higher or equal than the given upper limit.
+    /// Invalidate all rays that have a number of refractions higher or equal than the given upper limit.
     pub fn filter_by_nr_of_refractions(&mut self, max_refractions: usize) {
         for ray in self
             .ray_bundle

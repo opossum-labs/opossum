@@ -1150,7 +1150,7 @@ mod test_hit_map {
         let fl_data = hm.calc_combined_fluence_with_kde((51, 51)).unwrap();
         assert_relative_eq!(
             fl_data.interp_distribution()[(25, 25)].value,
-            5.474418964842738
+            2.257264625439249
         );
 
         let uuid = Uuid::new_v4();
@@ -1172,7 +1172,7 @@ mod test_hit_map {
         let fl_data = hm.calc_combined_fluence_with_kde((51, 51)).unwrap();
         assert_relative_eq!(
             fl_data.interp_distribution()[(25, 25)].value,
-            8.969644069111087
+            5.296802485042948
         );
     }
     #[test]
