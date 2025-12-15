@@ -293,6 +293,7 @@ impl OpmDocument {
             };
             info!("Analysis #{}", ana.0);
             analyzer.analyze(&mut self.scenery)?;
+            info!("Generating report #{}", ana.0);
             reports.push(analyzer.report(&self.scenery)?);
             self.scenery.clear_edges();
             self.scenery.reset_data();
