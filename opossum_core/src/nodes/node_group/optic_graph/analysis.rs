@@ -108,7 +108,6 @@ impl OpticGraph {
                 edges_data.insert(edge_weight.target_port().to_owned(), data);
             }
         }
-
         edges_data
     }
     /// Clear the [`LightData`] stored in the edges of this [`OpticGraph`]. Useful for back-
