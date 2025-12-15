@@ -59,7 +59,6 @@ impl Default for Lens {
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
                 },
-                // and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 Proptype::Curvature(millimeter!(500.0)),
             )
             .unwrap();
@@ -70,7 +69,6 @@ impl Default for Lens {
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
                 },
-                // and_validator(vec![numeric_is_not_zero(), numeric_is_not_nan()]),
                 Proptype::Curvature(millimeter!(-500.0)),
             )
             .unwrap();
@@ -81,7 +79,6 @@ impl Default for Lens {
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsFinite, Validator::NumericIsPositive],
                 },
-                // and_validator(vec![numeric_is_positive(), numeric_is_finite()]),
                 millimeter!(10.0).into(),
             )
             .unwrap();

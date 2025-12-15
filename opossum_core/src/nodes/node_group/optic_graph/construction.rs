@@ -30,8 +30,9 @@ impl OpticGraph {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the graph is set as `inverted` and a node is added. (This could end up in
-    /// a weird / undefined behaviour)
+    /// This function returns an error if:
+    /// - The graph is set as `inverted`.
+    /// - A node with the same [`Uuid`] already exists in the graph.
     pub fn add_node<T: Analyzable + 'static>(&mut self, node: T) -> OpmResult<Uuid> {
         if self.is_inverted() {
             return Err(OpossumError::OpticGroup(
@@ -39,6 +40,12 @@ impl OpticGraph {
             ));
         }
         let node_id = node.node_attr().uuid();
+        // Paranoia check: Ensure UUID does not already exist
+        if self.node_idx_by_uuid(node_id).is_some() {
+            return Err(OpossumError::OpticGroup(format!(
+                "node with uuid {node_id} already exists"
+            )));
+        }
         self.g.add_node(OpticRef::new(
             Arc::new(Mutex::new(node)),
             self.global_confg(),
@@ -610,6 +617,21 @@ mod test {
         let mut og = OpticGraph::default();
         og.set_is_inverted(true);
         assert!(og.add_node(Dummy::default()).is_err());
+    }
+    #[test]
+    fn add_node_duplicate_uuid() {
+        let mut og = OpticGraph::default();
+        let node1 = Dummy::default();
+        // We clone the node to get a second instance with the exact same UUID.
+        let node2 = node1.clone();
+        let id1 = og.add_node(node1).unwrap();
+        let result = og.add_node(node2);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert_eq!(
+            err_msg,
+            format!("OpticGroup:node with uuid {id1} already exists")
+        );
     }
     #[test]
     fn connect_nodes_ok() {
