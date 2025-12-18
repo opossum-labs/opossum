@@ -5,6 +5,7 @@ use super::node_attr::NodeAttr;
 use crate::{
     error::{OpmResult, OpossumError},
     meter, millimeter,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
@@ -21,6 +22,10 @@ use uom::si::f64::Length;
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
+
+inventory::submit! {
+    NodeRegistration::new::<CylindricLens>("cylindric lens", "cylindric lens")
+}
 
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("aqua")]

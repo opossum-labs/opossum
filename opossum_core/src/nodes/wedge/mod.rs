@@ -5,6 +5,7 @@ use crate::{
     degree,
     error::{OpmResult, OpossumError},
     millimeter,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
@@ -20,6 +21,10 @@ use uom::si::f64::{Angle, Length};
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
+
+inventory::submit! {
+    NodeRegistration::new::<Wedge>("wedge", "wedged substrate (prism)")
+}
 
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("aquamarine")]

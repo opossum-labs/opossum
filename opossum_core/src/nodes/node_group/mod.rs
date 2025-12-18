@@ -10,6 +10,7 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{LightData, light_data_builder::LightDataBuilder},
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     optic_ref::OpticRef,
@@ -33,6 +34,9 @@ use std::{
 use uom::si::f64::Length;
 use uuid::Uuid;
 
+inventory::submit! {
+    NodeRegistration::new::<NodeGroup>("group", "group node containing other nodes or groups")
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// The basic building block of an optical system. It represents a group of other optical
 /// nodes ([`OpticNode`]s) arranged in a (sub)graph.

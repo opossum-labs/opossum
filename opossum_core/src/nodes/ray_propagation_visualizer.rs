@@ -20,6 +20,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     millimeter,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
@@ -28,6 +29,11 @@ use crate::{
     reporting::node_report::NodeReport,
     spectrum::Spectrum,
 };
+
+inventory::submit! {
+    NodeRegistration::new::<RayPropagationVisualizer>("ray propagation", "ray propagation plotter")
+}
+
 /// A ray-propagation monitor
 ///
 /// It generates a plot that visualizes the ray path during propagtaion through the scenery.

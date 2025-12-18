@@ -11,6 +11,7 @@ use crate::{
     error::OpmResult,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Properties, Proptype},
@@ -23,6 +24,10 @@ use opm_macros_lib::OpmNode;
 
 /// alias for uom `RadiantExposure`, as this name is rather uncommon to use for laser scientists
 pub type Fluence = uom::si::f64::RadiantExposure;
+
+inventory::submit! {
+    NodeRegistration::new::<FluenceDetector>("fluence detector", "fluence detector")
+}
 
 /// A fluence monitor
 ///

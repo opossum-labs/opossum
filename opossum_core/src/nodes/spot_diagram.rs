@@ -19,6 +19,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     nanometer,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
@@ -34,6 +35,10 @@ use crate::{
     },
 };
 use core::f64;
+
+inventory::submit! {
+    NodeRegistration::new::<SpotDiagram>("spot diagram", "spot diagram detector")
+}
 
 /// A spot-diagram monitor
 ///

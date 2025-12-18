@@ -15,6 +15,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     meter, millimeter,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
@@ -25,6 +26,10 @@ use crate::{
 };
 use opm_macros_lib::OpmNode;
 use uom::si::f64::Length;
+
+inventory::submit! {
+    NodeRegistration::new::<ThinMirror>("mirror", "ideal flat/spherical mirror")
+}
 
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("aliceblue")]

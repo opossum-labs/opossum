@@ -20,6 +20,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     meter,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
@@ -28,6 +29,10 @@ use crate::{
     surface::{Parabola, geo_surface::GeoSurfaceRef, optic_surface::OpticSurface},
     utils::geom_transformation::Isometry,
 };
+
+inventory::submit! {
+    NodeRegistration::new::<ParabolicMirror>("parabolic mirror", "parabolic mirror")
+}
 
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("chocolate2")]

@@ -61,7 +61,7 @@ spade = "2.12"
 earcutr = "0.5"
 num-traits = "0.2"
 mutants = "0.0.3"
-
+inventory = "0.3"
 
 [lints.rust]
 # missing_docs = "warn"

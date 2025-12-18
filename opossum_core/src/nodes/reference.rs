@@ -6,6 +6,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     light_result::LightResult,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::OpticPorts,
     optic_ref::OpticRef,
@@ -15,6 +16,10 @@ use crate::{
 use opm_macros_lib::OpmNode;
 use std::sync::{Arc, Mutex, Weak};
 use uuid::Uuid;
+
+inventory::submit! {
+    NodeRegistration::new::<NodeReference>("reference", "reference to another node")
+}
 
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("lightsalmon3")]
