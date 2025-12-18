@@ -42,7 +42,7 @@ pub enum MenuSelection {
 #[component]
 pub fn MenuBar(
     menu_item_selected: Signal<Option<MenuSelection>>,
-    project_directory: Signal<Option<PathBuf>>,
+    project_directory: ReadSignal<Option<PathBuf>>,
     model_file_path: ReadSignal<Option<PathBuf>>,
     model_modified: ReadSignal<bool>,
     mut pending_action: Signal<Option<PendingAction>>,
