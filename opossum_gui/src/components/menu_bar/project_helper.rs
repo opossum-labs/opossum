@@ -12,13 +12,12 @@ use web_sys;
 pub async fn open_project(mut menu_item_selected: Signal<Option<MenuSelection>>) {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        // AsyncFileDialog nutzen
         let file = AsyncFileDialog::new()
             .set_directory("/")
             .set_title("Open OPOSSUM setup file")
             .add_filter("Opossum setup file", &["opm"])
             .pick_file()
-            .await; // Gibt Kontrolle an Event-Loop ab, bis User klickt
+            .await;
 
         if let Some(handle) = file {
             menu_item_selected.set(Some(MenuSelection::OpenProject(
@@ -54,7 +53,6 @@ pub async fn save_project_as(mut menu_item_selected: Signal<Option<MenuSelection
     #[cfg(target_arch = "wasm32")]
     {}
 }
-
 /// Saves a project under the given path
 /// (Works for WASM only if `model_file_path` exists).
 #[allow(clippy::future_not_send)]
@@ -70,18 +68,15 @@ pub async fn save_project(
             .set_title("Save OPOSSUM setup file")
             .add_filter("Opossum setup file", &["opm"])
             .save_file()
-            .await; // Wartet hier, ohne zu blockieren
+            .await;
         if let Some(handle) = file {
-            // handle.path() gibt den Pfad zurück
             menu_item_selected.set(Some(MenuSelection::SaveProject(
                 handle.path().to_path_buf(),
             )));
         }
     }
 }
-
 /// Shows a dialog for selecting the report directory.
-// Auch set_report_directory sollte asynchron werden
 #[allow(clippy::future_not_send)]
 pub async fn set_report_directory(mut menu_item_selected: Signal<Option<MenuSelection>>) {
     #[cfg(not(target_arch = "wasm32"))]

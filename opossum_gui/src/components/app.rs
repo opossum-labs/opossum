@@ -43,6 +43,7 @@ pub fn App() -> Element {
         menu_item_selected,
         model_modified.into(),
         model_file_path.into(),
+        project_directory.into(),
         pending_action,
         show_alert,
     );

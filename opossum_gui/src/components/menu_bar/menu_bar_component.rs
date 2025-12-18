@@ -5,8 +5,6 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize},
 };
 use opossum_core::prelude::*;
-#[cfg(not(target_arch = "wasm32"))]
-use rfd::FileDialog;
 use std::path::PathBuf;
 
 use crate::components::{
@@ -16,9 +14,9 @@ use crate::components::{
     },
     menu_bar::{
         edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+        file_path_display::FilePathDisplay,
         help::about::About,
         open_project,
-        path_helper::abbreviate_path,
     },
     short_cuts::{PendingAction, SHORTCUTS, ShortCutAction, ShortcutHandler},
 };
@@ -51,7 +49,7 @@ pub fn MenuBar(
     mut show_alert: Signal<bool>,
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
-
+    let short_cut_handler = use_context::<ShortcutHandler>();
     let mut request_action = move |action: PendingAction| {
         if *model_modified.read() {
             pending_action.set(Some(action));
@@ -243,24 +241,7 @@ pub fn MenuBar(
                         }
                     }
                     // display file path
-                    {
-                        let (display_path, full_path) = model_file_path()
-                            .map_or_else(
-                                || (
-                                    "unsaved.opm".to_string(),
-                                    "this model has not been saved yet".to_string(),
-                                ),
-                                |path| (abbreviate_path(&path, 40), path.to_string_lossy().to_string()),
-                            );
-                        let modified_marker = if model_modified() { "*" } else { "" };
-                        rsx! {
-                            li { class: "nav-item d-flex align-items-center",
-                                span { class: "navbar-text text-white-50 ms-3", title: "{full_path}",
-                                    "{display_path} {modified_marker}"
-                                }
-                            }
-                        }
-                    }
+                    FilePathDisplay {model_file_path, model_modified}
                 }
             }
             ExpandOnClick { maximize_symbol }
@@ -272,20 +253,7 @@ pub fn MenuBar(
                     div { class: "d-flex align-items-center",
                         button {
                             class: "btn btn-success me-4",
-                            onclick: move |_| {
-                                if project_directory().is_none() {
-                                    let path = FileDialog::new()
-                                        .set_directory("./")
-                                        .set_title("Select OPOSSUM report directory")
-                                        .pick_folder();
-                                    if let Some(path) = path {
-                                        project_directory.set(Some(path));
-                                        menu_item_selected.set(Some(MenuSelection::RunProject));
-                                    }
-                                } else {
-                                    menu_item_selected.set(Some(MenuSelection::RunProject));
-                                }
-                            },
+                            onclick: move |_| short_cut_handler.emulate(ShortCutAction::Simulate),
                             "Simulate"
                         }
                         ControlsMenu {

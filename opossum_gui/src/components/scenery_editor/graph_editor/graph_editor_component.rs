@@ -138,15 +138,21 @@ pub fn GraphEditor(
     let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
     let zoom = use_memo(move || *graph_state.read().editor_state.read().zoom.read());
 
-    // synchronize the needs_saving signal from graph_store to model_modified
     use_effect(move || {
         let graph_store = graph_state.peek().graph_store;
         let needs_saving_signal = graph_store.peek().needs_saving();
-        model_modified.set(*needs_saving_signal.read());
+        let is_unsaved = *needs_saving_signal.read();
+        if *model_modified.peek() != is_unsaved {
+            model_modified.set(is_unsaved);
+        }
         let file_path_signal = graph_store.peek().file_path();
-        model_file_path.set((*file_path_signal.read()).clone());
+        let current_path = (*file_path_signal.read()).clone();
+        
+        // Nur setzen, wenn er sich wirklich unterscheidet!
+        if *model_file_path.peek() != current_path {
+            model_file_path.set(current_path);
+        }
     });
-
     use_effect(move || {
         graph_processor.send(GraphStoreAction::GetSceneryId);
     });
