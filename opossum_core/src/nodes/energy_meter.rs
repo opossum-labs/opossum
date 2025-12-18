@@ -9,6 +9,7 @@ use crate::{
     joule,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Properties, Proptype},
@@ -41,6 +42,10 @@ impl From<Metertype> for Proptype {
     fn from(value: Metertype) -> Self {
         Self::Metertype(value)
     }
+}
+
+inventory::submit! {
+    NodeRegistration::new::<EnergyMeter>("energy meter", "ideal energy meter")
 }
 /// An (ideal) energy / power meter.
 ///

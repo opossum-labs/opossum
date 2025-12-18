@@ -10,6 +10,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     micrometer, nanometer,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
@@ -83,6 +84,10 @@ pub enum FilterType {
     Constant(f64),
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
+}
+
+inventory::submit! {
+    NodeRegistration::new::<IdealFilter>("ideal filter", "ideal filter")
 }
 
 #[derive(OpmNode, Debug, Clone)]

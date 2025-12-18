@@ -10,9 +10,14 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
 };
+
+inventory::submit! {
+    NodeRegistration::new::<Dummy>("dummy", "dummy node")
+}
 
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("gray")]

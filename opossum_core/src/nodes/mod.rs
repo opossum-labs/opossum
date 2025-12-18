@@ -67,81 +67,42 @@ pub use source_helper::{
     collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
 };
 pub use spot_diagram::SpotDiagram;
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock, Mutex},
-};
+use std::sync::{Arc, Mutex};
 pub use wedge::Wedge;
 
 use crate::{
+    analyzers::Analyzable,
     error::{OpmResult, OpossumError},
     optic_ref::OpticRef,
 };
-// A type alias for the node constructor function
-type NodeConstructor = Box<dyn Fn() -> OpticRef + Send + Sync>;
 
-// Struct to hold all info about a node type
-struct NodeInfo {
-    constructor: NodeConstructor,
+/// Struct to hold all info about a node type
+pub struct NodeRegistration {
+    name: &'static str,
     description: &'static str,
+    constructor: fn() -> OpticRef,
 }
 
-// Create a node factory as single point of truth.
-// Create a lazily-initialized static HashMap.
-static NODE_FACTORY: LazyLock<HashMap<&'static str, NodeInfo>> = LazyLock::new(|| {
-    let mut map = HashMap::new();
-    // A little helper macro to reduce boilerplate when adding nodes.
-    macro_rules! register_node {
-        ($map:expr, $name:expr, $type:ty, $desc:expr) => {
-            $map.insert(
-                $name,
-                NodeInfo {
-                    constructor: Box::new(|| {
-                        OpticRef::new(Arc::new(Mutex::new(<$type>::default())), None)
-                    }),
-                    description: $desc,
-                },
-            );
-        };
+impl NodeRegistration {
+    /// Create a new node registration
+    #[must_use]
+    pub const fn new<T>(name: &'static str, description: &'static str) -> Self
+    where
+        T: Analyzable + Default + 'static,
+    {
+        Self {
+            name,
+            description,
+            // Hier wird der Boilerplate-Code generiert:
+            constructor: Self::build_node_wrapper::<T>,
+        }
     }
+    fn build_node_wrapper<T: Analyzable + Default + 'static>() -> OpticRef {
+        OpticRef::new(Arc::new(Mutex::new(T::default())), None)
+    }
+}
 
-    register_node!(map, "dummy", Dummy, "dummy node");
-    register_node!(map, "beam splitter", BeamSplitter, "ideal beam splitter");
-    register_node!(map, "energy meter", EnergyMeter, "ideal energy meter");
-    register_node!(
-        map,
-        "group",
-        NodeGroup,
-        "group node containing other nodes or groups"
-    );
-    register_node!(map, "ideal filter", IdealFilter, "ideal filter");
-    register_node!(
-        map,
-        "reflective grating",
-        ReflectiveGrating,
-        "reflective optical grating"
-    );
-    register_node!(map, "reference", NodeReference, "reference to another node");
-    register_node!(map, "lens", Lens, "spherical lens");
-    register_node!(map, "cylindric lens", CylindricLens, "cylindric lens");
-    register_node!(map, "source", Source, "light source");
-    register_node!(map, "spectrometer", Spectrometer, "ideal spectrometer");
-    register_node!(map, "spot diagram", SpotDiagram, "spot diagram detector");
-    register_node!(map, "wavefront monitor", WaveFront, "wavefront detector");
-    register_node!(map, "paraxial surface", ParaxialSurface, "ideal thin lens");
-    register_node!(
-        map,
-        "ray propagation",
-        RayPropagationVisualizer,
-        "ray propagation plotter"
-    );
-    register_node!(map, "fluence detector", FluenceDetector, "fluence detector");
-    register_node!(map, "wedge", Wedge, "wedged substrate (prism)");
-    register_node!(map, "mirror", ThinMirror, "ideal flat / spherical mirror");
-    register_node!(map, "parabolic mirror", ParabolicMirror, "parabolic mirror");
-
-    map
-});
+inventory::collect!(NodeRegistration);
 
 /// Factory function creating a new reference of an optical node of the given type.
 ///
@@ -151,13 +112,20 @@ static NODE_FACTORY: LazyLock<HashMap<&'static str, NodeInfo>> = LazyLock::new(|
 /// # Errors
 ///
 /// This function will return an [`OpossumError`] if there is no node with the given type.
+// pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
+//     NODE_FACTORY
+//         .get(node_type)
+//         .map(|info| (info.constructor)())
+//         .ok_or_else(|| OpossumError::Other(format!("cannot create node type <{node_type}>")))
+// }
 pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
-    NODE_FACTORY
-        .get(node_type)
+    // Wir iterieren durch das Inventory und suchen den passenden Namen.
+    inventory::iter::<NodeRegistration>
+        .into_iter()
+        .find(|info| info.name == node_type)
         .map(|info| (info.constructor)())
         .ok_or_else(|| OpossumError::Other(format!("cannot create node type <{node_type}>")))
 }
-
 /// Return a list of all available node types.
 ///
 /// Returns a vector of tuples containing the name and the description of all
@@ -166,13 +134,12 @@ pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
 /// separate endpoint for adding reference nodes.
 #[must_use]
 pub fn node_types() -> Vec<(&'static str, &'static str)> {
-    NODE_FACTORY
-        .iter()
-        .filter(|(name, _)| **name != "reference") // Filter out "reference" as in the original
-        .map(|(name, info)| (*name, info.description))
+    inventory::iter::<NodeRegistration>
+        .into_iter()
+        .filter(|info| info.name != "reference") // Filterlogik wie zuvor
+        .map(|info| (info.name, info.description))
         .collect()
 }
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -180,11 +147,9 @@ mod test {
     fn create_node_ref_error() {
         assert!(create_node_ref("test").is_err());
     }
-
     #[test]
     fn create_node_ref_ok() {
-        // Test against the keys in our factory map, which is now the single source of truth.
-        for node_type in NODE_FACTORY.keys() {
+        for (node_type, _) in node_types() {
             assert!(create_node_ref(node_type).is_ok());
         }
     }

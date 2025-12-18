@@ -13,6 +13,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
+    nodes::NodeRegistration,
     num_per_mm,
     optic_node::OpticNode,
     optic_ports::PortType,
@@ -32,6 +33,10 @@ use uom::si::{
 /// a type definition for a linear number density: `1/length_unit`.
 /// used, for example, for the periodic grating structure
 pub type LinearDensity = uom::si::f64::LinearNumberDensity;
+
+inventory::submit! {
+    NodeRegistration::new::<ReflectiveGrating>("reflective grating", "reflective optical grating")
+}
 
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("cornsilk")]

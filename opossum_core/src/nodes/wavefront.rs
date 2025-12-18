@@ -16,6 +16,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     nanometer,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
@@ -30,6 +31,10 @@ use crate::{
 };
 
 use super::node_attr::NodeAttr;
+
+inventory::submit! {
+    NodeRegistration::new::<WaveFront>("wavefront monitor", "wavefront detector")
+}
 
 /// A wavefront monitor node
 ///
@@ -360,18 +365,18 @@ impl Plottable for WaveFrontErrorMap {
             let legend = plt_params.get_legend_flag().unwrap_or(false);
 
             // Adjust Z-axis bounds for 2D plots if data is nearly flat
-            if let Some(plt_series) = &self.get_plot_series(&mut plt_type, legend).unwrap_or(None) {
-                if !plt_series.is_empty() {
-                    let ranges = plt_series[0].define_data_based_axes_bounds(false);
-                    let z_bounds = ranges
-                        .get_z_bounds()
-                        .unwrap_or_else(|| AxLims::new(-0.5e-3, 0.5e-3).unwrap());
-                    if z_bounds.min > -1e-3 && z_bounds.max < 1e-3 {
-                        _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
-                            min: -1e-3,
-                            max: 1e-3,
-                        })));
-                    }
+            if let Some(plt_series) = &self.get_plot_series(&mut plt_type, legend).unwrap_or(None)
+                && !plt_series.is_empty()
+            {
+                let ranges = plt_series[0].define_data_based_axes_bounds(false);
+                let z_bounds = ranges
+                    .get_z_bounds()
+                    .unwrap_or_else(|| AxLims::new(-0.5e-3, 0.5e-3).unwrap());
+                if z_bounds.min > -1e-3 && z_bounds.max < 1e-3 {
+                    _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
+                        min: -1e-3,
+                        max: 1e-3,
+                    })));
                 }
             }
             plt_type

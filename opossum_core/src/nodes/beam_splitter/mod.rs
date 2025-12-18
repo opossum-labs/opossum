@@ -9,7 +9,7 @@ use crate::{
     analyzers::{AnalyzerType, raytrace::MissedSurfaceStrategy},
     error::{OpmResult, OpossumError},
     lightdata::LightData,
-    nodes::ideal_filter::SpectralFilterBuilder,
+    nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
@@ -126,6 +126,10 @@ impl From<SplittingConfigBuilder> for Proptype {
     fn from(config: SplittingConfigBuilder) -> Self {
         Self::SplittingConfigBuilder(config)
     }
+}
+
+inventory::submit! {
+    NodeRegistration::new::<BeamSplitter>("beam splitter", "ideal beam splitter")
 }
 
 #[derive(OpmNode, Debug, Clone)]

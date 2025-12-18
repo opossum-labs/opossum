@@ -14,6 +14,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     nanometer,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Properties, Proptype},
@@ -47,6 +48,9 @@ impl From<SpectrometerType> for Proptype {
     }
 }
 
+inventory::submit! {
+    NodeRegistration::new::<Spectrometer>("spectrometer", "ideal spectrometer")
+}
 /// An (ideal) spectrometer
 ///
 /// It normally measures / displays the spectrum of the incoming light.

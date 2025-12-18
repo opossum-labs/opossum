@@ -16,6 +16,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::{LightData, light_data_builder::LightDataBuilder},
     millimeter,
+    nodes::NodeRegistration,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
@@ -53,6 +54,9 @@ pub struct Source {
 }
 unsafe impl Send for Source {}
 
+inventory::submit! {
+    NodeRegistration::new::<Source>("source", "light source")
+}
 impl Default for Source {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("source");
