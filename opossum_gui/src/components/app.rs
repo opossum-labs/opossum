@@ -1,4 +1,4 @@
-// --- Gemeinsame Importe ---
+// --- Common imports ---
 use crate::{
     api::delete_scenery,
     components::{
@@ -36,12 +36,12 @@ pub fn App() -> Element {
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> = use_signal(|| None);
     let cxt_command = use_signal(|| None::<CxtCommand>);
 
-    // Globale Status-Signale
+    // global signals
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
     let model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
     let model_modified: Signal<bool> = use_signal(|| false);
 
-    // Status für "Unsaved Changes" Dialog
+    // status for "Unsaved Changes" dialog
     let mut pending_action = use_signal(|| Option::<PendingAction>::None);
     let mut show_alert = use_signal(|| false);
 
@@ -51,7 +51,6 @@ pub fn App() -> Element {
         });
     });
 
-    // --- 1. Ausführung von Befehlen (ohne Dirty-Check) ---
     let mut execute_immediate = move |cmd: AppCommand| {
         match cmd {
             AppCommand::NewProject => {
@@ -113,11 +112,7 @@ pub fn App() -> Element {
             _ => {}
         }
     };
-
-    // FIX 1: Closure klonen für den Alert Handler
     let mut execute_immediate_for_alert = execute_immediate.clone();
-
-    // --- 2. Zentrale Befehlsverarbeitung (mit Dirty-Check) ---
     let mut process_command = move |cmd: AppCommand| {
         match cmd {
             AppCommand::NewProject => {
@@ -159,7 +154,6 @@ pub fn App() -> Element {
     let on_alert_confirm = move |_| {
         if let Some(action) = *pending_action.read() {
             match action {
-                // Nutzung der geklonten Closure
                 PendingAction::NewProject => execute_immediate_for_alert(AppCommand::NewProject),
                 PendingAction::Quit => execute_immediate_for_alert(AppCommand::Quit),
                 PendingAction::OpenProject => execute_immediate_for_alert(AppCommand::OpenTrigger),
@@ -306,7 +300,6 @@ pub fn App() -> Element {
     // }
 }
 
-// FIX 2: Typen auf Signal<> geändert (statt ReadSignal<>)
 #[component]
 fn CommonAppLayout(
     cxt_command: Signal<Option<CxtCommand>>,
@@ -351,8 +344,6 @@ fn CommonAppLayout(
                 div { class: "col",
                     MenuBar {
                         project_directory,
-                        // HIER SIND DIE FIXES:
-                        // Wir zwingen den Compiler, die Konvertierung zu ReadSignal zu nutzen.
                         model_file_path: Into::<ReadSignal<Option<PathBuf>>>::into(model_file_path),
                         model_modified: Into::<ReadSignal<bool>>::into(model_modified),
                         on_menu_action,

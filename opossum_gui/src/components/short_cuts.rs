@@ -47,12 +47,10 @@ impl From<ShortCutAction> for AppCommand {
             ShortCutAction::Center => AppCommand::CenterGraph { zoom_to_fit: false },
             ShortCutAction::ZoomToFit => AppCommand::CenterGraph { zoom_to_fit: true },
             ShortCutAction::AutoLayout => AppCommand::AutoLayout,
-            // Save vom Shortcut ist immer generisch; App entscheidet ob Save oder SaveAs
             ShortCutAction::Save => AppCommand::Save,
             ShortCutAction::SaveAs => AppCommand::SaveAs,
             ShortCutAction::Open => AppCommand::OpenTrigger,
             ShortCutAction::New => AppCommand::NewProject,
-            // Report vom Shortcut triggert Dialog (leerer Pfad als Marker)
             ShortCutAction::Report => AppCommand::SetReportDir(PathBuf::new()),
             ShortCutAction::Simulate => AppCommand::Simulate,
             ShortCutAction::Quit => AppCommand::Quit,
@@ -75,7 +73,6 @@ pub static SHORTCUTS: LazyLock<HashMap<ShortCutAction, Shortcut>> = LazyLock::ne
     m
 });
 
-/// Helfer zum Ermitteln der Action aus einem Event
 pub fn get_action_from_event(event: &KeyboardEvent) -> Option<ShortCutAction> {
     SHORTCUTS.values().find(|sc| sc.matches(event)).map(|sc| sc.action)
 }
@@ -109,13 +106,15 @@ impl Shortcut {
             && self.alt == modifiers.alt()
             && self.key.to_uppercase() == key
     }
+}
 
-    pub fn display(&self) -> String {
+impl fmt::Display for Shortcut {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts = vec![];
         if self.ctrl_or_meta { parts.push(primary_modifier_label()); }
         if self.shift { parts.push("Shift"); }
         if self.alt { parts.push("Alt"); }
         parts.push(self.key);
-        parts.join("+")
+        write!(f, "{}", parts.join("+"))
     }
 }

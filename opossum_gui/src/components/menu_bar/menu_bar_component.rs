@@ -253,8 +253,7 @@ fn hide_dropdown(id: &str) {
 fn MenuListItemShortCut(short_cut_action: ShortCutAction, on_click: EventHandler<MouseEvent>) -> Element {
     let short_cut_display = SHORTCUTS
         .get(&short_cut_action)
-        .map_or(String::new(), |sc| sc.display());
-        
+        .map_or(String::new(), |sc| sc.to_string());
     rsx! {
         li {
             a {
