@@ -2,18 +2,22 @@
 use crate::{
     api::delete_scenery,
     components::{
+        alert_dialog::{
+            AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
+            AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
+        },
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
-        menu_bar::menu_bar_component::{MenuBar, MenuSelection},
+        menu_bar::{menu_bar_component::{AppCommand, MenuBar}, project_helper::{select_folder_path, select_open_path, select_save_path}},
         scenery_editor::{GraphEditor, NodeEditorCommand},
-        short_cuts::{PendingAction, ShortcutHandler},
+        short_cuts::{PendingAction, get_action_from_event},
     },
 };
 use dioxus::prelude::*;
 use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::{ProcessHandle, components::simulation::simulation_window::SimulationWindow};
+use crate::{components::simulation::simulation_window::SimulationWindow, ProcessHandle};
 #[cfg(not(target_arch = "wasm32"))]
 use dioxus::desktop::{tao::window::ResizeDirection, use_window};
 
@@ -29,79 +33,61 @@ pub fn App() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     let mut run_simulation = use_signal(|| false);
 
-    let mut node_editor_command: Signal<Option<NodeEditorCommand>> =
-        use_signal(|| None::<NodeEditorCommand>);
+    let mut node_editor_command: Signal<Option<NodeEditorCommand>> = use_signal(|| None);
     let cxt_command = use_signal(|| None::<CxtCommand>);
-    let menu_item_selected: Signal<Option<MenuSelection>> = use_signal(|| None::<MenuSelection>);
+
+    // Globale Status-Signale
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
     let model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
     let model_modified: Signal<bool> = use_signal(|| false);
-    let pending_action = use_signal(|| Option::<PendingAction>::None);
-    let show_alert = use_signal(|| false);
 
-    let short_cut_handler = ShortcutHandler::new(
-        menu_item_selected,
-        model_modified.into(),
-        model_file_path.into(),
-        project_directory.into(),
-        pending_action,
-        show_alert,
-    );
-    use_context_provider(|| short_cut_handler);
+    // Status für "Unsaved Changes" Dialog
+    let mut pending_action = use_signal(|| Option::<PendingAction>::None);
+    let mut show_alert = use_signal(|| false);
+
     use_effect(|| {
         spawn(async move {
             let _ = delete_scenery().await;
         });
     });
-    use_effect(move || {
-        let cxt_command = cxt_command.read();
-        if let Some(cxt_command) = &*(cxt_command) {
-            match cxt_command {
-                CxtCommand::AddRefNode(new_ref_node) => {
-                    node_editor_command.set(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
+
+    // --- 1. Ausführung von Befehlen (ohne Dirty-Check) ---
+    let mut execute_immediate = move |cmd: AppCommand| {
+        match cmd {
+            AppCommand::NewProject => {
+                node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
+            }
+            AppCommand::OpenTrigger => {
+                spawn(async move {
+                    if let Some(path) = select_open_path().await {
+                        node_editor_command.set(Some(NodeEditorCommand::LoadFile(path)));
+                    }
+                });
+            }
+            AppCommand::SaveAs => {
+                spawn(async move {
+                    if let Some(path) = select_save_path().await {
+                        node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
+                    }
+                });
+            }
+            AppCommand::SaveProject(path) => {
+                node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
+            }
+            AppCommand::SetReportDir(path) => {
+                if path.as_os_str().is_empty() {
+                    spawn(async move {
+                        if let Some(folder) = select_folder_path().await {
+                            project_directory.set(Some(folder));
+                        }
+                    });
+                } else {
+                    project_directory.set(Some(path));
                 }
             }
-        }
-    });
-    use_effect(move || {
-        let menu_item = menu_item_selected.read();
-        if let Some(menu_item) = &*(menu_item) {
-            match menu_item {
-                MenuSelection::AddNode(node_selected) => {
-                    node_editor_command
-                        .set(Some(NodeEditorCommand::AddNode(node_selected.clone())));
-                }
-                MenuSelection::AddAnalyzer(analyzer_selected) => {
-                    node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(
-                        analyzer_selected.clone(),
-                    )));
-                }
-                MenuSelection::AutoLayout => {
-                    node_editor_command.set(Some(NodeEditorCommand::AutoLayout));
-                }
-                MenuSelection::CenterGraph { zoom_to_fit } => {
-                    node_editor_command.set(Some(NodeEditorCommand::CenterGraph {
-                        zoom_to_fit: *zoom_to_fit,
-                    }));
-                }
-                MenuSelection::NewProject => {
-                    node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
-                }
-                MenuSelection::OpenProject(path) => {
-                    node_editor_command.set(Some(NodeEditorCommand::LoadFile(path.clone())));
-                }
-                MenuSelection::SaveProject(path) => {
-                    node_editor_command.set(Some(NodeEditorCommand::SaveFile(path.clone())));
-                }
-                MenuSelection::SetReportDir(path) => {
-                    project_directory.set(Some(path.clone()));
-                }
+            AppCommand::Quit => {
                 #[cfg(not(target_arch = "wasm32"))]
-                MenuSelection::RunProject => {
-                    run_simulation.set(true);
-                }
-                #[cfg(not(target_arch = "wasm32"))]
-                MenuSelection::Quit => {
+                {
                     #[cfg(not(debug_assertions))]
                     {
                         backend_handle.kill();
@@ -109,8 +95,92 @@ pub fn App() -> Element {
                     }
                     window_for_quit.close();
                 }
-                #[allow(unreachable_patterns)]
-                _ => {}
+            }
+            AppCommand::AutoLayout => node_editor_command.set(Some(NodeEditorCommand::AutoLayout)),
+            AppCommand::CenterGraph { zoom_to_fit } => {
+                node_editor_command.set(Some(NodeEditorCommand::CenterGraph { zoom_to_fit }))
+            }
+            AppCommand::AddNode(name) => {
+                node_editor_command.set(Some(NodeEditorCommand::AddNode(name)))
+            }
+            AppCommand::AddAnalyzer(atype) => {
+                node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(atype)))
+            }
+            AppCommand::Simulate => {
+                #[cfg(not(target_arch = "wasm32"))]
+                run_simulation.set(true);
+            }
+            _ => {}
+        }
+    };
+
+    // FIX 1: Closure klonen für den Alert Handler
+    let mut execute_immediate_for_alert = execute_immediate.clone();
+
+    // --- 2. Zentrale Befehlsverarbeitung (mit Dirty-Check) ---
+    let mut process_command = move |cmd: AppCommand| {
+        match cmd {
+            AppCommand::NewProject => {
+                if *model_modified.read() {
+                    pending_action.set(Some(PendingAction::NewProject));
+                    show_alert.set(true);
+                } else {
+                    execute_immediate(AppCommand::NewProject);
+                }
+            }
+            AppCommand::Quit => {
+                if *model_modified.read() {
+                    pending_action.set(Some(PendingAction::Quit));
+                    show_alert.set(true);
+                } else {
+                    execute_immediate(AppCommand::Quit);
+                }
+            }
+            AppCommand::OpenTrigger => {
+                if *model_modified.read() {
+                    pending_action.set(Some(PendingAction::OpenProject));
+                    show_alert.set(true);
+                } else {
+                    execute_immediate(AppCommand::OpenTrigger);
+                }
+            }
+            AppCommand::Save => {
+                if let Some(path) = model_file_path.read().clone() {
+                    execute_immediate(AppCommand::SaveProject(path));
+                } else {
+                    execute_immediate(AppCommand::SaveAs);
+                }
+            }
+            _ => execute_immediate(cmd),
+        }
+    };
+    let process_command_for_menu = process_command.clone();
+
+    let on_alert_confirm = move |_| {
+        if let Some(action) = *pending_action.read() {
+            match action {
+                // Nutzung der geklonten Closure
+                PendingAction::NewProject => execute_immediate_for_alert(AppCommand::NewProject),
+                PendingAction::Quit => execute_immediate_for_alert(AppCommand::Quit),
+                PendingAction::OpenProject => execute_immediate_for_alert(AppCommand::OpenTrigger),
+            }
+        }
+        pending_action.set(None);
+        show_alert.set(false);
+    };
+
+    let on_alert_cancel = move |_| {
+        pending_action.set(None);
+        show_alert.set(false);
+    };
+
+    use_effect(move || {
+        let cxt_command_val = cxt_command.read();
+        if let Some(cmd) = &*(cxt_command_val) {
+            match cmd {
+                CxtCommand::AddRefNode(new_ref_node) => {
+                    node_editor_command.set(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
+                }
             }
         }
     });
@@ -120,8 +190,11 @@ pub fn App() -> Element {
         div {
             class: "app-container",
             tabindex: 0,
-            onkeydown: move |e| short_cut_handler.handle_event(&e),
-
+            onkeydown: move |e| {
+                if let Some(action) = get_action_from_event(&e) {
+                    process_command(AppCommand::from(action));
+                }
+            },
             div {
                 class: "resize-handle-top",
                 onmousedown: {
@@ -188,7 +261,6 @@ pub fn App() -> Element {
             div {
                 class: "resize-handle-bottom-right",
                 onmousedown: {
-                    // let window = window.clone();
                     move |_| {
                         let _ = window.drag_resize_window(ResizeDirection::SouthEast);
                     }
@@ -196,49 +268,58 @@ pub fn App() -> Element {
             }
             CommonAppLayout {
                 cxt_command,
-                menu_item_selected,
+                on_menu_action: process_command_for_menu,
                 project_directory,
                 model_file_path,
                 model_modified,
                 node_editor_command,
-                pending_action,
                 show_alert,
-            }
-            SimulationWindow { show_simulation: run_simulation, project_directory }
-        }
-    }
-    #[cfg(target_arch = "wasm32")]
-    rsx! {
-        div {
-            class: "app-container",
-            tabindex: 0,
-            onkeydown: move |e| short_cut_handler.handle_event(&e),
-            CommonAppLayout {
-                cxt_command,
-                menu_item_selected,
-                project_directory,
-                model_file_path,
-                model_modified,
-                node_editor_command,
-                pending_action,
-                show_alert,
+                on_alert_confirm,
+                on_alert_cancel,
             }
         }
+        SimulationWindow { show_simulation: run_simulation, project_directory }
     }
+
+    // #[cfg(target_arch = "wasm32")]
+    // rsx! {
+    //     div {
+    //         class: "app-container",
+    //         tabindex: 0,
+    //         onkeydown: move |e| {
+    //             if let Some(action) = get_action_from_event(&e) {
+    //                 process_command(AppCommand::from(action));
+    //             }
+    //         },
+    //         CommonAppLayout {
+    //             cxt_command,
+    //             on_menu_action: process_command,
+    //             project_directory,
+    //             model_file_path,
+    //             model_modified,
+    //             node_editor_command,
+    //             show_alert,
+    //             on_alert_confirm,
+    //             on_alert_cancel,
+    //         }
+    //     }
+    // }
 }
 
+// FIX 2: Typen auf Signal<> geändert (statt ReadSignal<>)
 #[component]
 fn CommonAppLayout(
     cxt_command: Signal<Option<CxtCommand>>,
-    menu_item_selected: Signal<Option<MenuSelection>>,
-    project_directory: Signal<Option<PathBuf>>,
+    on_menu_action: EventHandler<AppCommand>,
+    project_directory: ReadSignal<Option<PathBuf>>,
     model_file_path: Signal<Option<PathBuf>>,
     model_modified: Signal<bool>,
     node_editor_command: Signal<Option<NodeEditorCommand>>,
-    pending_action: Signal<Option<PendingAction>>,
     show_alert: Signal<bool>,
+    on_alert_confirm: EventHandler<MouseEvent>,
+    on_alert_cancel: EventHandler<MouseEvent>,
 ) -> Element {
-    let mut height = use_signal(|| 100.0); // Start-Höhe (px)
+    let mut height = use_signal(|| 100.0);
     let mut dragging = use_signal(|| false);
     let mut last_y = use_signal(|| 0.0);
 
@@ -259,6 +340,7 @@ fn CommonAppLayout(
             last_y.set(evt);
         }
     };
+
     rsx! {
         ContextMenu { command: cxt_command }
         div {
@@ -268,12 +350,12 @@ fn CommonAppLayout(
             div { class: "row",
                 div { class: "col",
                     MenuBar {
-                        menu_item_selected,
                         project_directory,
-                        model_file_path,
-                        model_modified,
-                        pending_action,
-                        show_alert,
+                        // HIER SIND DIE FIXES:
+                        // Wir zwingen den Compiler, die Konvertierung zu ReadSignal zu nutzen.
+                        model_file_path: Into::<ReadSignal<Option<PathBuf>>>::into(model_file_path),
+                        model_modified: Into::<ReadSignal<bool>>::into(model_modified),
+                        on_menu_action,
                     }
                 }
             }
@@ -283,6 +365,18 @@ fn CommonAppLayout(
                 model_file_path,
             }
             Logger { drag_handler: on_mousedown, height }
+        }
+        AlertDialogRoot {
+            open: show_alert(),
+            on_open_change: move |v: bool| show_alert.set(v),
+            AlertDialogContent {
+                AlertDialogTitle { "Unsaved Changes" }
+                AlertDialogDescription { "You have unsaved changes. Do you really want to proceed and discard them?" }
+                AlertDialogActions {
+                    AlertDialogCancel { on_click: on_alert_cancel, "No" }
+                    AlertDialogAction { on_click: on_alert_confirm, "Yes" }
+                }
+            }
         }
     }
 }
