@@ -104,7 +104,7 @@ pub enum DragStatus {
 
 #[component]
 pub fn GraphEditor(
-    mut command: Signal<Option<NodeEditorCommand>>,
+    command: ReadSignal<Option<NodeEditorCommand>>,
     model_modified: Signal<bool>,
     model_file_path: Signal<Option<PathBuf>>,
 ) -> Element {
