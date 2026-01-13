@@ -8,7 +8,10 @@ use crate::{
         },
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
-        menu_bar::{menu_bar_component::{AppCommand, MenuBar}, project_helper::{select_folder_path, select_open_path, select_save_path}},
+        menu_bar::{
+            menu_bar_component::{AppCommand, MenuBar},
+            project_helper::{select_folder_path, select_open_path, select_save_path},
+        },
         scenery_editor::{GraphEditor, NodeEditorCommand},
         short_cuts::{PendingAction, get_action_from_event},
     },
@@ -17,7 +20,7 @@ use dioxus::prelude::*;
 use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::{components::simulation::simulation_window::SimulationWindow, ProcessHandle};
+use crate::{ProcessHandle, components::simulation::simulation_window::SimulationWindow};
 #[cfg(not(target_arch = "wasm32"))]
 use dioxus::desktop::{tao::window::ResizeDirection, use_window};
 
@@ -51,103 +54,106 @@ pub fn App() -> Element {
         });
     });
 
-    let mut execute_immediate = move |cmd: AppCommand| {
-        match cmd {
-            AppCommand::NewProject => {
-                node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
-            }
-            AppCommand::OpenTrigger => {
-                spawn(async move {
-                    if let Some(path) = select_open_path().await {
-                        node_editor_command.set(Some(NodeEditorCommand::LoadFile(path)));
-                    }
-                });
-            }
-            AppCommand::SaveAs => {
+    let mut execute_immediate = move |cmd: AppCommand| match cmd {
+        AppCommand::NewProject => {
+            node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
+        }
+        AppCommand::OpenTrigger => {
+            spawn(async move {
+                if let Some(path) = select_open_path().await {
+                    node_editor_command.set(Some(NodeEditorCommand::LoadFile(path)));
+                }
+            });
+        }
+        AppCommand::Save => {
+            if let Some(path) = model_file_path.read().clone() {
+                node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
+            } else {
                 spawn(async move {
                     if let Some(path) = select_save_path().await {
                         node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
                     }
                 });
             }
-            AppCommand::SaveProject(path) => {
-                node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
-            }
-            AppCommand::SetReportDir(path) => {
-                if path.as_os_str().is_empty() {
-                    spawn(async move {
-                        if let Some(folder) = select_folder_path().await {
-                            project_directory.set(Some(folder));
-                        }
-                    });
-                } else {
-                    project_directory.set(Some(path));
+        }
+        AppCommand::SaveAs => {
+            spawn(async move {
+                if let Some(path) = select_save_path().await {
+                    node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
                 }
-            }
-            AppCommand::Quit => {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    #[cfg(not(debug_assertions))]
-                    {
-                        backend_handle.kill();
-                        println!("Stopping app...")
+            });
+        }
+        AppCommand::SetReportDir(path) => {
+            if path.as_os_str().is_empty() {
+                spawn(async move {
+                    if let Some(folder) = select_folder_path().await {
+                        project_directory.set(Some(folder));
                     }
-                    window_for_quit.close();
+                });
+            } else {
+                project_directory.set(Some(path));
+            }
+        }
+        AppCommand::Quit => {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                #[cfg(not(debug_assertions))]
+                {
+                    backend_handle.kill();
+                    println!("Stopping app...")
                 }
+                window_for_quit.close();
             }
-            AppCommand::AutoLayout => node_editor_command.set(Some(NodeEditorCommand::AutoLayout)),
-            AppCommand::CenterGraph { zoom_to_fit } => {
-                node_editor_command.set(Some(NodeEditorCommand::CenterGraph { zoom_to_fit }))
-            }
-            AppCommand::AddNode(name) => {
-                node_editor_command.set(Some(NodeEditorCommand::AddNode(name)))
-            }
-            AppCommand::AddAnalyzer(atype) => {
-                node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(atype)))
-            }
-            AppCommand::Simulate => {
-                #[cfg(not(target_arch = "wasm32"))]
-                run_simulation.set(true);
-            }
-            _ => {}
+        }
+        AppCommand::AutoLayout => node_editor_command.set(Some(NodeEditorCommand::AutoLayout)),
+        AppCommand::CenterGraph { zoom_to_fit } => {
+            node_editor_command.set(Some(NodeEditorCommand::CenterGraph { zoom_to_fit }))
+        }
+        AppCommand::AddNode(name) => {
+            node_editor_command.set(Some(NodeEditorCommand::AddNode(name)))
+        }
+        AppCommand::AddAnalyzer(atype) => {
+            node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(atype)))
+        }
+        AppCommand::Simulate => {
+            #[cfg(not(target_arch = "wasm32"))]
+            run_simulation.set(true);
         }
     };
     let mut execute_immediate_for_alert = execute_immediate.clone();
-    let mut process_command = move |cmd: AppCommand| {
-        match cmd {
-            AppCommand::NewProject => {
-                if *model_modified.read() {
-                    pending_action.set(Some(PendingAction::NewProject));
-                    show_alert.set(true);
-                } else {
-                    execute_immediate(AppCommand::NewProject);
-                }
+    let mut process_command = move |cmd: AppCommand| match cmd {
+        AppCommand::NewProject => {
+            if *model_modified.read() {
+                pending_action.set(Some(PendingAction::NewProject));
+                show_alert.set(true);
+            } else {
+                execute_immediate(AppCommand::NewProject);
             }
-            AppCommand::Quit => {
-                if *model_modified.read() {
-                    pending_action.set(Some(PendingAction::Quit));
-                    show_alert.set(true);
-                } else {
-                    execute_immediate(AppCommand::Quit);
-                }
-            }
-            AppCommand::OpenTrigger => {
-                if *model_modified.read() {
-                    pending_action.set(Some(PendingAction::OpenProject));
-                    show_alert.set(true);
-                } else {
-                    execute_immediate(AppCommand::OpenTrigger);
-                }
-            }
-            AppCommand::Save => {
-                if let Some(path) = model_file_path.read().clone() {
-                    execute_immediate(AppCommand::SaveProject(path));
-                } else {
-                    execute_immediate(AppCommand::SaveAs);
-                }
-            }
-            _ => execute_immediate(cmd),
         }
+        AppCommand::Quit => {
+            if *model_modified.read() {
+                pending_action.set(Some(PendingAction::Quit));
+                show_alert.set(true);
+            } else {
+                execute_immediate(AppCommand::Quit);
+            }
+        }
+        AppCommand::OpenTrigger => {
+            if *model_modified.read() {
+                pending_action.set(Some(PendingAction::OpenProject));
+                show_alert.set(true);
+            } else {
+                execute_immediate(AppCommand::OpenTrigger);
+            }
+        }
+        AppCommand::Save => {
+            if let Some(path) = model_file_path.read().clone() {
+                node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
+            } else {
+                execute_immediate(AppCommand::SaveAs);
+            }
+        }
+        _ => execute_immediate(cmd),
     };
     let process_command_for_menu = process_command.clone();
 

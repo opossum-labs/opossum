@@ -24,10 +24,9 @@ const FAVICON: Asset = asset!("/assets/favicon.ico");
 #[derive(Debug, Clone)]
 pub enum AppCommand {
     NewProject,
-    OpenTrigger,                // Befehl: Öffnen Dialog starten
-    Save,                       // Befehl: Speichern (Pfad entscheidet App)
-    SaveAs,                     // Befehl: Speichern unter...
-    SaveProject(PathBuf),       // Befehl: Speichern unter konkretem Pfad
+    OpenTrigger, // start `Open` dialog
+    Save,
+    SaveAs,
     SetReportDir(PathBuf),
     AddNode(String),
     AddAnalyzer(AnalyzerType),
@@ -237,20 +236,25 @@ pub fn MenuBar(
 }
 
 fn hide_dropdown(id: &str) {
-    let script = format!(r"
+    let script = format!(
+        r"
         const el = document.getElementById('{id}');
         if (el) {{
             const instance = mdb.Dropdown.getInstance(el);
             if (instance) instance.hide();
         }}
-    ");
+    "
+    );
     spawn(async move {
         let _ = eval(&script).await;
     });
 }
 
 #[component]
-fn MenuListItemShortCut(short_cut_action: ShortCutAction, on_click: EventHandler<MouseEvent>) -> Element {
+fn MenuListItemShortCut(
+    short_cut_action: ShortCutAction,
+    on_click: EventHandler<MouseEvent>,
+) -> Element {
     let short_cut_display = SHORTCUTS
         .get(&short_cut_action)
         .map_or(String::new(), |sc| sc.to_string());
@@ -271,9 +275,9 @@ fn MenuListItemShortCut(short_cut_action: ShortCutAction, on_click: EventHandler
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
     use dioxus::desktop::use_window;
-    use std::time::{Duration, Instant};
     use dioxus_free_icons::icons::fa_solid_icons::FaWindowRestore;
-    
+    use std::time::{Duration, Instant};
+
     let window = use_window();
     let mut last_click = use_signal(|| Option::<Instant>::None);
     let dc_time = Duration::from_millis(300);
