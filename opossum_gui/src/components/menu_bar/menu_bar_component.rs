@@ -38,7 +38,6 @@ pub enum AppCommand {
 
 #[component]
 pub fn MenuBar(
-    project_directory: ReadSignal<Option<PathBuf>>,
     model_file_path: ReadSignal<Option<PathBuf>>,
     model_modified: ReadSignal<bool>,
     on_menu_action: EventHandler<AppCommand>,

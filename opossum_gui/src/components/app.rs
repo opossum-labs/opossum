@@ -117,7 +117,18 @@ pub fn App() -> Element {
         }
         AppCommand::Simulate => {
             #[cfg(not(target_arch = "wasm32"))]
-            run_simulation.set(true);
+            {
+                if project_directory.read().is_some() {
+                    run_simulation.set(true);
+                } else {
+                    spawn(async move {
+                        if let Some(folder) = select_folder_path().await {
+                            project_directory.set(Some(folder));
+                            run_simulation.set(true);
+                        }
+                    });
+                }
+            }
         }
     };
     let mut execute_immediate_for_alert = execute_immediate.clone();
@@ -269,10 +280,9 @@ pub fn App() -> Element {
             CommonAppLayout {
                 cxt_command,
                 on_menu_action: process_command_for_menu,
-                project_directory,
                 model_file_path,
                 model_modified,
-                node_editor_command,
+                node_editor_command: Into::<ReadSignal<Option<NodeEditorCommand>>>::into(node_editor_command),
                 show_alert,
                 on_alert_confirm,
                 on_alert_cancel,
@@ -310,10 +320,9 @@ pub fn App() -> Element {
 fn CommonAppLayout(
     cxt_command: Signal<Option<CxtCommand>>,
     on_menu_action: EventHandler<AppCommand>,
-    project_directory: ReadSignal<Option<PathBuf>>,
     model_file_path: Signal<Option<PathBuf>>,
     model_modified: Signal<bool>,
-    node_editor_command: Signal<Option<NodeEditorCommand>>,
+    node_editor_command: ReadSignal<Option<NodeEditorCommand>>,
     show_alert: Signal<bool>,
     on_alert_confirm: EventHandler<MouseEvent>,
     on_alert_cancel: EventHandler<MouseEvent>,
@@ -349,7 +358,6 @@ fn CommonAppLayout(
             div { class: "row",
                 div { class: "col",
                     MenuBar {
-                        project_directory,
                         model_file_path: Into::<ReadSignal<Option<PathBuf>>>::into(model_file_path),
                         model_modified: Into::<ReadSignal<bool>>::into(model_modified),
                         on_menu_action,
