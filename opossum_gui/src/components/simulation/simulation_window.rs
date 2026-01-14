@@ -22,7 +22,7 @@ enum CommandAction {
 
 #[component]
 pub fn SimulationWindow(
-    mut show_simulation: Signal<bool>,
+    show_simulation: Signal<bool>,
     project_directory: Signal<Option<PathBuf>>,
 ) -> Element {
     let mut output = use_signal(String::new);

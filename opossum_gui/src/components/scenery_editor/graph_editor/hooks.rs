@@ -235,7 +235,6 @@ pub fn use_drag_end() -> impl FnMut(MouseEvent) {
                         0.0,
                     );
                     graph_processor.send(GraphStoreAction::AddEdge(new_edge));
-                    // graph_modified.set(true);
                 }
             }
             _ => {}

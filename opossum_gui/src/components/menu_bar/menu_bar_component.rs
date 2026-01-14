@@ -8,17 +8,12 @@ use opossum_core::prelude::*;
 use std::path::PathBuf;
 
 use crate::components::{
-    alert_dialog::{
-        AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
-        AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
-    },
     menu_bar::{
         edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
         file_path_display::FilePathDisplay,
         help::about::About,
-        open_project,
     },
-    short_cuts::{PendingAction, SHORTCUTS, ShortCutAction, ShortcutHandler},
+    short_cuts::{SHORTCUTS, ShortCutAction},
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -26,80 +21,35 @@ use crate::components::menu_bar::controls::controls_menu::ControlsMenu;
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 
-#[derive(Debug)]
-pub enum MenuSelection {
+#[derive(Debug, Clone)]
+pub enum AppCommand {
     NewProject,
-    RunProject,
-    OpenProject(PathBuf),
-    SaveProject(PathBuf),
+    OpenTrigger, // start `Open` dialog
+    Save,
+    SaveAs,
     SetReportDir(PathBuf),
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     AutoLayout,
     CenterGraph { zoom_to_fit: bool },
     Quit,
+    Simulate,
 }
+
 #[component]
 pub fn MenuBar(
-    menu_item_selected: Signal<Option<MenuSelection>>,
-    project_directory: ReadSignal<Option<PathBuf>>,
     model_file_path: ReadSignal<Option<PathBuf>>,
     model_modified: ReadSignal<bool>,
-    mut pending_action: Signal<Option<PendingAction>>,
-    mut show_alert: Signal<bool>,
+    on_menu_action: EventHandler<AppCommand>,
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
-    let short_cut_handler = use_context::<ShortcutHandler>();
-    let mut request_action = move |action: PendingAction| {
-        if *model_modified.read() {
-            pending_action.set(Some(action));
-            show_alert.set(true);
-        } else {
-            match action {
-                PendingAction::NewProject => {
-                    menu_item_selected.set(Some(MenuSelection::NewProject));
-                }
-                PendingAction::Quit => menu_item_selected.set(Some(MenuSelection::Quit)),
-                PendingAction::OpenProject => {
-                    spawn(async move {
-                        open_project(menu_item_selected).await;
-                    });
-                }
-            }
-        }
-    };
-
-    let on_alert_confirm = move |_| {
-        if let Some(action) = *pending_action.read() {
-            match action {
-                PendingAction::NewProject => {
-                    menu_item_selected.set(Some(MenuSelection::NewProject));
-                }
-                PendingAction::Quit => menu_item_selected.set(Some(MenuSelection::Quit)),
-                PendingAction::OpenProject => {
-                    spawn(async move {
-                        crate::components::menu_bar::project_helper::open_project(
-                            menu_item_selected,
-                        )
-                        .await;
-                    });
-                }
-            }
-        }
-        pending_action.set(None);
-        show_alert.set(false);
-    };
-
-    let on_alert_cancel = move |_| {
-        pending_action.set(None);
-        show_alert.set(false);
-    };
 
     let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| {
         rsx! {
             Icon { width: 25, icon: FaWindowMaximize }
         }
     });
+
     rsx! {
         nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",
             button {
@@ -128,11 +78,26 @@ pub fn MenuBar(
                             "File"
                         }
                         ul { class: "dropdown-menu",
-                            MenuListItemShortCut { short_cut_action: ShortCutAction::New }
-                            MenuListItemShortCut { short_cut_action: ShortCutAction::Open }
-                            MenuListItemShortCut { short_cut_action: ShortCutAction::Save }
-                            MenuListItemShortCut { short_cut_action: ShortCutAction::SaveAs }
-                            MenuListItemShortCut { short_cut_action: ShortCutAction::Report }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::New,
+                                on_click: move |_| on_menu_action.call(AppCommand::NewProject),
+                            }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::Open,
+                                on_click: move |_| on_menu_action.call(AppCommand::OpenTrigger),
+                            }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::Save,
+                                on_click: move |_| on_menu_action.call(AppCommand::Save),
+                            }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::SaveAs,
+                                on_click: move |_| on_menu_action.call(AppCommand::SaveAs),
+                            }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::Report,
+                                on_click: move |_| on_menu_action.call(AppCommand::SetReportDir(PathBuf::new())),
+                            }
                         }
                     }
                     // --- Edit Menu  ---
@@ -157,19 +122,8 @@ pub fn MenuBar(
                                 ul { class: "dropdown-menu dropdown-submenu custom-scroll",
                                     NodesMenu {
                                         on_node_selected: move |node_name| {
-                                            menu_item_selected.set(Some(MenuSelection::AddNode(node_name)));
-                                            spawn(async {
-                                                let _ = eval(
-                                                        r"
-                                                            const el = document.getElementById('navbarDropdownEditMenuLink');
-                                                            if (el) {
-                                                                const instance = mdb.Dropdown.getInstance(el);
-                                                                if (instance) instance.hide();
-                                                            }
-                                                        ",
-                                                    )
-                                                    .await;
-                                            });
+                                            on_menu_action.call(AppCommand::AddNode(node_name));
+                                            hide_dropdown("navbarDropdownEditMenuLink");
                                         },
                                     }
                                 }
@@ -184,13 +138,8 @@ pub fn MenuBar(
                                 ul { class: "dropdown-menu dropdown-submenu custom-scroll",
                                     AnalyzersMenu {
                                         on_analyzer_selected: move |analyzer_type| {
-                                            menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_type)));
-                                            spawn(async {
-                                                let _ = eval(
-                                                        r"const el = document.getElementById('navbarDropdownEditMenuLink'); if (el) {const instance = mdb.Dropdown.getInstance(el);if (instance) instance.hide();}",
-                                                    )
-                                                    .await;
-                                            });
+                                            on_menu_action.call(AppCommand::AddAnalyzer(analyzer_type));
+                                            hide_dropdown("navbarDropdownEditMenuLink");
                                         },
                                     }
                                 }
@@ -208,9 +157,28 @@ pub fn MenuBar(
                             "Layout"
                         }
                         ul { class: "dropdown-menu",
-                            MenuListItemShortCut { short_cut_action: ShortCutAction::Center }
-                            MenuListItemShortCut { short_cut_action: ShortCutAction::ZoomToFit }
-                            MenuListItemShortCut { short_cut_action: ShortCutAction::AutoLayout }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::Center,
+                                on_click: move |_| {
+                                    on_menu_action
+                                        .call(AppCommand::CenterGraph {
+                                            zoom_to_fit: false,
+                                        })
+                                },
+                            }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::ZoomToFit,
+                                on_click: move |_| {
+                                    on_menu_action
+                                        .call(AppCommand::CenterGraph {
+                                            zoom_to_fit: true,
+                                        })
+                                },
+                            }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::AutoLayout,
+                                on_click: move |_| on_menu_action.call(AppCommand::AutoLayout),
+                            }
                         }
                     }
                     // --- Help Menu  ---
@@ -232,91 +200,83 @@ pub fn MenuBar(
                                     "About"
                                 }
                             }
-                            li { style: "height: 5px; padding-top: 0; padding-bottom: 0; border: 0;",
-                                a {
-                                    class: "dropdown-item",
-                                    style: "visibility: hidden; pointer-events: none;",
-                                }
-                            }
                         }
                     }
-                    // display file path
-                    FilePathDisplay {model_file_path, model_modified}
+                    // Display File Path
+                    FilePathDisplay { model_file_path, model_modified }
                 }
             }
             ExpandOnClick { maximize_symbol }
 
-            // --- Desktop-specific window controls (Simulate & Quit) ---
+            // --- Desktop-specific window controls ---
             {
                 #[cfg(not(target_arch = "wasm32"))]
                 rsx! {
                     div { class: "d-flex align-items-center",
                         button {
                             class: "btn btn-success me-4",
-                            onclick: move |_| short_cut_handler.emulate(ShortCutAction::Simulate),
+                            onclick: move |_| on_menu_action.call(AppCommand::Simulate),
                             "Simulate"
                         }
                         ControlsMenu {
                             maximize_symbol,
                             on_quit: move |()| {
-                                request_action(PendingAction::Quit);
+                                on_menu_action.call(AppCommand::Quit);
                             },
                         }
                     }
                 }
             }
         }
-        {
-            if *about_window.read() {
-                rsx! {
-                    About { show_about: about_window }
-                }
-            } else {
-                rsx! {}
-            }
-        }
-        AlertDialogRoot {
-            open: show_alert(),
-            on_open_change: move |v: bool| {
-                show_alert.set(v);
-            },
-            AlertDialogContent {
-                AlertDialogTitle { "Unsaved Changes" }
-                AlertDialogDescription { "You have unsaved changes. Do you really want to proceed and discard them?" }
-                AlertDialogActions {
-                    AlertDialogCancel { on_click: on_alert_cancel, "No" }
-                    AlertDialogAction { on_click: on_alert_confirm, "Yes" }
-                }
-            }
+        if *about_window.read() {
+            About { show_about: about_window }
         }
     }
 }
 
+fn hide_dropdown(id: &str) {
+    let script = format!(
+        r"
+        const el = document.getElementById('{id}');
+        if (el) {{
+            const instance = mdb.Dropdown.getInstance(el);
+            if (instance) instance.hide();
+        }}
+    "
+    );
+    spawn(async move {
+        let _ = eval(&script).await;
+    });
+}
+
 #[component]
-fn MenuListItemShortCut(short_cut_action: ShortCutAction) -> Element {
-    let short_cut_handler = use_context::<ShortcutHandler>();
+fn MenuListItemShortCut(
+    short_cut_action: ShortCutAction,
+    on_click: EventHandler<MouseEvent>,
+) -> Element {
     let short_cut_display = SHORTCUTS
         .get(&short_cut_action)
-        .map_or(String::new(), super::super::short_cuts::Shortcut::display);
+        .map_or(String::new(), |sc| sc.to_string());
     rsx! {
         li {
             a {
                 class: "dropdown-item d-flex justify-content-between align-items-center",
                 role: "button",
-                onclick: move |_| short_cut_handler.emulate(short_cut_action),
-                {short_cut_action.display()}
+                onclick: move |evt| on_click.call(evt),
+                {format!("{}", short_cut_action)}
                 span { class: "text-muted ms-4", {short_cut_display} }
             }
         }
     }
 }
+
 #[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
     use dioxus::desktop::use_window;
+    use dioxus_free_icons::icons::fa_solid_icons::FaWindowRestore;
     use std::time::{Duration, Instant};
 
-    use dioxus_free_icons::icons::fa_solid_icons::FaWindowRestore;
     let window = use_window();
     let mut last_click = use_signal(|| Option::<Instant>::None);
     let dc_time = Duration::from_millis(300);
@@ -351,6 +311,7 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
         }
     }
 }
+
 #[cfg(target_arch = "wasm32")]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {

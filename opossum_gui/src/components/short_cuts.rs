@@ -1,9 +1,6 @@
-use crate::components::menu_bar::{
-    menu_bar_component::MenuSelection, save_project, save_project_as, set_report_directory,
-};
+use crate::components::menu_bar::menu_bar_component::AppCommand;
 use dioxus::prelude::*;
-use rfd::FileDialog;
-use std::{collections::HashMap, sync::LazyLock};
+use std::{collections::HashMap, fmt, path::PathBuf, sync::LazyLock};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PendingAction {
@@ -11,111 +8,6 @@ pub enum PendingAction {
     OpenProject,
     Quit,
 }
-
-pub static SHORTCUTS: LazyLock<HashMap<ShortCutAction, Shortcut>> = LazyLock::new(|| {
-    let mut m = HashMap::new();
-    m.insert(
-        ShortCutAction::Open,
-        Shortcut {
-            ctrl_or_meta: true,
-            shift: false,
-            alt: false,
-            key: "O",
-            action: ShortCutAction::Open,
-        },
-    );
-    m.insert(
-        ShortCutAction::Save,
-        Shortcut {
-            ctrl_or_meta: true,
-            shift: false,
-            alt: false,
-            key: "S",
-            action: ShortCutAction::Save,
-        },
-    );
-    m.insert(
-        ShortCutAction::SaveAs,
-        Shortcut {
-            ctrl_or_meta: true,
-            shift: true,
-            alt: false,
-            key: "S",
-            action: ShortCutAction::SaveAs,
-        },
-    );
-    m.insert(
-        ShortCutAction::New,
-        Shortcut {
-            ctrl_or_meta: true,
-            shift: false,
-            alt: false,
-            key: "N",
-            action: ShortCutAction::New,
-        },
-    );
-    m.insert(
-        ShortCutAction::Center,
-        Shortcut {
-            ctrl_or_meta: true,
-            shift: true,
-            alt: false,
-            key: "C",
-            action: ShortCutAction::Center,
-        },
-    );
-    m.insert(
-        ShortCutAction::ZoomToFit,
-        Shortcut {
-            ctrl_or_meta: true,
-            shift: true,
-            alt: false,
-            key: "F",
-            action: ShortCutAction::ZoomToFit,
-        },
-    );
-    m.insert(
-        ShortCutAction::AutoLayout,
-        Shortcut {
-            ctrl_or_meta: true,
-            shift: true,
-            alt: false,
-            key: "A",
-            action: ShortCutAction::AutoLayout,
-        },
-    );
-    m.insert(
-        ShortCutAction::Report,
-        Shortcut {
-            ctrl_or_meta: true,
-            shift: false,
-            alt: false,
-            key: "R",
-            action: ShortCutAction::Report,
-        },
-    );
-    m.insert(
-        ShortCutAction::Simulate,
-        Shortcut {
-            ctrl_or_meta: false,
-            shift: false,
-            alt: true,
-            key: "S",
-            action: ShortCutAction::Simulate,
-        },
-    );
-    m.insert(
-        ShortCutAction::Quit,
-        Shortcut {
-            ctrl_or_meta: true,
-            shift: false,
-            alt: false,
-            key: "Q",
-            action: ShortCutAction::Simulate,
-        },
-    );
-    m
-});
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum ShortCutAction {
@@ -131,78 +23,9 @@ pub enum ShortCutAction {
     Quit,
 }
 
-impl ShortCutAction {
-    pub fn run(
-        self,
-        mut menu_item_selected: Signal<Option<MenuSelection>>,
-        model_modified: ReadSignal<bool>,
-        model_file_path: ReadSignal<Option<std::path::PathBuf>>,
-        mut project_directory: Signal<Option<std::path::PathBuf>>,
-        mut pending_action: Signal<Option<PendingAction>>,
-        mut show_alert: Signal<bool>,
-    ) {
-        match self {
-            Self::Center => {
-                menu_item_selected.set(Some(MenuSelection::CenterGraph { zoom_to_fit: false }));
-            }
-            Self::ZoomToFit => {
-                menu_item_selected.set(Some(MenuSelection::CenterGraph { zoom_to_fit: true }));
-            }
-            Self::AutoLayout => menu_item_selected.set(Some(MenuSelection::AutoLayout)),
-            Self::Save => {
-                spawn(async move {
-                    save_project(model_file_path, menu_item_selected).await;
-                });
-            }
-            Self::SaveAs => {
-                spawn(async move {
-                    save_project_as(menu_item_selected).await;
-                });
-            }
-            Self::Open => {
-                if *model_modified.read() {
-                    pending_action.set(Some(PendingAction::OpenProject));
-                    show_alert.set(true);
-                } else {
-                    // --- ÄNDERUNG ---
-                    spawn(async move {
-                        crate::components::menu_bar::project_helper::open_project(
-                            menu_item_selected,
-                        )
-                        .await;
-                    });
-                }
-            }
-            Self::New => {
-                if *model_modified.read() {
-                    pending_action.set(Some(PendingAction::NewProject));
-                    show_alert.set(true);
-                } else {
-                    menu_item_selected.set(Some(MenuSelection::NewProject));
-                }
-            }
-            Self::Report => {
-                spawn(async move {
-                    set_report_directory(menu_item_selected).await;
-                });
-            }
-            Self::Simulate => {if project_directory().is_none() {
-                                    let path = FileDialog::new()
-                                        .set_directory("./")
-                                        .set_title("Select OPOSSUM report directory")
-                                        .pick_folder();
-                                    if let Some(path) = path {
-                                        project_directory.set(Some(path));
-                                        menu_item_selected.set(Some(MenuSelection::RunProject));
-                                    }
-                                } else {
-                                    menu_item_selected.set(Some(MenuSelection::RunProject));
-                                }}
-            Self::Quit => {}
-        }
-    }
-    pub const fn display(self) -> &'static str {
-        match self {
+impl fmt::Display for ShortCutAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let text = match self {
             Self::Center => "Center Graph",
             Self::ZoomToFit => "Zoom to Fit Graph",
             Self::AutoLayout => "Auto Layout",
@@ -213,72 +36,49 @@ impl ShortCutAction {
             Self::Report => "Set Report Directory",
             Self::Simulate => "Start Simulation",
             Self::Quit => "Quit Application",
+        };
+        write!(f, "{}", text)
+    }
+}
+
+impl From<ShortCutAction> for AppCommand {
+    fn from(action: ShortCutAction) -> Self {
+        match action {
+            ShortCutAction::Center => AppCommand::CenterGraph { zoom_to_fit: false },
+            ShortCutAction::ZoomToFit => AppCommand::CenterGraph { zoom_to_fit: true },
+            ShortCutAction::AutoLayout => AppCommand::AutoLayout,
+            ShortCutAction::Save => AppCommand::Save,
+            ShortCutAction::SaveAs => AppCommand::SaveAs,
+            ShortCutAction::Open => AppCommand::OpenTrigger,
+            ShortCutAction::New => AppCommand::NewProject,
+            ShortCutAction::Report => AppCommand::SetReportDir(PathBuf::new()),
+            ShortCutAction::Simulate => AppCommand::Simulate,
+            ShortCutAction::Quit => AppCommand::Quit,
         }
     }
+}
+
+pub static SHORTCUTS: LazyLock<HashMap<ShortCutAction, Shortcut>> = LazyLock::new(|| {
+    let mut m = HashMap::new();
+    m.insert(ShortCutAction::Open, Shortcut::new(true, false, false, "O", ShortCutAction::Open));
+    m.insert(ShortCutAction::Save, Shortcut::new(true, false, false, "S", ShortCutAction::Save));
+    m.insert(ShortCutAction::SaveAs, Shortcut::new(true, true, false, "S", ShortCutAction::SaveAs));
+    m.insert(ShortCutAction::New, Shortcut::new(true, false, false, "N", ShortCutAction::New));
+    m.insert(ShortCutAction::Center, Shortcut::new(true, true, false, "C", ShortCutAction::Center));
+    m.insert(ShortCutAction::ZoomToFit, Shortcut::new(true, true, false, "F", ShortCutAction::ZoomToFit));
+    m.insert(ShortCutAction::AutoLayout, Shortcut::new(true, true, false, "A", ShortCutAction::AutoLayout));
+    m.insert(ShortCutAction::Report, Shortcut::new(true, false, false, "R", ShortCutAction::Report));
+    m.insert(ShortCutAction::Simulate, Shortcut::new(false, false, true, "S", ShortCutAction::Simulate));
+    m.insert(ShortCutAction::Quit, Shortcut::new(true, false, false, "Q", ShortCutAction::Quit));
+    m
+});
+
+pub fn get_action_from_event(event: &KeyboardEvent) -> Option<ShortCutAction> {
+    SHORTCUTS.values().find(|sc| sc.matches(event)).map(|sc| sc.action)
 }
 
 pub const fn primary_modifier_label() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "⌘" // Command-Key Symbol
-    } else {
-        "Ctrl"
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct ShortcutHandler {
-    menu_item_selected: Signal<Option<MenuSelection>>,
-    model_modified: ReadSignal<bool>,
-    model_file_path: ReadSignal<Option<std::path::PathBuf>>,
-    project_directory: Signal<Option<std::path::PathBuf>>,
-    pending_action: Signal<Option<PendingAction>>,
-    show_alert: Signal<bool>,
-}
-
-impl ShortcutHandler {
-    pub const fn new(
-        menu_item_selected: Signal<Option<MenuSelection>>,
-        model_modified: ReadSignal<bool>,
-        model_file_path: ReadSignal<Option<std::path::PathBuf>>,
-        project_directory: Signal<Option<std::path::PathBuf>>,
-        pending_action: Signal<Option<PendingAction>>,
-        show_alert: Signal<bool>,
-    ) -> Self {
-        Self {
-            menu_item_selected,
-            model_modified,
-            model_file_path,
-            project_directory,
-            pending_action,
-            show_alert,
-        }
-    }
-
-    /// Handler für Tastatur-Events
-    pub fn handle_event(&self, event: &KeyboardEvent) {
-        if let Some(sc) = SHORTCUTS.values().find(|sc| sc.matches(event)) {
-            sc.action.run(
-                self.menu_item_selected,
-                self.model_modified,
-                self.model_file_path,
-                self.project_directory,
-                self.pending_action,
-                self.show_alert,
-            );
-        }
-    }
-
-    /// Emulator für Klicks (z. B. Button-Handler)
-    pub fn emulate(&self, action: ShortCutAction) {
-        action.run(
-            self.menu_item_selected,
-            self.model_modified,
-            self.model_file_path,
-            self.project_directory,
-            self.pending_action,
-            self.show_alert,
-        );
-    }
+    if cfg!(target_os = "macos") { "⌘" } else { "Ctrl" }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -291,34 +91,30 @@ pub struct Shortcut {
 }
 
 impl Shortcut {
+    pub fn new(ctrl: bool, shift: bool, alt: bool, key: &'static str, action: ShortCutAction) -> Self {
+        Self { ctrl_or_meta: ctrl, shift, alt, key, action }
+    }
+
     pub fn matches(&self, event: &KeyboardEvent) -> bool {
         let modifiers = event.modifiers();
         let key = match event.data().key() {
             Key::Character(s) => s.to_uppercase(),
             _ => return false,
         };
-
         self.ctrl_or_meta == (modifiers.ctrl() || modifiers.meta())
             && self.shift == modifiers.shift()
             && self.alt == modifiers.alt()
             && self.key.to_uppercase() == key
     }
+}
 
-    pub fn display(&self) -> String {
+impl fmt::Display for Shortcut {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts = vec![];
-
-        if self.ctrl_or_meta {
-            parts.push(primary_modifier_label());
-        }
-        if self.shift {
-            parts.push("Shift");
-        }
-        if self.alt {
-            parts.push("Alt");
-        }
-
+        if self.ctrl_or_meta { parts.push(primary_modifier_label()); }
+        if self.shift { parts.push("Shift"); }
+        if self.alt { parts.push("Alt"); }
         parts.push(self.key);
-
-        parts.join("+")
+        write!(f, "{}", parts.join("+"))
     }
 }
