@@ -35,7 +35,7 @@ impl fmt::Display for ShortCutAction {
             Self::New => "New Project",
             Self::Report => "Set Report Directory",
             Self::Simulate => "Start Simulation",
-            Self::Quit => "Quit Application",
+            Self::Quit => "Quit",
         };
         write!(f, "{text}")
     }
