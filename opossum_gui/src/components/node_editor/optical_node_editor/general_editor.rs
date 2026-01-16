@@ -11,17 +11,12 @@ use opossum_core::{J_per_cm2, nodes::fluence_detector::Fluence};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 
 #[component]
-pub fn GeneralEditor(
-    node_type: String,
-    node_name: String,
-    node_lidt: Fluence,
-    node_inverted: bool,
-) -> Element {
+pub fn GeneralEditor(node_type: String, name: String, lidt: Fluence, inverted: bool) -> Element {
     let accordion_content = vec![rsx! {
             NodeTypeInput {node_type, label: "Node Type"},
-            NodeNameInput {node_name},
-            NodeLIDTInput {node_lidt},
-            NodeInvertedInput {node_inverted, label: "Invert Node"},
+            NodeNameInput {node_name: name},
+            NodeLIDTInput {node_lidt: lidt},
+            NodeInvertedInput {node_inverted: inverted, label: "Invert Node"},
     }];
     rsx! {
         AccordionItem {

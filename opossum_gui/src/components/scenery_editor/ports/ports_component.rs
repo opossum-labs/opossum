@@ -122,8 +122,16 @@ pub fn NodePort(
 
 #[component]
 pub fn NodePorts(node: NodeElement, inverted: bool) -> Element {
+    // TODO: This is a hack to avoid displaying an input port for Source nodes
+    let input_ports = if node.node_type()
+        == &crate::components::scenery_editor::node::NodeType::Optical("source".into())
+    {
+        &Vec::new()
+    } else {
+        node.input_ports()
+    };
     rsx! {
-        for in_port in node.input_ports() {
+        for in_port in input_ports {
             NodePort {
                 node: node.clone(),
                 port_name: in_port,

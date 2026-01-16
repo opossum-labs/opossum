@@ -163,7 +163,7 @@ pub fn MenuBar(
                                     on_menu_action
                                         .call(AppCommand::CenterGraph {
                                             zoom_to_fit: false,
-                                        })
+                                        });
                                 },
                             }
                             MenuListItemShortCut {
@@ -172,7 +172,7 @@ pub fn MenuBar(
                                     on_menu_action
                                         .call(AppCommand::CenterGraph {
                                             zoom_to_fit: true,
-                                        })
+                                        });
                                 },
                             }
                             MenuListItemShortCut {
@@ -256,14 +256,14 @@ fn MenuListItemShortCut(
 ) -> Element {
     let short_cut_display = SHORTCUTS
         .get(&short_cut_action)
-        .map_or(String::new(), |sc| sc.to_string());
+        .map_or(String::new(), ToString::to_string);
     rsx! {
         li {
             a {
                 class: "dropdown-item d-flex justify-content-between align-items-center",
                 role: "button",
                 onclick: move |evt| on_click.call(evt),
-                {format!("{}", short_cut_action)}
+                {format!("{short_cut_action}")}
                 span { class: "text-muted ms-4", {short_cut_display} }
             }
         }

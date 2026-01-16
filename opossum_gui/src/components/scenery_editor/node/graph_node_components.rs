@@ -5,12 +5,12 @@ use dioxus::prelude::*;
 use opossum_core::utils::to_f64;
 
 #[component]
-pub fn GraphNodeContent(node_name: String, node_type: NodeType, node_body: Element) -> Element {
+pub fn GraphNodeContent(name: String, node_type: NodeType, body: Element) -> Element {
     let node_type = match node_type {
         NodeType::Optical(_) => "optic-node",
         NodeType::Analyzer(_) => "analyzer-node",
     };
-    let font_fac = 6. * to_f64(node_name.len()) / (0.95 * NODE_WIDTH);
+    let font_fac = 6. * to_f64(name.len()) / (0.95 * NODE_WIDTH);
     let font_size = if font_fac > 1. { 10. / font_fac } else { 10. };
     rsx! {
         div {
@@ -19,8 +19,8 @@ pub fn GraphNodeContent(node_name: String, node_type: NodeType, node_body: Eleme
             style: format!(
                 "width: {NODE_WIDTH}px; height: {HEADER_HEIGHT}px; font-size: {font_size}pt; border-bottom-width:{BORDER_WIDTH}px",
             ),
-            {node_name}
+            {name}
         }
-        div { draggable: false, {node_body} }
+        div { draggable: false, {body} }
     }
 }

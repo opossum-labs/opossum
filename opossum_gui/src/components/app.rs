@@ -107,13 +107,13 @@ pub fn App() -> Element {
         }
         AppCommand::AutoLayout => node_editor_command.set(Some(NodeEditorCommand::AutoLayout)),
         AppCommand::CenterGraph { zoom_to_fit } => {
-            node_editor_command.set(Some(NodeEditorCommand::CenterGraph { zoom_to_fit }))
+            node_editor_command.set(Some(NodeEditorCommand::CenterGraph { zoom_to_fit }));
         }
         AppCommand::AddNode(name) => {
-            node_editor_command.set(Some(NodeEditorCommand::AddNode(name)))
+            node_editor_command.set(Some(NodeEditorCommand::AddNode(name)));
         }
         AppCommand::AddAnalyzer(atype) => {
-            node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(atype)))
+            node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(atype)));
         }
         AppCommand::Simulate => {
             #[cfg(not(target_arch = "wasm32"))]

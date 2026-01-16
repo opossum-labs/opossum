@@ -234,7 +234,7 @@ impl HTTPClient {
         res: Response,
     ) -> Result<R, String> {
         if res.status().is_success() {
-            if res.content_length().map_or_else(|| 0, |n| n) > 0 {
+            if res.content_length().unwrap_or(0) > 0 {
                 (res.json::<R>().await).map_or_else(
                     |_| Err("Error deserializing response to requested struct!".to_string()),
                     |res| Ok(res),
