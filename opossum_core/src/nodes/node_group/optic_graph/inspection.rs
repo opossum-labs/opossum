@@ -23,7 +23,7 @@ impl OpticGraph {
     }
     /// Return `true` if the node with the given [`Uuid`] has no incoming connections.
     ///
-    /// This is similiar to `is_stale_node` but only checks for incoming connection.
+    /// This is similiar to `is_stale_node` but only checks for incoming connections.
     ///
     /// # Errors
     ///
@@ -33,6 +33,20 @@ impl OpticGraph {
             .node_idx_by_uuid(node_id)
             .ok_or_else(|| OpossumError::Analysis("uuid does not exist".into()))?;
         let neighbors = self.g.neighbors_directed(idx, Direction::Incoming);
+        Ok(neighbors.count() != 0)
+    }
+    /// Return `true` if the node with the given [`Uuid`] has no outgoing connections.
+    ///
+    /// This is similiar to `is_stale_node` but only checks for outgoing connections.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given `node_id` is not found.
+    pub fn has_output_connections(&self, node_id: Uuid) -> OpmResult<bool> {
+        let idx = self
+            .node_idx_by_uuid(node_id)
+            .ok_or_else(|| OpossumError::Analysis("uuid does not exist".into()))?;
+        let neighbors = self.g.neighbors_directed(idx, Direction::Outgoing);
         Ok(neighbors.count() != 0)
     }
     /// Returns a node with the given [`Uuid`].
