@@ -98,6 +98,13 @@ pub fn MenuBar(
                                 short_cut_action: ShortCutAction::Report,
                                 on_click: move |_| on_menu_action.call(AppCommand::SetReportDir(PathBuf::new())),
                             }
+                            li {
+                                hr { class: "dropdown-divider" }
+                            }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::Quit,
+                                on_click: move |_| on_menu_action.call(AppCommand::Quit),
+                            }
                         }
                     }
                     // --- Edit Menu  ---
@@ -210,11 +217,17 @@ pub fn MenuBar(
 
             // --- Desktop-specific window controls ---
             {
+                let simulate_shortcut = SHORTCUTS
+                    .get(&ShortCutAction::Simulate)
+                    .map_or(String::new(), |s| format!(" ({})", s));
                 #[cfg(not(target_arch = "wasm32"))]
                 rsx! {
                     div { class: "d-flex align-items-center",
                         button {
                             class: "btn btn-success me-4",
+                            "data-mdb-ripple-init": "",
+                            "data-mdb-tooltip-init": "",
+                            title: "Simulate{simulate_shortcut}",
                             onclick: move |_| on_menu_action.call(AppCommand::Simulate),
                             "Simulate"
                         }
