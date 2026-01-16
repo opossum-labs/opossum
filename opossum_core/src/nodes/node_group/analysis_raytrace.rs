@@ -176,11 +176,23 @@ fn calculate_single_node_position(
     }
     let output =
         AnalysisRayTrace::calc_node_positions(&mut *node_ref.lock_opm()?, incoming_edges, config);
-    let outgoing_edges = output.map_err(|e| {
-        OpossumError::Analysis(format!(
-            "calculation of optical axis for node {node_info} failed: {e}"
-        ))
-    })?;
+
+    let outgoing_edges = match output {
+        Ok(edges) => edges,
+        Err(e) => {
+            // Check, if node has following nodes (=not a pure sink)
+            if graph.has_output_connections(node_id)? {
+                return Err(OpossumError::Analysis(format!(
+                    "calculation of optical axis for node {node_info} failed: {e}"
+                )));
+            }
+            // node has no successors => just issue a warning.
+            warn!(
+                "Calculation of optical axis for terminal node {node_info} failed: {e}. Ignoring as it has no successors."
+            );
+            LightResult::default()
+        }
+    };
     // If node is sink node, rewrite port names according to output mapping
     if graph.is_output_node(node_id)? {
         let portmap = if graph.is_inverted() {
