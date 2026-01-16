@@ -37,48 +37,85 @@ impl fmt::Display for ShortCutAction {
             Self::Simulate => "Start Simulation",
             Self::Quit => "Quit Application",
         };
-        write!(f, "{}", text)
+        write!(f, "{text}")
     }
 }
 
 impl From<ShortCutAction> for AppCommand {
     fn from(action: ShortCutAction) -> Self {
         match action {
-            ShortCutAction::Center => AppCommand::CenterGraph { zoom_to_fit: false },
-            ShortCutAction::ZoomToFit => AppCommand::CenterGraph { zoom_to_fit: true },
-            ShortCutAction::AutoLayout => AppCommand::AutoLayout,
-            ShortCutAction::Save => AppCommand::Save,
-            ShortCutAction::SaveAs => AppCommand::SaveAs,
-            ShortCutAction::Open => AppCommand::OpenTrigger,
-            ShortCutAction::New => AppCommand::NewProject,
-            ShortCutAction::Report => AppCommand::SetReportDir(PathBuf::new()),
-            ShortCutAction::Simulate => AppCommand::Simulate,
-            ShortCutAction::Quit => AppCommand::Quit,
+            ShortCutAction::Center => Self::CenterGraph { zoom_to_fit: false },
+            ShortCutAction::ZoomToFit => Self::CenterGraph { zoom_to_fit: true },
+            ShortCutAction::AutoLayout => Self::AutoLayout,
+            ShortCutAction::Save => Self::Save,
+            ShortCutAction::SaveAs => Self::SaveAs,
+            ShortCutAction::Open => Self::OpenTrigger,
+            ShortCutAction::New => Self::NewProject,
+            ShortCutAction::Report => Self::SetReportDir(PathBuf::new()),
+            ShortCutAction::Simulate => Self::Simulate,
+            ShortCutAction::Quit => Self::Quit,
         }
     }
 }
 
 pub static SHORTCUTS: LazyLock<HashMap<ShortCutAction, Shortcut>> = LazyLock::new(|| {
     let mut m = HashMap::new();
-    m.insert(ShortCutAction::Open, Shortcut::new(true, false, false, "O", ShortCutAction::Open));
-    m.insert(ShortCutAction::Save, Shortcut::new(true, false, false, "S", ShortCutAction::Save));
-    m.insert(ShortCutAction::SaveAs, Shortcut::new(true, true, false, "S", ShortCutAction::SaveAs));
-    m.insert(ShortCutAction::New, Shortcut::new(true, false, false, "N", ShortCutAction::New));
-    m.insert(ShortCutAction::Center, Shortcut::new(true, true, false, "C", ShortCutAction::Center));
-    m.insert(ShortCutAction::ZoomToFit, Shortcut::new(true, true, false, "F", ShortCutAction::ZoomToFit));
-    m.insert(ShortCutAction::AutoLayout, Shortcut::new(true, true, false, "A", ShortCutAction::AutoLayout));
-    m.insert(ShortCutAction::Report, Shortcut::new(true, false, false, "R", ShortCutAction::Report));
-    m.insert(ShortCutAction::Simulate, Shortcut::new(false, false, true, "S", ShortCutAction::Simulate));
-    m.insert(ShortCutAction::Quit, Shortcut::new(true, false, false, "Q", ShortCutAction::Quit));
+    m.insert(
+        ShortCutAction::Open,
+        Shortcut::new(true, false, false, "O", ShortCutAction::Open),
+    );
+    m.insert(
+        ShortCutAction::Save,
+        Shortcut::new(true, false, false, "S", ShortCutAction::Save),
+    );
+    m.insert(
+        ShortCutAction::SaveAs,
+        Shortcut::new(true, true, false, "S", ShortCutAction::SaveAs),
+    );
+    m.insert(
+        ShortCutAction::New,
+        Shortcut::new(true, false, false, "N", ShortCutAction::New),
+    );
+    m.insert(
+        ShortCutAction::Center,
+        Shortcut::new(true, true, false, "C", ShortCutAction::Center),
+    );
+    m.insert(
+        ShortCutAction::ZoomToFit,
+        Shortcut::new(true, true, false, "F", ShortCutAction::ZoomToFit),
+    );
+    m.insert(
+        ShortCutAction::AutoLayout,
+        Shortcut::new(true, true, false, "A", ShortCutAction::AutoLayout),
+    );
+    m.insert(
+        ShortCutAction::Report,
+        Shortcut::new(true, false, false, "R", ShortCutAction::Report),
+    );
+    m.insert(
+        ShortCutAction::Simulate,
+        Shortcut::new(false, false, true, "S", ShortCutAction::Simulate),
+    );
+    m.insert(
+        ShortCutAction::Quit,
+        Shortcut::new(true, false, false, "Q", ShortCutAction::Quit),
+    );
     m
 });
 
 pub fn get_action_from_event(event: &KeyboardEvent) -> Option<ShortCutAction> {
-    SHORTCUTS.values().find(|sc| sc.matches(event)).map(|sc| sc.action)
+    SHORTCUTS
+        .values()
+        .find(|sc| sc.matches(event))
+        .map(|sc| sc.action)
 }
 
 pub const fn primary_modifier_label() -> &'static str {
-    if cfg!(target_os = "macos") { "⌘" } else { "Ctrl" }
+    if cfg!(target_os = "macos") {
+        "⌘"
+    } else {
+        "Ctrl"
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -91,8 +128,20 @@ pub struct Shortcut {
 }
 
 impl Shortcut {
-    pub fn new(ctrl: bool, shift: bool, alt: bool, key: &'static str, action: ShortCutAction) -> Self {
-        Self { ctrl_or_meta: ctrl, shift, alt, key, action }
+    pub const fn new(
+        ctrl: bool,
+        shift: bool,
+        alt: bool,
+        key: &'static str,
+        action: ShortCutAction,
+    ) -> Self {
+        Self {
+            ctrl_or_meta: ctrl,
+            shift,
+            alt,
+            key,
+            action,
+        }
     }
 
     pub fn matches(&self, event: &KeyboardEvent) -> bool {
@@ -111,9 +160,15 @@ impl Shortcut {
 impl fmt::Display for Shortcut {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts = vec![];
-        if self.ctrl_or_meta { parts.push(primary_modifier_label()); }
-        if self.shift { parts.push("Shift"); }
-        if self.alt { parts.push("Alt"); }
+        if self.ctrl_or_meta {
+            parts.push(primary_modifier_label());
+        }
+        if self.shift {
+            parts.push("Shift");
+        }
+        if self.alt {
+            parts.push("Alt");
+        }
         parts.push(self.key);
         write!(f, "{}", parts.join("+"))
     }

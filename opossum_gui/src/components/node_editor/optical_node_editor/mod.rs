@@ -40,9 +40,9 @@ pub fn OpticalNodeEditor(node_id: Uuid, node_properties_sig: Signal<Properties>)
                         id: "accordionNodeConfig",
                         GeneralEditor {
                             node_type: node_attr.node_type(),
-                            node_name: node_attr.name(),
-                            node_lidt: *node_attr.lidt(),
-                            node_inverted: node_attr.inverted(),
+                            name: node_attr.name(),
+                            lidt: *node_attr.lidt(),
+                            inverted: node_attr.inverted(),
                         }
                         PropertiesEditor { node_properties_sig }
                         PositioningEditor {

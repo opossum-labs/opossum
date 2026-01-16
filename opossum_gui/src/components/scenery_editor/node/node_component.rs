@@ -85,9 +85,9 @@ pub fn Node(node: NodeElement) -> Element {
                 }
             },
             GraphNodeContent {
-                node_name: node.name(),
+                name: node.name(),
                 node_type: node.node_type().clone(),
-                node_body: rsx! {
+                body: rsx! {
                     div {
                         class: "node-body",
                         draggable: false,
