@@ -2,19 +2,14 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn MenuItem(
-    class: String,
-    onclick: Option<Callback<Event<MouseData>>>,
-    display: String,
+    // Optional, falls du mal keine spezielle Klasse brauchst
+    #[props(default = "context-menu-item".to_string())] class: String,
+    // EventHandler ist oft angenehmer als Option<Callback>
+    onclick: EventHandler<MouseEvent>,
+    // Erlaubt Icons oder formatierten Text statt nur String
+    children: Element,
 ) -> Element {
     rsx! {
-        a {
-            class,
-            onclick: move |e| {
-                if let Some(on_click_fn) = onclick {
-                    on_click_fn(e);
-                }
-            },
-            {display}
-        }
+        a { class: "{class}", onclick: move |e| onclick.call(e), {children} }
     }
 }
