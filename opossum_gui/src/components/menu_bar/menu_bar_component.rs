@@ -219,7 +219,7 @@ pub fn MenuBar(
             {
                 let simulate_shortcut = SHORTCUTS
                     .get(&ShortCutAction::Simulate)
-                    .map_or(String::new(), |s| format!(" ({})", s));
+                    .map_or(String::new(), |s| format!(" ({s})"));
                 #[cfg(not(target_arch = "wasm32"))]
                 rsx! {
                     div { class: "d-flex align-items-center",
