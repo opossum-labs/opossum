@@ -2,7 +2,7 @@ use crate::OPOSSUM_UI_LOGS;
 use dioxus::prelude::*;
 
 #[component]
-pub fn Logger(drag_handler: EventHandler<f64>, height: Signal<f64>) -> Element {
+pub fn Logger(drag_handler: EventHandler<f64>, height: ReadSignal<f64>) -> Element {
     rsx! {
         div { class: "row footer",
             div {

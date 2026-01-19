@@ -1,8 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{
-    OPOSSUM_UI_LOGS,
     api::{self, eval_action_run},
     components::simulation::utils::find_cli_executable,
+    OPOSSUM_UI_LOGS,
 };
 use dioxus::prelude::*;
 use futures_util::StreamExt;
@@ -14,7 +14,7 @@ use tokio::{
     process::Child,
 };
 
-// Define a message to control the coroutine
+// Nachrichtentypen zur Steuerung der Simulation
 enum CommandAction {
     Run,
     Abort,
@@ -23,14 +23,13 @@ enum CommandAction {
 #[component]
 pub fn SimulationWindow(
     show_simulation: Signal<bool>,
-    project_directory: Signal<Option<PathBuf>>,
+    project_directory: ReadSignal<Option<PathBuf>>,
 ) -> Element {
     let mut output = use_signal(String::new);
     let mut is_running = use_signal(|| false);
-
     let command_runner = use_coroutine(
         move |mut rx: UnboundedReceiver<CommandAction>| async move {
-            #[allow(unused_assignments)] // avoid false positive...
+            #[allow(unused_assignments)]
             let mut child_handle: Option<Child> = None;
 
             while let Some(action) = rx.next().await {
@@ -38,15 +37,14 @@ pub fn SimulationWindow(
                     CommandAction::Run => {
                         is_running.set(true);
                         output.set(String::new());
+                        output.write().push_str("[INFO] Preparing simulation...\n");
                         let Ok(temp_dir) = tempdir() else {
-                            output.set("Could not determine temp dir.".into());
+                            output.write().push_str("[ERROR] Could not create temp dir.\n");
                             is_running.set(false);
                             continue;
                         };
                         let temp_model_file = temp_dir.path().join("temp-opossum.opm");
                         let temp_model_file_clone = temp_model_file.clone();
-                        // We have to this with run_action instead of sending a node_editor_command since we have to be sure
-                        // that the file has been written before calling the CLI.
                         eval_action_run(
                             api::get_opm_file().await,
                             Some(move |opm_string| {
@@ -55,84 +53,81 @@ pub fn SimulationWindow(
                                 }
                             }),
                         );
-                        let Ok(cli_path) = find_cli_executable() else {
-                            output.set("Did not find CLI".into());
-                            is_running.set(false);
-                            continue;
+                        let cli_path = match find_cli_executable() {
+                            Ok(p) => p,
+                            Err(_) => {
+                                output.write().push_str("[ERROR] Opossum CLI executable not found.\n");
+                                is_running.set(false);
+                                continue;
+                            }
                         };
-                        let Some(report_dir) = project_directory() else {
-                            output.set("No report directory set".into());
-                            is_running.set(false);
-                            continue;
+                        let report_dir = match project_directory() {
+                            Some(d) => d,
+                            None => {
+                                output.write().push_str("[ERROR] No project directory set.\n");
+                                is_running.set(false);
+                                continue;
+                            }
                         };
                         let mut cmd = tokio::process::Command::new(cli_path);
-                        cmd.arg("-r").arg(report_dir.as_path());
-                        cmd.arg("-f").arg(temp_model_file_clone);
-                        cmd.arg("-s").arg("false"); // do not display OPOSSUM logo and version info
+                        cmd.arg("-r").arg(report_dir.as_path())
+                           .arg("-f").arg(temp_model_file_clone)
+                           .arg("-s").arg("false") // Silent mode (no Logo)
+                           .stdout(Stdio::piped())
+                           .stderr(Stdio::piped());
 
                         #[cfg(windows)]
                         {
                             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
                             cmd.creation_flags(CREATE_NO_WINDOW);
                         }
-                        cmd.stdout(Stdio::piped());
-                        cmd.stderr(Stdio::piped());
-
+                        output.write().push_str("[INFO] Starting CLI process...\n");
                         let mut child = match cmd.spawn() {
                             Ok(child) => child,
                             Err(e) => {
-                                output.set(format!("[ERROR] Failed to spawn command: {e}"));
+                                write!(output.write(), "[ERROR] Failed to spawn command: {e}\n").unwrap();
                                 is_running.set(false);
                                 continue;
                             }
                         };
-
-                        let stdout = child
-                            .stdout
-                            .take()
-                            .expect("child did not have a handle to stdout");
-                        let stderr = child
-                            .stderr
-                            .take()
-                            .expect("child did not have a handle to stderr");
+                        let stdout = child.stdout.take().expect("Failed to open stdout");
+                        let stderr = child.stderr.take().expect("Failed to open stderr");
                         let mut stdout_reader = BufReader::new(stdout);
                         let mut stderr_reader = BufReader::new(stderr);
+                        
                         child_handle = Some(child);
-
-                        let mut stdout_buf = [0; 1024];
-                        let mut stderr_buf = [0; 1024];
+                        let mut stdout_buf = [0u8; 1024];
+                        let mut stderr_buf = [0u8; 1024];
                         let mut stdout_closed = false;
                         let mut stderr_closed = false;
 
                         loop {
                             tokio::select! {
-                                // This branch handles aborting the process
-                                    maybe_action = rx.next() => {
-                                        if matches!(maybe_action, Some(CommandAction::Abort)) {
-                                            if let Some(mut child) = child_handle.take() {
-                                                if let Err(e) = child.kill().await {
-                                                    write!(*output.write(), "\n[ERROR] Failed to abort process: {e}").unwrap();
-                                                } else {
-                                                    output.write().push_str("\n[INFO] Process aborted by user.");
-                                                }
+                                maybe_action = rx.next() => {
+                                    if matches!(maybe_action, Some(CommandAction::Abort)) {
+                                        if let Some(mut child) = child_handle.take() {
+                                            output.write().push_str("\n[WARN] Aborting process requested by user...\n");
+                                            if let Err(e) = child.kill().await {
+                                                write!(output.write(), "[ERROR] Failed to kill process: {e}\n").unwrap();
+                                            } else {
+                                                output.write().push_str("[INFO] Process aborted successfully.\n");
                                             }
-                                            break;
                                         }
+                                        break;
+                                    }
                                 }
-                                // Read raw bytes from stdout, but only if the stream isn't closed yet
                                 result = stdout_reader.read(&mut stdout_buf), if !stdout_closed => {
                                     match result {
-                                        Ok(0) | Err(_) => stdout_closed = true, // Mark as closed, don't break
+                                        Ok(0) | Err(_) => stdout_closed = true,
                                         Ok(n) => {
                                             let s = String::from_utf8_lossy(&stdout_buf[..n]);
                                             output.write().push_str(&s);
                                         },
                                     }
                                 },
-                                // Read raw bytes from stderr, but only if the stream isn't closed yet
                                 result = stderr_reader.read(&mut stderr_buf), if !stderr_closed => {
-                                        match result {
-                                        Ok(0) | Err(_) => stderr_closed = true, // Mark as closed
+                                    match result {
+                                        Ok(0) | Err(_) => stderr_closed = true,
                                         Ok(n) => {
                                             let s = String::from_utf8_lossy(&stderr_buf[..n]);
                                             output.write().push_str(&s);
@@ -140,84 +135,99 @@ pub fn SimulationWindow(
                                     }
                                 }
                             }
-                            // Exit the loop only when both streams are confirmed to be closed
+
                             if stdout_closed && stderr_closed {
                                 break;
                             }
                         }
-                        // Ensure the process is fully waited on after the loop exits
                         if let Some(mut child) = child_handle.take() {
                             let _ = child.wait().await;
                         }
+                        
+                        output.write().push_str("\n[INFO] Simulation finished.\n");
                         is_running.set(false);
-                        temp_dir.close().unwrap();
                     }
                     CommandAction::Abort => {
-                        //todo: really abort the simulation
                         show_simulation.set(false);
                     }
                 }
             }
         },
     );
+
     use_effect(move || {
         if show_simulation() {
             command_runner.send(CommandAction::Run);
-        } else {
-            // If the window is closed while running, abort the process.
-            if is_running() {
-                command_runner.send(CommandAction::Abort);
-            }
+        } else if is_running() {
+            command_runner.send(CommandAction::Abort);
         }
     });
-    if show_simulation() {
-        rsx! {
-            div { class: "modal d-block", "tabindex": "-1",
-                div { class: "modal-dialog modal-dialog-centered modal-xl",
-                    div { class: "modal-content bg-dark text-white",
-                        div { class: "modal-header",
-                            h5 { class: "modal-title", "Running simulation..." }
-                            button {
-                                class: "btn-close btn-close-white",
-                                disabled: is_running(),
-                                "data-bs-dismiss": "modal",
-                                onclick: move |_| {
-                                    if is_running() {
-                                        command_runner.send(CommandAction::Abort);
-                                    } else {
-                                        show_simulation.set(false);
-                                    }
-                                },
+    if !show_simulation() {
+        return rsx! {};
+    }
+    rsx! {
+        div {
+            class: "modal d-block",
+            "tabindex": "-1",
+            style: "background-color: rgba(0,0,0,0.5);",
+            div { class: "modal-dialog modal-dialog-centered modal-xl",
+                div { class: "modal-content bg-dark text-white",
+                    div { class: "modal-header",
+                        h5 { class: "modal-title d-flex align-items-center gap-2",
+                            "Simulation Output"
+                            if is_running() {
+                                span {
+                                    class: "spinner-border spinner-border-sm text-info",
+                                    role: "status",
+                                    span { class: "visually-hidden", "Loading..." }
+                                }
                             }
                         }
-                        div { class: "modal-body", style: "overflow: auto;",
-                            pre { style: "height: 400px; font-size: 11px;",
+                        button {
+                            class: "btn-close btn-close-white",
+                            disabled: is_running(), // avoids closing the window while still running
+                            onclick: move |_| {
+                                if is_running() {
+                                    command_runner.send(CommandAction::Abort);
+                                } else {
+                                    show_simulation.set(false);
+                                }
+                            },
+                        }
+                    }
+                    div { class: "modal-body",
+                        div { style: "overflow-y: auto; max-height: 400px; background-color: #1e1e1e; padding: 10px; border-radius: 4px;",
+                            pre { style: "margin: 0; font-size: 11px; font-family: 'Consolas', monospace; white-space: pre-wrap;",
                                 code { "{output}" }
                             }
+                            div { id: "log-end-anchor" }
                         }
-                        div { class: "modal-footer",
-                            button {
-                                class: "btn btn-secondary",
-                                "data-bs-dismiss": "modal",
-                                onclick: move |_| {
-                                    if is_running() {
-                                        command_runner.send(CommandAction::Abort);
-                                    } else {
-                                        show_simulation.set(false);
-                                    }
-                                },
+                    }
+                    div { class: "modal-footer",
+                        // Status Text
+                        if is_running() {
+                            span { class: "me-auto text-info small", "Simulation is running..." }
+                        } else {
+                            span { class: "me-auto text-success small", "Process finished." }
+                        }
+                        button {
+                            class: if is_running() { "btn btn-danger" } else { "btn btn-secondary" },
+                            onclick: move |_| {
                                 if is_running() {
-                                    "Abort"
+                                    command_runner.send(CommandAction::Abort);
                                 } else {
-                                    "Close"
+                                    show_simulation.set(false);
                                 }
+                            },
+                            if is_running() {
+                                "Abort Simulation"
+                            } else {
+                                "Close"
                             }
                         }
                     }
                 }
             }
         }
-    } else {
-        rsx! {}
     }
 }
