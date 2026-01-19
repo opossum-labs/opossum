@@ -41,7 +41,7 @@ pub fn try_f64_to_usize(value: f64) -> Option<usize> {
     }
 }
 
-/// Safely converts an `f64` value to a `usize`.
+/// Safely converts an `f64` value to a `u8`.
 ///
 /// This function returns `Some(value)` if the `f64` is non-negative, finite, and
 /// fits within the bounds of `usize`. Otherwise, it returns `None`.

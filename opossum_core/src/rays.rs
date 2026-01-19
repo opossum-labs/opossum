@@ -1270,6 +1270,77 @@ impl Rays {
         }
         Some(min..max)
     }
+    /// Calculates a suggested spectral resolution based on the distribution of rays.
+    ///
+    /// This uses the [Freedman-Diaconis rule](https://en.wikipedia.org/wiki/Freedman%E2%80%93Diaconis_rule)
+    /// to determine a bin width that minimizes the difference between the histogram and the
+    /// theoretical underlying distribution. This helps to avoid "needle" spectra when
+    /// converting discrete rays to a continuous spectrum.
+    ///
+    /// # Returns
+    /// A `Length` representing the suggested resolution (bin width).
+    /// Returns a default of 0.2 nm if the calculation cannot be performed (e.g. too few rays or all wavelengths are the same).
+    ///
+    /// # Panics
+    ///
+    /// This function might theoretically panic if the wavelength range could not be determined.
+    #[must_use]
+    pub fn suggest_spectral_resolution(&self) -> Length {
+        let mut wvls: Vec<f64> = self
+            .ray_bundle
+            .iter()
+            .filter(|r| r.valid())
+            .map(|r| r.wavelength().get::<nanometer>())
+            .collect();
+
+        let n = to_f64(wvls.len());
+
+        // fallback for small or empty sets
+        if n < 2.0 {
+            return nanometer!(0.2);
+        }
+        // sort for quantile calculation
+        wvls.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Calc inter quartile
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        let q1 = wvls[(n * 0.25) as usize];
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        let q3 = wvls[(n * 0.75) as usize];
+        let iqr = q3 - q1;
+
+        // Freedman-Diaconis-rule: BinWidth = 2 * IQR / n^(1/3)
+        // but we skip the factor 2 because it seems to be too consevative...
+        let bin_width_nm = if iqr > f64::EPSILON {
+            iqr / n.cbrt()
+        } else {
+            // Fallback: If IQR 0 (e.g.. all rays have almost the same wavelength),
+            // we use range / sqrt(n) (one could also use the standard deviation)
+            let range = wvls.last().unwrap() - wvls.first().unwrap();
+            if range > f64::EPSILON {
+                range / n.sqrt()
+            } else {
+                0.2 // if exactly the same wavelength
+            }
+        };
+        nanometer!(bin_width_nm)
+    }
+    /// Create a continuous [`Spectrum`] with automatically determined resolution.
+    ///
+    /// This function uses `suggest_spectral_resolution` to calculate an optimal bin width
+    /// to avoid aliasing artifacts ("needles") and calls `to_spectrum` with this value.
+    ///
+    /// # Errors
+    ///
+    /// This functions returns an error if [`Rays`] is empty.
+    pub fn to_auto_spectrum(&self) -> OpmResult<Spectrum> {
+        let optimal_resolution = self.suggest_spectral_resolution();
+        // Optional: Loggen der gefundenen Auflösung zur Kontrolle
+        // log::info!("Auto-detected spectral resolution: {:.4} nm", optimal_resolution.get::<nanometer>());
+        self.to_spectrum(&optimal_resolution)
+    }
     /// Create a [`Spectrum`] (with a given resolution) from a ray bundle.
     ///
     /// This functions creates a spectrum by adding all individual `valid` rays from ray bundle with
