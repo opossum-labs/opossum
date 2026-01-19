@@ -155,7 +155,7 @@ impl Spectrometer {
             .as_ref()
             .and_then(|light_data| match light_data {
                 LightData::Energy(s) => Some(s.clone()),
-                LightData::Geometric(r) => r.to_spectrum(&nanometer!(0.2)).ok(),
+                LightData::Geometric(r) => r.to_auto_spectrum().ok(), // r.to_spectrum(&nanometer!(0.2)).ok(),
                 LightData::Fourier => None,
                 LightData::GhostFocus(r) => {
                     let mut all_rays = Rays::default();
