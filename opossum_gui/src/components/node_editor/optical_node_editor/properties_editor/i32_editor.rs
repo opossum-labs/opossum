@@ -4,12 +4,12 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
+use uuid::Uuid;
 
 #[component]
-pub fn I32Editor(int32: i32, property_key: String) -> Element {
+pub fn I32Editor(node_id: Uuid, int32: i32, property_key: String) -> Element {
     let int32_sig = use_signal(|| int32);
-    use_set_node_change_property(&property_key, int32, int32_sig);
-
+    use_set_node_change_property(node_id, &property_key, int32, int32_sig);
     rsx! {
         LabeledInput {
             id: format!("i32Property{property_key}").to_camel_case(),
@@ -21,7 +21,6 @@ pub fn I32Editor(int32: i32, property_key: String) -> Element {
         }
     }
 }
-
 fn on_i32_input_change(mut signal: Signal<i32>) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(val) = e.data.value().parse::<i32>() {

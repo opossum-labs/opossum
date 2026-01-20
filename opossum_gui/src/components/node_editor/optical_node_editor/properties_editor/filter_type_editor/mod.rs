@@ -13,9 +13,11 @@ use opossum_core::{
     utils::default_from_name::DefaultFromName,
 };
 pub use spectral_transmission_editor::SpectralFilterTypeEditor;
+use uuid::Uuid; // Import hinzugefügt
 
 #[component]
 pub fn FilterTypeEditor(
+    node_id: Uuid, // Prop hinzugefügt
     filter_type_builder: FilterTypeBuilder,
     property_key: String,
     property: Property,
@@ -23,7 +25,13 @@ pub fn FilterTypeEditor(
     let filter_type_builder_sig = use_signal(|| filter_type_builder.clone());
     use_context_provider(|| property);
 
-    use_set_node_change_property(&property_key, filter_type_builder, filter_type_builder_sig);
+    // node_id an den Hook übergeben
+    use_set_node_change_property(
+        node_id,
+        &property_key,
+        filter_type_builder,
+        filter_type_builder_sig,
+    );
 
     let mut element_list: Vec<Result<VNode, RenderError>> = vec![rsx! {
     FilterTypeSelector {filter_type_builder_sig}}];

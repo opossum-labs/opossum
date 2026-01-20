@@ -10,9 +10,11 @@ use dioxus::prelude::*;
 use opossum_core::{
     nodes::SplittingConfigBuilder, prelude::Property, utils::default_from_name::DefaultFromName,
 };
+use uuid::Uuid; // Import hinzugefügt
 
 #[component]
 pub fn SplitterTypeEditor(
+    node_id: Uuid, // Prop hinzugefügt
     splitting_config_builder: SplittingConfigBuilder,
     property_key: String,
     property: Property,
@@ -20,11 +22,15 @@ pub fn SplitterTypeEditor(
     use_context_provider(|| property);
 
     let splitting_config_builder_sig = use_signal(|| splitting_config_builder.clone());
+    
+    // node_id an den Hook übergeben
     use_set_node_change_property(
+        node_id,
         &property_key,
         splitting_config_builder,
         splitting_config_builder_sig,
     );
+    
     let mut element_list = vec![rsx! {
     SplittingConfigSelector {splitting_config_builder_sig}}];
 

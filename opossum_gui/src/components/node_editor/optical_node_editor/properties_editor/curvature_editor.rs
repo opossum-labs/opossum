@@ -10,9 +10,14 @@ use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_core::prelude::{Proptype, millimeter};
 use uom::si::{f64::Length, length::millimeter};
+use uuid::Uuid; // Import hinzugefügt
 
 #[component]
-pub fn CurvatureEditor(curvature: Length, property_key: String) -> Element {
+pub fn CurvatureEditor(
+    node_id: Uuid, // Prop hinzugefügt
+    curvature: Length,
+    property_key: String
+) -> Element {
     let curvature_sig = use_signal(|| curvature);
     let mut last_finite_curvature = use_signal(|| {
         if curvature.is_finite() {
@@ -35,7 +40,9 @@ pub fn CurvatureEditor(curvature: Length, property_key: String) -> Element {
         let property_key = property_key.clone();
         move || {
             if curvature != *curvature_sig.read() {
+                // Hier wird jetzt die node_id mitgesendet
                 node_change_handle.send(NodeChangeAction::Property(
+                    node_id,
                     property_key.clone(),
                     Proptype::Curvature(*curvature_sig.read()),
                 ));

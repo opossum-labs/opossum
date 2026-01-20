@@ -24,9 +24,11 @@ use opossum_core::{
 };
 use strum::IntoEnumIterator;
 use uom::si::{angle::degree, length::millimeter};
+use uuid::Uuid; // Added import
 
 #[component]
 pub fn AlignmentEditor(
+    node_id: Uuid, // Added node_id prop
     alignment: Isometry,
     node_properties_sig: Signal<Properties>,
     node_type: String,
@@ -35,9 +37,11 @@ pub fn AlignmentEditor(
     use_context_provider(|| alignment_sig);
     use_update_signal_with_reactive_prop(alignment, alignment_sig);
     let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+    
     use_effect(move || {
         if *alignment_sig.read() != alignment {
-            node_config_processor.send(NodeChangeAction::Alignment(*alignment_sig.read()));
+            // Updated action to include node_id
+            node_config_processor.send(NodeChangeAction::Alignment(node_id, *alignment_sig.read()));
         }
     });
 
@@ -64,6 +68,7 @@ pub fn AlignmentEditor(
 
 #[component]
 pub fn PositioningEditor(
+    node_id: Uuid, // Added node_id prop
     position_opt: Option<Isometry>,
     node_properties_sig: Signal<Properties>,
     node_type: String,
@@ -76,7 +81,8 @@ pub fn PositioningEditor(
 
     use_effect(move || {
         if *position_opt_sig.read() != position_opt {
-            node_config_processor.send(NodeChangeAction::Isometry(*position_opt_sig.read()));
+            // Updated action to include node_id
+            node_config_processor.send(NodeChangeAction::Isometry(node_id, *position_opt_sig.read()));
         }
     });
 
@@ -115,6 +121,7 @@ pub fn PositioningEditor(
         }
     }
 }
+
 #[component]
 fn PositioningInputs(position_opt_sig: Signal<Option<Isometry>>) -> Element {
     let position_sig = use_signal(|| position_opt_sig.read().unwrap_or_default());

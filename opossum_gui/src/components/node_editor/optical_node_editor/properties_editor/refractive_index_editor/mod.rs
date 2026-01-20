@@ -22,12 +22,18 @@ use crate::components::node_editor::{
     },
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
+use uuid::Uuid; // Import hinzugefügt
 
 #[component]
-pub fn RefractiveIndexEditor(ref_ind_type: RefractiveIndexType, property_key: String) -> Element {
+pub fn RefractiveIndexEditor(
+    node_id: Uuid, // Prop hinzugefügt
+    ref_ind_type: RefractiveIndexType, 
+    property_key: String
+) -> Element {
     let mut ref_ind_type_sig = use_signal(|| ref_ind_type.clone());
 
-    use_set_node_change_property(&property_key, ref_ind_type, ref_ind_type_sig);
+    // node_id an den Hook übergeben
+    use_set_node_change_property(node_id, &property_key, ref_ind_type, ref_ind_type_sig);
 
     let select_id = format!("refractiveIndexProperty{property_key}").to_camel_case();
     rsx! {

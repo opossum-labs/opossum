@@ -4,11 +4,18 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
+use uuid::Uuid; // Import hinzugefügt
 
 #[component]
-pub fn StringEditor(s: String, property_key: String) -> Element {
+pub fn StringEditor(
+    node_id: Uuid, // Prop hinzugefügt
+    s: String, 
+    property_key: String
+) -> Element {
     let string_sig = use_signal(|| s.clone());
-    use_set_node_change_property(&property_key, s.clone(), string_sig);
+    
+    // node_id an den Hook übergeben
+    use_set_node_change_property(node_id, &property_key, s.clone(), string_sig);
 
     rsx! {
         LabeledInput {

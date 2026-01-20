@@ -7,14 +7,18 @@ use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_core::nanometer;
 use uom::si::{f64::Length, length::nanometer};
+use uuid::Uuid;
 
 #[component]
-pub fn LengthOptionEditor(length_opt: Option<Length>, property_key: String) -> Element {
+pub fn LengthOptionEditor(
+    node_id: Uuid,
+    length_opt: Option<Length>,
+    property_key: String,
+) -> Element {
     let mut length_opt_sig = use_signal(|| length_opt);
     let select_id = format!("lengthOptionProperty{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
-
-    use_set_node_change_property(&property_key, length_opt, length_opt_sig);
+    use_set_node_change_property(node_id, &property_key, length_opt, length_opt_sig);
 
     rsx! {
         LabeledSelect {

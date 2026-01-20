@@ -1,18 +1,20 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-
-use crate::components::node_editor::CallbackWrapper;
-use crate::components::node_editor::inputs::input_components::{LabeledInput, LabeledSelect};
-use crate::components::node_editor::inputs::select_options_from_enum_iterator;
-use crate::components::node_editor::node_config_editor::NodeChangeAction;
-use crate::components::node_editor::optical_node_editor::general_editor::NodeTypeInput;
-use crate::components::scenery_editor::GraphStore;
-use crate::{OPOSSUM_UI_LOGS, api};
+use crate::components::node_editor::{
+    CallbackWrapper,
+    inputs::{
+        input_components::{LabeledInput, LabeledSelect},
+        select_options_from_enum_iterator,
+    },
+    node_config_editor::NodeChangeAction,
+    optical_node_editor::general_editor::NodeTypeInput,
+};
+use crate::{OPOSSUM_UI_LOGS, api, components::scenery_editor::GraphStore};
 use dioxus::prelude::*;
-use opossum_core::analyzers::raytrace::MissedSurfaceStrategy;
-use opossum_core::picojoule;
-use opossum_core::prelude::*;
-use opossum_core::surface::hit_map::fluence_estimator::FluenceEstimator;
-use opossum_core::utils::default_from_name::DefaultFromName;
+use opossum_core::{
+    analyzers::raytrace::MissedSurfaceStrategy, picojoule, prelude::*,
+    surface::hit_map::fluence_estimator::FluenceEstimator,
+    utils::default_from_name::DefaultFromName,
+};
 use uom::si::energy::picojoule;
 use uuid::Uuid;
 
@@ -20,17 +22,13 @@ use uuid::Uuid;
 pub fn AnalyzerNodeEditor(node_id: Uuid) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
     let resource_future = use_resource(move || async move {
-        let node_id_opt = graph_store.read().active_node();
-        if let Some(node_id) = node_id_opt {
-            match api::get_analyzer_info(node_id).await {
-                Ok(analyzer_info) => Some(analyzer_info),
-                Err(err_str) => {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                    None
-                }
+        // Wir nutzen die übergebene node_id für den API call
+        match api::get_analyzer_info(node_id).await {
+            Ok(analyzer_info) => Some(analyzer_info),
+            Err(err_str) => {
+                OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                None
             }
-        } else {
-            None
         }
     });
 
@@ -51,12 +49,12 @@ pub fn AnalyzerNodeEditor(node_id: Uuid) -> Element {
                                 AnalyzerType::Energy => rsx! {},
                                 AnalyzerType::RayTrace(ray_trace_config) => {
                                     rsx! {
-                                        RayTraceEditor { ray_trace_config }
+                                        RayTraceEditor { node_id, ray_trace_config }
                                     }
                                 }
                                 AnalyzerType::GhostFocus(ghost_focus_config) => {
                                     rsx! {
-                                        GhostFocusEditor { ghost_focus_config }
+                                        GhostFocusEditor { node_id, ghost_focus_config }
                                     }
                                 }
                             }
@@ -74,14 +72,16 @@ pub fn AnalyzerNodeEditor(node_id: Uuid) -> Element {
 }
 
 #[component]
-pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
+pub fn RayTraceEditor(node_id: Uuid, ray_trace_config: RayTraceConfig) -> Element {
     let mut ray_trace_config_sig = use_signal(|| ray_trace_config);
     let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+
     use_effect(move || {
         if ray_trace_config != *ray_trace_config_sig.read() {
-            node_config_processor.send(NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(
-                *ray_trace_config_sig.read(),
-            )));
+            node_config_processor.send(NodeChangeAction::AnalyzerType(
+                node_id,
+                AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
+            ));
         }
     });
 
@@ -163,14 +163,16 @@ pub fn RayTraceEditor(ray_trace_config: RayTraceConfig) -> Element {
 }
 
 #[component]
-pub fn GhostFocusEditor(ghost_focus_config: GhostFocusConfig) -> Element {
+pub fn GhostFocusEditor(node_id: Uuid, ghost_focus_config: GhostFocusConfig) -> Element {
     let mut ghost_focus_config_sig = use_signal(|| ghost_focus_config.clone());
     let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+
     use_effect(move || {
         if ghost_focus_config != *ghost_focus_config_sig.read() {
-            node_config_processor.send(NodeChangeAction::AnalyzerType(AnalyzerType::GhostFocus(
-                ghost_focus_config_sig.read().clone(),
-            )));
+            node_config_processor.send(NodeChangeAction::AnalyzerType(
+                node_id,
+                AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
+            ));
         }
     });
 

@@ -7,7 +7,7 @@ use opossum_core::utils::{
 };
 use std::fmt::Display;
 use strum::EnumIter;
-
+use uuid::Uuid;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
@@ -41,10 +41,14 @@ impl Display for Vec2Options {
 impl DefaultFromName for Vec2Options {}
 
 #[component]
-pub fn Vec2Editor(vector: Vector2<f64>, property_key: String) -> Element {
+pub fn Vec2Editor(
+    node_id: Uuid,
+    vector: Vector2<f64>, 
+    property_key: String
+) -> Element {
     let select_label = property_key.to_sentence_case();
     let mut vec_sig = use_signal(|| vector);
-    use_set_node_change_property(&property_key, vector, vec_sig);
+    use_set_node_change_property(node_id, &property_key, vector, vec_sig);
 
     let vec_x_input = InputData::new(
         InputParam::F64(format!("{select_label} x")),
@@ -100,7 +104,6 @@ pub fn Vec2Editor(vector: Vector2<f64>, property_key: String) -> Element {
         }
     }
 }
-
 fn on_vec_input_change(
     mut vec_sig: Signal<Vector2<f64>>,
     axis: TranslationAxis,

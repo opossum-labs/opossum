@@ -4,11 +4,18 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
+use uuid::Uuid; // Import hinzugefügt
 
 #[component]
-pub fn BoolEditor(b: bool, property_key: String) -> Element {
+pub fn BoolEditor(
+    node_id: Uuid, // Prop hinzugefügt
+    b: bool, 
+    property_key: String
+) -> Element {
     let bool_sig = use_signal(|| b);
-    use_set_node_change_property(&property_key, b, bool_sig);
+    
+    // node_id an den Hook übergeben
+    use_set_node_change_property(node_id, &property_key, b, bool_sig);
 
     rsx! {
         LabeledCheckboxInput {

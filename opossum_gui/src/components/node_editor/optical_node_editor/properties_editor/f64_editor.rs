@@ -8,12 +8,19 @@ use crate::{
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_core::prelude::{Property, Proptype};
+use uuid::Uuid; // Import hinzugefügt
 
 #[component]
-pub fn F64Editor(float64: f64, property_key: String, property: Property) -> Element {
+pub fn F64Editor(
+    node_id: Uuid, // Prop hinzugefügt
+    float64: f64, 
+    property_key: String, 
+    property: Property
+) -> Element {
     let float64_sig = use_signal(|| float64);
 
-    use_set_node_change_property(&property_key, float64, float64_sig);
+    // node_id an den Hook übergeben
+    use_set_node_change_property(node_id, &property_key, float64, float64_sig);
 
     rsx! {
         LabeledInput {

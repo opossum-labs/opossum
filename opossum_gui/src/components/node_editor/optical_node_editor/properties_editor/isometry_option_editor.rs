@@ -15,12 +15,18 @@ use opossum_core::{
 };
 use strum::IntoEnumIterator;
 use uom::si::{angle::degree, length::millimeter};
+use uuid::Uuid; // Import hinzugefügt
 
 #[component]
-pub fn IsometryOptionEditor(isometry: Isometry, property_key: String) -> Element {
+pub fn IsometryOptionEditor(
+    node_id: Uuid, // Prop hinzugefügt
+    isometry: Isometry, 
+    property_key: String
+) -> Element {
     let isometry_sig = use_signal(|| isometry);
 
-    use_set_node_change_property(&property_key, isometry, isometry_sig);
+    // node_id an den Hook übergeben
+    use_set_node_change_property(node_id, &property_key, isometry, isometry_sig);
 
     let input_data = get_isometry_option_input_data(isometry_sig);
 

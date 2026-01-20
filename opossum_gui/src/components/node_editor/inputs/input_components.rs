@@ -66,7 +66,6 @@ pub fn LabeledFileInput(
                     disabled: readonly,
                     onclick: move |_| {
                         if readonly {
-
                             return;
                         }
                         let filter = accept.clone();
@@ -81,15 +80,7 @@ pub fn LabeledFileInput(
                                 let path = handle.path().to_string_lossy().to_string();
                                 let safe_path = path.replace('\\', "\\\\").replace('\'', "\\'");
                                 let js = format!(
-                                    r#"
-                                                                                                                                                                    let el = document.getElementById('{target_id}');
-                                                                                                                                                                    if (el) {{
-                                                                                                                                                                        let nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                                                                                                                                                                        nativeInputValueSetter.call(el, '{safe_path}');
-                                                                                                                                                                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                                                                                                                                                        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                                                                                                                                                    }}
-                                                                                                                                                                "#,
+                                    r#"let el=document.getElementById('{target_id}');if (el) {{let nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;nativeInputValueSetter.call(el, '{safe_path}');el.dispatchEvent(new Event('input', {{ bubbles: true }}));el.dispatchEvent(new Event('change', {{ bubbles: true }}));}}"#,
                                 );
                                 dioxus::document::eval(&js);
                             }

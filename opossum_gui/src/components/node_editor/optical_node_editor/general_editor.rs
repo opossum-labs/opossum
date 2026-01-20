@@ -1,6 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
-    CallbackWrapper,
+    CallbackWrapper, // Wichtig: Wird für den Wrapper benötigt
     accordion::AccordionItem,
     inputs::input_components::{LabeledCheckboxInput, LabeledInput},
     node_config_editor::NodeChangeAction,
@@ -9,15 +9,53 @@ use crate::components::node_editor::{
 use dioxus::prelude::*;
 use opossum_core::{J_per_cm2, nodes::fluence_detector::Fluence};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
+use uuid::Uuid;
 
 #[component]
-pub fn GeneralEditor(node_type: String, name: String, lidt: Fluence, inverted: bool) -> Element {
-    let accordion_content = vec![rsx! {
-            NodeTypeInput {node_type, label: "Node Type"},
-            NodeNameInput {node_name: name},
-            NodeLIDTInput {node_lidt: lidt},
-            NodeInvertedInput {node_inverted: inverted, label: "Invert Node"},
-    }];
+pub fn GeneralEditor(
+    node_id: Uuid,
+    node_type: String,
+    name: String,
+    lidt: Fluence,
+    inverted: bool,
+) -> Element {
+    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+
+    // --- LAGGING ID PATTERN ---
+    let mut bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+
+    let accordion_content = vec![
+        rsx! {
+            NodeTypeInput { node_type, label: "Node Type" }
+        },
+        rsx! {
+            NodeNameInput {
+                value: name,
+                on_valid_change: move |new_name: String| {
+                    node_config_processor.send(NodeChangeAction::Name(*bound_node_id.peek(), new_name));
+                }
+            }
+        },
+        rsx! {
+            NodeLIDTInput {
+                value: lidt,
+                on_valid_change: move |new_fluence: Fluence| {
+                    node_config_processor.send(NodeChangeAction::Lidt(*bound_node_id.peek(), new_fluence));
+                }
+            }
+        },
+        rsx! {
+            NodeInvertedInput {
+                value: inverted,
+                label: "Invert Node",
+                on_valid_change: move |new_state: bool| {
+                    node_config_processor.send(NodeChangeAction::Inverted(*bound_node_id.peek(), new_state));
+                }
+            }
+        }
+    ];
+
     rsx! {
         AccordionItem {
             elements: accordion_content,
@@ -30,59 +68,85 @@ pub fn GeneralEditor(node_type: String, name: String, lidt: Fluence, inverted: b
 }
 
 #[component]
-pub fn NodeNameInput(node_name: String) -> Element {
-    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+pub fn NodeNameInput(
+    value: String,
+    on_valid_change: EventHandler<String>,
+) -> Element {
+    let mut text_state = use_signal(|| value.clone());
+
+    use_effect(use_reactive!(|value| {
+        text_state.set(value);
+    }));
+
     rsx! {
         LabeledInput {
             id: "inputNodeName",
             label: "Node Name",
-            value: node_name,
-            onchange: name_onchange(node_config_processor),
+            value: text_state,
+            // FIX: Closure in CallbackWrapper verpackt
+            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+                let new_val = e.data.value();
+                text_state.set(new_val.clone());
+                on_valid_change.call(new_val);
+            }),
         }
     }
 }
 
-#[must_use]
-pub fn name_onchange(node_config_processor: Coroutine<NodeChangeAction>) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
-        let Ok(name) = e.data.value().parse::<String>();
-        node_config_processor.send(NodeChangeAction::Name(name));
-    })
-}
-
 #[component]
-pub fn NodeLIDTInput(node_lidt: Fluence) -> Element {
-    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
-    let val_sig = use_signal(|| node_lidt);
-    use_update_signal_with_reactive_prop(node_lidt, val_sig);
+pub fn NodeLIDTInput(
+    value: Fluence,
+    on_valid_change: EventHandler<Fluence>,
+) -> Element {
+    let mut text_state = use_signal(|| format!("{:.2}", value.get::<joule_per_square_centimeter>()));
+
+    use_effect(use_reactive!(|value| {
+        text_state.set(format!("{:.2}", value.get::<joule_per_square_centimeter>()));
+    }));
 
     rsx! {
         LabeledInput {
             id: "inputNodeLIDT",
             label: "LIDT in J/cm²",
-            value: format!("{:.2}", val_sig.read().get::<joule_per_square_centimeter>()),
-            onchange: lidt_onchange(node_config_processor, val_sig),
+            value: text_state,
             r#type: "number",
             min: Some("0.0"),
+            // FIX: Closure in CallbackWrapper verpackt
+            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+                let input_str = e.data.value();
+
+                if let Ok(parsed_num) = input_str.parse::<f64>() {
+                    if parsed_num >= 0.0 {
+                        on_valid_change.call(J_per_cm2!(parsed_num));
+                        return;
+                    }
+                }
+
+                text_state.set(format!("{:.2}", value.get::<joule_per_square_centimeter>()));
+            }),
         }
     }
 }
 
-#[must_use]
-pub fn lidt_onchange(
-    node_config_processor: Coroutine<NodeChangeAction>,
-    mut old_lidt: Signal<Fluence>,
-) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
-        if let Ok(lidt) = e.data.parsed::<f64>() {
-            if lidt >= 0. {
-                node_config_processor.send(NodeChangeAction::Lidt(J_per_cm2!(lidt)));
-            } else {
-                let val = *old_lidt.read();
-                old_lidt.set(val);
-            }
+#[component]
+pub fn NodeInvertedInput(
+    value: bool,
+    label: String,
+    on_valid_change: EventHandler<bool>,
+) -> Element {
+    rsx! {
+        LabeledCheckboxInput {
+            id: "inputNodeInverted",
+            label,
+            value,
+            // FIX: Closure in CallbackWrapper verpackt
+            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+                if let Ok(new_val) = e.data.parsed::<bool>() {
+                    on_valid_change.call(new_val);
+                }
+            }),
         }
-    })
+    }
 }
 
 #[component]
@@ -96,26 +160,4 @@ pub fn NodeTypeInput(node_type: String, label: &'static str) -> Element {
             onchange: CallbackWrapper::noop(),
         }
     }
-}
-
-#[component]
-pub fn NodeInvertedInput(node_inverted: bool, label: &'static str) -> Element {
-    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
-    rsx! {
-        LabeledCheckboxInput {
-            id: "inputNodeInverted",
-            label,
-            value: node_inverted,
-            onchange: inverted_onchange(node_config_processor),
-        }
-    }
-}
-
-#[must_use]
-pub fn inverted_onchange(node_config_processor: Coroutine<NodeChangeAction>) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
-        if let Ok(inverted) = e.data.parsed::<bool>() {
-            node_config_processor.send(NodeChangeAction::Inverted(inverted));
-        }
-    })
 }

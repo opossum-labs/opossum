@@ -13,14 +13,20 @@ use crate::components::node_editor::{
 use light_data_builder_selection::SourceLightDataBuilderSelector;
 use opossum_core::prelude::LightDataBuilder;
 use ray_source_editor::RaySourceEditor;
+use uuid::Uuid; // Import hinzugefügt
 
 use dioxus::prelude::*;
 
 #[component]
-pub fn LightDataEditor(light_data_builder: LightDataBuilder, property_key: String) -> Element {
+pub fn LightDataEditor(
+    node_id: Uuid, // Prop hinzugefügt
+    light_data_builder: LightDataBuilder, 
+    property_key: String
+) -> Element {
     let light_data_builder_sig = use_signal(|| light_data_builder.clone());
 
-    use_set_node_change_property(&property_key, light_data_builder, light_data_builder_sig);
+    // node_id an den Hook übergeben
+    use_set_node_change_property(node_id, &property_key, light_data_builder, light_data_builder_sig);
 
     let mut accordion_item_content = vec![rsx! {
     SourceLightDataBuilderSelector {light_data_builder_sig }}];

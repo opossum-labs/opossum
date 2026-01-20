@@ -8,15 +8,21 @@ use opossum_core::{
     surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::default_from_name::DefaultFromName,
 };
+use uuid::Uuid;
 
 #[component]
 pub fn FluenceEstimatorEditor(
+    node_id: Uuid,
     fluence_estimator: FluenceEstimator,
     property_key: String,
 ) -> Element {
     let mut fluence_estimator_sig = use_signal(|| fluence_estimator);
-    use_set_node_change_property(&property_key, fluence_estimator, fluence_estimator_sig);
-
+    use_set_node_change_property(
+        node_id,
+        &property_key,
+        fluence_estimator,
+        fluence_estimator_sig,
+    );
     rsx! {
         LabeledSelect {
             id: format!("fluenceEstimatorProperty{property_key}").to_camel_case(),

@@ -6,12 +6,18 @@ use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_core::degree;
 use uom::si::{angle::degree, f64::Angle};
+use uuid::Uuid; // Import hinzugefügt
 
 #[component]
-pub fn AngleEditor(angle: Angle, property_key: String) -> Element {
+pub fn AngleEditor(
+    node_id: Uuid, // Prop hinzugefügt
+    angle: Angle, 
+    property_key: String
+) -> Element {
     let angle_sig = use_signal(|| angle);
 
-    use_set_node_change_property(&property_key, angle, angle_sig);
+    // node_id an den Hook übergeben
+    use_set_node_change_property(node_id, &property_key, angle, angle_sig);
 
     rsx! {
         LabeledInput {

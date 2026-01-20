@@ -38,19 +38,32 @@ pub fn OpticalNodeEditor(node_id: Uuid, node_properties_sig: Signal<Properties>)
                     div {
                         class: "accordion accordion-borderless bg-dark ",
                         id: "accordionNodeConfig",
+                        // WICHTIG: Das `key`-Attribut zwingt Dioxus dazu, die Komponente
+                        // neu zu mounten, wenn sich die ID ändert. Das verhindert,
+                        // dass alte Event-Handler auf den neuen Node angewendet werden.
                         GeneralEditor {
+                            key: "{node_id}",
+                            node_id,
                             node_type: node_attr.node_type(),
                             name: node_attr.name(),
                             lidt: *node_attr.lidt(),
                             inverted: node_attr.inverted(),
                         }
-                        PropertiesEditor { node_properties_sig }
+                        PropertiesEditor {
+                            key: "{node_id}",
+                            node_id,
+                            node_properties_sig,
+                        }
                         PositioningEditor {
+                            key: "{node_id}",
+                            node_id,
                             position_opt: node_attr.isometry(),
                             node_properties_sig,
                             node_type: node_attr.node_type(),
                         }
                         AlignmentEditor {
+                            key: "{node_id}",
+                            node_id,
                             alignment: node_attr.alignment().unwrap_or(Isometry::identity()),
                             node_properties_sig,
                             node_type: node_attr.node_type(),
