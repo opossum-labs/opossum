@@ -1,27 +1,32 @@
 use crate::components::node_editor::{
-    CallbackWrapper, inputs::input_components::LabeledCheckboxInput,
-    optical_node_editor::properties_editor::use_set_node_change_property,
+    CallbackWrapper,
+    inputs::input_components::LabeledCheckboxInput,
+    node_config_editor::NodeChangeEvent,
+    optical_node_editor::properties_editor::{
+        use_set_node_change_property, use_update_signal_with_reactive_prop,
+    },
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use uuid::Uuid; // Import hinzugefügt
+use uuid::Uuid;
 
 #[component]
 pub fn BoolEditor(
-    node_id: Uuid, // Prop hinzugefügt
-    b: bool, 
-    property_key: String
+    node_id: Uuid,
+    b: bool,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let bool_sig = use_signal(|| b);
-    
-    // node_id an den Hook übergeben
-    use_set_node_change_property(node_id, &property_key, b, bool_sig);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(*bound_node_id.read(), &property_key, b, bool_sig, on_change);
 
     rsx! {
         LabeledCheckboxInput {
             id: format!("boolProperty{property_key}").to_camel_case(),
             label: format!("{}", property_key.to_sentence_case()),
-            value: format!("{}", b),
+            value: format!("{}", *bool_sig.read()),
             onchange: on_bool_input_change(bool_sig),
         }
     }

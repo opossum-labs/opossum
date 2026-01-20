@@ -1,38 +1,47 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        CallbackWrapper, inputs::input_components::LabeledInput,
-        optical_node_editor::properties_editor::use_set_node_change_property,
+        CallbackWrapper,
+        inputs::input_components::LabeledInput,
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::{
+            use_set_node_change_property, use_update_signal_with_reactive_prop,
+        },
     },
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_core::prelude::{Property, Proptype};
-use uuid::Uuid; // Import hinzugefügt
+use uuid::Uuid;
 
 #[component]
 pub fn F64Editor(
-    node_id: Uuid, // Prop hinzugefügt
-    float64: f64, 
-    property_key: String, 
-    property: Property
+    node_id: Uuid,
+    float64: f64,
+    property_key: String,
+    property: Property,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let float64_sig = use_signal(|| float64);
-
-    // node_id an den Hook übergeben
-    use_set_node_change_property(node_id, &property_key, float64, float64_sig);
-
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(
+        *bound_node_id.read(),
+        &property_key,
+        float64,
+        float64_sig,
+        on_change,
+    );
     rsx! {
         LabeledInput {
             id: format!("float64Property{property_key}").to_camel_case(),
             label: format!("{}", property_key.to_sentence_case()),
-            value: format!("{:.3}", float64),
+            value: format!("{:.3}", *float64_sig.read()),
             r#type: "number",
             onchange: on_float64_input_change(float64_sig, property),
         }
     }
 }
-
 pub fn on_float64_input_change(mut signal: Signal<f64>, property: Property) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(val) = e.data.value().parse::<f64>() {
@@ -41,6 +50,7 @@ pub fn on_float64_input_change(mut signal: Signal<f64>, property: Property) -> C
                 Ok(()) => signal.set(val),
                 Err(e) => {
                     OPOSSUM_UI_LOGS.write().add_log(format!("{e}").as_str());
+                    // Bei Fehler auf alten Wert zurücksetzen
                     signal.set(last_val);
                 }
             }

@@ -11,7 +11,7 @@ use crate::{
             InputData,
             input_components::{LabeledSelect, RowedInputs},
         },
-        node_config_editor::NodeChangeAction,
+        node_config_editor::{NodeChangeAction, NodeChangeEvent}, // Event Structs importiert
         optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
@@ -24,24 +24,28 @@ use opossum_core::{
 };
 use strum::IntoEnumIterator;
 use uom::si::{angle::degree, length::millimeter};
-use uuid::Uuid; // Added import
+use uuid::Uuid;
 
 #[component]
 pub fn AlignmentEditor(
-    node_id: Uuid, // Added node_id prop
+    node_id: Uuid,
     alignment: Isometry,
     node_properties_sig: Signal<Properties>,
     node_type: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let alignment_sig = use_signal(|| alignment);
     use_context_provider(|| alignment_sig);
     use_update_signal_with_reactive_prop(alignment, alignment_sig);
-    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
-    
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
     use_effect(move || {
+        // Wir senden nur, wenn lokal != prop (d.h. eine echte Änderung stattgefunden hat)
         if *alignment_sig.read() != alignment {
-            // Updated action to include node_id
-            node_config_processor.send(NodeChangeAction::Alignment(node_id, *alignment_sig.read()));
+            on_change.call(NodeChangeEvent {
+                node_id: *bound_node_id.peek(), // Lagging ID nutzen
+                action: NodeChangeAction::Alignment(*alignment_sig.read()),
+            });
         }
     });
 
@@ -68,21 +72,23 @@ pub fn AlignmentEditor(
 
 #[component]
 pub fn PositioningEditor(
-    node_id: Uuid, // Added node_id prop
+    node_id: Uuid,
     position_opt: Option<Isometry>,
     node_properties_sig: Signal<Properties>,
     node_type: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut position_opt_sig = use_signal(|| position_opt);
     use_context_provider(|| position_opt_sig);
-
     use_update_signal_with_reactive_prop(position_opt, position_opt_sig);
-    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
-
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
     use_effect(move || {
         if *position_opt_sig.read() != position_opt {
-            // Updated action to include node_id
-            node_config_processor.send(NodeChangeAction::Isometry(node_id, *position_opt_sig.read()));
+            on_change.call(NodeChangeEvent {
+                node_id: *bound_node_id.peek(),
+                action: NodeChangeAction::Isometry(*position_opt_sig.read()),
+            });
         }
     });
 
@@ -122,9 +128,13 @@ pub fn PositioningEditor(
     }
 }
 
+// --- Helper Components & Functions (bleiben weitgehend gleich, da sie nur Signale modifizieren) ---
+
 #[component]
 fn PositioningInputs(position_opt_sig: Signal<Option<Isometry>>) -> Element {
     let position_sig = use_signal(|| position_opt_sig.read().unwrap_or_default());
+
+    // Sync zurück zum Parent Signal, wenn sich das lokale Signal ändert
     use_effect(move || {
         position_opt_sig.set(Some(*position_sig.read()));
     });

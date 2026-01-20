@@ -3,18 +3,25 @@ pub mod alignment_editor;
 pub mod general_editor;
 pub mod properties_editor;
 
-use crate::components::node_editor::optical_node_editor::alignment_editor::{
-    AlignmentEditor, PositioningEditor,
+use crate::components::node_editor::{
+    node_config_editor::NodeChangeEvent,
+    optical_node_editor::{
+        alignment_editor::{AlignmentEditor, PositioningEditor},
+        general_editor::GeneralEditor,
+        properties_editor::PropertiesEditor,
+    },
 };
-use crate::components::node_editor::optical_node_editor::general_editor::GeneralEditor;
-use crate::components::node_editor::optical_node_editor::properties_editor::PropertiesEditor;
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_core::prelude::{Isometry, Properties};
 use uuid::Uuid;
 
 #[component]
-pub fn OpticalNodeEditor(node_id: Uuid, node_properties_sig: Signal<Properties>) -> Element {
+pub fn OpticalNodeEditor(
+    node_id: Uuid,
+    node_properties_sig: Signal<Properties>,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
     let node_id_memo = use_memo(use_reactive!(|node_id| node_id));
 
     let resource_future = use_resource(move || async move {
@@ -38,35 +45,32 @@ pub fn OpticalNodeEditor(node_id: Uuid, node_properties_sig: Signal<Properties>)
                     div {
                         class: "accordion accordion-borderless bg-dark ",
                         id: "accordionNodeConfig",
-                        // WICHTIG: Das `key`-Attribut zwingt Dioxus dazu, die Komponente
-                        // neu zu mounten, wenn sich die ID ändert. Das verhindert,
-                        // dass alte Event-Handler auf den neuen Node angewendet werden.
                         GeneralEditor {
-                            key: "{node_id}",
                             node_id,
                             node_type: node_attr.node_type(),
                             name: node_attr.name(),
                             lidt: *node_attr.lidt(),
                             inverted: node_attr.inverted(),
+                            on_change: on_change.clone(),
                         }
                         PropertiesEditor {
-                            key: "{node_id}",
                             node_id,
                             node_properties_sig,
+                            on_change: on_change.clone(),
                         }
                         PositioningEditor {
-                            key: "{node_id}",
                             node_id,
                             position_opt: node_attr.isometry(),
                             node_properties_sig,
                             node_type: node_attr.node_type(),
+                            on_change: on_change.clone(),
                         }
                         AlignmentEditor {
-                            key: "{node_id}",
                             node_id,
                             alignment: node_attr.alignment().unwrap_or(Isometry::identity()),
                             node_properties_sig,
                             node_type: node_attr.node_type(),
+                            on_change: on_change.clone(),
                         }
                     }
                 }

@@ -1,6 +1,9 @@
 use crate::components::node_editor::{
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
-    optical_node_editor::properties_editor::use_set_node_change_property,
+    node_config_editor::NodeChangeEvent,
+    optical_node_editor::properties_editor::{
+        use_set_node_change_property, use_update_signal_with_reactive_prop,
+    },
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
@@ -15,14 +18,19 @@ pub fn FluenceEstimatorEditor(
     node_id: Uuid,
     fluence_estimator: FluenceEstimator,
     property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut fluence_estimator_sig = use_signal(|| fluence_estimator);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
     use_set_node_change_property(
-        node_id,
+        *bound_node_id.read(),
         &property_key,
         fluence_estimator,
         fluence_estimator_sig,
+        on_change,
     );
+
     rsx! {
         LabeledSelect {
             id: format!("fluenceEstimatorProperty{property_key}").to_camel_case(),

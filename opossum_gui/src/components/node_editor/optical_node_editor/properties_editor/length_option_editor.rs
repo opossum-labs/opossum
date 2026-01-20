@@ -1,7 +1,10 @@
 use crate::components::node_editor::{
     CallbackWrapper,
     inputs::input_components::{LabeledInput, LabeledSelect},
-    optical_node_editor::properties_editor::use_set_node_change_property,
+    node_config_editor::NodeChangeEvent,
+    optical_node_editor::properties_editor::{
+        use_set_node_change_property, use_update_signal_with_reactive_prop,
+    },
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
@@ -14,19 +17,28 @@ pub fn LengthOptionEditor(
     node_id: Uuid,
     length_opt: Option<Length>,
     property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut length_opt_sig = use_signal(|| length_opt);
     let select_id = format!("lengthOptionProperty{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
-    use_set_node_change_property(node_id, &property_key, length_opt, length_opt_sig);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(
+        *bound_node_id.read(),
+        &property_key,
+        length_opt,
+        length_opt_sig,
+        on_change,
+    );
 
     rsx! {
         LabeledSelect {
             id: select_id,
             label: select_label,
             options: vec![
-                (length_opt.is_none(), "None".to_owned()),
-                (length_opt.is_some(), "Define".to_owned()),
+                (length_opt_sig.read().is_none(), "None".to_owned()),
+                (length_opt_sig.read().is_some(), "Define".to_owned()),
             ],
             onchange: move |_: Event<FormData>| {
                 if length_opt_sig.read().is_some() {

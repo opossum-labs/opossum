@@ -8,16 +8,20 @@ use opossum_core::nodes::fluence_detector::Fluence;
 use opossum_core::prelude::{AnalyzerType, Isometry, Properties, Proptype};
 use uuid::Uuid;
 
-#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct NodeChangeEvent {
+    pub node_id: Uuid,
+    pub action: NodeChangeAction,
+}
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChangeAction {
-    Name(Uuid, String),
-    Lidt(Uuid, Fluence),
-    Alignment(Uuid, Isometry),
-    Inverted(Uuid, bool),
-    Property(Uuid, String, Proptype),
-    Isometry(Uuid, Option<Isometry>),
-    AnalyzerType(Uuid, AnalyzerType),
+    Name(String),
+    Lidt(Fluence),
+    Alignment(Isometry),
+    Inverted(bool),
+    Property(String, Proptype),
+    Isometry(Option<Isometry>),
+    AnalyzerType(AnalyzerType),
 }
 
 #[component]
@@ -26,16 +30,25 @@ pub fn NodeConfigEditor(
     is_modified: Signal<bool>,
 ) -> Element {
     let node_properties_sig = use_signal(Properties::default);
-
-    // Props reichen hier eigentlich, Context ist optional, aber wir lassen es wie gehabt
     use_context_provider(|| node_properties_sig);
     use_node_config_processor(node_properties_sig, is_modified);
+
+    let node_config_processor = use_coroutine_handle::<NodeChangeEvent>();
+
+    let on_node_change = move |evt: NodeChangeEvent| {
+        node_config_processor.send(evt);
+    };
+
     match active_node_opt() {
         Some((NodeType::Optical(_), node_id)) => rsx! {
-            OpticalNodeEditor { node_id, node_properties_sig }
+            OpticalNodeEditor {
+                node_id,
+                node_properties_sig,
+                on_change: on_node_change,
+            }
         },
         Some((NodeType::Analyzer(_), node_id)) => rsx! {
-            AnalyzerNodeEditor { node_id }
+            AnalyzerNodeEditor { node_id, on_change: on_node_change }
         },
         None => rsx! {
             div { "No node selected" }
@@ -51,27 +64,29 @@ fn use_node_config_processor(
     let mut graph_store = use_context::<Signal<GraphStore>>();
 
     use_coroutine(
-        move |mut rx: UnboundedReceiver<NodeChangeAction>| async move {
-            while let Some(action) = rx.next().await {
-                let result: Result<(), String> = match action {
-                    NodeChangeAction::Name(uuid, name) => {
+        move |mut rx: UnboundedReceiver<NodeChangeEvent>| async move {
+            while let Some(event) = rx.next().await {
+                // 1. ID extrahieren (Das ist die sichere "Lagging ID" aus dem UI)
+                let uuid = event.node_id;
+
+                // 2. Aktion ausführen
+                let result: Result<(), String> = match event.action {
+                    NodeChangeAction::Name(name) => {
                         api::update_node_name(uuid, name.clone()).await.map(|_| {
-                            // Store nur updaten, wenn der Node noch existiert
                             graph_store.write().set_name_of_node(uuid, name);
                         })
                     }
-                    NodeChangeAction::Lidt(uuid, lidt_new) => {
+                    NodeChangeAction::Lidt(lidt_new) => {
                         api::update_node_lidt(uuid, lidt_new).await.map(|_| ())
                     }
-                    NodeChangeAction::Alignment(uuid, iso) => {
+                    NodeChangeAction::Alignment(iso) => {
                         api::update_node_alignment(uuid, iso).await.map(|_| ())
                     }
-                    NodeChangeAction::Property(uuid, key, prop) => {
+                    NodeChangeAction::Property(key, prop) => {
                         api::update_node_property(uuid, (key.clone(), prop.clone()))
                             .await
                             .map(|_| {
-                                // Wir müssen prüfen, ob der bearbeitete Node *immer noch* der aktive ist,
-                                // bevor wir das lokale UI Signal updaten. Sonst zeigen wir falsche Daten an.
+                                // Nur lokales UI updaten, wenn der User noch denselben Node ansieht
                                 if let Some(active_id) = graph_store.read().active_node() {
                                     if active_id == uuid {
                                         node_properties_sig.write().set(&key, prop).unwrap_or_else(
@@ -85,10 +100,10 @@ fn use_node_config_processor(
                                 }
                             })
                     }
-                    NodeChangeAction::Isometry(uuid, iso) => {
+                    NodeChangeAction::Isometry(iso) => {
                         api::update_node_isometry(uuid, iso).await.map(|_| ())
                     }
-                    NodeChangeAction::Inverted(uuid, inverted) => {
+                    NodeChangeAction::Inverted(inverted) => {
                         match api::update_node_inversion(uuid, inverted).await {
                             Ok(connections) => {
                                 graph_processor.send(GraphStoreAction::UpdateEdges(connections));
@@ -98,13 +113,14 @@ fn use_node_config_processor(
                             Err(e) => Err(e),
                         }
                     }
-                    NodeChangeAction::AnalyzerType(uuid, analyzer_type) => {
+                    NodeChangeAction::AnalyzerType(analyzer_type) => {
                         api::update_analyzer_config_ron(uuid, analyzer_type)
                             .await
                             .map(|_| ())
                     }
                 };
 
+                // 3. Ergebnis verarbeiten
                 match result {
                     Ok(_) => {
                         is_modified.set(true);

@@ -1,3 +1,18 @@
+use crate::{
+    OPOSSUM_UI_LOGS,
+    components::node_editor::{
+        CallbackWrapper,
+        inputs::{
+            InputData, InputParam,
+            input_components::{LabeledSelect, RowedInputs},
+            select_options_from_enum_iterator,
+        },
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::{
+            use_set_node_change_property, use_update_signal_with_reactive_prop,
+        },
+    },
+};
 use approx::relative_eq;
 use dioxus::prelude::*;
 use inflector::Inflector;
@@ -8,18 +23,6 @@ use opossum_core::utils::{
 use std::fmt::Display;
 use strum::EnumIter;
 use uuid::Uuid;
-use crate::{
-    OPOSSUM_UI_LOGS,
-    components::node_editor::{
-        CallbackWrapper,
-        inputs::{
-            InputData, InputParam,
-            input_components::{LabeledSelect, RowedInputs},
-            select_options_from_enum_iterator,
-        },
-        optical_node_editor::properties_editor::use_set_node_change_property,
-    },
-};
 
 #[derive(PartialEq, Eq, EnumIter, Clone, Copy)]
 enum Vec2Options {
@@ -43,12 +46,21 @@ impl DefaultFromName for Vec2Options {}
 #[component]
 pub fn Vec2Editor(
     node_id: Uuid,
-    vector: Vector2<f64>, 
-    property_key: String
+    vector: Vector2<f64>,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let select_label = property_key.to_sentence_case();
     let mut vec_sig = use_signal(|| vector);
-    use_set_node_change_property(node_id, &property_key, vector, vec_sig);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(
+        *bound_node_id.read(),
+        &property_key,
+        vector,
+        vec_sig,
+        on_change,
+    );
 
     let vec_x_input = InputData::new(
         InputParam::F64(format!("{select_label} x")),
@@ -66,9 +78,9 @@ pub fn Vec2Editor(
         on_vec_input_change(vec_sig, TranslationAxis::Y),
         format!("{:.3}", vec_sig.read().y),
     );
-
-    let vec2_select = use_memo(use_reactive!(|vector| {
-        let normed_vec = vector.normalize();
+    let vec2_select = use_memo(move || {
+        let current_vec = vec_sig.read();
+        let normed_vec = current_vec.normalize();
         if relative_eq!(normed_vec.x, 0.0) {
             Vec2Options::Y
         } else if relative_eq!(normed_vec.y, 0.0) {
@@ -76,7 +88,7 @@ pub fn Vec2Editor(
         } else {
             Vec2Options::Mix
         }
-    }));
+    });
 
     rsx! {
         LabeledSelect {
@@ -104,6 +116,7 @@ pub fn Vec2Editor(
         }
     }
 }
+
 fn on_vec_input_change(
     mut vec_sig: Signal<Vector2<f64>>,
     axis: TranslationAxis,

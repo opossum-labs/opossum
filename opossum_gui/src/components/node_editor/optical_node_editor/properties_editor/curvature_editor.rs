@@ -3,20 +3,21 @@ use core::f64;
 use crate::components::node_editor::{
     CallbackWrapper,
     inputs::{InputData, InputParam, input_components::InputParamLabeledInput},
-    node_config_editor::NodeChangeAction,
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_core::prelude::{Proptype, millimeter};
 use uom::si::{f64::Length, length::millimeter};
-use uuid::Uuid; // Import hinzugefügt
+use uuid::Uuid;
 
 #[component]
 pub fn CurvatureEditor(
-    node_id: Uuid, // Prop hinzugefügt
+    node_id: Uuid,
     curvature: Length,
-    property_key: String
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let curvature_sig = use_signal(|| curvature);
     let mut last_finite_curvature = use_signal(|| {
@@ -26,7 +27,8 @@ pub fn CurvatureEditor(
             millimeter!(1000.)
         }
     });
-
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
     use_update_signal_with_reactive_prop(curvature, curvature_sig);
     use_effect(move || {
         let current_val = *curvature_sig.read();
@@ -34,18 +36,17 @@ pub fn CurvatureEditor(
             last_finite_curvature.set(current_val);
         }
     });
-
-    let node_change_handle = use_coroutine_handle::<NodeChangeAction>();
     use_effect({
         let property_key = property_key.clone();
         move || {
             if curvature != *curvature_sig.read() {
-                // Hier wird jetzt die node_id mitgesendet
-                node_change_handle.send(NodeChangeAction::Property(
-                    node_id,
-                    property_key.clone(),
-                    Proptype::Curvature(*curvature_sig.read()),
-                ));
+                on_change.call(NodeChangeEvent {
+                    node_id: *bound_node_id.peek(),
+                    action: NodeChangeAction::Property(
+                        property_key.clone(),
+                        Proptype::Curvature(*curvature_sig.read()),
+                    ),
+                });
             }
         }
     });
@@ -71,6 +72,8 @@ pub fn CurvatureEditor(
         }
     }
 }
+
+// --- Helper Components & Functions (bleiben weitgehend gleich) ---
 
 #[component]
 fn CurvatureSelector(
@@ -114,6 +117,7 @@ fn CurvatureInput(
         InputParamLabeledInput { input_data: curvature_input }
     }
 }
+
 fn on_is_curved_input_change(
     mut curvature_sig: Signal<Length>,
     last_finite_curvature: Signal<Length>,

@@ -5,10 +5,12 @@ use crate::components::node_editor::{
         input_components::{LabeledInput, LabeledSelect},
         select_options_from_enum_iterator,
     },
-    node_config_editor::NodeChangeAction,
-    optical_node_editor::general_editor::NodeTypeInput,
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    optical_node_editor::{
+        general_editor::NodeTypeInput, properties_editor::use_update_signal_with_reactive_prop,
+    },
 };
-use crate::{OPOSSUM_UI_LOGS, api, components::scenery_editor::GraphStore};
+use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_core::{
     analyzers::raytrace::MissedSurfaceStrategy, picojoule, prelude::*,
@@ -19,10 +21,8 @@ use uom::si::energy::picojoule;
 use uuid::Uuid;
 
 #[component]
-pub fn AnalyzerNodeEditor(node_id: Uuid) -> Element {
-    let graph_store = use_context::<Signal<GraphStore>>();
+pub fn AnalyzerNodeEditor(node_id: Uuid, on_change: EventHandler<NodeChangeEvent>) -> Element {
     let resource_future = use_resource(move || async move {
-        // Wir nutzen die übergebene node_id für den API call
         match api::get_analyzer_info(node_id).await {
             Ok(analyzer_info) => Some(analyzer_info),
             Err(err_str) => {
@@ -49,12 +49,12 @@ pub fn AnalyzerNodeEditor(node_id: Uuid) -> Element {
                                 AnalyzerType::Energy => rsx! {},
                                 AnalyzerType::RayTrace(ray_trace_config) => {
                                     rsx! {
-                                        RayTraceEditor { node_id, ray_trace_config }
+                                        RayTraceEditor { node_id, ray_trace_config, on_change: on_change.clone() }
                                     }
                                 }
                                 AnalyzerType::GhostFocus(ghost_focus_config) => {
                                     rsx! {
-                                        GhostFocusEditor { node_id, ghost_focus_config }
+                                        GhostFocusEditor { node_id, ghost_focus_config, on_change: on_change.clone() }
                                     }
                                 }
                             }
@@ -72,16 +72,24 @@ pub fn AnalyzerNodeEditor(node_id: Uuid) -> Element {
 }
 
 #[component]
-pub fn RayTraceEditor(node_id: Uuid, ray_trace_config: RayTraceConfig) -> Element {
+pub fn RayTraceEditor(
+    node_id: Uuid,
+    ray_trace_config: RayTraceConfig,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
     let mut ray_trace_config_sig = use_signal(|| ray_trace_config);
-    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+    use_update_signal_with_reactive_prop(ray_trace_config, ray_trace_config_sig);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
 
     use_effect(move || {
         if ray_trace_config != *ray_trace_config_sig.read() {
-            node_config_processor.send(NodeChangeAction::AnalyzerType(
-                node_id,
-                AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
-            ));
+            on_change.call(NodeChangeEvent {
+                node_id: *bound_node_id.peek(), // Lagging ID nutzen
+                action: NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(
+                    *ray_trace_config_sig.read(),
+                )),
+            });
         }
     });
 
@@ -163,16 +171,24 @@ pub fn RayTraceEditor(node_id: Uuid, ray_trace_config: RayTraceConfig) -> Elemen
 }
 
 #[component]
-pub fn GhostFocusEditor(node_id: Uuid, ghost_focus_config: GhostFocusConfig) -> Element {
+pub fn GhostFocusEditor(
+    node_id: Uuid,
+    ghost_focus_config: GhostFocusConfig,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
     let mut ghost_focus_config_sig = use_signal(|| ghost_focus_config.clone());
-    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
+    use_update_signal_with_reactive_prop(ghost_focus_config.clone(), ghost_focus_config_sig);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
 
     use_effect(move || {
         if ghost_focus_config != *ghost_focus_config_sig.read() {
-            node_config_processor.send(NodeChangeAction::AnalyzerType(
-                node_id,
-                AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
-            ));
+            on_change.call(NodeChangeEvent {
+                node_id: *bound_node_id.peek(),
+                action: NodeChangeAction::AnalyzerType(AnalyzerType::GhostFocus(
+                    ghost_focus_config_sig.read().clone(),
+                )),
+            });
         }
     });
 

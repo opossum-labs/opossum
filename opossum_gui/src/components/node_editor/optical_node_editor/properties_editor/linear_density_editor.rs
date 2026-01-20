@@ -1,6 +1,10 @@
 use crate::components::node_editor::{
-    CallbackWrapper, inputs::input_components::LabeledInput,
-    optical_node_editor::properties_editor::use_set_node_change_property,
+    CallbackWrapper,
+    inputs::input_components::LabeledInput,
+    node_config_editor::NodeChangeEvent,
+    optical_node_editor::properties_editor::{
+        use_set_node_change_property, use_update_signal_with_reactive_prop,
+    },
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
@@ -11,11 +15,21 @@ use uuid::Uuid;
 #[component]
 pub fn LinearDensityEditor(
     node_id: Uuid,
-    linear_density: LinearNumberDensity, 
-    property_key: String
+    linear_density: LinearNumberDensity,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let linear_density_sig = use_signal(|| linear_density);
-    use_set_node_change_property(node_id, &property_key, linear_density, linear_density_sig);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(
+        *bound_node_id.read(),
+        &property_key,
+        linear_density,
+        linear_density_sig,
+        on_change,
+    );
+
     rsx! {
         LabeledInput {
             id: format!("linearDensityProperty{property_key}").to_camel_case(),
@@ -26,6 +40,7 @@ pub fn LinearDensityEditor(
         }
     }
 }
+
 fn on_linear_density_input_change(mut signal: Signal<LinearNumberDensity>) -> CallbackWrapper {
     CallbackWrapper::new(move |e: Event<FormData>| {
         if let Ok(linear_density) = e.data.value().parse::<f64>() {

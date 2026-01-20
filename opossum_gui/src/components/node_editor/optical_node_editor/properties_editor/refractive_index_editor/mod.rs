@@ -20,20 +20,30 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
-    optical_node_editor::properties_editor::use_set_node_change_property,
+    node_config_editor::NodeChangeEvent,
+    optical_node_editor::properties_editor::{
+        use_set_node_change_property, use_update_signal_with_reactive_prop,
+    },
 };
-use uuid::Uuid; // Import hinzugefügt
+use uuid::Uuid;
 
 #[component]
 pub fn RefractiveIndexEditor(
-    node_id: Uuid, // Prop hinzugefügt
-    ref_ind_type: RefractiveIndexType, 
-    property_key: String
+    node_id: Uuid,
+    ref_ind_type: RefractiveIndexType,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut ref_ind_type_sig = use_signal(|| ref_ind_type.clone());
-
-    // node_id an den Hook übergeben
-    use_set_node_change_property(node_id, &property_key, ref_ind_type, ref_ind_type_sig);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(
+        *bound_node_id.read(),
+        &property_key,
+        ref_ind_type,
+        ref_ind_type_sig,
+        on_change,
+    );
 
     let select_id = format!("refractiveIndexProperty{property_key}").to_camel_case();
     rsx! {

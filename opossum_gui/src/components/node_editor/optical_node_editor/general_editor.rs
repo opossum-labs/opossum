@@ -1,9 +1,9 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
-    CallbackWrapper, // Wichtig: Wird für den Wrapper benötigt
+    CallbackWrapper,
     accordion::AccordionItem,
     inputs::input_components::{LabeledCheckboxInput, LabeledInput},
-    node_config_editor::NodeChangeAction,
+    node_config_editor::{NodeChangeAction, NodeChangeEvent}, // Event Struct importiert
     optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
@@ -18,11 +18,9 @@ pub fn GeneralEditor(
     name: String,
     lidt: Fluence,
     inverted: bool,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let node_config_processor = use_coroutine_handle::<NodeChangeAction>();
-
-    // --- LAGGING ID PATTERN ---
-    let mut bound_node_id = use_signal(|| node_id);
+    let bound_node_id = use_signal(|| node_id);
     use_update_signal_with_reactive_prop(node_id, bound_node_id);
 
     let accordion_content = vec![
@@ -33,7 +31,10 @@ pub fn GeneralEditor(
             NodeNameInput {
                 value: name,
                 on_valid_change: move |new_name: String| {
-                    node_config_processor.send(NodeChangeAction::Name(*bound_node_id.peek(), new_name));
+                    on_change.call(NodeChangeEvent {
+                        node_id: *bound_node_id.peek(),
+                        action: NodeChangeAction::Name(new_name),
+                    });
                 }
             }
         },
@@ -41,7 +42,10 @@ pub fn GeneralEditor(
             NodeLIDTInput {
                 value: lidt,
                 on_valid_change: move |new_fluence: Fluence| {
-                    node_config_processor.send(NodeChangeAction::Lidt(*bound_node_id.peek(), new_fluence));
+                    on_change.call(NodeChangeEvent {
+                        node_id: *bound_node_id.peek(),
+                        action: NodeChangeAction::Lidt(new_fluence),
+                    });
                 }
             }
         },
@@ -50,10 +54,13 @@ pub fn GeneralEditor(
                 value: inverted,
                 label: "Invert Node",
                 on_valid_change: move |new_state: bool| {
-                    node_config_processor.send(NodeChangeAction::Inverted(*bound_node_id.peek(), new_state));
+                    on_change.call(NodeChangeEvent {
+                        node_id: *bound_node_id.peek(),
+                        action: NodeChangeAction::Inverted(new_state),
+                    });
                 }
             }
-        }
+        },
     ];
 
     rsx! {
@@ -67,11 +74,10 @@ pub fn GeneralEditor(
     }
 }
 
+// --- Die Child-Komponenten bleiben "dumm" und unverändert ---
+
 #[component]
-pub fn NodeNameInput(
-    value: String,
-    on_valid_change: EventHandler<String>,
-) -> Element {
+pub fn NodeNameInput(value: String, on_valid_change: EventHandler<String>) -> Element {
     let mut text_state = use_signal(|| value.clone());
 
     use_effect(use_reactive!(|value| {
@@ -83,7 +89,6 @@ pub fn NodeNameInput(
             id: "inputNodeName",
             label: "Node Name",
             value: text_state,
-            // FIX: Closure in CallbackWrapper verpackt
             onchange: CallbackWrapper::new(move |e: Event<FormData>| {
                 let new_val = e.data.value();
                 text_state.set(new_val.clone());
@@ -94,11 +99,9 @@ pub fn NodeNameInput(
 }
 
 #[component]
-pub fn NodeLIDTInput(
-    value: Fluence,
-    on_valid_change: EventHandler<Fluence>,
-) -> Element {
-    let mut text_state = use_signal(|| format!("{:.2}", value.get::<joule_per_square_centimeter>()));
+pub fn NodeLIDTInput(value: Fluence, on_valid_change: EventHandler<Fluence>) -> Element {
+    let mut text_state =
+        use_signal(|| format!("{:.2}", value.get::<joule_per_square_centimeter>()));
 
     use_effect(use_reactive!(|value| {
         text_state.set(format!("{:.2}", value.get::<joule_per_square_centimeter>()));
@@ -111,7 +114,6 @@ pub fn NodeLIDTInput(
             value: text_state,
             r#type: "number",
             min: Some("0.0"),
-            // FIX: Closure in CallbackWrapper verpackt
             onchange: CallbackWrapper::new(move |e: Event<FormData>| {
                 let input_str = e.data.value();
 
@@ -139,7 +141,6 @@ pub fn NodeInvertedInput(
             id: "inputNodeInverted",
             label,
             value,
-            // FIX: Closure in CallbackWrapper verpackt
             onchange: CallbackWrapper::new(move |e: Event<FormData>| {
                 if let Ok(new_val) = e.data.parsed::<bool>() {
                     on_valid_change.call(new_val);

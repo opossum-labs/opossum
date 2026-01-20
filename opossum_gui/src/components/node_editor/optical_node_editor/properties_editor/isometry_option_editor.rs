@@ -4,7 +4,10 @@ use crate::{
         CallbackWrapper,
         accordion::AccordionItem,
         inputs::{InputData, input_components::RowedInputs},
-        optical_node_editor::properties_editor::use_set_node_change_property,
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::{
+            use_set_node_change_property, use_update_signal_with_reactive_prop,
+        },
     },
 };
 use dioxus::prelude::*;
@@ -15,23 +18,28 @@ use opossum_core::{
 };
 use strum::IntoEnumIterator;
 use uom::si::{angle::degree, length::millimeter};
-use uuid::Uuid; // Import hinzugefügt
+use uuid::Uuid;
 
 #[component]
 pub fn IsometryOptionEditor(
-    node_id: Uuid, // Prop hinzugefügt
-    isometry: Isometry, 
-    property_key: String
+    node_id: Uuid,
+    isometry: Isometry,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let isometry_sig = use_signal(|| isometry);
-
-    // node_id an den Hook übergeben
-    use_set_node_change_property(node_id, &property_key, isometry, isometry_sig);
-
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(
+        *bound_node_id.read(),
+        &property_key,
+        isometry,
+        isometry_sig,
+        on_change,
+    );
     let input_data = get_isometry_option_input_data(isometry_sig);
-
     let accordion_content = vec![rsx! {
-        RowedInputs {inputs: input_data }
+        RowedInputs { inputs: input_data }
     }];
 
     rsx! {
@@ -48,7 +56,6 @@ pub fn IsometryOptionEditor(
         }
     }
 }
-
 fn on_isometry_option_change(
     mut isometry_sig: Signal<Isometry>,
     axis_type: AlignmentAxis,
