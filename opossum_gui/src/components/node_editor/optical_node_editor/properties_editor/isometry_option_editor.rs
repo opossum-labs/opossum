@@ -55,12 +55,14 @@ pub fn IsometryOptionEditor(
         }
     }
 }
-fn on_isometry_option_change(
+
+// NEU: Handler für String-Events (FlushableTextInput)
+fn on_isometry_option_change_str(
     mut isometry_sig: Signal<Isometry>,
     axis_type: AlignmentAxis,
-) -> EventHandler<Event<FormData>> {
-    EventHandler::new(move |e: Event<FormData>| {
-        if let Ok(val) = e.data.value().parse::<f64>() {
+) -> EventHandler<String> {
+    EventHandler::new(move |val_str: String| {
+        if let Ok(val) = val_str.parse::<f64>() {
             let res = match axis_type {
                 AlignmentAxis::Translation(translation_axis) => isometry_sig
                     .write()
@@ -82,10 +84,12 @@ fn get_isometry_option_input_data(isometry_sig: Signal<Isometry>) -> Vec<InputDa
     let id_add_on = "isometryOptionInput";
     let mut alignment_inputs = Vec::<InputData>::new();
     for (trans_axis, rot_axis) in TranslationAxis::iter().zip(RotationAxis::iter()) {
+        // Translation
         alignment_inputs.push(InputData::new(
             trans_axis.into(),
             id_add_on,
-            on_isometry_option_change(isometry_sig, AlignmentAxis::Translation(trans_axis)),
+            EventHandler::new(|_| {}),
+            on_isometry_option_change_str(isometry_sig, AlignmentAxis::Translation(trans_axis)),
             format!(
                 "{:.3}",
                 isometry_sig
@@ -94,10 +98,13 @@ fn get_isometry_option_input_data(isometry_sig: Signal<Isometry>) -> Vec<InputDa
                     .get::<millimeter>()
             ),
         ));
+
+        // Rotation
         alignment_inputs.push(InputData::new(
             rot_axis.into(),
             id_add_on,
-            on_isometry_option_change(isometry_sig, AlignmentAxis::Rotation(rot_axis)),
+            EventHandler::new(|_| {}), // Neuer Dummy
+            on_isometry_option_change_str(isometry_sig, AlignmentAxis::Rotation(rot_axis)),
             format!(
                 "{:.3}",
                 isometry_sig

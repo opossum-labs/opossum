@@ -3,6 +3,99 @@
 use crate::components::node_editor::inputs::{InputData, InputParam};
 use dioxus::prelude::*;
 use itertools::Itertools;
+use std::ops::{AddAssign, SubAssign};
+
+// ========================================================
+// 1. NEU: SEMAPHORE PROTOKOLL (Dirty Check)
+// ========================================================
+
+#[derive(Clone, Copy)]
+pub struct FormContext {
+    pub flush_trigger: Signal<usize>,
+    pub dirty_count: Signal<usize>,
+}
+
+#[component]
+pub fn FlushableTextInput(
+    id: String,
+    label: String,
+    value: String,
+    on_save: EventHandler<String>,
+    #[props(default = "text")] r#type: &'static str,
+    #[props(optional)] step: Option<&'static str>,
+    #[props(optional)] min: Option<&'static str>,
+    #[props(optional)] max: Option<&'static str>,
+    #[props(default = false)] readonly: bool,
+) -> Element {
+    let mut form_ctx = use_context::<FormContext>();
+
+    let mut local_value = use_signal(|| value.clone());
+    let mut is_locally_dirty = use_signal(|| false);
+
+    // Sync bei Node-Wechsel
+    use_effect(use_reactive!(|value| {
+        local_value.set(value);
+        is_locally_dirty.set(false);
+    }));
+
+    let mut perform_save = move || {
+        if *is_locally_dirty.peek() {
+            let val = local_value.peek().clone();
+            on_save.call(val);
+            is_locally_dirty.set(false);
+            form_ctx.dirty_count.write().sub_assign(1);
+        }
+    };
+
+    // Fix: Signal erst in Variable ziehen für use_effect
+    let flush_sig = form_ctx.flush_trigger;
+    use_effect(move || {
+        flush_sig();
+        perform_save();
+    });
+
+    rsx! {
+        div { class: "form-floating border-start", "data-mdb-input-init": "",
+            input {
+                class: "form-control bg-dark text-light form-control-sm",
+                id: id.as_str(),
+                name: id.as_str(),
+                placeholder: label,
+                value: "{local_value}",
+                readonly,
+                disabled: readonly,
+                r#type,
+                step: step.unwrap_or_default(),
+                min: min.unwrap_or_default(),
+                max: max.unwrap_or_default(),
+
+                oninput: move |e: Event<FormData>| {
+                    local_value.set(e.data.value());
+                    if !*is_locally_dirty.peek() {
+                        is_locally_dirty.set(true);
+                        form_ctx.dirty_count.write().add_assign(1);
+                    }
+                },
+                onblur: move |_| perform_save(),
+                onkeydown: move |e: Event<KeyboardData>| {
+                    if e.key() == Key::Enter {
+                        perform_save();
+                    }
+                },
+            }
+            label { class: "form-label text-secondary", r#for: id,
+                "{label}"
+                if *is_locally_dirty.read() {
+                    span { class: "text-warning", " *" }
+                }
+            }
+        }
+    }
+}
+
+// ========================================================
+// 2. EXISTIERENDE KOMPONENTEN (Wiederhergestellt)
+// ========================================================
 
 #[component]
 pub fn LabeledCheckboxInput(
@@ -95,6 +188,7 @@ pub fn LabeledFileInput(
 #[component]
 pub fn InputParamLabeledInput(input_data: InputData) -> Element {
     if let InputParam::Bool(label) = input_data.input_param {
+        // Checkboxen feuern sofort, das ist ok (kein Pending State)
         rsx! {
             LabeledCheckboxInput {
                 id: input_data.id,
@@ -104,6 +198,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
             }
         }
     } else if let InputParam::FilePath(label, accept) = input_data.input_param {
+        // FileInputs feuern auch sofort
         rsx! {
             LabeledFileInput {
                 id: input_data.id,
@@ -114,6 +209,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
             }
         }
     } else if let InputParam::Selection(label, options) = input_data.input_param {
+        // Selects feuern sofort
         rsx! {
             LabeledSelect {
                 id: input_data.id,
@@ -123,12 +219,15 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
             }
         }
     } else {
+        // HIER IST DIE ÄNDERUNG:
+        // Für Zahlen und Text nutzen wir jetzt FlushableTextInput!
+        // Wir nutzen input_data.callback_str statt input_data.callback
         rsx! {
-            LabeledInput {
+            FlushableTextInput {
                 id: input_data.id,
                 label: input_data.input_param.label(),
                 value: input_data.value,
-                onchange: input_data.callback,
+                on_save: input_data.callback_str, // Nutzt den String-Handler
                 r#type: input_data.input_param.rtype(),
                 readonly: input_data.readonly,
             }

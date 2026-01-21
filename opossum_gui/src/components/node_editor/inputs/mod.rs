@@ -11,10 +11,25 @@ where
     Self: IntoEnumIterator + IntoInputDataStrings<D> + Copy + 'static,
 {
     fn setter_from_obj(&self) -> impl FnMut(&mut D, T);
+
+    // Callback für Standard-Events (Checkboxen, Selects)
     fn create_callback(&self, mut obj: D, mut sig: Signal<B>) -> EventHandler<Event<FormData>> {
         let this = *self;
         EventHandler::new(move |e: Event<FormData>| {
             if let Some(value) = this.parse_value(e) {
+                let mut setter = this.setter_from_obj();
+                setter(&mut obj, value);
+                sig.set(obj.clone().into());
+            }
+        })
+    }
+
+    // NEU: Callback für String-Events (FlushableTextInput)
+    fn create_callback_str(&self, mut obj: D, mut sig: Signal<B>) -> EventHandler<String> {
+        let this = *self;
+        EventHandler::new(move |val_str: String| {
+            // Wir parsen direkt den String
+            if let Ok(value) = val_str.parse::<T>() {
                 let mut setter = this.setter_from_obj();
                 setter(&mut obj, value);
                 sig.set(obj.clone().into());
@@ -32,7 +47,8 @@ where
         InputData::new(
             Into::<InputParam>::into(*self),
             self.create_id_string().as_str(),
-            self.create_callback(obj, sig),
+            self.create_callback(obj.clone(), sig), // Für Legacy/Events
+            self.create_callback_str(obj, sig),     // Für Flushable
             value_str,
         )
     }
@@ -146,7 +162,8 @@ pub struct InputData {
     pub value: String,
     pub id: String,
     pub input_param: InputParam,
-    pub callback: EventHandler<Event<FormData>>,
+    pub callback: EventHandler<Event<FormData>>, // Alt (für Checkboxen)
+    pub callback_str: EventHandler<String>,      // Neu (für FlushableTextInput)
     pub readonly: bool,
 }
 
@@ -155,6 +172,7 @@ impl InputData {
         input_param: InputParam,
         id_str_add_on: &str,
         callback: EventHandler<Event<FormData>>,
+        callback_str: EventHandler<String>,
         value: String,
     ) -> Self {
         Self {
@@ -162,6 +180,7 @@ impl InputData {
             id: format!("{}{}", id_str_add_on, input_param.id_str()),
             input_param,
             callback,
+            callback_str,
             readonly: false,
         }
     }

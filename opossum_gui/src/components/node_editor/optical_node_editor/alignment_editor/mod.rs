@@ -161,12 +161,13 @@ fn RotationAlignmentInputs(
     }
 }
 
-fn on_isometry_option_change(
+// NEU: String-basierter Handler für FlushableTextInput
+fn on_isometry_option_change_str(
     mut iso_sig: Signal<Isometry>,
     axis_type: AlignmentAxis,
-) -> EventHandler<Event<FormData>> {
-    EventHandler::new(move |e: Event<FormData>| {
-        if let Ok(val) = e.data.value().parse::<f64>() {
+) -> EventHandler<String> {
+    EventHandler::new(move |val_str: String| {
+        if let Ok(val) = val_str.parse::<f64>() {
             let mut iso = *iso_sig.read();
             let res = match axis_type {
                 AlignmentAxis::Translation(translation_axis) => {
@@ -198,7 +199,8 @@ fn get_translation_alignment_input_data(iso_sig: Signal<Isometry>) -> Vec<InputD
         alignment_inputs.push(InputData::new(
             trans_axis.into(),
             id_add_on,
-            on_isometry_option_change(iso_sig, AlignmentAxis::Translation(trans_axis)),
+            EventHandler::new(|_| {}), // Dummy
+            on_isometry_option_change_str(iso_sig, AlignmentAxis::Translation(trans_axis)),
             format!(
                 "{:.3}",
                 iso_sig
@@ -217,6 +219,7 @@ fn get_rotation_alignment_input_data(
 ) -> Vec<InputData> {
     let id_add_on = "inputNodeAlignmentRot";
     let mut alignment_inputs = Vec::<InputData>::new();
+
     for rot_axis in RotationAxis::iter() {
         if let Some(axes_skip) = axes_skip
             && axes_skip.contains(&rot_axis)
@@ -226,7 +229,8 @@ fn get_rotation_alignment_input_data(
         alignment_inputs.push(InputData::new(
             rot_axis.into(),
             id_add_on,
-            on_isometry_option_change(iso_sig, AlignmentAxis::Rotation(rot_axis)),
+            EventHandler::new(|_| {}), // Dummy
+            on_isometry_option_change_str(iso_sig, AlignmentAxis::Rotation(rot_axis)),
             format!(
                 "{:.3}",
                 iso_sig.read().rotation_of_axis(rot_axis).get::<degree>()

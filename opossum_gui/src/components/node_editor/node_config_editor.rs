@@ -1,11 +1,14 @@
 use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
 use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
 use crate::components::scenery_editor::{GraphStore, GraphStoreAction, NodeType};
+// IMPORT FOR FLUSH
+use crate::components::node_editor::inputs::input_components::FormContext;
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
 use opossum_core::nodes::fluence_detector::Fluence;
 use opossum_core::prelude::{AnalyzerType, Isometry, Properties, Proptype};
+use std::ops::AddAssign;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -13,6 +16,7 @@ pub struct NodeChangeEvent {
     pub node_id: Uuid,
     pub action: NodeChangeAction,
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChangeAction {
     Name(String),
@@ -31,15 +35,49 @@ pub fn NodeConfigEditor(
 ) -> Element {
     let node_properties_sig = use_signal(Properties::default);
     use_context_provider(|| node_properties_sig);
+
+    // 1. SETUP DES PROTOKOLLS (mut Signals)
+    let mut flush_trigger = use_signal(|| 0usize);
+    let dirty_count = use_signal(|| 0usize);
+
+    use_context_provider(|| FormContext {
+        flush_trigger,
+        dirty_count,
+    });
+
+    // 2. STATE
+    let mut displayed_node = use_signal(|| active_node_opt());
+
+    // 3. FLUSH BEFEHL
+    use_effect(move || {
+        active_node_opt(); // subscribe to node_id changes
+        flush_trigger.write().add_assign(1);
+    });
+
+    // 4. DER GATEKEEPER
+    use_effect(move || {
+        let target = active_node_opt();
+        let current = displayed_node();
+        let pending = *dirty_count.read();
+
+        // Wenn Ziel anders als Aktuell...
+        if target != current {
+            // ... und alles sauber ist...
+            if pending == 0 {
+                // ... dann umschalten
+                displayed_node.set(target);
+            }
+        }
+    });
+
+    // Standard Processing
     use_node_config_processor(node_properties_sig, is_modified);
-
     let node_config_processor = use_coroutine_handle::<NodeChangeEvent>();
-
-    let on_node_change = move |evt: NodeChangeEvent| {
+    let on_node_change = EventHandler::new(move |evt: NodeChangeEvent| {
         node_config_processor.send(evt);
-    };
+    });
 
-    match active_node_opt() {
+    match displayed_node() {
         Some((NodeType::Optical(_), node_id)) => rsx! {
             OpticalNodeEditor {
                 node_id,
@@ -66,10 +104,8 @@ fn use_node_config_processor(
     use_coroutine(
         move |mut rx: UnboundedReceiver<NodeChangeEvent>| async move {
             while let Some(event) = rx.next().await {
-                // 1. ID extrahieren (Das ist die sichere "Lagging ID" aus dem UI)
                 let uuid = event.node_id;
 
-                // 2. Aktion ausführen
                 let result: Result<(), String> = match event.action {
                     NodeChangeAction::Name(name) => {
                         api::update_node_name(uuid, name.clone()).await.map(|_| {
@@ -86,7 +122,6 @@ fn use_node_config_processor(
                         api::update_node_property(uuid, (key.clone(), prop.clone()))
                             .await
                             .map(|_| {
-                                // Nur lokales UI updaten, wenn der User noch denselben Node ansieht
                                 if let Some(active_id) = graph_store.read().active_node()
                                     && active_id == uuid
                                 {
@@ -120,7 +155,6 @@ fn use_node_config_processor(
                     }
                 };
 
-                // 3. Ergebnis verarbeiten
                 match result {
                     Ok(()) => {
                         is_modified.set(true);

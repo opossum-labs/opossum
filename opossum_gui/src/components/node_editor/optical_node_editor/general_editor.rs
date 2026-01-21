@@ -1,9 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    inputs::input_components::{LabeledCheckboxInput, LabeledInput},
-    node_config_editor::{NodeChangeAction, NodeChangeEvent}, // Event Struct importiert
-    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
+    inputs::input_components::{FlushableTextInput, LabeledCheckboxInput, LabeledInput},
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
 use dioxus::prelude::*;
 use opossum_core::{J_per_cm2, nodes::fluence_detector::Fluence};
@@ -19,32 +18,39 @@ pub fn GeneralEditor(
     inverted: bool,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let bound_node_id = use_signal(|| node_id);
-    use_update_signal_with_reactive_prop(node_id, bound_node_id);
-
     let accordion_content = vec![
         rsx! {
-            NodeTypeInput { node_type, label: "Node Type" }
+            NodeTypeInput { node_type: node_type, label: "Node Type" }
         },
         rsx! {
-            NodeNameInput {
+            FlushableTextInput {
+                id: format!("nodeName_{}", node_id),
+                label: "Node Name".to_string(),
                 value: name,
-                on_valid_change: move |new_name: String| {
+                on_save: move |new_val: String| {
                     on_change.call(NodeChangeEvent {
-                        node_id: *bound_node_id.peek(),
-                        action: NodeChangeAction::Name(new_name),
+                        node_id,
+                        action: NodeChangeAction::Name(new_val),
                     });
                 }
             }
         },
         rsx! {
-            NodeLIDTInput {
-                value: lidt,
-                on_valid_change: move |new_fluence: Fluence| {
-                    on_change.call(NodeChangeEvent {
-                        node_id: *bound_node_id.peek(),
-                        action: NodeChangeAction::Lidt(new_fluence),
-                    });
+            FlushableTextInput {
+                id: format!("nodeLidt_{}", node_id),
+                label: "LIDT in J/cm²".to_string(),
+                value: format!("{:.2}", lidt.get::<joule_per_square_centimeter>()),
+                r#type: "number",
+                step: "0.1",
+                min: "0.0",
+                on_save: move |new_val_str: String| {
+                    if let Ok(parsed_num) = new_val_str.parse::<f64>()
+                         && parsed_num >= 0.0 {
+                             on_change.call(NodeChangeEvent {
+                                node_id,
+                                action: NodeChangeAction::Lidt(J_per_cm2!(parsed_num)),
+                            });
+                        }
                 }
             }
         },
@@ -54,7 +60,7 @@ pub fn GeneralEditor(
                 label: "Invert Node",
                 on_valid_change: move |new_state: bool| {
                     on_change.call(NodeChangeEvent {
-                        node_id: *bound_node_id.peek(),
+                        node_id,
                         action: NodeChangeAction::Inverted(new_state),
                     });
                 }
@@ -74,56 +80,6 @@ pub fn GeneralEditor(
 }
 
 #[component]
-pub fn NodeNameInput(value: String, on_valid_change: EventHandler<String>) -> Element {
-    let mut text_state = use_signal(|| value.clone());
-
-    use_effect(use_reactive!(|value| {
-        text_state.set(value);
-    }));
-
-    rsx! {
-        LabeledInput {
-            id: "inputNodeName",
-            label: "Node Name",
-            value: text_state,
-            onchange: move |e: Event<FormData>| {
-                let new_val = e.data.value();
-                text_state.set(new_val.clone());
-                on_valid_change.call(new_val);
-            },
-        }
-    }
-}
-
-#[component]
-pub fn NodeLIDTInput(value: Fluence, on_valid_change: EventHandler<Fluence>) -> Element {
-    let mut text_state =
-        use_signal(|| format!("{:.2}", value.get::<joule_per_square_centimeter>()));
-
-    use_effect(use_reactive!(|value| {
-        text_state.set(format!("{:.2}", value.get::<joule_per_square_centimeter>()));
-    }));
-
-    rsx! {
-        LabeledInput {
-            id: "inputNodeLIDT",
-            label: "LIDT in J/cm²",
-            value: text_state,
-            r#type: "number",
-            min: Some("0.0"),
-            onchange: move |e: Event<FormData>| {
-                let input_str = e.data.value();
-                if let Ok(parsed_num) = input_str.parse::<f64>() && parsed_num >= 0.0 {
-                    on_valid_change.call(J_per_cm2!(parsed_num));
-                    return;
-                }
-                text_state.set(format!("{:.2}", value.get::<joule_per_square_centimeter>()));
-            },
-        }
-    }
-}
-
-#[component]
 pub fn NodeInvertedInput(
     value: bool,
     label: String,
@@ -131,9 +87,9 @@ pub fn NodeInvertedInput(
 ) -> Element {
     rsx! {
         LabeledCheckboxInput {
-            id: "inputNodeInverted",
+            id: "inputNodeInverted".to_string(),
             label,
-            value,
+            value: format!("{}", value),
             onchange: move |e: Event<FormData>| {
                 if let Ok(new_val) = e.data.parsed::<bool>() {
                     on_valid_change.call(new_val);
@@ -147,11 +103,11 @@ pub fn NodeInvertedInput(
 pub fn NodeTypeInput(node_type: String, label: &'static str) -> Element {
     rsx! {
         LabeledInput {
-            id: "inputNodeType",
-            label,
+            id: "inputNodeType".to_string(),
+            label: label.to_string(),
             value: node_type,
             readonly: true,
-            onchange: move |_| {},
+            onchange: |_| {},
         }
     }
 }

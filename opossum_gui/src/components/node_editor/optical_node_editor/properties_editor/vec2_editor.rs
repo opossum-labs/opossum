@@ -61,22 +61,31 @@ pub fn Vec2Editor(
         on_change,
     );
 
+    // Dummy Handler für den Legacy-Slot (Checkboxen/Selects), da wir hier Zahlen haben
+    let dummy_legacy_callback = EventHandler::new(|_| {});
+
     let vec_x_input = InputData::new(
         InputParam::F64(format!("{select_label} x")),
         format!("vec2xProperty{property_key}")
             .to_camel_case()
             .as_str(),
-        on_vec_input_change(vec_sig, TranslationAxis::X),
+        dummy_legacy_callback, // 3. Argument: Legacy
+        on_vec_input_change_str(vec_sig, TranslationAxis::X), // 4. Argument: String/Flushable
         format!("{:.3}", vec_sig.read().x),
     );
+
+    let dummy_legacy_callback = EventHandler::new(|_| {}); // Neu erstellen für ownership
+
     let vec_y_input = InputData::new(
         InputParam::F64(format!("{select_label} y")),
         format!("vec2yProperty{property_key}")
             .to_camel_case()
             .as_str(),
-        on_vec_input_change(vec_sig, TranslationAxis::Y),
+        dummy_legacy_callback,
+        on_vec_input_change_str(vec_sig, TranslationAxis::Y),
         format!("{:.3}", vec_sig.read().y),
     );
+
     let vec2_select = use_memo(move || {
         let current_vec = vec_sig.read();
         let normed_vec = current_vec.normalize();
@@ -116,12 +125,13 @@ pub fn Vec2Editor(
     }
 }
 
-fn on_vec_input_change(
+// NEU: Nimmt String entgegen für FlushableTextInput
+fn on_vec_input_change_str(
     mut vec_sig: Signal<Vector2<f64>>,
     axis: TranslationAxis,
-) -> EventHandler<Event<FormData>> {
-    EventHandler::new(move |e: Event<FormData>| {
-        if let Ok(val) = e.data.value().parse::<f64>() {
+) -> EventHandler<String> {
+    EventHandler::new(move |val_str: String| {
+        if let Ok(val) = val_str.parse::<f64>() {
             match axis {
                 TranslationAxis::X => vec_sig.write().x = val,
                 TranslationAxis::Y => vec_sig.write().y = val,

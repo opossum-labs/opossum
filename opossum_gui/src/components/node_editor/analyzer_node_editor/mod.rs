@@ -1,7 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
     inputs::{
-        input_components::{LabeledInput, LabeledSelect},
+        // WICHTIG: FlushableTextInput importieren, LabeledInput entfernen (oder behalten falls nötig)
+        input_components::{FlushableTextInput, LabeledSelect},
         select_options_from_enum_iterator,
     },
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
@@ -30,7 +31,6 @@ pub fn AnalyzerNodeEditor(node_id: Uuid, on_change: EventHandler<NodeChangeEvent
             }
         }
     });
-
     match &*resource_future.read_unchecked() {
         Some(Some(analyzer_info)) => {
             rsx! {
@@ -77,55 +77,62 @@ pub fn RayTraceEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut ray_trace_config_sig = use_signal(|| ray_trace_config);
+    // Sync Prop -> Signal: Wichtig für den Node-Wechsel!
     use_update_signal_with_reactive_prop(ray_trace_config, ray_trace_config_sig);
-    let bound_node_id = use_signal(|| node_id);
-    use_update_signal_with_reactive_prop(node_id, bound_node_id);
-
-    use_effect(move || {
-        if ray_trace_config != *ray_trace_config_sig.read() {
-            on_change.call(NodeChangeEvent {
-                node_id: *bound_node_id.peek(),
-                action: NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(
-                    *ray_trace_config_sig.read(),
-                )),
-            });
-        }
-    });
 
     rsx! {
-        LabeledInput {
-            id: "rayTraceAnalyzerConfigMaxRefractions",
-            label: "Max refractions",
+        // NEU: FlushableTextInput statt LabeledInput
+        FlushableTextInput {
+            id: "rayTraceMaxRefr".to_string(),
+            label: "Max refractions".to_string(),
             value: format!("{}", ray_trace_config_sig.read().max_number_of_refractions()),
-            onchange: move |e: Event<FormData>| {
-                if let Ok(max_refractions) = e.data.value().parse::<usize>() {
+            r#type: "number",
+            step: "1",
+            min: "0",
+            // Callback liefert jetzt String (kein Event<FormData>)
+            on_save: move |val: String| {
+                if let Ok(max_refractions) = val.parse::<usize>() {
                     ray_trace_config_sig.write().set_max_number_of_refractions(max_refractions);
+                    on_change
+                        .call(NodeChangeEvent {
+                            node_id,
+                            action: NodeChangeAction::AnalyzerType(
+                                AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
+                            ),
+                        });
                 }
             },
-            r#type: "number",
-            step: Some("1"),
-            min: Some("0"),
         }
-        LabeledInput {
-            id: "rayTraceAnalyzerConfigMaxBounces",
-            label: "Max bounces",
+        FlushableTextInput {
+            id: "rayTraceMaxBounces".to_string(),
+            label: "Max bounces".to_string(),
             value: format!("{}", ray_trace_config_sig.read().max_number_of_bounces()),
-            onchange: move |e: Event<FormData>| {
-                if let Ok(max_bounces) = e.data.value().parse::<usize>() {
+            r#type: "number",
+            step: "1",
+            min: "0",
+            on_save: move |val: String| {
+                if let Ok(max_bounces) = val.parse::<usize>() {
                     ray_trace_config_sig.write().set_max_number_of_bounces(max_bounces);
+                    on_change
+                        .call(NodeChangeEvent {
+                            node_id,
+                            action: NodeChangeAction::AnalyzerType(
+                                AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
+                            ),
+                        });
                 }
             },
-            r#type: "number",
-            step: Some("1"),
-            min: Some("0"),
         }
-        LabeledInput {
-            id: "rayTraceAnalyzerConfigMinRayEnergy",
-            label: "Minimum ray energy in pJ",
+        FlushableTextInput {
+            id: "rayTraceMinEnergy".to_string(),
+            label: "Minimum ray energy in pJ".to_string(),
             value: format!("{}", ray_trace_config_sig.read().min_energy_per_ray().get::<picojoule>()),
-            onchange: move |e: Event<FormData>| {
+            r#type: "number",
+            step: "1.",
+            min: "0.",
+            on_save: move |val: String| {
                 let old_value = ray_trace_config_sig.read().min_energy_per_ray();
-                if let Ok(min_ray_energy) = e.data.value().parse::<f64>() {
+                if let Ok(min_ray_energy) = val.parse::<f64>() {
                     if min_ray_energy < 0.0 {
                         OPOSSUM_UI_LOGS
                             .write()
@@ -137,22 +144,30 @@ pub fn RayTraceEditor(
                                 OPOSSUM_UI_LOGS.write().add_log(&err.to_string());
                             });
                     } else {
-                        ray_trace_config_sig
+                        let update_result = ray_trace_config_sig
                             .write()
-                            .set_min_energy_per_ray(picojoule!(min_ray_energy))
-                            .unwrap_or_else(|err| {
-                                OPOSSUM_UI_LOGS.write().add_log(&err.to_string());
-                            });
+                            .set_min_energy_per_ray(picojoule!(min_ray_energy));
+
+                        match update_result {
+                            Ok(()) => {
+                                on_change
+                                    .call(NodeChangeEvent {
+                                        node_id,
+                                        action: NodeChangeAction::AnalyzerType(
+                                            AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
+                                        ),
+                                    });
+                            }
+                            Err(err) => OPOSSUM_UI_LOGS.write().add_log(&err.to_string()),
+                        }
                     }
                 }
             },
-            r#type: "number",
-            step: Some("1."),
-            min: Some("0."),
         }
+        // Selects brauchen kein Flushable, da sie sofort feuern
         LabeledSelect {
-            id: "rayTracingAnalyzerMissedSurfaceStrategy",
-            label: "Missed-Surface Strategy",
+            id: "rayTraceMissedSurf".to_string(),
+            label: "Missed-Surface Strategy".to_string(),
             options: select_options_from_enum_iterator(
                 ray_trace_config_sig.read().missed_surface_strategy(),
                 None,
@@ -163,6 +178,13 @@ pub fn RayTraceEditor(
                     val.as_str(),
                 ) {
                     ray_trace_config_sig.write().set_missed_surface_strategy(surface_strategy);
+                    on_change
+                        .call(NodeChangeEvent {
+                            node_id,
+                            action: NodeChangeAction::AnalyzerType(
+                                AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
+                            ),
+                        });
                 }
             },
         }
@@ -176,38 +198,32 @@ pub fn GhostFocusEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut ghost_focus_config_sig = use_signal(|| ghost_focus_config.clone());
-    use_update_signal_with_reactive_prop(ghost_focus_config.clone(), ghost_focus_config_sig);
-    let bound_node_id = use_signal(|| node_id);
-    use_update_signal_with_reactive_prop(node_id, bound_node_id);
-
-    use_effect(move || {
-        if ghost_focus_config != *ghost_focus_config_sig.read() {
-            on_change.call(NodeChangeEvent {
-                node_id: *bound_node_id.peek(),
-                action: NodeChangeAction::AnalyzerType(AnalyzerType::GhostFocus(
-                    ghost_focus_config_sig.read().clone(),
-                )),
-            });
-        }
-    });
+    use_update_signal_with_reactive_prop(ghost_focus_config, ghost_focus_config_sig);
 
     rsx! {
-        LabeledInput {
-            id: "ghostFocusAnalyzerConfigMaxBounces",
-            label: "Max Bounces",
+        FlushableTextInput {
+            id: "ghostFocusMaxBounces".to_string(),
+            label: "Max Bounces".to_string(),
             value: format!("{}", ghost_focus_config_sig.read().max_bounces()),
-            onchange: move |e: Event<FormData>| {
-                if let Ok(max_bounces) = e.data.value().parse::<usize>() {
+            r#type: "number",
+            step: "1",
+            min: "0",
+            on_save: move |val: String| {
+                if let Ok(max_bounces) = val.parse::<usize>() {
                     ghost_focus_config_sig.write().set_max_bounces(max_bounces);
+                    on_change
+                        .call(NodeChangeEvent {
+                            node_id,
+                            action: NodeChangeAction::AnalyzerType(
+                                AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
+                            ),
+                        });
                 }
             },
-            r#type: "number",
-            step: Some("1"),
-            min: Some("0"),
         }
         LabeledSelect {
-            id: "ghostFocusAnalyzerConfigFluenceEstimator",
-            label: "Fluence Estimator",
+            id: "ghostFocusFluence".to_string(),
+            label: "Fluence Estimator".to_string(),
             options: select_options_from_enum_iterator(
                 ghost_focus_config_sig.read().fluence_estimator(),
                 None,
@@ -218,6 +234,13 @@ pub fn GhostFocusEditor(
                     val.as_str(),
                 ) {
                     ghost_focus_config_sig.write().set_fluence_estimator(fluence_estimator);
+                    on_change
+                        .call(NodeChangeEvent {
+                            node_id,
+                            action: NodeChangeAction::AnalyzerType(
+                                AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
+                            ),
+                        });
                 }
             },
         }

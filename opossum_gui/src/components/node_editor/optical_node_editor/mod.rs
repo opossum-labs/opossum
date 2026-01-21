@@ -36,7 +36,6 @@ pub fn OpticalNodeEditor(
             }
         }
     });
-
     match &*resource_future.read_unchecked() {
         Some(Some(node_attr)) => {
             rsx! {
@@ -76,10 +75,8 @@ pub fn OpticalNodeEditor(
                 }
             }
         }
-        _ => {
-            rsx! {
-                div { "No node selected" }
-            }
-        }
+        _ => rsx! {
+            div { "No data" }
+        },
     }
 }
