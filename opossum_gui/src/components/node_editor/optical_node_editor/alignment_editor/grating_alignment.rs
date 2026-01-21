@@ -161,7 +161,7 @@ fn AngleToLittrowComponent(
                     let update_res = iso.set_rotation_of_axis(RotationAxis::Pitch, new_angle);
 
                     match update_res {
-                        Ok(_) => {
+                        Ok(()) => {
                             alignment_sig.set(iso);
                             on_save.call(iso);
                         }

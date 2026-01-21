@@ -2,9 +2,9 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::AccordionItem,
+        hooks::use_update_signal_with_reactive_prop,
         inputs::{InputData, input_components::RowedInputs},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
-        optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
 use dioxus::prelude::*;

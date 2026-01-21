@@ -1,13 +1,13 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
+        hooks::use_update_signal_with_reactive_prop,
         inputs::{
             InputData, InputParam,
             input_components::{LabeledSelect, RowedInputs},
             select_options_from_enum_iterator,
         },
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
-        optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
 use approx::relative_eq;

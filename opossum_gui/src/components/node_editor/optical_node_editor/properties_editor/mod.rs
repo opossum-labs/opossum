@@ -19,6 +19,7 @@ mod vec2_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
+    hooks::use_update_signal_with_reactive_prop,
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::{
         angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
@@ -65,9 +66,28 @@ pub fn PropertiesEditor(
 }
 
 // Helper: creates the suitable editor
+// Helper: creates the suitable editor
 fn get_editor(
     node_id: Uuid,
     property: Property,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Option<Element> {
+    if let Some(editor) = get_primitive_editor(node_id, &property, property_key.clone(), on_change)
+    {
+        return Some(editor);
+    }
+
+    if let Some(editor) = get_optical_editor(node_id, &property, property_key.clone(), on_change) {
+        return Some(editor);
+    }
+
+    get_geometric_editor(node_id, &property, property_key, on_change)
+}
+
+fn get_primitive_editor(
+    node_id: Uuid,
+    property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Option<Element> {
@@ -93,7 +113,7 @@ fn get_editor(
                 node_id,
                 float64,
                 property_key,
-                property,
+                property: property.clone(),
                 on_change,
             }
         }),
@@ -105,12 +125,31 @@ fn get_editor(
                 on_change,
             }
         }),
+        Proptype::Vec2(vector) => Some(rsx! {
+            Vec2Editor {
+                node_id,
+                vector,
+                property_key,
+                on_change,
+            }
+        }),
+        _ => None,
+    }
+}
+
+fn get_optical_editor(
+    node_id: Uuid,
+    property: &Property,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Option<Element> {
+    match property.prop().clone() {
         Proptype::SplittingConfigBuilder(splitting_config_builder) => Some(rsx! {
             SplitterTypeEditor {
                 node_id,
                 splitting_config_builder,
                 property_key,
-                property,
+                property: property.clone(),
                 on_change,
             }
         }),
@@ -119,7 +158,7 @@ fn get_editor(
                 node_id,
                 filter_type_builder,
                 property_key,
-                property,
+                property: property.clone(),
                 on_change,
             }
         }),
@@ -139,6 +178,33 @@ fn get_editor(
                 on_change,
             }
         }),
+        Proptype::LightDataBuilder(light_data_builder) => Some(rsx! {
+            LightDataEditor {
+                node_id,
+                light_data_builder,
+                property_key,
+                on_change,
+            }
+        }),
+        Proptype::RefractiveIndex(ref_ind_type) => Some(rsx! {
+            RefractiveIndexEditor {
+                node_id,
+                ref_ind_type,
+                property_key,
+                on_change,
+            }
+        }),
+        _ => None,
+    }
+}
+
+fn get_geometric_editor(
+    node_id: Uuid,
+    property: &Property,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Option<Element> {
+    match property.prop().clone() {
         Proptype::Length(length) => Some(rsx! {
             LengthEditor {
                 node_id,
@@ -151,14 +217,6 @@ fn get_editor(
             CurvatureEditor {
                 node_id,
                 curvature,
-                property_key,
-                on_change,
-            }
-        }),
-        Proptype::LightDataBuilder(light_data_builder) => Some(rsx! {
-            LightDataEditor {
-                node_id,
-                light_data_builder,
                 property_key,
                 on_change,
             }
@@ -187,39 +245,7 @@ fn get_editor(
                 on_change,
             }
         }),
-        Proptype::RefractiveIndex(ref_ind_type) => Some(rsx! {
-            RefractiveIndexEditor {
-                node_id,
-                ref_ind_type,
-                property_key,
-                on_change,
-            }
-        }),
-        Proptype::Vec2(vector) => Some(rsx! {
-            Vec2Editor {
-                node_id,
-                vector,
-                property_key,
-                on_change,
-            }
-        }),
-        // properties that should not be edited...
-        Proptype::LightData(_)
-        | Proptype::Uuid(_)
-        | Proptype::FluenceData(_)
-        | Proptype::SpectrometerType(_)
-        | Proptype::WaveFrontData(_)
-        | Proptype::RayPositionHistory(_)
-        | Proptype::GhostFocusHistory(_)
-        | Proptype::NodeReport(_)
-        | Proptype::Fluence(_)
-        | Proptype::WfLambda(_, _)
-        | Proptype::Energy(_)
-        | Proptype::Vec3(_)
-        | Proptype::HitMap(_)
-        | Proptype::Spectrum(_)
-        | Proptype::Metertype(_)
-        | Proptype::Aperture(_) => None,
+        _ => None,
     }
 }
 pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone + 'static>(
@@ -248,18 +274,5 @@ pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone + 'sta
                 });
             }
         }
-    });
-}
-
-pub fn use_update_signal_with_reactive_prop<T: PartialEq + Clone + 'static>(
-    prop: T,
-    mut prop_signal: Signal<T>,
-) {
-    use_effect({
-        use_reactive!(|(prop,)| {
-            if *prop_signal.peek() != prop {
-                prop_signal.set(prop);
-            }
-        })
     });
 }

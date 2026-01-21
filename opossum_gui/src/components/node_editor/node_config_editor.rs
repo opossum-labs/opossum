@@ -1,8 +1,8 @@
 use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
+use crate::components::node_editor::hooks::use_save_manager;
+use crate::components::node_editor::inputs::input_components::FormContext;
 use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
 use crate::components::scenery_editor::{GraphStore, GraphStoreAction, NodeType};
-// IMPORT FOR FLUSH
-use crate::components::node_editor::inputs::input_components::FormContext;
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
@@ -36,9 +36,10 @@ pub fn NodeConfigEditor(
     let node_properties_sig = use_signal(Properties::default);
     use_context_provider(|| node_properties_sig);
 
-    // 1. SETUP DES PROTOKOLLS (mut Signals)
-    let mut flush_trigger = use_signal(|| 0usize);
-    let dirty_count = use_signal(|| 0usize);
+    // 1. SETUP PROTOCOLS (mut Signals) via shared hook
+    let save_manager = use_save_manager();
+    let mut flush_trigger = save_manager.flush_trigger;
+    let dirty_count = save_manager.dirty_count;
 
     use_context_provider(|| FormContext {
         flush_trigger,
@@ -46,25 +47,26 @@ pub fn NodeConfigEditor(
     });
 
     // 2. STATE
+    #[allow(clippy::redundant_closure)]
     let mut displayed_node = use_signal(|| active_node_opt());
 
-    // 3. FLUSH BEFEHL
+    // 3. FLUSH COMMAND
     use_effect(move || {
         active_node_opt(); // subscribe to node_id changes
         flush_trigger.write().add_assign(1);
     });
 
-    // 4. DER GATEKEEPER
+    // 4. THE GATEKEEPER
     use_effect(move || {
         let target = active_node_opt();
         let current = displayed_node();
         let pending = *dirty_count.read();
 
-        // Wenn Ziel anders als Aktuell...
+        // If target differs from current...
         if target != current {
-            // ... und alles sauber ist...
+            // ... and everything is clean...
             if pending == 0 {
-                // ... dann umschalten
+                // ... then switch
                 displayed_node.set(target);
             }
         }

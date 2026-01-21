@@ -6,12 +6,12 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::AccordionItem,
+        hooks::use_update_signal_with_reactive_prop,
         inputs::{
             InputData,
             input_components::{LabeledSelect, RowedInputs},
         },
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
-        optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
 use dioxus::prelude::*;
@@ -140,6 +140,7 @@ fn PositioningInputs(
     let mut position_sig = use_signal(|| position_opt_sig.read().unwrap_or_default());
 
     use_effect(move || {
+        #[allow(clippy::collapsible_if)]
         if let Some(iso) = position_opt_sig.read().as_ref() {
             if *position_sig.peek() != *iso {
                 position_sig.set(*iso);

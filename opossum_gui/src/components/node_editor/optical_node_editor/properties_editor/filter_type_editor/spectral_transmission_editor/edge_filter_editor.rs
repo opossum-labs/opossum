@@ -6,11 +6,11 @@ use uom::si::length::nanometer;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
+        hooks::use_update_signal_with_reactive_prop,
         inputs::{
             InputData, InputParam, IntoInputData, IntoInputDataStrings,
             input_components::RowedInputs, select_options_from_enum_iterator,
         },
-        optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
 

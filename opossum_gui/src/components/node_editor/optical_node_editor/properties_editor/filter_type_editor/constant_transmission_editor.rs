@@ -1,8 +1,7 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        inputs::input_components::LabeledInput,
-        optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
+        hooks::use_update_signal_with_reactive_prop, inputs::input_components::LabeledInput,
     },
 };
 use approx::relative_ne;

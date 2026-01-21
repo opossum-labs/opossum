@@ -1,9 +1,7 @@
 use crate::components::node_editor::{
-    inputs::input_components::LabeledCheckboxInput,
+    hooks::use_update_signal_with_reactive_prop, inputs::input_components::LabeledCheckboxInput,
     node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::{
-        use_set_node_change_property, use_update_signal_with_reactive_prop,
-    },
+    optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;

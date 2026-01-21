@@ -6,10 +6,10 @@ mod ray_source_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
+    hooks::use_update_signal_with_reactive_prop,
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
         light_data_editor::energy_source_editor::EnergySourceEditor, use_set_node_change_property,
-        use_update_signal_with_reactive_prop,
     },
 };
 use light_data_builder_selection::SourceLightDataBuilderSelector;

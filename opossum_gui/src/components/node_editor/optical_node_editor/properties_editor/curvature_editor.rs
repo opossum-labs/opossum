@@ -1,7 +1,7 @@
 use crate::components::node_editor::{
+    hooks::use_update_signal_with_reactive_prop,
     inputs::{InputData, InputParam, input_components::InputParamLabeledInput},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use core::f64;
 use dioxus::prelude::*;

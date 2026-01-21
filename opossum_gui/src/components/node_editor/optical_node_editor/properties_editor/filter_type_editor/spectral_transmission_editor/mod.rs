@@ -12,12 +12,12 @@ use strum::EnumIter;
 
 use crate::components::node_editor::{
     accordion::ElementList,
+    hooks::use_update_signal_with_reactive_prop,
     inputs::{
         InputParam, IntoInputData, IntoInputDataStrings,
         input_components::{InputParamLabeledInput, LabeledSelect},
         select_options_from_enum_iterator,
     },
-    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 
 #[component]

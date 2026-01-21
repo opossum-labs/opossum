@@ -3,12 +3,10 @@ mod spectral_transmission_editor;
 
 use crate::components::node_editor::{
     accordion::ElementList,
+    hooks::use_update_signal_with_reactive_prop,
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
     node_config_editor::NodeChangeEvent, // Import hinzugefügt
-    optical_node_editor::properties_editor::{
-        use_set_node_change_property,
-        use_update_signal_with_reactive_prop, // Helper Import hinzugefügt
-    },
+    optical_node_editor::properties_editor::use_set_node_change_property,
 };
 pub use constant_transmission_editor::ConstantFilterTypeEditor;
 use dioxus::prelude::*;
