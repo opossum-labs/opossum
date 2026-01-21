@@ -15,19 +15,34 @@ use dioxus::prelude::*;
 use inflector::Inflector;
 
 use crate::components::node_editor::{
+    hooks::use_update_signal_with_reactive_prop,
     inputs::{
         InputData, IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
+use uuid::Uuid;
 
 #[component]
-pub fn RefractiveIndexEditor(ref_ind_type: RefractiveIndexType, property_key: String) -> Element {
+pub fn RefractiveIndexEditor(
+    node_id: Uuid,
+    ref_ind_type: RefractiveIndexType,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
     let mut ref_ind_type_sig = use_signal(|| ref_ind_type.clone());
-
-    use_set_node_change_property(&property_key, ref_ind_type, ref_ind_type_sig);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(
+        *bound_node_id.read(),
+        &property_key,
+        ref_ind_type,
+        ref_ind_type_sig,
+        on_change,
+    );
 
     let select_id = format!("refractiveIndexProperty{property_key}").to_camel_case();
     rsx! {

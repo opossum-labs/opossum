@@ -4,7 +4,6 @@ use std::vec;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        CallbackWrapper,
         inputs::input_components::{LabeledInput, LabeledSelect},
         optical_node_editor::alignment_editor::{
             RotationAlignmentInputs, TranslationAlignmentInputs,
@@ -29,11 +28,13 @@ use uom::si::{
 pub fn GratingAlignmentInputs(
     alignment_sig: Signal<Isometry>,
     node_properties_sig: Signal<Properties>,
+    on_save: EventHandler<Isometry>,
 ) -> Element {
     let alignment_select_sig = use_signal(|| true);
 
     let mut element_list = vec![rsx! {
-    GratingAlignmentSelector {alignment_select_sig}}];
+        GratingAlignmentSelector { alignment_select_sig }
+    }];
 
     if let (true, Ok(Proptype::I32(diffraction_order)), Ok(Proptype::LinearDensity(line_density))) = (
         *alignment_select_sig.read(),
@@ -41,16 +42,25 @@ pub fn GratingAlignmentInputs(
         node_properties_sig.read().get("line density").cloned(),
     ) {
         element_list.push(rsx! {
-            LittrowConfigEditor { alignment_sig, diffraction_order, line_density }
+            LittrowConfigEditor {
+                alignment_sig,
+                diffraction_order,
+                line_density,
+                on_save,
+            }
         });
         element_list.push(rsx! {
-            RotationAlignmentInputs { alignment_sig, axes_skip: Some(vec![RotationAxis::Pitch]) }
-            TranslationAlignmentInputs { alignment_sig }
+            RotationAlignmentInputs {
+                alignment_sig,
+                axes_skip: Some(vec![RotationAxis::Pitch]),
+                on_save,
+            }
+            TranslationAlignmentInputs { alignment_sig, on_save }
         });
     } else {
         element_list.push(rsx! {
-            RotationAlignmentInputs { alignment_sig, axes_skip: None }
-            TranslationAlignmentInputs { alignment_sig }
+            RotationAlignmentInputs { alignment_sig, axes_skip: None, on_save }
+            TranslationAlignmentInputs { alignment_sig, on_save }
         });
     }
     rsx! {
@@ -65,6 +75,7 @@ pub fn LittrowConfigEditor(
     alignment_sig: Signal<Isometry>,
     diffraction_order: i32,
     line_density: LinearNumberDensity,
+    on_save: EventHandler<Isometry>,
 ) -> Element {
     let incident_angle_sig = use_signal(|| true);
     let mut reference_wavelength_sig = use_signal(|| nanometer!(1053.));
@@ -75,11 +86,11 @@ pub fn LittrowConfigEditor(
             label: "Reference wavelength",
             value: format!("{:.3}", reference_wavelength_sig.read().get::<nanometer>()),
             r#type: "number",
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+            onchange: move |e: Event<FormData>| {
                 if let Ok(length) = e.data.value().parse::<f64>() {
                     reference_wavelength_sig.set(nanometer!(length));
                 }
-            }),
+            },
         }
         AngleToLittrowComponent {
             incident_angle_sig,
@@ -87,6 +98,7 @@ pub fn LittrowConfigEditor(
             diffraction_order,
             line_density,
             alignment_sig,
+            on_save,
         }
     }
 }
@@ -116,6 +128,7 @@ fn AngleToLittrowComponent(
     diffraction_order: i32,
     line_density: LinearNumberDensity,
     mut alignment_sig: Signal<Isometry>,
+    on_save: EventHandler<Isometry>,
 ) -> Element {
     rsx! {
         LabeledInput {
@@ -134,7 +147,7 @@ fn AngleToLittrowComponent(
             ),
             r#type: "number",
             step: Some("0.01"),
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+            onchange: move |e: Event<FormData>| {
                 if let Ok(angle) = e.data.value().parse::<f64>() {
                     let m_g_lambda = reference_wavelength_sig.read().get::<meter>()
                         * line_density.get::<per_meter>() * to_f64(diffraction_order);
@@ -143,16 +156,23 @@ fn AngleToLittrowComponent(
                     if !*incident_angle_sig.read() {
                         new_angle = radian!((- new_angle.sin().value + m_g_lambda).asin());
                     }
-                    alignment_sig
-                        .write()
-                        .set_rotation_of_axis(RotationAxis::Pitch, new_angle)
-                        .unwrap_or_else(|e| {
+
+                    let mut iso = *alignment_sig.read();
+                    let update_res = iso.set_rotation_of_axis(RotationAxis::Pitch, new_angle);
+
+                    match update_res {
+                        Ok(()) => {
+                            alignment_sig.set(iso);
+                            on_save.call(iso);
+                        }
+                        Err(e) => {
                             OPOSSUM_UI_LOGS
                                 .write()
                                 .add_log(&format!("Failed to set rotation of isometry: {e}"));
-                        });
+                        }
+                    }
                 }
-            }),
+            },
         }
     }
 }

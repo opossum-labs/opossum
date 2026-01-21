@@ -1,8 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{
+    OPOSSUM_UI_LOGS,
     api::{self, eval_action_run},
     components::simulation::utils::find_cli_executable,
-    OPOSSUM_UI_LOGS,
 };
 use dioxus::prelude::*;
 use futures_util::StreamExt;
@@ -39,7 +39,9 @@ pub fn SimulationWindow(
                         output.set(String::new());
                         output.write().push_str("[INFO] Preparing simulation...\n");
                         let Ok(temp_dir) = tempdir() else {
-                            output.write().push_str("[ERROR] Could not create temp dir.\n");
+                            output
+                                .write()
+                                .push_str("[ERROR] Could not create temp dir.\n");
                             is_running.set(false);
                             continue;
                         };
@@ -53,28 +55,29 @@ pub fn SimulationWindow(
                                 }
                             }),
                         );
-                        let cli_path = match find_cli_executable() {
-                            Ok(p) => p,
-                            Err(_) => {
-                                output.write().push_str("[ERROR] Opossum CLI executable not found.\n");
-                                is_running.set(false);
-                                continue;
-                            }
+                        let Ok(cli_path) = find_cli_executable() else {
+                            output
+                                .write()
+                                .push_str("[ERROR] Opossum CLI executable not found.\n");
+                            is_running.set(false);
+                            continue;
                         };
-                        let report_dir = match project_directory() {
-                            Some(d) => d,
-                            None => {
-                                output.write().push_str("[ERROR] No project directory set.\n");
-                                is_running.set(false);
-                                continue;
-                            }
+                        let Some(report_dir) = project_directory() else {
+                            output
+                                .write()
+                                .push_str("[ERROR] No project directory set.\n");
+                            is_running.set(false);
+                            continue;
                         };
                         let mut cmd = tokio::process::Command::new(cli_path);
-                        cmd.arg("-r").arg(report_dir.as_path())
-                           .arg("-f").arg(temp_model_file_clone)
-                           .arg("-s").arg("false") // Silent mode (no Logo)
-                           .stdout(Stdio::piped())
-                           .stderr(Stdio::piped());
+                        cmd.arg("-r")
+                            .arg(report_dir.as_path())
+                            .arg("-f")
+                            .arg(temp_model_file_clone)
+                            .arg("-s")
+                            .arg("false") // Silent mode (no Logo)
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped());
 
                         #[cfg(windows)]
                         {
@@ -85,7 +88,8 @@ pub fn SimulationWindow(
                         let mut child = match cmd.spawn() {
                             Ok(child) => child,
                             Err(e) => {
-                                write!(output.write(), "[ERROR] Failed to spawn command: {e}\n").unwrap();
+                                writeln!(output.write(), "[ERROR] Failed to spawn command: {e}")
+                                    .unwrap();
                                 is_running.set(false);
                                 continue;
                             }
@@ -94,7 +98,7 @@ pub fn SimulationWindow(
                         let stderr = child.stderr.take().expect("Failed to open stderr");
                         let mut stdout_reader = BufReader::new(stdout);
                         let mut stderr_reader = BufReader::new(stderr);
-                        
+
                         child_handle = Some(child);
                         let mut stdout_buf = [0u8; 1024];
                         let mut stderr_buf = [0u8; 1024];
@@ -108,7 +112,7 @@ pub fn SimulationWindow(
                                         if let Some(mut child) = child_handle.take() {
                                             output.write().push_str("\n[WARN] Aborting process requested by user...\n");
                                             if let Err(e) = child.kill().await {
-                                                write!(output.write(), "[ERROR] Failed to kill process: {e}\n").unwrap();
+                                                writeln!(output.write(), "[ERROR] Failed to kill process: {e}").unwrap();
                                             } else {
                                                 output.write().push_str("[INFO] Process aborted successfully.\n");
                                             }
@@ -143,7 +147,7 @@ pub fn SimulationWindow(
                         if let Some(mut child) = child_handle.take() {
                             let _ = child.wait().await;
                         }
-                        
+
                         output.write().push_str("\n[INFO] Simulation finished.\n");
                         is_running.set(false);
                     }

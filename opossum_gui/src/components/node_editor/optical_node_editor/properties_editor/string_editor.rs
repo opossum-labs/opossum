@@ -1,28 +1,37 @@
 use crate::components::node_editor::{
-    CallbackWrapper, inputs::input_components::LabeledInput,
+    hooks::use_update_signal_with_reactive_prop, inputs::input_components::LabeledInput,
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
+use uuid::Uuid;
 
 #[component]
-pub fn StringEditor(s: String, property_key: String) -> Element {
-    let string_sig = use_signal(|| s.clone());
-    use_set_node_change_property(&property_key, s.clone(), string_sig);
+pub fn StringEditor(
+    node_id: Uuid,
+    s: String,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
+    let mut string_sig = use_signal(|| s.clone());
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(
+        *bound_node_id.read(),
+        &property_key,
+        s,
+        string_sig,
+        on_change,
+    );
 
     rsx! {
         LabeledInput {
             id: format!("stringProperty{property_key}").to_camel_case(),
             label: format!("{}", property_key.to_sentence_case()),
-            value: s,
+            value: string_sig,
             r#type: "text",
-            onchange: on_string_input_change(string_sig),
+            onchange: move |e: Event<FormData>| { string_sig.set(e.data.value()) },
         }
     }
-}
-
-fn on_string_input_change(mut signal: Signal<String>) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
-        signal.set(e.data.value());
-    })
 }

@@ -10,14 +10,11 @@ use ray_type_selection::RayDataBuilderSelector;
 
 use crate::components::node_editor::{
     accordion::ElementList,
+    hooks::use_update_signal_with_reactive_prop,
     inputs::input_components::RowedInputs,
-    optical_node_editor::properties_editor::{
-        light_data_editor::ray_source_editor::{
-            collimated_source_editor::ReferenceLengthEditor,
-            distribution_editor::DistributionEditor,
-            image_source_editor::get_image_source_input_params,
-        },
-        use_update_signal_with_reactive_prop,
+    optical_node_editor::properties_editor::light_data_editor::ray_source_editor::{
+        collimated_source_editor::ReferenceLengthEditor, distribution_editor::DistributionEditor,
+        image_source_editor::get_image_source_input_params,
     },
 };
 

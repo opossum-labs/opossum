@@ -1,5 +1,7 @@
 use crate::components::node_editor::{
+    hooks::use_update_signal_with_reactive_prop,
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
@@ -8,14 +10,25 @@ use opossum_core::{
     surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::default_from_name::DefaultFromName,
 };
+use uuid::Uuid;
 
 #[component]
 pub fn FluenceEstimatorEditor(
+    node_id: Uuid,
     fluence_estimator: FluenceEstimator,
     property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut fluence_estimator_sig = use_signal(|| fluence_estimator);
-    use_set_node_change_property(&property_key, fluence_estimator, fluence_estimator_sig);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(
+        *bound_node_id.read(),
+        &property_key,
+        fluence_estimator,
+        fluence_estimator_sig,
+        on_change,
+    );
 
     rsx! {
         LabeledSelect {

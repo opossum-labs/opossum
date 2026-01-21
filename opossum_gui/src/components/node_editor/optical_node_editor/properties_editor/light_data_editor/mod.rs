@@ -6,6 +6,8 @@ mod ray_source_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
+    hooks::use_update_signal_with_reactive_prop,
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
         light_data_editor::energy_source_editor::EnergySourceEditor, use_set_node_change_property,
     },
@@ -13,17 +15,31 @@ use crate::components::node_editor::{
 use light_data_builder_selection::SourceLightDataBuilderSelector;
 use opossum_core::prelude::LightDataBuilder;
 use ray_source_editor::RaySourceEditor;
+use uuid::Uuid;
 
 use dioxus::prelude::*;
 
 #[component]
-pub fn LightDataEditor(light_data_builder: LightDataBuilder, property_key: String) -> Element {
+pub fn LightDataEditor(
+    node_id: Uuid,
+    light_data_builder: LightDataBuilder,
+    property_key: String,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
     let light_data_builder_sig = use_signal(|| light_data_builder.clone());
-
-    use_set_node_change_property(&property_key, light_data_builder, light_data_builder_sig);
+    let bound_node_id = use_signal(|| node_id);
+    use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    use_set_node_change_property(
+        *bound_node_id.read(),
+        &property_key,
+        light_data_builder,
+        light_data_builder_sig,
+        on_change,
+    );
 
     let mut accordion_item_content = vec![rsx! {
-    SourceLightDataBuilderSelector {light_data_builder_sig }}];
+        SourceLightDataBuilderSelector { light_data_builder_sig }
+    }];
 
     match &*light_data_builder_sig.read() {
         LightDataBuilder::Energy(energy_data_builder) => accordion_item_content.push(rsx! {
@@ -39,7 +55,6 @@ pub fn LightDataEditor(light_data_builder: LightDataBuilder, property_key: Strin
             }
         }),
     }
-
     rsx! {
         div {
             class: "accordion accordion-borderless bg-dark border-start",
