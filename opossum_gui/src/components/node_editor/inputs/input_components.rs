@@ -1,9 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-use crate::components::node_editor::{
-    CallbackWrapper,
-    inputs::{InputData, InputParam},
-};
+use crate::components::node_editor::inputs::{InputData, InputParam};
 use dioxus::prelude::*;
 use itertools::Itertools;
 
@@ -12,7 +9,7 @@ pub fn LabeledCheckboxInput(
     id: String,
     label: String,
     value: String,
-    onchange: CallbackWrapper,
+    onchange: EventHandler<Event<FormData>>,
     #[props(default = false)] readonly: bool,
 ) -> Element {
     rsx! {
@@ -39,12 +36,13 @@ pub fn LabeledFileInput(
     id: String,
     label: String,
     value: String,
-    onchange: CallbackWrapper,
+    onchange: EventHandler<Event<FormData>>,
     accept: String,
     #[props(default = false)] readonly: bool,
 ) -> Element {
     let id_target = id.clone();
-    let onchange_input = onchange.clone();
+    let onchange_input = onchange;
+
     rsx! {
         div { class: "form-file border-start file-selection-wrapper",
             div { class: "input-group",
@@ -102,7 +100,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 id: input_data.id,
                 label,
                 value: input_data.value,
-                onchange: input_data.callback_opt,
+                onchange: input_data.callback,
             }
         }
     } else if let InputParam::FilePath(label, accept) = input_data.input_param {
@@ -111,7 +109,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 id: input_data.id,
                 label,
                 value: input_data.value,
-                onchange: input_data.callback_opt,
+                onchange: input_data.callback,
                 accept,
             }
         }
@@ -121,7 +119,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 id: input_data.id,
                 label,
                 options,
-                onchange: move |e| input_data.callback_opt.call(e),
+                onchange: move |e| input_data.callback.call(e),
             }
         }
     } else {
@@ -130,7 +128,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 id: input_data.id,
                 label: input_data.input_param.label(),
                 value: input_data.value,
-                onchange: input_data.callback_opt,
+                onchange: input_data.callback,
                 r#type: input_data.input_param.rtype(),
                 readonly: input_data.readonly,
             }
@@ -172,7 +170,7 @@ pub fn LabeledInput(
     id: String,
     label: String,
     value: String,
-    onchange: CallbackWrapper,
+    onchange: EventHandler<Event<FormData>>,
     #[props(default = "text")] r#type: &'static str,
     #[props(optional)] step: Option<&'static str>,
     #[props(optional)] min: Option<&'static str>,
@@ -205,7 +203,7 @@ pub fn LabeledSelect(
     id: String,
     label: String,
     options: Vec<(bool, String)>,
-    onchange: Callback<Event<FormData>>,
+    onchange: EventHandler<Event<FormData>>,
 ) -> Element {
     rsx! {
         div { class: "form-floating border-start", "data-mdb-input-init": "",
@@ -213,7 +211,7 @@ pub fn LabeledSelect(
                 class: "form-select bg-dark text-light",
                 id: id.as_str(),
                 "aria-label": label,
-                onchange,
+                onchange: move |e| onchange.call(e),
                 for (is_selected , option) in options {
                     option { selected: is_selected, value: option, {option.clone()} }
                 }

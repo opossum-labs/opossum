@@ -1,5 +1,4 @@
 use crate::components::node_editor::{
-    CallbackWrapper,
     inputs::input_components::{LabeledInput, LabeledSelect},
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
@@ -60,11 +59,11 @@ pub fn LengthOptionEditor(
                                 label: format!("{} in nm", property_key.to_sentence_case()),
                                 value: format!("{:.3}", length.get::<nanometer>()),
                                 r#type: "number",
-                                onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+                                onchange: move |e: Event<FormData>| {
                                     if let Ok(length) = e.data.value().parse::<f64>() {
                                         length_opt_sig.set(Some(nanometer!(length)));
                                     }
-                                }),
+                                },
                             }
                         }
                     },

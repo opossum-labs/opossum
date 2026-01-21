@@ -55,25 +55,19 @@ pub fn SimulationWindow(
                                 }
                             }),
                         );
-                        let cli_path = match find_cli_executable() {
-                            Ok(p) => p,
-                            Err(_) => {
-                                output
-                                    .write()
-                                    .push_str("[ERROR] Opossum CLI executable not found.\n");
-                                is_running.set(false);
-                                continue;
-                            }
+                        let Ok(cli_path) = find_cli_executable() else {
+                            output
+                                .write()
+                                .push_str("[ERROR] Opossum CLI executable not found.\n");
+                            is_running.set(false);
+                            continue;
                         };
-                        let report_dir = match project_directory() {
-                            Some(d) => d,
-                            None => {
-                                output
-                                    .write()
-                                    .push_str("[ERROR] No project directory set.\n");
-                                is_running.set(false);
-                                continue;
-                            }
+                        let Some(report_dir) = project_directory() else {
+                            output
+                                .write()
+                                .push_str("[ERROR] No project directory set.\n");
+                            is_running.set(false);
+                            continue;
                         };
                         let mut cmd = tokio::process::Command::new(cli_path);
                         cmd.arg("-r")
@@ -94,7 +88,7 @@ pub fn SimulationWindow(
                         let mut child = match cmd.spawn() {
                             Ok(child) => child,
                             Err(e) => {
-                                write!(output.write(), "[ERROR] Failed to spawn command: {e}\n")
+                                writeln!(output.write(), "[ERROR] Failed to spawn command: {e}")
                                     .unwrap();
                                 is_running.set(false);
                                 continue;
@@ -118,7 +112,7 @@ pub fn SimulationWindow(
                                         if let Some(mut child) = child_handle.take() {
                                             output.write().push_str("\n[WARN] Aborting process requested by user...\n");
                                             if let Err(e) = child.kill().await {
-                                                write!(output.write(), "[ERROR] Failed to kill process: {e}\n").unwrap();
+                                                writeln!(output.write(), "[ERROR] Failed to kill process: {e}").unwrap();
                                             } else {
                                                 output.write().push_str("[INFO] Process aborted successfully.\n");
                                             }

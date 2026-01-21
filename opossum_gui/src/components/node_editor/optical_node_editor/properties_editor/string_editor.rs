@@ -1,10 +1,8 @@
 use crate::components::node_editor::{
-    CallbackWrapper,
     inputs::input_components::LabeledInput,
-    node_config_editor::NodeChangeEvent, // Import hinzugefügt
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
-        use_set_node_change_property,
-        use_update_signal_with_reactive_prop, // Helper Import hinzugefügt
+        use_set_node_change_property, use_update_signal_with_reactive_prop,
     },
 };
 use dioxus::prelude::*;
@@ -18,7 +16,7 @@ pub fn StringEditor(
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let string_sig = use_signal(|| s.clone());
+    let mut string_sig = use_signal(|| s.clone());
     let bound_node_id = use_signal(|| node_id);
     use_update_signal_with_reactive_prop(node_id, bound_node_id);
     use_set_node_change_property(
@@ -35,13 +33,7 @@ pub fn StringEditor(
             label: format!("{}", property_key.to_sentence_case()),
             value: string_sig,
             r#type: "text",
-            onchange: on_string_input_change(string_sig),
+            onchange: move |e: Event<FormData>| { string_sig.set(e.data.value()) },
         }
     }
-}
-
-fn on_string_input_change(mut signal: Signal<String>) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
-        signal.set(e.data.value());
-    })
 }

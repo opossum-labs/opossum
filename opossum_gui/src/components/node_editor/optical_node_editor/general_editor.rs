@@ -1,6 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
-    CallbackWrapper,
     accordion::AccordionItem,
     inputs::input_components::{LabeledCheckboxInput, LabeledInput},
     node_config_editor::{NodeChangeAction, NodeChangeEvent}, // Event Struct importiert
@@ -74,8 +73,6 @@ pub fn GeneralEditor(
     }
 }
 
-// --- Die Child-Komponenten bleiben "dumm" und unverändert ---
-
 #[component]
 pub fn NodeNameInput(value: String, on_valid_change: EventHandler<String>) -> Element {
     let mut text_state = use_signal(|| value.clone());
@@ -89,11 +86,11 @@ pub fn NodeNameInput(value: String, on_valid_change: EventHandler<String>) -> El
             id: "inputNodeName",
             label: "Node Name",
             value: text_state,
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+            onchange: move |e: Event<FormData>| {
                 let new_val = e.data.value();
                 text_state.set(new_val.clone());
                 on_valid_change.call(new_val);
-            }),
+            },
         }
     }
 }
@@ -114,18 +111,14 @@ pub fn NodeLIDTInput(value: Fluence, on_valid_change: EventHandler<Fluence>) -> 
             value: text_state,
             r#type: "number",
             min: Some("0.0"),
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+            onchange: move |e: Event<FormData>| {
                 let input_str = e.data.value();
-
-                if let Ok(parsed_num) = input_str.parse::<f64>() {
-                    if parsed_num >= 0.0 {
-                        on_valid_change.call(J_per_cm2!(parsed_num));
-                        return;
-                    }
+                if let Ok(parsed_num) = input_str.parse::<f64>() && parsed_num >= 0.0 {
+                    on_valid_change.call(J_per_cm2!(parsed_num));
+                    return;
                 }
-
                 text_state.set(format!("{:.2}", value.get::<joule_per_square_centimeter>()));
-            }),
+            },
         }
     }
 }
@@ -141,11 +134,11 @@ pub fn NodeInvertedInput(
             id: "inputNodeInverted",
             label,
             value,
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+            onchange: move |e: Event<FormData>| {
                 if let Ok(new_val) = e.data.parsed::<bool>() {
                     on_valid_change.call(new_val);
                 }
-            }),
+            },
         }
     }
 }
@@ -158,7 +151,7 @@ pub fn NodeTypeInput(node_type: String, label: &'static str) -> Element {
             label,
             value: node_type,
             readonly: true,
-            onchange: CallbackWrapper::noop(),
+            onchange: move |_| {},
         }
     }
 }

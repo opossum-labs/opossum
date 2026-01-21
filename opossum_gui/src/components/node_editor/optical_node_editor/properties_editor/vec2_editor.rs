@@ -1,7 +1,6 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        CallbackWrapper,
         inputs::{
             InputData, InputParam,
             input_components::{LabeledSelect, RowedInputs},
@@ -120,8 +119,8 @@ pub fn Vec2Editor(
 fn on_vec_input_change(
     mut vec_sig: Signal<Vector2<f64>>,
     axis: TranslationAxis,
-) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
+) -> EventHandler<Event<FormData>> {
+    EventHandler::new(move |e: Event<FormData>| {
         if let Ok(val) = e.data.value().parse::<f64>() {
             match axis {
                 TranslationAxis::X => vec_sig.write().x = val,

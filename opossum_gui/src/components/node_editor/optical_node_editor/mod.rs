@@ -51,26 +51,26 @@ pub fn OpticalNodeEditor(
                             name: node_attr.name(),
                             lidt: *node_attr.lidt(),
                             inverted: node_attr.inverted(),
-                            on_change: on_change.clone(),
+                            on_change,
                         }
                         PropertiesEditor {
                             node_id,
                             node_properties_sig,
-                            on_change: on_change.clone(),
+                            on_change,
                         }
                         PositioningEditor {
                             node_id,
                             position_opt: node_attr.isometry(),
                             node_properties_sig,
                             node_type: node_attr.node_type(),
-                            on_change: on_change.clone(),
+                            on_change,
                         }
                         AlignmentEditor {
                             node_id,
                             alignment: node_attr.alignment().unwrap_or(Isometry::identity()),
                             node_properties_sig,
                             node_type: node_attr.node_type(),
-                            on_change: on_change.clone(),
+                            on_change,
                         }
                     }
                 }

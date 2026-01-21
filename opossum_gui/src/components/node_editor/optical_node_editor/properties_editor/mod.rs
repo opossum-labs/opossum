@@ -44,12 +44,8 @@ pub fn PropertiesEditor(
     let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
 
     for (property_key, property) in &*node_properties_sig.read() {
-        if let Some(editor) = get_editor(
-            node_id,
-            property.clone(),
-            property_key.clone(),
-            on_change.clone(),
-        ) {
+        if let Some(editor) = get_editor(node_id, property.clone(), property_key.clone(), on_change)
+        {
             editor_inputs.push(editor);
         }
     }
@@ -226,17 +222,13 @@ fn get_editor(
         | Proptype::Aperture(_) => None,
     }
 }
-
-/// Dieser Hook wird von den spezifischen Editoren (z.B. F64Editor) aufgerufen.
-/// Er wurde angepasst, um NodeChangeEvent via Callback zu senden, statt use_coroutine zu nutzen.
 pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone + 'static>(
-    node_id: Uuid, // Hier sollte die "Lagging ID" übergeben werden!
+    node_id: Uuid,
     property_key: &str,
     prop_type_value: T,
     prop_type_value_sig: Signal<T>,
-    on_change: EventHandler<NodeChangeEvent>, // NEU: Callback statt Coroutine
+    on_change: EventHandler<NodeChangeEvent>,
 ) {
-    // Sync von außen nach innen (Standard Logik für Props->State)
     use_update_signal_with_reactive_prop(prop_type_value.clone(), prop_type_value_sig);
 
     use_effect({

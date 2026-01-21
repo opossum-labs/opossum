@@ -1,11 +1,9 @@
-use core::f64;
-
 use crate::components::node_editor::{
-    CallbackWrapper,
     inputs::{InputData, InputParam, input_components::InputParamLabeledInput},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
+use core::f64;
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_core::prelude::{Proptype, millimeter};
@@ -121,8 +119,8 @@ fn CurvatureInput(
 fn on_is_curved_input_change(
     mut curvature_sig: Signal<Length>,
     last_finite_curvature: Signal<Length>,
-) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
+) -> EventHandler<Event<FormData>> {
+    EventHandler::new(move |e: Event<FormData>| {
         if let Ok(is_finite) = e.data.value().parse::<bool>() {
             if is_finite {
                 curvature_sig.set(*last_finite_curvature.read());
@@ -136,8 +134,8 @@ fn on_is_curved_input_change(
 fn on_length_input_change(
     mut signal: Signal<Length>,
     mut last_finite_curvature: Signal<Length>,
-) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
+) -> EventHandler<Event<FormData>> {
+    EventHandler::new(move |e: Event<FormData>| {
         if let Ok(length) = e.data.value().parse::<f64>() {
             let new_length = millimeter!(length);
             signal.set(new_length);

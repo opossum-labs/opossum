@@ -1,10 +1,8 @@
 pub mod input_components;
 use dioxus::prelude::*;
 use opossum_core::utils::geom_transformation::{RotationAxis, TranslationAxis};
-use strum::IntoEnumIterator;
-
-use crate::components::node_editor::CallbackWrapper;
 use std::{fmt::Display, str::FromStr};
+use strum::IntoEnumIterator;
 
 pub trait IntoInputData<T, D, B: 'static>: Into<InputParam>
 where
@@ -13,11 +11,9 @@ where
     Self: IntoEnumIterator + IntoInputDataStrings<D> + Copy + 'static,
 {
     fn setter_from_obj(&self) -> impl FnMut(&mut D, T);
-
-    fn create_callback(&self, mut obj: D, mut sig: Signal<B>) -> CallbackWrapper {
+    fn create_callback(&self, mut obj: D, mut sig: Signal<B>) -> EventHandler<Event<FormData>> {
         let this = *self;
-
-        CallbackWrapper::new(move |e: Event<FormData>| {
+        EventHandler::new(move |e: Event<FormData>| {
             if let Some(value) = this.parse_value(e) {
                 let mut setter = this.setter_from_obj();
                 setter(&mut obj, value);
@@ -25,6 +21,7 @@ where
             }
         })
     }
+
     fn parse_value(&self, e: Event<FormData>) -> Option<T> {
         let e_value = e.value();
         e_value.parse::<T>().ok()
@@ -149,7 +146,7 @@ pub struct InputData {
     pub value: String,
     pub id: String,
     pub input_param: InputParam,
-    pub callback_opt: CallbackWrapper,
+    pub callback: EventHandler<Event<FormData>>,
     pub readonly: bool,
 }
 
@@ -157,14 +154,14 @@ impl InputData {
     pub fn new(
         input_param: InputParam,
         id_str_add_on: &str,
-        callback_opt: CallbackWrapper,
+        callback: EventHandler<Event<FormData>>,
         value: String,
     ) -> Self {
         Self {
             value,
             id: format!("{}{}", id_str_add_on, input_param.id_str()),
             input_param,
-            callback_opt,
+            callback,
             readonly: false,
         }
     }

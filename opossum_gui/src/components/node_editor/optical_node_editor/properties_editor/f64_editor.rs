@@ -1,7 +1,6 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        CallbackWrapper,
         inputs::input_components::LabeledInput,
         node_config_editor::NodeChangeEvent,
         optical_node_editor::properties_editor::{
@@ -22,7 +21,7 @@ pub fn F64Editor(
     property: Property,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let float64_sig = use_signal(|| float64);
+    let mut float64_sig = use_signal(|| float64);
     let bound_node_id = use_signal(|| node_id);
     use_update_signal_with_reactive_prop(node_id, bound_node_id);
     use_set_node_change_property(
@@ -38,22 +37,18 @@ pub fn F64Editor(
             label: format!("{}", property_key.to_sentence_case()),
             value: format!("{:.3}", *float64_sig.read()),
             r#type: "number",
-            onchange: on_float64_input_change(float64_sig, property),
+            onchange: move |e: Event<FormData>| {
+                if let Ok(val) = e.data.value().parse::<f64>() {
+                    let last_val = *float64_sig.read();
+                    match property.validate_proptype(&Proptype::F64(val)) {
+                        Ok(()) => float64_sig.set(val),
+                        Err(e) => {
+                            OPOSSUM_UI_LOGS.write().add_log(format!("{e}").as_str());
+                            float64_sig.set(last_val);
+                        }
+                    }
+                }
+            },
         }
     }
-}
-pub fn on_float64_input_change(mut signal: Signal<f64>, property: Property) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
-        if let Ok(val) = e.data.value().parse::<f64>() {
-            let last_val = *signal.read();
-            match property.validate_proptype(&Proptype::F64(val)) {
-                Ok(()) => signal.set(val),
-                Err(e) => {
-                    OPOSSUM_UI_LOGS.write().add_log(format!("{e}").as_str());
-                    // Bei Fehler auf alten Wert zurücksetzen
-                    signal.set(last_val);
-                }
-            }
-        }
-    })
 }

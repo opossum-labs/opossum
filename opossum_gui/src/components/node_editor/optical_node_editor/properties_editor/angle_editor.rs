@@ -1,10 +1,8 @@
 use crate::components::node_editor::{
-    CallbackWrapper,
     inputs::input_components::LabeledInput,
-    node_config_editor::NodeChangeEvent, // Import hinzugefügt
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
-        use_set_node_change_property,
-        use_update_signal_with_reactive_prop, // Helper Import hinzugefügt
+        use_set_node_change_property, use_update_signal_with_reactive_prop,
     },
 };
 use dioxus::prelude::*;
@@ -20,7 +18,7 @@ pub fn AngleEditor(
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let angle_sig = use_signal(|| angle);
+    let mut angle_sig = use_signal(|| angle);
     let bound_node_id = use_signal(|| node_id);
     use_update_signal_with_reactive_prop(node_id, bound_node_id);
     use_set_node_change_property(
@@ -36,15 +34,11 @@ pub fn AngleEditor(
             label: format!("{} angle in degrees", property_key.to_sentence_case()),
             value: format!("{:.3}", angle_sig.read().get::<degree>()),
             r#type: "number",
-            onchange: on_angle_input_change(angle_sig),
+            onchange: move |e: Event<FormData>| {
+                if let Ok(angle) = e.data.value().parse::<f64>() {
+                    angle_sig.set(degree!(angle));
+                }
+            },
         }
     }
-}
-
-fn on_angle_input_change(mut signal: Signal<Angle>) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
-        if let Ok(angle) = e.data.value().parse::<f64>() {
-            signal.set(degree!(angle));
-        }
-    })
 }

@@ -1,5 +1,4 @@
 use crate::components::node_editor::{
-    CallbackWrapper,
     inputs::input_components::LabeledInput,
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
@@ -17,7 +16,7 @@ pub fn I32Editor(
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let int32_sig = use_signal(|| int32);
+    let mut int32_sig = use_signal(|| int32);
     let bound_node_id = use_signal(|| node_id);
     use_update_signal_with_reactive_prop(node_id, bound_node_id);
     use_set_node_change_property(
@@ -35,15 +34,11 @@ pub fn I32Editor(
             value: format!("{}", *int32_sig.read()),
             r#type: "number",
             step: Some("1"),
-            onchange: on_i32_input_change(int32_sig),
+            onchange: move |e: Event<FormData>| {
+                if let Ok(val) = e.data.value().parse::<i32>() {
+                    int32_sig.set(val);
+                }
+            },
         }
     }
-}
-
-fn on_i32_input_change(mut signal: Signal<i32>) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
-        if let Ok(val) = e.data.value().parse::<i32>() {
-            signal.set(val);
-        }
-    })
 }

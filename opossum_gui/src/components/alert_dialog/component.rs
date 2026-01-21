@@ -24,7 +24,7 @@ pub fn AlertDialogRoot(props: AlertDialogRootProps) -> Element {
 #[component]
 pub fn AlertDialogContent(props: AlertDialogContentProps) -> Element {
     let base_class = props.class.unwrap_or_default();
-    let combined_class = format!("{} alert-dialog", base_class);
+    let combined_class = format!("{base_class} alert-dialog");
     rsx! {
         alert_dialog::AlertDialogContent {
             id: props.id,

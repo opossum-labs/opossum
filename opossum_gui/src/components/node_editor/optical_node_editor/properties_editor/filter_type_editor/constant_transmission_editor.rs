@@ -1,7 +1,7 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        CallbackWrapper, inputs::input_components::LabeledInput,
+        inputs::input_components::LabeledInput,
         optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
@@ -14,7 +14,7 @@ pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Into<Proptype> + 'sta
     transmission: f64,
     builder_sig: Signal<T>,
 ) -> Element {
-    let transmission_sig = use_signal(|| transmission);
+    let mut transmission_sig = use_signal(|| transmission);
     let property = use_context::<Property>();
 
     use_update_signal_with_reactive_prop(transmission, transmission_sig);
@@ -33,25 +33,18 @@ pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Into<Proptype> + 'sta
             step: Some("0.01"),
             min: Some("0."),
             max: Some("1."),
-            onchange: on_transmission_input_change::<T>(transmission_sig, property),
+            onchange: move |e: Event<FormData>| {
+                if let Ok(val) = e.data.value().parse::<f64>() {
+                    let last_val = *transmission_sig.read();
+                    match property.validate_proptype(&T::from(val).into()) {
+                        Ok(()) => transmission_sig.set(val),
+                        Err(e) => {
+                            OPOSSUM_UI_LOGS.write().add_log(format!("{e}").as_str());
+                            transmission_sig.set(last_val);
+                        }
+                    }
+                }
+            },
         }
     }
-}
-
-pub fn on_transmission_input_change<T: From<f64> + PartialEq + Into<Proptype> + 'static>(
-    mut signal: Signal<f64>,
-    property: Property,
-) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
-        if let Ok(val) = e.data.value().parse::<f64>() {
-            let last_val = *signal.read();
-            match property.validate_proptype(&T::from(val).into()) {
-                Ok(()) => signal.set(val),
-                Err(e) => {
-                    OPOSSUM_UI_LOGS.write().add_log(format!("{e}").as_str());
-                    signal.set(last_val);
-                }
-            }
-        }
-    })
 }

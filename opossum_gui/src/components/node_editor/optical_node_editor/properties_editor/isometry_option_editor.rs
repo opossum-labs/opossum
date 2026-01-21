@@ -1,7 +1,6 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        CallbackWrapper,
         accordion::AccordionItem,
         inputs::{InputData, input_components::RowedInputs},
         node_config_editor::NodeChangeEvent,
@@ -59,8 +58,8 @@ pub fn IsometryOptionEditor(
 fn on_isometry_option_change(
     mut isometry_sig: Signal<Isometry>,
     axis_type: AlignmentAxis,
-) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
+) -> EventHandler<Event<FormData>> {
+    EventHandler::new(move |e: Event<FormData>| {
         if let Ok(val) = e.data.value().parse::<f64>() {
             let res = match axis_type {
                 AlignmentAxis::Translation(translation_axis) => isometry_sig

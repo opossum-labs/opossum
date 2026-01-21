@@ -5,13 +5,12 @@ mod grating_alignment;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        CallbackWrapper,
         accordion::AccordionItem,
         inputs::{
             InputData,
             input_components::{LabeledSelect, RowedInputs},
         },
-        node_config_editor::{NodeChangeAction, NodeChangeEvent}, // Event Structs importiert
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
     },
 };
@@ -39,11 +38,11 @@ pub fn AlignmentEditor(
     use_update_signal_with_reactive_prop(alignment, alignment_sig);
     let bound_node_id = use_signal(|| node_id);
     use_update_signal_with_reactive_prop(node_id, bound_node_id);
+
     use_effect(move || {
-        // Wir senden nur, wenn lokal != prop (d.h. eine echte Änderung stattgefunden hat)
         if *alignment_sig.read() != alignment {
             on_change.call(NodeChangeEvent {
-                node_id: *bound_node_id.peek(), // Lagging ID nutzen
+                node_id: *bound_node_id.peek(),
                 action: NodeChangeAction::Alignment(*alignment_sig.read()),
             });
         }
@@ -83,6 +82,7 @@ pub fn PositioningEditor(
     use_update_signal_with_reactive_prop(position_opt, position_opt_sig);
     let bound_node_id = use_signal(|| node_id);
     use_update_signal_with_reactive_prop(node_id, bound_node_id);
+
     use_effect(move || {
         if *position_opt_sig.read() != position_opt {
             on_change.call(NodeChangeEvent {
@@ -128,13 +128,9 @@ pub fn PositioningEditor(
     }
 }
 
-// --- Helper Components & Functions (bleiben weitgehend gleich, da sie nur Signale modifizieren) ---
-
 #[component]
 fn PositioningInputs(position_opt_sig: Signal<Option<Isometry>>) -> Element {
     let position_sig = use_signal(|| position_opt_sig.read().unwrap_or_default());
-
-    // Sync zurück zum Parent Signal, wenn sich das lokale Signal ändert
     use_effect(move || {
         position_opt_sig.set(Some(*position_sig.read()));
     });
@@ -168,8 +164,8 @@ fn RotationAlignmentInputs(
 fn on_isometry_option_change(
     mut iso_sig: Signal<Isometry>,
     axis_type: AlignmentAxis,
-) -> CallbackWrapper {
-    CallbackWrapper::new(move |e: Event<FormData>| {
+) -> EventHandler<Event<FormData>> {
+    EventHandler::new(move |e: Event<FormData>| {
         if let Ok(val) = e.data.value().parse::<f64>() {
             let mut iso = *iso_sig.read();
             let res = match axis_type {

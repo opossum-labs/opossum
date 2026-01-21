@@ -87,16 +87,16 @@ fn use_node_config_processor(
                             .await
                             .map(|_| {
                                 // Nur lokales UI updaten, wenn der User noch denselben Node ansieht
-                                if let Some(active_id) = graph_store.read().active_node() {
-                                    if active_id == uuid {
-                                        node_properties_sig.write().set(&key, prop).unwrap_or_else(
-                                            |_| {
-                                                OPOSSUM_UI_LOGS.write().add_log(&format!(
-                                                    "Failed to set local property: {key}"
-                                                ));
-                                            },
-                                        );
-                                    }
+                                if let Some(active_id) = graph_store.read().active_node()
+                                    && active_id == uuid
+                                {
+                                    node_properties_sig.write().set(&key, prop).unwrap_or_else(
+                                        |_| {
+                                            OPOSSUM_UI_LOGS.write().add_log(&format!(
+                                                "Failed to set local property: {key}"
+                                            ));
+                                        },
+                                    );
                                 }
                             })
                     }
@@ -122,7 +122,7 @@ fn use_node_config_processor(
 
                 // 3. Ergebnis verarbeiten
                 match result {
-                    Ok(_) => {
+                    Ok(()) => {
                         is_modified.set(true);
                     }
                     Err(err_str) => {

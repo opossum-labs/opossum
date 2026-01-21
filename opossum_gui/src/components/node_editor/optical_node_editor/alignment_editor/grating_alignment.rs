@@ -4,7 +4,6 @@ use std::vec;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        CallbackWrapper,
         inputs::input_components::{LabeledInput, LabeledSelect},
         optical_node_editor::alignment_editor::{
             RotationAlignmentInputs, TranslationAlignmentInputs,
@@ -33,7 +32,8 @@ pub fn GratingAlignmentInputs(
     let alignment_select_sig = use_signal(|| true);
 
     let mut element_list = vec![rsx! {
-    GratingAlignmentSelector {alignment_select_sig}}];
+        GratingAlignmentSelector { alignment_select_sig }
+    }];
 
     if let (true, Ok(Proptype::I32(diffraction_order)), Ok(Proptype::LinearDensity(line_density))) = (
         *alignment_select_sig.read(),
@@ -75,11 +75,11 @@ pub fn LittrowConfigEditor(
             label: "Reference wavelength",
             value: format!("{:.3}", reference_wavelength_sig.read().get::<nanometer>()),
             r#type: "number",
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+            onchange: move |e: Event<FormData>| {
                 if let Ok(length) = e.data.value().parse::<f64>() {
                     reference_wavelength_sig.set(nanometer!(length));
                 }
-            }),
+            },
         }
         AngleToLittrowComponent {
             incident_angle_sig,
@@ -134,7 +134,7 @@ fn AngleToLittrowComponent(
             ),
             r#type: "number",
             step: Some("0.01"),
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+            onchange: move |e: Event<FormData>| {
                 if let Ok(angle) = e.data.value().parse::<f64>() {
                     let m_g_lambda = reference_wavelength_sig.read().get::<meter>()
                         * line_density.get::<per_meter>() * to_f64(diffraction_order);
@@ -152,7 +152,7 @@ fn AngleToLittrowComponent(
                                 .add_log(&format!("Failed to set rotation of isometry: {e}"));
                         });
                 }
-            }),
+            },
         }
     }
 }

@@ -1,6 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
-    CallbackWrapper,
     inputs::{
         input_components::{LabeledInput, LabeledSelect},
         select_options_from_enum_iterator,
@@ -49,12 +48,12 @@ pub fn AnalyzerNodeEditor(node_id: Uuid, on_change: EventHandler<NodeChangeEvent
                                 AnalyzerType::Energy => rsx! {},
                                 AnalyzerType::RayTrace(ray_trace_config) => {
                                     rsx! {
-                                        RayTraceEditor { node_id, ray_trace_config, on_change: on_change.clone() }
+                                        RayTraceEditor { node_id, ray_trace_config, on_change }
                                     }
                                 }
                                 AnalyzerType::GhostFocus(ghost_focus_config) => {
                                     rsx! {
-                                        GhostFocusEditor { node_id, ghost_focus_config, on_change: on_change.clone() }
+                                        GhostFocusEditor { node_id, ghost_focus_config, on_change }
                                     }
                                 }
                             }
@@ -85,7 +84,7 @@ pub fn RayTraceEditor(
     use_effect(move || {
         if ray_trace_config != *ray_trace_config_sig.read() {
             on_change.call(NodeChangeEvent {
-                node_id: *bound_node_id.peek(), // Lagging ID nutzen
+                node_id: *bound_node_id.peek(),
                 action: NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(
                     *ray_trace_config_sig.read(),
                 )),
@@ -98,11 +97,11 @@ pub fn RayTraceEditor(
             id: "rayTraceAnalyzerConfigMaxRefractions",
             label: "Max refractions",
             value: format!("{}", ray_trace_config_sig.read().max_number_of_refractions()),
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
-                if let Ok(max_refractions) = e.data.parsed::<usize>() {
+            onchange: move |e: Event<FormData>| {
+                if let Ok(max_refractions) = e.data.value().parse::<usize>() {
                     ray_trace_config_sig.write().set_max_number_of_refractions(max_refractions);
                 }
-            }),
+            },
             r#type: "number",
             step: Some("1"),
             min: Some("0"),
@@ -111,11 +110,11 @@ pub fn RayTraceEditor(
             id: "rayTraceAnalyzerConfigMaxBounces",
             label: "Max bounces",
             value: format!("{}", ray_trace_config_sig.read().max_number_of_bounces()),
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
-                if let Ok(max_bounces) = e.data.parsed::<usize>() {
+            onchange: move |e: Event<FormData>| {
+                if let Ok(max_bounces) = e.data.value().parse::<usize>() {
                     ray_trace_config_sig.write().set_max_number_of_bounces(max_bounces);
                 }
-            }),
+            },
             r#type: "number",
             step: Some("1"),
             min: Some("0"),
@@ -124,9 +123,9 @@ pub fn RayTraceEditor(
             id: "rayTraceAnalyzerConfigMinRayEnergy",
             label: "Minimum ray energy in pJ",
             value: format!("{}", ray_trace_config_sig.read().min_energy_per_ray().get::<picojoule>()),
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
+            onchange: move |e: Event<FormData>| {
                 let old_value = ray_trace_config_sig.read().min_energy_per_ray();
-                if let Ok(min_ray_energy) = e.data.parsed::<f64>() {
+                if let Ok(min_ray_energy) = e.data.value().parse::<f64>() {
                     if min_ray_energy < 0.0 {
                         OPOSSUM_UI_LOGS
                             .write()
@@ -146,7 +145,7 @@ pub fn RayTraceEditor(
                             });
                     }
                 }
-            }),
+            },
             r#type: "number",
             step: Some("1."),
             min: Some("0."),
@@ -197,11 +196,11 @@ pub fn GhostFocusEditor(
             id: "ghostFocusAnalyzerConfigMaxBounces",
             label: "Max Bounces",
             value: format!("{}", ghost_focus_config_sig.read().max_bounces()),
-            onchange: CallbackWrapper::new(move |e: Event<FormData>| {
-                if let Ok(max_bounces) = e.data.parsed::<usize>() {
+            onchange: move |e: Event<FormData>| {
+                if let Ok(max_bounces) = e.data.value().parse::<usize>() {
                     ghost_focus_config_sig.write().set_max_bounces(max_bounces);
                 }
-            }),
+            },
             r#type: "number",
             step: Some("1"),
             min: Some("0"),
