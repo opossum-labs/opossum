@@ -9,8 +9,13 @@ use uom::si::f64::Length;
 
 use super::SpectralDistribution;
 
+/// The minimum difference between two wavelengths to be considered distinct (in nanometers).
+pub const MIN_WAVELENGTH_DIFF_NM: f64 = 1e-6;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnsureValidated)]
 /// A struct representing a collection of laser lines with their respective wavelengths and relative intensities.
+///
+/// Note: Laser lines must have unique wavelengths. Wavelengths are considered equal if their difference is less than [`MIN_WAVELENGTH_DIFF_NM`] nm.
 pub struct LaserLines {
     lines: validated_vec_type!(
         Vec<(Length, f64)>,
@@ -33,7 +38,8 @@ impl LaserLines {
     /// * the vector is empty,
     /// * any wavelength is negative or infinite,
     /// * any intensity is negative or infinite,
-    /// * the sum of intensities is zero.
+    /// * the sum of intensities is zero,
+    /// * any two wavelengths differ by less than [`MIN_WAVELENGTH_DIFF_NM`] nm.
     pub fn new(lines: Vec<(Length, f64)>) -> OpmResult<Self> {
         let mut laser_lines = Self::default();
         laser_lines.set_lines(lines)?;
@@ -57,7 +63,33 @@ impl LaserLines {
     /// - The input list is empty.
     /// - Any wavelength is negative or not normal.
     /// - Any intensity is negative or not finite.
+    /// - Any new wavelength is already present (difference < [`MIN_WAVELENGTH_DIFF_NM`] nm).
     pub fn add_lines(&mut self, lines: Vec<(Length, f64)>) -> OpmResult<()> {
+        let current_lines = self.lines.get();
+        for (new_wvl, _) in &lines {
+            // Check against existing lines
+            if current_lines.iter().any(|(current_wvl, _)| {
+                (*current_wvl - *new_wvl).abs() < nanometer!(MIN_WAVELENGTH_DIFF_NM)
+            }) {
+                return Err(crate::error::OpossumError::Spectrum(format!(
+                    "Laser line with wavelength {:.6} nm already exists",
+                    new_wvl.get::<uom::si::length::nanometer>()
+                )));
+            }
+        }
+
+        // Check for duplicates within the new lines
+        for (i, (wvl1, _)) in lines.iter().enumerate() {
+            for (wvl2, _) in lines.iter().skip(i + 1) {
+                if (*wvl1 - *wvl2).abs() < nanometer!(MIN_WAVELENGTH_DIFF_NM) {
+                    return Err(crate::error::OpossumError::Spectrum(format!(
+                        "Duplicate laser line with wavelength {:.6} nm in input",
+                        wvl1.get::<uom::si::length::nanometer>()
+                    )));
+                }
+            }
+        }
+
         for line in lines {
             self.lines.push(line)?;
         }
@@ -81,7 +113,19 @@ impl LaserLines {
     /// - The input list is empty.
     /// - Any wavelength is negative or not normal.
     /// - Any intensity is negative or not finite.
+    /// - Any wavelengths in the input are duplicates (difference < [`MIN_WAVELENGTH_DIFF_NM`] nm).
     pub fn set_lines(&mut self, lines: Vec<(Length, f64)>) -> OpmResult<()> {
+        // Check for duplicates within the new lines
+        for (i, (wvl1, _)) in lines.iter().enumerate() {
+            for (wvl2, _) in lines.iter().skip(i + 1) {
+                if (*wvl1 - *wvl2).abs() < nanometer!(MIN_WAVELENGTH_DIFF_NM) {
+                    return Err(crate::error::OpossumError::Spectrum(format!(
+                        "Duplicate laser line with wavelength {:.6} nm in input",
+                        wvl1.get::<uom::si::length::nanometer>()
+                    )));
+                }
+            }
+        }
         self.lines.set(lines)?;
         Ok(())
     }
@@ -261,5 +305,36 @@ mod laser_lines_tests {
         // Intensities normalized to sum 1.0
         let sum: f64 = generated.iter().map(|(_, intensity)| *intensity).sum();
         assert!((sum - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_duplicate_wavelengths() {
+        let mut laser = LaserLines::default(); // default has 1054.0
+
+        // Try adding same wavelength
+        let res = laser.add_lines(vec![valid_line(1054.0, 0.5)]);
+        assert!(res.is_err());
+        if let Err(crate::error::OpossumError::Spectrum(msg)) = res {
+            assert!(msg.contains("already exists"));
+        } else {
+            panic!("Wrong error type");
+        }
+
+        // Try adding duplicates within input
+        let res = laser.add_lines(vec![valid_line(600.0, 0.5), valid_line(600.0, 0.5)]);
+        assert!(res.is_err());
+        if let Err(crate::error::OpossumError::Spectrum(msg)) = res {
+            assert!(msg.contains("Duplicate laser line"));
+        } else {
+            panic!("Wrong error type");
+        }
+    }
+
+    #[test]
+    fn test_set_duplicate_wavelengths() {
+        let mut laser = LaserLines::default();
+
+        let res = laser.set_lines(vec![valid_line(532.0, 0.5), valid_line(532.0, 0.5)]);
+        assert!(res.is_err());
     }
 }
