@@ -1,11 +1,19 @@
 //! Performing a (simple) energy flow analysis
 #![warn(missing_docs)]
 use super::Analyzer;
+use super::{AnalyzerRegistration, AnalyzerType};
 use crate::{
     error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode,
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
+
+inventory::submit! {
+    AnalyzerRegistration::new(
+        || AnalyzerType::Energy,
+        |at| if matches!(at, AnalyzerType::Energy) { Some(Box::new(EnergyAnalyzer::default())) } else { None }
+    )
+}
 
 /// Analyzer for simulating a simple energy flow
 #[derive(Debug, Default)]

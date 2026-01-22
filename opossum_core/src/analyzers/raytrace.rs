@@ -20,7 +20,16 @@ use crate::{
 };
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+
+use super::AnalyzerRegistration;
 use strum::EnumIter;
+
+inventory::submit! {
+    AnalyzerRegistration::new(
+        || AnalyzerType::RayTrace(RayTraceConfig::default()),
+        |at| if let AnalyzerType::RayTrace(config) = at { Some(Box::new(RayTracingAnalyzer::new(*config))) } else { None }
+    )
+}
 use uom::si::f64::{Angle, Energy, Length};
 
 //pub type LightResRays = LightDings<Rays>;

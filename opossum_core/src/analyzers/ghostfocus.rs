@@ -26,7 +26,17 @@ use crate::{
     utils::LockExt,
 };
 
-use super::{Analyzer, AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace};
+use super::{
+    Analyzer, AnalyzerRegistration, AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace,
+};
+
+inventory::submit! {
+    AnalyzerRegistration::new(
+        || AnalyzerType::GhostFocus(GhostFocusConfig::default()),
+        |at| if let AnalyzerType::GhostFocus(config) = at { Some(Box::new(GhostFocusAnalyzer::new(config.clone()))) } else { None }
+    )
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
