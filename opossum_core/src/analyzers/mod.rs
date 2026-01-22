@@ -16,14 +16,12 @@ pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use strum::EnumIter;
-use strum::IntoEnumIterator;
 use utoipa::ToSchema;
 
 /// Type of analysis to be performed.
 ///
 /// While the individual analyzers are implemented as traits, this enum is necessary for serialization / desrialization.
-#[derive(EnumIter, PartialEq, Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(PartialEq, Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub enum AnalyzerType {
     /// Simple energy flow analysis of an optical spectrum.
     ///
@@ -42,6 +40,28 @@ pub enum AnalyzerType {
     #[schema(value_type=())]
     GhostFocus(GhostFocusConfig),
 }
+
+/// Struct to hold all info about an analyzer type
+pub struct AnalyzerRegistration {
+    /// Function to create a default instance of the analyzer type configuration.
+    pub factory: fn() -> AnalyzerType,
+    /// Function to create an analyzer instance from the configuration.
+    pub builder: fn(&AnalyzerType) -> Option<Box<dyn Analyzer>>,
+}
+
+impl AnalyzerRegistration {
+    /// Create a new analyzer registration
+    #[must_use]
+    pub const fn new(
+        factory: fn() -> AnalyzerType,
+        builder: fn(&AnalyzerType) -> Option<Box<dyn Analyzer>>,
+    ) -> Self {
+        Self { factory, builder }
+    }
+}
+
+inventory::collect!(AnalyzerRegistration);
+
 impl AnalyzerType {
     /// Returns the available analyzer types.
     ///
@@ -49,7 +69,10 @@ impl AnalyzerType {
     /// the backend / gui to determine which analyzers are available.
     #[must_use]
     pub fn analyzer_types() -> Vec<Self> {
-        Self::iter().collect()
+        inventory::iter::<AnalyzerRegistration>
+            .into_iter()
+            .map(|reg| (reg.factory)())
+            .collect()
     }
 }
 impl Display for AnalyzerType {

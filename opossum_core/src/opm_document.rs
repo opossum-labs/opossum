@@ -7,10 +7,7 @@
 //! This module also handles reading and writing of `.opm` files.
 use crate::{
     SceneryResources,
-    analyzers::{
-        Analyzer, AnalyzerType, energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer,
-        raytrace::RayTracingAnalyzer,
-    },
+    analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     optic_node::OpticNode,
@@ -286,11 +283,16 @@ impl OpmDocument {
         }
         let mut reports = vec![];
         for ana in self.analyzers.iter().enumerate() {
-            let analyzer: &dyn Analyzer = match ana.1.1.analyzer_type.clone() {
-                AnalyzerType::Energy => &EnergyAnalyzer::default(),
-                AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config),
-                AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config),
-            };
+            let analyzer_type = &ana.1.1.analyzer_type;
+            let analyzer_box = inventory::iter::<AnalyzerRegistration>
+                .into_iter()
+                .find_map(|reg| (reg.builder)(analyzer_type))
+                .ok_or_else(|| {
+                    OpossumError::Other(format!(
+                        "No analyzer implementation found for type: {analyzer_type:?}"
+                    ))
+                })?;
+            let analyzer: &dyn Analyzer = &*analyzer_box;
             info!("Analysis #{}", ana.0);
             analyzer.analyze(&mut self.scenery)?;
             info!("Generating report #{}", ana.0);
