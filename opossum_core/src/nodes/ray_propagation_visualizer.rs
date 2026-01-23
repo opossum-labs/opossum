@@ -22,7 +22,6 @@ use crate::{
     millimeter,
     nodes::NodeRegistration,
     optic_node::OpticNode,
-    optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype, validator::Validator},
     rays::Rays,
@@ -179,15 +178,11 @@ impl AnalysisGhostFocus for RayPropagationVisualizer {
 }
 impl AnalysisEnergy for RayPropagationVisualizer {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let in_port = &self.ports().names(&PortType::Input)[0];
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
+        let result = self.analyze_pass_through(incoming_data)?;
         // It does not make sense to use a RayPropagationVisualizer with energy analysis.
         // The following is only necessary to show a warning in the node report;
         self.light_data = Some(LightData::Energy(Spectrum::default()));
-        Ok(LightResult::from([(out_port.into(), data.clone())]))
+        Ok(result)
     }
 }
 impl AnalysisRayTrace for RayPropagationVisualizer {

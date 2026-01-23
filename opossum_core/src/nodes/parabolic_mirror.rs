@@ -451,16 +451,7 @@ impl AnalysisGhostFocus for ParabolicMirror {
         Ok(out_light_rays)
     }
 }
-impl AnalysisEnergy for ParabolicMirror {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let in_port = &self.ports().names(&PortType::Input)[0];
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
-        Ok(LightResult::from([(out_port.into(), data.clone())]))
-    }
-}
+impl AnalysisEnergy for ParabolicMirror {}
 impl AnalysisRayTrace for ParabolicMirror {
     fn analyze(
         &mut self,

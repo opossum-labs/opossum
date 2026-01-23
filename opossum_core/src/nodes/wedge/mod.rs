@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use super::NodeAttr;
 use crate::{
+    analyzers::energy::AnalysisEnergy,
     degree,
     error::{OpmResult, OpossumError},
     millimeter,
@@ -18,7 +19,6 @@ use num::Zero;
 use opm_macros_lib::OpmNode;
 use uom::si::f64::{Angle, Length};
 
-mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 
@@ -179,6 +179,7 @@ impl OpticNode for Wedge {
         &mut self.node_attr
     }
 }
+impl AnalysisEnergy for Wedge {}
 
 #[cfg(test)]
 mod test {

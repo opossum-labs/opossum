@@ -3,6 +3,7 @@
 
 use super::node_attr::NodeAttr;
 use crate::{
+    analyzers::energy::AnalysisEnergy,
     error::{OpmResult, OpossumError},
     meter, millimeter,
     nodes::NodeRegistration,
@@ -19,7 +20,6 @@ use opm_macros_lib::OpmNode;
 use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
 
-mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 
@@ -312,6 +312,7 @@ impl OpticNode for Lens {
         Ok(())
     }
 }
+impl AnalysisEnergy for Lens {}
 // impl SDF for Lens
 // {
 //     fn sdf_eval_point(&self, p: &nalgebra::Point3<f64>, p_out: &mut nalgebra::Point3<f64>) -> f64 {

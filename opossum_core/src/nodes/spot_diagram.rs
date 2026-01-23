@@ -189,15 +189,12 @@ impl OpticNode for SpotDiagram {
 }
 impl AnalysisEnergy for SpotDiagram {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let in_port = &self.ports().names(&PortType::Input)[0];
+        let result = self.analyze_pass_through(incoming_data)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
-        if let LightData::Geometric(_) = data {
+        if let Some(data @ LightData::Geometric(_)) = result.get(out_port) {
             self.light_data = Some(data.clone());
         }
-        Ok(LightResult::from([(out_port.into(), data.clone())]))
+        Ok(result)
     }
 }
 impl AnalysisGhostFocus for SpotDiagram {

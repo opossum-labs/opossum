@@ -42,7 +42,24 @@ pub trait AnalysisEnergy: OpticNode {
     ///
     /// # Errors
     /// This function will return an error if the concrete implementation of the [`OpticNode`] fails.
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult>;
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        self.analyze_pass_through(incoming_data)
+    }
+
+    /// Analyze energy in a simple pass through mode:
+    ///
+    /// The light at the first input port is transparently forwarded to the first output port.
+    ///
+    /// # Errors
+    /// This function will return an error if the concrete implementation of the [`OpticNode`] fails.
+    fn analyze_pass_through(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let in_port = &self.ports().names(&crate::optic_ports::PortType::Input)[0];
+        let out_port = &self.ports().names(&crate::optic_ports::PortType::Output)[0];
+        let Some(data) = incoming_data.get(in_port) else {
+            return Ok(LightResult::default());
+        };
+        Ok(LightResult::from([(out_port.into(), data.clone())]))
+    }
 }
 
 #[cfg(test)]

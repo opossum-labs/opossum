@@ -254,13 +254,12 @@ impl AnalysisGhostFocus for Spectrometer {
 }
 impl AnalysisEnergy for Spectrometer {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let in_port = &self.ports().names(&PortType::Input)[0];
+        let result = self.analyze_pass_through(incoming_data)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
-        self.light_data = Some(data.clone());
-        Ok(LightResult::from([(out_port.into(), data.clone())]))
+        if let Some(data) = result.get(out_port) {
+            self.light_data = Some(data.clone());
+        }
+        Ok(result)
     }
 }
 impl AnalysisRayTrace for Spectrometer {

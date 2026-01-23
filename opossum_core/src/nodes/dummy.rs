@@ -75,16 +75,7 @@ impl AnalysisGhostFocus for Dummy {
         AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
     }
 }
-impl AnalysisEnergy for Dummy {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let in_port = &self.ports().names(&PortType::Input)[0];
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        incoming_data.get(in_port).map_or_else(
-            || Ok(LightResult::default()),
-            |data| Ok(LightResult::from([(out_port.into(), data.clone())])),
-        )
-    }
-}
+impl AnalysisEnergy for Dummy {}
 impl AnalysisRayTrace for Dummy {
     fn analyze(
         &mut self,

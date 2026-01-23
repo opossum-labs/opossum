@@ -13,7 +13,6 @@ use crate::{
     lightdata::LightData,
     nodes::NodeRegistration,
     optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
@@ -210,16 +209,7 @@ impl AnalysisGhostFocus for FluenceDetector {
         AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
     }
 }
-impl AnalysisEnergy for FluenceDetector {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let in_port = &self.ports().names(&PortType::Input)[0];
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
-        Ok(LightResult::from([(out_port.into(), data.clone())]))
-    }
-}
+impl AnalysisEnergy for FluenceDetector {}
 impl AnalysisRayTrace for FluenceDetector {
     fn analyze(
         &mut self,
