@@ -107,12 +107,12 @@ impl GeoSurface for Cylinder {
         if self.radius.is_sign_positive() {
             // Convex
             if is_back_propagating {
-                normal *= -1.0;
+                normal.neg_mut();
             }
         } else {
             // Concave
             if !is_back_propagating {
-                normal *= -1.0;
+                normal.neg_mut();
             }
         }
         Some((
@@ -146,6 +146,7 @@ mod test {
     use super::*;
     use crate::{joule, millimeter, nanometer};
     use approx::assert_abs_diff_eq;
+    use uom::si::length::millimeter;
 
     #[test]
     fn new() {
@@ -275,5 +276,33 @@ mod test {
         assert_abs_diff_eq!(normal.x, 0.0);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, -1.0);
+    }
+    #[test]
+    fn intersect_positive_back_propagating_off_axis() {
+        let wvl = nanometer!(1053.0);
+        // Ray starts at z=10, moves in -z direction, offset in x
+        let ray = Ray::new(millimeter!(0.6, 0.0, 10.0), -Vector3::z(), wvl, joule!(1.0)).unwrap();
+
+        // Cylinder at origin with radius 1mm
+        let iso = Isometry::new_along_z(millimeter!(0.0)).unwrap();
+        let s = Cylinder::new(millimeter!(1.0), iso).unwrap();
+
+        // Geometry: x^2 + z^2 = r^2 => 0.6^2 + z^2 = 1.0^2
+        // 0.36 + z^2 = 1.0 => z^2 = 0.64 => z = -0.8 (first hit from z=-10)
+        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+
+        assert_abs_diff_eq!(intersection_point.x.get::<millimeter>(), 0.6);
+        assert_abs_diff_eq!(
+            intersection_point.z.get::<millimeter>(),
+            -0.8,
+            epsilon = 1e-12
+        );
+
+        // Initial normal would be [0.6, 0.0, 0.8] normalized
+        // Because it's convex (radius > 0) and back-propagating (dir.z < 0),
+        // Expected normal: [-0.6, 0.0, -0.8]
+        assert_abs_diff_eq!(normal.x, -0.6, epsilon = 1e-12);
+        assert_abs_diff_eq!(normal.y, 0.0);
+        assert_abs_diff_eq!(normal.z, 0.8, epsilon = 1e-12);
     }
 }

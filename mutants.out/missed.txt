@@ -12,8 +12,6 @@ opossum_core/src/analyzers/ghostfocus.rs:346:21: replace < with == in GhostFocus
 opossum_core/src/analyzers/ghostfocus.rs:368:20: replace /= with *= in GhostFocusHistory::project_to_plane
 opossum_core/src/nodes/spot_diagram.rs:270:45: replace - with / in <impl Plottable for SpotDiagram>::get_plot_series
 opossum_core/src/utils/math_distribution_functions.rs:78:56: delete - in general_2d_super_gaussian_point_rectangular
-opossum_core/src/surface/cylinder.rs:118:27: replace *= with /= in <impl GeoSurface for Cylinder>::calc_intersect_and_normal_do
-opossum_core/src/spectral_distribution/gaussian.rs:148:9: replace Gaussian::set_fwhm with ()
 opossum_core/src/properties/validator.rs:179:13: delete match arm Proptype::F64(v) in Validator::validate_numeric_is_in_range
 opossum_core/src/nodes/ideal_filter.rs:1194:40: replace + with * in <impl From<BandFilter> for Spectrum>::from
 opossum_core/src/plottable/mod.rs:1339:42: replace || with && in Plottable::to_plot
@@ -49,7 +47,6 @@ opossum_core/src/spectrum.rs:164:23: replace < with <= in Spectrum::from_laser_l
 opossum_core/src/surface/hit_map/rays_hit_map.rs:548:45: replace > with >= in RaysHitMap::calc_2d_bounding_box
 opossum_core/src/properties/property.rs:92:13: delete match arm Proptype::Spectrum(spectrum) in Property::export_data
 opossum_core/src/nodes/ideal_filter.rs:536:31: replace > with < in EdgeFilter::set_transmission_range
-opossum_core/src/position_distributions/sobol.rs:148:58: replace - with / in <impl PositionDistribution for SobolDist>::generate
 opossum_core/src/refractive_index/refr_index_schott.rs:147:9: replace RefrIndexSchott::a5 -> f64 with 1.0
 opossum_core/src/spectral_distribution/laser_lines.rs:99:39: replace || with && in LaserLines::add_lines
 opossum_core/src/dottable.rs:120:54: replace > with < in Dottable::calculate_layout

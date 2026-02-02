@@ -158,6 +158,9 @@ impl From<SobolDist> for super::PosDistType {
 mod test {
     use super::*;
     use crate::millimeter;
+    use approx::assert_abs_diff_eq;
+    use uom::si::length::millimeter;
+
     #[test]
     fn new_wrong() {
         assert!(SobolDist::new(Length::zero(), Length::zero(), 1).is_err());
@@ -171,8 +174,56 @@ mod test {
         assert!(SobolDist::new(millimeter!(1.0), millimeter!(1.0), 0).is_err());
     }
     #[test]
-    fn generate() {
-        let strategy = SobolDist::new(millimeter!(1.0), millimeter!(1.0), 10).unwrap();
-        assert_eq!(strategy.generate().len(), 10);
+    fn test_default() {
+        let d = SobolDist::default();
+        assert_eq!(d.nr_of_points(), 1000);
+        assert_abs_diff_eq!(d.side_length_x().get::<millimeter>(), 5.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(d.side_length_y().get::<millimeter>(), 5.0, epsilon = 1e-12);
+    }
+
+    #[test]
+    fn test_getters_setters() {
+        let mut d = SobolDist::default();
+
+        assert!(d.set_nr_of_points(500).is_ok());
+        assert_eq!(d.nr_of_points(), 500);
+        assert!(d.set_nr_of_points(0).is_err());
+
+        assert!(d.set_side_length_x(millimeter!(10.0)).is_ok());
+        assert_abs_diff_eq!(d.side_length_x().get::<millimeter>(), 10.0, epsilon = 1e-12);
+
+        assert!(d.set_side_length_y(millimeter!(20.0)).is_ok());
+        assert_abs_diff_eq!(d.side_length_y().get::<millimeter>(), 20.0, epsilon = 1e-12);
+
+        // Validation: both zero
+        assert!(d.set_side_length_x(Length::zero()).is_ok()); // One zero is fine
+        assert!(d.set_side_length_y(Length::zero()).is_err()); // Both zero fails
+    }
+
+    #[test]
+    fn generate_bounds() {
+        let side_x = millimeter!(2.0);
+        let side_y = millimeter!(4.0);
+        let n = 100;
+        let strategy = SobolDist::new(side_x, side_y, n).unwrap();
+        let points = strategy.generate();
+
+        assert_eq!(points.len(), n);
+
+        for p in points {
+            // Expected range for x: [-1.0, 1.0]
+            // Expected range for y: [-2.0, 2.0]
+            assert!(
+                p.x >= -0.5 * side_x && p.x <= 0.5 * side_x,
+                "Point x out of bounds: {:?}",
+                p.x
+            );
+            assert!(
+                p.y >= -0.5 * side_y && p.y <= 0.5 * side_y,
+                "Point y out of bounds: {:?}",
+                p.y
+            );
+            assert_eq!(p.z, Length::zero());
+        }
     }
 }

@@ -234,11 +234,12 @@ impl From<Gaussian> for super::SpecDistType {
 mod test {
     use crate::{
         nanometer,
-        spectral_distribution::{Gaussian, SpectralDistribution},
+        spectral_distribution::{Gaussian, SpecDistType, SpectralDistribution},
     };
     use approx::assert_abs_diff_eq;
     use core::f64;
-    use uom::si::f64::Length;
+    use uom::si::{f64::Length, length::nanometer};
+
     #[test]
     fn new() {
         assert!(
@@ -266,7 +267,6 @@ mod test {
         }
         let wvl_values: Vec<Length> = test_values.iter().map(|v| nanometer!(*v)).collect();
         for value in &wvl_values {
-            println!("{:?}", value);
             assert!(
                 Gaussian::new(
                     (*value, nanometer!(2000.0)),
@@ -355,5 +355,82 @@ mod test {
         assert_abs_diff_eq!(values[5].0.value, nanometer!(1500.0).value);
         let v_sum: f64 = values.iter().map(|v| v.1).sum();
         assert_abs_diff_eq!(v_sum, 1.0);
+    }
+    #[test]
+    fn test_default() {
+        let g = Gaussian::default();
+        assert_abs_diff_eq!(g.wvl_start().get::<nanometer>(), 1000.0);
+        assert_abs_diff_eq!(g.wvl_end().get::<nanometer>(), 1100.0);
+        assert_eq!(g.num_points(), 50);
+        assert_abs_diff_eq!(g.mu().get::<nanometer>(), 1054.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(g.fwhm().get::<nanometer>(), 10.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(g.power(), 1.0);
+    }
+
+    #[test]
+    fn test_getters_setters() {
+        let mut g = Gaussian::default();
+
+        // Test Wavelength Range
+        assert!(g.set_wvl_start(nanometer!(900.0)).is_ok());
+        assert_abs_diff_eq!(g.wvl_start().get::<nanometer>(), 900.0);
+        assert!(g.set_wvl_end(nanometer!(1200.0)).is_ok());
+        assert_abs_diff_eq!(g.wvl_end().get::<nanometer>(), 1200.0);
+
+        // Validation check: start >= end must fail
+        assert!(g.set_wvl_start(nanometer!(1300.0)).is_err());
+
+        // Test Num Points
+        assert!(g.set_num_points(100).is_ok());
+        assert_eq!(g.num_points(), 100);
+        assert!(g.set_num_points(0).is_err());
+
+        // Test Mu
+        assert!(g.set_mu(nanometer!(1000.0)).is_ok());
+        assert_abs_diff_eq!(g.mu().get::<nanometer>(), 1000.0);
+        assert!(g.set_mu(nanometer!(-1.0)).is_err());
+
+        // Test FWHM
+        assert!(g.set_fwhm(nanometer!(20.0)).is_ok());
+        assert_abs_diff_eq!(g.fwhm().get::<nanometer>(), 20.0, epsilon = 1e-12);
+        assert!(g.set_fwhm(nanometer!(0.0)).is_err());
+
+        // Test Power
+        assert!(g.set_power(2.0).is_ok());
+        assert_abs_diff_eq!(g.power(), 2.0);
+        assert!(g.set_power(-0.5).is_err());
+    }
+
+    #[test]
+    fn test_conversions() {
+        let g = Gaussian::default();
+        let spec_type: SpecDistType = g.clone().into();
+
+        if let SpecDistType::Gaussian(converted) = spec_type {
+            assert_abs_diff_eq!(converted.mu().value, g.mu().value);
+        } else {
+            panic!("Conversion to SpecDistType::Gaussian failed");
+        }
+    }
+
+    #[test]
+    fn test_generate_symmetry() {
+        // A Gaussian centered in the range should be symmetric
+        let mu = nanometer!(1500.0);
+        let g = Gaussian::new(
+            (nanometer!(1000.0), nanometer!(2000.0)),
+            21, // odd number to have a center point
+            mu,
+            nanometer!(100.0),
+            1.0,
+        )
+        .unwrap();
+
+        let values = g.generate().unwrap();
+
+        // Check symmetry around index 10 (the 11th point at 1500nm)
+        for i in 0..10 {
+            assert_abs_diff_eq!(values[i].1, values[20 - i].1, epsilon = 1e-12);
+        }
     }
 }
