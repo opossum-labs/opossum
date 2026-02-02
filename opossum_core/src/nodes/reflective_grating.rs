@@ -28,6 +28,8 @@ use opm_macros_lib::OpmNode;
 use uom::si::{
     angle::radian,
     f64::{Angle, Length},
+    length::nanometer,
+    linear_number_density::per_millimeter,
 };
 
 /// a type definition for a linear number density: `1/length_unit`.
@@ -73,11 +75,6 @@ impl Default for ReflectiveGrating {
                         Validator::NumericIsPositive,
                     ],
                 },
-                // and_validator(vec![
-                //     numeric_is_finite(),
-                //     numeric_is_positive(),
-                //     numeric_is_not_zero(),
-                // ]),
                 Proptype::LinearDensity(num_per_mm!(1740.)),
             )
             .unwrap();
@@ -128,8 +125,17 @@ impl ReflectiveGrating {
         else {
             return Err(OpossumError::Analysis("cannot read line density".into()));
         };
-        let littrow =
-            (to_f64(*diffraction_order) * wavelength.value * line_density.value / 2.).asin();
+        let x = to_f64(*diffraction_order) * wavelength.value * line_density.value / 2.;
+
+        if x.abs() > 1.0 {
+            return Err(OpossumError::Analysis(format!(
+                "Wavelength {} nm is too large for grating constant {} lines/mm and order {} (evanescent waves)",
+                wavelength.get::<nanometer>(),
+                line_density.get::<per_millimeter>(),
+                diffraction_order
+            )));
+        }
+        let littrow = x.asin();
         self.with_tilt(radian!(0., littrow + angle.get::<radian>(), 0.0))
     }
     /// Set the angle of a grating such that the outgoing ray has an angle of `angle` to littrow
@@ -315,6 +321,70 @@ mod test {
         } else {
             assert!(false, "property line density was not a LinearDensity.");
         }
+    }
+    #[test]
+    fn with_rot_from_littrow_math() {
+        let line_density = num_per_mm!(1000.0);
+        let diffraction_order = 1;
+        let wavelength = nanometer!(500.0);
+
+        let node = ReflectiveGrating::new("test_grating", line_density, diffraction_order)
+            .unwrap()
+            .with_rot_from_littrow(wavelength, degree!(0.0))
+            .unwrap();
+
+        // Manual calculation: littrow = asin(m * lambda * G / 2)
+        // 1 * 500e-6 mm * 1000 l/mm / 2 = 0.25
+        let expected_littrow = (1.0_f64 * 500e-6 * 1000.0 / 2.0).asin();
+        let actual_tilt = node
+            .node_attr()
+            .alignment()
+            .as_ref()
+            .expect("Alignment should be set by with_tilt")
+            .rotation()[1]
+            .get::<radian>();
+
+        assert_relative_eq!(actual_tilt, expected_littrow, epsilon = 1e-12);
+    }
+
+    #[test]
+    fn with_rot_from_littrow_with_offset() {
+        let line_density = num_per_mm!(1200.0);
+        let diffraction_order = -1;
+        let wavelength = nanometer!(632.8);
+        let offset = degree!(5.0);
+
+        let node = ReflectiveGrating::new("test_offset", line_density, diffraction_order)
+            .unwrap()
+            .with_rot_from_littrow(wavelength, offset)
+            .unwrap();
+
+        // littrow = asin(-1 * 632.8e-6 * 1200.0 / 2.0)
+        let littrow = (-1.0_f64 * 632.8e-6 * 1200.0 / 2.0).asin();
+        let expected_tilt = littrow + offset.get::<radian>();
+        let actual_tilt = node
+            .node_attr()
+            .alignment()
+            .as_ref()
+            .expect("Alignment should be set by with_tilt")
+            .rotation()[1]
+            .get::<radian>();
+
+        assert_relative_eq!(actual_tilt, expected_tilt, epsilon = 1e-12);
+    }
+    #[test]
+    fn with_rot_from_littrow_impossible_physics() {
+        let line_density = num_per_mm!(5000.0);
+        let wavelength = nanometer!(1000.0);
+        let diffraction_order = 1;
+
+        // x = (1 * 1e-3 mm * 5000 mm^-1) / 2 = 2.5
+        // asin(2.5) is NaN!
+        let node = ReflectiveGrating::new("test", line_density, diffraction_order).unwrap();
+        let result = node.with_rot_from_littrow(wavelength, degree!(0.0));
+
+        let err_msg = result.unwrap_err();
+        assert_eq!(err_msg, OpossumError::Analysis("Wavelength 1000 nm is too large for grating constant 5000 lines/mm and order 1 (evanescent waves)".into()));
     }
     #[test]
     fn invalid_line_density() {
