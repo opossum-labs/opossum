@@ -2876,7 +2876,29 @@ mod test {
         let centroid = rays.energy_weighted_centroid();
         assert!(centroid.is_none());
     }
+    #[test]
+    fn energy_centroid_test_non_trivial() {
+        // --- NEW: Robust test case for all axes and non-unit energy ---
+        // Ray 1: Pos(2, 4, 6), Energy 0.5 -> Weighted: (1, 2, 3)
+        // Ray 2: Pos(4, 8, 12), Energy 2.0 -> Weighted: (8, 16, 24)
+        // Total Energy: 2.5
+        // Expected Centroid: Sum(Weighted) / 2.5 = (9/2.5, 18/2.5, 27/2.5) = (3.6, 7.2, 10.8)
+        let robust_rays = Rays::from(vec![
+            Ray::new_collimated(millimeter!(2., 4., 6.), nanometer!(1054.), joule!(0.5)).unwrap(),
+            Ray::new_collimated(millimeter!(4., 8., 12.), nanometer!(1054.), joule!(2.0)).unwrap(),
+        ]);
 
+        let c = robust_rays.energy_weighted_centroid().unwrap();
+
+        // Mutation Result X: (2/0.5 + 4/2.0) / 2.5 = (4 + 2) / 2.5 = 2.4 (vs 3.6)
+        assert_relative_eq!(c.x.get::<millimeter>(), 3.6, epsilon = 1e-10);
+        assert_relative_eq!(c.y.get::<millimeter>(), 7.2, epsilon = 1e-10);
+        assert_relative_eq!(c.z.get::<millimeter>(), 10.8, epsilon = 1e-10);
+
+        // --- Check invalid/empty cases ---
+        let rays_empty = Rays::default();
+        assert!(rays_empty.energy_weighted_centroid().is_none());
+    }
     #[test]
     fn define_up_direction_test() {
         let mut rays = Rays::default();

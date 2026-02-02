@@ -7,10 +7,8 @@ opossum_core/src/nodes/beam_splitter/mod.rs:118:9: replace <impl Display for Spl
 opossum_core/src/plottable/mod.rs:383:59: replace + with * in PlotType::draw_2d_colormesh
 opossum_core/src/plottable/mod.rs:1125:47: replace - with + in PlotData::new_triangulatedsurface
 opossum_core/src/apertures/polygon.rs:59:24: replace - with + in PolygonConfig::in_polygon
-opossum_core/src/nodes/reflective_grating.rs:147:81: replace / with * in ReflectiveGrating::to_rot_from_littrow
 opossum_core/src/dottable.rs:131:41: replace / with % in Dottable::calculate_layout
 opossum_core/src/analyzers/ghostfocus.rs:346:21: replace < with == in GhostFocusHistory::project_to_plane
-opossum_core/src/rays.rs:628:33: replace * with / in Rays::energy_weighted_centroid
 opossum_core/src/analyzers/ghostfocus.rs:368:20: replace /= with *= in GhostFocusHistory::project_to_plane
 opossum_core/src/nodes/spot_diagram.rs:270:45: replace - with / in <impl Plottable for SpotDiagram>::get_plot_series
 opossum_core/src/utils/math_distribution_functions.rs:78:56: delete - in general_2d_super_gaussian_point_rectangular
