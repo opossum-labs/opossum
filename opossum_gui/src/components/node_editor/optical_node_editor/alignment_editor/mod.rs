@@ -9,17 +9,16 @@ use crate::{
         hooks::use_update_signal_with_reactive_prop,
         inputs::{
             InputData,
-            input_components::{LabeledSelect, RowedInputs},
+            input_components::{LabeledSelect, NodeConfigUnitInput, RowedInputs},
         },
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
 };
+use approx::relative_ne;
 use dioxus::prelude::*;
 use grating_alignment::GratingAlignmentInputs;
 use opossum_core::{
-    degree, millimeter,
-    prelude::{Isometry, Properties},
-    utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis},
+    degree, meter, millimeter, prelude::{Isometry, Properties}, utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis}
 };
 use strum::IntoEnumIterator;
 use uom::si::{angle::degree, length::millimeter};
@@ -46,12 +45,17 @@ pub fn AlignmentEditor(
 
     let accordion_content = if node_type == "reflective grating" {
         rsx! {
-            GratingAlignmentInputs { alignment_sig, node_properties_sig, on_save }
+            GratingAlignmentInputs {
+                alignment_sig,
+                node_properties_sig,
+                on_save,
+                node_id,
+            }
         }
     } else {
         rsx! {
             RotationAlignmentInputs { alignment_sig, axes_skip: None, on_save }
-            TranslationAlignmentInputs { alignment_sig, on_save }
+            TranslationAlignmentInputs { alignment_sig, on_save, node_id }
         }
     };
     rsx! {
@@ -117,10 +121,9 @@ pub fn PositioningEditor(
 
     if position_opt_sig.read().is_some() {
         accordion_content.push(rsx! {
-            PositioningInputs { position_opt_sig, on_save }
+            PositioningInputs { position_opt_sig, on_save, node_id }
         });
     }
-
     rsx! {
         AccordionItem {
             elements: accordion_content,
@@ -136,6 +139,7 @@ pub fn PositioningEditor(
 fn PositioningInputs(
     position_opt_sig: Signal<Option<Isometry>>,
     on_save: EventHandler<Isometry>,
+    node_id: Uuid
 ) -> Element {
     let mut position_sig = use_signal(|| position_opt_sig.read().unwrap_or_default());
 
@@ -150,7 +154,7 @@ fn PositioningInputs(
 
     rsx! {
         RotationAlignmentInputs { alignment_sig: position_sig, axes_skip: None, on_save }
-        TranslationAlignmentInputs { alignment_sig: position_sig, on_save }
+        TranslationAlignmentInputs { alignment_sig: position_sig, on_save, node_id }
     }
 }
 
@@ -158,12 +162,142 @@ fn PositioningInputs(
 fn TranslationAlignmentInputs(
     alignment_sig: Signal<Isometry>,
     on_save: EventHandler<Isometry>,
+    node_id: Uuid
 ) -> Element {
-    let input_data = get_translation_alignment_input_data(alignment_sig, on_save);
+    let id_add_on = "inputNodeAlignmentTrans";
+    let mut x_sig = use_signal(|| alignment_sig.read().translation_of_axis(TranslationAxis::X));
+    let mut y_sig = use_signal(|| alignment_sig.read().translation_of_axis(TranslationAxis::Y));
+    let mut z_sig = use_signal(|| alignment_sig.read().translation_of_axis(TranslationAxis::Z));
+    let x_memo = use_memo(move || x_sig.read().value);
+    let y_memo = use_memo(move || y_sig.read().value);
+    let z_memo = use_memo(move || z_sig.read().value);
 
-    rsx! {
-        RowedInputs { inputs: input_data }
+    rsx!{
+        div { class: "row gy-1 gx-2",
+            div { class: "col-sm",
+                NodeConfigUnitInput {
+                    id: format!("{id_add_on}{}{}", TranslationAxis::X, node_id.as_simple().to_string()),
+                    label: format!("{} translation", TranslationAxis::X),
+                    value: x_memo,
+                    base_unit: "m",
+                    onchange: move |new_trans: f64| {
+                        if relative_ne!(
+                            alignment_sig.read().translation_of_axis(TranslationAxis::X).value, new_trans
+                        ) {
+                            let mut new_iso = *alignment_sig.read();
+                            if new_iso
+                                .set_translation_of_axis(TranslationAxis::X, meter!(new_trans))
+                                .is_ok()
+                            {
+                                x_sig.set(meter!(new_trans));
+                                on_save.call(new_iso);
+                            }
+                        }
+                    },
+                }
+            }
+            div { class: "col-sm",
+                NodeConfigUnitInput {
+                    id: format!("{id_add_on}{}", TranslationAxis::Y),
+                    label: format!("{} translation", TranslationAxis::Y),
+                    value: y_memo,
+                    base_unit: "m",
+                    onchange: move |new_trans: f64| {
+                        if relative_ne!(
+                            alignment_sig.read().translation_of_axis(TranslationAxis::Y).value, new_trans
+                        ) {
+                            y_sig.set(meter!(new_trans));
+                            let mut new_iso = *alignment_sig.read();
+                            new_iso.set_translation_of_axis(TranslationAxis::Y, meter!(new_trans));
+                            on_save.call(new_iso);
+                        }
+                    },
+                }
+            }
+        }
+        NodeConfigUnitInput {
+            id: format!("{id_add_on}{}", TranslationAxis::Z),
+            label: format!("{} translation", TranslationAxis::Z),
+            value: z_memo,
+            base_unit: "m",
+            onchange: move |new_trans: f64| {
+                if relative_ne!(
+                    alignment_sig.read().translation_of_axis(TranslationAxis::Z).value, new_trans
+                ) {
+                    z_sig.set(meter!(new_trans));
+                    let mut new_iso = *alignment_sig.read();
+                    new_iso.set_translation_of_axis(TranslationAxis::Z, meter!(new_trans));
+                    on_save.call(new_iso);
+                }
+            },
+        }
     }
+
+        // alignment_inputs.push(InputData::new(
+        //     trans_axis.into(),
+        //     id_add_on,
+        //     EventHandler::new(|_| {}),
+        //     on_isometry_option_change_str(iso_sig, AlignmentAxis::Translation(trans_axis), on_save),
+        //     format!(
+        //         "{:.3}",
+        //         iso_sig
+        //             .read()
+        //             .translation_of_axis(trans_axis)
+        //             .get::<millimeter>()
+        //     ),
+        // ));
+    
+
+
+
+    // let input_data = get_translation_alignment_input_data(alignment_sig, on_save);
+
+    // rsx! {
+    //     for chunk in input_data.iter().chunks(2) {
+    //         {
+
+    //             let inputs: Vec<&InputData> = chunk.collect::<Vec<&InputData>>();
+    //             if inputs.len() == 2 {
+    //                 rsx! {
+    //                     div { class: "row gy-1 gx-2",
+    //                         div { class: "col-sm",
+    //                             NodeConfigUnitInput {
+    //                                 id: inputs[0].id,
+    //                                 label: inputs[0].input_param.label(),
+    //                                 value: inputs[0].value,
+    //                                 base_unit: inputs[0].input_param.base_unit().unwrap_or_default(),
+    //                                 onchange: move |new_angle: f64| {
+    //                                     if relative_ne!(angle_sig.read().get::< degree > (), new_angle) {
+    //                                         angle_sig.set(degree!(new_angle % 360.0));
+    //                                         on_change
+    //                                             .call(NodeChangeEvent {
+    //                                                 node_id,
+    //                                                 action: NodeChangeAction::Property(
+    //                                                     property_key.clone(),
+    //                                                     degree!(new_angle % 360.0).into(),
+    //                                                 ),
+    //                                             });
+    //                                     }
+    //                                 },
+    //                             }
+    //                             InputParamLabeledInput { input_data: inputs[0].clone() }
+    //                         }
+    //                         div { class: "col-sm",
+    //                             InputParamLabeledInput { input_data: inputs[1].clone() }
+    //                         }
+    //                     }
+    //                 }
+    //             } else if inputs.len() == 1 {
+    //                 rsx! {
+    //                     InputParamLabeledInput { input_data: inputs[0].clone() }
+    //                 }
+    //             } else {
+    //                 rsx! {}
+    //             }
+    //         }
+    //     }
+    //     // RowedInputs { inputs: input_data }
+    // }
 }
 
 #[component]

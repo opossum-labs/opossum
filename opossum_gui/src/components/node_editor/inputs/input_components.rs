@@ -25,6 +25,7 @@ pub fn FlushableTextInput(
     #[props(optional)] step: Option<&'static str>,
     #[props(optional)] min: Option<&'static str>,
     #[props(optional)] max: Option<&'static str>,
+    #[props(optional)] eval_input: Option<Callback<String, bool>>,
     #[props(default = false)] readonly: bool,
 ) -> Element {
     let mut form_ctx = use_context::<FormContext>();
@@ -70,10 +71,25 @@ pub fn FlushableTextInput(
                 max: max.unwrap_or_default(),
 
                 oninput: move |e: Event<FormData>| {
-                    local_value.set(e.data.value());
-                    if !*is_locally_dirty.peek() {
-                        is_locally_dirty.set(true);
-                        form_ctx.dirty_count.write().add_assign(1);
+                    let new_value = e.data.value();
+                    if let Some(eval_input) = eval_input {
+                        if !eval_input(new_value.clone()) {
+                            local_value.set(local_value());
+                        }
+                        else{
+                            local_value.set(new_value);
+                            if !*is_locally_dirty.peek() {
+                                is_locally_dirty.set(true);
+                                form_ctx.dirty_count.write().add_assign(1);
+                            }
+                        }
+                    }
+                    else{
+                        local_value.set(new_value);
+                        if !*is_locally_dirty.peek() {
+                            is_locally_dirty.set(true);
+                            form_ctx.dirty_count.write().add_assign(1);
+                        }
                     }
                 },
                 onblur: move |_| perform_save(),
@@ -345,23 +361,35 @@ pub fn UnitInput(
         }
     });
 
-    let oninput = use_on_input(val_str, base_unit);
-    let onchange = use_on_change(onchange, value, base_unit);
+
+    let on_input_eval = move |input_val: String| {
+        is_permissive_unit_input(&input_val, base_unit)
+    };
+
 
     rsx! {
         div { class: container_class,
-            input {
-                class: input_class,
-                id: id.as_str(),
-                name: id.as_str(),
-                placeholder: label,
-                value: val_str.read().as_str(),
+            FlushableTextInput {
+                id,
+                label,
+                value: val_str.read().clone(),
                 readonly,
-                disabled: readonly,
-                onchange,
-                oninput,
+                eval_input: Some(Callback::new(on_input_eval)),
+                on_save: move |val: String| {
+                    if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, base_unit) {
+                        if let Some(parsed) = parse_si_number(&num_str, &prefix_str) {
+                            // base_val_sig.set(parsed);
+                            onchange.call(parsed);
+                        } else {
+                            onchange.call(*value.read());
+                            // base_val_sig.set(base_val_sig());
+                            OPOSSUM_UI_LOGS
+                                .write()
+                                .add_log("Cannot parse input number string to f64!");
+                        }
+                    }
+                },
             }
-            label { class: label_class, r#for: id, "{label}" }
         }
     }
 }

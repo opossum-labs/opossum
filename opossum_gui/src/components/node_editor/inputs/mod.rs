@@ -123,9 +123,9 @@ impl InputParam {
 impl From<TranslationAxis> for InputParam {
     fn from(axis: TranslationAxis) -> Self {
         match axis {
-            TranslationAxis::X => Self::Length("X translation in mm".into()),
-            TranslationAxis::Y => Self::Length("Y translation in mm".into()),
-            TranslationAxis::Z => Self::Length("Z translation in mm".into()),
+            TranslationAxis::X => Self::Length("X translation".into()),
+            TranslationAxis::Y => Self::Length("Y translation".into()),
+            TranslationAxis::Z => Self::Length("Z translation".into()),
         }
     }
 }
@@ -133,9 +133,9 @@ impl From<TranslationAxis> for InputParam {
 impl From<RotationAxis> for InputParam {
     fn from(axis: RotationAxis) -> Self {
         match axis {
-            RotationAxis::Roll => Self::Angle("Roll in degrees".into()),
-            RotationAxis::Pitch => Self::Angle("Pitch in degrees".into()),
-            RotationAxis::Yaw => Self::Angle("Yaw in degrees".into()),
+            RotationAxis::Roll => Self::Angle("Roll".into()),
+            RotationAxis::Pitch => Self::Angle("Pitch".into()),
+            RotationAxis::Yaw => Self::Angle("Yaw".into()),
         }
     }
 }

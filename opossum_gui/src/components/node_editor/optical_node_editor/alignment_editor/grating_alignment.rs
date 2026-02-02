@@ -23,12 +23,14 @@ use uom::si::{
     length::{meter, nanometer},
     linear_number_density::per_meter,
 };
+use uuid::Uuid;
 
 #[component]
 pub fn GratingAlignmentInputs(
     alignment_sig: Signal<Isometry>,
     node_properties_sig: Signal<Properties>,
     on_save: EventHandler<Isometry>,
+    node_id: Uuid,
 ) -> Element {
     let alignment_select_sig = use_signal(|| true);
 
@@ -55,12 +57,12 @@ pub fn GratingAlignmentInputs(
                 axes_skip: Some(vec![RotationAxis::Pitch]),
                 on_save,
             }
-            TranslationAlignmentInputs { alignment_sig, on_save }
+            TranslationAlignmentInputs { alignment_sig, on_save, node_id }
         });
     } else {
         element_list.push(rsx! {
             RotationAlignmentInputs { alignment_sig, axes_skip: None, on_save }
-            TranslationAlignmentInputs { alignment_sig, on_save }
+            TranslationAlignmentInputs { alignment_sig, on_save, node_id }
         });
     }
     rsx! {
