@@ -1,12 +1,13 @@
 use crate::components::node_editor::{
     hooks::use_update_signal_with_reactive_prop,
-    inputs::{InputData, InputParam, input_components::InputParamLabeledInput},
+    inputs::{InputData, InputParam, input_components::{InputParamLabeledInput, NodeConfigUnitInput}},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
 use core::f64;
+use approx::relative_ne;
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_core::prelude::{Proptype, millimeter};
+use opossum_core::{meter, prelude::{Proptype, millimeter}};
 use uom::si::{f64::Length, length::millimeter};
 use uuid::Uuid;
 
@@ -18,6 +19,7 @@ pub fn CurvatureEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let curvature_sig = use_signal(|| curvature);
+    let curv_value_memo = use_memo(move || curvature_sig.read().value);
     let mut last_finite_curvature = use_signal(|| {
         if curvature.is_finite() {
             curvature
@@ -50,12 +52,17 @@ pub fn CurvatureEditor(
     rsx! {
         div { class: "row gy-1 gx-2",
             div { class: "col-sm",
-                CurvatureInput {
-                    curvature,
-                    curvature_sig,
-                    last_finite_curvature,
-                    property_key: property_key.clone(),
-                    on_save,
+                NodeConfigUnitInput {
+                    id: format!("curvatureProperty{property_key}").to_camel_case().as_str(),
+                    label: property_key.to_sentence_case(),
+                    value: curv_value_memo,
+                    base_unit: "m",
+                    onchange: move |new_curv: f64| {
+                        if relative_ne!(curvature_sig.read().value, new_curv) {
+                            on_save.call(meter!(new_curv));
+                        }
+                    },
+                    readonly: curvature.is_infinite(),
                 }
             }
             div { class: "col-sm",
@@ -105,20 +112,21 @@ fn CurvatureInput(
     property_key: String,
     on_save: EventHandler<Length>,
 ) -> Element {
-    let str_callback = on_length_input_change_str(curvature_sig, last_finite_curvature, on_save);
-    let dummy_legacy_callback = EventHandler::new(|_| {});
-    let mut curvature_input = InputData::new(
-        InputParam::Length(format!("{} in mm", property_key.to_sentence_case())),
-        format!("curvatureProperty{property_key}")
-            .to_camel_case()
-            .as_str(),
-        dummy_legacy_callback,
-        str_callback,
-        format!("{:.3}", curvature_sig.read().get::<millimeter>()),
-    );
-    curvature_input.readonly = curvature.is_infinite();
+    let value_memo = use_memo(move || curvature_sig.read().value);
     rsx! {
-        InputParamLabeledInput { input_data: curvature_input }
+        NodeConfigUnitInput {
+            id: format!("curvatureProperty{property_key}").to_camel_case().as_str(),
+            label: property_key.to_sentence_case(),
+            value: value_memo,
+            base_unit: "m",
+            onchange: move |new_curv: f64| {
+                if relative_ne!(curvature_sig.read().value, new_curv) {
+                    on_save
+                        .call(meter!(new_curv));
+                }
+            },
+            readonly: curvature.is_infinite(),
+        }
     }
 }
 

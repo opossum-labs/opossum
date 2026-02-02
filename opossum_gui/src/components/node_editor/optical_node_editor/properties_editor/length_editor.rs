@@ -1,7 +1,6 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop, inputs::input_components::{LabeledInput, NodeConfigUnitInput},
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::properties_editor::use_set_node_change_property,
+    hooks::use_update_signal_with_reactive_prop, inputs::input_components::NodeConfigUnitInput,
+    node_config_editor::{NodeChangeAction, NodeChangeEvent}
 };
 use approx::relative_ne;
 use dioxus::prelude::*;
@@ -20,7 +19,7 @@ pub fn LengthEditor(
     let mut length_sig = use_signal(|| length);
     use_update_signal_with_reactive_prop(length, length_sig);
     let value_memo = use_memo(move || length_sig.read().value);
-    
+
     rsx! {
         NodeConfigUnitInput {
             id: format!("lengthProperty{property_key}").to_camel_case().as_str(),
