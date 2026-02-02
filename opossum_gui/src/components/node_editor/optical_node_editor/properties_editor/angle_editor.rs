@@ -1,8 +1,9 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop, inputs::input_components::LabeledInput,
-    node_config_editor::NodeChangeEvent,
+    hooks::use_update_signal_with_reactive_prop, inputs::input_components::{LabeledInput, NodeConfigUnitInput},
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
+use approx::relative_ne;
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_core::degree;
@@ -17,24 +18,25 @@ pub fn AngleEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut angle_sig = use_signal(|| angle);
-    let bound_node_id = use_signal(|| node_id);
-    use_update_signal_with_reactive_prop(node_id, bound_node_id);
-    use_set_node_change_property(
-        *bound_node_id.read(),
-        &property_key,
-        angle,
-        angle_sig,
-        on_change,
-    );
+    use_update_signal_with_reactive_prop(angle, angle_sig);
+    let value_memo = use_memo(move || angle_sig.read().get::<degree>());
     rsx! {
-        LabeledInput {
-            id: format!("angleProperty{property_key}").to_camel_case(),
-            label: format!("{} angle in degrees", property_key.to_sentence_case()),
-            value: format!("{:.3}", angle_sig.read().get::<degree>()),
-            r#type: "number",
-            onchange: move |e: Event<FormData>| {
-                if let Ok(angle) = e.data.value().parse::<f64>() {
-                    angle_sig.set(degree!(angle));
+        NodeConfigUnitInput {
+            id: format!("angleProperty{property_key}").to_camel_case().as_str(),
+            label: property_key.to_sentence_case(),
+            value: value_memo,
+            base_unit: "°",
+            onchange: move |new_angle: f64| {
+                if relative_ne!(angle_sig.read().get::< degree > (), new_angle) {
+                    angle_sig.set(degree!(new_angle % 360.0));
+                    on_change
+                        .call(NodeChangeEvent {
+                            node_id,
+                            action: NodeChangeAction::Property(
+                                property_key.clone(),
+                                degree!(new_angle % 360.0).into(),
+                            ),
+                        });
                 }
             },
         }
