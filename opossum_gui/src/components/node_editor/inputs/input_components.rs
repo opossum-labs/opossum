@@ -1,6 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-use crate::components::node_editor::inputs::{InputData, InputParam};
+use crate::{OPOSSUM_UI_LOGS, components::node_editor::inputs::{InputData, InputParam, format_si_notation, is_permissive_unit_input, parse_si_number, parse_unit_input_strict}};
 use dioxus::prelude::*;
 use itertools::Itertools;
 use std::ops::{AddAssign, SubAssign};
@@ -296,6 +296,113 @@ pub fn LabeledInput(
         }
     }
 }
+
+#[component]
+pub fn NodeConfigUnitInput(
+    id: String,
+    label: String,
+    value: ReadSignal<f64>,
+    base_unit: &'static str,
+    onchange: EventHandler<f64>,
+    #[props(default = false)] readonly: bool,
+) -> Element 
+{
+    rsx! {
+        UnitInput {
+            id,
+            label,
+            value,
+            base_unit,
+            onchange,
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm".to_string(),
+            label_class: "form-label text-secondary".to_string(),
+            readonly,
+        }
+    }
+}
+#[component]
+pub fn UnitInput(
+    id: String,
+    label: String,
+    value: ReadSignal<f64>,
+    base_unit: &'static str,
+    onchange: EventHandler<f64>,
+
+    #[props(default = String::new())] container_class: String,
+    #[props(default = String::new())] input_class: String,
+    #[props(default = String::new())] label_class: String,
+    #[props(default = false)] readonly: bool,
+) -> Element {
+    let mut val_str =
+        use_signal(|| format!("{}{}", format_si_notation(*value.read()), base_unit));
+
+    use_effect(move || {
+        let current_str = val_str.peek().clone();
+        let new_str = format!("{}{}", format_si_notation(*value.read()), base_unit);
+        if current_str != new_str {
+            val_str.set(new_str);
+        }
+    });
+
+    let oninput = use_on_input(val_str, base_unit);
+    let onchange = use_on_change(onchange, value, base_unit);
+
+    rsx! {
+        div { class: container_class,
+            input {
+                class: input_class,
+                id: id.as_str(),
+                name: id.as_str(),
+                placeholder: label,
+                value: val_str.read().as_str(),
+                readonly,
+                disabled: readonly,
+                onchange,
+                oninput,
+            }
+            label { class: label_class, r#for: id, "{label}" }
+        }
+    }
+}
+
+
+fn use_on_change(
+    onchange: EventHandler<f64>,
+    value: ReadSignal<f64>,
+    base_unit: &'static str,
+) -> impl FnMut(Event<FormData>) {
+    move |e: Event<FormData>| {
+        let raw = e.data().value();
+        if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&raw, base_unit) {
+            if let Some(parsed) = parse_si_number(&num_str, &prefix_str) {
+                // base_val_sig.set(parsed);
+                onchange.call(parsed);
+            } else {
+                onchange.call(*value.read());
+                // base_val_sig.set(base_val_sig());
+                OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log("Cannot parse input number string to f64!");
+            }
+        }
+    }
+}
+
+fn use_on_input(
+    mut val_sig: Signal<String>,
+    base_unit: &'static str,
+) -> impl FnMut(Event<FormData>) {
+    move |e: Event<FormData>| {
+        let raw = e.data().value();
+        if is_permissive_unit_input(&raw, base_unit) {
+            val_sig.set(raw);
+        } else {
+            val_sig.set(val_sig());
+        }
+    }
+}
+
 
 #[component]
 pub fn LabeledSelect(

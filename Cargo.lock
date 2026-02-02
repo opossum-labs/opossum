@@ -4985,6 +4985,7 @@ dependencies = [
  "nalgebra",
  "num",
  "opossum_core",
+ "regex",
  "reqwest",
  "rfd 0.16.0",
  "ron",
