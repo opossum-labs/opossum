@@ -301,7 +301,7 @@ pub fn LabeledInput(
 pub fn NodeConfigUnitInput(
     id: String,
     label: String,
-    value: ReadSignal<f64>,
+    value: Memo<f64>,
     base_unit: &'static str,
     onchange: EventHandler<f64>,
     #[props(default = false)] readonly: bool,
@@ -325,7 +325,7 @@ pub fn NodeConfigUnitInput(
 pub fn UnitInput(
     id: String,
     label: String,
-    value: ReadSignal<f64>,
+    value: Memo<f64>,
     base_unit: &'static str,
     onchange: EventHandler<f64>,
 
@@ -369,7 +369,7 @@ pub fn UnitInput(
 
 fn use_on_change(
     onchange: EventHandler<f64>,
-    value: ReadSignal<f64>,
+    value: Memo<f64>,
     base_unit: &'static str,
 ) -> impl FnMut(Event<FormData>) {
     move |e: Event<FormData>| {
