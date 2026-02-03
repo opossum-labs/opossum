@@ -57,12 +57,12 @@ pub fn GratingAlignmentInputs(
                 axes_skip: Some(vec![RotationAxis::Pitch]),
                 on_save,
             }
-            TranslationAlignmentInputs { alignment_sig, on_save, node_id }
+            // TranslationAlignmentInputs { alignment_sig, on_save, node_id }
         });
     } else {
         element_list.push(rsx! {
             RotationAlignmentInputs { alignment_sig, axes_skip: None, on_save }
-            TranslationAlignmentInputs { alignment_sig, on_save, node_id }
+            // TranslationAlignmentInputs { alignment_sig, on_save, node_id }
         });
     }
     rsx! {

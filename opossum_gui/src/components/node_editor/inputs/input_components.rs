@@ -3,6 +3,7 @@
 use crate::{OPOSSUM_UI_LOGS, components::node_editor::inputs::{InputData, InputParam, format_si_notation, is_permissive_unit_input, parse_si_number, parse_unit_input_strict}};
 use dioxus::prelude::*;
 use itertools::Itertools;
+use uuid::Uuid;
 use std::ops::{AddAssign, SubAssign};
 
 // ========================================================
@@ -19,7 +20,7 @@ pub struct FormContext {
 pub fn FlushableTextInput(
     id: String,
     label: String,
-    value: String,
+    value: ReadSignal<String>,
     on_save: EventHandler<String>,
     #[props(default = "text")] r#type: &'static str,
     #[props(optional)] step: Option<&'static str>,
@@ -28,14 +29,16 @@ pub fn FlushableTextInput(
     #[props(optional)] eval_input: Option<Callback<String, bool>>,
     #[props(default = false)] readonly: bool,
 ) -> Element {
+
+    println!("new FlushableTextInput created with id: {}", id);
     let mut form_ctx = use_context::<FormContext>();
 
-    let mut local_value = use_signal(|| value.clone());
+    let mut local_value = use_signal(|| value.read().clone());
     let mut is_locally_dirty = use_signal(|| false);
 
     // Sync bei Node-Wechsel
     use_effect(use_reactive!(|value| {
-        local_value.set(value);
+        local_value.set(value.read().clone());
         is_locally_dirty.set(false);
     }));
 
@@ -55,6 +58,7 @@ pub fn FlushableTextInput(
         perform_save();
     });
 
+    println!("value is: {}", local_value());
     rsx! {
         div { class: "form-floating border-start", "data-mdb-input-init": "",
             input {
@@ -317,7 +321,7 @@ pub fn LabeledInput(
 pub fn NodeConfigUnitInput(
     id: String,
     label: String,
-    value: Memo<f64>,
+    value: ReadSignal<f64>,
     base_unit: &'static str,
     onchange: EventHandler<f64>,
     #[props(default = false)] readonly: bool,
@@ -341,7 +345,7 @@ pub fn NodeConfigUnitInput(
 pub fn UnitInput(
     id: String,
     label: String,
-    value: Memo<f64>,
+    value: ReadSignal<f64>,
     base_unit: &'static str,
     onchange: EventHandler<f64>,
 
@@ -372,7 +376,7 @@ pub fn UnitInput(
             FlushableTextInput {
                 id,
                 label,
-                value: val_str.read().clone(),
+                value: val_str,
                 readonly,
                 eval_input: Some(Callback::new(on_input_eval)),
                 on_save: move |val: String| {
