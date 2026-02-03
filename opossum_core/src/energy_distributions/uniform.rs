@@ -97,7 +97,10 @@ impl From<UniformDist> for super::EnergyDistType {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::joule;
+    use crate::{joule, millimeter};
+    use approx::assert_abs_diff_eq;
+    use nalgebra::Point2;
+    use uom::si::energy::joule;
     #[test]
     fn new_uniform_energy() {
         assert!(UniformDist::new(joule!(0.)).is_err());
@@ -106,5 +109,16 @@ mod test {
         assert!(UniformDist::new(joule!(f64::NEG_INFINITY)).is_err());
         assert!(UniformDist::new(joule!(-1.)).is_err());
         assert!(UniformDist::new(joule!(1.)).is_ok());
+    }
+    #[test]
+    fn uniform_renormalization_integration() {
+        let total = joule!(1.0);
+        let dist = UniformDist::new(total).unwrap();
+        let points = vec![Point2::new(millimeter!(0.0), millimeter!(0.0)); 10];
+        let mut energies = dist.apply(&points);
+        energies[0] = joule!(0.0); // Simulate energy loss: set one element to zero
+        dist.renormalize(&mut energies);
+        let sum: f64 = energies.iter().map(|e| e.get::<joule>()).sum();
+        assert_abs_diff_eq!(sum, 1.0, epsilon = 1e-12);
     }
 }

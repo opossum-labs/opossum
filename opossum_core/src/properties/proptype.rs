@@ -92,7 +92,7 @@ pub enum Proptype {
     FluenceData(FluenceData),
     /// This property stores the fluence estimator strategy [`FluenceEstimator`]
     FluenceEstimator(FluenceEstimator),
-    /// This property stores the wavefront Information [`WaveFrontData`]
+    /// This property stores the wavefront Information [`WaveFrontErrorMap`]
     WaveFrontData(WaveFrontErrorMap),
     /// This property stores the ray position history of all [`Rays`](crate::rays::Rays) during propagation through the optic scenery
     RayPositionHistory(RayPositionHistories),

@@ -333,6 +333,7 @@ impl From<General2DGaussian> for super::EnergyDistType {
 mod test {
     use super::*;
     use crate::{joule, meter, radian};
+    use uom::si::energy::joule;
     #[test]
     fn new_gaussian_sigma() {
         assert!(
@@ -722,6 +723,59 @@ mod test {
                 true
             )
             .is_ok()
+        );
+    }
+    #[test]
+    fn power_parameter_influence() {
+        let center = Point2::new(millimeter!(0.0), millimeter!(0.0));
+        let sigma = Point2::new(millimeter!(1.0), millimeter!(1.0));
+
+        // Wir brauchen mindestens zwei Punkte, damit die Normalisierung
+        // die relative Verteilung beibehält.
+        let points = vec![
+            Point2::new(millimeter!(0.0), millimeter!(0.0)),
+            Point2::new(millimeter!(0.5), millimeter!(0.5)),
+        ];
+
+        let dist_1 =
+            General2DGaussian::new(joule!(1.0), center, sigma, 1.0, degree!(0.0), false).unwrap();
+        let dist_2 =
+            General2DGaussian::new(joule!(1.0), center, sigma, 2.0, degree!(0.0), false).unwrap();
+
+        let e1 = dist_1.apply(&points);
+        let e2 = dist_2.apply(&points);
+
+        // Vergleiche die Energie am zweiten Punkt (0.5, 0.5)
+        // Bei power=2 (Super-Gauß) fällt die Flanke steiler ab oder ist flacher
+        // (je nach Definition), was die Anteile verschiebt.
+        assert!(
+            (e1[1].get::<joule>() - e2[1].get::<joule>()).abs() > 1e-5,
+            "Power parameter should influence relative distribution between points"
+        );
+    }
+
+    #[test]
+    fn rectangular_flag_influence() {
+        let center = Point2::new(millimeter!(0.0), millimeter!(0.0));
+        let sigma = Point2::new(millimeter!(1.0), millimeter!(0.5));
+
+        // Auch hier: Zwei Punkte verwenden
+        let points = vec![
+            Point2::new(millimeter!(0.0), millimeter!(0.0)),
+            Point2::new(millimeter!(0.8), millimeter!(0.4)),
+        ];
+
+        let dist_ellip =
+            General2DGaussian::new(joule!(1.0), center, sigma, 2.0, degree!(0.0), false).unwrap();
+        let dist_rect =
+            General2DGaussian::new(joule!(1.0), center, sigma, 2.0, degree!(0.0), true).unwrap();
+
+        let e_ellip = dist_ellip.apply(&points);
+        let e_rect = dist_rect.apply(&points);
+
+        assert!(
+            (e_ellip[1].get::<joule>() - e_rect[1].get::<joule>()).abs() > 1e-5,
+            "Rectangular flag should influence relative distribution for power != 1"
         );
     }
 }

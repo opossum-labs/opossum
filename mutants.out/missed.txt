@@ -489,7 +489,6 @@ opossum_core/src/spectrum.rs:260:9: replace Spectrum::is_transmission_spectrum -
 opossum_core/src/lightdata/energy_data_builder.rs:191:40: replace || with && in EnergyLaserLines::add_lines
 opossum_core/src/nodes/ideal_filter.rs:924:12: delete ! in BandFilter::set_center_wavelength
 opossum_core/src/position_distributions/hexagonal_tiling.rs:176:37: replace * with / in <impl PositionDistribution for HexagonalTiling>::generate
-opossum_core/src/energy_distributions/mod.rs:40:59: replace / with % in EnergyDistribution::renormalize
 opossum_core/src/utils/math_distribution_functions.rs:147:78: replace * with / in general_2d_super_gaussian_point_elliptical
 opossum_core/src/rays.rs:431:37: replace / with * in Rays::new_hexapolar_point_source
 opossum_core/src/refractive_index/refr_index_conrady.rs:82:9: replace RefrIndexConrady::a -> f64 with -1.0

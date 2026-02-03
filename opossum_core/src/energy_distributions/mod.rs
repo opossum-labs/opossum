@@ -17,11 +17,39 @@ use nalgebra::Point2;
 use uom::si::f64::{Energy, Length};
 
 pub trait EnergyDistribution {
+    /// Applies the energy distribution logic to a set of spatial points.
+    ///
+    /// This function calculates how much energy is assigned to each point in the `input`
+    /// slice based on the specific distribution profile (e.g., Uniform or Gaussian).
+    ///
+    /// # Parameters
+    /// - `input`: A slice of [`Point2<Length>`] representing the sampling coordinates.
+    ///
+    /// # Returns
+    /// A [`Vec<Energy>`] containing the energy value for each corresponding input point.
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy>;
+    /// Returns the total integrated energy defined for this distribution.
+    ///
+    /// # Returns
+    /// The total [`Energy`] value.
     fn get_total_energy(&self) -> Energy;
+    /// Re-scales the provided energy vector to ensure energy conservation.
+    ///
+    /// This method adjusts the values in `energy_dist` so that their sum matches
+    /// the value returned by [`Self::get_total_energy`]. It is typically used
+    /// after filtering or clipping operations to restore the total energy budget.
+    ///
+    /// # Algorithm and Numerical Stability
+    /// 1. A threshold `min_energy` is calculated as $E_{total} \times \epsilon$ (using [`f64::EPSILON`]).
+    /// 2. Only energy values above this threshold are summed up to calculate the current total.
+    /// 3. A scale factor is derived: $F = \frac{E_{target}}{E_{current\_valid}}$.
+    /// 4. Every element in the vector is multiplied by this factor.
+    ///
+    /// # Parameters
+    /// - `energy_dist`: A mutable reference to a vector of [`Energy`] values to be normalized in place.
     fn renormalize(&self, energy_dist: &mut Vec<Energy>) {
-        //sum up energy of rays that are valid: energy is larger than machine epsilon times total energy
         let min_energy = f64::EPSILON * self.get_total_energy();
+
         let total_energy_valid_rays = joule!(
             energy_dist
                 .iter()
@@ -37,9 +65,13 @@ pub trait EnergyDistribution {
                 .kahan_sum()
                 .sum()
         );
-        //scaling factor if a significant amount of energy has been lost
-        let energy_scale_factor = self.get_total_energy() / total_energy_valid_rays;
-        let _ = energy_dist.iter_mut().map(|e| *e * energy_scale_factor);
+
+        if total_energy_valid_rays.value > 0.0 {
+            let energy_scale_factor = self.get_total_energy() / total_energy_valid_rays;
+            for e in energy_dist.iter_mut() {
+                *e = *e * energy_scale_factor;
+            }
+        }
     }
 }
 
