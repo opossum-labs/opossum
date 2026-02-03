@@ -58,6 +58,8 @@ impl Shape for GaussianShape {
 mod test {
     use super::*;
     use crate::meter;
+    use approx::assert_abs_diff_eq;
+
     #[test]
     fn new() {
         let p = meter!(0.0, 0.0);
@@ -76,6 +78,13 @@ mod test {
         assert!(GaussianShape::new((meter!(1.0), meter!(1.0)), p).is_err());
     }
     #[test]
+    fn getters() {
+        let g = GaussianShape::new((meter!(1.0), meter!(2.0)), meter!(3.0, 4.0)).unwrap();
+        assert_eq!(g.sigma(), (meter!(1.0), meter!(2.0)));
+        assert_eq!(g.center().x, meter!(3.0));
+        assert_eq!(g.center().y, meter!(4.0));
+    }
+    #[test]
     fn transmission_factor() {
         let g = GaussianShape::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
         assert_eq!(g.transmission_factor(&meter!(1.0, 1.0)), 1.0);
@@ -83,5 +92,22 @@ mod test {
             g.transmission_factor(&meter!(0.0, 0.0)),
             1.0 / 1.0_f64.exp()
         );
+    }
+    #[test]
+    fn test_sigma_decay() {
+        let sigma_x = meter!(1.0);
+        let sigma_y = meter!(2.0);
+        let g = GaussianShape::new((sigma_x, sigma_y), meter!(0.0, 0.0)).unwrap();
+
+        // Center (0 sigma)
+        assert_eq!(g.transmission_factor(&meter!(0.0, 0.0)), 1.0);
+
+        // 1 sigma in X: exp(-0.5 * (1/1)^2) = exp(-0.5)
+        let t_1sigma_x = g.transmission_factor(&meter!(1.0, 0.0));
+        assert_abs_diff_eq!(t_1sigma_x, (-0.5_f64).exp(), epsilon = 1e-12);
+
+        // 1 sigma in Y: exp(-0.5 * (2/2)^2) = exp(-0.5)
+        let t_1sigma_y = g.transmission_factor(&meter!(0.0, 2.0));
+        assert_abs_diff_eq!(t_1sigma_y, (-0.5_f64).exp(), epsilon = 1e-12);
     }
 }

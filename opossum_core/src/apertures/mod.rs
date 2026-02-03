@@ -146,24 +146,20 @@ impl Aperture {
     /// 0.0 is fully opaque, 1.0 fully transparent.
     #[must_use]
     pub fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let base_transmission = match self {
-            Self::None => 1.0,
-            Self::BinaryCircle(shape, _) => shape.transmission_factor(point),
-            Self::BinaryRectangle(shape, _) => shape.transmission_factor(point),
-            Self::BinaryPolygon(shape, _) => shape.transmission_factor(point),
-            Self::Gaussian(shape, _) => shape.transmission_factor(point),
-            Self::Stack(apertures, _) => apertures
-                .apertures()
-                .iter()
-                .fold(1.0, |acc, ap| acc * ap.apodize(point)),
-        };
-        // Zentrale Logik für Loch vs. Hindernis
-        let aperture_type = match self {
-            Self::BinaryCircle(_, aperture_type)
-            | Self::BinaryRectangle(_, aperture_type)
-            | Self::BinaryPolygon(_, aperture_type)
-            | Self::Stack(_, aperture_type) => aperture_type,
-            _ => &ApertureType::Hole, // Default für None, Gaussian etc.
+        // Resolve both transmission and type in a single match for clarity and correctness
+        let (base_transmission, aperture_type) = match self {
+            Self::None => (1.0, &ApertureType::Hole),
+            Self::BinaryCircle(shape, at) => (shape.transmission_factor(point), at),
+            Self::BinaryRectangle(shape, at) => (shape.transmission_factor(point), at),
+            Self::BinaryPolygon(shape, at) => (shape.transmission_factor(point), at),
+            Self::Gaussian(shape, at) => (shape.transmission_factor(point), at),
+            Self::Stack(apertures, at) => (
+                apertures
+                    .apertures()
+                    .iter()
+                    .fold(1.0, |acc, ap| acc * ap.apodize(point)),
+                at,
+            ),
         };
 
         if matches!(aperture_type, ApertureType::Obstruction) {
@@ -179,7 +175,7 @@ impl From<Aperture> for Proptype {
     }
 }
 
-/// Trait for the calaculation ofthe transmission factor for each shape.
+/// Trait for the calculation of the transmission factor for each shape.
 pub trait Shape {
     /// Calculate the transmission factor (always treated as aperture type `hole`).
     fn transmission_factor(&self, point: &Point2<Length>) -> f64;
@@ -296,8 +292,26 @@ impl Plottable for Aperture {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::meter;
     #[test]
     fn default() {
         assert!(matches!(Aperture::default(), Aperture::None));
+    }
+    #[test]
+    fn test_obstruction_logic() {
+        // A circle as a hole (default)
+        let hole = Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
+        // A circle as an obstruction
+        let block =
+            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Obstruction).unwrap();
+
+        let p_inside = meter!(0.5, 0.0);
+        let p_outside = meter!(2.0, 0.0);
+
+        assert_eq!(hole.apodize(&p_inside), 1.0);
+        assert_eq!(hole.apodize(&p_outside), 0.0);
+
+        assert_eq!(block.apodize(&p_inside), 0.0);
+        assert_eq!(block.apodize(&p_outside), 1.0);
     }
 }

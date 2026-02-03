@@ -97,6 +97,17 @@ mod test {
         assert!(PolygonConfig::new(too_little_points).is_err());
     }
     #[test]
+    fn getters() {
+        let points = vec![
+            meter!(0.0, 0.0),
+            meter!(1.0, 0.5),
+            meter!(2.0, 0.0),
+            meter!(1.0, 1.0),
+        ];
+        let poly = PolygonConfig::new(points.clone()).unwrap();
+        assert_eq!(poly.points(), points.as_slice());
+    }
+    #[test]
     fn transmission_factor() {
         let poly = PolygonConfig::new(vec![
             meter!(0.0, 0.0),
@@ -111,5 +122,30 @@ mod test {
         assert_eq!(poly.transmission_factor(&meter!(1.0, 0.0)), 0.0);
         assert_eq!(poly.transmission_factor(&meter!(2.0, 1.0)), 0.0);
         assert_eq!(poly.transmission_factor(&meter!(0.0, 1.0)), 0.0);
+    }
+    #[test]
+    fn test_non_convex_u_shape() {
+        // A U-shaped polygon
+        let points = vec![
+            meter!(0.0, 0.0),
+            meter!(3.0, 0.0),
+            meter!(3.0, 3.0),
+            meter!(2.0, 3.0),
+            meter!(2.0, 1.0),
+            meter!(1.0, 1.0),
+            meter!(1.0, 3.0),
+            meter!(0.0, 3.0),
+        ];
+        let poly = PolygonConfig::new(points).unwrap();
+
+        // Inside the "arms"
+        assert_eq!(poly.transmission_factor(&meter!(0.5, 2.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(2.5, 2.0)), 1.0);
+
+        // In the "gap" of the U (should be outside/0.0)
+        assert_eq!(poly.transmission_factor(&meter!(1.5, 2.0)), 0.0);
+
+        // Bottom bar
+        assert_eq!(poly.transmission_factor(&meter!(1.5, 0.5)), 1.0);
     }
 }

@@ -96,6 +96,14 @@ mod test {
         assert!(RectangleShape::new(meter!(2.0), meter!(1.0), p).is_err());
     }
     #[test]
+    fn getters() {
+        let r = RectangleShape::new(meter!(2.0), meter!(1.0), meter!(3.0, 4.0)).unwrap();
+        assert_eq!(r.width(), meter!(2.0));
+        assert_eq!(r.height(), meter!(1.0));
+        assert_eq!(r.center().x, meter!(3.0));
+        assert_eq!(r.center().y, meter!(4.0));
+    }
+    #[test]
     fn transmission_factor() {
         let r = RectangleShape::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
         assert_eq!(r.transmission_factor(&meter!(1.0, 1.0)), 1.0);

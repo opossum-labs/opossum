@@ -15,7 +15,7 @@ impl CircleShape {
     ///
     /// # Errors
     ///
-    /// This function will return an error if the given radius of negative, NaN or Infinity.
+    /// This function will return an error if the given radius of negative, `NaN` or `Infinity`.
     pub fn new(radius: Length, center: Point2<Length>) -> OpmResult<Self> {
         if radius.is_normal() && radius.is_sign_positive() {
             Ok(Self { radius, center })
@@ -25,8 +25,8 @@ impl CircleShape {
     }
     /// Returns the radius of this [`CircleShape`]
     #[must_use]
-    pub fn radius(&self) -> &Length {
-        &self.radius
+    pub fn radius(&self) -> Length {
+        self.radius
     }
     /// Returns the center of this [`CircleShape`].
     #[must_use]
@@ -69,6 +69,13 @@ mod test {
         assert!(CircleShape::new(meter!(f64::INFINITY), center).is_err());
     }
     #[test]
+    fn getters() {
+        let c = CircleShape::new(meter!(2.0), meter!(3.0, 4.0)).unwrap();
+        assert_eq!(c.radius(), meter!(2.0));
+        assert_eq!(c.center().x, meter!(3.0));
+        assert_eq!(c.center().y, meter!(4.0));
+    }
+    #[test]
     fn transmission_factor() {
         let c = CircleShape::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
         assert_eq!(c.transmission_factor(&meter!(1.0, 1.0)), 1.0);
@@ -78,5 +85,18 @@ mod test {
         assert_eq!(c.transmission_factor(&meter!(0.0, 1.0)), 1.0);
         assert_eq!(c.transmission_factor(&meter!(0.0, 0.0)), 0.0);
         assert_eq!(c.transmission_factor(&meter!(2.0, 2.0)), 0.0);
+    }
+    #[test]
+    fn test_boundary_conditions() {
+        let radius = meter!(1.0);
+        let c = CircleShape::new(radius, meter!(0.0, 0.0)).unwrap();
+
+        // Point exactly on the boundary (x^2 + y^2 == r^2)
+        // Floating point precision might be tricky, but 1.0^2 is exact.
+        assert_eq!(c.transmission_factor(&meter!(1.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(0.0, 1.0)), 1.0);
+
+        // Slightly outside
+        assert_eq!(c.transmission_factor(&meter!(1.000001, 0.0)), 0.0);
     }
 }

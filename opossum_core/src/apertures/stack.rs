@@ -66,6 +66,8 @@ pub fn plot_circle(conf: &CircleShape) -> Vec<PlotSeries> {
 }
 #[cfg(test)]
 mod test {
+    use approx::assert_abs_diff_eq;
+
     use super::super::{ApertureType, CircleShape, RectangleShape};
     use super::*;
     use crate::meter;
@@ -84,5 +86,53 @@ mod test {
         assert_eq!(s_ap.apodize(&meter!(1.0, 1.0)), 0.0);
         assert_eq!(s_ap.apodize(&meter!(-1.0, 0.0)), 0.0);
         assert_eq!(s_ap.apodize(&meter!(0.0, -1.0)), 0.0);
+    }
+    #[test]
+    fn test_stack_transmission_factor() {
+        // 1. Create a circle at (0,0) with radius 1.0
+        let circle = CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
+        let circle_ap = Aperture::BinaryCircle(circle, ApertureType::Hole);
+
+        // 2. Create a rectangle at (1,0) with width 2.0 and height 2.0
+        // This rectangle covers x from 0.0 to 2.0 and y from -1.0 to 1.0
+        let rect = RectangleShape::new(meter!(2.0), meter!(2.0), meter!(1.0, 0.0)).unwrap();
+        let rect_ap = Aperture::BinaryRectangle(rect, ApertureType::Hole);
+
+        // 3. Create the stack
+        let stack = StackShape::new(vec![circle_ap, rect_ap]);
+
+        // --- Test Points ---
+
+        // Point (0.5, 0.0): Inside BOTH circle and rectangle
+        // Expected: 1.0 * 1.0 = 1.0
+        assert_abs_diff_eq!(
+            stack.transmission_factor(&meter!(0.5, 0.0)),
+            1.0,
+            epsilon = 1e-12
+        );
+
+        // Point (-0.5, 0.0): Inside circle, but OUTSIDE rectangle (x < 0)
+        // Expected: 1.0 * 0.0 = 0.0
+        assert_abs_diff_eq!(
+            stack.transmission_factor(&meter!(-0.5, 0.0)),
+            0.0,
+            epsilon = 1e-12
+        );
+
+        // Point (1.5, 0.0): Outside circle, but INSIDE rectangle
+        // Expected: 0.0 * 1.0 = 0.0
+        assert_abs_diff_eq!(
+            stack.transmission_factor(&meter!(1.5, 0.0)),
+            0.0,
+            epsilon = 1e-12
+        );
+
+        // Point (5.0, 5.0): Outside BOTH
+        // Expected: 0.0 * 0.0 = 0.0
+        assert_abs_diff_eq!(
+            stack.transmission_factor(&meter!(5.0, 5.0)),
+            0.0,
+            epsilon = 1e-12
+        );
     }
 }
