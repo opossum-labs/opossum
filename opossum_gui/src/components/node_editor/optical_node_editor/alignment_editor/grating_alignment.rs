@@ -51,19 +51,9 @@ pub fn GratingAlignmentInputs(
                 on_save,
             }
         });
-        element_list.push(rsx! {
-            RotationAlignmentInputs {
-                alignment_sig,
-                axes_skip: Some(vec![RotationAxis::Pitch]),
-                on_save,
-            }
-            // TranslationAlignmentInputs { alignment_sig, on_save, node_id }
-        });
+        element_list.push(rsx! {});
     } else {
-        element_list.push(rsx! {
-            RotationAlignmentInputs { alignment_sig, axes_skip: None, on_save }
-            // TranslationAlignmentInputs { alignment_sig, on_save, node_id }
-        });
+        element_list.push(rsx! {});
     }
     rsx! {
         for element in element_list {
