@@ -4,10 +4,9 @@ use std::vec;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        inputs::input_components::{LabeledInput, LabeledSelect},
-        optical_node_editor::alignment_editor::{
-            RotationAlignmentInputs, TranslationAlignmentInputs,
-        },
+        hooks::use_update_signal_with_reactive_prop, inputs::input_components::{LabeledInput, LabeledSelect}, optical_node_editor::alignment_editor::{
+            RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation, on_new_translation,
+        }
     },
 };
 use dioxus::prelude::*;
@@ -27,13 +26,15 @@ use uuid::Uuid;
 
 #[component]
 pub fn GratingAlignmentInputs(
-    alignment_sig: Signal<Isometry>,
+    alignment_sig_outside: ReadSignal<Isometry>,
     node_properties_sig: Signal<Properties>,
     on_save: EventHandler<Isometry>,
     node_id: Uuid,
 ) -> Element {
     let alignment_select_sig = use_signal(|| true);
-
+    let mut alignment_sig = use_signal(|| *alignment_sig_outside.read());
+    use_update_signal_with_reactive_prop(*alignment_sig_outside.read(), alignment_sig);
+    
     let mut element_list = vec![rsx! {
         GratingAlignmentSelector { alignment_select_sig }
     }];
@@ -48,12 +49,42 @@ pub fn GratingAlignmentInputs(
                 alignment_sig,
                 diffraction_order,
                 line_density,
-                on_save,
+                on_alignment_change: move |iso: Isometry| {
+                    alignment_sig.set(iso);
+                    on_save.call(iso);
+                },
             }
         });
-        element_list.push(rsx! {});
+        
+        element_list.push(rsx! {
+            RotationAlignmentInputs {
+                alignment: alignment_sig,
+                axes_skip: Some(vec![RotationAxis::Pitch]),
+                on_new_rotation: on_new_rotation(on_save, alignment_sig.into()),
+                node_id,
+            }
+            TranslationAlignmentInputs {
+                alignment: alignment_sig,
+                on_new_translation: on_new_translation(on_save, alignment_sig.into()),
+                node_id,
+            }
+        });
     } else {
-        element_list.push(rsx! {});
+        element_list.push(rsx! {
+
+            RotationAlignmentInputs {
+                alignment: alignment_sig,
+                axes_skip: None,
+                on_new_rotation: on_new_rotation(on_save, alignment_sig.into()),
+                node_id,
+            
+            }
+            TranslationAlignmentInputs {
+                alignment: alignment_sig,
+                on_new_translation: on_new_translation(on_save, alignment_sig.into()),
+                node_id,
+            }
+        });
     }
     rsx! {
         for element in element_list {
@@ -64,15 +95,20 @@ pub fn GratingAlignmentInputs(
 
 #[component]
 pub fn LittrowConfigEditor(
-    alignment_sig: Signal<Isometry>,
+    alignment_sig: ReadSignal<Isometry>,
     diffraction_order: i32,
     line_density: LinearNumberDensity,
-    on_save: EventHandler<Isometry>,
+    on_alignment_change: EventHandler<Isometry>,
 ) -> Element {
-    let incident_angle_sig = use_signal(|| true);
+    let mut incident_angle_sig = use_signal(|| true);
     let mut reference_wavelength_sig = use_signal(|| nanometer!(1053.));
     rsx! {
-        InOrOutgoingFromLittrowSelector { incident_angle_sig }
+        InOrOutgoingFromLittrowSelector {
+            incident_angle_sig,
+            on_incident_change: move |new_state: bool| {
+                incident_angle_sig.set(new_state);
+            },
+        }
         LabeledInput {
             id: "alignmentWavelengthGrating",
             label: "Reference wavelength",
@@ -90,7 +126,7 @@ pub fn LittrowConfigEditor(
             diffraction_order,
             line_density,
             alignment_sig,
-            on_save,
+            on_alignment_change,
         }
     }
 }
@@ -115,12 +151,12 @@ fn calc_deviation_angle_from_littrow(
 
 #[component]
 fn AngleToLittrowComponent(
-    incident_angle_sig: Signal<bool>,
-    reference_wavelength_sig: Signal<Length>,
+    incident_angle_sig: ReadSignal<bool>,
+    reference_wavelength_sig: ReadSignal<Length>,
     diffraction_order: i32,
     line_density: LinearNumberDensity,
-    mut alignment_sig: Signal<Isometry>,
-    on_save: EventHandler<Isometry>,
+    alignment_sig: ReadSignal<Isometry>,
+    on_alignment_change: EventHandler<Isometry>,
 ) -> Element {
     rsx! {
         LabeledInput {
@@ -154,8 +190,7 @@ fn AngleToLittrowComponent(
 
                     match update_res {
                         Ok(()) => {
-                            alignment_sig.set(iso);
-                            on_save.call(iso);
+                            on_alignment_change.call(iso);
                         }
                         Err(e) => {
                             OPOSSUM_UI_LOGS
@@ -194,7 +229,7 @@ pub fn GratingAlignmentSelector(mut alignment_select_sig: Signal<bool>) -> Eleme
 }
 
 #[component]
-pub fn InOrOutgoingFromLittrowSelector(incident_angle_sig: Signal<bool>) -> Element {
+pub fn InOrOutgoingFromLittrowSelector(incident_angle_sig: ReadSignal<bool>, on_incident_change: EventHandler<bool>) -> Element {
     let incident_label = "Incident angle to Littrow";
     let diffracted_label = "Diffracted angle to Littrow";
 
@@ -209,9 +244,9 @@ pub fn InOrOutgoingFromLittrowSelector(incident_angle_sig: Signal<bool>) -> Elem
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if val.as_str() == incident_label {
-                    incident_angle_sig.set(true);
+                    on_incident_change.call(true);
                 } else {
-                    incident_angle_sig.set(false);
+                    on_incident_change.call(false);
                 }
             },
         }

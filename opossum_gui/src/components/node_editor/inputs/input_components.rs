@@ -281,6 +281,28 @@ pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
     }
 }
 
+
+#[component]
+pub fn RowedElements(elements: Vec<Element>, num_per_row: usize) -> Element {
+    rsx! {
+        for chunk in elements.iter().chunks(num_per_row) {
+            {
+                let elements_in_row: Vec<&Element> = chunk.collect::<Vec<&Element>>();
+                {
+                    rsx! {
+                        div { class: "row gy-1 gx-2",
+                            for elem in elements_in_row {
+                                div { class: "col-sm", {elem.clone()} }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 #[component]
 pub fn LabeledInput(
     id: String,

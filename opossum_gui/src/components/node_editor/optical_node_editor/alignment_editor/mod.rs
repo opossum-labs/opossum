@@ -9,7 +9,7 @@ use crate::{
         hooks::use_update_signal_with_reactive_prop,
         inputs::{
             InputData,
-            input_components::{LabeledSelect, NodeConfigUnitInput, RowedInputs},
+            input_components::{LabeledSelect, NodeConfigUnitInput, RowedElements, RowedInputs},
         },
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
@@ -42,7 +42,14 @@ pub fn AlignmentEditor(
     });
 
     let accordion_content = if node_type == "reflective grating" {
-        rsx! {}
+        rsx! {
+            GratingAlignmentInputs {
+                alignment_sig_outside: alignment_memo,
+                node_properties_sig,
+                on_save,
+                node_id,
+            }
+        }
     } else {
         rsx! {
             RotationAlignmentInputs {
@@ -280,57 +287,44 @@ fn RotationAlignmentInputs(
 
     let id_add_on = "inputNodeAlignmentRot";
 
-    let mut roll_sig = use_signal(move || alignment.read().rotation_of_axis(RotationAxis::Roll).get::<degree>());
-    let mut pitch_sig = use_signal(move || alignment.read().rotation_of_axis(RotationAxis::Pitch).get::<degree>());
-    let mut yaw_sig = use_signal(move || alignment.read().rotation_of_axis(RotationAxis::Yaw).get::<degree>());
+    let mut rot_input_vec = Vec::<Element>::new();
 
-    use_update_signal_with_reactive_prop(alignment.read().rotation_of_axis(RotationAxis::Roll).get::<degree>(), roll_sig);
-    use_update_signal_with_reactive_prop(alignment.read().rotation_of_axis(RotationAxis::Pitch).get::<degree>(), pitch_sig);
-    use_update_signal_with_reactive_prop(alignment.read().rotation_of_axis(RotationAxis::Yaw).get::<degree>(), yaw_sig);
+    for rot_axis in RotationAxis::iter() {
+        if let Some(ref axes_skip) = axes_skip
+            && axes_skip.contains(&rot_axis)
+        {
+            continue;
+        }
+        rot_input_vec.push(rsx!{
+            RotationInput {
+                alignment,
+                axis: rot_axis,
+                id: format!("{id_add_on}{}{}", rot_axis, node_id.as_simple().to_string()),
+                on_new_rotation: on_new_rotation.clone(),
+            }
+        });
+    }
+    rsx!{
+        RowedElements { elements: rot_input_vec, num_per_row: 2 }
+    }
+}
+
+#[component]
+pub fn RotationInput(alignment: ReadSignal<Isometry>, axis: RotationAxis, id: String, on_new_rotation: EventHandler<(Angle, RotationAxis)>) -> Element{
+    let mut value_sig = use_signal(move || alignment.read().rotation_of_axis(axis).get::<degree>());
+    use_update_signal_with_reactive_prop(alignment.read().rotation_of_axis(axis).get::<degree>(), value_sig);
 
     rsx!{
-        div { class: "row gy-1 gx-2",
-            div { class: "col-sm",
-                NodeConfigUnitInput {
-                    id: format!("{id_add_on}{}{}", RotationAxis::Roll, node_id.as_simple().to_string()),
-                    label: format!("{} rotation", RotationAxis::Roll),
-                    value: roll_sig,
-                    base_unit: "°",
-                    onchange: move |new_rot: f64| {
-                        roll_sig.set(new_rot);
-                        on_new_rotation.call((degree!(new_rot), RotationAxis::Roll));
-                    },
-                }
-            }
-            div { class: "col-sm",
-                NodeConfigUnitInput {
-                    id: format!("{id_add_on}{}", RotationAxis::Pitch),
-                    label: format!("{} rotation", RotationAxis::Pitch),
-                    value: pitch_sig,
-                    base_unit: "°",
-                    onchange: move |new_rot: f64| {
-                        pitch_sig.set(new_rot);
-                        on_new_rotation.call((degree!(new_rot), RotationAxis::Pitch));
-                    },
-                }
-            }
-        }
         NodeConfigUnitInput {
-            id: format!("{id_add_on}{}", RotationAxis::Yaw),
-            label: format!("{} rotation", RotationAxis::Yaw),
-            value: yaw_sig,
+            id,
+            label: format!("{} rotation", axis),
+            value: value_sig,
             base_unit: "°",
             onchange: move |new_rot: f64| {
-                yaw_sig.set(new_rot);
-                on_new_rotation.call((degree!(new_rot), RotationAxis::Yaw));
+                on_new_rotation.call((degree!(new_rot), axis));
             },
         }
     }
-
-    // let input_data = get_rotation_alignment_input_data(alignment_sig, axes_skip.as_ref(), on_save);
-    // rsx! {
-    //     RowedInputs { inputs: input_data }
-    // }
 }
 
 fn on_isometry_option_change_str(
