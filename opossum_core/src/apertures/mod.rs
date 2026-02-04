@@ -298,6 +298,81 @@ mod test {
         assert!(matches!(Aperture::default(), Aperture::None));
     }
     #[test]
+    fn test_new_circle() {
+        let center = meter!(0.0, 0.0);
+        // Valid radius
+        assert!(Aperture::new_circle(meter!(1.0), center, ApertureType::Hole).is_ok());
+        // Invalid radius (negative)
+        assert!(Aperture::new_circle(meter!(-1.0), center, ApertureType::Hole).is_err());
+    }
+
+    #[test]
+    fn test_new_rectangle() {
+        let center = meter!(0.0, 0.0);
+        // Valid dimensions
+        assert!(
+            Aperture::new_rectangle(meter!(1.0), meter!(1.0), center, ApertureType::Hole).is_ok()
+        );
+        // Invalid height
+        assert!(
+            Aperture::new_rectangle(meter!(1.0), meter!(0.0), center, ApertureType::Hole).is_err()
+        );
+    }
+
+    #[test]
+    fn test_new_gaussian() {
+        let center = meter!(0.0, 0.0);
+        // Valid sigma
+        assert!(
+            Aperture::new_gaussian((meter!(1.0), meter!(1.0)), center, ApertureType::Hole).is_ok()
+        );
+        // Invalid sigma (zero)
+        assert!(
+            Aperture::new_gaussian((meter!(0.0), meter!(1.0)), center, ApertureType::Hole).is_err()
+        );
+    }
+
+    #[test]
+    fn test_new_polygon() {
+        // Valid triangle
+        let points = vec![meter!(0.0, 0.0), meter!(1.0, 0.0), meter!(0.0, 1.0)];
+        assert!(Aperture::new_polygon(points, ApertureType::Hole).is_ok());
+        // Invalid polygon (too few points)
+        let points_too_few = vec![meter!(0.0, 0.0), meter!(1.0, 0.0)];
+        assert!(Aperture::new_polygon(points_too_few, ApertureType::Hole).is_err());
+    }
+
+    #[test]
+    fn test_new_stack() {
+        let circle =
+            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
+        let rect = Aperture::new_rectangle(
+            meter!(1.0),
+            meter!(1.0),
+            meter!(0.0, 0.0),
+            ApertureType::Hole,
+        )
+        .unwrap();
+
+        // Stack returns Self directly, not OpmResult
+        let stack = Aperture::new_stack(vec![circle, rect], ApertureType::Obstruction);
+
+        if let Aperture::Stack(config, at) = stack {
+            assert_eq!(config.apertures().len(), 2);
+            assert_eq!(at, ApertureType::Obstruction);
+        } else {
+            panic!("Expected Aperture::Stack variant");
+        }
+    }
+
+    #[test]
+    fn test_is_none() {
+        assert!(Aperture::None.is_none());
+        let circle =
+            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
+        assert!(!circle.is_none());
+    }
+    #[test]
     fn test_obstruction_logic() {
         // A circle as a hole (default)
         let hole = Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
