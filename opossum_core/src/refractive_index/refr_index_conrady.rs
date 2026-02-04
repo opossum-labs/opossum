@@ -58,6 +58,11 @@ impl RefrIndexConrady {
                 "upper wavelength limit is invalid.".into(),
             ));
         }
+        if wavelength_range.start >= wavelength_range.end {
+            return Err(OpossumError::Other(
+                "wavelength range start must be less than end".into(),
+            ));
+        }
         Ok(Self {
             n0,
             a,
@@ -121,6 +126,7 @@ impl RefrIndexConrady {
 }
 
 impl RefractiveIndex for RefrIndexConrady {
+    #[inline]
     fn get_refractive_index(&self, wavelength: Length) -> OpmResult<f64> {
         if !self.wvl_range.contains(&wavelength) {
             return Err(OpossumError::Other("wavelength outside valid range".into()));
@@ -183,6 +189,67 @@ mod test {
         assert_eq!(r.n0, 1.0);
         assert_eq!(r.a, 2.0);
         assert_eq!(r.b, 3.0);
+    }
+    #[test]
+    fn test_default_sio2() {
+        let sio2 = RefrIndexConrady::default();
+        // Verify SiO2 default coefficients
+        assert_eq!(sio2.n0(), 1.427);
+        assert_eq!(sio2.a(), 11.1);
+        assert_eq!(sio2.b(), 5.13e6);
+        assert_eq!(sio2.wavelength_range().start, nanometer!(1000.0));
+    }
+
+    #[test]
+    fn test_setters_and_getters() {
+        let mut r = RefrIndexConrady::default();
+
+        // Test coefficient setters
+        r.set_n0(1.5);
+        r.set_a(12.0);
+        r.set_b(6.0e6);
+
+        assert_eq!(r.n0(), 1.5);
+        assert_eq!(r.a(), 12.0);
+        assert_eq!(r.b(), 6.0e6);
+
+        // Test wavelength range setters
+        let new_range = nanometer!(400.0)..nanometer!(800.0);
+        r.set_wavelength_range(new_range.clone());
+        assert_eq!(r.wavelength_range(), &new_range);
+
+        r.set_wavelength_range_start(nanometer!(450.0));
+        assert_eq!(r.wavelength_range().start, nanometer!(450.0));
+
+        r.set_wavelength_range_end(nanometer!(750.0));
+        assert_eq!(r.wavelength_range().end, nanometer!(750.0));
+    }
+
+    #[test]
+    fn test_range_boundary_behavior() {
+        let r = RefrIndexConrady::default(); // Range: 1000nm to 1100nm
+
+        // Start is inclusive
+        assert!(r.get_refractive_index(nanometer!(1000.0)).is_ok());
+
+        // End is exclusive
+        assert!(r.get_refractive_index(nanometer!(1100.0)).is_err());
+
+        // Explicit out of bounds
+        assert!(r.get_refractive_index(nanometer!(999.9)).is_err());
+        assert!(r.get_refractive_index(nanometer!(1100.1)).is_err());
+    }
+
+    #[test]
+    fn test_enum_conversion_consistency() {
+        let r = RefrIndexConrady::default();
+        let r_enum: RefractiveIndexType = r.clone().into();
+
+        if let RefractiveIndexType::Conrady(inner) = r_enum {
+            assert_eq!(inner, r);
+        } else {
+            panic!("Enum conversion for Conrady failed");
+        }
     }
     #[test]
     fn get_refractive_index() {

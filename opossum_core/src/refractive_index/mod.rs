@@ -103,3 +103,101 @@ pub trait RefractiveIndex {
     /// This function is mainly used to store a model in a [`Property`](crate::properties::property::Property)
     fn to_enum(&self) -> RefractiveIndexType;
 }
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::nanometer;
+
+    #[test]
+    fn test_default_is_sellmeier() {
+        let default_idx = RefractiveIndexType::default();
+        // The default implementation should return Sellmeier1.
+        assert!(matches!(default_idx, RefractiveIndexType::Sellmeier1(_)));
+    }
+
+    #[test]
+    fn test_display_strings() {
+        // Test that each variant displays the correct descriptive string.
+        assert_eq!(
+            format!(
+                "{}",
+                RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap())
+            ),
+            "Constant"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                RefractiveIndexType::Sellmeier1(RefrIndexSellmeier1::default())
+            ),
+            "Sellmeier equation"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                RefractiveIndexType::Schott(RefrIndexSchott::default())
+            ),
+            "Schott equation"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                RefractiveIndexType::Conrady(RefrIndexConrady::default())
+            ),
+            "Conrady equation"
+        );
+    }
+
+    #[test]
+    fn test_central_validation_logic() {
+        // Case 1: Valid calculation (N-BK7 default at 1050nm).
+        let refr = RefractiveIndexType::default();
+        let n = refr.get_refractive_index(nanometer!(1050.0)).unwrap();
+        assert!(n >= 1.0);
+
+        // Case 2: Validation during construction
+        // We verify that RefrIndexConst prevents invalid values at the start.
+        assert!(RefrIndexConst::new(0.9).is_err());
+        assert!(RefrIndexConst::new(f64::NAN).is_err());
+
+        // Case 3: The "Safety Net" in RefractiveIndexType
+        // We create a Sellmeier model that is valid at construction (finite coefficients)
+        // but produces a value < 1.0 or NaN during calculation.
+        // Sellmeier1 allows negative k-coefficients.
+        let sneaky_sellmeier = RefrIndexSellmeier1::new(
+            -10.0,
+            0.0,
+            0.0, // Large negative k1
+            0.01,
+            0.02,
+            103.0,
+            nanometer!(1000.0)..nanometer!(1100.0),
+        )
+        .unwrap();
+
+        let sneaky_enum = RefractiveIndexType::Sellmeier1(sneaky_sellmeier);
+        let result = sneaky_enum.get_refractive_index(nanometer!(1050.0));
+
+        // This must be caught by the central check in RefractiveIndexType.
+        assert!(result.is_err());
+        if let Err(OpossumError::Other(msg)) = result {
+            assert!(msg.contains("<1.0 or not finite"));
+        }
+    }
+
+    #[test]
+    fn test_error_propagation_from_variants() {
+        // Ensure that variant-specific errors (like out of range) are propagated.
+        let bk7 = RefractiveIndexType::default(); // Valid range: 1000..1100nm
+        let out_of_range = bk7.get_refractive_index(nanometer!(500.0));
+        assert!(out_of_range.is_err());
+    }
+
+    #[test]
+    fn test_trait_to_enum_consistency() {
+        // Ensure the RefractiveIndex trait's to_enum works for the variants.
+        let schott = RefrIndexSchott::default();
+        let enu = schott.to_enum();
+        assert!(matches!(enu, RefractiveIndexType::Schott(_)));
+    }
+}

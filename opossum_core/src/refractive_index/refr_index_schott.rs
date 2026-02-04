@@ -75,6 +75,11 @@ impl RefrIndexSchott {
                 "upper wavelength limit is invalid.".into(),
             ));
         }
+        if wavelength_range.start >= wavelength_range.end {
+            return Err(OpossumError::Other(
+                "wavelength range start must be less than end".into(),
+            ));
+        }
         Ok(Self {
             a0,
             a1,
@@ -183,6 +188,7 @@ impl RefrIndexSchott {
 }
 
 impl RefractiveIndex for RefrIndexSchott {
+    #[inline]
     fn get_refractive_index(&self, wavelength: Length) -> OpmResult<f64> {
         if !self.wvl_range.contains(&wavelength) {
             return Err(OpossumError::Other("wavelength outside valid range".into()));
@@ -359,6 +365,69 @@ mod test {
         assert_eq!(r.a3, 4.0);
         assert_eq!(r.a4, 5.0);
         assert_eq!(r.a5, 6.0);
+    }
+    #[test]
+    fn test_default_hzf52() {
+        let hzf52 = RefrIndexSchott::default();
+        // Verify default H-ZF52 coefficients
+        assert_eq!(hzf52.a0(), 3.267_600_58);
+        assert_eq!(hzf52.a1(), -2.053_845_66E-002);
+        assert_eq!(hzf52.a5(), 7.526_495_55E-005);
+        assert_eq!(hzf52.wavelength_range().start, nanometer!(1000.0));
+    }
+
+    #[test]
+    fn test_setters_and_getters() {
+        let mut r = RefrIndexSchott::default();
+
+        // Test all coefficient setters
+        r.set_a0(1.0);
+        r.set_a1(2.0);
+        r.set_a2(3.0);
+        r.set_a3(4.0);
+        r.set_a4(5.0);
+        r.set_a5(6.0);
+
+        assert_eq!(r.a0(), 1.0);
+        assert_eq!(r.a1(), 2.0);
+        assert_eq!(r.a2(), 3.0);
+        assert_eq!(r.a3(), 4.0);
+        assert_eq!(r.a4(), 5.0);
+        assert_eq!(r.a5(), 6.0);
+
+        // Test wavelength range setters
+        let new_range = nanometer!(400.0)..nanometer!(800.0);
+        r.set_wavelength_range(new_range.clone());
+        assert_eq!(r.wavelength_range(), &new_range);
+
+        r.set_wavelength_range_start(nanometer!(500.0));
+        assert_eq!(r.wavelength_range().start, nanometer!(500.0));
+
+        r.set_wavelength_range_end(nanometer!(700.0));
+        assert_eq!(r.wavelength_range().end, nanometer!(700.0));
+    }
+
+    #[test]
+    fn test_range_inclusivity() {
+        let r = RefrIndexSchott::default(); // Range: 1000nm to 1100nm
+
+        // Start is inclusive
+        assert!(r.get_refractive_index(nanometer!(1000.0)).is_ok());
+
+        // End is exclusive in Rust Ranges
+        assert!(r.get_refractive_index(nanometer!(1100.0)).is_err());
+    }
+
+    #[test]
+    fn test_enum_consistency() {
+        let r = RefrIndexSchott::default();
+        let r_enum: RefractiveIndexType = r.clone().into();
+
+        if let RefractiveIndexType::Schott(inner) = r_enum {
+            assert_eq!(inner, r);
+        } else {
+            panic!("Schott model enum conversion failed");
+        }
     }
     #[test]
     fn get_refractive_index() {

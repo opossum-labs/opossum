@@ -80,6 +80,11 @@ impl RefrIndexSellmeier1 {
                 "upper wavelength limit is invalid.".into(),
             ));
         }
+        if wavelength_range.start >= wavelength_range.end {
+            return Err(OpossumError::Other(
+                "wavelength range start must be less than end".into(),
+            ));
+        }
         Ok(Self {
             k1,
             k2,
@@ -186,6 +191,7 @@ impl RefrIndexSellmeier1 {
     }
 }
 impl RefractiveIndex for RefrIndexSellmeier1 {
+    #[inline]
     fn get_refractive_index(&self, wavelength: uom::si::f64::Length) -> OpmResult<f64> {
         if !self.wvl_range.contains(&wavelength) {
             return Err(OpossumError::Other("wavelength outside valid range".into()));
@@ -340,6 +346,73 @@ mod test {
         assert_eq!(r.l1, 4.0);
         assert_eq!(r.l2, 5.0);
         assert_eq!(r.l3, 6.0);
+    }
+    #[test]
+    fn test_default_bk7() {
+        let bk7 = RefrIndexSellmeier1::default();
+        // Check if default is indeed N-BK7 (Schott)
+        assert_eq!(bk7.k1(), 1.039_612_120);
+        assert_eq!(bk7.l1(), 0.006_000_698_67);
+        assert_eq!(bk7.wavelength_range().start, nanometer!(1000.0));
+    }
+
+    #[test]
+    fn test_setters_and_getters() {
+        let mut r = RefrIndexSellmeier1::default();
+
+        // Test K-coefficients
+        r.set_k1(1.5);
+        r.set_k2(2.5);
+        r.set_k3(3.5);
+        assert_eq!(r.k1(), 1.5);
+        assert_eq!(r.k2(), 2.5);
+        assert_eq!(r.k3(), 3.5);
+
+        // Test L-coefficients
+        r.set_l1(0.01);
+        r.set_l2(0.02);
+        r.set_l3(0.03);
+        assert_eq!(r.l1(), 0.01);
+        assert_eq!(r.l2(), 0.02);
+        assert_eq!(r.l3(), 0.03);
+
+        // Test Wavelength Range setters
+        let new_range = nanometer!(400.0)..nanometer!(800.0);
+        r.set_wavelength_range(new_range.clone());
+        assert_eq!(r.wavelength_range(), &new_range);
+
+        r.set_wavelength_range_start(nanometer!(500.0));
+        assert_eq!(r.wavelength_range().start, nanometer!(500.0));
+
+        r.set_wavelength_range_end(nanometer!(700.0));
+        assert_eq!(r.wavelength_range().end, nanometer!(700.0));
+    }
+
+    #[test]
+    fn test_wavelength_range_logic() {
+        let r = RefrIndexSellmeier1::default(); // 1000nm to 1100nm
+
+        // Lower bound: inclusive
+        assert!(r.get_refractive_index(nanometer!(1000.0)).is_ok());
+
+        // Upper bound: exclusive (Rust Range behavior: start..end)
+        assert!(r.get_refractive_index(nanometer!(1100.0)).is_err());
+
+        // Out of bounds
+        assert!(r.get_refractive_index(nanometer!(999.9)).is_err());
+        assert!(r.get_refractive_index(nanometer!(1100.1)).is_err());
+    }
+
+    #[test]
+    fn test_from_trait_integration() {
+        let r = RefrIndexSellmeier1::default();
+        let r_enum: RefractiveIndexType = r.clone().into();
+
+        if let RefractiveIndexType::Sellmeier1(inner) = r_enum {
+            assert_eq!(inner, r);
+        } else {
+            panic!("From trait conversion to RefractiveIndexType::Sellmeier1 failed");
+        }
     }
     #[test]
     fn get_refractive_index() {
