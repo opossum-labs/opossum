@@ -1,12 +1,12 @@
 use crate::components::node_editor::{
     hooks::use_update_signal_with_reactive_prop,
-    inputs::input_components::{LabeledInput, LabeledSelect},
-    node_config_editor::NodeChangeEvent,
+    inputs::input_components::{LabeledInput, LabeledSelect, NodeConfigUnitInput},
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_core::nanometer;
+use opossum_core::{meter, nanometer};
 use uom::si::{f64::Length, length::nanometer};
 use uuid::Uuid;
 
@@ -18,17 +18,20 @@ pub fn LengthOptionEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut length_opt_sig = use_signal(|| length_opt);
+    use_update_signal_with_reactive_prop(length_opt, length_opt_sig);
+    
     let select_id = format!("lengthOptionProperty{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
-    let bound_node_id = use_signal(|| node_id);
-    use_update_signal_with_reactive_prop(node_id, bound_node_id);
-    use_set_node_change_property(
-        *bound_node_id.read(),
-        &property_key,
-        length_opt,
-        length_opt_sig,
-        on_change,
-    );
+    // let bound_node_id = use_signal(|| node_id);
+    // use_update_signal_with_reactive_prop(node_id, bound_node_id);
+    
+    // use_set_node_change_property(
+    //     *bound_node_id.read(),
+    //     &property_key,
+    //     length_opt,
+    //     length_opt_sig,
+    //     on_change,
+    // );
 
     rsx! {
         LabeledSelect {
@@ -53,15 +56,21 @@ pub fn LengthOptionEditor(
                     rsx! {},
                     |length| {
                         rsx! {
-                            LabeledInput {
-                                id: format!("lengthOptionProperty{property_key}").to_camel_case(),
-                                label: format!("{} in nm", property_key.to_sentence_case()),
-                                value: format!("{:.3}", length.get::<nanometer>()),
-                                r#type: "number",
-                                onchange: move |e: Event<FormData>| {
-                                    if let Ok(length) = e.data.value().parse::<f64>() {
-                                        length_opt_sig.set(Some(nanometer!(length)));
-                                    }
+                            NodeConfigUnitInput {
+                                id: format!("lengthOptionProperty{property_key}").to_camel_case().as_str(),
+                                label: property_key.to_sentence_case(),
+                                value: length.value,
+                                base_unit: "m",
+                                onchange: move |new_length: f64| {
+                                    length_opt_sig.set(Some(meter!(new_length)));
+                                    on_change
+                                        .call(NodeChangeEvent {
+                                            node_id,
+                                            action: NodeChangeAction::Property(
+                                                property_key.clone(),
+                                                length_opt_sig.read().clone().into(),
+                                            ),
+                                        });
                                 },
                             }
                         }
