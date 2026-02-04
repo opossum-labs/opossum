@@ -32,10 +32,6 @@ pub fn AlignmentEditor(
     node_type: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    // let mut alignment_sig = use_signal(|| alignment);
-    // use_context_provider(|| alignment_sig);
-    // use_update_signal_with_reactive_prop(alignment, alignment_sig);
-    // let alignment_memo = use_memo(move || *alignment_sig.read());
     let alignment_memo = use_memo(use_reactive!(|alignment| alignment));
 // 
     let on_save = EventHandler::new(move |new_iso: Isometry| {
@@ -45,31 +41,6 @@ pub fn AlignmentEditor(
         });
     });
 
-    let on_new_translation = EventHandler::new(move |(new_trans, axis): (Length, TranslationAxis)| {
-        let old_alignment_ax_val = alignment_memo.read().translation_of_axis(axis);
-        if relative_ne!(
-            old_alignment_ax_val.value, new_trans.value
-        ) {
-            let mut new_alignment = *alignment_memo.read();
-            if new_alignment
-                                        .set_translation_of_axis(axis, new_trans)
-                .is_ok()
-            {
-                on_change.call(NodeChangeEvent {
-                    node_id,
-                    action: NodeChangeAction::Alignment(new_alignment),
-                })
-            }
-            else{
-                OPOSSUM_UI_LOGS.write().add_log(
-                    format!("Failed to set alignment for axis {axis}!",)
-                        .as_str(),
-                );
-            }
-        }
-
-    });
-
     let accordion_content = if node_type == "reflective grating" {
         rsx! {}
     } else {
@@ -77,7 +48,7 @@ pub fn AlignmentEditor(
             // RotationAlignmentInputs { alignment_sig, axes_skip: None, on_save }
             TranslationAlignmentInputs {
                 alignment: alignment_memo,
-                on_new_translation,
+                on_new_translation: on_new_translation(on_save, alignment_memo.into()),
                 node_id,
             }
         }
@@ -91,6 +62,29 @@ pub fn AlignmentEditor(
             content_id: "alignmentCollapse",
         }
     }
+}
+
+fn on_new_translation(on_save: EventHandler<Isometry>, alignment: ReadSignal<Isometry>) -> EventHandler<(Length, TranslationAxis)> {
+    EventHandler::new(move |(new_trans, axis): (Length, TranslationAxis)| {
+        let old_alignment_ax_val = alignment.read().translation_of_axis(axis);
+        if relative_ne!(
+            old_alignment_ax_val.value, new_trans.value
+        ) {
+            let mut new_alignment = *alignment.read();
+            if new_alignment
+                                        .set_translation_of_axis(axis, new_trans)
+                .is_ok()
+            {
+                on_save.call(new_alignment);
+            }
+            else{
+                OPOSSUM_UI_LOGS.write().add_log(
+                    format!("Failed to set alignment for axis {axis}!",)
+                        .as_str(),
+                );
+            }
+        }
+    })
 }
 
 #[component]
@@ -178,7 +172,11 @@ fn PositioningInputs(
 
     rsx! {
         RotationAlignmentInputs { alignment_sig: position_sig, axes_skip: None, on_save }
-        // TranslationAlignmentInputs { alignment_sig: position_sig, on_save, node_id }
+        TranslationAlignmentInputs {
+            alignment: position_sig,
+            on_new_translation: on_new_translation(on_save, position_sig.into()),
+            node_id,
+        }
     }
 }
 
