@@ -29,8 +29,6 @@ pub fn FlushableTextInput(
     #[props(optional)] eval_input: Option<Callback<String, bool>>,
     #[props(default = false)] readonly: bool,
 ) -> Element {
-
-    println!("new FlushableTextInput created with id: {}", id);
     let mut form_ctx = use_context::<FormContext>();
 
     let mut local_value = use_signal(|| value.read().clone());
@@ -58,7 +56,6 @@ pub fn FlushableTextInput(
         perform_save();
     });
 
-    println!("value is: {}", local_value());
     rsx! {
         div { class: "form-floating border-start", "data-mdb-input-init": "",
             input {

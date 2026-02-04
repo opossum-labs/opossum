@@ -1,8 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
-    accordion::AccordionItem,
-    inputs::input_components::{FlushableTextInput, LabeledCheckboxInput, LabeledInput},
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    accordion::AccordionItem, hooks::use_update_signal_with_reactive_prop, inputs::input_components::{FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput}, node_config_editor::{NodeChangeAction, NodeChangeEvent}
 };
 use dioxus::prelude::*;
 use opossum_core::{J_per_cm2, nodes::fluence_detector::Fluence};
@@ -18,6 +16,8 @@ pub fn GeneralEditor(
     inverted: bool,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
+    let mut lidt_sig = use_signal(|| lidt.get::<joule_per_square_centimeter>());
+    use_update_signal_with_reactive_prop(lidt.get::<joule_per_square_centimeter>(), lidt_sig);
     let accordion_content = vec![
         rsx! {
             NodeTypeInput { node_type: node_type, label: "Node Type" }
@@ -36,23 +36,21 @@ pub fn GeneralEditor(
             }
         },
         rsx! {
-            FlushableTextInput {
-                id: format!("nodeLidt_{}", node_id),
-                label: "LIDT in J/cm²".to_string(),
-                value: format!("{:.2}", lidt.get::<joule_per_square_centimeter>()),
-                r#type: "number",
-                step: "0.1",
-                min: "0.0",
-                on_save: move |new_val_str: String| {
-                    if let Ok(parsed_num) = new_val_str.parse::<f64>()
-                         && parsed_num >= 0.0 {
+            NodeConfigUnitInput {
+                    id: format!("nodeLidt_{}", node_id),
+                    label: "Damage Threshold".to_string(),
+                    value: lidt_sig,
+                    base_unit: "J/cm²",
+                    onchange: move |new_lidt: f64| {
+                    if new_lidt >= 0.0 {
+                        lidt_sig.set(new_lidt);
                              on_change.call(NodeChangeEvent {
                                 node_id,
-                                action: NodeChangeAction::Lidt(J_per_cm2!(parsed_num)),
+                                action: NodeChangeAction::Lidt(J_per_cm2!(new_lidt)),
                             });
                         }
                 }
-            }
+                }
         },
         rsx! {
             NodeInvertedInput {
@@ -78,6 +76,7 @@ pub fn GeneralEditor(
         }
     }
 }
+
 
 #[component]
 pub fn NodeInvertedInput(
