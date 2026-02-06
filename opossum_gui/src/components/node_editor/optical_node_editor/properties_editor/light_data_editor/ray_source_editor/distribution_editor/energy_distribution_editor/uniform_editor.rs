@@ -6,7 +6,6 @@ use dioxus::prelude::*;
 use opossum_core::energy_distributions::{EnergyDistType, EnergyDistribution, UniformDist};
 use opossum_core::joule;
 use strum::EnumIter;
-use uom::si::energy::joule;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 pub enum UniformParam {
@@ -15,7 +14,7 @@ pub enum UniformParam {
 
 impl From<UniformParam> for InputParam {
     fn from(_: UniformParam) -> Self {
-        Self::Energy("Energy in J".into())
+        Self::Energy("Energy".into())
     }
 }
 
@@ -25,7 +24,7 @@ impl IntoInputDataStrings<UniformDist> for UniformParam {
     }
 
     fn create_value_string(&self, obj: &UniformDist) -> String {
-        format!("{:.3}", obj.get_total_energy().get::<joule>())
+        format!("{}", obj.get_total_energy().value)
     }
 }
 

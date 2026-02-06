@@ -4,9 +4,9 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::energy_distributions::{EnergyDistType, EnergyDistribution, General2DGaussian};
-use opossum_core::{degree, joule, millimeter};
+use opossum_core::{degree, joule, meter};
 use strum::{EnumIter, IntoEnumIterator};
-use uom::si::{angle::degree, energy::joule, length::millimeter};
+use uom::si::angle::degree;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 pub enum General2DGaussianParam {
@@ -23,13 +23,13 @@ pub enum General2DGaussianParam {
 impl From<General2DGaussianParam> for InputParam {
     fn from(value: General2DGaussianParam) -> Self {
         match value {
-            General2DGaussianParam::CenterX => Self::Length("Center X in mm".into()),
-            General2DGaussianParam::CenterY => Self::Length("Center Y in mm".into()),
-            General2DGaussianParam::SigmaX => Self::Length("Sigma X in mm".into()),
-            General2DGaussianParam::SigmaY => Self::Length("Sigma Y in mm".into()),
-            General2DGaussianParam::Energy => Self::Energy("Energy in J".into()),
+            General2DGaussianParam::CenterX => Self::Length("Center X".into()),
+            General2DGaussianParam::CenterY => Self::Length("Center Y".into()),
+            General2DGaussianParam::SigmaX => Self::Length("Sigma X".into()),
+            General2DGaussianParam::SigmaY => Self::Length("Sigma Y".into()),
+            General2DGaussianParam::Energy => Self::Energy("Energy".into()),
             General2DGaussianParam::Power => Self::F64("Power".into()),
-            General2DGaussianParam::Theta => Self::Angle("Theta in degrees".into()),
+            General2DGaussianParam::Theta => Self::Angle("Theta".into()),
             General2DGaussianParam::Rectangular => Self::Bool("Rectangular".into()),
         }
     }
@@ -52,13 +52,13 @@ impl IntoInputDataStrings<General2DGaussian> for General2DGaussianParam {
 
     fn create_value_string(&self, obj: &General2DGaussian) -> String {
         match self {
-            Self::CenterX => format!("{:.3e}", obj.center().x.get::<millimeter>()),
-            Self::CenterY => format!("{:.3e}", obj.center().y.get::<millimeter>()),
-            Self::SigmaX => format!("{:.3e}", obj.sigma().x.get::<millimeter>()),
-            Self::SigmaY => format!("{:.3e}", obj.sigma().y.get::<millimeter>()),
-            Self::Energy => format!("{:.3}", obj.get_total_energy().get::<joule>()),
+            Self::CenterX => format!("{}", obj.center().x.value),
+            Self::CenterY => format!("{}", obj.center().y.value),
+            Self::SigmaX => format!("{}", obj.sigma().x.value),
+            Self::SigmaY => format!("{}", obj.sigma().y.value),
+            Self::Energy => format!("{}", obj.get_total_energy().value),
             Self::Power => format!("{}", obj.power()),
-            Self::Theta => format!("{:.3}", obj.theta().get::<degree>()),
+            Self::Theta => format!("{}", obj.theta().get::<degree>()),
             Self::Rectangular => format!("{}", obj.rectangular()),
         }
     }
@@ -73,19 +73,19 @@ impl IntoInputData<f64, General2DGaussian, EnergyDistType> for General2DGaussian
     fn setter_from_obj(&self) -> impl FnMut(&mut General2DGaussian, f64) {
         match self {
             Self::CenterX => move |obj: &mut General2DGaussian, val: f64| {
-                obj.set_center_x(millimeter!(val))
+                obj.set_center_x(meter!(val))
                     .log_err_with_context("`set_center_x` of gaussian energy distribution");
             },
             Self::CenterY => move |obj: &mut General2DGaussian, val: f64| {
-                obj.set_center_y(millimeter!(val))
+                obj.set_center_y(meter!(val))
                     .log_err_with_context("`set_center_y` of gaussian energy distribution");
             },
             Self::SigmaX => move |obj: &mut General2DGaussian, val: f64| {
-                obj.set_sigma_x(millimeter!(val))
+                obj.set_sigma_x(meter!(val))
                     .log_err_with_context("`set_sigma_x` of gaussian energy distribution");
             },
             Self::SigmaY => move |obj: &mut General2DGaussian, val: f64| {
-                obj.set_sigma_y(millimeter!(val))
+                obj.set_sigma_y(meter!(val))
                     .log_err_with_context("`set_sigma_y` of gaussian energy distribution");
             },
             Self::Energy => move |obj: &mut General2DGaussian, val: f64| {

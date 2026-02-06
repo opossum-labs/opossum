@@ -3,12 +3,13 @@ use crate::{
     components::{
         logger::LogResultExt,
         node_editor::inputs::{
-            InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
+            InputParam, IntoInputData, IntoInputDataStrings, format_si_notation, input_components::RowedInputs, parse_si_number, parse_unit_input_strict
         },
     },
 };
+
 use dioxus::prelude::*;
-use opossum_core::nanometer;
+use opossum_core::meter;
 use opossum_core::spectral_distribution::{LaserLines, SpecDistType};
 use strum::EnumIter;
 use uom::si::length::nanometer;
@@ -22,7 +23,7 @@ pub enum LaserLinesParam {
 impl From<LaserLinesParam> for InputParam {
     fn from(value: LaserLinesParam) -> Self {
         match value {
-            LaserLinesParam::Wavelength => Self::Length("Wavelength in nm".into()),
+            LaserLinesParam::Wavelength => Self::Length("Wavelength".into()),
             LaserLinesParam::RelativeIntensity => Self::F64("Relative intensity".into()),
         }
     }
@@ -39,11 +40,11 @@ impl IntoInputDataStrings<LaserLines> for LaserLinesParam {
     fn create_value_string(&self, obj: &LaserLines) -> String {
         obj.lines().last().map_or_else(
             || match self {
-                Self::Wavelength => format!("{:.3}", 1054),
+                Self::Wavelength => format!("{}", 1054e-9),
                 Self::RelativeIntensity => format!("{:.3}", 1.0),
             },
             |laser_line| match self {
-                Self::Wavelength => format!("{:.3}", laser_line.0.get::<nanometer>()),
+                Self::Wavelength => format!("{}", laser_line.0.value),
                 Self::RelativeIntensity => format!("{:.3}", laser_line.1),
             },
         )
@@ -77,12 +78,20 @@ pub fn LaserLineInput(
                         Some(FormValue::Text(wvl_val)),
                         Some(FormValue::Text(rel_int_val)),
                     ) = (wvl_opt.clone(), rel_int_opt.clone()) {
-                        if let (Ok(wvl), Ok(rel_int)) = (wvl_val.parse(), rel_int_val.parse()) {
-                            if let SpecDistType::LaserLines(ll) = &mut *spect_dist_type_sig
-                                .write()
-                            {
-                                ll.add_lines(vec![(nanometer!(wvl), rel_int)])
-                                    .log_err_with_context("Error adding laser line");
+                        if let Ok((num_str, prefix_str)) = parse_unit_input_strict(
+                            &wvl_val,
+                            "m",
+                        ) {
+                            if let (Some(wvl), Ok(rel_int)) = (
+                                parse_si_number(&num_str, &prefix_str),
+                                rel_int_val.parse(),
+                            ) {
+                                if let SpecDistType::LaserLines(ll) = &mut *spect_dist_type_sig
+                                    .write()
+                                {
+                                    ll.add_lines(vec![(meter!(wvl), rel_int)])
+                                        .log_err_with_context("Error adding laser line");
+                                }
                             }
                         } else {
                             OPOSSUM_UI_LOGS
@@ -131,7 +140,7 @@ fn LaserLineList(laser_lines: LaserLines, spect_dist_type_sig: Signal<SpecDistTy
                     };
                     rsx! {
                         li { class,
-                            span { {format!("λ: {:.3} nm", line.0.get::<nanometer>())} }
+                            span { {format!("λ: {}m", format_si_notation(line.0.value))} }
                             span { {format!("Int: {:.3}", line.1)} }
                             a {
                                 class: "text-danger ms-auto",

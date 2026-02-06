@@ -255,7 +255,7 @@ fn format_fixed_decimal(v: f64, decimals: usize) -> String {
 ///
 /// `Some(f64)` containing the scaled value if parsing succeeds, or `None` if
 /// the numeric string is invalid.
-fn parse_si_number(num_str: &str, prefix_str: &str) -> Option<f64> {
+pub fn parse_si_number(num_str: &str, prefix_str: &str) -> Option<f64> {
     let max_num = 1e33 * (1. - 1e-14);
     let min_num = 0.0;
     let factor = si_prefix_to_exponent(prefix_str);
@@ -335,7 +335,7 @@ fn is_permissive_unit_input(input: &str, base_unit: &str) -> bool {
 /// `Ok((value, prefix))` where `value` is the numeric string and `prefix`
 /// is the extracted SI prefix (or empty if none is present).
 /// Returns `Err(())` if the input does not strictly conform to the expected format.
-fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, String), ()> {
+pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, String), ()> {
     let valid_prefixes: Vec<char> = vec![
         'q', 'r', 'y', 'z', 'a', 'f', 'p', 'n', 'µ', 'u', 'm', 'k', 'M', 'G', 'T', 'P', 'E', 'Z',
         'Y', 'R', 'Q',
