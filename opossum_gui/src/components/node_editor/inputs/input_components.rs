@@ -235,7 +235,53 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 onchange: move |e| input_data.callback.call(e),
             }
         }
-    } else {
+    } 
+    else if let InputParam::Energy(_) = input_data.input_param {
+        // Selects feuern sofort
+        rsx! {
+            NodeConfigUnitInput {
+                id: input_data.id,
+                label: input_data.input_param.label(),
+                value: input_data.value.parse::<f64>().unwrap_or_default(),
+                base_unit: "J",
+                onchange: move |new_energy: f64| {
+                    input_data.callback_str.call(new_energy.to_string());
+                },
+                readonly: input_data.readonly,
+            }
+        }
+    } 
+    else if let InputParam::Length(_) = input_data.input_param {
+        // Selects feuern sofort
+        rsx! {
+            NodeConfigUnitInput {
+                id: input_data.id,
+                label: input_data.input_param.label(),
+                value: input_data.value.parse::<f64>().unwrap_or_default(),
+                base_unit: "m",
+                onchange: move |new_length: f64| {
+                    input_data.callback_str.call(new_length.to_string());
+                },
+                readonly: input_data.readonly,
+            }
+        }
+    } 
+    else if let InputParam::Angle(_) = input_data.input_param {
+        // Selects feuern sofort
+        rsx! {
+            NodeConfigUnitInput {
+                id: input_data.id,
+                label: input_data.input_param.label(),
+                value: input_data.value.parse::<f64>().unwrap_or_default(),
+                base_unit: "°",
+                onchange: move |new_angle: f64| {
+                    input_data.callback_str.call(new_angle.to_string());
+                },
+                readonly: input_data.readonly,
+            }
+        }
+    } 
+    else {
         // HIER IST DIE ÄNDERUNG:
         // Für Zahlen und Text nutzen wir jetzt FlushableTextInput!
         // Wir nutzen input_data.callback_str statt input_data.callback

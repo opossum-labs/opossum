@@ -1,11 +1,10 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-mod collimated_source_editor;
 mod distribution_editor;
 mod image_source_editor;
 mod point_source_editor;
 mod ray_type_selection;
 use dioxus::prelude::*;
-use opossum_core::prelude::{LightDataBuilder, RayDataBuilder};
+use opossum_core::prelude::{LightDataBuilder, PointSrc, RayDataBuilder};
 use ray_type_selection::RayDataBuilderSelector;
 
 use crate::components::node_editor::{
@@ -13,7 +12,7 @@ use crate::components::node_editor::{
     hooks::use_update_signal_with_reactive_prop,
     inputs::input_components::RowedInputs,
     optical_node_editor::properties_editor::light_data_editor::ray_source_editor::{
-        collimated_source_editor::ReferenceLengthEditor, distribution_editor::DistributionEditor,
+        point_source_editor::ReferenceLengthEditor, distribution_editor::DistributionEditor,
         image_source_editor::get_image_source_input_params,
     },
 };
@@ -23,7 +22,7 @@ pub fn RaySourceEditor(
     ray_data_builder: RayDataBuilder,
     light_data_builder_sig: Signal<LightDataBuilder>,
 ) -> Element {
-    let ray_data_builder_sig: Signal<RayDataBuilder> = use_signal(|| ray_data_builder.clone());
+    let mut ray_data_builder_sig: Signal<RayDataBuilder> = use_signal(|| ray_data_builder.clone());
     use_update_signal_with_reactive_prop(ray_data_builder.clone(), ray_data_builder_sig);
     use_context_provider(|| ray_data_builder_sig);
 
@@ -46,7 +45,12 @@ pub fn RaySourceEditor(
         }
         RayDataBuilder::PointSrc(point_src) => {
             element_list.push(rsx! {
-                ReferenceLengthEditor { point_src: point_src.clone() }
+                ReferenceLengthEditor {
+                    point_src: point_src.clone(),
+                    ray_data_handler: EventHandler::new(move |new_point_src: PointSrc| {
+                        ray_data_builder_sig.set(RayDataBuilder::PointSrc(new_point_src));
+                    }),
+                }
                 DistributionEditor {}
             });
         }

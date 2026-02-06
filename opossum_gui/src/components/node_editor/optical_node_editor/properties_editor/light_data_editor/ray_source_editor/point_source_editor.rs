@@ -1,35 +1,33 @@
 use crate::components::{
-    logger::LogResultExt, node_editor::inputs::input_components::LabeledInput,
+    logger::LogResultExt, node_editor::inputs::input_components::NodeConfigUnitInput,
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    millimeter,
-    prelude::{PointSrc, RayDataBuilder},
+    meter,
+    prelude::PointSrc,
 };
-use uom::si::length::millimeter;
 
 #[component]
 pub fn ReferenceLengthEditor(
-    ray_data_builder_sig: Signal<RayDataBuilder>,
     point_src: PointSrc,
+    ray_data_handler: EventHandler<PointSrc>,
 ) -> Element {
     rsx! {
-        LabeledInput {
+        NodeConfigUnitInput {
             id: "pointsrcRefLength",
-            label: "Reference Length in mm",
-            value: format!("{:.3}", point_src.reference_length().get::<millimeter>()),
-            onchange: move |e: Event<FormData>| {
+            label: "Reference Length",
+            value: point_src.reference_length().value,
+            base_unit: "m",
+            onchange: move |new_length: f64| {
                 let mut point_src = point_src.clone();
-                if let Ok(ref_length) = e.data.value().parse::<f64>() {
-                    point_src
-                        .set_reference_length(millimeter!(ref_length))
-                        .log_err_with_context(
-                            "validation failed in `set_reference_length` of PointSrc",
-                        );
-                    ray_data_builder_sig.set(RayDataBuilder::PointSrc(point_src));
-                }
+
+                point_src
+                    .set_reference_length(meter!(new_length))
+                    .log_err_with_context(
+                        "validation failed in `set_reference_length` of PointSrc",
+                    );
+                ray_data_handler.call(point_src);
             },
-            r#type: "number",
         }
     }
 }
