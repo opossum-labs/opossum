@@ -399,7 +399,7 @@ pub fn NodeConfigUnitInput(
             base_unit,
             onchange,
             container_class: "form-floating border-start".to_string(),
-            input_class: "form-control bg-dark text-light form-control-sm".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
             label_class: "form-label text-secondary".to_string(),
             readonly,
         }

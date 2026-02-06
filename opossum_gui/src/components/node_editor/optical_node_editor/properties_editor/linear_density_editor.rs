@@ -1,11 +1,12 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop, inputs::input_components::LabeledInput,
-    node_config_editor::NodeChangeEvent,
+    hooks::use_update_signal_with_reactive_prop, inputs::input_components::{LabeledInput, NodeConfigUnitInput},
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
+use approx::relative_ne;
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_core::num_per_mm;
+use opossum_core::{num_per_m, num_per_mm};
 use uom::si::{f64::LinearNumberDensity, linear_number_density::per_millimeter};
 use uuid::Uuid;
 
@@ -27,6 +28,25 @@ pub fn LinearDensityEditor(
         on_change,
     );
     rsx! {
+        // NodeConfigUnitInput {
+        //     id: format!("linearDensityProperty{property_key}").to_camel_case(),
+        //     label: property_key.to_sentence_case(),
+        //     value: linear_density_sig.read().value,
+        //     base_unit: "m⁻¹",
+        //     onchange: move |new_linear_density: f64| {
+        //         if relative_ne!(linear_density.value, new_linear_density) {
+        //             linear_density_sig.set(num_per_m!(new_linear_density));
+        //             on_change
+        //                 .call(NodeChangeEvent {
+        //                     node_id,
+        //                     action: NodeChangeAction::Property(
+        //                         property_key.clone(),
+        //                         num_per_m!(new_linear_density).into(),
+        //                     ),
+        //                 });
+        //         }
+        //     },
+        // }
         LabeledInput {
             id: format!("linearDensityProperty{property_key}").to_camel_case(),
             label: format!("{} in 1/mm", property_key.to_sentence_case()),

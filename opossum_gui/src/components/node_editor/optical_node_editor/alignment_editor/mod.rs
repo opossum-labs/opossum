@@ -31,7 +31,6 @@ pub fn AlignmentEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let alignment_memo = use_memo(use_reactive!(|alignment| alignment));
-// 
     let on_save = EventHandler::new(move |new_iso: Isometry| {
         on_change.call(NodeChangeEvent {
             node_id,
