@@ -12,7 +12,6 @@ use dioxus::prelude::*;
 use opossum_core::meter;
 use opossum_core::spectral_distribution::{LaserLines, SpecDistType};
 use strum::EnumIter;
-use uom::si::length::nanometer;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 pub enum LaserLinesParam {

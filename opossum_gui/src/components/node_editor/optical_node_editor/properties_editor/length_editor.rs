@@ -1,7 +1,6 @@
 use crate::components::node_editor::{
     hooks::use_update_signal_with_reactive_prop, inputs::input_components::NodeConfigUnitInput,
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use approx::relative_ne;
 use dioxus::prelude::*;

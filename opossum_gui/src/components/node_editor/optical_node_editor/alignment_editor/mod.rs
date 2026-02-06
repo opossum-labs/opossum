@@ -7,10 +7,8 @@ use crate::{
     components::node_editor::{
         accordion::AccordionItem,
         hooks::use_update_signal_with_reactive_prop,
-        inputs::{
-            InputData,
-            input_components::{LabeledSelect, NodeConfigUnitInput, RowedElements, RowedInputs},
-        },
+        inputs::
+            input_components::{LabeledSelect, NodeConfigUnitInput, RowedElements},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
 };
@@ -18,10 +16,10 @@ use approx::relative_ne;
 use dioxus::prelude::*;
 use grating_alignment::GratingAlignmentInputs;
 use opossum_core::{
-    degree, meter, millimeter, prelude::{Isometry, Properties}, utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis}
+    degree, meter, prelude::{Isometry, Properties}, utils::geom_transformation::{RotationAxis, TranslationAxis}
 };
 use strum::IntoEnumIterator;
-use uom::si::{angle::degree, f64::{Angle, Length}, length::millimeter};
+use uom::si::{angle::degree, f64::{Angle, Length}};
 use uuid::Uuid;
 
 #[component]
@@ -311,7 +309,7 @@ fn RotationAlignmentInputs(
 
 #[component]
 pub fn RotationInput(alignment: ReadSignal<Isometry>, axis: RotationAxis, id: String, on_new_rotation: EventHandler<(Angle, RotationAxis)>) -> Element{
-    let mut value_sig = use_signal(move || alignment.read().rotation_of_axis(axis).get::<degree>());
+    let value_sig = use_signal(move || alignment.read().rotation_of_axis(axis).get::<degree>());
     use_update_signal_with_reactive_prop(alignment.read().rotation_of_axis(axis).get::<degree>(), value_sig);
 
     rsx!{
@@ -325,89 +323,4 @@ pub fn RotationInput(alignment: ReadSignal<Isometry>, axis: RotationAxis, id: St
             },
         }
     }
-}
-
-fn on_isometry_option_change_str(
-    mut iso_sig: Signal<Isometry>,
-    axis_type: AlignmentAxis,
-    on_save: EventHandler<Isometry>,
-) -> EventHandler<String> {
-    EventHandler::new(move |val_str: String| {
-        if let Ok(val) = val_str.parse::<f64>() {
-            let mut iso = *iso_sig.read();
-            let res = match axis_type {
-                AlignmentAxis::Translation(translation_axis) => {
-                    iso.set_translation_of_axis(translation_axis, millimeter!(val))
-                }
-                AlignmentAxis::Rotation(rotation_axis) => {
-                    iso.set_rotation_of_axis(rotation_axis, degree!(val))
-                }
-            };
-            match res {
-                Ok(()) => {
-                    iso_sig.set(iso);
-                    on_save.call(iso);
-                }
-                Err(err_str) => {
-                    OPOSSUM_UI_LOGS.write().add_log(
-                        format!("Failed to set alignment for axis {axis_type}: {err_str}",)
-                            .as_str(),
-                    );
-                }
-            }
-        }
-    })
-}
-
-fn get_translation_alignment_input_data(
-    iso_sig: Signal<Isometry>,
-    on_save: EventHandler<Isometry>,
-) -> Vec<InputData> {
-    let id_add_on = "inputNodeAlignmentTrans";
-    let mut alignment_inputs = Vec::<InputData>::new();
-
-    for trans_axis in TranslationAxis::iter() {
-        alignment_inputs.push(InputData::new(
-            trans_axis.into(),
-            id_add_on,
-            EventHandler::new(|_| {}),
-            on_isometry_option_change_str(iso_sig, AlignmentAxis::Translation(trans_axis), on_save),
-            format!(
-                "{:.3}",
-                iso_sig
-                    .read()
-                    .translation_of_axis(trans_axis)
-                    .get::<millimeter>()
-            ),
-        ));
-    }
-    alignment_inputs
-}
-
-fn get_rotation_alignment_input_data(
-    iso_sig: Signal<Isometry>,
-    axes_skip: Option<&Vec<RotationAxis>>,
-    on_save: EventHandler<Isometry>,
-) -> Vec<InputData> {
-    let id_add_on = "inputNodeAlignmentRot";
-    let mut alignment_inputs = Vec::<InputData>::new();
-
-    for rot_axis in RotationAxis::iter() {
-        if let Some(axes_skip) = axes_skip
-            && axes_skip.contains(&rot_axis)
-        {
-            continue;
-        }
-        alignment_inputs.push(InputData::new(
-            rot_axis.into(),
-            id_add_on,
-            EventHandler::new(|_| {}),
-            on_isometry_option_change_str(iso_sig, AlignmentAxis::Rotation(rot_axis), on_save),
-            format!(
-                "{:.3}",
-                iso_sig.read().rotation_of_axis(rot_axis).get::<degree>()
-            ),
-        ));
-    }
-    alignment_inputs
 }

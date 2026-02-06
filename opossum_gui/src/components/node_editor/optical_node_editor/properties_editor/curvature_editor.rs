@@ -8,7 +8,7 @@ use approx::relative_ne;
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_core::{meter, prelude::{Proptype, millimeter}};
-use uom::si::{f64::Length, length::millimeter};
+use uom::si::f64::Length;
 use uuid::Uuid;
 
 #[component]

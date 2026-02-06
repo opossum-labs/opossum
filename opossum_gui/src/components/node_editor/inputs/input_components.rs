@@ -3,7 +3,6 @@
 use crate::{OPOSSUM_UI_LOGS, components::node_editor::inputs::{InputData, InputParam, format_si_notation, is_permissive_unit_input, parse_si_number, parse_unit_input_strict}};
 use dioxus::prelude::*;
 use itertools::Itertools;
-use uuid::Uuid;
 use std::ops::{AddAssign, SubAssign};
 
 // ========================================================

@@ -9,7 +9,6 @@ use opossum_core::{
     utils::try_f64_to_usize,
 };
 use strum::EnumIter;
-use uom::si::length::nanometer;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 pub enum GaussianSpectrumParam {

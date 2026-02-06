@@ -1,13 +1,12 @@
 use crate::components::node_editor::{
     hooks::use_update_signal_with_reactive_prop,
-    inputs::input_components::{LabeledInput, LabeledSelect, NodeConfigUnitInput},
+    inputs::input_components::{LabeledSelect, NodeConfigUnitInput},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
 use opossum_core::{meter, nanometer};
-use uom::si::{f64::Length, length::nanometer};
+use uom::si::f64::Length;
 use uuid::Uuid;
 
 #[component]
@@ -22,17 +21,6 @@ pub fn LengthOptionEditor(
     
     let select_id = format!("lengthOptionProperty{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
-    // let bound_node_id = use_signal(|| node_id);
-    // use_update_signal_with_reactive_prop(node_id, bound_node_id);
-    
-    // use_set_node_change_property(
-    //     *bound_node_id.read(),
-    //     &property_key,
-    //     length_opt,
-    //     length_opt_sig,
-    //     on_change,
-    // );
-
     rsx! {
         LabeledSelect {
             id: select_id,
