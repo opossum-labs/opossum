@@ -8,6 +8,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     optic_node::OpticNode,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
+    utils::file_utils::sanitize_filename,
 };
 
 static HTML_REPORT: &str = include_str!("../html/html_report.html");
@@ -87,7 +88,11 @@ impl HtmlReport {
         for node_report in analysis_report.node_reports() {
             node_report.properties().export_data(
                 &data_dir,
-                &format!("_{}_{}", &node_report.name(), &node_report.uuid()),
+                &format!(
+                    "_{}_{}",
+                    sanitize_filename(node_report.name()),
+                    &node_report.uuid()
+                ),
             )?;
         }
 
@@ -132,8 +137,9 @@ impl HtmlNodeReport {
             node_name: node_report.name().to_string(),
             node_type: node_report.node_type().to_string(),
             props: node_report.properties().html_props(&format!(
-                "{id}_{}_{}",
-                node_report.name(),
+                "{}_{}_{}",
+                sanitize_filename(id),
+                sanitize_filename(node_report.name()),
                 node_report.uuid()
             )),
             uuid: node_report.uuid().to_string(),

@@ -3,6 +3,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     plottable::Plottable,
     properties::validator::Validator,
+    utils::file_utils::sanitize_filename,
 };
 use nalgebra::vector;
 use serde::{Deserialize, Serialize};
@@ -86,29 +87,35 @@ impl Property {
     pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
         match &self.prop {
             Proptype::FluenceData(fluence) => {
-                let file_path = report_path.join(Path::new(&format!("{id}.png")));
+                let file_path =
+                    report_path.join(Path::new(&format!("{}.png", sanitize_filename(id))));
                 fluence.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
             }
             Proptype::Spectrum(spectrum) => {
-                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
+                let file_path =
+                    report_path.join(Path::new(&format!("{}.svg", sanitize_filename(id))));
                 spectrum.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::RayPositionHistory(ray_hist) => {
-                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
+                let file_path =
+                    report_path.join(Path::new(&format!("{}.svg", sanitize_filename(id))));
                 ray_hist.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::GhostFocusHistory(ghost_hist) => {
-                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
+                let file_path =
+                    report_path.join(Path::new(&format!("{}.svg", sanitize_filename(id))));
                 let mut ghost_hist = ghost_hist.clone();
                 ghost_hist.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
                 ghost_hist.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::WaveFrontData(wavefront_error_map) => {
-                let file_path = report_path.join(Path::new(&format!("{id}.png")));
+                let file_path =
+                    report_path.join(Path::new(&format!("{}.png", sanitize_filename(id))));
                 wavefront_error_map.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
             }
             Proptype::HitMap(hit_map) => {
-                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
+                let file_path =
+                    report_path.join(Path::new(&format!("{}.svg", sanitize_filename(id))));
                 hit_map.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::NodeReport(report) => {

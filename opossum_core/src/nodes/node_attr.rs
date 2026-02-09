@@ -16,9 +16,17 @@ use crate::{
     optic_ports::OpticPorts,
     optic_scenery_rsc::SceneryResources,
     properties::{Properties, Proptype, validator::Validator},
-    utils::geom_transformation::Isometry,
+    utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
     validated, validated_type,
 };
+
+fn deserialize_name<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    Ok(sanitize_filename(&s))
+}
 
 /// Struct for storing common attributes of optical nodes.
 ///
@@ -29,6 +37,7 @@ pub struct NodeAttr {
     /// The type of the node (e.g., "lens", "mirror").
     node_type: String,
     /// The name of the node.
+    #[serde(deserialize_with = "deserialize_name")]
     name: String,
     ports: OpticPorts,
     /// Universally unique identifier for this node.
@@ -220,7 +229,7 @@ impl NodeAttr {
     }
     /// Sets the name of this [`NodeAttr`].
     pub fn set_name(&mut self, name: &str) {
-        self.name = name.to_string();
+        self.name = sanitize_filename(name);
     }
     /// Sets this [`NodeAttr`] as `inverted`.
     pub const fn set_inverted(&mut self, inverted: bool) {
@@ -297,5 +306,35 @@ impl NodeAttr {
         let id = self.uuid;
         *self = node_attr.clone();
         self.uuid = id;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn set_name_sanitization() {
+        let mut attr = NodeAttr::new("test");
+        attr.set_name("../bad_name");
+        assert_eq!(attr.name(), ".._bad_name");
+    }
+
+    #[test]
+    fn deserialize_name_sanitization() {
+        let ron_str = r#"
+            (
+                node_type: "test",
+                name: "../malicious",
+                uuid: "98248e7f-dc4c-4131-8710-f3d5be2ff087",
+                ports: (
+                    inputs: {},
+                    outputs: {}
+                ),
+                lidt: 1.0
+            )
+        "#;
+        let attr: NodeAttr = ron::from_str(ron_str).unwrap();
+        assert_eq!(attr.name(), ".._malicious");
     }
 }

@@ -76,3 +76,40 @@ pub fn recreate_data_dir<P: AsRef<Path>>(report_directory: P) -> OpmResult<()> {
 pub fn create_f_path<P: AsRef<Path>>(path: P, f_name: &str, f_ext: &str) -> PathBuf {
     path.as_ref().join(f_name).with_extension(f_ext)
 }
+/// Sanitizes a filename by replacing invalid characters with underscores.
+///
+/// Invalid characters include `/`, `\`, null bytes, and control characters.
+/// Leading `.` and `..` are also replaced to prevent path traversal.
+pub fn sanitize_filename(name: &str) -> String {
+    // Replace invalid characters
+    let processed = name
+        .replace(['/', '\\', '\0'], "_")
+        .replace(|c: char| c.is_control(), "_");
+
+    // Handle special cases for . and ..
+    if processed == "." {
+        "_".to_string()
+    } else if processed == ".." {
+        "__".to_string()
+    } else {
+        processed
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_filename() {
+        assert_eq!(sanitize_filename("valid_name"), "valid_name");
+        assert_eq!(sanitize_filename("valid_name.txt"), "valid_name.txt");
+        assert_eq!(sanitize_filename("invalid/name"), "invalid_name");
+        assert_eq!(sanitize_filename("invalid\\name"), "invalid_name");
+        assert_eq!(sanitize_filename("../invalid"), ".._invalid");
+        assert_eq!(sanitize_filename("..\\invalid"), ".._invalid");
+        assert_eq!(sanitize_filename("invalid\0name"), "invalid_name");
+        assert_eq!(sanitize_filename("."), "_");
+        assert_eq!(sanitize_filename(".."), "__");
+    }
+}
