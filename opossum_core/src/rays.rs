@@ -1352,7 +1352,7 @@ impl Rays {
     ///   - [`Rays`] is empty
     ///   - the `resolution` is invalid (negative, infinite)
     pub fn to_spectrum(&self, resolution: &Length) -> OpmResult<Spectrum> {
-        let lines = self
+        let mut lines = self
             .ray_bundle
             .iter()
             .filter(|r| r.valid())
@@ -1363,7 +1363,30 @@ impl Rays {
                 "ray bundle is empty - cannot create spectrum".into(),
             ));
         }
-        let spectrum = Spectrum::from_laser_lines(&EnergyLaserLines::new(lines, *resolution)?)?;
+
+        // sort lines by wavelength
+        lines.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Aggregate energy for duplicate wavelengths
+        let mut unique_lines: Vec<(Length, Energy)> = Vec::new();
+        for (wvl, energy) in lines {
+            if let Some(last) = unique_lines.last_mut() {
+                if (last.0 - wvl).abs()
+                    < Length::new::<nanometer>(
+                        crate::spectral_distribution::laser_lines::MIN_WAVELENGTH_DIFF_NM,
+                    )
+                {
+                    last.1 += energy;
+                } else {
+                    unique_lines.push((wvl, energy));
+                }
+            } else {
+                unique_lines.push((wvl, energy));
+            }
+        }
+
+        let spectrum =
+            Spectrum::from_laser_lines(&EnergyLaserLines::new(unique_lines, *resolution)?)?;
         Ok(spectrum)
     }
     /// Set the refractive index of the medium all [`Rays`] are propagating in.

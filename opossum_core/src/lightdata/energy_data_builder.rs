@@ -9,6 +9,7 @@ use crate::{
         YNotAllZero,
     },
     joule, nanometer,
+    spectral_distribution::laser_lines::MIN_WAVELENGTH_DIFF_NM,
     spectrum::Spectrum,
     utils::default_from_name::DefaultFromName,
     validated, validated_type, validated_vec, validated_vec_type,
@@ -35,7 +36,6 @@ pub enum EnergyDataBuilder {
     Raw(Spectrum),
     /// Build a spectrum from a (CSV) file.
     FromFile(SpectrumFile),
-    // FromFile(PathBuf),
     /// Build a spectrum from a set of (narrow) laser lines (center wavelength, energy) and a given spectrum resolution.
     LaserLines(EnergyLaserLines),
 }
@@ -227,6 +227,31 @@ impl EnergyLaserLines {
     /// - Any wavelength is negative or not normal.
     /// - Any Energy is negative or not finite.
     pub fn add_lines(&mut self, lines: Vec<(Length, Energy)>) -> OpmResult<()> {
+        let current_lines = self.lines.get();
+        for (new_wvl, _) in &lines {
+            // Check against existing lines
+            if current_lines.iter().any(|(current_wvl, _)| {
+                (*current_wvl - *new_wvl).abs() < Length::new::<nanometer>(MIN_WAVELENGTH_DIFF_NM)
+            }) {
+                return Err(crate::error::OpossumError::Spectrum(format!(
+                    "Laser line with wavelength {:.6} nm already exists",
+                    new_wvl.get::<uom::si::length::nanometer>()
+                )));
+            }
+        }
+
+        // Check for duplicates within the new lines
+        for (i, (wvl1, _)) in lines.iter().enumerate() {
+            for (wvl2, _) in lines.iter().skip(i + 1) {
+                if (*wvl1 - *wvl2).abs() < Length::new::<nanometer>(MIN_WAVELENGTH_DIFF_NM) {
+                    return Err(crate::error::OpossumError::Spectrum(format!(
+                        "Duplicate laser line with wavelength {:.6} nm in input",
+                        wvl1.get::<uom::si::length::nanometer>()
+                    )));
+                }
+            }
+        }
+
         for line in lines {
             self.lines.push(line)?;
         }
@@ -251,6 +276,17 @@ impl EnergyLaserLines {
     /// - Any wavelength is negative or not normal.
     /// - Any energy is negative or not finite.
     pub fn set_lines(&mut self, lines: Vec<(Length, Energy)>) -> OpmResult<()> {
+        // Check for duplicates within the new lines
+        for (i, (wvl1, _)) in lines.iter().enumerate() {
+            for (wvl2, _) in lines.iter().skip(i + 1) {
+                if (*wvl1 - *wvl2).abs() < Length::new::<nanometer>(MIN_WAVELENGTH_DIFF_NM) {
+                    return Err(crate::error::OpossumError::Spectrum(format!(
+                        "Duplicate laser line with wavelength {:.6} nm in input",
+                        wvl1.get::<uom::si::length::nanometer>()
+                    )));
+                }
+            }
+        }
         self.lines.set(lines)?;
         Ok(())
     }
@@ -421,7 +457,14 @@ mod test {
         );
         assert!(
             ell.add_lines(vec![(nanometer!(500.0), joule!(0.1))])
-                .is_ok()
+                .is_err() // duplicate line wvl: 500nm
+        );
+        assert!(
+            ell.add_lines(vec![
+                (nanometer!(600.0), joule!(0.1)),
+                (nanometer!(600.0), joule!(0.1))
+            ])
+            .is_err() // duplicate line wvl in input: 600nm
         )
     }
     #[test]
@@ -453,6 +496,14 @@ mod test {
             ell.set_lines(vec![(nanometer!(500.0), joule!(-0.5))])
                 .is_err(),
             // "negative energy line is an error"
+        );
+        assert!(
+            ell.set_lines(vec![
+                (nanometer!(500.0), joule!(0.5)),
+                (nanometer!(500.0), joule!(0.5))
+            ])
+            .is_err(),
+            // "duplicate wavelength in input is an error"
         );
     }
     #[test]
