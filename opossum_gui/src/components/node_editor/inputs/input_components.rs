@@ -388,6 +388,7 @@ pub fn NodeConfigUnitInput(
     value: ReadSignal<f64>,
     base_unit: &'static str,
     onchange: EventHandler<f64>,
+    #[props(default = false)] reciprocal: bool,
     #[props(default = false)] readonly: bool,
 ) -> Element 
 {
@@ -402,6 +403,7 @@ pub fn NodeConfigUnitInput(
             input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
             label_class: "form-label text-secondary".to_string(),
             readonly,
+            reciprocal,
         }
     }
 }
@@ -412,28 +414,26 @@ pub fn UnitInput(
     value: ReadSignal<f64>,
     base_unit: &'static str,
     onchange: EventHandler<f64>,
-
+    #[props(default = false)] reciprocal: bool,
     #[props(default = String::new())] container_class: String,
     #[props(default = String::new())] input_class: String,
     #[props(default = String::new())] label_class: String,
     #[props(default = false)] readonly: bool,
 ) -> Element {
     let mut val_str =
-        use_signal(|| format!("{}{}", format_si_notation(*value.read()), base_unit));
+        use_signal(|| format!("{}{}", format_si_notation(*value.read(), reciprocal), base_unit));
 
     use_effect(move || {
         let current_str = val_str.peek().clone();
-        let new_str = format!("{}{}", format_si_notation(*value.read()), base_unit);
+        let new_str = format!("{}{}", format_si_notation(*value.read(), reciprocal), base_unit);
         if current_str != new_str {
             val_str.set(new_str);
         }
     });
 
-
     let on_input_eval = move |input_val: String| {
         is_permissive_unit_input(&input_val, base_unit)
     };
-
 
     rsx! {
         div { class: container_class,
@@ -445,7 +445,7 @@ pub fn UnitInput(
                 eval_input: Some(Callback::new(on_input_eval)),
                 on_save: move |val: String| {
                     if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, base_unit) {
-                        if let Some(parsed) = parse_si_number(&num_str, &prefix_str) {
+                        if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
                             // base_val_sig.set(parsed);
                             onchange.call(parsed);
                         } else {
@@ -458,43 +458,6 @@ pub fn UnitInput(
                     }
                 },
             }
-        }
-    }
-}
-
-
-fn use_on_change(
-    onchange: EventHandler<f64>,
-    value: Memo<f64>,
-    base_unit: &'static str,
-) -> impl FnMut(Event<FormData>) {
-    move |e: Event<FormData>| {
-        let raw = e.data().value();
-        if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&raw, base_unit) {
-            if let Some(parsed) = parse_si_number(&num_str, &prefix_str) {
-                // base_val_sig.set(parsed);
-                onchange.call(parsed);
-            } else {
-                onchange.call(*value.read());
-                // base_val_sig.set(base_val_sig());
-                OPOSSUM_UI_LOGS
-                    .write()
-                    .add_log("Cannot parse input number string to f64!");
-            }
-        }
-    }
-}
-
-fn use_on_input(
-    mut val_sig: Signal<String>,
-    base_unit: &'static str,
-) -> impl FnMut(Event<FormData>) {
-    move |e: Event<FormData>| {
-        let raw = e.data().value();
-        if is_permissive_unit_input(&raw, base_unit) {
-            val_sig.set(raw);
-        } else {
-            val_sig.set(val_sig());
         }
     }
 }

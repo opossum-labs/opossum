@@ -130,8 +130,8 @@ pub fn EnergyLaserLineEditor(
                             parse_unit_input_strict(&energy_val, "J"),
                         ) {
                             if let (Some(wvl), Some(energy)) = (
-                                parse_si_number(&num_str_wvl, &prefix_str_wvl),
-                                parse_si_number(&num_str_energy, &prefix_str_energy),
+                                parse_si_number(&num_str_wvl, &prefix_str_wvl, false),
+                                parse_si_number(&num_str_energy, &prefix_str_energy, false),
                             ) {
                                 if let EnergyDataBuilder::LaserLines(ll) = &mut *energy_data_builder_sig
                                     .write()
@@ -195,8 +195,8 @@ fn LaserLineList(
                     };
                     rsx! {
                         li { class,
-                            span { {format!("λ: {}m", format_si_notation(line.0.value))} }
-                            span { {format!("E: {}J", format_si_notation(line.1.value))} }
+                            span { {format!("λ: {}m", format_si_notation(line.0.value, false))} }
+                            span { {format!("E: {}J", format_si_notation(line.1.value, false))} }
                             a {
                                 class: "text-danger ms-auto",
                                 onclick: {

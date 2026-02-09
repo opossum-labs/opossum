@@ -82,7 +82,7 @@ pub fn LaserLineInput(
                             "m",
                         ) {
                             if let (Some(wvl), Ok(rel_int)) = (
-                                parse_si_number(&num_str, &prefix_str),
+                                parse_si_number(&num_str, &prefix_str, false),
                                 rel_int_val.parse(),
                             ) {
                                 if let SpecDistType::LaserLines(ll) = &mut *spect_dist_type_sig
@@ -139,7 +139,7 @@ fn LaserLineList(laser_lines: LaserLines, spect_dist_type_sig: Signal<SpecDistTy
                     };
                     rsx! {
                         li { class,
-                            span { {format!("λ: {}m", format_si_notation(line.0.value))} }
+                            span { {format!("λ: {}m", format_si_notation(line.0.value, false))} }
                             span { {format!("Int: {:.3}", line.1)} }
                             a {
                                 class: "text-danger ms-auto",

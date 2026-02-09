@@ -255,10 +255,10 @@ fn format_fixed_decimal(v: f64, decimals: usize) -> String {
 ///
 /// `Some(f64)` containing the scaled value if parsing succeeds, or `None` if
 /// the numeric string is invalid.
-pub fn parse_si_number(num_str: &str, prefix_str: &str) -> Option<f64> {
+pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Option<f64> {
     let max_num = 1e33 * (1. - 1e-14);
     let min_num = 0.0;
-    let factor = si_prefix_to_exponent(prefix_str);
+    let factor = si_prefix_to_exponent(prefix_str, reciprocal);
     let normalized = num_str.replace(',', ".");
     if let Ok(parsed) = normalized.parse::<f64>() {
         if (parsed.abs() * 10f64.powi(factor)) > max_num {
@@ -385,14 +385,19 @@ pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, 
 /// # Returns
 ///
 /// A `String` containing the formatted value and SI prefix.
-pub fn format_si_notation(x: f64) -> String {
+pub fn format_si_notation(x: f64, reciprocal: bool) -> String {
     if x.is_infinite() {
         return "∞".into();
     }
 
     let (mantissa, exponent) = get_mantissa_and_exponent(x);
 
-    let prefix = si_prefix_from_exponent(exponent);
+    let prefix = if reciprocal{
+        si_prefix_from_exponent(-exponent)
+    }
+    else{
+        si_prefix_from_exponent(exponent)
+    };
 
     if relative_eq!(mantissa, 0.0) {
         return "0.0 ".into();
@@ -501,8 +506,8 @@ fn si_prefix_from_exponent(exponent: i32) -> String {
 /// # Returns
 ///
 /// The corresponding exponent as a power of ten.
-fn si_prefix_to_exponent(prefix: &str) -> i32 {
-    match prefix {
+fn si_prefix_to_exponent(prefix: &str, reciprocal: bool) -> i32 {
+    let exp = match prefix {
         "q" => -30,
         "r" => -27,
         "y" => -24,
@@ -524,5 +529,10 @@ fn si_prefix_to_exponent(prefix: &str) -> i32 {
         "R" => 27,
         "Q" => 30,
         _ => 0,
+    };
+    if reciprocal {
+        -exp
+    } else {
+        exp
     }
 }
