@@ -31,6 +31,9 @@ pub fn GhostFocusEditor(
             r#type: "number",
             step: "1",
             min: "0",
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
             on_save: move |val: String| {
                 if let Ok(max_bounces) = val.parse::<usize>() {
                     ghost_focus_config_sig.write().set_max_bounces(max_bounces);

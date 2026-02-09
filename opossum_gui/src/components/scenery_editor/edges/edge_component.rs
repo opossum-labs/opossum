@@ -1,9 +1,11 @@
-use crate::components::{node_editor::{
-        inputs::input_components::UnitInput},scenery_editor::{
-    constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
-    edges::define_bezier_path,
-    graph_store::{GraphStore, GraphStoreAction},
-}};
+use crate::components::{
+    node_editor::inputs::input_components::UnitInput,
+    scenery_editor::{
+        constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
+        edges::define_bezier_path,
+        graph_store::{GraphStore, GraphStoreAction},
+    },
+};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 

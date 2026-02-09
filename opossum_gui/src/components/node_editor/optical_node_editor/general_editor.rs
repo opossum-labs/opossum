@@ -32,12 +32,15 @@ pub fn GeneralEditor(
                 id: format!("nodeName_{}", node_id),
                 label: "Node Name".to_string(),
                 value: name,
+                container_class: "form-floating border-start".to_string(),
+                input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+                label_class: "form-label text-secondary".to_string(),
                 on_save: move |new_val: String| {
                     on_change.call(NodeChangeEvent {
                         node_id,
                         action: NodeChangeAction::Name(new_val),
                     });
-                }
+                },
             }
         },
         rsx! {

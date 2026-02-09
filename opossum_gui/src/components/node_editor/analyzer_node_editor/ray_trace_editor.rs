@@ -22,11 +22,9 @@ pub fn RayTraceEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut ray_trace_config_sig = use_signal(|| ray_trace_config);
-    // Sync Prop -> Signal: Wichtig für den Node-Wechsel!
     use_update_signal_with_reactive_prop(ray_trace_config, ray_trace_config_sig);
 
     rsx! {
-        // NEU: FlushableTextInput statt LabeledInput
         FlushableTextInput {
             id: "rayTraceMaxRefr".to_string(),
             label: "Max refractions".to_string(),
@@ -34,7 +32,9 @@ pub fn RayTraceEditor(
             r#type: "number",
             step: "1",
             min: "0",
-            // Callback liefert jetzt String (kein Event<FormData>)
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
             on_save: move |val: String| {
                 if let Ok(max_refractions) = val.parse::<usize>() {
                     ray_trace_config_sig.write().set_max_number_of_refractions(max_refractions);
@@ -55,6 +55,9 @@ pub fn RayTraceEditor(
             r#type: "number",
             step: "1",
             min: "0",
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
             on_save: move |val: String| {
                 if let Ok(max_bounces) = val.parse::<usize>() {
                     ray_trace_config_sig.write().set_max_number_of_bounces(max_bounces);
@@ -75,6 +78,9 @@ pub fn RayTraceEditor(
             r#type: "number",
             step: "1.",
             min: "0.",
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
             on_save: move |val: String| {
                 let old_value = ray_trace_config_sig.read().min_energy_per_ray();
                 if let Ok(min_ray_energy) = val.parse::<f64>() {
