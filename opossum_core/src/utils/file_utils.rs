@@ -80,6 +80,7 @@ pub fn create_f_path<P: AsRef<Path>>(path: P, f_name: &str, f_ext: &str) -> Path
 ///
 /// Invalid characters include `/`, `\`, null bytes, and control characters.
 /// Leading `.` and `..` are also replaced to prevent path traversal.
+#[must_use]
 pub fn sanitize_filename(name: &str) -> String {
     // Replace invalid characters
     let processed = name

@@ -7,9 +7,33 @@ use tinytemplate::TinyTemplate;
 use crate::{
     error::{OpmResult, OpossumError},
     optic_node::OpticNode,
-    reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
+    reporting::{
+        analysis_report::AnalysisReport,
+        node_report::NodeReport,
+        report_note::{ReportLevel, ReportNote},
+    },
     utils::file_utils::sanitize_filename,
 };
+
+#[derive(Serialize)]
+pub struct HtmlReportNote {
+    pub message: String,
+    pub css_class: String,
+}
+
+impl From<ReportNote> for HtmlReportNote {
+    fn from(note: ReportNote) -> Self {
+        let css_class = match note.level {
+            ReportLevel::Info => "alert-info",
+            ReportLevel::Warning => "alert-warning",
+            ReportLevel::Error => "alert-danger",
+        };
+        Self {
+            message: note.message,
+            css_class: css_class.to_string(),
+        }
+    }
+}
 
 static HTML_REPORT: &str = include_str!("../html/html_report.html");
 static HTML_NODE_REPORT: &str = include_str!("../html/node_report.html");
@@ -21,6 +45,7 @@ pub struct HtmlReport {
     analysis_type: String,
     description: String,
     node_reports: Vec<HtmlNodeReport>,
+    notes: Vec<HtmlReportNote>,
 }
 impl HtmlReport {
     #[must_use]
@@ -30,6 +55,7 @@ impl HtmlReport {
         analysis_type: String,
         description: String,
         node_reports: Vec<HtmlNodeReport>,
+        notes: Vec<HtmlReportNote>,
     ) -> Self {
         Self {
             opossum_version,
@@ -37,6 +63,7 @@ impl HtmlReport {
             analysis_type,
             description,
             node_reports,
+            notes,
         }
     }
     /// Creates a new [`HtmlReport`] from an [`AnalysisReport`].
@@ -51,7 +78,7 @@ impl HtmlReport {
         let html_node_reports: Vec<HtmlNodeReport> = report
             .node_reports()
             .iter()
-            .map(|r| HtmlNodeReport::from_node_report(r, ""))
+            .map(HtmlNodeReport::from_node_report)
             .collect();
 
         Ok(Self::new(
@@ -63,6 +90,11 @@ impl HtmlReport {
             report.analysis_type().to_string(),
             scenery.node_attr().name(),
             html_node_reports,
+            report
+                .notes()
+                .iter()
+                .map(|n| HtmlReportNote::from(n.clone()))
+                .collect(),
         ))
     }
     /// Generate a complete HTML report, including the main HTML file
@@ -128,22 +160,37 @@ pub struct HtmlNodeReport {
     pub uuid: String,
     /// show or hide item in report by default
     pub show_item: bool,
+    /// notes regarding the node
+    pub notes: Vec<HtmlReportNote>,
+    /// link to the node's data file
+    pub link: String,
 }
 impl HtmlNodeReport {
     /// Create this [`HtmlNodeReport`] from an [`NodeReport`].
     #[must_use]
-    pub fn from_node_report(node_report: &NodeReport, id: &str) -> Self {
+    pub fn from_node_report(node_report: &NodeReport) -> Self {
         Self {
-            node_name: node_report.name().to_string(),
+            node_name: sanitize_filename(node_report.name()),
             node_type: node_report.node_type().to_string(),
             props: node_report.properties().html_props(&format!(
                 "{}_{}_{}",
-                sanitize_filename(id),
-                sanitize_filename(node_report.name()),
+                node_report.name(),
+                node_report.node_type(),
+                node_report.uuid()
+            )),
+            link: sanitize_filename(&format!(
+                "{}_{}_{}",
+                node_report.name(),
+                node_report.node_type(),
                 node_report.uuid()
             )),
             uuid: node_report.uuid().to_string(),
             show_item: node_report.show_item(),
+            notes: node_report
+                .notes()
+                .iter()
+                .map(|n| HtmlReportNote::from(n.clone()))
+                .collect(),
         }
     }
 }
@@ -173,11 +220,12 @@ mod test {
         properties.create("test1", "desc1", 1.0.into()).unwrap();
         properties.create("test2", "desc2", "test".into()).unwrap();
         let report = NodeReport::new("test detector", "detector name", "123", properties);
-        let html_report = HtmlNodeReport::from_node_report(&report, "345");
+        let html_report = HtmlNodeReport::from_node_report(&report);
         assert_eq!(html_report.node_name, "detector name");
         assert_eq!(html_report.node_type, "test detector");
         assert_eq!(html_report.uuid, "123");
         assert_eq!(html_report.show_item, false);
+        assert!(html_report.notes.is_empty());
         let html_props = html_report.props;
 
         assert_eq!(html_props[0].name, "test1");

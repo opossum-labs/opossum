@@ -16,7 +16,11 @@ use crate::{
     optic_ref::OpticRef,
     properties::{Properties, Proptype},
     rays::Rays,
-    reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
+    reporting::{
+        analysis_report::AnalysisReport,
+        node_report::NodeReport,
+        report_note::{ReportLevel, ReportNote},
+    },
     surface::optic_surface::OpticSurface,
     utils::LockExt,
 };
@@ -517,11 +521,29 @@ impl NodeGroup {
     pub fn toplevel_report(&self) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::default();
         analysis_report.add_scenery(self);
+
+        if !self.graph.is_single_tree() {
+            analysis_report.add_note(ReportNote::new(
+                ReportLevel::Warning,
+                "The system contains unconnected sub-trees. Analysis might not be complete.",
+            ));
+        }
         for node_ref in self.graph.nodes() {
-            let uuid = node_ref.uuid().as_simple().to_string();
-            let node_report = node_ref.optical_ref.lock_opm()?.node_report(&uuid);
-            if let Some(node_report) = node_report {
-                analysis_report.add_node_report(node_report);
+            let uuid = node_ref.uuid();
+            if self.graph.is_stale_node(uuid)? {
+                analysis_report.add_note(ReportNote::new(
+                    ReportLevel::Warning,
+                    &format!(
+                        "Node '{}' is unconnected and was skipped during analysis.",
+                        node_ref.optical_ref.lock_opm()?.name()
+                    ),
+                ));
+            } else {
+                let uuid_str = uuid.as_simple().to_string();
+                let node_report = node_ref.optical_ref.lock_opm()?.node_report(&uuid_str);
+                if let Some(node_report) = node_report {
+                    analysis_report.add_node_report(node_report);
+                }
             }
         }
         Ok(analysis_report)
