@@ -1,8 +1,9 @@
-use crate::components::scenery_editor::{
+use crate::components::{node_editor::{
+        inputs::input_components::UnitInput},scenery_editor::{
     constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
     edges::define_bezier_path,
     graph_store::{GraphStore, GraphStoreAction},
-};
+}};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 
@@ -72,25 +73,27 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 pointer_events: "auto",
                 class: "input-with-unit",
                 style: "display: flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; box-sizing: border-box;",
-                input {
-                    style: "text-align: right; flex:1; min-width: 0; height: 100%; font-size: 11pt; border: none; outline: none; padding: 0;",
-                    r#type: "number",
-                    step: "0.0001",
-                    value: format!("{:.4}", edge.distance()),
+                UnitInput {
+                    id: format!(
+                        "distance-{}{}",
+                        edge.src_uuid().as_simple(),
+                        edge.target_uuid().as_simple(),
+                    ),
+                    label: String::new(),
+                    value: edge.distance(),
+                    base_unit: "m",
                     onchange: {
-                        move |event: Event<FormData>| {
-                            if let Ok(new_distance) = event.data.parsed::<f64>() {
-                                edge.set_distance(new_distance);
-                                let edge = edge.clone();
-                                graph_processor.send(GraphStoreAction::UpdateEdge(edge));
-                            }
+                        let edge = edge.clone();
+                        move |new_distance: f64| {
+                            let mut edge = edge.clone();
+
+                            edge.set_distance(new_distance);
+                            graph_processor.send(GraphStoreAction::UpdateEdge(edge));
                         }
                     },
-                    ondoubleclick: |event| {
-                        event.stop_propagation();
-                    },
+                    flushable_input: false,
+                    input_class: "edge_distance_input".to_string(),
                 }
-                span { style: "font-size: 9pt; margin-left: 3px; color: #555;", "m" }
             }
         }
     }

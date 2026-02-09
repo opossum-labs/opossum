@@ -416,7 +416,9 @@ pub fn UnitInput(
     #[props(default = String::new())] input_class: String,
     #[props(default = String::new())] label_class: String,
     #[props(default = false)] readonly: bool,
+    #[props(default = false)] flushable_input: bool,
 ) -> Element {
+
     let mut val_str = use_signal(|| {
         format!(
             "{}{}",
@@ -439,22 +441,60 @@ pub fn UnitInput(
 
     let on_input_eval = move |input_val: String| is_permissive_unit_input(&input_val, base_unit);
 
-    rsx! {
-        div { class: container_class,
-            FlushableTextInput {
+    if flushable_input{
+        rsx! {
+            div { class: container_class,
+                FlushableTextInput {
+                    id,
+                    label,
+                    value: val_str,
+                    readonly,
+                    eval_input: Some(Callback::new(on_input_eval)),
+                    on_save: move |val: String| {
+                        if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, base_unit) {
+                            if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
+                                // base_val_sig.set(parsed);
+                                onchange.call(parsed);
+                            } else {
+                                onchange.call(*value.read());
+                                // base_val_sig.set(base_val_sig());
+                                OPOSSUM_UI_LOGS
+                                    .write()
+                                    .add_log("Cannot parse input number string to f64!");
+                            }
+                        }
+                    },
+                }
+            }
+        }
+    }
+    else{
+        rsx! {
+            input {
+                class: input_class,
                 id,
-                label,
+                // label,
                 value: val_str,
                 readonly,
-                eval_input: Some(Callback::new(on_input_eval)),
-                on_save: move |val: String| {
-                    if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, base_unit) {
+                oninput: move |e: Event<FormData>| {
+                    let new_value = e.data.value();
+                    if on_input_eval(new_value.clone()) {
+                        val_str.set(new_value);
+                    } else {
+                        val_str.set(val_str());
+                    }
+                },
+                onchange: move |event: Event<FormData>| {
+                    let new_value = event.data.value();
+                    if let Ok((num_str, prefix_str)) = parse_unit_input_strict(
+                        &new_value, // base_val_sig.set(parsed);
+                        base_unit,
+                    ) { // base_val_sig.set(base_val_sig());
                         if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
-                            // base_val_sig.set(parsed);
                             onchange.call(parsed);
-                        } else {
+                        }
+                        else{
                             onchange.call(*value.read());
-                            // base_val_sig.set(base_val_sig());
                             OPOSSUM_UI_LOGS
                                 .write()
                                 .add_log("Cannot parse input number string to f64!");
@@ -463,8 +503,11 @@ pub fn UnitInput(
                 },
             }
         }
+        
     }
 }
+    
+
 
 #[component]
 pub fn LabeledSelect(
