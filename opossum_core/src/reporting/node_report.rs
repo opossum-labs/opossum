@@ -1,5 +1,8 @@
 //! Module for storing node specific data to be integrated in an [`AnalysisReport`](crate::reporting::analysis_report::AnalysisReport).
-use crate::properties::{Properties, Proptype};
+use crate::{
+    properties::{Properties, Proptype},
+    reporting::report_note::ReportNote,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -10,6 +13,8 @@ pub struct NodeReport {
     uuid: String,
     properties: Properties,
     show_item: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    notes: Vec<ReportNote>,
 }
 impl NodeReport {
     /// Creates a new [`NodeReport`].
@@ -21,6 +26,7 @@ impl NodeReport {
             uuid: uuid.to_string(),
             properties,
             show_item: false,
+            notes: Vec::new(),
         }
     }
     /// Returns a reference to the node type of this [`NodeReport`].
@@ -56,6 +62,15 @@ impl NodeReport {
     pub const fn set_show_item(&mut self, show_item: bool) {
         self.show_item = show_item;
     }
+    /// Add a note to this [`NodeReport`].
+    pub fn add_note(&mut self, note: ReportNote) {
+        self.notes.push(note);
+    }
+    /// Returns a reference to the notes of this [`NodeReport`].
+    #[must_use]
+    pub fn notes(&self) -> &[ReportNote] {
+        &self.notes
+    }
 }
 
 impl From<NodeReport> for Proptype {
@@ -85,6 +100,7 @@ mod test {
         assert_eq!(report.name(), "detector name");
         assert_eq!(report.uuid(), "123");
         assert_eq!(report.properties().nr_of_props(), 0);
+        assert!(report.notes().is_empty());
     }
     #[test]
     fn show_item() {

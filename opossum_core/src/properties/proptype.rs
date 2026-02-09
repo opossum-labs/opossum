@@ -160,17 +160,7 @@ impl Proptype {
                     template_engine.render("image", &format!("data/{id}_{property_name}.png"))
                 }
                 Self::NodeReport(report) => {
-                    let html_node_report = HtmlNodeReport {
-                        node_name: report.name().into(),
-                        node_type: report.node_type().into(),
-                        props: report.properties().html_props(&format!(
-                            "{id}_{}_{}",
-                            report.name(),
-                            report.uuid()
-                        )),
-                        uuid: report.uuid().to_string(),
-                        show_item: report.show_item(),
-                    };
+                    let html_node_report = HtmlNodeReport::from_node_report(report);
                     template_engine.render("group", &html_node_report)
                 }
                 Self::Fluence(value) => template_engine.render(
@@ -248,61 +238,51 @@ impl From<Angle> for Proptype {
         Self::Angle(value)
     }
 }
-
 impl From<Option<Length>> for Proptype {
     fn from(value: Option<Length>) -> Self {
         Self::LengthOption(value)
     }
 }
-
 impl From<Isometry> for Proptype {
     fn from(value: Isometry) -> Self {
         Self::Isometry(Some(value))
     }
 }
-
 impl From<LinearNumberDensity> for Proptype {
     fn from(val: LinearNumberDensity) -> Self {
         Self::LinearDensity(val)
     }
 }
-
 impl From<FluenceEstimator> for Proptype {
     fn from(val: FluenceEstimator) -> Self {
         Self::FluenceEstimator(val)
     }
 }
-
 impl From<Vector2<f64>> for Proptype {
     fn from(value: Vector2<f64>) -> Self {
         Self::Vec2(value)
     }
 }
-
 impl From<CollimatedSrc> for Proptype {
     fn from(val: CollimatedSrc) -> Self {
         Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataBuilder::Collimated(val)))
     }
 }
-
 impl From<PointSrc> for Proptype {
     fn from(val: PointSrc) -> Self {
         Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataBuilder::PointSrc(val)))
     }
 }
-
 impl From<ImageSrc> for Proptype {
     fn from(val: ImageSrc) -> Self {
         Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataBuilder::Image(val)))
     }
 }
-
 impl From<LightDataBuilder> for Proptype {
     fn from(val: LightDataBuilder) -> Self {
         Self::LightDataBuilder(val)
     }
 }
-
 impl From<FilterTypeBuilder> for Proptype {
     fn from(val: FilterTypeBuilder) -> Self {
         Self::FilterTypeBuilder(val)
@@ -450,7 +430,7 @@ mod test {
             Proptype::NodeReport(NodeReport::new("test1", "test2", "test3", Properties::default()))
                 .to_html("id", "property_name")
                 .unwrap(),
-            "<div class=\"accordion-item\">\n  <h5 class=\"accordion-header\">\n    <button class=\"accordion-button\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#test3\">\n      <span class=\"h5 me-2\">test2</span><small class=\"muted\">test1</small>\n    </button>\n  </h5>\n  <div id=\"test3\" class=\"accordion-collapse collapse \">\n    <div class=\"accordion-body\">\n      <table class=\"table table-sm table-bordered\">\n        <tbody>\n          \n        </tbody>\n      </table>\n    </div>\n  </div>\n</div>\n".to_string()
+            "<div class=\"accordion-item\">\n  <h5 class=\"accordion-header\">\n    <button class=\"accordion-button\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#test3\">\n      <span class=\"h5 me-2\">test2</span><small class=\"muted\">test1</small>\n    </button>\n  </h5>\n  <div id=\"test3\" class=\"accordion-collapse collapse \">\n    <div class=\"accordion-body\">\n      \n      <table class=\"table table-sm table-bordered\">\n        <tbody>\n          \n        </tbody>\n      </table>\n    </div>\n  </div>\n</div>\n".to_string()
         );
         assert_eq!(
             Proptype::Fluence(J_per_m2!(1.234567))

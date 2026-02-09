@@ -3,7 +3,7 @@
 
 use std::{fs::File, io::Write, path::Path};
 
-use super::{html_report::HtmlReport, node_report::NodeReport};
+use super::{html_report::HtmlReport, node_report::NodeReport, report_note::ReportNote};
 use crate::{
     error::{OpmResult, OpossumError},
     get_version,
@@ -20,6 +20,8 @@ pub struct AnalysisReport {
     analysis_type: String,
     scenery: Option<NodeGroup>,
     node_reports: Vec<NodeReport>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    notes: Vec<ReportNote>,
 }
 impl Default for AnalysisReport {
     fn default() -> Self {
@@ -29,6 +31,7 @@ impl Default for AnalysisReport {
             analysis_type: String::default(),
             scenery: None,
             node_reports: Vec::default(),
+            notes: Vec::default(),
         }
     }
 }
@@ -42,6 +45,7 @@ impl AnalysisReport {
             analysis_type: String::default(),
             scenery: None,
             node_reports: Vec::default(),
+            notes: Vec::default(),
         }
     }
     /// Add an [`NodeGroup`] to this [`AnalysisReport`].
@@ -58,6 +62,15 @@ impl AnalysisReport {
     /// their particular analysis result.
     pub fn add_node_report(&mut self, report: NodeReport) {
         self.node_reports.push(report);
+    }
+    /// Add a note to this [`AnalysisReport`].
+    pub fn add_note(&mut self, note: ReportNote) {
+        self.notes.push(note);
+    }
+    /// Returns a reference to the notes of this [`AnalysisReport`].
+    #[must_use]
+    pub fn notes(&self) -> &[ReportNote] {
+        &self.notes
     }
     /// Returns the scenery of this [`AnalysisReport`].
     #[must_use]
@@ -133,6 +146,7 @@ mod test {
         assert!(report.scenery.is_none());
         assert_eq!(report.opossum_version, "test");
         assert!(report.node_reports.is_empty());
+        assert!(report.notes.is_empty());
         assert_eq!(report.analysis_timestamp, timestamp);
     }
     #[test]
@@ -141,6 +155,7 @@ mod test {
         assert!(report.scenery.is_none());
         assert_eq!(report.opossum_version, get_version());
         assert!(report.node_reports.is_empty());
+        assert!(report.notes.is_empty());
     }
     #[test]
     fn set_analysis_type() {

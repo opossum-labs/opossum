@@ -43,6 +43,11 @@
             <img src="scenery.svg" class="img-fluid" style="max-height: 600pt; break-after:all;"
               alt="Optical scene diagram" />
           </div>
+          {{ for note in notes }}
+          <div class="alert {note.css_class}" role="alert">
+            {note.message}
+          </div>
+          {{ endfor }}
         </div>
       </div>
       <div class="accordion" id="nodeAccordion">
