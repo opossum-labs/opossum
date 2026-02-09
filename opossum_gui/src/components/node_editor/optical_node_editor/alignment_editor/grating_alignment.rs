@@ -4,9 +4,12 @@ use std::vec;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        hooks::use_update_signal_with_reactive_prop, inputs::input_components::{LabeledInput, LabeledSelect}, optical_node_editor::alignment_editor::{
-            RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation, on_new_translation,
-        }
+        hooks::use_update_signal_with_reactive_prop,
+        inputs::input_components::{LabeledInput, LabeledSelect},
+        optical_node_editor::alignment_editor::{
+            RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation,
+            on_new_translation,
+        },
     },
 };
 use dioxus::prelude::*;
@@ -34,7 +37,7 @@ pub fn GratingAlignmentInputs(
     let alignment_select_sig = use_signal(|| true);
     let mut alignment_sig = use_signal(|| *alignment_sig_outside.read());
     use_update_signal_with_reactive_prop(*alignment_sig_outside.read(), alignment_sig);
-    
+
     let mut element_list = vec![rsx! {
         GratingAlignmentSelector { alignment_select_sig }
     }];
@@ -55,7 +58,7 @@ pub fn GratingAlignmentInputs(
                 },
             }
         });
-        
+
         element_list.push(rsx! {
             RotationAlignmentInputs {
                 alignment: alignment_sig,
@@ -77,7 +80,7 @@ pub fn GratingAlignmentInputs(
                 axes_skip: None,
                 on_new_rotation: on_new_rotation(on_save, alignment_sig.into()),
                 node_id,
-            
+
             }
             TranslationAlignmentInputs {
                 alignment: alignment_sig,
@@ -229,7 +232,10 @@ pub fn GratingAlignmentSelector(mut alignment_select_sig: Signal<bool>) -> Eleme
 }
 
 #[component]
-pub fn InOrOutgoingFromLittrowSelector(incident_angle_sig: ReadSignal<bool>, on_incident_change: EventHandler<bool>) -> Element {
+pub fn InOrOutgoingFromLittrowSelector(
+    incident_angle_sig: ReadSignal<bool>,
+    on_incident_change: EventHandler<bool>,
+) -> Element {
     let incident_label = "Incident angle to Littrow";
     let diffracted_label = "Diffracted angle to Littrow";
 

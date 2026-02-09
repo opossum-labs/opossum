@@ -3,7 +3,9 @@ use crate::{
     components::{
         logger::LogResultExt,
         node_editor::inputs::{
-            InputData, InputParam, IntoInputData, IntoInputDataStrings, format_si_notation, input_components::{InputParamLabeledInput, RowedInputs}, parse_si_number, parse_unit_input_strict
+            InputData, InputParam, IntoInputData, IntoInputDataStrings, format_si_notation,
+            input_components::{InputParamLabeledInput, RowedInputs},
+            parse_si_number, parse_unit_input_strict,
         },
     },
 };
@@ -39,14 +41,14 @@ impl IntoInputDataStrings<EnergyLaserLines> for EnergyLaserLinesParam {
     }
     fn create_value_string(&self, obj: &EnergyLaserLines) -> String {
         match self {
-            Self::Wavelength => obj.lines().last().map_or_else(
-                || "1054.000".to_string(),
-                |ll| format!("{}", ll.0.value),
-            ),
-            Self::Energy => obj.lines().last().map_or_else(
-                || "1.000".to_string(),
-                |ll| format!("{}", ll.1.value),
-            ),
+            Self::Wavelength => obj
+                .lines()
+                .last()
+                .map_or_else(|| "1054.000".to_string(), |ll| format!("{}", ll.0.value)),
+            Self::Energy => obj
+                .lines()
+                .last()
+                .map_or_else(|| "1.000".to_string(), |ll| format!("{}", ll.1.value)),
             Self::SpectralResolution => {
                 format!("{}", obj.spectral_resolution().value)
             }

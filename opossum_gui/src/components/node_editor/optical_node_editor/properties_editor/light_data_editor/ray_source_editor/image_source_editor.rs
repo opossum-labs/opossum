@@ -7,12 +7,13 @@ use crate::components::{
     },
 };
 use dioxus::prelude::*;
-use opossum_core::{meter, prelude::{ImageSrc, RayDataBuilder}};
 use opossum_core::{degree, joule};
+use opossum_core::{
+    meter,
+    prelude::{ImageSrc, RayDataBuilder},
+};
 use strum::{EnumIter, IntoEnumIterator};
-use uom::si::
-    angle::degree
-;
+use uom::si::angle::degree;
 
 #[component]
 pub fn ImageSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {

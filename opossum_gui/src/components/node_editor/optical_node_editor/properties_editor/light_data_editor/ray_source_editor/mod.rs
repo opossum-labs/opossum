@@ -12,8 +12,9 @@ use crate::components::node_editor::{
     hooks::use_update_signal_with_reactive_prop,
     inputs::input_components::RowedInputs,
     optical_node_editor::properties_editor::light_data_editor::ray_source_editor::{
-        point_source_editor::ReferenceLengthEditor, distribution_editor::DistributionEditor,
+        distribution_editor::DistributionEditor,
         image_source_editor::get_image_source_input_params,
+        point_source_editor::ReferenceLengthEditor,
     },
 };
 

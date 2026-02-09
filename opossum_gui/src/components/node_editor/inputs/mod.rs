@@ -188,11 +188,6 @@ impl InputData {
     }
 }
 
-
-
-
-
-
 /// Formats a floating-point value with a fixed number of decimal places.
 ///
 /// The value is rounded to `decimals` decimal places. Trailing zeros in the
@@ -211,8 +206,11 @@ impl InputData {
 ///
 /// A `String` containing the formatted decimal representation.
 fn format_fixed_decimal(v: f64, decimals: usize) -> String {
+    #[allow(clippy::cast_possible_wrap)]
+    #[allow(clippy::cast_possible_truncation)]
     let factor = 10f64.powi(decimals as i32);
     let scaled = (v * factor).round();
+    #[allow(clippy::cast_possible_truncation)]
     let int_scaled = scaled as i128;
 
     let s = int_scaled.to_string();
@@ -234,9 +232,9 @@ fn format_fixed_decimal(v: f64, decimals: usize) -> String {
 
     let trimmed = frac_part.trim_end_matches('0');
     if trimmed.is_empty() {
-        format!("{}.0", int_part)
+        format!("{int_part}.0")
     } else {
-        format!("{}.{}", int_part, trimmed)
+        format!("{int_part}.{trimmed}")
     }
 }
 
@@ -259,8 +257,9 @@ pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Opt
     let max_num = 1e33 * (1. - 1e-14);
     let min_num = 0.0;
     let factor = si_prefix_to_exponent(prefix_str, reciprocal);
+
     let normalized = num_str.replace(',', ".");
-    if let Ok(parsed) = normalized.parse::<f64>() {
+    normalized.parse::<f64>().map_or(None, |parsed| {
         if (parsed.abs() * 10f64.powi(factor)) > max_num {
             Some(parsed.signum() * max_num)
         } else if (parsed.abs() * 10f64.powi(factor)) < min_num {
@@ -268,9 +267,7 @@ pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Opt
         } else {
             Some(parsed * 10f64.powi(factor))
         }
-    } else {
-        None
-    }
+    })
 }
 
 /// Checks whether an input string resembles a valid, permissive unit input.
@@ -351,22 +348,17 @@ pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, 
 
     if prefix_str.is_empty() {
         if regex.is_match(value_str) {
-            Ok((value_str.to_string(), "".to_string()))
+            Ok((value_str.to_string(), String::new()))
         } else {
             Err(())
         }
     } else {
         let mut chars = prefix_str.chars();
         let prefix_char = chars.next_back().unwrap();
-        if valid_prefixes.contains(&prefix_char) {
-            if regex.is_match(value_str) {
-                return Ok((value_str.to_string(), prefix_char.to_string()));
-            } else {
-                return Err(());
-            }
-        } else {
-            return Err(());
+        if valid_prefixes.contains(&prefix_char) && regex.is_match(value_str) {
+            return Ok((value_str.to_string(), prefix_char.to_string()));
         }
+        Err(())
     }
 }
 
@@ -392,10 +384,9 @@ pub fn format_si_notation(x: f64, reciprocal: bool) -> String {
 
     let (mantissa, exponent) = get_mantissa_and_exponent(x);
 
-    let prefix = if reciprocal{
+    let prefix = if reciprocal {
         si_prefix_from_exponent(-exponent)
-    }
-    else{
+    } else {
         si_prefix_from_exponent(exponent)
     };
 
@@ -403,8 +394,10 @@ pub fn format_si_notation(x: f64, reciprocal: bool) -> String {
         return "0.0 ".into();
     }
 
-    let mantissa_str =
-        format_fixed_decimal(mantissa, 15 - mantissa.abs().log10().abs().ceil() as usize);
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
+    let decimals = 15 - mantissa.abs().log10().abs().ceil() as usize;
+    let mantissa_str = format_fixed_decimal(mantissa, decimals);
 
     format!("{mantissa_str} {prefix}")
 }
@@ -452,8 +445,9 @@ fn get_exponent(x_abs: f64) -> i32 {
         return 0;
     }
     let exp10 = x_abs.log10();
-    let exp3 = (exp10 / 3.0).floor() as i32 * 3;
-    exp3
+    #[allow(clippy::cast_possible_truncation)]
+    let exp3 = (exp10 / 3.0).floor() as i32;
+    exp3 * 3
 }
 
 /// Converts an engineering exponent into its corresponding SI prefix.
@@ -530,9 +524,5 @@ fn si_prefix_to_exponent(prefix: &str, reciprocal: bool) -> i32 {
         "Q" => 30,
         _ => 0,
     };
-    if reciprocal {
-        -exp
-    } else {
-        exp
-    }
+    if reciprocal { -exp } else { exp }
 }

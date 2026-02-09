@@ -1,5 +1,6 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop, inputs::input_components::NodeConfigUnitInput,
+    hooks::use_update_signal_with_reactive_prop,
+    inputs::input_components::NodeConfigUnitInput,
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
 use approx::relative_ne;

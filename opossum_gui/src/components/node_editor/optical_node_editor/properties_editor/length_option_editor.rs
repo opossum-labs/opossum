@@ -18,7 +18,7 @@ pub fn LengthOptionEditor(
 ) -> Element {
     let mut length_opt_sig = use_signal(|| length_opt);
     use_update_signal_with_reactive_prop(length_opt, length_opt_sig);
-    
+
     let select_id = format!("lengthOptionProperty{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
     rsx! {
@@ -56,7 +56,7 @@ pub fn LengthOptionEditor(
                                             node_id,
                                             action: NodeChangeAction::Property(
                                                 property_key.clone(),
-                                                length_opt_sig.read().clone().into(),
+                                                (*length_opt_sig.read()).into(),
                                             ),
                                         });
                                 },

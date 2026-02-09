@@ -2,10 +2,7 @@ use crate::components::{
     logger::LogResultExt, node_editor::inputs::input_components::NodeConfigUnitInput,
 };
 use dioxus::prelude::*;
-use opossum_core::{
-    meter,
-    prelude::PointSrc,
-};
+use opossum_core::{meter, prelude::PointSrc};
 
 #[component]
 pub fn ReferenceLengthEditor(

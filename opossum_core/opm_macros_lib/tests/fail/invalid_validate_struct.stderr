@@ -9,9 +9,13 @@ help: the trait `ValidateTrait` is not implemented for `Validated<std::string::S
    |
  4 | struct Validated<T, V>(T, V);
    | ^^^^^^^^^^^^^^^^^^^^^^
-   = help: the following other types implement trait `ValidateTrait`:
-             opossum_core::generic_validators::Validated<T, V>
-             opossum_core::generic_validators::ValidatedVec<T, EV, CV>
+help: the following other types implement trait `ValidateTrait`
+  --> $WORKSPACE/opossum_core/src/generic_validators/mod.rs
+   |
+   | impl<T, V: Validate<T>> ValidateTrait for Validated<T, V> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `opossum_core::generic_validators::Validated<T, V>`
+   | impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidateTrait for ValidatedVec<T, EV, CV> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `opossum_core::generic_validators::ValidatedVec<T, EV, CV>`
 note: required by a bound in `_::{closure#0}::_check`
   --> tests/fail/invalid_validate_struct.rs:8:10
    |
@@ -30,9 +34,13 @@ help: the trait `ValidateTrait` is not implemented for `Validated<std::string::S
    |
  4 | struct Validated<T, V>(T, V);
    | ^^^^^^^^^^^^^^^^^^^^^^
-   = help: the following other types implement trait `ValidateTrait`:
-             opossum_core::generic_validators::Validated<T, V>
-             opossum_core::generic_validators::ValidatedVec<T, EV, CV>
+help: the following other types implement trait `ValidateTrait`
+  --> $WORKSPACE/opossum_core/src/generic_validators/mod.rs
+   |
+   | impl<T, V: Validate<T>> ValidateTrait for Validated<T, V> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `opossum_core::generic_validators::Validated<T, V>`
+   | impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidateTrait for ValidatedVec<T, EV, CV> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `opossum_core::generic_validators::ValidatedVec<T, EV, CV>`
 note: required by a bound in `_::{closure#1}::_check`
   --> tests/fail/invalid_validate_struct.rs:8:10
    |

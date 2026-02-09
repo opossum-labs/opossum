@@ -4,7 +4,9 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    meter, position_distributions::{FibonacciEllipse, PosDistType}, utils::try_f64_to_usize
+    meter,
+    position_distributions::{FibonacciEllipse, PosDistType},
+    utils::try_f64_to_usize,
 };
 use strum::EnumIter;
 

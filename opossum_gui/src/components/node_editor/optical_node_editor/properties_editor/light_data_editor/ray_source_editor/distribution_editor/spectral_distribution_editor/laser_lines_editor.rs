@@ -3,7 +3,8 @@ use crate::{
     components::{
         logger::LogResultExt,
         node_editor::inputs::{
-            InputParam, IntoInputData, IntoInputDataStrings, format_si_notation, input_components::RowedInputs, parse_si_number, parse_unit_input_strict
+            InputParam, IntoInputData, IntoInputDataStrings, format_si_notation,
+            input_components::RowedInputs, parse_si_number, parse_unit_input_strict,
         },
     },
 };
@@ -84,13 +85,12 @@ pub fn LaserLineInput(
                             if let (Some(wvl), Ok(rel_int)) = (
                                 parse_si_number(&num_str, &prefix_str, false),
                                 rel_int_val.parse(),
-                            ) {
-                                if let SpecDistType::LaserLines(ll) = &mut *spect_dist_type_sig
+                            )
+                                && let SpecDistType::LaserLines(ll) = &mut *spect_dist_type_sig
                                     .write()
-                                {
-                                    ll.add_lines(vec![(meter!(wvl), rel_int)])
-                                        .log_err_with_context("Error adding laser line");
-                                }
+                            {
+                                ll.add_lines(vec![(meter!(wvl), rel_int)])
+                                    .log_err_with_context("Error adding laser line");
                             }
                         } else {
                             OPOSSUM_UI_LOGS

@@ -5,6 +5,7 @@ use dioxus_primitives::alert_dialog::{
     AlertDialogTitleProps,
 };
 
+#[allow(clippy::volatile_composites)]
 #[component]
 pub fn AlertDialogRoot(props: AlertDialogRootProps) -> Element {
     rsx! {

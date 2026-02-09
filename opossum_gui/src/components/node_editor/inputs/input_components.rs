@@ -1,6 +1,12 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-use crate::{OPOSSUM_UI_LOGS, components::node_editor::inputs::{InputData, InputParam, format_si_notation, is_permissive_unit_input, parse_si_number, parse_unit_input_strict}};
+use crate::{
+    OPOSSUM_UI_LOGS,
+    components::node_editor::inputs::{
+        InputData, InputParam, format_si_notation, is_permissive_unit_input, parse_si_number,
+        parse_unit_input_strict,
+    },
+};
 use dioxus::prelude::*;
 use itertools::Itertools;
 use std::ops::{AddAssign, SubAssign};
@@ -73,18 +79,16 @@ pub fn FlushableTextInput(
                 oninput: move |e: Event<FormData>| {
                     let new_value = e.data.value();
                     if let Some(eval_input) = eval_input {
-                        if !eval_input(new_value.clone()) {
-                            local_value.set(local_value());
-                        }
-                        else{
+                        if eval_input(new_value.clone()) {
                             local_value.set(new_value);
                             if !*is_locally_dirty.peek() {
                                 is_locally_dirty.set(true);
                                 form_ctx.dirty_count.write().add_assign(1);
                             }
+                        } else {
+                            local_value.set(local_value());
                         }
-                    }
-                    else{
+                    } else {
                         local_value.set(new_value);
                         if !*is_locally_dirty.peek() {
                             is_locally_dirty.set(true);
@@ -234,8 +238,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 onchange: move |e| input_data.callback.call(e),
             }
         }
-    } 
-    else if let InputParam::Energy(_) = input_data.input_param {
+    } else if let InputParam::Energy(_) = input_data.input_param {
         // Selects feuern sofort
         rsx! {
             NodeConfigUnitInput {
@@ -249,8 +252,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 readonly: input_data.readonly,
             }
         }
-    } 
-    else if let InputParam::Length(_) = input_data.input_param {
+    } else if let InputParam::Length(_) = input_data.input_param {
         // Selects feuern sofort
         rsx! {
             NodeConfigUnitInput {
@@ -264,8 +266,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 readonly: input_data.readonly,
             }
         }
-    } 
-    else if let InputParam::Angle(_) = input_data.input_param {
+    } else if let InputParam::Angle(_) = input_data.input_param {
         // Selects feuern sofort
         rsx! {
             NodeConfigUnitInput {
@@ -279,8 +280,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 readonly: input_data.readonly,
             }
         }
-    } 
-    else {
+    } else {
         // HIER IST DIE ÄNDERUNG:
         // Für Zahlen und Text nutzen wir jetzt FlushableTextInput!
         // Wir nutzen input_data.callback_str statt input_data.callback
@@ -326,7 +326,6 @@ pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
     }
 }
 
-
 #[component]
 pub fn RowedElements(elements: Vec<Element>, num_per_row: usize) -> Element {
     rsx! {
@@ -346,7 +345,6 @@ pub fn RowedElements(elements: Vec<Element>, num_per_row: usize) -> Element {
         }
     }
 }
-
 
 #[component]
 pub fn LabeledInput(
@@ -390,8 +388,7 @@ pub fn NodeConfigUnitInput(
     onchange: EventHandler<f64>,
     #[props(default = false)] reciprocal: bool,
     #[props(default = false)] readonly: bool,
-) -> Element 
-{
+) -> Element {
     rsx! {
         UnitInput {
             id,
@@ -420,20 +417,27 @@ pub fn UnitInput(
     #[props(default = String::new())] label_class: String,
     #[props(default = false)] readonly: bool,
 ) -> Element {
-    let mut val_str =
-        use_signal(|| format!("{}{}", format_si_notation(*value.read(), reciprocal), base_unit));
+    let mut val_str = use_signal(|| {
+        format!(
+            "{}{}",
+            format_si_notation(*value.read(), reciprocal),
+            base_unit
+        )
+    });
 
     use_effect(move || {
         let current_str = val_str.peek().clone();
-        let new_str = format!("{}{}", format_si_notation(*value.read(), reciprocal), base_unit);
+        let new_str = format!(
+            "{}{}",
+            format_si_notation(*value.read(), reciprocal),
+            base_unit
+        );
         if current_str != new_str {
             val_str.set(new_str);
         }
     });
 
-    let on_input_eval = move |input_val: String| {
-        is_permissive_unit_input(&input_val, base_unit)
-    };
+    let on_input_eval = move |input_val: String| is_permissive_unit_input(&input_val, base_unit);
 
     rsx! {
         div { class: container_class,
@@ -461,7 +465,6 @@ pub fn UnitInput(
         }
     }
 }
-
 
 #[component]
 pub fn LabeledSelect(

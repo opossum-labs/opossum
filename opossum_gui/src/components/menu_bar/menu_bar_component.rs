@@ -19,6 +19,7 @@ use crate::components::{
 #[cfg(not(target_arch = "wasm32"))]
 use crate::components::menu_bar::controls::controls_menu::ControlsMenu;
 
+#[allow(clippy::volatile_composites)]
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 
 #[derive(Debug, Clone)]

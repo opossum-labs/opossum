@@ -1,6 +1,11 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
-    accordion::AccordionItem, hooks::use_update_signal_with_reactive_prop, inputs::input_components::{FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput}, node_config_editor::{NodeChangeAction, NodeChangeEvent}
+    accordion::AccordionItem,
+    hooks::use_update_signal_with_reactive_prop,
+    inputs::input_components::{
+        FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput,
+    },
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
 use dioxus::prelude::*;
 use opossum_core::{J_per_cm2, nodes::fluence_detector::Fluence};
@@ -76,7 +81,6 @@ pub fn GeneralEditor(
         }
     }
 }
-
 
 #[component]
 pub fn NodeInvertedInput(

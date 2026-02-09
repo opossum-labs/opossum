@@ -1,3 +1,4 @@
+#![allow(clippy::volatile_composites)]
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{
     opm_document::AnalyzerInfo, prelude::*, types::api_types::NodeInfo, utils::to_f64,

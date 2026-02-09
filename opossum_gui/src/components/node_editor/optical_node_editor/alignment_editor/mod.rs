@@ -7,8 +7,7 @@ use crate::{
     components::node_editor::{
         accordion::AccordionItem,
         hooks::use_update_signal_with_reactive_prop,
-        inputs::
-            input_components::{LabeledSelect, NodeConfigUnitInput, RowedElements},
+        inputs::input_components::{LabeledSelect, NodeConfigUnitInput, RowedElements},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
 };
@@ -16,10 +15,15 @@ use approx::relative_ne;
 use dioxus::prelude::*;
 use grating_alignment::GratingAlignmentInputs;
 use opossum_core::{
-    degree, meter, prelude::{Isometry, Properties}, utils::geom_transformation::{RotationAxis, TranslationAxis}
+    degree, meter,
+    prelude::{Isometry, Properties},
+    utils::geom_transformation::{RotationAxis, TranslationAxis},
 };
 use strum::IntoEnumIterator;
-use uom::si::{angle::degree, f64::{Angle, Length}};
+use uom::si::{
+    angle::degree,
+    f64::{Angle, Length},
+};
 use uuid::Uuid;
 
 #[component]
@@ -73,48 +77,45 @@ pub fn AlignmentEditor(
     }
 }
 
-fn on_new_translation(on_save: EventHandler<Isometry>, alignment: ReadSignal<Isometry>) -> EventHandler<(Length, TranslationAxis)> {
+fn on_new_translation(
+    on_save: EventHandler<Isometry>,
+    alignment: ReadSignal<Isometry>,
+) -> EventHandler<(Length, TranslationAxis)> {
     EventHandler::new(move |(new_trans, axis): (Length, TranslationAxis)| {
         let old_alignment_ax_val = alignment.read().translation_of_axis(axis);
-        if relative_ne!(
-            old_alignment_ax_val.value, new_trans.value
-        ) {
+        if relative_ne!(old_alignment_ax_val.value, new_trans.value) {
             let mut new_alignment = *alignment.read();
             if new_alignment
-                                        .set_translation_of_axis(axis, new_trans)
+                .set_translation_of_axis(axis, new_trans)
                 .is_ok()
             {
                 on_save.call(new_alignment);
-            }
-            else{
-                OPOSSUM_UI_LOGS.write().add_log(
-                    format!("Failed to set alignment for axis {axis}!",)
-                        .as_str(),
-                );
+            } else {
+                OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log(format!("Failed to set alignment for axis {axis}!",).as_str());
             }
         }
     })
 }
 
-
-fn on_new_rotation(on_save: EventHandler<Isometry>, alignment: ReadSignal<Isometry>) -> EventHandler<(Angle, RotationAxis)> {
+fn on_new_rotation(
+    on_save: EventHandler<Isometry>,
+    alignment: ReadSignal<Isometry>,
+) -> EventHandler<(Angle, RotationAxis)> {
     EventHandler::new(move |(new_rot, axis): (Angle, RotationAxis)| {
         let old_alignment_ax_val = alignment.read().rotation_of_axis(axis);
         if relative_ne!(
-            old_alignment_ax_val.get::<degree>(), new_rot.get::<degree>()
+            old_alignment_ax_val.get::<degree>(),
+            new_rot.get::<degree>()
         ) {
             let mut new_alignment = *alignment.read();
-            if new_alignment
-                                        .set_rotation_of_axis(axis, new_rot)
-                .is_ok()
-            {
+            if new_alignment.set_rotation_of_axis(axis, new_rot).is_ok() {
                 on_save.call(new_alignment);
-            }
-            else{
-                OPOSSUM_UI_LOGS.write().add_log(
-                    format!("Failed to set alignment for axis {axis}!",)
-                        .as_str(),
-                );
+            } else {
+                OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log(format!("Failed to set alignment for axis {axis}!",).as_str());
             }
         }
     })
@@ -190,7 +191,7 @@ pub fn PositioningEditor(
 fn PositioningInputs(
     position_opt_sig: Signal<Option<Isometry>>,
     on_save: EventHandler<Isometry>,
-    node_id: Uuid
+    node_id: Uuid,
 ) -> Element {
     let mut position_sig = use_signal(|| position_opt_sig.read().unwrap_or_default());
 
@@ -222,19 +223,52 @@ fn PositioningInputs(
 fn TranslationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
     on_new_translation: EventHandler<(Length, TranslationAxis)>,
-    node_id: Uuid
+    node_id: Uuid,
 ) -> Element {
     let id_add_on = "inputNodeAlignmentTrans";
 
-    let mut x_sig = use_signal(move || alignment.read().translation_of_axis(TranslationAxis::X).value);
-    let mut y_sig = use_signal(move || alignment.read().translation_of_axis(TranslationAxis::Y).value);
-    let mut z_sig = use_signal(move || alignment.read().translation_of_axis(TranslationAxis::Z).value);
+    let mut x_sig = use_signal(move || {
+        alignment
+            .read()
+            .translation_of_axis(TranslationAxis::X)
+            .value
+    });
+    let mut y_sig = use_signal(move || {
+        alignment
+            .read()
+            .translation_of_axis(TranslationAxis::Y)
+            .value
+    });
+    let mut z_sig = use_signal(move || {
+        alignment
+            .read()
+            .translation_of_axis(TranslationAxis::Z)
+            .value
+    });
 
-    use_update_signal_with_reactive_prop(alignment.read().translation_of_axis(TranslationAxis::X).value, x_sig);
-    use_update_signal_with_reactive_prop(alignment.read().translation_of_axis(TranslationAxis::Y).value, y_sig);
-    use_update_signal_with_reactive_prop(alignment.read().translation_of_axis(TranslationAxis::Z).value, z_sig);
+    use_update_signal_with_reactive_prop(
+        alignment
+            .read()
+            .translation_of_axis(TranslationAxis::X)
+            .value,
+        x_sig,
+    );
+    use_update_signal_with_reactive_prop(
+        alignment
+            .read()
+            .translation_of_axis(TranslationAxis::Y)
+            .value,
+        y_sig,
+    );
+    use_update_signal_with_reactive_prop(
+        alignment
+            .read()
+            .translation_of_axis(TranslationAxis::Z)
+            .value,
+        z_sig,
+    );
 
-    rsx!{
+    rsx! {
         div { class: "row gy-1 gx-2",
             div { class: "col-sm",
                 NodeConfigUnitInput {
@@ -279,9 +313,8 @@ fn RotationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
     axes_skip: Option<Vec<RotationAxis>>,
     on_new_rotation: EventHandler<(Angle, RotationAxis)>,
-    node_id: Uuid
+    node_id: Uuid,
 ) -> Element {
-
     let id_add_on = "inputNodeAlignmentRot";
 
     let mut rot_input_vec = Vec::<Element>::new();
@@ -292,26 +325,34 @@ fn RotationAlignmentInputs(
         {
             continue;
         }
-        rot_input_vec.push(rsx!{
+        rot_input_vec.push(rsx! {
             RotationInput {
                 alignment,
                 axis: rot_axis,
                 id: format!("{id_add_on}{}{}", rot_axis, node_id.as_simple().to_string()),
-                on_new_rotation: on_new_rotation.clone(),
+                on_new_rotation,
             }
         });
     }
-    rsx!{
+    rsx! {
         RowedElements { elements: rot_input_vec, num_per_row: 2 }
     }
 }
 
 #[component]
-pub fn RotationInput(alignment: ReadSignal<Isometry>, axis: RotationAxis, id: String, on_new_rotation: EventHandler<(Angle, RotationAxis)>) -> Element{
+pub fn RotationInput(
+    alignment: ReadSignal<Isometry>,
+    axis: RotationAxis,
+    id: String,
+    on_new_rotation: EventHandler<(Angle, RotationAxis)>,
+) -> Element {
     let value_sig = use_signal(move || alignment.read().rotation_of_axis(axis).get::<degree>());
-    use_update_signal_with_reactive_prop(alignment.read().rotation_of_axis(axis).get::<degree>(), value_sig);
+    use_update_signal_with_reactive_prop(
+        alignment.read().rotation_of_axis(axis).get::<degree>(),
+        value_sig,
+    );
 
-    rsx!{
+    rsx! {
         NodeConfigUnitInput {
             id,
             label: format!("{} rotation", axis),

@@ -1,3 +1,5 @@
+#![allow(clippy::volatile_composites)]
+
 use dioxus::prelude::*;
 use opossum_gui::App;
 

@@ -1,13 +1,19 @@
 use crate::components::node_editor::{
     hooks::use_update_signal_with_reactive_prop,
-    inputs::{InputData, InputParam, input_components::{InputParamLabeledInput, NodeConfigUnitInput}},
+    inputs::{
+        InputData, InputParam,
+        input_components::{InputParamLabeledInput, NodeConfigUnitInput},
+    },
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
-use core::f64;
 use approx::relative_ne;
+use core::f64;
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_core::{meter, prelude::{Proptype, millimeter}};
+use opossum_core::{
+    meter,
+    prelude::{Proptype, millimeter},
+};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
@@ -121,8 +127,7 @@ fn CurvatureInput(
             base_unit: "m",
             onchange: move |new_curv: f64| {
                 if relative_ne!(curvature_sig.read().value, new_curv) {
-                    on_save
-                        .call(meter!(new_curv));
+                    on_save.call(meter!(new_curv));
                 }
             },
             readonly: curvature.is_infinite(),
@@ -144,21 +149,6 @@ fn on_is_curved_input_change(
             };
             curvature_sig.set(new_val);
             on_save.call(new_val);
-        }
-    })
-}
-
-fn on_length_input_change_str(
-    mut signal: Signal<Length>,
-    mut last_finite_curvature: Signal<Length>,
-    on_save: EventHandler<Length>,
-) -> EventHandler<String> {
-    EventHandler::new(move |val_str: String| {
-        if let Ok(length) = val_str.parse::<f64>() {
-            let new_length = millimeter!(length);
-            signal.set(new_length);
-            last_finite_curvature.set(new_length);
-            on_save.call(new_length);
         }
     })
 }
