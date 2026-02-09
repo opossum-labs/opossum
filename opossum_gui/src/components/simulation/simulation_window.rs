@@ -174,6 +174,16 @@ pub fn SimulationWindow(
             class: "modal d-block",
             "tabindex": "-1",
             style: "background-color: rgba(0,0,0,0.5);",
+            onkeydown: move |evt| {
+                if let Key::Escape = evt.key() {
+                    if !is_running() {
+                       show_simulation.set(false);
+                    }
+                }
+            },
+            onmounted: move |evt| {
+                let _ = evt.set_focus(true);
+            },
             div { class: "modal-dialog modal-dialog-centered modal-xl",
                 div { class: "modal-content bg-dark text-white",
                     div { class: "modal-header",
@@ -216,6 +226,7 @@ pub fn SimulationWindow(
                         }
                         button {
                             class: if is_running() { "btn btn-danger" } else { "btn btn-secondary" },
+                            title: if is_running() { "Abort the running simulation" } else { "Close window (Esc)" },
                             onclick: move |_| {
                                 if is_running() {
                                     command_runner.send(CommandAction::Abort);
