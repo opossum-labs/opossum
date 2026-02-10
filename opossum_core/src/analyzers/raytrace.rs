@@ -193,7 +193,7 @@ pub trait AnalysisRayTrace: OpticNode {
                 rays.invalidate_by_threshold_energy(c.min_energy_per_ray)?;
             }
         }
-
+        surf.prune_hit_map(&iso);
         self.set_apodization_warning(apodized);
 
         // merge all rays

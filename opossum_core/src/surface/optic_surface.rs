@@ -189,6 +189,14 @@ impl OpticSurface {
     pub fn reset_hit_map(&mut self) {
         self.hit_map.reset();
     }
+
+    /// Prunes the hit map of this [`OpticSurface`] by removing all points that are outside the aperture.
+    pub fn prune_hit_map(&mut self, iso: &Isometry) {
+        if !self.aperture.is_none() {
+            self.hit_map.prune_by_aperture(&self.aperture, iso);
+        }
+    }
+
     /// Evaluate the fluence of a given ray bundle on this surface. If the fluence
     /// surpasses its lidt, store the critical fluence parameters in the hitmap
     ///

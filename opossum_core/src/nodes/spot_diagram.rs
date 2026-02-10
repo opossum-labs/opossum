@@ -25,7 +25,10 @@ use crate::{
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
-    reporting::node_report::NodeReport,
+    reporting::{
+        node_report::NodeReport,
+        report_note::{ReportLevel, ReportNote},
+    },
     utils::{
         geom_transformation::Isometry,
         unit_format::{
@@ -71,7 +74,7 @@ impl Default for SpotDiagram {
         let mut node_attr = NodeAttr::new("spot diagram");
         node_attr
             .create_property(
-                "plot_aperture",
+                "plot aperture",
                 "flag that defines if the aperture is displayed in a plot",
                 false.into(),
             )
@@ -135,7 +138,7 @@ impl OpticNode for SpotDiagram {
                 props
                     .create(
                         "centroid y",
-                        "y position of energy-weightedcentroid",
+                        "y position of energy-weighted centroid",
                         c.y.into(),
                     )
                     .unwrap();
@@ -154,23 +157,15 @@ impl OpticNode for SpotDiagram {
                     )
                     .unwrap();
             }
-            if self.apodization_warning {
-                props
-                    .create(
-                        "Warning",
-                        "warning during analysis",
-                        "Rays have been apodized at input aperture. Results might not be accurate."
-                            .into(),
-                    )
-                    .unwrap();
-            }
         }
-        Some(NodeReport::new(
-            &self.node_type(),
-            &self.name(),
-            uuid,
-            props,
-        ))
+        let mut report = NodeReport::new(&self.node_type(), &self.name(), uuid, props);
+        if self.apodization_warning {
+            report.add_note(ReportNote::new(
+                ReportLevel::Warning,
+                "Rays have been apodized at input aperture. Results might not be accurate.",
+            ));
+        }
+        Some(report)
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -509,5 +504,94 @@ mod test {
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 5);
+
+        sd.set_apodization_warning(true);
+        let node_report = sd.node_report("").unwrap();
+        let notes = node_report.notes();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].level, ReportLevel::Warning);
+        assert!(notes[0].message.contains("apodized"));
+    }
+    #[test]
+    fn test_aperture_on_hitmap() {
+        use crate::{
+            analyzers::raytrace::{AnalysisRayTrace, RayTraceConfig},
+            apertures::{Aperture, ApertureType},
+            light_result::LightResult,
+            lightdata::LightData,
+            prelude::*,
+            ray::Ray,
+            rays::Rays,
+        };
+        use nalgebra::{Point3, Vector3};
+
+        let mut sd = SpotDiagram::default();
+        let aperture = Aperture::new_rectangle(
+            millimeter!(1.0),
+            millimeter!(1.0),
+            millimeter!(0.0, 0.0),
+            ApertureType::Hole,
+        )
+        .unwrap();
+
+        sd.set_aperture(&PortType::Input, "input_1", &aperture)
+            .unwrap();
+        sd.node_attr_mut().set_isometry(Isometry::identity());
+
+        let mut rays = Rays::default();
+        // ray inside aperture
+        rays.add_ray(
+            Ray::new(
+                Point3::new(millimeter!(0.0), millimeter!(0.0), millimeter!(-1.0)),
+                Vector3::new(0.0, 0.0, 1.0),
+                nanometer!(550.0),
+                joule!(1.0),
+            )
+            .unwrap(),
+        );
+
+        // ray outside aperture
+        rays.add_ray(
+            Ray::new(
+                Point3::new(millimeter!(0.0), millimeter!(2.0), millimeter!(-1.0)),
+                Vector3::new(0.0, 0.0, 1.0),
+                nanometer!(550.0),
+                joule!(1.0),
+            )
+            .unwrap(),
+        );
+
+        let analyzer = RayTraceConfig::default();
+        let mut incoming_data = LightResult::default();
+        incoming_data.insert("input_1".to_string(), LightData::Geometric(rays));
+
+        AnalysisRayTrace::analyze(&mut sd, incoming_data, &analyzer).unwrap();
+
+        let node_report = sd.node_report("").unwrap();
+        let node_props = node_report.properties(); // Returns &Properties
+
+        // Use iterator correctly as (key, value)
+        let hit_map_prop = node_props
+            .iter()
+            .find(|(name, _p)| *name == "Spot diagram")
+            .unwrap();
+
+        if let Proptype::HitMap(hm) = hit_map_prop.1.prop() {
+            // Should verify that we only have 1 hit point (the one inside the aperture)
+            // The one outside should be pruned/not present
+            let merged = hm.get_merged_rays_hit_map().unwrap();
+            let points = merged.hit_map().positions();
+            assert_eq!(
+                points.len(),
+                1,
+                "HitMap should only contain rays passing through aperture"
+            );
+            assert!(
+                points[0].y.abs().value < 1.0,
+                "Remaining point should be inside the aperture"
+            );
+        } else {
+            panic!("Property is not a HitMap");
+        }
     }
 }

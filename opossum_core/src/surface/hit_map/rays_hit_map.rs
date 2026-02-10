@@ -2,13 +2,16 @@
 //!
 //! This module also conatins the routines for genearating a fluence map using different estimator strategies.
 use crate::{
-    J_per_cm2, centimeter,
+    J_per_cm2,
+    apertures::Aperture,
+    centimeter,
     error::{OpmResult, OpossumError},
     kde::Kde,
     meter, micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     plottable::AxLims,
     utils::{
+        geom_transformation::Isometry,
         griddata::{
             VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
             grid_interpolate_3d_triangulated_scatter_data, linspace,
@@ -415,6 +418,71 @@ impl RaysHitMap {
         } else {
             Err(OpossumError::Analysis("wrong hit point type for to calculate fluence with binning! Must be an Energyhitpoint!".into()))
         }
+    }
+
+    /// Prunes the [`RaysHitMap`] by removing all hit points that are outside the given [`Aperture`].
+    pub fn prune_by_aperture(&mut self, aperture: &Aperture, surface_iso: &Isometry) {
+        // If aperture is None, do nothing
+        if aperture.is_none() {
+            return;
+        }
+
+        match &mut self.hit_points {
+            HitPoints::Energy(vec) => {
+                vec.retain(|hp| {
+                    let local_point_3d = surface_iso.inverse_transform_point(&hp.position);
+                    let local_point_2d = Point2::new(local_point_3d.x, local_point_3d.y);
+                    aperture.apodize(&local_point_2d) > 0.0
+                });
+            }
+            HitPoints::Fluence(vec) => {
+                vec.retain(|hp| {
+                    let local_point_3d = surface_iso.inverse_transform_point(&hp.position);
+                    let local_point_2d = Point2::new(local_point_3d.x, local_point_3d.y);
+                    aperture.apodize(&local_point_2d) > 0.0
+                });
+            }
+        }
+        self.recalculate_limits();
+    }
+
+    fn recalculate_limits(&mut self) {
+        let (xmin, xmax, ymin, ymax) = match &self.hit_points {
+            HitPoints::Energy(vec) => vec.iter().fold(
+                (
+                    meter!(f64::INFINITY),
+                    meter!(f64::NEG_INFINITY),
+                    meter!(f64::INFINITY),
+                    meter!(f64::NEG_INFINITY),
+                ),
+                |arg0, v| {
+                    (
+                        arg0.0.min(v.position.x),
+                        arg0.1.max(v.position.x),
+                        arg0.2.min(v.position.y),
+                        arg0.3.max(v.position.y),
+                    )
+                },
+            ),
+            HitPoints::Fluence(vec) => vec.iter().fold(
+                (
+                    meter!(f64::INFINITY),
+                    meter!(f64::NEG_INFINITY),
+                    meter!(f64::INFINITY),
+                    meter!(f64::NEG_INFINITY),
+                ),
+                |arg0, v| {
+                    (
+                        arg0.0.min(v.position.x),
+                        arg0.1.max(v.position.x),
+                        arg0.2.min(v.position.y),
+                        arg0.3.max(v.position.y),
+                    )
+                },
+            ),
+        };
+        self.x_lims = (xmin, xmax);
+        self.y_lims = (ymin, ymax);
     }
 
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] using the "Voronoi" method
