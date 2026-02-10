@@ -1,5 +1,4 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop,
     inputs::{
         InputData, InputParam,
         input_components::{InputParamLabeledInput, NodeConfigUnitInput},
@@ -26,7 +25,6 @@ pub fn CurvatureEditor(
 ) -> Element {
     let mut curvature_sig = use_signal(|| curvature);
     let mut is_finite_sig = use_signal(|| curvature.is_finite());
-    let curv_value_memo = use_memo(move || curvature_sig.read().value);
 
     let mut last_finite_curvature = use_signal(|| {
         if curvature.is_finite() {
@@ -46,7 +44,7 @@ pub fn CurvatureEditor(
     });
 
     use_effect(move || {
-        let current_val = *curv_value_memo.read();
+        let current_val = curvature_sig.read().value;
         if current_val.is_finite() {
             last_finite_curvature.set(meter!(current_val));
         }
@@ -69,10 +67,10 @@ pub fn CurvatureEditor(
                 NodeConfigUnitInput {
                     id: format!("curvatureProperty{property_key}").to_camel_case().as_str(),
                     label: property_key.to_sentence_case(),
-                    value: *curv_value_memo.read(),
+                    value: curvature_sig.read().value,
                     base_unit: "m",
                     onchange: move |new_curv: f64| {
-                        if relative_ne!(* curv_value_memo.read(), new_curv) {
+                        if relative_ne!(curvature_sig.read().value, new_curv) {
                             curvature_sig.set(meter!(new_curv));
                             on_save.call(meter!(new_curv));
                         }
@@ -82,9 +80,7 @@ pub fn CurvatureEditor(
             }
             div { class: "col-sm",
                 CurvatureSelector {
-                    curvature,
-                    curvature_sig: curv_value_memo,
-                    last_finite_curvature,
+                    is_finite_sig,
                     property_key,
                     on_is_curved_change: move |is_finite| {
                         is_finite_sig.set(is_finite);
@@ -98,9 +94,7 @@ pub fn CurvatureEditor(
 
 #[component]
 fn CurvatureSelector(
-    curvature: Length,
-    curvature_sig: ReadSignal<f64>,
-    last_finite_curvature: Signal<Length>,
+    is_finite_sig: ReadSignal<bool>,
     property_key: String,
     on_is_curved_change: EventHandler<bool>,
 ) -> Element {
@@ -117,7 +111,7 @@ fn CurvatureSelector(
             .as_str(),
         legacy_callback,
         dummy_str_callback,
-        curvature_sig.read().is_finite().to_string(),
+        is_finite_sig.read().to_string(),
     );
     rsx! {
         InputParamLabeledInput { input_data: checkbox_input }

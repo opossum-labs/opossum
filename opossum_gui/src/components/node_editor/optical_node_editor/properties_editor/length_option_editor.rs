@@ -11,13 +11,28 @@ use uuid::Uuid;
 
 #[component]
 pub fn LengthOptionEditor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     length_opt: Option<Length>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut length_opt_sig = use_signal(|| length_opt);
-    use_update_signal_with_reactive_prop(length_opt, length_opt_sig);
+
+    use_effect({
+        let property_key = property_key.to_owned();
+        move || {
+            if length_opt != *length_opt_sig.read() {
+                on_change
+                                        .call(NodeChangeEvent {
+                                            node_id: *node_id.read(),
+                                            action: NodeChangeAction::Property(
+                                                property_key.clone(),
+                                                (*length_opt_sig.read()).into(),
+                                            ),
+                                        });
+            }
+        }
+    });
 
     let select_id = format!("lengthOptionProperty{property_key}").to_camel_case();
     let select_label = property_key.to_sentence_case();
@@ -51,14 +66,6 @@ pub fn LengthOptionEditor(
                                 base_unit: "m",
                                 onchange: move |new_length: f64| {
                                     length_opt_sig.set(Some(meter!(new_length)));
-                                    on_change
-                                        .call(NodeChangeEvent {
-                                            node_id,
-                                            action: NodeChangeAction::Property(
-                                                property_key.clone(),
-                                                (*length_opt_sig.read()).into(),
-                                            ),
-                                        });
                                 },
                             }
                         }

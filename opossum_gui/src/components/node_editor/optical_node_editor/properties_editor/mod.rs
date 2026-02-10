@@ -220,14 +220,14 @@ fn get_geometric_editor(
                 on_change,
             }
         }),
-        // Proptype::LengthOption(length_opt) => Some(rsx! {
-        //     LengthOptionEditor {
-        //         node_id,
-        //         length_opt,
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
+        Proptype::LengthOption(length_opt) => Some(rsx! {
+            LengthOptionEditor {
+                node_id,
+                length_opt,
+                property_key,
+                on_change,
+            }
+        }),
         // Proptype::Isometry(isometry) => Some(rsx! {
         //     IsometryOptionEditor {
         //         node_id,
@@ -259,11 +259,7 @@ pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone + 'sta
     use_effect({
         let property_key = property_key.to_owned();
         move || {
-            // Wenn der User lokal etwas geändert hat (State != Prop)...
             if prop_type_value != *prop_type_value_sig.read() {
-                // ... senden wir das Event.
-                // WICHTIG: Die node_id, die hier reinkommt, muss vom Aufrufer
-                // bereits via Lagging-ID-Pattern gesichert worden sein.
                 on_change.call(NodeChangeEvent {
                     node_id,
                     action: NodeChangeAction::Property(
