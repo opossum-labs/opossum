@@ -117,4 +117,3 @@ fn CurvatureSelector(
         InputParamLabeledInput { input_data: checkbox_input }
     }
 }
-

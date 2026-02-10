@@ -4,15 +4,20 @@ pub mod general_editor;
 pub mod properties_editor;
 
 use crate::components::node_editor::{
-    inputs::input_components::FlushableTextInput, node_config_editor::{NodeChangeAction, NodeChangeEvent}, optical_node_editor::{
+    inputs::input_components::FlushableTextInput,
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    optical_node_editor::{
         alignment_editor::{AlignmentEditor, PositioningEditor},
         general_editor::GeneralEditor,
         properties_editor::PropertiesEditor,
-    }
+    },
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_core::{nodes::fluence_detector::Fluence, prelude::{Isometry, Properties}};
+use opossum_core::{
+    nodes::fluence_detector::Fluence,
+    prelude::{Isometry, Properties},
+};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -33,9 +38,6 @@ pub fn OpticalNodeEditor(
     // node_properties_sig: Signal<Properties>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-
-
-
     let resource_future = use_resource(move || async move {
         let node_id = *node_id.read();
         match api::get_node_properties(node_id).await {
@@ -95,51 +97,50 @@ pub fn OpticalNodeEditor(
                 }
             }
         }
-    }
-    else{
-        rsx!{
+    } else {
+        rsx! {
             div { "No data" }
         }
     }
 
-// rsx! {
-//     div { class: "noselect",
-//         h6 { "Node Configuration" }
-//         div {
-//             class: "accordion accordion-borderless bg-dark noselect",
-//             id: "accordionNodeConfig",
+    // rsx! {
+    //     div { class: "noselect",
+    //         h6 { "Node Configuration" }
+    //         div {
+    //             class: "accordion accordion-borderless bg-dark noselect",
+    //             id: "accordionNodeConfig",
 
-//             GeneralEditor {
-//                 node_id,
-//                 node_type: node_attr.node_type(),
-//                 name: node_attr.name(),
-//                 lidt: *node_attr.lidt(),
-//                 inverted: node_attr.inverted(),
-//                 on_change,
-//             }
-//             PropertiesEditor { node_id, node_properties_sig, on_change }
-//             PositioningEditor {
-//                 node_id,
-//                 position_opt: node_attr.isometry(),
-//                 node_properties_sig,
-//                 node_type: node_attr.node_type(),
-//                 on_change,
-//             }
-//             AlignmentEditor {
-//                 node_id,
-//                 alignment: node_attr.alignment().unwrap_or(Isometry::identity()),
-//                 node_properties_sig,
-//                 node_type: node_attr.node_type(),
-//                 on_change,
-//             }
-//         }
-//     }
+    //             GeneralEditor {
+    //                 node_id,
+    //                 node_type: node_attr.node_type(),
+    //                 name: node_attr.name(),
+    //                 lidt: *node_attr.lidt(),
+    //                 inverted: node_attr.inverted(),
+    //                 on_change,
+    //             }
+    //             PropertiesEditor { node_id, node_properties_sig, on_change }
+    //             PositioningEditor {
+    //                 node_id,
+    //                 position_opt: node_attr.isometry(),
+    //                 node_properties_sig,
+    //                 node_type: node_attr.node_type(),
+    //                 on_change,
+    //             }
+    //             AlignmentEditor {
+    //                 node_id,
+    //                 alignment: node_attr.alignment().unwrap_or(Isometry::identity()),
+    //                 node_properties_sig,
+    //                 node_type: node_attr.node_type(),
+    //                 on_change,
+    //             }
+    //         }
+    //     }
 
-// }
-//     }
-//     else{
-//         rsx!{}
-//     }
+    // }
+    //     }
+    //     else{
+    //         rsx!{}
+    //     }
     // match &*resource_future.read() {
     //     Some(Some(node_attr)) if node_attr.uuid() == node_id  => {
     //         rsx! {

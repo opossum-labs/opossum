@@ -1,5 +1,4 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop,
     inputs::input_components::{LabeledSelect, NodeConfigUnitInput},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
@@ -22,14 +21,13 @@ pub fn LengthOptionEditor(
         let property_key = property_key.to_owned();
         move || {
             if length_opt != *length_opt_sig.read() {
-                on_change
-                                        .call(NodeChangeEvent {
-                                            node_id: *node_id.read(),
-                                            action: NodeChangeAction::Property(
-                                                property_key.clone(),
-                                                (*length_opt_sig.read()).into(),
-                                            ),
-                                        });
+                on_change.call(NodeChangeEvent {
+                    node_id: *node_id.read(),
+                    action: NodeChangeAction::Property(
+                        property_key.clone(),
+                        (*length_opt_sig.read()).into(),
+                    ),
+                });
             }
         }
     });

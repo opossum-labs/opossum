@@ -5,7 +5,8 @@ use crate::components::node_editor::{
     inputs::input_components::{
         FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput,
     },
-    node_config_editor::{NodeChangeAction, NodeChangeEvent}, optical_node_editor::UINodeAttr,
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    optical_node_editor::UINodeAttr,
 };
 use dioxus::prelude::*;
 use opossum_core::{J_per_cm2, nodes::fluence_detector::Fluence};
@@ -18,11 +19,10 @@ pub fn GeneralEditor(
     node_id: Memo<Uuid>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-
     // let mut lidt_sig = use_signal(|| node_attr.lidt.get::<joule_per_square_centimeter>());
     // use_update_signal_with_reactive_prop(lidt.get::<joule_per_square_centimeter>(), lidt_sig);
 
-    let accordion_content = if node_attr.node_id == *node_id.read(){
+    let accordion_content = if node_attr.node_id == *node_id.read() {
         let node_id = node_attr.node_id;
         let node_type = node_attr.node_type.clone();
         let name = node_attr.name.clone();
@@ -78,12 +78,9 @@ pub fn GeneralEditor(
                 }
             },
         ]
-    }
-    else{
+    } else {
         vec![]
     };
-
-    
 
     rsx! {
         AccordionItem {

@@ -21,16 +21,20 @@ use crate::components::node_editor::{
     accordion::AccordionItem,
     hooks::use_update_signal_with_reactive_prop,
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::{UINodeAttr, properties_editor::{
-        angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
-        f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
-        fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
-        isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
-        length_option_editor::LengthOptionEditor, light_data_editor::LightDataEditor,
-        linear_density_editor::LinearDensityEditor, refractive_index_editor::RefractiveIndexEditor,
-        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
-        vec2_editor::Vec2Editor,
-    }},
+    optical_node_editor::{
+        UINodeAttr,
+        properties_editor::{
+            angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
+            f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
+            fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
+            isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
+            length_option_editor::LengthOptionEditor, light_data_editor::LightDataEditor,
+            linear_density_editor::LinearDensityEditor,
+            refractive_index_editor::RefractiveIndexEditor,
+            splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
+            vec2_editor::Vec2Editor,
+        },
+    },
 };
 use dioxus::prelude::*;
 use opossum_core::prelude::{Properties, Property, Proptype};
@@ -43,8 +47,7 @@ pub fn PropertiesEditor(
     node_attr: UINodeAttr,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-
-    let editor_inputs = if node_attr.node_id == *node_id.read(){
+    let editor_inputs = if node_attr.node_id == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
         for (property_key, property) in node_attr.properties.iter() {
             if let Some(editor) = get_editor(node_id, property, property_key.clone(), on_change) {
@@ -52,8 +55,7 @@ pub fn PropertiesEditor(
             }
         }
         editor_inputs
-    }
-    else{
+    } else {
         vec![]
     };
     rsx! {
@@ -228,14 +230,14 @@ fn get_geometric_editor(
                 on_change,
             }
         }),
-        // Proptype::Isometry(isometry) => Some(rsx! {
-        //     IsometryOptionEditor {
-        //         node_id,
-        //         isometry: isometry.unwrap_or_default(),
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
+        Proptype::Isometry(isometry) => Some(rsx! {
+            IsometryOptionEditor {
+                node_id,
+                isometry: isometry.unwrap_or_default(),
+                property_key,
+                on_change,
+            }
+        }),
         // Proptype::Angle(angle) => Some(rsx! {
         //     AngleEditor {
         //         node_id,
