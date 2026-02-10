@@ -93,39 +93,39 @@ fn get_primitive_editor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Option<Element> {
     match property.prop().clone() {
-        // Proptype::String(s) => Some(rsx! {
-        //     StringEditor {
-        //         node_id,
-        //         s,
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
-        // Proptype::I32(int32) => Some(rsx! {
-        //     I32Editor {
-        //         node_id,
-        //         int32,
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
-        // Proptype::F64(float64) => Some(rsx! {
-        //     F64Editor {
-        //         node_id,
-        //         float64,
-        //         property_key,
-        //         property: property.clone(),
-        //         on_change,
-        //     }
-        // }),
-        // Proptype::Bool(b) => Some(rsx! {
-        //     BoolEditor {
-        //         node_id,
-        //         b,
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
+        Proptype::String(s) => Some(rsx! {
+            StringEditor {
+                node_id,
+                s,
+                property_key,
+                on_change,
+            }
+        }),
+        Proptype::I32(int32) => Some(rsx! {
+            I32Editor {
+                node_id,
+                int32,
+                property_key,
+                on_change,
+            }
+        }),
+        Proptype::F64(float64) => Some(rsx! {
+            F64Editor {
+                node_id,
+                float64,
+                property_key,
+                property: property.clone(),
+                on_change,
+            }
+        }),
+        Proptype::Bool(b) => Some(rsx! {
+            BoolEditor {
+                node_id,
+                b,
+                property_key,
+                on_change,
+            }
+        }),
         // Proptype::Vec2(vector) => Some(rsx! {
         //     Vec2Editor {
         //         node_id,

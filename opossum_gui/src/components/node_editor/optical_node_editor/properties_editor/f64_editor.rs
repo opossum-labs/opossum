@@ -1,52 +1,46 @@
 use crate::{
-    OPOSSUM_UI_LOGS,
-    components::node_editor::{
-        hooks::use_update_signal_with_reactive_prop, inputs::input_components::LabeledInput,
-        node_config_editor::NodeChangeEvent,
-        optical_node_editor::properties_editor::use_set_node_change_property,
+    components::node_editor::{inputs::input_components::FlushableTextInput,
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
 };
+use approx::relative_ne;
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_core::prelude::{Property, Proptype};
+use opossum_core::prelude::Property;
 use uuid::Uuid;
 
 #[component]
 pub fn F64Editor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     float64: f64,
     property_key: String,
     property: Property,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut float64_sig = use_signal(|| float64);
-    let bound_node_id = use_signal(|| node_id);
-    use_update_signal_with_reactive_prop(node_id, bound_node_id);
-    use_set_node_change_property(
-        *bound_node_id.read(),
-        &property_key,
-        float64,
-        float64_sig,
-        on_change,
-    );
+    let float64_memo = use_memo(use_reactive!(|float64| float64));
+   
     rsx! {
-        LabeledInput {
+        FlushableTextInput {
             id: format!("float64Property{property_key}").to_camel_case(),
             label: format!("{}", property_key.to_sentence_case()),
-            value: format!("{:.3}", *float64_sig.read()),
-            r#type: "number",
-            onchange: move |e: Event<FormData>| {
-                if let Ok(val) = e.data.value().parse::<f64>() {
-                    let last_val = *float64_sig.read();
-                    match property.validate_proptype(&Proptype::F64(val)) {
-                        Ok(()) => float64_sig.set(val),
-                        Err(e) => {
-                            OPOSSUM_UI_LOGS.write().add_log(format!("{e}").as_str());
-                            float64_sig.set(last_val);
-                        }
+            value: float64_memo().to_string(),
+            on_save: move |new_val: String| {
+                if let Ok(val) = new_val.parse::<f64>() {
+                    if relative_ne!(float64_memo(), val) {
+                        on_change
+                            .call(NodeChangeEvent {
+                                node_id: *node_id.read(),
+                                action: NodeChangeAction::Property(
+                                    property_key.clone(),
+                                    val.into(),
+                                ),
+                            });
                     }
                 }
             },
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
         }
     }
 }

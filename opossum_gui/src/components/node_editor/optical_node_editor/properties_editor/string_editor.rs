@@ -1,6 +1,6 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop, inputs::input_components::LabeledInput,
-    node_config_editor::NodeChangeEvent,
+    hooks::use_update_signal_with_reactive_prop, inputs::input_components::{FlushableTextInput, LabeledInput},
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::use_set_node_change_property,
 };
 use dioxus::prelude::*;
@@ -9,29 +9,32 @@ use uuid::Uuid;
 
 #[component]
 pub fn StringEditor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     s: String,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut string_sig = use_signal(|| s.clone());
-    let bound_node_id = use_signal(|| node_id);
-    use_update_signal_with_reactive_prop(node_id, bound_node_id);
-    use_set_node_change_property(
-        *bound_node_id.read(),
-        &property_key,
-        s,
-        string_sig,
-        on_change,
-    );
-
+    let string_memo = use_memo(use_reactive!(|s| s.clone()));
     rsx! {
-        LabeledInput {
+        FlushableTextInput {
             id: format!("stringProperty{property_key}").to_camel_case(),
             label: format!("{}", property_key.to_sentence_case()),
-            value: string_sig,
-            r#type: "text",
-            onchange: move |e: Event<FormData>| { string_sig.set(e.data.value()) },
+            value: string_memo(),
+            on_save: move |new_val: String| {
+                if string_memo() != new_val {
+                    on_change
+                        .call(NodeChangeEvent {
+                            node_id: *node_id.read(),
+                            action: NodeChangeAction::Property(
+                                property_key.clone(),
+                                new_val.into(),
+                            ),
+                        });
+                }
+            },
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
         }
     }
 }
