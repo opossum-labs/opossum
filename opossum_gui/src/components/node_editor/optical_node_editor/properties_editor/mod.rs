@@ -238,14 +238,14 @@ fn get_geometric_editor(
                 on_change,
             }
         }),
-        // Proptype::Angle(angle) => Some(rsx! {
-        //     AngleEditor {
-        //         node_id,
-        //         angle,
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
+        Proptype::Angle(angle) => Some(rsx! {
+            AngleEditor {
+                node_id,
+                angle,
+                property_key,
+                on_change,
+            }
+        }),
         _ => None,
     }
 }

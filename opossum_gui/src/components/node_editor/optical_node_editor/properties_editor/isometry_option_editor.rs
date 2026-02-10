@@ -2,12 +2,11 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::AccordionItem,
-        hooks::use_update_signal_with_reactive_prop,
         inputs::{InputData, input_components::RowedInputs},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
 };
-use dioxus::{html::u::is, prelude::*};
+use dioxus::prelude::*;
 use opossum_core::{
     degree, meter, prelude::{Isometry, Proptype}, utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis}
 };
