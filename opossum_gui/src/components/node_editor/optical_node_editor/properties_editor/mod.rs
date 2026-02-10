@@ -82,7 +82,6 @@ fn get_editor(
     if let Some(editor) = get_optical_editor(node_id, property, property_key.clone(), on_change) {
         return Some(editor);
     }
-
     get_geometric_editor(node_id, property, property_key, on_change)
 }
 
@@ -126,14 +125,14 @@ fn get_primitive_editor(
                 on_change,
             }
         }),
-        // Proptype::Vec2(vector) => Some(rsx! {
-        //     Vec2Editor {
-        //         node_id,
-        //         vector,
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
+        Proptype::Vec2(vector) => Some(rsx! {
+            Vec2Editor {
+                node_id,
+                vector,
+                property_key,
+                on_change,
+            }
+        }),
         _ => None,
     }
 }

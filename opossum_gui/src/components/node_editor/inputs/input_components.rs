@@ -48,6 +48,7 @@ pub fn FlushableTextInput(
         is_locally_dirty.set(false);
     }));
 
+
     let mut perform_save = move || {
         if *is_locally_dirty.peek() {
             let val = local_value.peek().clone();
@@ -275,6 +276,20 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                     input_data.callback_str.call(new_angle.to_string());
                 },
                 readonly: input_data.readonly,
+            }
+        }
+    }
+    else if let InputParam::F64(_) = input_data.input_param {
+        rsx! {
+            FlushableTextInput {
+                id: input_data.id,
+                label: input_data.input_param.label(),
+                value: input_data.value,
+                on_save: input_data.callback_str,
+                readonly: input_data.readonly,
+                container_class: "form-floating border-start".to_string(),
+                input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+                label_class: "form-label text-secondary".to_string(),
             }
         }
     } else {
