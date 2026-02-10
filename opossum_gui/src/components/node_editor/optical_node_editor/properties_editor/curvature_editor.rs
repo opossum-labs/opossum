@@ -19,13 +19,13 @@ use uuid::Uuid;
 
 #[component]
 pub fn CurvatureEditor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     curvature: Length,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let curvature_sig = use_signal(|| curvature);
-    let curv_value_memo = use_memo(move || curvature_sig.read().value);
+    // let curv_value_memo = use_memo(move || curvature_sig.read().value);
     let mut last_finite_curvature = use_signal(|| {
         if curvature.is_finite() {
             curvature
@@ -47,7 +47,7 @@ pub fn CurvatureEditor(
     let prop_key_clone = property_key.clone();
     let on_save = EventHandler::new(move |new_val: Length| {
         on_change.call(NodeChangeEvent {
-            node_id,
+            node_id: *node_id.read(),
             action: NodeChangeAction::Property(
                 prop_key_clone.clone(),
                 Proptype::Curvature(new_val),
@@ -61,7 +61,7 @@ pub fn CurvatureEditor(
                 NodeConfigUnitInput {
                     id: format!("curvatureProperty{property_key}").to_camel_case().as_str(),
                     label: property_key.to_sentence_case(),
-                    value: curv_value_memo,
+                    value: curvature.value,
                     base_unit: "m",
                     onchange: move |new_curv: f64| {
                         if relative_ne!(curvature_sig.read().value, new_curv) {

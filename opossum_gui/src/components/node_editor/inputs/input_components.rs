@@ -71,7 +71,7 @@ pub fn FlushableTextInput(
                 id: id.as_str(),
                 name: id.as_str(),
                 placeholder: label,
-                value: "{local_value}",
+                value: local_value.read().clone(),
                 readonly,
                 disabled: readonly,
                 r#type,
@@ -453,6 +453,12 @@ pub fn UnitInput(
                     if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, base_unit) {
                         if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
                             onchange.call(parsed);
+                            let val = format!(
+                                "{}{}",
+                                format_si_notation(parsed, reciprocal),
+                                base_unit,
+                            );
+                            val_str.set(val);
                         } else {
                             onchange.call(*value.read());
                             OPOSSUM_UI_LOGS
@@ -468,7 +474,6 @@ pub fn UnitInput(
             input {
                 class: input_class,
                 id,
-                // label,
                 value: val_str,
                 readonly,
                 oninput: move |e: Event<FormData>| {

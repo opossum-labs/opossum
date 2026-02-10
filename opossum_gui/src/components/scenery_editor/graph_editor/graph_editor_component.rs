@@ -148,7 +148,6 @@ pub fn GraphEditor(
         let file_path_signal = graph_store.peek().file_path();
         let current_path = (*file_path_signal.read()).clone();
 
-        // Nur setzen, wenn er sich wirklich unterscheidet!
         if *model_file_path.peek() != current_path {
             model_file_path.set(current_path);
         }

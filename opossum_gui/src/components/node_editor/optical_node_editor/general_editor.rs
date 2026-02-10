@@ -5,7 +5,7 @@ use crate::components::node_editor::{
     inputs::input_components::{
         FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput,
     },
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    node_config_editor::{NodeChangeAction, NodeChangeEvent}, optical_node_editor::UINodeAttr,
 };
 use dioxus::prelude::*;
 use opossum_core::{J_per_cm2, nodes::fluence_detector::Fluence};
@@ -14,65 +14,76 @@ use uuid::Uuid;
 
 #[component]
 pub fn GeneralEditor(
-    node_id: Uuid,
-    node_type: String,
-    name: String,
-    lidt: Fluence,
-    inverted: bool,
+    node_attr: UINodeAttr,
+    node_id: Memo<Uuid>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut lidt_sig = use_signal(|| lidt.get::<joule_per_square_centimeter>());
-    use_update_signal_with_reactive_prop(lidt.get::<joule_per_square_centimeter>(), lidt_sig);
-    let accordion_content = vec![
-        rsx! {
-            NodeTypeInput { node_type: node_type, label: "Node Type" }
-        },
-        rsx! {
-            FlushableTextInput {
-                id: format!("nodeName_{}", node_id),
-                label: "Node Name".to_string(),
-                value: name,
-                container_class: "form-floating border-start".to_string(),
-                input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
-                label_class: "form-label text-secondary".to_string(),
-                on_save: move |new_val: String| {
-                    on_change.call(NodeChangeEvent {
-                        node_id,
-                        action: NodeChangeAction::Name(new_val),
-                    });
-                },
-            }
-        },
-        rsx! {
-            NodeConfigUnitInput {
-                    id: format!("nodeLidt_{}", node_id),
-                    label: "Damage Threshold".to_string(),
-                    value: lidt_sig,
-                    base_unit: "J/cm²",
-                    onchange: move |new_lidt: f64| {
-                    if new_lidt >= 0.0 {
-                        lidt_sig.set(new_lidt);
-                             on_change.call(NodeChangeEvent {
-                                node_id,
-                                action: NodeChangeAction::Lidt(J_per_cm2!(new_lidt)),
-                            });
-                        }
+
+    // let mut lidt_sig = use_signal(|| node_attr.lidt.get::<joule_per_square_centimeter>());
+    // use_update_signal_with_reactive_prop(lidt.get::<joule_per_square_centimeter>(), lidt_sig);
+
+    let accordion_content = if node_attr.node_id == *node_id.read(){
+        let node_id = node_attr.node_id;
+        let node_type = node_attr.node_type.clone();
+        let name = node_attr.name.clone();
+        let lidt = node_attr.lidt;
+        let inverted = node_attr.inverted;
+        vec![
+            rsx! {
+                NodeTypeInput { node_type: node_type, label: "Node Type" }
+            },
+            rsx! {
+                FlushableTextInput {
+                    id: format!("nodeName_{}", node_id),
+                    label: "Node Name".to_string(),
+                    value: name,
+                    container_class: "form-floating border-start".to_string(),
+                    input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+                    label_class: "form-label text-secondary".to_string(),
+                    on_save: move |new_val: String| {
+                        on_change.call(NodeChangeEvent {
+                            node_id,
+                            action: NodeChangeAction::Name(new_val),
+                        });
+                    },
                 }
+            },
+            rsx! {
+                NodeConfigUnitInput {
+                        id: format!("nodeLidt_{}", node_id),
+                        label: "Damage Threshold".to_string(),
+                        value: lidt.get::<joule_per_square_centimeter>(),
+                        base_unit: "J/cm²",
+                        onchange: move |new_lidt: f64| {
+                        if new_lidt >= 0.0 {
+                            // lidt_sig.set(new_lidt);
+                                on_change.call(NodeChangeEvent {
+                                    node_id,
+                                    action: NodeChangeAction::Lidt(J_per_cm2!(new_lidt)),
+                                });
+                            }
+                    }
+                    }
+            },
+            rsx! {
+                NodeInvertedInput {
+                    value: inverted,
+                    label: "Invert Node",
+                    on_valid_change: move |new_state: bool| {
+                        on_change.call(NodeChangeEvent {
+                            node_id,
+                            action: NodeChangeAction::Inverted(new_state),
+                        });
+                    }
                 }
-        },
-        rsx! {
-            NodeInvertedInput {
-                value: inverted,
-                label: "Invert Node",
-                on_valid_change: move |new_state: bool| {
-                    on_change.call(NodeChangeEvent {
-                        node_id,
-                        action: NodeChangeAction::Inverted(new_state),
-                    });
-                }
-            }
-        },
-    ];
+            },
+        ]
+    }
+    else{
+        vec![]
+    };
+
+    
 
     rsx! {
         AccordionItem {
