@@ -435,7 +435,7 @@ mod test {
             Proptype::WaveFrontData(WaveFrontErrorMap::default())
                 .to_html("id", "property_name",0)
                 .unwrap(),
-            "<img src=\"data/id_property_name.png\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()
+            "<img src=\"data_0/id_property_name.png\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()
         );
         assert_eq!(
             Proptype::NodeReport(NodeReport::new("test1", "test2", "test3", Properties::default()))
