@@ -24,8 +24,10 @@ pub fn CurvatureEditor(
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let curvature_sig = use_signal(|| curvature);
-    // let curv_value_memo = use_memo(move || curvature_sig.read().value);
+    let mut curvature_sig = use_signal(|| curvature);
+    let mut is_finite_sig = use_signal(|| curvature.is_finite());
+    let curv_value_memo = use_memo(move || curvature_sig.read().value);
+
     let mut last_finite_curvature = use_signal(|| {
         if curvature.is_finite() {
             curvature
@@ -34,16 +36,22 @@ pub fn CurvatureEditor(
         }
     });
 
-    use_update_signal_with_reactive_prop(curvature, curvature_sig);
-
     use_effect(move || {
-        let current_val = *curvature_sig.read();
-        if current_val.is_finite() {
-            last_finite_curvature.set(current_val);
+        if *is_finite_sig.read() {
+            let last_finite = *last_finite_curvature.read();
+            curvature_sig.set(last_finite);
+        } else {
+            curvature_sig.set(millimeter!(f64::INFINITY));
         }
     });
 
-    // FIX: Clone property_key FOR the closure
+    use_effect(move || {
+        let current_val = *curv_value_memo.read();
+        if current_val.is_finite() {
+            last_finite_curvature.set(meter!(current_val));
+        }
+    });
+
     let prop_key_clone = property_key.clone();
     let on_save = EventHandler::new(move |new_val: Length| {
         on_change.call(NodeChangeEvent {
@@ -61,40 +69,46 @@ pub fn CurvatureEditor(
                 NodeConfigUnitInput {
                     id: format!("curvatureProperty{property_key}").to_camel_case().as_str(),
                     label: property_key.to_sentence_case(),
-                    value: curvature.value,
+                    value: *curv_value_memo.read(),
                     base_unit: "m",
                     onchange: move |new_curv: f64| {
-                        if relative_ne!(curvature_sig.read().value, new_curv) {
+                        if relative_ne!(* curv_value_memo.read(), new_curv) {
+                            curvature_sig.set(meter!(new_curv));
                             on_save.call(meter!(new_curv));
                         }
                     },
-                    readonly: curvature.is_infinite(),
+                    readonly: !*is_finite_sig.read(),
                 }
             }
             div { class: "col-sm",
                 CurvatureSelector {
                     curvature,
-                    curvature_sig,
+                    curvature_sig: curv_value_memo,
                     last_finite_curvature,
                     property_key,
-                    on_save,
+                    on_is_curved_change: move |is_finite| {
+                        is_finite_sig.set(is_finite);
+                        on_save.call(millimeter!(f64::INFINITY));
+                    },
                 }
             }
         }
     }
 }
-// ... (Helper Components CurvatureSelector, CurvatureInput etc. bleiben unverändert wie zuvor) ...
-// Hier bitte die Helper aus meinem vorletzten Post einfügen, die waren korrekt.
-// Kurzfassung:
+
 #[component]
 fn CurvatureSelector(
     curvature: Length,
-    curvature_sig: Signal<Length>,
+    curvature_sig: ReadSignal<f64>,
     last_finite_curvature: Signal<Length>,
     property_key: String,
-    on_save: EventHandler<Length>,
+    on_is_curved_change: EventHandler<bool>,
 ) -> Element {
-    let legacy_callback = on_is_curved_input_change(curvature_sig, last_finite_curvature, on_save);
+    let legacy_callback = EventHandler::new(move |e: Event<FormData>| {
+        if let Ok(is_finite) = e.data.value().parse::<bool>() {
+            on_is_curved_change.call(is_finite);
+        }
+    });
     let dummy_str_callback = EventHandler::new(|_| {});
     let checkbox_input = InputData::new(
         InputParam::Bool("Curved".into()),
@@ -110,45 +124,3 @@ fn CurvatureSelector(
     }
 }
 
-#[component]
-fn CurvatureInput(
-    curvature: Length,
-    curvature_sig: Signal<Length>,
-    last_finite_curvature: Signal<Length>,
-    property_key: String,
-    on_save: EventHandler<Length>,
-) -> Element {
-    let value_memo = use_memo(move || curvature_sig.read().value);
-    rsx! {
-        NodeConfigUnitInput {
-            id: format!("curvatureProperty{property_key}").to_camel_case().as_str(),
-            label: property_key.to_sentence_case(),
-            value: value_memo,
-            base_unit: "m",
-            onchange: move |new_curv: f64| {
-                if relative_ne!(curvature_sig.read().value, new_curv) {
-                    on_save.call(meter!(new_curv));
-                }
-            },
-            readonly: curvature.is_infinite(),
-        }
-    }
-}
-
-fn on_is_curved_input_change(
-    mut curvature_sig: Signal<Length>,
-    last_finite_curvature: Signal<Length>,
-    on_save: EventHandler<Length>,
-) -> EventHandler<Event<FormData>> {
-    EventHandler::new(move |e: Event<FormData>| {
-        if let Ok(is_finite) = e.data.value().parse::<bool>() {
-            let new_val = if is_finite {
-                *last_finite_curvature.read()
-            } else {
-                millimeter!(f64::INFINITY)
-            };
-            curvature_sig.set(new_val);
-            on_save.call(new_val);
-        }
-    })
-}
