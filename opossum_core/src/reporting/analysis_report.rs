@@ -103,7 +103,7 @@ impl AnalysisReport {
             .map_err(|e| OpossumError::Other(format!("writing RON file failed: {e}")))?;
 
         // 2. Save the HTML report (including data files)
-        let html_report = HtmlReport::from_analysis_report(self)?;
+        let html_report = HtmlReport::from_analysis_report(self, report_number)?;
         html_report.generate_report_files(report_directory, self, report_number)?;
         Ok(())
     }

@@ -138,7 +138,12 @@ impl Proptype {
     /// This function will return an error if
     ///   - underlying html templates could not be compiled
     ///   - a property value could not be converted to html code.
-    pub fn to_html(&self, id: &str, property_name: &str) -> OpmResult<String> {
+    pub fn to_html(
+        &self,
+        id: &str,
+        property_name: &str,
+        report_number: usize,
+    ) -> OpmResult<String> {
         THREAD_TEMPLATES.with(|template_refcell| {
             let template_engine = template_refcell.borrow();
             let string_value = match self {
@@ -153,14 +158,16 @@ impl Proptype {
                 Self::Spectrum(_)
                 | Self::HitMap(_)
                 | Self::RayPositionHistory(_)
-                | Self::GhostFocusHistory(_) => {
-                    template_engine.render("image", &format!("data/{id}_{property_name}.svg"))
-                }
-                Self::WaveFrontData(_) | Self::FluenceData(_) => {
-                    template_engine.render("image", &format!("data/{id}_{property_name}.png"))
-                }
+                | Self::GhostFocusHistory(_) => template_engine.render(
+                    "image",
+                    &format!("data_{report_number}/{id}_{property_name}.svg"),
+                ),
+                Self::WaveFrontData(_) | Self::FluenceData(_) => template_engine.render(
+                    "image",
+                    &format!("data_{report_number}/{id}_{property_name}.png"),
+                ),
                 Self::NodeReport(report) => {
-                    let html_node_report = HtmlNodeReport::from_node_report(report);
+                    let html_node_report = HtmlNodeReport::from_node_report(report, report_number);
                     template_engine.render("group", &html_node_report)
                 }
                 Self::Fluence(value) => template_engine.render(
@@ -396,63 +403,67 @@ mod test {
     fn to_html() {
         assert_eq!(
             Proptype::String("Test".into())
-                .to_html("id", "property_name")
+                .to_html("id", "property_name", 0)
                 .unwrap(),
             "Test".to_string()
         );
         assert_eq!(
-            Proptype::I32(-14).to_html("id", "property_name").unwrap(),
+            Proptype::I32(-14)
+                .to_html("id", "property_name", 0)
+                .unwrap(),
             "-14".to_string()
         );
         assert_eq!(
             Proptype::F64(-3.1415926537)
-                .to_html("id", "property_name")
+                .to_html("id", "property_name", 0)
                 .unwrap(),
             "-3.141593".to_string()
         );
         assert_eq!(
-            Proptype::Bool(true).to_html("id", "property_name").unwrap(),
+            Proptype::Bool(true)
+                .to_html("id", "property_name", 0)
+                .unwrap(),
             "true".to_string()
         );
         assert_eq!(
             Proptype::SpectrometerType(SpectrometerType::HR2000)
-                .to_html("id", "property_name")
+                .to_html("id", "property_name", 0)
                 .unwrap(),
             "Ocean Optics HR2000".to_string()
         );
         assert_eq!(
             Proptype::WaveFrontData(WaveFrontErrorMap::default())
-                .to_html("id", "property_name")
+                .to_html("id", "property_name",0)
                 .unwrap(),
             "<img src=\"data/id_property_name.png\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()
         );
         assert_eq!(
             Proptype::NodeReport(NodeReport::new("test1", "test2", "test3", Properties::default()))
-                .to_html("id", "property_name")
+                .to_html("id", "property_name",0)
                 .unwrap(),
             "<div class=\"accordion-item\">\n  <h5 class=\"accordion-header\">\n    <button class=\"accordion-button\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#test3\">\n      <span class=\"h5 me-2\">test2</span><small class=\"muted\">test1</small>\n    </button>\n  </h5>\n  <div id=\"test3\" class=\"accordion-collapse collapse \">\n    <div class=\"accordion-body\">\n      \n      <table class=\"table table-sm table-bordered\">\n        <tbody>\n          \n        </tbody>\n      </table>\n    </div>\n  </div>\n</div>\n".to_string()
         );
         assert_eq!(
             Proptype::Fluence(J_per_m2!(1.234567))
-                .to_html("id", "property_name")
+                .to_html("id", "property_name", 0)
                 .unwrap(),
             " 123.457 μJ/cm²".to_string()
         );
         assert_eq!(
             Proptype::WfLambda(0.123456, nanometer!(1054.0))
-                .to_html("id", "property_name")
+                .to_html("id", "property_name", 0)
                 .unwrap(),
             " 123.456 mλ, (λ =    1.054 μm)".to_string()
         );
         assert_eq!(
             Proptype::Length(meter!(0.12345678))
-                .to_html("id", "property_name")
+                .to_html("id", "property_name", 0)
                 .unwrap(),
             " 123.457 mm".to_string()
         );
         assert_eq!(
             Proptype::Energy(joule!(0.12345678))
-                .to_html("id", "property_name")
+                .to_html("id", "property_name", 0)
                 .unwrap(),
             " 123.457 mJ".to_string()
         );

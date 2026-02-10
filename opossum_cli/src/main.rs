@@ -32,8 +32,8 @@ fn opossum() -> OpmResult<()> {
         .create_dot_file(&opossum_args.report_directory)
         .unwrap_or_else(|e| warn!("{e}"));
     let reports = document.analyze()?;
-    for report in reports.iter().enumerate() {
-        report.1.save(&opossum_args.report_directory, report.0)?;
+    for (report_nr, report) in reports.iter().enumerate() {
+        report.save(&opossum_args.report_directory, report_nr)?;
     }
     Ok(())
 }
