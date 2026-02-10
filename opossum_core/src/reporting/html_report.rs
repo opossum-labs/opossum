@@ -118,14 +118,9 @@ impl HtmlReport {
             OpossumError::Other(format!("Error creating data dir for html report: {e}"))
         })?;
         for node_report in analysis_report.node_reports() {
-            node_report.properties().export_data(
-                &data_dir,
-                &format!(
-                    "_{}_{}",
-                    sanitize_filename(node_report.name()),
-                    &node_report.uuid()
-                ),
-            )?;
+            node_report
+                .properties()
+                .export_data(&data_dir, node_report.uuid())?;
         }
 
         // 2. Render and write the main HTML file
@@ -162,8 +157,6 @@ pub struct HtmlNodeReport {
     pub show_item: bool,
     /// notes regarding the node
     pub notes: Vec<HtmlReportNote>,
-    /// link to the node's data file
-    pub link: String,
 }
 impl HtmlNodeReport {
     /// Create this [`HtmlNodeReport`] from an [`NodeReport`].
@@ -172,18 +165,7 @@ impl HtmlNodeReport {
         Self {
             node_name: sanitize_filename(node_report.name()),
             node_type: node_report.node_type().to_string(),
-            props: node_report.properties().html_props(&format!(
-                "{}_{}_{}",
-                node_report.name(),
-                node_report.node_type(),
-                node_report.uuid()
-            )),
-            link: sanitize_filename(&format!(
-                "{}_{}_{}",
-                node_report.name(),
-                node_report.node_type(),
-                node_report.uuid()
-            )),
+            props: node_report.properties().html_props(node_report.uuid()),
             uuid: node_report.uuid().to_string(),
             show_item: node_report.show_item(),
             notes: node_report

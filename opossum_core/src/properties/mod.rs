@@ -179,7 +179,7 @@ impl Properties {
         }
         html_props
     }
-    /// Export these [`Properties`] to a of files on disk at the given `report_path`.
+    /// Export these [`Properties`] to a set of files on disk at the given `report_path`.
     ///
     /// # Errors
     ///
