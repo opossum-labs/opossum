@@ -4,9 +4,8 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::position_distributions::{Hexapolar, PosDistType};
-use opossum_core::{millimeter, utils::try_f64_to_u8};
+use opossum_core::{meter, utils::try_f64_to_u8};
 use strum::{EnumIter, IntoEnumIterator};
-use uom::si::length::millimeter;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 pub enum HexapolarParam {
@@ -18,7 +17,7 @@ impl From<HexapolarParam> for InputParam {
     fn from(value: HexapolarParam) -> Self {
         match value {
             HexapolarParam::NrOfRings => Self::U8("#Rings".into()),
-            HexapolarParam::Radius => Self::Length("Radius in mm".into()),
+            HexapolarParam::Radius => Self::Length("Radius".into()),
         }
     }
 }
@@ -35,7 +34,7 @@ impl IntoInputDataStrings<Hexapolar> for HexapolarParam {
     fn create_value_string(&self, obj: &Hexapolar) -> String {
         match self {
             Self::NrOfRings => format!("{}", obj.nr_of_rings()),
-            Self::Radius => format!("{:.3e}", obj.radius().get::<millimeter>()),
+            Self::Radius => format!("{}", obj.radius().value),
         }
     }
 }
@@ -54,7 +53,7 @@ impl IntoInputData<f64, Hexapolar, PosDistType> for HexapolarParam {
                 }
             },
             Self::Radius => move |obj: &mut Hexapolar, val: f64| {
-                obj.set_radius(millimeter!(val))
+                obj.set_radius(meter!(val))
                     .log_err_with_context("`set_radius` of hexapolar");
             },
         }

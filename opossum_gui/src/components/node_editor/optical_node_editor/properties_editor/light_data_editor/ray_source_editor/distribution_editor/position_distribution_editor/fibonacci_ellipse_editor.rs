@@ -4,12 +4,11 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    millimeter,
+    meter,
     position_distributions::{FibonacciEllipse, PosDistType},
     utils::try_f64_to_usize,
 };
 use strum::EnumIter;
-use uom::si::length::millimeter;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 pub enum FibonacciEllipseParam {
@@ -21,8 +20,8 @@ pub enum FibonacciEllipseParam {
 impl From<FibonacciEllipseParam> for InputParam {
     fn from(value: FibonacciEllipseParam) -> Self {
         match value {
-            FibonacciEllipseParam::MajorAxis => Self::Length("Major axis in mm".into()),
-            FibonacciEllipseParam::MinorAxis => Self::Length("Minor axis in mm".into()),
+            FibonacciEllipseParam::MajorAxis => Self::Length("Major axis".into()),
+            FibonacciEllipseParam::MinorAxis => Self::Length("Minor axis".into()),
             FibonacciEllipseParam::Points => Self::Usize("#Points".into()),
         }
     }
@@ -39,8 +38,8 @@ impl IntoInputDataStrings<FibonacciEllipse> for FibonacciEllipseParam {
     }
     fn create_value_string(&self, obj: &FibonacciEllipse) -> String {
         match self {
-            Self::MajorAxis => format!("{:.3e}", obj.radius_x().get::<millimeter>()),
-            Self::MinorAxis => format!("{:.3e}", obj.radius_y().get::<millimeter>()),
+            Self::MajorAxis => format!("{}", obj.radius_x().value),
+            Self::MinorAxis => format!("{}", obj.radius_y().value),
             Self::Points => format!("{}", obj.nr_of_points()),
         }
     }
@@ -55,11 +54,11 @@ impl IntoInputData<f64, FibonacciEllipse, PosDistType> for FibonacciEllipseParam
     fn setter_from_obj(&self) -> impl FnMut(&mut FibonacciEllipse, f64) {
         match self {
             Self::MajorAxis => move |obj: &mut FibonacciEllipse, val: f64| {
-                obj.set_radius_x(millimeter!(val))
+                obj.set_radius_x(meter!(val))
                     .log_err_with_context("`set_radius_x` of fibonacci-ellipse.");
             },
             Self::MinorAxis => move |obj: &mut FibonacciEllipse, val: f64| {
-                obj.set_radius_y(millimeter!(val))
+                obj.set_radius_y(meter!(val))
                     .log_err_with_context("`set_radius_y` of fibonacci-ellipse.");
             },
             Self::Points => move |obj: &mut FibonacciEllipse, val: f64| {

@@ -7,14 +7,13 @@ use crate::components::{
     },
 };
 use dioxus::prelude::*;
-use opossum_core::prelude::{ImageSrc, RayDataBuilder};
-use opossum_core::{degree, joule, micrometer, nanometer};
-use strum::{EnumIter, IntoEnumIterator};
-use uom::si::{
-    angle::degree,
-    energy::joule,
-    length::{micrometer, nanometer},
+use opossum_core::{degree, joule};
+use opossum_core::{
+    meter,
+    prelude::{ImageSrc, RayDataBuilder},
 };
+use strum::{EnumIter, IntoEnumIterator};
+use uom::si::angle::degree;
 
 #[component]
 pub fn ImageSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
@@ -72,10 +71,10 @@ impl From<ImageSrcParam> for InputParam {
     fn from(value: ImageSrcParam) -> Self {
         match value {
             ImageSrcParam::FPath => Self::FilePath("File:".into(), ".png".into()),
-            ImageSrcParam::PxlSize => Self::F64("Pixel size in µm".into()),
-            ImageSrcParam::Energy => Self::Energy("Energy in J".into()),
-            ImageSrcParam::Wavelength => Self::Length("Wavelength in nm".into()),
-            ImageSrcParam::ConeAngle => Self::Angle("Cone Angle in degrees".into()),
+            ImageSrcParam::PxlSize => Self::Length("Pixel size".into()),
+            ImageSrcParam::Energy => Self::Energy("Energy".into()),
+            ImageSrcParam::Wavelength => Self::Length("Wavelength".into()),
+            ImageSrcParam::ConeAngle => Self::Angle("Cone Angle".into()),
         }
     }
 }
@@ -101,9 +100,9 @@ impl IntoInputDataStrings<ImageSrc> for ImageSrcParam {
                     f.to_str().unwrap_or("no file selected")
                 })
                 .to_string(),
-            Self::PxlSize => format!("{:.3e}", obj.pixel_size().get::<micrometer>()),
-            Self::Energy => format!("{:.3e}", obj.energy().get::<joule>()),
-            Self::Wavelength => format!("{:.3e}", obj.wavelength().get::<nanometer>()),
+            Self::PxlSize => format!("{:.3e}", obj.pixel_size().value),
+            Self::Energy => format!("{:.3e}", obj.energy().value),
+            Self::Wavelength => format!("{:.3e}", obj.wavelength().value),
             Self::ConeAngle => format!("{:.3e}", obj.cone_angle().get::<degree>()),
         }
     }
@@ -117,7 +116,7 @@ impl IntoInputData<f64, ImageSrc, RayDataBuilder> for ImageSrcParam {
     fn setter_from_obj(&self) -> impl FnMut(&mut ImageSrc, f64) {
         match self {
             Self::PxlSize => move |obj: &mut ImageSrc, val: f64| {
-                obj.set_pixel_size(micrometer!(val))
+                obj.set_pixel_size(meter!(val))
                     .log_err_with_context("validation failed in `set_pixel_size` of ImgSrc");
             },
             Self::Energy => move |obj: &mut ImageSrc, val: f64| {
@@ -125,7 +124,7 @@ impl IntoInputData<f64, ImageSrc, RayDataBuilder> for ImageSrcParam {
                     .log_err_with_context("validation failed in `set_energy` of ImgSrc");
             },
             Self::Wavelength => move |obj: &mut ImageSrc, val: f64| {
-                obj.set_wavelength(nanometer!(val))
+                obj.set_wavelength(meter!(val))
                     .log_err_with_context("validation failed in `set_wavelength` of ImgSrc");
             },
             Self::ConeAngle => move |obj: &mut ImageSrc, val: f64| {

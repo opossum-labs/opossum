@@ -39,10 +39,10 @@ pub fn OpticalNodeEditor(
     match &*resource_future.read_unchecked() {
         Some(Some(node_attr)) => {
             rsx! {
-                div {
+                div { class: "noselect",
                     h6 { "Node Configuration" }
                     div {
-                        class: "accordion accordion-borderless bg-dark ",
+                        class: "accordion accordion-borderless bg-dark noselect",
                         id: "accordionNodeConfig",
                         GeneralEditor {
                             node_id,

@@ -2,6 +2,7 @@
 use crate::api;
 use dioxus::prelude::*;
 
+#[allow(clippy::volatile_composites)]
 const LOGO: Asset = asset!("/assets/LogoBanner.svg");
 
 #[component]

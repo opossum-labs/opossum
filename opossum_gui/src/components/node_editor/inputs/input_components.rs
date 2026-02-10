@@ -1,6 +1,12 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-use crate::components::node_editor::inputs::{InputData, InputParam};
+use crate::{
+    OPOSSUM_UI_LOGS,
+    components::node_editor::inputs::{
+        InputData, InputParam, format_si_notation, is_permissive_unit_input, parse_si_number,
+        parse_unit_input_strict,
+    },
+};
 use dioxus::prelude::*;
 use itertools::Itertools;
 use std::ops::{AddAssign, SubAssign};
@@ -19,22 +25,26 @@ pub struct FormContext {
 pub fn FlushableTextInput(
     id: String,
     label: String,
-    value: String,
+    value: ReadSignal<String>,
     on_save: EventHandler<String>,
+    #[props(default = String::new())] container_class: String,
+    #[props(default = String::new())] input_class: String,
+    #[props(default = String::new())] label_class: String,
     #[props(default = "text")] r#type: &'static str,
     #[props(optional)] step: Option<&'static str>,
     #[props(optional)] min: Option<&'static str>,
     #[props(optional)] max: Option<&'static str>,
+    #[props(optional)] eval_input: Option<Callback<String, bool>>,
     #[props(default = false)] readonly: bool,
 ) -> Element {
     let mut form_ctx = use_context::<FormContext>();
 
-    let mut local_value = use_signal(|| value.clone());
+    let mut local_value = use_signal(|| value.read().clone());
     let mut is_locally_dirty = use_signal(|| false);
 
     // Sync bei Node-Wechsel
     use_effect(use_reactive!(|value| {
-        local_value.set(value);
+        local_value.set(value.read().clone());
         is_locally_dirty.set(false);
     }));
 
@@ -55,9 +65,9 @@ pub fn FlushableTextInput(
     });
 
     rsx! {
-        div { class: "form-floating border-start", "data-mdb-input-init": "",
+        div { class: container_class, "data-mdb-input-init": "",
             input {
-                class: "form-control bg-dark text-light form-control-sm",
+                class: input_class,
                 id: id.as_str(),
                 name: id.as_str(),
                 placeholder: label,
@@ -70,10 +80,23 @@ pub fn FlushableTextInput(
                 max: max.unwrap_or_default(),
 
                 oninput: move |e: Event<FormData>| {
-                    local_value.set(e.data.value());
-                    if !*is_locally_dirty.peek() {
-                        is_locally_dirty.set(true);
-                        form_ctx.dirty_count.write().add_assign(1);
+                    let new_value = e.data.value();
+                    if let Some(eval_input) = eval_input {
+                        if eval_input(new_value.clone()) {
+                            local_value.set(new_value);
+                            if !*is_locally_dirty.peek() {
+                                is_locally_dirty.set(true);
+                                form_ctx.dirty_count.write().add_assign(1);
+                            }
+                        } else {
+                            local_value.set(local_value());
+                        }
+                    } else {
+                        local_value.set(new_value);
+                        if !*is_locally_dirty.peek() {
+                            is_locally_dirty.set(true);
+                            form_ctx.dirty_count.write().add_assign(1);
+                        }
                     }
                 },
                 onblur: move |_| perform_save(),
@@ -83,7 +106,7 @@ pub fn FlushableTextInput(
                     }
                 },
             }
-            label { class: "form-label text-secondary", r#for: id,
+            label { class: label_class, r#for: id,
                 "{label}"
                 if *is_locally_dirty.read() {
                     span { class: "text-warning", " *" }
@@ -188,7 +211,6 @@ pub fn LabeledFileInput(
 #[component]
 pub fn InputParamLabeledInput(input_data: InputData) -> Element {
     if let InputParam::Bool(label) = input_data.input_param {
-        // Checkboxen feuern sofort, das ist ok (kein Pending State)
         rsx! {
             LabeledCheckboxInput {
                 id: input_data.id,
@@ -198,7 +220,6 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
             }
         }
     } else if let InputParam::FilePath(label, accept) = input_data.input_param {
-        // FileInputs feuern auch sofort
         rsx! {
             LabeledFileInput {
                 id: input_data.id,
@@ -209,7 +230,6 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
             }
         }
     } else if let InputParam::Selection(label, options) = input_data.input_param {
-        // Selects feuern sofort
         rsx! {
             LabeledSelect {
                 id: input_data.id,
@@ -218,18 +238,57 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 onchange: move |e| input_data.callback.call(e),
             }
         }
+    } else if let InputParam::Energy(_) = input_data.input_param {
+        rsx! {
+            NodeConfigUnitInput {
+                id: input_data.id,
+                label: input_data.input_param.label(),
+                value: input_data.value.parse::<f64>().unwrap_or_default(),
+                base_unit: "J",
+                onchange: move |new_energy: f64| {
+                    input_data.callback_str.call(new_energy.to_string());
+                },
+                readonly: input_data.readonly,
+            }
+        }
+    } else if let InputParam::Length(_) = input_data.input_param {
+        rsx! {
+            NodeConfigUnitInput {
+                id: input_data.id,
+                label: input_data.input_param.label(),
+                value: input_data.value.parse::<f64>().unwrap_or_default(),
+                base_unit: "m",
+                onchange: move |new_length: f64| {
+                    input_data.callback_str.call(new_length.to_string());
+                },
+                readonly: input_data.readonly,
+            }
+        }
+    } else if let InputParam::Angle(_) = input_data.input_param {
+        rsx! {
+            NodeConfigUnitInput {
+                id: input_data.id,
+                label: input_data.input_param.label(),
+                value: input_data.value.parse::<f64>().unwrap_or_default(),
+                base_unit: "°",
+                onchange: move |new_angle: f64| {
+                    input_data.callback_str.call(new_angle.to_string());
+                },
+                readonly: input_data.readonly,
+            }
+        }
     } else {
-        // HIER IST DIE ÄNDERUNG:
-        // Für Zahlen und Text nutzen wir jetzt FlushableTextInput!
-        // Wir nutzen input_data.callback_str statt input_data.callback
         rsx! {
             FlushableTextInput {
                 id: input_data.id,
                 label: input_data.input_param.label(),
                 value: input_data.value,
-                on_save: input_data.callback_str, // Nutzt den String-Handler
+                on_save: input_data.callback_str,
                 r#type: input_data.input_param.rtype(),
                 readonly: input_data.readonly,
+                container_class: "form-floating border-start".to_string(),
+                input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+                label_class: "form-label text-secondary".to_string(),
             }
         }
     }
@@ -265,6 +324,26 @@ pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
 }
 
 #[component]
+pub fn RowedElements(elements: Vec<Element>, num_per_row: usize) -> Element {
+    rsx! {
+        for chunk in elements.iter().chunks(num_per_row) {
+            {
+                let elements_in_row: Vec<&Element> = chunk.collect::<Vec<&Element>>();
+                {
+                    rsx! {
+                        div { class: "row gy-1 gx-2",
+                            for elem in elements_in_row {
+                                div { class: "col-sm", {elem.clone()} }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
 pub fn LabeledInput(
     id: String,
     label: String,
@@ -293,6 +372,130 @@ pub fn LabeledInput(
                 onchange: move |e: Event<FormData>| onchange.call(e),
             }
             label { class: "form-label text-secondary", r#for: id, "{label}" }
+        }
+    }
+}
+
+#[component]
+pub fn NodeConfigUnitInput(
+    id: String,
+    label: String,
+    value: ReadSignal<f64>,
+    base_unit: &'static str,
+    onchange: EventHandler<f64>,
+    #[props(default = false)] reciprocal: bool,
+    #[props(default = false)] readonly: bool,
+) -> Element {
+    rsx! {
+        UnitInput {
+            id,
+            label,
+            value,
+            base_unit,
+            onchange,
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
+            readonly,
+            reciprocal,
+            flushable_input: true,
+        }
+    }
+}
+#[component]
+pub fn UnitInput(
+    id: String,
+    label: String,
+    value: ReadSignal<f64>,
+    base_unit: &'static str,
+    onchange: EventHandler<f64>,
+    #[props(default = false)] reciprocal: bool,
+    #[props(default = String::new())] container_class: String,
+    #[props(default = String::new())] input_class: String,
+    #[props(default = String::new())] label_class: String,
+    #[props(default = false)] readonly: bool,
+    #[props(default = false)] flushable_input: bool,
+) -> Element {
+    let mut val_str = use_signal(|| {
+        format!(
+            "{}{}",
+            format_si_notation(*value.read(), reciprocal),
+            base_unit
+        )
+    });
+
+    use_effect(move || {
+        let current_str = val_str.peek().clone();
+        let new_str = format!(
+            "{}{}",
+            format_si_notation(*value.read(), reciprocal),
+            base_unit
+        );
+        if current_str != new_str {
+            val_str.set(new_str);
+        }
+    });
+
+    let on_input_eval = move |input_val: String| is_permissive_unit_input(&input_val, base_unit);
+
+    if flushable_input {
+        rsx! {
+            FlushableTextInput {
+                id,
+                label,
+                value: val_str,
+                readonly,
+                container_class,
+                input_class,
+                label_class,
+                eval_input: Some(Callback::new(on_input_eval)),
+                on_save: move |val: String| {
+                    if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, base_unit) {
+                        if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
+                            onchange.call(parsed);
+                        } else {
+                            onchange.call(*value.read());
+                            OPOSSUM_UI_LOGS
+                                .write()
+                                .add_log("Cannot parse input number string to f64!");
+                        }
+                    }
+                },
+            }
+        }
+    } else {
+        rsx! {
+            input {
+                class: input_class,
+                id,
+                // label,
+                value: val_str,
+                readonly,
+                oninput: move |e: Event<FormData>| {
+                    let new_value = e.data.value();
+                    if on_input_eval(new_value.clone()) {
+                        val_str.set(new_value);
+                    } else {
+                        val_str.set(val_str());
+                    }
+                },
+                onchange: move |event: Event<FormData>| {
+                    let new_value = event.data.value();
+                    if let Ok((num_str, prefix_str)) = parse_unit_input_strict(
+                        &new_value,
+                        base_unit,
+                    ) {
+                        if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
+                            onchange.call(parsed);
+                        } else {
+                            onchange.call(*value.read());
+                            OPOSSUM_UI_LOGS
+                                .write()
+                                .add_log("Cannot parse input number string to f64!");
+                        }
+                    }
+                },
+            }
         }
     }
 }

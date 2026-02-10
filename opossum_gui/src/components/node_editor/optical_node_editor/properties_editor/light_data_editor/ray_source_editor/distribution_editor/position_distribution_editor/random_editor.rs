@@ -4,12 +4,11 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    millimeter,
+    meter,
     position_distributions::{PosDistType, Random},
     utils::try_f64_to_usize,
 };
 use strum::EnumIter;
-use uom::si::length::millimeter;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 pub enum RandomParam {
@@ -21,8 +20,8 @@ pub enum RandomParam {
 impl From<RandomParam> for InputParam {
     fn from(value: RandomParam) -> Self {
         match value {
-            RandomParam::SideLengthX => Self::Length("Length X in mm".into()),
-            RandomParam::SideLengthY => Self::Length("Length Y in mm".into()),
+            RandomParam::SideLengthX => Self::Length("Length X".into()),
+            RandomParam::SideLengthY => Self::Length("Length Y".into()),
             RandomParam::Points => Self::Usize("#Points".into()),
         }
     }
@@ -40,8 +39,8 @@ impl IntoInputDataStrings<Random> for RandomParam {
 
     fn create_value_string(&self, obj: &Random) -> String {
         match self {
-            Self::SideLengthX => format!("{:.3e}", obj.side_length_x().get::<millimeter>()),
-            Self::SideLengthY => format!("{:.3e}", obj.side_length_y().get::<millimeter>()),
+            Self::SideLengthX => format!("{}", obj.side_length_x().value),
+            Self::SideLengthY => format!("{}", obj.side_length_y().value),
             Self::Points => format!("{}", obj.nr_of_points()),
         }
     }
@@ -56,11 +55,11 @@ impl IntoInputData<f64, Random, PosDistType> for RandomParam {
     fn setter_from_obj(&self) -> impl FnMut(&mut Random, f64) {
         match self {
             Self::SideLengthX => move |obj: &mut Random, val: f64| {
-                obj.set_side_length_x(millimeter!(val))
+                obj.set_side_length_x(meter!(val))
                     .log_err_with_context("`set_side_length_x` of random");
             },
             Self::SideLengthY => move |obj: &mut Random, val: f64| {
-                obj.set_side_length_y(millimeter!(val))
+                obj.set_side_length_y(meter!(val))
                     .log_err_with_context("`set_side_length_y` of random");
             },
             Self::Points => move |obj: &mut Random, val: f64| {

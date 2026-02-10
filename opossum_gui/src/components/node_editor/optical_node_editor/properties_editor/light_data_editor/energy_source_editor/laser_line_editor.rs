@@ -3,15 +3,15 @@ use crate::{
     components::{
         logger::LogResultExt,
         node_editor::inputs::{
-            InputData, InputParam, IntoInputData, IntoInputDataStrings,
+            InputData, InputParam, IntoInputData, IntoInputDataStrings, format_si_notation,
             input_components::{InputParamLabeledInput, RowedInputs},
+            parse_si_number, parse_unit_input_strict,
         },
     },
 };
 use dioxus::prelude::*;
-use opossum_core::prelude::{EnergyDataBuilder, EnergyLaserLines, joule, nanometer};
+use opossum_core::prelude::{EnergyDataBuilder, EnergyLaserLines, joule, meter};
 use strum::{EnumIter, IntoEnumIterator};
-use uom::si::{energy::joule, length::nanometer};
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 pub enum EnergyLaserLinesParam {
@@ -23,9 +23,9 @@ pub enum EnergyLaserLinesParam {
 impl From<EnergyLaserLinesParam> for InputParam {
     fn from(value: EnergyLaserLinesParam) -> Self {
         match value {
-            EnergyLaserLinesParam::Wavelength => Self::Length("Wavelength in nm".into()),
-            EnergyLaserLinesParam::Energy => Self::Energy("Energy in joule".into()),
-            EnergyLaserLinesParam::SpectralResolution => Self::Length("Resolution in nm".into()),
+            EnergyLaserLinesParam::Wavelength => Self::Length("Wavelength".into()),
+            EnergyLaserLinesParam::Energy => Self::Energy("Energy".into()),
+            EnergyLaserLinesParam::SpectralResolution => Self::Length("Resolution".into()),
         }
     }
 }
@@ -41,16 +41,16 @@ impl IntoInputDataStrings<EnergyLaserLines> for EnergyLaserLinesParam {
     }
     fn create_value_string(&self, obj: &EnergyLaserLines) -> String {
         match self {
-            Self::Wavelength => obj.lines().last().map_or_else(
-                || "1054.000".to_string(),
-                |ll| format!("{:.3}", ll.0.get::<nanometer>()),
-            ),
-            Self::Energy => obj.lines().last().map_or_else(
-                || "1.000".to_string(),
-                |ll| format!("{:.3}", ll.1.get::<joule>()),
-            ),
+            Self::Wavelength => obj
+                .lines()
+                .last()
+                .map_or_else(|| "1054.000".to_string(), |ll| format!("{}", ll.0.value)),
+            Self::Energy => obj
+                .lines()
+                .last()
+                .map_or_else(|| "1.000".to_string(), |ll| format!("{}", ll.1.value)),
             Self::SpectralResolution => {
-                format!("{:.3}", obj.spectral_resolution().get::<nanometer>())
+                format!("{}", obj.spectral_resolution().value)
             }
         }
     }
@@ -65,7 +65,7 @@ impl IntoInputData<f64, EnergyLaserLines, EnergyDataBuilder> for EnergyLaserLine
     fn setter_from_obj(&self) -> impl FnMut(&mut EnergyLaserLines, f64) {
         if self == &Self::SpectralResolution {
             move |obj: &mut EnergyLaserLines, val: f64| {
-                obj.set_spectral_resolution(nanometer!(val))
+                obj.set_spectral_resolution(meter!(val))
                     .log_err_with_context("Validation failed in `set_spectral_resolution`");
             }
         } else {
@@ -83,7 +83,7 @@ impl IntoInputData<f64, EnergyLaserLines, EnergyLaserLines> for EnergyLaserLines
     fn setter_from_obj(&self) -> impl FnMut(&mut EnergyLaserLines, f64) {
         if self == &Self::SpectralResolution {
             move |obj: &mut EnergyLaserLines, val: f64| {
-                obj.set_spectral_resolution(nanometer!(val))
+                obj.set_spectral_resolution(meter!(val))
                     .log_err_with_context("Validation failed in `set_spectral_resolution`");
             }
         } else {
@@ -124,26 +124,37 @@ pub fn EnergyLaserLineEditor(
                         wvl_opt.clone(),
                         energy_opt.clone(),
                     ) {
-                        if let (Ok(wvl), Ok(energy)) = (wvl_val.parse(), energy_val.parse()) {
-                            if let EnergyDataBuilder::LaserLines(ll) = &mut *energy_data_builder_sig
-                                .write()
-                            {
-                                ll.add_lines(vec![(nanometer!(wvl), joule!(energy))])
-                                    .unwrap_or_else(|e| {
-                                        OPOSSUM_UI_LOGS
-                                            .write()
-                                            .add_log(format!("Error adding laser line: {e}").as_str());
-                                    });
+                        if let (
+                            Ok((num_str_wvl, prefix_str_wvl)),
+                            Ok((num_str_energy, prefix_str_energy)),
+                        ) = (
+                            parse_unit_input_strict(&wvl_val, "m"),
+                            parse_unit_input_strict(&energy_val, "J"),
+                        ) {
+                            if let (Some(wvl), Some(energy)) = (
+                                parse_si_number(&num_str_wvl, &prefix_str_wvl, false),
+                                parse_si_number(&num_str_energy, &prefix_str_energy, false),
+                            ) {
+                                if let EnergyDataBuilder::LaserLines(ll) = &mut *energy_data_builder_sig
+                                    .write()
+                                {
+                                    ll.add_lines(vec![(meter!(wvl), joule!(energy))])
+                                        .unwrap_or_else(|e| {
+                                            OPOSSUM_UI_LOGS
+                                                .write()
+                                                .add_log(format!("Error adding laser line: {e}").as_str());
+                                        });
+                                }
+                            } else {
+                                OPOSSUM_UI_LOGS
+                                    .write()
+                                    .add_log(
+                                        format!(
+                                            "Could not parse laser line inputs! Wavelength: {wvl_opt:?}. Energy: {energy_opt:?}",
+                                        )
+                                            .as_str(),
+                                    );
                             }
-                        } else {
-                            OPOSSUM_UI_LOGS
-                                .write()
-                                .add_log(
-                                    format!(
-                                        "Could not parse laser line inputs! Wavelength: {wvl_opt:?}. Energy: {energy_opt:?}",
-                                    )
-                                        .as_str(),
-                                );
                         }
                     } else {
                         OPOSSUM_UI_LOGS
@@ -186,8 +197,8 @@ fn LaserLineList(
                     };
                     rsx! {
                         li { class,
-                            span { {format!("λ: {:.3} nm", line.0.get::<nanometer>())} }
-                            span { {format!("E: {:.3} J", line.1.get::<joule>())} }
+                            span { {format!("λ: {}m", format_si_notation(line.0.value, false))} }
+                            span { {format!("E: {}J", format_si_notation(line.1.value, false))} }
                             a {
                                 class: "text-danger ms-auto",
                                 onclick: {

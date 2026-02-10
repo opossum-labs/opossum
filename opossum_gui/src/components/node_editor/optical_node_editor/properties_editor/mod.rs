@@ -45,8 +45,7 @@ pub fn PropertiesEditor(
     let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
 
     for (property_key, property) in &*node_properties_sig.read() {
-        if let Some(editor) = get_editor(node_id, property.clone(), property_key.clone(), on_change)
-        {
+        if let Some(editor) = get_editor(node_id, property, property_key.clone(), on_change) {
             editor_inputs.push(editor);
         }
     }
@@ -69,20 +68,19 @@ pub fn PropertiesEditor(
 // Helper: creates the suitable editor
 fn get_editor(
     node_id: Uuid,
-    property: Property,
+    property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Option<Element> {
-    if let Some(editor) = get_primitive_editor(node_id, &property, property_key.clone(), on_change)
-    {
+    if let Some(editor) = get_primitive_editor(node_id, property, property_key.clone(), on_change) {
         return Some(editor);
     }
 
-    if let Some(editor) = get_optical_editor(node_id, &property, property_key.clone(), on_change) {
+    if let Some(editor) = get_optical_editor(node_id, property, property_key.clone(), on_change) {
         return Some(editor);
     }
 
-    get_geometric_editor(node_id, &property, property_key, on_change)
+    get_geometric_editor(node_id, property, property_key, on_change)
 }
 
 fn get_primitive_editor(
