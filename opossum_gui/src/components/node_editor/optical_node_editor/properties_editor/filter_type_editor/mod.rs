@@ -41,20 +41,20 @@ pub fn FilterTypeEditor(
         FilterTypeSelector { filter_type_builder_sig }
     }];
 
-    match &*filter_type_builder_sig.read() {
-        FilterTypeBuilder::Constant(transmission) => element_list.push(rsx! {
-            ConstantFilterTypeEditor {
-                transmission: *transmission,
-                builder_sig: filter_type_builder_sig,
-            }
-        }),
-        FilterTypeBuilder::Spectrum(spectral_filter_builder) => element_list.push(rsx! {
-            SpectralFilterTypeEditor {
-                spectral_filter_builder: spectral_filter_builder.clone(),
-                builder_sig: filter_type_builder_sig,
-            }
-        }),
-    }
+    // match &*filter_type_builder_sig.read() {
+    //     FilterTypeBuilder::Constant(transmission) => element_list.push(rsx! {
+    //         ConstantFilterTypeEditor {
+    //             transmission: *transmission,
+    //             builder_sig: filter_type_builder_sig,
+    //         }
+    //     }),
+    //     FilterTypeBuilder::Spectrum(spectral_filter_builder) => element_list.push(rsx! {
+    //         SpectralFilterTypeEditor {
+    //             spectral_filter_builder: spectral_filter_builder.clone(),
+    //             builder_sig: filter_type_builder_sig,
+    //         }
+    //     }),
+    // }
 
     rsx! {
         ElementList { element_list }

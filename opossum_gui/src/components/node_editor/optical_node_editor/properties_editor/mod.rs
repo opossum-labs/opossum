@@ -144,15 +144,15 @@ fn get_optical_editor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Option<Element> {
     match property.prop().clone() {
-        // Proptype::SplittingConfigBuilder(splitting_config_builder) => Some(rsx! {
-        //     SplitterTypeEditor {
-        //         node_id,
-        //         splitting_config_builder,
-        //         property_key,
-        //         property: property.clone(),
-        //         on_change,
-        //     }
-        // }),
+        Proptype::SplittingConfigBuilder(splitting_config_builder) => Some(rsx! {
+            SplitterTypeEditor {
+                node_id,
+                splitting_config_builder,
+                property_key,
+                property: property.clone(),
+                on_change,
+            }
+        }),
         // Proptype::FilterTypeBuilder(filter_type_builder) => Some(rsx! {
         //     FilterTypeEditor {
         //         node_id,
