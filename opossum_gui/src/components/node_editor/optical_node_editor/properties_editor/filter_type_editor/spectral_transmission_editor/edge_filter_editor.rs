@@ -5,11 +5,9 @@ use uom::si::length::nanometer;
 
 use crate::{
     OPOSSUM_UI_LOGS,
-    components::node_editor::{
-        inputs::{
-            InputData, InputParam, IntoInputData, IntoInputDataStrings,
-            input_components::RowedInputs, select_options_from_enum_iterator,
-        },
+    components::node_editor::inputs::{
+        InputData, InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
+        select_options_from_enum_iterator,
     },
 };
 
@@ -22,10 +20,11 @@ pub fn EdgeFilterEditor(
 
     let on_edge_filter_change = EventHandler::new(move |new_edge_filter: EdgeFilter| {
         if new_edge_filter != *edge_filter_sig.read() {
-            on_spectral_filter_change.call(SpectralFilterBuilder::EdgeFilter(new_edge_filter.clone()));
+            on_spectral_filter_change
+                .call(SpectralFilterBuilder::EdgeFilter(new_edge_filter.clone()));
             edge_filter_sig.set(new_edge_filter);
         }
-     });
+    });
 
     let mut inputs = Vec::<InputData>::new();
     for param in EdgeFilterParam::iter() {
@@ -34,14 +33,14 @@ pub fn EdgeFilterEditor(
                 IntoInputData::<EdgeFilterType, EdgeFilter, EdgeFilter>::to_input_data(
                     &EdgeFilterParam::FilterType(*edge_filter_sig.read().edge_filter_type()),
                     edge_filter_sig.read().clone(),
-                    on_edge_filter_change
+                    on_edge_filter_change,
                 ),
             );
         } else {
             inputs.push(IntoInputData::<f64, EdgeFilter, EdgeFilter>::to_input_data(
                 &param,
                 edge_filter_sig.read().clone(),
-                on_edge_filter_change
+                on_edge_filter_change,
             ));
         }
     }
@@ -100,10 +99,7 @@ impl IntoInputDataStrings<EdgeFilter> for EdgeFilterParam {
         match self {
             Self::FilterType(bft) => bft.to_string(),
             Self::EdgeWavelength => format!("{}", obj.edge_wavelength().value),
-            Self::SmoothStepWidth => format!(
-                "{}",
-                obj.smooth_step_width().map_or(0., |s| s.value)
-            ),
+            Self::SmoothStepWidth => format!("{}", obj.smooth_step_width().map_or(0., |s| s.value)),
             Self::TransmissionStart => format!("{:.3}", obj.transmission_range().start),
             Self::TransmissionEnd => format!("{:.3}", obj.transmission_range().end),
             Self::RangeStart => format!("{}", obj.range().start.value),
@@ -123,12 +119,11 @@ impl IntoInputData<f64, EdgeFilter, EdgeFilter> for EdgeFilterParam {
         match self {
             Self::FilterType(_) => move |_: &mut EdgeFilter, _: f64| {},
             Self::EdgeWavelength => move |obj: &mut EdgeFilter, val: f64| {
-                obj.set_edge_wavelength(meter!(val))
-                    .unwrap_or_else(|_| {
-                        OPOSSUM_UI_LOGS
-                            .write()
-                            .add_log(&format!("Invalid edge wavelength value: {val}"));
-                    });
+                obj.set_edge_wavelength(meter!(val)).unwrap_or_else(|_| {
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log(&format!("Invalid edge wavelength value: {val}"));
+                });
             },
             Self::SmoothStepWidth => move |obj: &mut EdgeFilter, val: f64| {
                 if val <= 0. {

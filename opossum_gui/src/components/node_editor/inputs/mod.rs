@@ -15,7 +15,11 @@ where
     fn setter_from_obj(&self) -> impl FnMut(&mut D, T);
 
     // Callback für Standard-Events (Checkboxen, Selects)
-    fn create_callback(&self, mut obj: D, handler: EventHandler<B>) -> EventHandler<Event<FormData>> {
+    fn create_callback(
+        &self,
+        mut obj: D,
+        handler: EventHandler<B>,
+    ) -> EventHandler<Event<FormData>> {
         let this = *self;
         EventHandler::new(move |e: Event<FormData>| {
             if let Some(value) = this.parse_value(e) {
@@ -54,7 +58,7 @@ where
         )
     }
 
-    fn to_input_data_vec(obj: &D,  handler: EventHandler<B>) -> Vec<InputData> {
+    fn to_input_data_vec(obj: &D, handler: EventHandler<B>) -> Vec<InputData> {
         let mut input_data = Vec::<InputData>::new();
         for enum_variant in Self::iter() {
             input_data.push(enum_variant.to_input_data(obj.clone(), handler));
@@ -163,8 +167,8 @@ pub struct InputData {
     pub value: String,
     pub id: String,
     pub input_param: InputParam,
-    pub callback: EventHandler<Event<FormData>>, 
-    pub callback_str: EventHandler<String>,      
+    pub callback: EventHandler<Event<FormData>>,
+    pub callback_str: EventHandler<String>,
     pub readonly: bool,
 }
 

@@ -41,7 +41,7 @@ pub fn SpectralFilterTypeSelector(
 }
 
 #[component]
-pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clone+ 'static>(
+pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clone + 'static>(
     spectral_filter_builder: SpectralFilterBuilder,
     on_spectral_filter_change: EventHandler<T>,
 ) -> Element {
@@ -52,7 +52,7 @@ pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clo
             on_spectral_filter_change.call(new_builder.clone().into());
             spectral_filter_builder_sig.set(new_builder);
         }
-     });
+    });
 
     let mut element_list = vec![rsx! {
     SpectralFilterTypeSelector {spectral_filter_builder_sig , on_spectral_filter_change}}];
@@ -64,8 +64,7 @@ pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clo
         SpectralFilterBuilder::BandFilter(band_filter) => rsx! {
             BandFilterEditor { band_filter, on_spectral_filter_change }
         },
-        SpectralFilterBuilder::FromFile(_) => 
-        {
+        SpectralFilterBuilder::FromFile(_) => {
             let input_data = FilterFromFileParam::FPath.to_input_data(
                 spectral_filter_builder_sig.read().clone(),
                 on_spectral_filter_change,

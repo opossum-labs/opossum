@@ -3,15 +3,21 @@ use crate::{
     components::node_editor::{
         accordion::AccordionItem,
         inputs::{InputData, input_components::RowedInputs},
-        node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
     },
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    degree, meter, prelude::{Isometry, Proptype}, utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis}
+    degree, meter,
+    prelude::Isometry,
+    utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis},
 };
 use strum::IntoEnumIterator;
-use uom::si::{angle::degree, f64::{Angle, Length}};
+use uom::si::{
+    angle::degree,
+    f64::{Angle, Length},
+};
 use uuid::Uuid;
 
 #[component]
@@ -21,38 +27,38 @@ pub fn IsometryOptionEditor(
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut isometry_sig = use_signal(|| isometry);
-
-    let on_save = EventHandler::new(move |new_iso: Isometry| {
-        on_change.call(NodeChangeEvent {
-            node_id: *node_id.read(),
-            action: NodeChangeAction::Property(
-                property_key.clone(),
-                Proptype::Isometry(Some(new_iso)),
-            ),
-        });
-    });
+    let isometry_sig = use_signal(|| isometry);
+    let on_save = on_save_proptype_handler(
+        isometry_sig,
+        property_key.clone(),
+        on_change,
+        node_id.into(),
+    );
 
     let on_new_rotation = EventHandler::new(move |(axis, rotation): (RotationAxis, Angle)| {
-        if isometry_sig.write().set_rotation_of_axis(axis, rotation).is_ok() {
-            on_save.call(*isometry_sig.read());
+        let mut iso = *isometry_sig.read();
+        if iso.set_rotation_of_axis(axis, rotation).is_ok() {
+            on_save.call(iso);
         } else {
-            OPOSSUM_UI_LOGS.write().add_log(
-                format!("Failed to set rotation for axis {axis}").as_str(),
-            );
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(format!("Failed to set rotation for axis {axis}").as_str());
         }
     });
-    let on_new_translation = EventHandler::new(move |(axis, translation): (TranslationAxis, Length)| {
-        if isometry_sig.write().set_translation_of_axis(axis, translation).is_ok() {
-            on_save.call(*isometry_sig.read());
-        } else {
-            OPOSSUM_UI_LOGS.write().add_log(
-                format!("Failed to set translation for axis {axis}").as_str(),
-            );
-        }
-    });
+    let on_new_translation =
+        EventHandler::new(move |(axis, translation): (TranslationAxis, Length)| {
+            let mut iso = *isometry_sig.read();
+            if iso.set_translation_of_axis(axis, translation).is_ok() {
+                on_save.call(iso);
+            } else {
+                OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log(format!("Failed to set translation for axis {axis}").as_str());
+            }
+        });
 
-    let input_data = get_isometry_option_input_data(on_new_rotation, on_new_translation, isometry_sig.into());
+    let input_data =
+        get_isometry_option_input_data(on_new_rotation, on_new_translation, isometry_sig.into());
     let accordion_content = vec![rsx! {
         RowedInputs { inputs: input_data }
     }];
@@ -78,7 +84,7 @@ fn on_isometry_option_change_str(
 ) -> EventHandler<String> {
     EventHandler::new(move |val_str: String| {
         if let Ok(val) = val_str.parse::<f64>() {
-             match axis_type {
+            match axis_type {
                 AlignmentAxis::Translation(translation_axis) => {
                     on_new_translation.call((translation_axis, meter!(val)));
                 }
@@ -109,9 +115,7 @@ fn get_isometry_option_input_data(
             ),
             format!(
                 "{}",
-                isometry_sig
-                    .read()
-                    .translation_of_axis(trans_axis).value
+                isometry_sig.read().translation_of_axis(trans_axis).value
             ),
         ));
         alignment_inputs.push(InputData::new(

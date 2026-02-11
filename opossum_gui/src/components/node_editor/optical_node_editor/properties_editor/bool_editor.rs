@@ -1,7 +1,6 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop, inputs::input_components::LabeledCheckboxInput,
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::properties_editor::use_set_node_change_property,
+    inputs::input_components::LabeledCheckboxInput, node_config_editor::NodeChangeEvent,
+    optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
@@ -14,20 +13,18 @@ pub fn BoolEditor(
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let bool_memo = use_memo(use_reactive!(|b| b));
+    let bool_sig = use_signal(|| b);
+    let on_save =
+        on_save_proptype_handler(bool_sig, property_key.clone(), on_change, node_id.into());
 
     rsx! {
         LabeledCheckboxInput {
             id: format!("boolProperty{property_key}").to_camel_case(),
-            label: format!("{}", property_key.to_sentence_case()),
-            value: format!("{}", *bool_memo.read()),
+            label: property_key.to_sentence_case(),
+            value: format!("{}", *bool_sig.read()),
             onchange: move |e: Event<FormData>| {
                 if let Ok(val) = e.data.value().parse::<bool>() {
-                    on_change
-                        .call(NodeChangeEvent {
-                            node_id: *node_id.read(),
-                            action: NodeChangeAction::Property(property_key.clone(), val.into()),
-                        });
+                    on_save.call(val);
                 }
             },
         }

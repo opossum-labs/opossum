@@ -48,7 +48,6 @@ pub fn FlushableTextInput(
         is_locally_dirty.set(false);
     }));
 
-
     let mut perform_save = move || {
         if *is_locally_dirty.peek() {
             let val = local_value.peek().clone();
@@ -278,8 +277,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 readonly: input_data.readonly,
             }
         }
-    }
-    else if let InputParam::F64(_) = input_data.input_param {
+    } else if let InputParam::F64(_) = input_data.input_param {
         rsx! {
             FlushableTextInput {
                 id: input_data.id,

@@ -24,15 +24,21 @@ use crate::components::node_editor::{
     optical_node_editor::{
         UINodeAttr,
         properties_editor::{
-            angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
-            f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
-            fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
-            isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
-            length_option_editor::LengthOptionEditor, 
+            angle_editor::AngleEditor,
+            bool_editor::BoolEditor,
+            curvature_editor::CurvatureEditor,
+            f64_editor::F64Editor,
+            filter_type_editor::FilterTypeEditor,
+            fluence_estimator_editor::FluenceEstimatorEditor,
+            i32_editor::I32Editor,
+            isometry_option_editor::IsometryOptionEditor,
+            length_editor::LengthEditor,
+            length_option_editor::LengthOptionEditor,
             // light_data_editor::LightDataEditor,
             linear_density_editor::LinearDensityEditor,
             // refractive_index_editor::RefractiveIndexEditor,
-            splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
+            splitter_type_editor::SplitterTypeEditor,
+            string_editor::StringEditor,
             vec2_editor::Vec2Editor,
         },
     },
@@ -270,4 +276,30 @@ pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone + 'sta
             }
         }
     });
+}
+
+/// Creates an EventHandler for saving a property change, which updates the signal and calls the on_change handler with a NodeChangeEvent.
+/// This function can be used in property editors to handle changes to properties and ensure that the UI updates accordingly.
+/// # Arguments
+/// * `sig` - A Signal that holds the current value of the property being edited. This signal will be updated when the property changes This signal should be defined in the calling component.
+/// * `property_key` - The key of the property being edited. This is used in the NodeChangeEvent to specify which property has changed.
+/// * `change_handler` - An EventHandler that will be called with a NodeChangeEvent when the property changes. This is typically the on_change handler passed down from the parent component.
+/// * `node_id` - A ReadSignal that provides the ID of the node whose property is being edited. This is used in the NodeChangeEvent to specify which node has changed.
+/// # Returns
+/// An EventHandler that can be used in the property editor to handle changes to the property.
+pub fn on_save_proptype_handler<T: Into<Proptype> + PartialEq + Clone + 'static>(
+    mut sig: Signal<T>,
+    property_key: String,
+    change_handler: EventHandler<NodeChangeEvent>,
+    node_id: ReadSignal<Uuid>,
+) -> EventHandler<T> {
+    EventHandler::new(move |new_prop: T| {
+        if new_prop != *sig.read() {
+            change_handler.call(NodeChangeEvent {
+                node_id: *node_id.read(),
+                action: NodeChangeAction::Property(property_key.clone(), new_prop.clone().into()),
+            });
+            sig.set(new_prop);
+        }
+    })
 }

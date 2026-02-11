@@ -1,6 +1,7 @@
 use crate::components::node_editor::{
     inputs::input_components::{LabeledSelect, NodeConfigUnitInput},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
@@ -15,38 +16,27 @@ pub fn LengthOptionEditor(
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut length_opt_sig = use_signal(|| length_opt);
+    let length_opt_sig = use_signal(|| length_opt);
+    let on_save = on_save_proptype_handler(
+        length_opt_sig,
+        property_key.clone(),
+        on_change,
+        node_id.into(),
+    );
 
-    use_effect({
-        let property_key = property_key.to_owned();
-        move || {
-            if length_opt != *length_opt_sig.read() {
-                on_change.call(NodeChangeEvent {
-                    node_id: *node_id.read(),
-                    action: NodeChangeAction::Property(
-                        property_key.clone(),
-                        (*length_opt_sig.read()).into(),
-                    ),
-                });
-            }
-        }
-    });
-
-    let select_id = format!("lengthOptionProperty{property_key}").to_camel_case();
-    let select_label = property_key.to_sentence_case();
     rsx! {
         LabeledSelect {
-            id: select_id,
-            label: select_label,
+            id: format!("lengthOptionProperty{property_key}").to_camel_case(),
+            label: property_key.to_sentence_case(),
             options: vec![
                 (length_opt_sig.read().is_none(), "None".to_owned()),
                 (length_opt_sig.read().is_some(), "Define".to_owned()),
             ],
             onchange: move |_: Event<FormData>| {
                 if length_opt_sig.read().is_some() {
-                    length_opt_sig.set(None);
+                    on_save.call(None);
                 } else {
-                    length_opt_sig.set(Some(nanometer!(1054.)));
+                    on_save.call(Some(nanometer!(1054.)));
                 }
             },
         }
@@ -63,7 +53,7 @@ pub fn LengthOptionEditor(
                                 value: length.value,
                                 base_unit: "m",
                                 onchange: move |new_length: f64| {
-                                    length_opt_sig.set(Some(meter!(new_length)));
+                                    on_save.call(Some(meter!(new_length)));
                                 },
                             }
                         }

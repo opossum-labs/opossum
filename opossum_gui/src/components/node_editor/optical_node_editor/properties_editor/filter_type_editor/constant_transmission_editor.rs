@@ -1,8 +1,6 @@
-use crate::
-    components::node_editor::inputs::input_components::FlushableTextInput;
+use crate::components::node_editor::inputs::input_components::FlushableTextInput;
 use approx::relative_ne;
 use dioxus::prelude::*;
-
 
 #[component]
 pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Clone + 'static>(

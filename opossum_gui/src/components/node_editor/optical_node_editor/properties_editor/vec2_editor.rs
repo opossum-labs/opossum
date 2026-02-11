@@ -1,22 +1,21 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        hooks::use_update_signal_with_reactive_prop,
         inputs::{
             InputData, InputParam,
             input_components::{LabeledSelect, RowedInputs},
             select_options_from_enum_iterator,
         },
-        node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
     },
 };
-use approx::{relative_eq, relative_ne};
+use approx::relative_eq;
 use dioxus::prelude::*;
 use inflector::Inflector;
 use nalgebra::Vector2;
-use opossum_core::{
-    prelude::Proptype,
-    utils::{default_from_name::DefaultFromName, geom_transformation::TranslationAxis},
+use opossum_core::utils::{
+    default_from_name::DefaultFromName, geom_transformation::TranslationAxis,
 };
 use std::fmt::Display;
 use strum::EnumIter;
@@ -49,18 +48,10 @@ pub fn Vec2Editor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let select_label = property_key.to_sentence_case();
-    let mut vec_sig = use_signal(|| vector);
+    let vec_sig = use_signal(|| vector);
 
-    let prop_key_clone = property_key.clone();
-    let on_vec_change = EventHandler::new(move |new_vec: Vector2<f64>| {
-        if relative_ne!(vec_sig.read().x, new_vec.x) || relative_ne!(vec_sig.read().y, new_vec.y) {
-            on_change.call(NodeChangeEvent {
-                node_id: *node_id.read(),
-                action: NodeChangeAction::Property(prop_key_clone.clone(), Proptype::Vec2(new_vec)),
-            });
-            vec_sig.set(new_vec);
-        }
-    });
+    let on_save =
+        on_save_proptype_handler(vec_sig, property_key.clone(), on_change, node_id.into());
 
     let dummy_legacy_callback = EventHandler::new(|_| {});
 
@@ -70,7 +61,7 @@ pub fn Vec2Editor(
             .to_camel_case()
             .as_str(),
         dummy_legacy_callback,
-        on_vec_input_change_str(vec_sig.into(), TranslationAxis::X, on_vec_change),
+        on_vec_input_change_str(vec_sig.into(), TranslationAxis::X, on_save),
         format!("{:.3}", vec_sig.read().x),
     );
 
@@ -82,7 +73,7 @@ pub fn Vec2Editor(
             .to_camel_case()
             .as_str(),
         dummy_legacy_callback,
-        on_vec_input_change_str(vec_sig.into(), TranslationAxis::Y, on_vec_change),
+        on_vec_input_change_str(vec_sig.into(), TranslationAxis::Y, on_save),
         format!("{:.3}", vec_sig.read().y),
     );
 
@@ -110,7 +101,7 @@ pub fn Vec2Editor(
                         Vec2Options::Y => Vector2::new(0., 1.),
                         Vec2Options::Mix => Vector2::new(1., 1.),
                     };
-                    on_vec_change.call(new_vec);
+                    on_save.call(new_vec);
                 }
             },
         }

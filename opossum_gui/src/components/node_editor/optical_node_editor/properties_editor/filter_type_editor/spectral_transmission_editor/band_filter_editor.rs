@@ -5,11 +5,9 @@ use uom::si::length::nanometer;
 
 use crate::{
     OPOSSUM_UI_LOGS,
-    components::node_editor::{
-        inputs::{
-            InputData, InputParam, IntoInputData, IntoInputDataStrings,
-            input_components::RowedInputs, select_options_from_enum_iterator,
-        },
+    components::node_editor::inputs::{
+        InputData, InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
+        select_options_from_enum_iterator,
     },
 };
 
@@ -22,10 +20,11 @@ pub fn BandFilterEditor(
 
     let on_band_filter_change = EventHandler::new(move |new_band_filter: BandFilter| {
         if new_band_filter != *band_filter_sig.read() {
-            on_spectral_filter_change.call(SpectralFilterBuilder::BandFilter(new_band_filter.clone()));
+            on_spectral_filter_change
+                .call(SpectralFilterBuilder::BandFilter(new_band_filter.clone()));
             band_filter_sig.set(new_band_filter);
         }
-     });
+    });
 
     let mut inputs = Vec::<InputData>::new();
     for param in BandFilterParam::iter() {
@@ -34,14 +33,14 @@ pub fn BandFilterEditor(
                 IntoInputData::<BandFilterType, BandFilter, BandFilter>::to_input_data(
                     &BandFilterParam::FilterType(*band_filter_sig.read().band_filter_type()),
                     band_filter_sig.read().clone(),
-                    on_band_filter_change
+                    on_band_filter_change,
                 ),
             );
         } else {
             inputs.push(IntoInputData::<f64, BandFilter, BandFilter>::to_input_data(
                 &param,
                 band_filter_sig.read().clone(),
-                on_band_filter_change
+                on_band_filter_change,
             ));
         }
     }
@@ -106,10 +105,7 @@ impl IntoInputDataStrings<BandFilter> for BandFilterParam {
             Self::Width => format!("{}", obj.width().value),
             Self::TransmissionStart => format!("{:.3}", obj.transmission_range().start),
             Self::TransmissionEnd => format!("{:.3}", obj.transmission_range().end),
-            Self::SmoothStepWidth => format!(
-                "{}",
-                obj.smooth_step_width().map_or(0., |s| s.value)
-            ),
+            Self::SmoothStepWidth => format!("{}", obj.smooth_step_width().map_or(0., |s| s.value)),
             Self::RangeStart => format!("{}", obj.range().start.value),
             Self::RangeEnd => format!("{}", obj.range().end.value),
             Self::Resolution => format!("{}", obj.resolution().value),
@@ -127,12 +123,11 @@ impl IntoInputData<f64, BandFilter, BandFilter> for BandFilterParam {
         match self {
             Self::FilterType(_) => move |_: &mut BandFilter, _: f64| {},
             Self::CenterWavelength => move |obj: &mut BandFilter, val: f64| {
-                obj.set_center_wavelength(meter!(val))
-                    .unwrap_or_else(|_| {
-                        OPOSSUM_UI_LOGS
-                            .write()
-                            .add_log(&format!("Invalid center wavelength value: {val}"));
-                    });
+                obj.set_center_wavelength(meter!(val)).unwrap_or_else(|_| {
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log(&format!("Invalid center wavelength value: {val}"));
+                });
             },
             Self::Width => move |obj: &mut BandFilter, val: f64| {
                 obj.set_width(meter!(val)).unwrap_or_else(|_| {

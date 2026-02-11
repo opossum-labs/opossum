@@ -9,10 +9,7 @@ use approx::relative_ne;
 use core::f64;
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_core::{
-    meter,
-    prelude::{Proptype, millimeter},
-};
+use opossum_core::{meter, prelude::Proptype};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
@@ -25,40 +22,46 @@ pub fn CurvatureEditor(
 ) -> Element {
     let mut curvature_sig = use_signal(|| curvature);
     let mut is_finite_sig = use_signal(|| curvature.is_finite());
-
     let mut last_finite_curvature = use_signal(|| {
         if curvature.is_finite() {
             curvature
         } else {
-            millimeter!(1000.)
+            meter!(1.)
         }
     });
 
+    // Cannot use on_save_proptype_handler here to reduce code duplication because Curvature and Length Proptypes are ambigous
+    let on_save = EventHandler::new({
+        let property_key = property_key.clone();
+        move |new_val: Length| {
+            if relative_ne!(curvature_sig.read().value, new_val.value) {
+                on_change.call(NodeChangeEvent {
+                    node_id: *node_id.read(),
+                    action: NodeChangeAction::Property(
+                        property_key.clone(),
+                        Proptype::Curvature(new_val),
+                    ),
+                });
+                curvature_sig.set(new_val);
+            }
+        }
+    });
+
+    // When is_finite_sig changes, update curvature_sig and call on_save
     use_effect(move || {
         if *is_finite_sig.read() {
-            let last_finite = *last_finite_curvature.read();
-            curvature_sig.set(last_finite);
+            on_save.call(*last_finite_curvature.read());
         } else {
-            curvature_sig.set(millimeter!(f64::INFINITY));
+            on_save.call(meter!(f64::INFINITY));
         }
     });
 
+    // When curvature_sig changes to a finite value, update last_finite_curvature
     use_effect(move || {
         let current_val = curvature_sig.read().value;
         if current_val.is_finite() {
             last_finite_curvature.set(meter!(current_val));
         }
-    });
-
-    let prop_key_clone = property_key.clone();
-    let on_save = EventHandler::new(move |new_val: Length| {
-        on_change.call(NodeChangeEvent {
-            node_id: *node_id.read(),
-            action: NodeChangeAction::Property(
-                prop_key_clone.clone(),
-                Proptype::Curvature(new_val),
-            ),
-        });
     });
 
     rsx! {
@@ -71,7 +74,6 @@ pub fn CurvatureEditor(
                     base_unit: "m",
                     onchange: move |new_curv: f64| {
                         if relative_ne!(curvature_sig.read().value, new_curv) {
-                            curvature_sig.set(meter!(new_curv));
                             on_save.call(meter!(new_curv));
                         }
                     },
@@ -84,7 +86,6 @@ pub fn CurvatureEditor(
                     property_key,
                     on_is_curved_change: move |is_finite| {
                         is_finite_sig.set(is_finite);
-                        on_save.call(millimeter!(f64::INFINITY));
                     },
                 }
             }
