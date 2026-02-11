@@ -46,19 +46,12 @@ pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clo
     on_spectral_filter_change: EventHandler<T>,
 ) -> Element {
     let mut spectral_filter_builder_sig = use_signal(|| spectral_filter_builder.clone());
-    // use_update_signal_with_reactive_prop(
-    //     spectral_filter_builder.clone(),
-    //     spectral_filter_builder_sig,
-    // );
-
-    use_effect(move || {
-        if spectral_filter_builder != *spectral_filter_builder_sig.read() {
-            on_spectral_filter_change.call(spectral_filter_builder_sig.read().clone().into());
-        }
-    });
 
     let on_spectral_filter_change = EventHandler::new(move |new_builder: SpectralFilterBuilder| {
+        println!("New spectral filter builder");
         if new_builder != *spectral_filter_builder_sig.read() {
+            println!("differing spectral filter builder");
+
             on_spectral_filter_change.call(new_builder.clone().into());
             spectral_filter_builder_sig.set(new_builder);
         }
@@ -76,14 +69,13 @@ pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clo
         },
         SpectralFilterBuilder::FromFile(_) => 
         {
-            // let input_data = FilterFromFileParam::FPath.to_input_data(
-            //     spectral_filter_builder_sig.read().clone(),
-            //     spectral_filter_builder_sig,
-            // );
-            // rsx! {
-            //     InputParamLabeledInput { input_data }
-            // }
-            rsx!{}
+            let input_data = FilterFromFileParam::FPath.to_input_data(
+                spectral_filter_builder_sig.read().clone(),
+                on_spectral_filter_change,
+            );
+            rsx! {
+                InputParamLabeledInput { input_data }
+            }
         }
     };
 
@@ -126,10 +118,10 @@ impl IntoInputDataStrings<SpectralFilterBuilder> for FilterFromFileParam {
 
 impl IntoInputData<String, SpectralFilterBuilder, SpectralFilterBuilder> for FilterFromFileParam {
     fn parse_value(&self, e: Event<FormData>) -> Option<String> {
-        if e.files().is_empty() {
+        if e.value().is_empty() {
             None
         } else {
-            Some(e.files()[0].name())
+            Some(e.value())
         }
     }
 
