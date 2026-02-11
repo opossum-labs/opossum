@@ -10,9 +10,9 @@ mod i32_editor;
 mod isometry_option_editor;
 mod length_editor;
 mod length_option_editor;
-mod light_data_editor;
+// mod light_data_editor;
 mod linear_density_editor;
-mod refractive_index_editor;
+// mod refractive_index_editor;
 mod splitter_type_editor;
 mod string_editor;
 mod vec2_editor;
@@ -28,9 +28,10 @@ use crate::components::node_editor::{
             f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
             fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
             isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
-            length_option_editor::LengthOptionEditor, light_data_editor::LightDataEditor,
+            length_option_editor::LengthOptionEditor, 
+            // light_data_editor::LightDataEditor,
             linear_density_editor::LinearDensityEditor,
-            refractive_index_editor::RefractiveIndexEditor,
+            // refractive_index_editor::RefractiveIndexEditor,
             splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
             vec2_editor::Vec2Editor,
         },

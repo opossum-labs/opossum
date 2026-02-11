@@ -15,26 +15,26 @@ where
     fn setter_from_obj(&self) -> impl FnMut(&mut D, T);
 
     // Callback für Standard-Events (Checkboxen, Selects)
-    fn create_callback(&self, mut obj: D, mut sig: Signal<B>) -> EventHandler<Event<FormData>> {
+    fn create_callback(&self, mut obj: D, handler: EventHandler<B>) -> EventHandler<Event<FormData>> {
         let this = *self;
         EventHandler::new(move |e: Event<FormData>| {
             if let Some(value) = this.parse_value(e) {
                 let mut setter = this.setter_from_obj();
                 setter(&mut obj, value);
-                sig.set(obj.clone().into());
+                handler.call(obj.clone().into());
             }
         })
     }
 
     // NEU: Callback für String-Events (FlushableTextInput)
-    fn create_callback_str(&self, mut obj: D, mut sig: Signal<B>) -> EventHandler<String> {
+    fn create_callback_str(&self, mut obj: D, handler: EventHandler<B>) -> EventHandler<String> {
         let this = *self;
         EventHandler::new(move |val_str: String| {
             // Wir parsen direkt den String
             if let Ok(value) = val_str.parse::<T>() {
                 let mut setter = this.setter_from_obj();
                 setter(&mut obj, value);
-                sig.set(obj.clone().into());
+                handler.call(obj.clone().into());
             }
         })
     }
@@ -44,21 +44,21 @@ where
         e_value.parse::<T>().ok()
     }
 
-    fn to_input_data(&self, obj: D, sig: Signal<B>) -> InputData {
+    fn to_input_data(&self, obj: D, handler: EventHandler<B>) -> InputData {
         let value_str = self.create_value_string(&obj);
         InputData::new(
             Into::<InputParam>::into(*self),
             self.create_id_string().as_str(),
-            self.create_callback(obj.clone(), sig), // Für Legacy/Events
-            self.create_callback_str(obj, sig),     // Für Flushable
+            self.create_callback(obj.clone(), handler), // Für Legacy/Events
+            self.create_callback_str(obj, handler),     // Für Flushable
             value_str,
         )
     }
 
-    fn to_input_data_vec(obj: &D, sig: Signal<B>) -> Vec<InputData> {
+    fn to_input_data_vec(obj: &D,  handler: EventHandler<B>) -> Vec<InputData> {
         let mut input_data = Vec::<InputData>::new();
         for enum_variant in Self::iter() {
-            input_data.push(enum_variant.to_input_data(obj.clone(), sig));
+            input_data.push(enum_variant.to_input_data(obj.clone(), handler));
         }
         input_data
     }

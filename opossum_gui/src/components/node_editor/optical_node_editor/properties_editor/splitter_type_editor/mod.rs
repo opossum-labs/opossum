@@ -49,11 +49,12 @@ pub fn SplitterTypeEditor(
                     transmission: *transmission,
                     on_transmission_change: on_save,
                 }
-            });},
+            });
+        },
         SplittingConfigBuilder::Spectrum(spectral_filter_builder) => element_list.push(rsx! {
             SpectralFilterTypeEditor {
                 spectral_filter_builder: spectral_filter_builder.clone(),
-                builder_sig: splitting_config_builder_sig,
+                on_spectral_filter_change: on_save,
             }
         }),
     }

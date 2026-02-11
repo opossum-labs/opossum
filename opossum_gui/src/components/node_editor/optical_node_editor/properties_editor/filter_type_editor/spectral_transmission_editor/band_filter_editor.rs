@@ -1,12 +1,11 @@
 use dioxus::prelude::*;
-use opossum_core::prelude::{BandFilter, BandFilterType, SpectralFilterBuilder, nanometer};
+use opossum_core::prelude::{BandFilter, BandFilterType, SpectralFilterBuilder, meter};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::length::nanometer;
 
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        hooks::use_update_signal_with_reactive_prop,
         inputs::{
             InputData, InputParam, IntoInputData, IntoInputDataStrings,
             input_components::RowedInputs, select_options_from_enum_iterator,
@@ -17,21 +16,16 @@ use crate::{
 #[component]
 pub fn BandFilterEditor(
     band_filter: BandFilter,
-    spectral_filter_builder_sig: Signal<SpectralFilterBuilder>,
+    on_spectral_filter_change: EventHandler<SpectralFilterBuilder>,
 ) -> Element {
-    let band_filter_sig = use_signal(|| band_filter.clone());
-    use_update_signal_with_reactive_prop(band_filter.clone(), band_filter_sig);
+    let mut band_filter_sig = use_signal(|| band_filter.clone());
 
-    use_effect({
-        let band_filter = band_filter;
-        move || {
-            if band_filter != *band_filter_sig.read() {
-                spectral_filter_builder_sig.set(SpectralFilterBuilder::BandFilter(
-                    band_filter_sig.read().clone(),
-                ));
-            }
+    let on_band_filter_change = EventHandler::new(move |new_band_filter: BandFilter| {
+        if new_band_filter != *band_filter_sig.read() {
+            on_spectral_filter_change.call(SpectralFilterBuilder::BandFilter(new_band_filter.clone()));
+            band_filter_sig.set(new_band_filter);
         }
-    });
+     });
 
     let mut inputs = Vec::<InputData>::new();
     for param in BandFilterParam::iter() {
@@ -40,14 +34,14 @@ pub fn BandFilterEditor(
                 IntoInputData::<BandFilterType, BandFilter, BandFilter>::to_input_data(
                     &BandFilterParam::FilterType(*band_filter_sig.read().band_filter_type()),
                     band_filter_sig.read().clone(),
-                    band_filter_sig,
+                    on_band_filter_change
                 ),
             );
         } else {
             inputs.push(IntoInputData::<f64, BandFilter, BandFilter>::to_input_data(
                 &param,
                 band_filter_sig.read().clone(),
-                band_filter_sig,
+                on_band_filter_change
             ));
         }
     }
@@ -77,14 +71,14 @@ impl From<BandFilterParam> for InputParam {
                 "Band filter type".to_string(),
                 select_options_from_enum_iterator(&bft, None),
             ),
-            BandFilterParam::CenterWavelength => Self::Length("Center λ in nm".to_string()),
-            BandFilterParam::Width => Self::Length("FWHM in nm".to_string()),
-            BandFilterParam::TransmissionStart => Self::Length("Min. transmission".to_string()),
-            BandFilterParam::TransmissionEnd => Self::Length("Max. transmission".to_string()),
-            BandFilterParam::SmoothStepWidth => Self::Length("Smoothing in nm".to_string()),
-            BandFilterParam::RangeStart => Self::Length("Start λ in nm".to_string()),
-            BandFilterParam::RangeEnd => Self::Length("End λ in nm".to_string()),
-            BandFilterParam::Resolution => Self::Length("Resolution in nm".to_string()),
+            BandFilterParam::CenterWavelength => Self::Length("Center λ".to_string()),
+            BandFilterParam::Width => Self::Length("FWHM".to_string()),
+            BandFilterParam::TransmissionStart => Self::F64("Min. transmission".to_string()),
+            BandFilterParam::TransmissionEnd => Self::F64("Max. transmission".to_string()),
+            BandFilterParam::SmoothStepWidth => Self::Length("Smoothing".to_string()),
+            BandFilterParam::RangeStart => Self::Length("Start λ".to_string()),
+            BandFilterParam::RangeEnd => Self::Length("End λ".to_string()),
+            BandFilterParam::Resolution => Self::Length("Resolution".to_string()),
         }
     }
 }
@@ -108,17 +102,17 @@ impl IntoInputDataStrings<BandFilter> for BandFilterParam {
     fn create_value_string(&self, obj: &BandFilter) -> String {
         match self {
             Self::FilterType(bft) => bft.to_string(),
-            Self::CenterWavelength => format!("{:.3}", obj.center_wavelength().get::<nanometer>()),
-            Self::Width => format!("{:.3}", obj.width().get::<nanometer>()),
+            Self::CenterWavelength => format!("{}", obj.center_wavelength().value),
+            Self::Width => format!("{}", obj.width().value),
             Self::TransmissionStart => format!("{:.3}", obj.transmission_range().start),
             Self::TransmissionEnd => format!("{:.3}", obj.transmission_range().end),
             Self::SmoothStepWidth => format!(
-                "{:.3}",
-                obj.smooth_step_width().map_or(0., |s| s.get::<nanometer>())
+                "{}",
+                obj.smooth_step_width().map_or(0., |s| s.value)
             ),
-            Self::RangeStart => format!("{:.3}", obj.range().start.get::<nanometer>()),
-            Self::RangeEnd => format!("{:.3}", obj.range().end.get::<nanometer>()),
-            Self::Resolution => format!("{:.3}", obj.resolution().get::<nanometer>()),
+            Self::RangeStart => format!("{}", obj.range().start.value),
+            Self::RangeEnd => format!("{}", obj.range().end.value),
+            Self::Resolution => format!("{}", obj.resolution().value),
         }
     }
 }
@@ -133,7 +127,7 @@ impl IntoInputData<f64, BandFilter, BandFilter> for BandFilterParam {
         match self {
             Self::FilterType(_) => move |_: &mut BandFilter, _: f64| {},
             Self::CenterWavelength => move |obj: &mut BandFilter, val: f64| {
-                obj.set_center_wavelength(nanometer!(val))
+                obj.set_center_wavelength(meter!(val))
                     .unwrap_or_else(|_| {
                         OPOSSUM_UI_LOGS
                             .write()
@@ -141,7 +135,7 @@ impl IntoInputData<f64, BandFilter, BandFilter> for BandFilterParam {
                     });
             },
             Self::Width => move |obj: &mut BandFilter, val: f64| {
-                obj.set_width(nanometer!(val)).unwrap_or_else(|_| {
+                obj.set_width(meter!(val)).unwrap_or_else(|_| {
                     OPOSSUM_UI_LOGS
                         .write()
                         .add_log(&format!("Invalid band-filter width value: {val}"));
@@ -155,7 +149,7 @@ impl IntoInputData<f64, BandFilter, BandFilter> for BandFilterParam {
                             .add_log(&format!("Invalid smoothing step-width value: {val}"));
                     });
                 } else {
-                    obj.set_smooth_step_width(Some(nanometer!(val)))
+                    obj.set_smooth_step_width(Some(meter!(val)))
                         .unwrap_or_else(|_| {
                             OPOSSUM_UI_LOGS
                                 .write()
@@ -165,14 +159,14 @@ impl IntoInputData<f64, BandFilter, BandFilter> for BandFilterParam {
             },
 
             Self::RangeStart => move |obj: &mut BandFilter, val: f64| {
-                obj.set_range_start(nanometer!(val)).unwrap_or_else(|_| {
+                obj.set_range_start(meter!(val)).unwrap_or_else(|_| {
                     OPOSSUM_UI_LOGS
                         .write()
                         .add_log(&format!("Invalid range-start value: {val}"));
                 });
             },
             Self::RangeEnd => move |obj: &mut BandFilter, val: f64| {
-                obj.set_range_end(nanometer!(val)).unwrap_or_else(|_| {
+                obj.set_range_end(meter!(val)).unwrap_or_else(|_| {
                     OPOSSUM_UI_LOGS
                         .write()
                         .add_log(&format!("Invalid range-end value: {val}"));
@@ -193,7 +187,7 @@ impl IntoInputData<f64, BandFilter, BandFilter> for BandFilterParam {
                 });
             },
             Self::Resolution => move |obj: &mut BandFilter, val: f64| {
-                obj.set_resolution(nanometer!(val)).unwrap_or_else(|_| {
+                obj.set_resolution(meter!(val)).unwrap_or_else(|_| {
                     OPOSSUM_UI_LOGS
                         .write()
                         .add_log(&format!("Invalid band-filter resolution value: {val}"));
