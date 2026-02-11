@@ -1,6 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use super::NodeAttr;
+#[cfg(test)]
+use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
     degree,
@@ -10,7 +12,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
-    refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
+    refractive_index::{RefrIndexConst, RefractiveIndexType},
     surface::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
@@ -109,7 +111,7 @@ impl Wedge {
         name: &str,
         center_thickness: Length,
         wedge_angle: Angle,
-        refractive_index: &dyn RefractiveIndex,
+        refractive_index: impl Into<RefractiveIndexType>,
     ) -> OpmResult<Self> {
         let mut wedge = Self::default();
         wedge.node_attr.set_name(name);
@@ -119,7 +121,7 @@ impl Wedge {
 
         wedge
             .node_attr
-            .set_property("refractive index", refractive_index.to_enum().into())?;
+            .set_property("refractive index", refractive_index.into().into())?;
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
         wedge.update_surfaces()?;
         Ok(wedge)

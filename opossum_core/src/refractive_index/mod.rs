@@ -5,12 +5,14 @@ use std::fmt::Display;
 use strum::EnumIter;
 use uom::si::f64::Length;
 
+pub mod bounded_model;
 pub mod ref_index_air;
 pub mod refr_index_conrady;
 pub mod refr_index_const;
 pub mod refr_index_schott;
 pub mod refr_index_sellmeier1;
 
+pub use bounded_model::{BoundedFormula, DispersionFormula};
 pub use ref_index_air::RefrIndexAir;
 pub use refr_index_conrady::RefrIndexConrady;
 pub use refr_index_const::{RefrIndexConst, refr_index_vaccuum};
@@ -104,10 +106,36 @@ pub trait RefractiveIndex {
     ///   - the given wavelength is outside defined limits.
     ///   - the model would calculate a value below 1.0, NaN or infinity
     fn get_refractive_index(&self, wavelength: Length) -> OpmResult<f64>;
-    /// Create a corresponding [`RefractiveIndexType`] value.
-    ///
-    /// This function is mainly used to store a model in a [`Property`](crate::properties::property::Property)
-    fn to_enum(&self) -> RefractiveIndexType;
+}
+
+impl From<&RefrIndexConst> for RefractiveIndexType {
+    fn from(val: &RefrIndexConst) -> Self {
+        Self::Const(*val)
+    }
+}
+
+impl From<&RefrIndexSellmeier1> for RefractiveIndexType {
+    fn from(val: &RefrIndexSellmeier1) -> Self {
+        Self::Sellmeier1(val.clone())
+    }
+}
+
+impl From<&RefrIndexSchott> for RefractiveIndexType {
+    fn from(val: &RefrIndexSchott) -> Self {
+        Self::Schott(val.clone())
+    }
+}
+
+impl From<&RefrIndexConrady> for RefractiveIndexType {
+    fn from(val: &RefrIndexConrady) -> Self {
+        Self::Conrady(val.clone())
+    }
+}
+
+impl From<&RefrIndexAir> for RefractiveIndexType {
+    fn from(val: &RefrIndexAir) -> Self {
+        Self::Air(val.clone())
+    }
 }
 #[cfg(test)]
 mod test {
@@ -200,10 +228,10 @@ mod test {
     }
 
     #[test]
-    fn test_trait_to_enum_consistency() {
+    fn test_trait_from_trait_consistency() {
         // Ensure the RefractiveIndex trait's to_enum works for the variants.
         let schott = RefrIndexSchott::default();
-        let enu = schott.to_enum();
+        let enu = RefractiveIndexType::from(&schott);
         assert!(matches!(enu, RefractiveIndexType::Schott(_)));
     }
 }
