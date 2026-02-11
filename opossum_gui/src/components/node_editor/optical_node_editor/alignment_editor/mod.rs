@@ -6,7 +6,6 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::{AccordionItem, ElementList},
-        hooks::use_update_signal_with_reactive_prop,
         inputs::input_components::{LabeledSelect, NodeConfigUnitInput, RowedElements},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::UINodeAttr,
@@ -266,46 +265,24 @@ fn TranslationAlignmentInputs(
 ) -> Element {
     let id_add_on = "inputNodeAlignmentTrans";
 
-    let mut x_sig = use_signal(move || {
+    let x_sig = use_memo(move || {
         alignment
             .read()
             .translation_of_axis(TranslationAxis::X)
             .value
     });
-    let mut y_sig = use_signal(move || {
+    let y_sig = use_memo(move || {
         alignment
             .read()
             .translation_of_axis(TranslationAxis::Y)
             .value
     });
-    let mut z_sig = use_signal(move || {
+    let z_sig = use_memo(move || {
         alignment
             .read()
             .translation_of_axis(TranslationAxis::Z)
             .value
     });
-
-    use_update_signal_with_reactive_prop(
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::X)
-            .value,
-        x_sig,
-    );
-    use_update_signal_with_reactive_prop(
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::Y)
-            .value,
-        y_sig,
-    );
-    use_update_signal_with_reactive_prop(
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::Z)
-            .value,
-        z_sig,
-    );
 
     rsx! {
         div { class: "row gy-1 gx-2",
@@ -320,7 +297,6 @@ fn TranslationAlignmentInputs(
                     value: x_sig,
                     base_unit: "m",
                     onchange: move |new_trans: f64| {
-                        x_sig.set(new_trans);
                         on_new_translation.call((meter!(new_trans), TranslationAxis::X));
                     },
                 }
@@ -332,7 +308,6 @@ fn TranslationAlignmentInputs(
                     value: y_sig,
                     base_unit: "m",
                     onchange: move |new_trans: f64| {
-                        y_sig.set(new_trans);
                         on_new_translation.call((meter!(new_trans), TranslationAxis::Y));
                     },
                 }
@@ -344,7 +319,6 @@ fn TranslationAlignmentInputs(
             value: z_sig,
             base_unit: "m",
             onchange: move |new_trans: f64| {
-                z_sig.set(new_trans);
                 on_new_translation.call((meter!(new_trans), TranslationAxis::Z));
             },
         }
@@ -389,17 +363,13 @@ pub fn RotationInput(
     id: String,
     on_new_rotation: EventHandler<(Angle, RotationAxis)>,
 ) -> Element {
-    let value_sig = use_signal(move || alignment.read().rotation_of_axis(axis).get::<degree>());
-    use_update_signal_with_reactive_prop(
-        alignment.read().rotation_of_axis(axis).get::<degree>(),
-        value_sig,
-    );
+    let value_memo = use_memo(move || alignment.read().rotation_of_axis(axis).get::<degree>());
 
     rsx! {
         NodeConfigUnitInput {
             id,
             label: format!("{} rotation", axis),
-            value: value_sig,
+            value: value_memo,
             base_unit: "°",
             onchange: move |new_rot: f64| {
                 on_new_rotation.call((degree!(new_rot), axis));

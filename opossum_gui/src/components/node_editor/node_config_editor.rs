@@ -68,7 +68,7 @@ pub fn NodeConfigEditor(
             OpticalNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
         },
         Some((NodeType::Analyzer(_), node_id)) => rsx! {
-            AnalyzerNodeEditor { node_id, on_change: on_node_change }
+            AnalyzerNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
         },
         None => rsx! {
             div { "No node selected" }

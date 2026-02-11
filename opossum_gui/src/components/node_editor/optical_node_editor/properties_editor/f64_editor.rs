@@ -12,7 +12,6 @@ pub fn F64Editor(
     node_id: Memo<Uuid>,
     float64: f64,
     property_key: String,
-    property: Property,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let float64_sig = use_signal(|| float64);

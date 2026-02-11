@@ -92,7 +92,7 @@ pub fn GratingAlignmentInputs(
                 axes_skip: None,
                 on_new_rotation: on_new_rotation(on_save, alignment_memo.into()),
                 node_id,
-
+            
             }
             TranslationAlignmentInputs {
                 alignment: alignment_memo,
@@ -212,48 +212,6 @@ fn AngleToLittrowComponent(
                 }
             },
         }
-        // LabeledInput {
-        //     id: "angleToLittrowGrating",
-        //     label: "Angle in degrees",
-        //     value: format!(
-        //         "{:.3}",
-        //         calc_deviation_angle_from_littrow(
-        //                 diffraction_order,
-        //                 line_density,
-        //                 alignment_memo.read().rotation_of_axis(RotationAxis::Pitch),
-        //                 *reference_wavelength_sig.read(),
-        //                 *incident_angle_sig.read(),
-        //             )
-        //             .get::<degree>(),
-        //     ),
-        //     r#type: "number",
-        //     step: Some("0.01"),
-        //     onchange: move |e: Event<FormData>| {
-        //         if let Ok(angle) = e.data.value().parse::<f64>() {
-        //             let m_g_lambda = reference_wavelength_sig.read().get::<meter>()
-        //                 * line_density.get::<per_meter>() * to_f64(diffraction_order);
-        //             let littrow_angle = (m_g_lambda / 2.).asin();
-        //             let mut new_angle = radian!(littrow_angle) + degree!(angle);
-        //             if !*incident_angle_sig.read() {
-        //                 new_angle = radian!((- new_angle.sin().value + m_g_lambda).asin());
-        //             }
-
-        //             let mut iso = *alignment_memo.read();
-        //             let update_res = iso.set_rotation_of_axis(RotationAxis::Pitch, new_angle);
-
-        //             match update_res {
-        //                 Ok(()) => {
-        //                     on_alignment_change.call(iso);
-        //                 }
-        //                 Err(e) => {
-        //                     OPOSSUM_UI_LOGS
-        //                         .write()
-        //                         .add_log(&format!("Failed to set rotation of isometry: {e}"));
-        //                 }
-        //             }
-        //         }
-        //     },
-        // }
     }
 }
 

@@ -15,9 +15,9 @@ use opossum_core::prelude::*;
 use uuid::Uuid;
 
 #[component]
-pub fn AnalyzerNodeEditor(node_id: Uuid, on_change: EventHandler<NodeChangeEvent>) -> Element {
+pub fn AnalyzerNodeEditor(node_id: Memo<Uuid>, on_change: EventHandler<NodeChangeEvent>) -> Element {
     let resource_future = use_resource(move || async move {
-        match api::get_analyzer_info(node_id).await {
+        match api::get_analyzer_info(*node_id.read()).await {
             Ok(analyzer_info) => Some(analyzer_info),
             Err(err_str) => {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -27,6 +27,8 @@ pub fn AnalyzerNodeEditor(node_id: Uuid, on_change: EventHandler<NodeChangeEvent
     });
     match &*resource_future.read_unchecked() {
         Some(Some(analyzer_info)) => {
+            if analyzer_info.id() == *node_id.read() {
+                
             rsx! {
                 div {
                     h6 { "Analyzer Configuration" }
@@ -55,6 +57,10 @@ pub fn AnalyzerNodeEditor(node_id: Uuid, on_change: EventHandler<NodeChangeEvent
                     }
                 }
             }
+        }
+        else{
+            rsx!{}
+        }
         }
         _ => {
             rsx! {

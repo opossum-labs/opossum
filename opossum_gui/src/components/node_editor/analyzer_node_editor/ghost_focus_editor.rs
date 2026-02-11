@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 #[component]
 pub fn GhostFocusEditor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     ghost_focus_config: GhostFocusConfig,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
@@ -39,7 +39,7 @@ pub fn GhostFocusEditor(
                     ghost_focus_config_sig.write().set_max_bounces(max_bounces);
                     on_change
                         .call(NodeChangeEvent {
-                            node_id,
+                            node_id: *node_id.read(),
                             action: NodeChangeAction::AnalyzerType(
                                 AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
                             ),
@@ -62,7 +62,7 @@ pub fn GhostFocusEditor(
                     ghost_focus_config_sig.write().set_fluence_estimator(fluence_estimator);
                     on_change
                         .call(NodeChangeEvent {
-                            node_id,
+                            node_id: *node_id.read(),
                             action: NodeChangeAction::AnalyzerType(
                                 AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
                             ),

@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 #[component]
 pub fn RayTraceEditor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     ray_trace_config: RayTraceConfig,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
@@ -40,7 +40,7 @@ pub fn RayTraceEditor(
                     ray_trace_config_sig.write().set_max_number_of_refractions(max_refractions);
                     on_change
                         .call(NodeChangeEvent {
-                            node_id,
+                            node_id: *node_id.read(),
                             action: NodeChangeAction::AnalyzerType(
                                 AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
                             ),
@@ -63,7 +63,7 @@ pub fn RayTraceEditor(
                     ray_trace_config_sig.write().set_max_number_of_bounces(max_bounces);
                     on_change
                         .call(NodeChangeEvent {
-                            node_id,
+                            node_id: *node_id.read(),
                             action: NodeChangeAction::AnalyzerType(
                                 AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
                             ),
@@ -103,7 +103,7 @@ pub fn RayTraceEditor(
                             Ok(()) => {
                                 on_change
                                     .call(NodeChangeEvent {
-                                        node_id,
+                                        node_id: *node_id.read(),
                                         action: NodeChangeAction::AnalyzerType(
                                             AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
                                         ),
@@ -131,7 +131,7 @@ pub fn RayTraceEditor(
                     ray_trace_config_sig.write().set_missed_surface_strategy(surface_strategy);
                     on_change
                         .call(NodeChangeEvent {
-                            node_id,
+                            node_id: *node_id.read(),
                             action: NodeChangeAction::AnalyzerType(
                                 AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
                             ),

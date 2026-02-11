@@ -19,7 +19,6 @@ mod vec2_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    hooks::use_update_signal_with_reactive_prop,
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::{
         UINodeAttr,
@@ -114,7 +113,6 @@ fn get_primitive_editor(
                 node_id,
                 float64,
                 property_key,
-                property: property.clone(),
                 on_change,
             }
         }),
