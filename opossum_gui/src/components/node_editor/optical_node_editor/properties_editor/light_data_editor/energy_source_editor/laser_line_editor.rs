@@ -95,7 +95,7 @@ impl IntoInputData<f64, EnergyLaserLines, EnergyLaserLines> for EnergyLaserLines
 #[component]
 pub fn EnergyLaserLineEditor(
     energy_laser_lines: EnergyLaserLines,
-    energy_data_builder_sig: Signal<EnergyDataBuilder>,
+    on_save: EventHandler<EnergyDataBuilder>,
 ) -> Element {
     let mut form_inputs = Vec::<InputData>::new();
     for elp in EnergyLaserLinesParam::iter() {
@@ -104,7 +104,7 @@ pub fn EnergyLaserLineEditor(
                 IntoInputData::<f64, EnergyLaserLines, EnergyDataBuilder>::to_input_data(
                     &elp,
                     energy_laser_lines.clone(),
-                    energy_data_builder_sig,
+                    on_save,
                 ),
             );
         }
@@ -112,11 +112,12 @@ pub fn EnergyLaserLineEditor(
     let spec_res_input = IntoInputData::<f64, EnergyLaserLines, EnergyDataBuilder>::to_input_data(
         &EnergyLaserLinesParam::SpectralResolution,
         energy_laser_lines.clone(),
-        energy_data_builder_sig,
+        on_save,
     );
     rsx! {
         form {
             onsubmit: {
+                let mut ll = energy_laser_lines.clone();
                 move |e: Event<FormData>| {
                     let wvl_opt = e.data().get_first(&form_inputs[0].id);
                     let energy_opt = e.data().get_first(&form_inputs[1].id);
@@ -135,16 +136,17 @@ pub fn EnergyLaserLineEditor(
                                 parse_si_number(&num_str_wvl, &prefix_str_wvl, false),
                                 parse_si_number(&num_str_energy, &prefix_str_energy, false),
                             ) {
-                                if let EnergyDataBuilder::LaserLines(ll) = &mut *energy_data_builder_sig
-                                    .write()
-                                {
-                                    ll.add_lines(vec![(meter!(wvl), joule!(energy))])
-                                        .unwrap_or_else(|e| {
-                                            OPOSSUM_UI_LOGS
-                                                .write()
-                                                .add_log(format!("Error adding laser line: {e}").as_str());
-                                        });
+                                match ll.add_lines(vec![(meter!(wvl), joule!(energy))]) {
+                                    Ok(_) => {
+                                        on_save.call(EnergyDataBuilder::LaserLines(ll.clone()));
+                                    }
+                                    Err(e) => {
+                                        OPOSSUM_UI_LOGS
+                                            .write()
+                                            .add_log(format!("Error adding laser line: {e}").as_str());
+                                    }
                                 }
+
                             } else {
                                 OPOSSUM_UI_LOGS
                                     .write()
@@ -175,7 +177,7 @@ pub fn EnergyLaserLineEditor(
                 id: "energylaserlinesubmit",
                 value: "Add laser line",
             }
-            LaserLineList { laser_lines: energy_laser_lines, energy_data_builder_sig }
+            LaserLineList { laser_lines: energy_laser_lines.clone(), on_save }
         }
         InputParamLabeledInput { input_data: spec_res_input }
     }
@@ -184,7 +186,7 @@ pub fn EnergyLaserLineEditor(
 #[component]
 fn LaserLineList(
     laser_lines: EnergyLaserLines,
-    energy_data_builder_sig: Signal<EnergyDataBuilder>,
+    on_save: EventHandler<EnergyDataBuilder>,
 ) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "laserLineList",
@@ -206,7 +208,7 @@ fn LaserLineList(
                                     move |_| {
                                         let mut laser_lines = laser_lines.clone();
                                         if laser_lines.delete_line(i).is_ok() {
-                                            energy_data_builder_sig.set(EnergyDataBuilder::LaserLines(laser_lines));
+                                            on_save.call(EnergyDataBuilder::LaserLines(laser_lines));
                                         }
                                     }
                                 },

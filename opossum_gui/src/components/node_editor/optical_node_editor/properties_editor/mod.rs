@@ -10,7 +10,7 @@ mod i32_editor;
 mod isometry_option_editor;
 mod length_editor;
 mod length_option_editor;
-// mod light_data_editor;
+mod light_data_editor;
 mod linear_density_editor;
 mod refractive_index_editor;
 mod splitter_type_editor;
@@ -34,7 +34,7 @@ use crate::components::node_editor::{
             isometry_option_editor::IsometryOptionEditor,
             length_editor::LengthEditor,
             length_option_editor::LengthOptionEditor,
-            // light_data_editor::LightDataEditor,
+            light_data_editor::LightDataEditor,
             linear_density_editor::LinearDensityEditor,
             refractive_index_editor::RefractiveIndexEditor,
             splitter_type_editor::SplitterTypeEditor,
@@ -183,14 +183,14 @@ fn get_optical_editor(
                 on_change,
             }
         }),
-        // Proptype::LightDataBuilder(light_data_builder) => Some(rsx! {
-        //     LightDataEditor {
-        //         node_id,
-        //         light_data_builder,
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
+        Proptype::LightDataBuilder(light_data_builder) => Some(rsx! {
+            LightDataEditor {
+                node_id,
+                light_data_builder,
+                property_key,
+                on_change,
+            }
+        }),
         Proptype::RefractiveIndex(ref_ind_type) => Some(rsx! {
             RefractiveIndexEditor {
                 node_id,

@@ -13,34 +13,32 @@ use crate::components::node_editor::hooks::use_update_signal_with_reactive_prop;
 #[component]
 pub fn EnergySourceEditor(
     energy_data_builder: EnergyDataBuilder,
-    light_data_builder_sig: Signal<LightDataBuilder>,
+    on_save: EventHandler<LightDataBuilder>,
 ) -> Element {
-    let energy_data_builder_sig = use_signal(|| energy_data_builder.clone());
-    use_update_signal_with_reactive_prop(energy_data_builder.clone(), energy_data_builder_sig);
+    let mut energy_data_builder_sig = use_signal(|| energy_data_builder.clone());
 
-    use_effect(move || {
-        if energy_data_builder != *energy_data_builder_sig.read() {
-            light_data_builder_sig.set(LightDataBuilder::Energy(
-                energy_data_builder_sig.read().clone(),
-            ));
+    let on_energy_data_builder_save = EventHandler::new(move |new_builder: EnergyDataBuilder| {
+        if new_builder != *energy_data_builder_sig.read() {
+            on_save.call(new_builder.clone().into());
+            energy_data_builder_sig.set(new_builder);
         }
     });
 
     rsx! {
-        EnergyDataBuilderSelector { energy_data_builder_sig }
-        EnergyDataEditor { energy_data_builder_sig }
+        EnergyDataBuilderSelector { energy_data_builder_sig, on_energy_data_builder_save }
+        EnergyDataEditor { energy_data_builder_sig, on_save: on_energy_data_builder_save }
     }
 }
 
 #[component]
-pub fn EnergyDataEditor(energy_data_builder_sig: Signal<EnergyDataBuilder>) -> Element {
+pub fn EnergyDataEditor(energy_data_builder_sig: ReadSignal<EnergyDataBuilder>, on_save: EventHandler<EnergyDataBuilder>) -> Element {
     match energy_data_builder_sig() {
         EnergyDataBuilder::Raw(_) => rsx! {},
         EnergyDataBuilder::FromFile(spec_file) => rsx! {
-            SpectrumFromFileEditor { spec_file, energy_data_builder_sig }
+            SpectrumFromFileEditor { spec_file, on_save }
         },
         EnergyDataBuilder::LaserLines(energy_laser_lines) => rsx! {
-            EnergyLaserLineEditor { energy_laser_lines, energy_data_builder_sig }
+            EnergyLaserLineEditor { energy_laser_lines, on_save }
         },
     }
 }

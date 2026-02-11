@@ -9,7 +9,7 @@ use opossum_core::{
 };
 
 #[component]
-pub fn EnergyDataBuilderSelector(energy_data_builder_sig: Signal<EnergyDataBuilder>) -> Element {
+pub fn EnergyDataBuilderSelector(energy_data_builder_sig: ReadSignal<EnergyDataBuilder>, on_energy_data_builder_save: EventHandler<EnergyDataBuilder>) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectEnergyDataType",
@@ -21,7 +21,7 @@ pub fn EnergyDataBuilderSelector(energy_data_builder_sig: Signal<EnergyDataBuild
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(edb) = EnergyDataBuilder::default_from_name(val.as_str()) {
-                    energy_data_builder_sig.set(edb);
+                    on_energy_data_builder_save.call(edb);
                 }
             },
         }

@@ -11,12 +11,12 @@ use strum::EnumIter;
 #[component]
 pub fn SpectrumFromFileEditor(
     spec_file: SpectrumFile,
-    energy_data_builder_sig: Signal<EnergyDataBuilder>,
+    on_save: EventHandler<EnergyDataBuilder>,
 ) -> Element {
     let input_data = IntoInputData::<String, SpectrumFile, EnergyDataBuilder>::to_input_data(
         &EnergySpectrumFromFileParam::FPath,
         spec_file,
-        energy_data_builder_sig,
+        on_save,
     );
     rsx! {
         InputParamLabeledInput { input_data }
