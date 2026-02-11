@@ -2,7 +2,6 @@
 pub mod property;
 pub mod proptype;
 pub mod validator;
-// pub mod validators;
 
 use log::warn;
 pub use property::Property;

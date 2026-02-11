@@ -1,6 +1,10 @@
+//! Refractive index model for air.
+//!
+//! This model uses the Edlén formula modified by Birch and Downs. See https://emtoolbox.nist.gov/Wavelength/Documentation.asp
 use std::ops::Range;
 
 use super::{RefractiveIndex, RefractiveIndexType};
+use crate::{degree_celsius, hectopascal};
 use crate::{
     error::{OpmResult, OpossumError},
     generic_validators::{AllFinite, AllInRange},
@@ -10,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::{Length, Pressure, ThermodynamicTemperature},
     length::micrometer,
-    pressure::{hectopascal, pascal},
+    pressure::pascal,
     thermodynamic_temperature::{degree_celsius, kelvin},
 };
 
@@ -51,25 +55,44 @@ fn partial_vapor_pressure(temperature: ThermodynamicTemperature, humidity: f64) 
 }
 
 #[derive(Deserialize)]
-struct NonValidatedRelativeHumidity {
-    pub humidity: f64,
-}
-type ValidatedRelativeHumidity = validated_type!(f64, AllFinite && AllInRange::<f64>);
-
-/// Refractive index of air using the Edlén formula modified by
-/// Birch and Downs. See https://emtoolbox.nist.gov/Wavelength/Documentation.asp
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
-pub struct RefrIndexAir {
+struct NonValidatedRefrIndexAir {
     temperature: ThermodynamicTemperature,
     pressure: Pressure,
+    humidity: f64,
+}
+
+type ValidatedRelativeHumidity = validated_type!(f64, AllFinite && AllInRange::<f64>);
+type ValidatedPressure = validated_type!(Pressure, AllFinite && AllInRange::<Pressure>);
+type ValidatedTemperature = validated_type!(
+    ThermodynamicTemperature,
+    AllFinite && AllInRange::<ThermodynamicTemperature>
+);
+
+/// Refractive index of air using the Edlén formula
+#[derive(Clone, Serialize, Debug, PartialEq)] //, EnsureValidated)]
+pub struct RefrIndexAir {
+    temperature: ValidatedTemperature,
+    pressure: ValidatedPressure,
     humidity: ValidatedRelativeHumidity,
+    #[serde(skip)] // it is constant and does not need to be serialized
     wvl_range: Range<Length>,
 }
 impl Default for RefrIndexAir {
     fn default() -> Self {
         Self {
-            temperature: ThermodynamicTemperature::new::<degree_celsius>(20.0),
-            pressure: Pressure::new::<hectopascal>(1013.25),
+            temperature: validated!(
+                degree_celsius!(20.0),
+                AllFinite
+                    && AllInRange::new(degree_celsius!(-40.0), degree_celsius!(100.0), false)
+                        .unwrap()
+            )
+            .unwrap(),
+            pressure: validated!(
+                hectopascal!(1013.25),
+                AllFinite
+                    && AllInRange::new(hectopascal!(100.0), hectopascal!(1400.0), false).unwrap()
+            )
+            .unwrap(),
             humidity: validated!(
                 50.0,
                 AllFinite && (AllInRange::new(0.0, 100.0, true).unwrap())
@@ -88,25 +111,34 @@ impl RefrIndexAir {
     ) -> OpmResult<Self> {
         let mut n_air = RefrIndexAir::default();
         n_air.set_humidity(humidity)?;
-        n_air.set_pressure(pressure);
-        n_air.set_temperature(temperature);
+        n_air.set_pressure(pressure)?;
+        n_air.set_temperature(temperature)?;
         Ok(n_air)
     }
     /// Sets the temperature of this [`RefrIndexAir`].
-    pub fn set_temperature(&mut self, temperature: ThermodynamicTemperature) {
-        self.temperature = temperature;
+    pub fn set_temperature(&mut self, temperature: ThermodynamicTemperature) -> OpmResult<()> {
+        self.temperature = validated!(
+            temperature,
+            AllFinite
+                && AllInRange::new(degree_celsius!(-40.0), degree_celsius!(100.0), false).unwrap()
+        )?;
+        Ok(())
     }
     /// Returns the temperature of this [`RefrIndexAir`].
     pub fn temperature(&self) -> ThermodynamicTemperature {
-        self.temperature
+        *self.temperature.get()
     }
     /// Sets the pressure of this [`RefrIndexAir`].
-    pub fn set_pressure(&mut self, pressure: Pressure) {
-        self.pressure = pressure;
+    pub fn set_pressure(&mut self, pressure: Pressure) -> OpmResult<()> {
+        self.pressure = validated!(
+            pressure,
+            AllFinite && AllInRange::new(hectopascal!(100.0), hectopascal!(1400.0), false).unwrap()
+        )?;
+        Ok(())
     }
     /// Returns the pressure of this [`RefrIndexAir`].
     pub fn pressure(&self) -> Pressure {
-        self.pressure
+        *self.pressure.get()
     }
     /// Sets the humidity of this [`RefrIndexAir`].
     ///
@@ -133,16 +165,31 @@ impl RefrIndexAir {
         self.wvl_range.clone()
     }
 }
+
+impl<'de> serde::Deserialize<'de> for RefrIndexAir {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        //deserialize non validated struct
+        let helper = NonValidatedRefrIndexAir::deserialize(deserializer)?;
+
+        //get correct validators from default
+        Self::new(helper.temperature, helper.pressure, helper.humidity)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
 impl RefractiveIndex for RefrIndexAir {
     #[inline]
     fn get_refractive_index(&self, wavelength: Length) -> OpmResult<f64> {
         if !self.wvl_range.contains(&wavelength) {
             return Err(OpossumError::Other("wavelength outside valid range".into()));
         }
-        let s = 1.0 / wavelength.get::<micrometer>();
-        let t = self.temperature.get::<degree_celsius>();
-        let p = self.pressure.get::<pascal>();
-        let p_v = partial_vapor_pressure(self.temperature, self.humidity()).get::<pascal>();
+        let s = 1.0 / wavelength.get::<micrometer>().powi(2);
+        let t = self.temperature().get::<degree_celsius>();
+        let p = self.pressure().get::<pascal>();
+        let p_v = partial_vapor_pressure(self.temperature(), self.humidity()).get::<pascal>();
         let n_s = 1.0 + 1.0E-8 * (A + B / (130.0 - s) + C / (38.9 - s));
         let x = (1.0 + 1.0E-8 * (E - F * t) * p) / (1.0 + G * t);
         let n_tp = 1.0 + p * (n_s - 1.0) * x / D;
@@ -160,23 +207,51 @@ impl From<RefrIndexAir> for RefractiveIndexType {
 }
 mod test {
     use super::*;
-    use uom::si::pressure::kilopascal;
+    use approx::assert_abs_diff_eq;
     #[test]
-    fn test_saturation_vapor_pressure() {
-        let p = saturation_vapor_pressure(ThermodynamicTemperature::new::<degree_celsius>(-10.0));
-        assert_eq!(p.get::<pascal>(), 260.0);
+    fn test_default() {
+        let n_air = RefrIndexAir::default();
+        assert_eq!(n_air.temperature(), degree_celsius!(20.0));
+        assert_eq!(n_air.pressure(), hectopascal!(1013.25));
+        assert_eq!(n_air.humidity(), 50.0);
     }
     #[test]
-    fn test() {
-        let n_air = RefrIndexAir::new(
-            ThermodynamicTemperature::new::<degree_celsius>(40.0),
-            Pressure::new::<kilopascal>(120.0),
-            75.0,
-        )
-        .unwrap();
-        assert_eq!(
+    fn test_new() {
+        let n_air = RefrIndexAir::new(degree_celsius!(25.0), hectopascal!(1010.0), 60.0).unwrap();
+        assert_eq!(n_air.temperature(), degree_celsius!(25.0));
+        assert_eq!(n_air.pressure(), hectopascal!(1010.0));
+        assert_eq!(n_air.humidity(), 60.0);
+
+        assert!(RefrIndexAir::new(degree_celsius!(150.0), hectopascal!(1010.0), 60.0).is_err());
+        assert!(RefrIndexAir::new(degree_celsius!(25.0), hectopascal!(50.0), 60.0).is_err());
+        assert!(RefrIndexAir::new(degree_celsius!(25.0), hectopascal!(1010.0), 150.0).is_err());
+    }
+    #[test]
+    fn test_saturation_vapor_pressure() {
+        let p = saturation_vapor_pressure(degree_celsius!(40.0));
+        assert_eq!(p.get::<pascal>().round(), 7384.0);
+        let p = saturation_vapor_pressure(degree_celsius!(100.0));
+        assert_eq!(p.get::<pascal>().round(), 101418.0);
+    }
+    #[test]
+    fn test_get_refractive_index() {
+        let n_air = RefrIndexAir::new(degree_celsius!(15.0), hectopascal!(1013.25), 0.0).unwrap();
+        assert_abs_diff_eq!(
             n_air.get_refractive_index(nanometer!(633.0)).unwrap(),
-            1.0002899936603902
+            1.000276529,
+            epsilon = 1e-9
+        );
+        let n_air = RefrIndexAir::new(degree_celsius!(20.0), hectopascal!(1013.25), 50.0).unwrap();
+        assert_abs_diff_eq!(
+            n_air.get_refractive_index(nanometer!(633.0)).unwrap(),
+            1.000271374,
+            epsilon = 1e-9
+        );
+        let n_air = RefrIndexAir::new(degree_celsius!(40.0), hectopascal!(1100.00), 50.0).unwrap();
+        assert_abs_diff_eq!(
+            n_air.get_refractive_index(nanometer!(633.0)).unwrap(),
+            1.00027492,
+            epsilon = 1e-9
         );
     }
 }
