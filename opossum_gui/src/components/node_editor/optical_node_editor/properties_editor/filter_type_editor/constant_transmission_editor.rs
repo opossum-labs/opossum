@@ -1,18 +1,13 @@
-use crate::{
-    OPOSSUM_UI_LOGS,
-    components::node_editor::{
-        hooks::use_update_signal_with_reactive_prop, inputs::input_components::FlushableTextInput,
-    },
-};
+use crate::
+    components::node_editor::inputs::input_components::FlushableTextInput;
 use approx::relative_ne;
 use dioxus::prelude::*;
-use opossum_core::{nodes::SplittingConfigBuilder, prelude::{Property, Proptype}};
 
 
 #[component]
-pub fn ConstantFilterTypeEditor(
+pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Clone + 'static>(
     transmission: f64,
-    on_transmission_change: EventHandler<SplittingConfigBuilder>,
+    on_transmission_change: EventHandler<T>,
 ) -> Element {
     let transmission_sig = use_signal(|| transmission);
     rsx! {
@@ -25,7 +20,7 @@ pub fn ConstantFilterTypeEditor(
                 if let Ok(val) = new_val.parse::<f64>()
                     && relative_ne!(old_val, val)
                 {
-                    on_transmission_change.call(SplittingConfigBuilder::from(val));
+                    on_transmission_change.call(T::from(val));
                 }
             },
             container_class: "form-floating border-start".to_string(),
