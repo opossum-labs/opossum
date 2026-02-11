@@ -67,7 +67,7 @@ pub fn NodeConfigEditor(
         Some((NodeType::Optical(_), _)) => rsx! {
             OpticalNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
         },
-        Some((NodeType::Analyzer(_), node_id)) => rsx! {
+        Some((NodeType::Analyzer(_), _)) => rsx! {
             AnalyzerNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
         },
         None => rsx! {

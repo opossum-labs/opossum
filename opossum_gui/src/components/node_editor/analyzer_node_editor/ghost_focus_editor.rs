@@ -1,5 +1,4 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop,
     inputs::{
         input_components::{FlushableTextInput, LabeledSelect},
         select_options_from_enum_iterator,
@@ -21,7 +20,25 @@ pub fn GhostFocusEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut ghost_focus_config_sig = use_signal(|| ghost_focus_config.clone());
-    use_update_signal_with_reactive_prop(ghost_focus_config, ghost_focus_config_sig);
+
+    let ghost_focus_config_handler = EventHandler::new(move |ghost_focus_config: GhostFocusConfig| {
+        on_change
+                .call(NodeChangeEvent {
+                    node_id: *node_id.read(),
+                    action: NodeChangeAction::AnalyzerType(
+                        AnalyzerType::GhostFocus(ghost_focus_config),
+                    ),
+                });
+    });
+
+    let max_bounces_handler = EventHandler::new(move |max_bounces: usize| {
+        ghost_focus_config_sig.write().set_max_bounces(max_bounces);
+        ghost_focus_config_handler.call(*ghost_focus_config_sig.read());
+    });
+    let fluence_estimator_handler = EventHandler::new(move |fluence_estimator: FluenceEstimator| {
+            ghost_focus_config_sig.write().set_fluence_estimator(fluence_estimator);
+            ghost_focus_config_handler.call(*ghost_focus_config_sig.read());
+    });
 
     rsx! {
         FlushableTextInput {
@@ -36,14 +53,7 @@ pub fn GhostFocusEditor(
             label_class: "form-label text-secondary".to_string(),
             on_save: move |val: String| {
                 if let Ok(max_bounces) = val.parse::<usize>() {
-                    ghost_focus_config_sig.write().set_max_bounces(max_bounces);
-                    on_change
-                        .call(NodeChangeEvent {
-                            node_id: *node_id.read(),
-                            action: NodeChangeAction::AnalyzerType(
-                                AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
-                            ),
-                        });
+                    max_bounces_handler.call(max_bounces);
                 }
             },
         }
@@ -59,14 +69,7 @@ pub fn GhostFocusEditor(
                 if let Some(fluence_estimator) = FluenceEstimator::default_from_name(
                     val.as_str(),
                 ) {
-                    ghost_focus_config_sig.write().set_fluence_estimator(fluence_estimator);
-                    on_change
-                        .call(NodeChangeEvent {
-                            node_id: *node_id.read(),
-                            action: NodeChangeAction::AnalyzerType(
-                                AnalyzerType::GhostFocus(ghost_focus_config_sig.read().clone()),
-                            ),
-                        });
+                    fluence_estimator_handler.call(fluence_estimator);
                 }
             },
         }

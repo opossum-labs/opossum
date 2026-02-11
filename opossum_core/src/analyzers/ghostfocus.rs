@@ -37,7 +37,7 @@ inventory::submit! {
     )
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Copy)]
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
     max_bounces: usize,

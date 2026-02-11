@@ -4,7 +4,6 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
-use opossum_core::prelude::Property;
 use uuid::Uuid;
 
 #[component]
