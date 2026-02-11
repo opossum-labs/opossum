@@ -48,10 +48,7 @@ pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clo
     let mut spectral_filter_builder_sig = use_signal(|| spectral_filter_builder.clone());
 
     let on_spectral_filter_change = EventHandler::new(move |new_builder: SpectralFilterBuilder| {
-        println!("New spectral filter builder");
         if new_builder != *spectral_filter_builder_sig.read() {
-            println!("differing spectral filter builder");
-
             on_spectral_filter_change.call(new_builder.clone().into());
             spectral_filter_builder_sig.set(new_builder);
         }

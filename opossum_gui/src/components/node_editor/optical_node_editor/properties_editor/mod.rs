@@ -150,19 +150,17 @@ fn get_optical_editor(
                 node_id,
                 splitting_config_builder,
                 property_key,
-                property: property.clone(),
                 on_change,
             }
         }),
-        // Proptype::FilterTypeBuilder(filter_type_builder) => Some(rsx! {
-        //     FilterTypeEditor {
-        //         node_id,
-        //         filter_type_builder,
-        //         property_key,
-        //         property: property.clone(),
-        //         on_change,
-        //     }
-        // }),
+        Proptype::FilterTypeBuilder(filter_type_builder) => Some(rsx! {
+            FilterTypeEditor {
+                node_id,
+                filter_type_builder,
+                property_key,
+                on_change,
+            }
+        }),
         // Proptype::FluenceEstimator(fluence_estimator) => Some(rsx! {
         //     FluenceEstimatorEditor {
         //         node_id,

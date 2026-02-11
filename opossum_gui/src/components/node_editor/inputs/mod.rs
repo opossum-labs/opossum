@@ -18,11 +18,7 @@ where
     fn create_callback(&self, mut obj: D, handler: EventHandler<B>) -> EventHandler<Event<FormData>> {
         let this = *self;
         EventHandler::new(move |e: Event<FormData>| {
-            println!("Callback received string value: {}", e.value());
-
             if let Some(value) = this.parse_value(e) {
-                                println!("value_str parsed successfully");
-
                 let mut setter = this.setter_from_obj();
                 setter(&mut obj, value);
                 handler.call(obj.clone().into());
@@ -34,9 +30,7 @@ where
     fn create_callback_str(&self, mut obj: D, handler: EventHandler<B>) -> EventHandler<String> {
         let this = *self;
         EventHandler::new(move |val_str: String| {
-            println!("Callback_str received string value: {}", val_str);
             if let Ok(value) = val_str.parse::<T>() {
-                println!("value_str parsed successfully");
                 let mut setter = this.setter_from_obj();
                 setter(&mut obj, value);
                 handler.call(obj.clone().into());

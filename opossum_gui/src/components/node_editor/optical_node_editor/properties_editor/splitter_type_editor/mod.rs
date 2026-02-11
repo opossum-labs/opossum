@@ -18,10 +18,8 @@ pub fn SplitterTypeEditor(
     node_id: Memo<Uuid>,
     splitting_config_builder: SplittingConfigBuilder,
     property_key: String,
-    property: Property,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    use_context_provider(|| property);
     let mut splitting_config_builder_sig = use_signal(|| splitting_config_builder.clone());
 
     let on_save = EventHandler::new(move |new_builder: SplittingConfigBuilder| {
