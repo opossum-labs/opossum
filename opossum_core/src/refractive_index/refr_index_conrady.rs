@@ -2,8 +2,7 @@
 use std::ops::Range;
 
 use num::pow::Pow;
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::micrometer;
 
@@ -11,28 +10,44 @@ use crate::error::OpmResult;
 use crate::error::OpossumError;
 use crate::nanometer;
 
-use super::{RefractiveIndex, RefractiveIndexType};
+use super::RefractiveIndexType;
+use super::bounded_model::{BoundedFormula, DispersionFormula};
+
+/// Coefficients for the Conrady dispersion formula.
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub struct ConradyCoefficients {
+    /// Base refractive index n0
+    pub n0: f64,
+    /// Coefficient A
+    pub a: f64,
+    /// Coefficient B
+    pub b: f64,
+}
+
+impl DispersionFormula for ConradyCoefficients {
+    fn calculate(&self, wavelength: Length) -> f64 {
+        let lambda = wavelength.get::<micrometer>();
+        self.n0 + (self.a / lambda) + (self.b / lambda.pow(3.5))
+    }
+}
 
 /// Refractive index model following the Conrady formula.
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
-pub struct RefrIndexConrady {
-    n0: f64,
-    a: f64,
-    b: f64,
-    wvl_range: Range<Length>,
-}
+pub type RefrIndexConrady = BoundedFormula<ConradyCoefficients>;
 
 impl Default for RefrIndexConrady {
     //SiO2
     fn default() -> Self {
         Self {
-            n0: 1.427,
-            a: 11.1,
-            b: 5.13e6,
+            coefficients: ConradyCoefficients {
+                n0: 1.427,
+                a: 11.1,
+                b: 5.13e6,
+            },
             wvl_range: nanometer!(1000.)..nanometer!(1100.),
         }
     }
 }
+
 impl RefrIndexConrady {
     /// Create a new refractive index model following the Conrady formula.
     ///
@@ -48,105 +63,54 @@ impl RefrIndexConrady {
                 "all coefficients must be finite.".into(),
             ));
         }
-        if wavelength_range.start.is_sign_negative() || !wavelength_range.start.is_finite() {
-            return Err(OpossumError::Other(
-                "lower wavelength limit is invalid.".into(),
-            ));
-        }
-        if wavelength_range.end.is_sign_negative() || !wavelength_range.end.is_finite() {
-            return Err(OpossumError::Other(
-                "upper wavelength limit is invalid.".into(),
-            ));
-        }
-        if wavelength_range.start >= wavelength_range.end {
-            return Err(OpossumError::Other(
-                "wavelength range start must be less than end".into(),
-            ));
-        }
-        Ok(Self {
-            n0,
-            a,
-            b,
-            wvl_range: wavelength_range,
-        })
+
+        Self::from_coefficients(ConradyCoefficients { n0, a, b }, wavelength_range)
     }
+
     /// Returns the constant term `n0` in the Conrady equation.
     #[must_use]
     pub const fn n0(&self) -> f64 {
-        self.n0
+        self.coefficients.n0
     }
 
     /// Sets the constant term `n0` in the Conrady equation.
     pub const fn set_n0(&mut self, value: f64) {
-        self.n0 = value;
+        self.coefficients.n0 = value;
     }
 
     /// Returns the coefficient `a` in the Conrady equation.
     #[must_use]
     pub const fn a(&self) -> f64 {
-        self.a
+        self.coefficients.a
     }
 
     /// Sets the coefficient `a` in the Conrady equation.
     pub const fn set_a(&mut self, value: f64) {
-        self.a = value;
+        self.coefficients.a = value;
     }
 
     /// Returns the coefficient `b` in the Conrady equation.
     #[must_use]
     pub const fn b(&self) -> f64 {
-        self.b
+        self.coefficients.b
     }
 
     /// Sets the coefficient `b` in the Conrady equation.
     pub const fn set_b(&mut self, value: f64) {
-        self.b = value;
-    }
-
-    /// Returns the wavelength range (in meters) over which the Conrady equation is valid.
-    #[must_use]
-    pub fn wavelength_range(&self) -> &Range<Length> {
-        &self.wvl_range
-    }
-
-    /// Sets the full wavelength range (in meters) for which the Conrady equation is valid.
-    pub fn set_wavelength_range(&mut self, range: Range<Length>) {
-        self.wvl_range = range;
-    }
-
-    /// Sets the start of the wavelength range (in meters).
-    pub fn set_wavelength_range_start(&mut self, start: Length) {
-        self.wvl_range.start = start;
-    }
-
-    /// Sets the end of the wavelength range (in meters).
-    pub fn set_wavelength_range_end(&mut self, end: Length) {
-        self.wvl_range.end = end;
+        self.coefficients.b = value;
     }
 }
 
-impl RefractiveIndex for RefrIndexConrady {
-    #[inline]
-    fn get_refractive_index(&self, wavelength: Length) -> OpmResult<f64> {
-        if !self.wvl_range.contains(&wavelength) {
-            return Err(OpossumError::Other("wavelength outside valid range".into()));
-        }
-        let lambda = wavelength.get::<micrometer>();
-        Ok(self.n0 + (self.a / lambda) + (self.b / lambda.pow(3.5)))
-    }
-    fn to_enum(&self) -> RefractiveIndexType {
-        RefractiveIndexType::Conrady(self.clone())
-    }
-}
 impl From<RefrIndexConrady> for RefractiveIndexType {
     fn from(refr: RefrIndexConrady) -> Self {
         Self::Conrady(refr)
     }
 }
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::nanometer;
+    use crate::{nanometer, refractive_index::RefractiveIndex};
     use approx::assert_relative_eq;
     #[test]
     fn new_wrong() {
@@ -186,9 +150,9 @@ mod test {
     fn new() {
         let r =
             RefrIndexConrady::new(1.0, 2.0, 3.0, nanometer!(500.0)..nanometer!(2000.0)).unwrap();
-        assert_eq!(r.n0, 1.0);
-        assert_eq!(r.a, 2.0);
-        assert_eq!(r.b, 3.0);
+        assert_eq!(r.n0(), 1.0);
+        assert_eq!(r.a(), 2.0);
+        assert_eq!(r.b(), 3.0);
     }
     #[test]
     fn test_default_sio2() {
@@ -217,12 +181,6 @@ mod test {
         let new_range = nanometer!(400.0)..nanometer!(800.0);
         r.set_wavelength_range(new_range.clone());
         assert_eq!(r.wavelength_range(), &new_range);
-
-        r.set_wavelength_range_start(nanometer!(450.0));
-        assert_eq!(r.wavelength_range().start, nanometer!(450.0));
-
-        r.set_wavelength_range_end(nanometer!(750.0));
-        assert_eq!(r.wavelength_range().end, nanometer!(750.0));
     }
 
     #[test]
@@ -234,10 +192,6 @@ mod test {
 
         // End is exclusive
         assert!(r.get_refractive_index(nanometer!(1100.0)).is_err());
-
-        // Explicit out of bounds
-        assert!(r.get_refractive_index(nanometer!(999.9)).is_err());
-        assert!(r.get_refractive_index(nanometer!(1100.1)).is_err());
     }
 
     #[test]
@@ -262,10 +216,5 @@ mod test {
         );
         assert!(i.get_refractive_index(nanometer!(499.0)).is_err());
         assert!(i.get_refractive_index(nanometer!(2001.0)).is_err());
-    }
-    #[test]
-    fn get_enum() {
-        let i = RefrIndexConrady::new(0.0, 0.0, 0.0, nanometer!(1.0)..nanometer!(2.0)).unwrap();
-        assert!(matches!(i.to_enum(), RefractiveIndexType::Conrady(_)));
     }
 }

@@ -55,7 +55,6 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
             tabindex: 0,
             pointer_events: "auto",
             onkeydown: {
-                let edge = edge.clone();
                 move |event: Event<KeyboardData>| {
                     if event.data().key() == Key::Delete {
                         graph_processor.send(GraphStoreAction::DeleteEdge(edge.clone()));

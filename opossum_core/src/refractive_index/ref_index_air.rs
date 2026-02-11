@@ -298,10 +298,6 @@ impl RefractiveIndex for RefrIndexAir {
 
         Ok(n_tp - correction)
     }
-
-    fn to_enum(&self) -> RefractiveIndexType {
-        RefractiveIndexType::Air(self.clone())
-    }
 }
 
 impl From<RefrIndexAir> for RefractiveIndexType {

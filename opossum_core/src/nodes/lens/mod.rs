@@ -2,6 +2,8 @@
 //! Lens with spherical or flat surfaces
 
 use super::node_attr::NodeAttr;
+#[cfg(test)]
+use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
     error::{OpmResult, OpossumError},
@@ -11,7 +13,7 @@ use crate::{
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     radian,
-    refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
+    refractive_index::{RefrIndexConst, RefractiveIndexType},
     surface::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
@@ -114,7 +116,7 @@ impl Lens {
         front_curvature: Length,
         rear_curvature: Length,
         center_thickness: Length,
-        refractive_index: &dyn RefractiveIndex,
+        refractive_index: impl Into<RefractiveIndexType>,
     ) -> OpmResult<Self> {
         let mut lens = Self::default();
         lens.node_attr.set_name(name);
@@ -125,7 +127,7 @@ impl Lens {
         lens.node_attr
             .set_property("center thickness", center_thickness.into())?;
         lens.node_attr
-            .set_property("refractive index", refractive_index.to_enum().into())?;
+            .set_property("refractive index", refractive_index.into().into())?;
         lens.update_surfaces()?;
         Ok(lens)
     }
