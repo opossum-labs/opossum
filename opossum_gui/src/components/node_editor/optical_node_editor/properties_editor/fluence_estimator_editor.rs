@@ -2,7 +2,7 @@ use crate::components::node_editor::{
     hooks::use_update_signal_with_reactive_prop,
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
     node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::use_set_node_change_property,
+    optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
@@ -14,20 +14,17 @@ use uuid::Uuid;
 
 #[component]
 pub fn FluenceEstimatorEditor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     fluence_estimator: FluenceEstimator,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut fluence_estimator_sig = use_signal(|| fluence_estimator);
-    let bound_node_id = use_signal(|| node_id);
-    use_update_signal_with_reactive_prop(node_id, bound_node_id);
-    use_set_node_change_property(
-        *bound_node_id.read(),
-        &property_key,
-        fluence_estimator,
+    let fluence_estimator_sig = use_signal(|| fluence_estimator);
+    let on_save = on_save_proptype_handler(
         fluence_estimator_sig,
+        property_key.clone(),
         on_change,
+        node_id.into(),
     );
 
     rsx! {
@@ -40,7 +37,7 @@ pub fn FluenceEstimatorEditor(
                 if let Some(fluence_estimator_type) = FluenceEstimator::default_from_name(
                     val.as_str(),
                 ) {
-                    fluence_estimator_sig.set(fluence_estimator_type);
+                    on_save.call(fluence_estimator_type);
                 }
             },
         }

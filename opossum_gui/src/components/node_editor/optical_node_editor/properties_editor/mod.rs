@@ -12,7 +12,7 @@ mod length_editor;
 mod length_option_editor;
 // mod light_data_editor;
 mod linear_density_editor;
-// mod refractive_index_editor;
+mod refractive_index_editor;
 mod splitter_type_editor;
 mod string_editor;
 mod vec2_editor;
@@ -36,7 +36,7 @@ use crate::components::node_editor::{
             length_option_editor::LengthOptionEditor,
             // light_data_editor::LightDataEditor,
             linear_density_editor::LinearDensityEditor,
-            // refractive_index_editor::RefractiveIndexEditor,
+            refractive_index_editor::RefractiveIndexEditor,
             splitter_type_editor::SplitterTypeEditor,
             string_editor::StringEditor,
             vec2_editor::Vec2Editor,
@@ -167,22 +167,22 @@ fn get_optical_editor(
                 on_change,
             }
         }),
-        // Proptype::FluenceEstimator(fluence_estimator) => Some(rsx! {
-        //     FluenceEstimatorEditor {
-        //         node_id,
-        //         fluence_estimator,
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
-        // Proptype::LinearDensity(linear_density) => Some(rsx! {
-        //     LinearDensityEditor {
-        //         node_id,
-        //         linear_density,
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
+        Proptype::FluenceEstimator(fluence_estimator) => Some(rsx! {
+            FluenceEstimatorEditor {
+                node_id,
+                fluence_estimator,
+                property_key,
+                on_change,
+            }
+        }),
+        Proptype::LinearDensity(linear_density) => Some(rsx! {
+            LinearDensityEditor {
+                node_id,
+                linear_density,
+                property_key,
+                on_change,
+            }
+        }),
         // Proptype::LightDataBuilder(light_data_builder) => Some(rsx! {
         //     LightDataEditor {
         //         node_id,
@@ -191,14 +191,14 @@ fn get_optical_editor(
         //         on_change,
         //     }
         // }),
-        // Proptype::RefractiveIndex(ref_ind_type) => Some(rsx! {
-        //     RefractiveIndexEditor {
-        //         node_id,
-        //         ref_ind_type,
-        //         property_key,
-        //         on_change,
-        //     }
-        // }),
+        Proptype::RefractiveIndex(ref_ind_type) => Some(rsx! {
+            RefractiveIndexEditor {
+                node_id,
+                ref_ind_type,
+                property_key,
+                on_change,
+            }
+        }),
         _ => None,
     }
 }

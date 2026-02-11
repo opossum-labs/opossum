@@ -1,9 +1,8 @@
 use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 use dioxus::prelude::*;
-use opossum_core::nanometer;
+use opossum_core::meter;
 use opossum_core::{prelude::RefrIndexSellmeier1, refractive_index::RefractiveIndexType};
 use strum::EnumIter;
-use uom::si::length::nanometer;
 
 #[derive(Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum Sellmeier1Param {
@@ -20,8 +19,8 @@ pub enum Sellmeier1Param {
 impl From<Sellmeier1Param> for InputParam {
     fn from(value: Sellmeier1Param) -> Self {
         match value {
-            Sellmeier1Param::WaveLengthStart => Self::Length("Start λ in nm".into()),
-            Sellmeier1Param::WavelengthEnd => Self::Length("End λ in nm".into()),
+            Sellmeier1Param::WaveLengthStart => Self::Length("Start λ".into()),
+            Sellmeier1Param::WavelengthEnd => Self::Length("End λ".into()),
             Sellmeier1Param::K1 => Self::F64("K1".into()),
             Sellmeier1Param::K2 => Self::F64("K2".into()),
             Sellmeier1Param::K3 => Self::F64("K3".into()),
@@ -50,9 +49,9 @@ impl IntoInputDataStrings<RefrIndexSellmeier1> for Sellmeier1Param {
     fn create_value_string(&self, obj: &RefrIndexSellmeier1) -> String {
         match self {
             Self::WaveLengthStart => {
-                format!("{:.3}", obj.wavelength_range().start.get::<nanometer>())
+                format!("{}", obj.wavelength_range().start.value)
             }
-            Self::WavelengthEnd => format!("{:.3}", obj.wavelength_range().end.get::<nanometer>()),
+            Self::WavelengthEnd => format!("{}", obj.wavelength_range().end.value),
             Self::K1 => format!("{:.3e}", obj.k1()),
             Self::K2 => format!("{:.3e}", obj.k2()),
             Self::K3 => format!("{:.3e}", obj.k3()),
@@ -72,10 +71,10 @@ impl IntoInputData<f64, RefrIndexSellmeier1, RefractiveIndexType> for Sellmeier1
     fn setter_from_obj(&self) -> impl FnMut(&mut RefrIndexSellmeier1, f64) {
         match self {
             Self::WaveLengthStart => move |obj: &mut RefrIndexSellmeier1, val: f64| {
-                obj.set_wavelength_range_start(nanometer!(val));
+                obj.set_wavelength_range_start(meter!(val));
             },
             Self::WavelengthEnd => move |obj: &mut RefrIndexSellmeier1, val: f64| {
-                obj.set_wavelength_range_end(nanometer!(val));
+                obj.set_wavelength_range_end(meter!(val));
             },
             Self::K1 => move |obj: &mut RefrIndexSellmeier1, val: f64| obj.set_k1(val),
             Self::K2 => move |obj: &mut RefrIndexSellmeier1, val: f64| obj.set_k2(val),
