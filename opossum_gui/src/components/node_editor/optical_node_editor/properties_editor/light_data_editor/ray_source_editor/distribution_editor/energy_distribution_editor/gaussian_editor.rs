@@ -122,7 +122,7 @@ impl IntoInputData<bool, General2DGaussian, EnergyDistType> for General2DGaussia
 
 pub fn get_general_2d_gaussian_input_params(
     gaussian: &General2DGaussian,
-    energy_dist_type_sig: Signal<EnergyDistType>,
+    on_save: EventHandler<EnergyDistType>,
 ) -> Vec<InputData> {
     let mut input_data = Vec::<InputData>::new();
     for enum_variant in General2DGaussianParam::iter() {
@@ -132,7 +132,7 @@ pub fn get_general_2d_gaussian_input_params(
                     IntoInputData::<bool, General2DGaussian, EnergyDistType>::to_input_data(
                         &enum_variant,
                         *gaussian,
-                        energy_dist_type_sig,
+                        on_save,
                     ),
                 );
             }
@@ -140,7 +140,7 @@ pub fn get_general_2d_gaussian_input_params(
                 IntoInputData::<f64, General2DGaussian, EnergyDistType>::to_input_data(
                     &enum_variant,
                     *gaussian,
-                    energy_dist_type_sig,
+                    on_save,
                 ),
             ),
         }
