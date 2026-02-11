@@ -2,19 +2,18 @@
 
 mod energy_source_editor;
 mod light_data_builder_selection;
-// mod ray_source_editor;
+mod ray_source_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    hooks::use_update_signal_with_reactive_prop,
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
-        light_data_editor::energy_source_editor::EnergySourceEditor, on_save_proptype_handler, use_set_node_change_property
+        light_data_editor::energy_source_editor::EnergySourceEditor, on_save_proptype_handler
     },
 };
 use light_data_builder_selection::SourceLightDataBuilderSelector;
 use opossum_core::prelude::LightDataBuilder;
-// use ray_source_editor::RaySourceEditor;
+use ray_source_editor::RaySourceEditor;
 use uuid::Uuid;
 
 use dioxus::prelude::*;
@@ -44,8 +43,7 @@ pub fn LightDataEditor(
             EnergySourceEditor { energy_data_builder: energy_data_builder.clone(), on_save }
         }),
         LightDataBuilder::Geometric(ray_data_builder) => accordion_item_content.push(rsx! {
-            {"nothing here"}
-            // RaySourceEditor { ray_data_builder: ray_data_builder.clone(), on_save }
+            RaySourceEditor { ray_data_builder: ray_data_builder.clone(), on_save }
         }),
     }
     rsx! {

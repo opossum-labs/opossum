@@ -21,27 +21,25 @@ use crate::components::node_editor::{
 #[component]
 pub fn RaySourceEditor(
     ray_data_builder: RayDataBuilder,
-    light_data_builder_sig: Signal<LightDataBuilder>,
+    on_save: EventHandler<LightDataBuilder>,
 ) -> Element {
     let mut ray_data_builder_sig: Signal<RayDataBuilder> = use_signal(|| ray_data_builder.clone());
-    use_update_signal_with_reactive_prop(ray_data_builder.clone(), ray_data_builder_sig);
-    use_context_provider(|| ray_data_builder_sig);
 
-    use_effect(move || {
-        if ray_data_builder != *ray_data_builder_sig.read() {
-            light_data_builder_sig.set(LightDataBuilder::Geometric(
-                ray_data_builder_sig.read().clone(),
-            ));
-        }
+    let on_ray_data_builder_save = EventHandler::new(move |new_ray_data_builder: RayDataBuilder| {
+        on_save.call(LightDataBuilder::Geometric(new_ray_data_builder.clone()));
+        ray_data_builder_sig.set(new_ray_data_builder);
     });
 
-    let mut element_list = vec![rsx! {RayDataBuilderSelector { ray_data_builder_sig }}];
+    let mut element_list = vec![rsx! {RayDataBuilderSelector { ray_data_builder_sig, on_save: on_ray_data_builder_save }}];
 
     match &*ray_data_builder_sig.read() {
         RayDataBuilder::Raw(_) => {}
         RayDataBuilder::Collimated(_) => {
             element_list.push(rsx! {
-                DistributionEditor {}
+                DistributionEditor {
+                    ray_data_builder_sig,
+                    on_save: on_ray_data_builder_save,
+                }
             });
         }
         RayDataBuilder::PointSrc(point_src) => {
@@ -49,14 +47,17 @@ pub fn RaySourceEditor(
                 ReferenceLengthEditor {
                     point_src: point_src.clone(),
                     ray_data_handler: EventHandler::new(move |new_point_src: PointSrc| {
-                        ray_data_builder_sig.set(RayDataBuilder::PointSrc(new_point_src));
+                        on_ray_data_builder_save.call(RayDataBuilder::PointSrc(new_point_src));
                     }),
                 }
-                DistributionEditor {}
+                DistributionEditor {
+                    ray_data_builder_sig,
+                    on_save: on_ray_data_builder_save,
+                }
             });
         }
         RayDataBuilder::Image(img_src) => {
-            let inputs = get_image_source_input_params(img_src, ray_data_builder_sig);
+            let inputs = get_image_source_input_params(img_src, on_ray_data_builder_save);
             element_list.push(rsx! {
                 RowedInputs { inputs }
             });
