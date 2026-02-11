@@ -9,7 +9,6 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
-    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
 use gaussian_editor::get_general_2d_gaussian_input_params;

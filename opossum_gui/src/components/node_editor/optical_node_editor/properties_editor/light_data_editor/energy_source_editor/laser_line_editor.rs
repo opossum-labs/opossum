@@ -146,7 +146,6 @@ pub fn EnergyLaserLineEditor(
                                             .add_log(format!("Error adding laser line: {e}").as_str());
                                     }
                                 }
-
                             } else {
                                 OPOSSUM_UI_LOGS
                                     .write()
