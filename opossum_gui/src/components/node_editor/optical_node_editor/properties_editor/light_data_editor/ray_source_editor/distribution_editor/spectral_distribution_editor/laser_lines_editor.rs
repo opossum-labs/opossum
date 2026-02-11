@@ -83,8 +83,7 @@ pub fn LaserLineInput(laser_lines: LaserLines, on_save: EventHandler<SpecDistTyp
                             if let (Some(wvl), Ok(rel_int)) = (
                                 parse_si_number(&num_str, &prefix_str, false),
                                 rel_int_val.parse(),
-                            )
-                            {
+                            ) {
                                 match ll.add_lines(vec![(meter!(wvl), rel_int)]) {
                                     Ok(_) => {
                                         on_save.call(SpecDistType::LaserLines(ll.clone()));

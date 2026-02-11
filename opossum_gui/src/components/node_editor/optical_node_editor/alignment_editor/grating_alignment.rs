@@ -92,7 +92,7 @@ pub fn GratingAlignmentInputs(
                 axes_skip: None,
                 on_new_rotation: on_new_rotation(on_save, alignment_memo.into()),
                 node_id,
-            
+
             }
             TranslationAlignmentInputs {
                 alignment: alignment_memo,

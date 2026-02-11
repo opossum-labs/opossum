@@ -24,32 +24,40 @@ pub fn RayTraceEditor(
     let mut ray_trace_config_sig = use_signal(|| ray_trace_config);
 
     let ray_trace_config_handler = EventHandler::new(move |ray_trace_config: RayTraceConfig| {
-        on_change
-                .call(NodeChangeEvent {
-                    node_id: *node_id.read(),
-                    action: NodeChangeAction::AnalyzerType(
-                        AnalyzerType::RayTrace(ray_trace_config),
-                    ),
-                });
+        on_change.call(NodeChangeEvent {
+            node_id: *node_id.read(),
+            action: NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(ray_trace_config)),
+        });
     });
 
     let max_refractions_handler = EventHandler::new(move |max_refractions: usize| {
-            ray_trace_config_sig.write().set_max_number_of_refractions(max_refractions);
-            ray_trace_config_handler.call(*ray_trace_config_sig.read());
+        ray_trace_config_sig
+            .write()
+            .set_max_number_of_refractions(max_refractions);
+        ray_trace_config_handler.call(*ray_trace_config_sig.read());
     });
     let max_bounces_handler = EventHandler::new(move |max_bounces: usize| {
-            ray_trace_config_sig.write().set_max_number_of_bounces(max_bounces);
-            ray_trace_config_handler.call(*ray_trace_config_sig.read());
+        ray_trace_config_sig
+            .write()
+            .set_max_number_of_bounces(max_bounces);
+        ray_trace_config_handler.call(*ray_trace_config_sig.read());
     });
     let min_ray_energy_handler = EventHandler::new(move |min_ray_energy: Energy| {
-            ray_trace_config_sig.write().set_min_energy_per_ray(min_ray_energy);
+        if ray_trace_config_sig
+            .write()
+            .set_min_energy_per_ray(min_ray_energy).is_ok()
+        {
             ray_trace_config_handler.call(*ray_trace_config_sig.read());
+        }
     });
-    let missed_surface_strategy_handler = EventHandler::new(move |missed_surface_strategy: MissedSurfaceStrategy| {
-            ray_trace_config_sig.write().set_missed_surface_strategy(missed_surface_strategy);
+    let missed_surface_strategy_handler =
+        EventHandler::new(move |missed_surface_strategy: MissedSurfaceStrategy| {
+            ray_trace_config_sig
+                .write()
+                .set_missed_surface_strategy(missed_surface_strategy);
             ray_trace_config_handler.call(*ray_trace_config_sig.read());
-    });
-           
+        });
+
     rsx! {
         FlushableTextInput {
             id: "rayTraceMaxRefr".to_string(),
@@ -92,9 +100,7 @@ pub fn RayTraceEditor(
                 if val >= 0.0 {
                     min_ray_energy_handler.call(joule!(val));
                 } else {
-                    OPOSSUM_UI_LOGS
-                        .write()
-                        .add_log("Minimum ray energy must be non-negative.");
+                    OPOSSUM_UI_LOGS.write().add_log("Minimum ray energy must be non-negative.");
                 }
             },
         }

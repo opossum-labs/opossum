@@ -177,7 +177,7 @@ pub fn SimulationWindow(
             onkeydown: move |evt| {
                 if let Key::Escape = evt.key() {
                     if !is_running() {
-                       show_simulation.set(false);
+                        show_simulation.set(false);
                     }
                 }
             },

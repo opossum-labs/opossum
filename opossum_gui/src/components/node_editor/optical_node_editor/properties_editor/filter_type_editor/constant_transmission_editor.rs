@@ -15,9 +15,7 @@ pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Clone + 'static>(
             value: format!("{:.3}", transmission_sig.read()),
             on_save: move |new_val: String| {
                 let old_val = *transmission_sig.read();
-                if let Ok(val) = new_val.parse::<f64>()
-                    && relative_ne!(old_val, val)
-                {
+                if let Ok(val) = new_val.parse::<f64>() && relative_ne!(old_val, val) {
                     on_transmission_change.call(T::from(val));
                 }
             },
