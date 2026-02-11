@@ -44,11 +44,8 @@ pub fn NodeConfigEditor(
     #[allow(clippy::redundant_closure)]
     let mut displayed_node = use_signal(|| active_node_opt());
 
-    let memo_active_node_id = use_memo(move || {
-        displayed_node()
-            .map(|(_, id)| id)
-            .unwrap_or_else(|| Uuid::nil())
-    });
+    let memo_active_node_id =
+        use_memo(move || displayed_node().map_or_else(Uuid::nil, |(_, id)| id));
 
     use_effect(move || {
         if *dirty_count.read() == 0 {

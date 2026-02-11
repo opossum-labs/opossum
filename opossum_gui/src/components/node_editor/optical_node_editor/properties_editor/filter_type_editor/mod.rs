@@ -23,7 +23,7 @@ pub fn FilterTypeEditor(
     let filter_type_builder_sig = use_signal(|| filter_type_builder.clone());
     let on_save = on_save_proptype_handler(
         filter_type_builder_sig,
-        property_key.clone(),
+        property_key,
         on_change,
         node_id.into(),
     );

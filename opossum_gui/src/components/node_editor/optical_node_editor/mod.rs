@@ -33,20 +33,20 @@ pub struct UINodeAttr {
 
 #[component]
 pub fn OpticalNodeEditor(node_id: Memo<Uuid>, on_change: EventHandler<NodeChangeEvent>) -> Element {
-    let mut ui_node_attr_sig = use_signal(|| UINodeAttr::default());
+    let mut ui_node_attr_sig = use_signal(UINodeAttr::default);
     let resource_future = use_resource(move || async move {
         let node_id = *node_id.read();
         match api::get_node_properties(node_id).await {
             Ok(node_attr) => {
                 let ui_node_attr = UINodeAttr {
                     node_id,
-                    node_type: node_attr.node_type().to_string(),
-                    name: node_attr.name().to_string(),
+                    node_type: node_attr.node_type(),
+                    name: node_attr.name(),
                     lidt: *node_attr.lidt(),
                     inverted: node_attr.inverted(),
                     properties: node_attr.properties().clone(),
-                    position: node_attr.isometry().clone(),
-                    alignment: node_attr.alignment().clone(),
+                    position: node_attr.isometry(),
+                    alignment: *node_attr.alignment(),
                 };
                 ui_node_attr_sig.set(ui_node_attr.clone());
                 Some(ui_node_attr)
@@ -63,7 +63,7 @@ pub fn OpticalNodeEditor(node_id: Memo<Uuid>, on_change: EventHandler<NodeChange
             let _ = ui_node_attr_sig
                 .write()
                 .properties
-                .set(&key, proptype.clone());
+                .set(key, proptype.clone());
         }
         on_change.call(evt);
     });

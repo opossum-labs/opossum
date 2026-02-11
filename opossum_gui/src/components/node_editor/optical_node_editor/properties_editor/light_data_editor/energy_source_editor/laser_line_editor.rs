@@ -117,7 +117,7 @@ pub fn EnergyLaserLineEditor(
     rsx! {
         form {
             onsubmit: {
-                let mut ll = energy_laser_lines.clone();
+                let mut ll = energy_laser_lines;
                 move |e: Event<FormData>| {
                     let wvl_opt = e.data().get_first(&form_inputs[0].id);
                     let energy_opt = e.data().get_first(&form_inputs[1].id);
@@ -137,7 +137,7 @@ pub fn EnergyLaserLineEditor(
                                 parse_si_number(&num_str_energy, &prefix_str_energy, false),
                             ) {
                                 match ll.add_lines(vec![(meter!(wvl), joule!(energy))]) {
-                                    Ok(_) => {
+                                    Ok(()) => {
                                         on_save.call(EnergyDataBuilder::LaserLines(ll.clone()));
                                     }
                                     Err(e) => {

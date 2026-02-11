@@ -68,7 +68,7 @@ pub fn LaserLineInput(laser_lines: LaserLines, on_save: EventHandler<SpecDistTyp
     rsx! {
         form {
             onsubmit: {
-                let mut ll = laser_lines.clone();
+                let mut ll = laser_lines;
                 move |e: Event<FormData>| {
                     let wvl_opt = e.data().get_first(&inputs[0].id);
                     let rel_int_opt = e.data().get_first(&inputs[1].id);
@@ -85,7 +85,7 @@ pub fn LaserLineInput(laser_lines: LaserLines, on_save: EventHandler<SpecDistTyp
                                 rel_int_val.parse(),
                             ) {
                                 match ll.add_lines(vec![(meter!(wvl), rel_int)]) {
-                                    Ok(_) => {
+                                    Ok(()) => {
                                         on_save.call(SpecDistType::LaserLines(ll.clone()));
                                     }
                                     Err(e) => {

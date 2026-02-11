@@ -28,12 +28,7 @@ pub fn IsometryOptionEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let isometry_sig = use_signal(|| isometry);
-    let on_save = on_save_proptype_handler(
-        isometry_sig,
-        property_key.clone(),
-        on_change,
-        node_id.into(),
-    );
+    let on_save = on_save_proptype_handler(isometry_sig, property_key, on_change, node_id.into());
 
     let on_new_rotation = EventHandler::new(move |(axis, rotation): (RotationAxis, Angle)| {
         let mut iso = *isometry_sig.read();
@@ -91,7 +86,7 @@ fn on_isometry_option_change_str(
                 AlignmentAxis::Rotation(rotation_axis) => {
                     on_new_rotation.call((rotation_axis, degree!(val)));
                 }
-            };
+            }
         }
     })
 }

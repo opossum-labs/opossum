@@ -45,7 +45,8 @@ pub fn RayTraceEditor(
     let min_ray_energy_handler = EventHandler::new(move |min_ray_energy: Energy| {
         if ray_trace_config_sig
             .write()
-            .set_min_energy_per_ray(min_ray_energy).is_ok()
+            .set_min_energy_per_ray(min_ray_energy)
+            .is_ok()
         {
             ray_trace_config_handler.call(*ray_trace_config_sig.read());
         }

@@ -19,7 +19,7 @@ pub fn GhostFocusEditor(
     ghost_focus_config: GhostFocusConfig,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut ghost_focus_config_sig = use_signal(|| ghost_focus_config.clone());
+    let mut ghost_focus_config_sig = use_signal(|| ghost_focus_config);
 
     let ghost_focus_config_handler =
         EventHandler::new(move |ghost_focus_config: GhostFocusConfig| {

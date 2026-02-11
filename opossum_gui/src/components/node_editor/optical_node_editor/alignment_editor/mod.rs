@@ -33,9 +33,7 @@ pub fn AlignmentEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let node_prop_memo = use_memo(move || node_attr.read().properties.clone());
-    let accordion_content = if node_attr.read().node_id != *node_id.read() {
-        vec![]
-    } else {
+    let accordion_content = if node_attr.read().node_id == *node_id.read() {
         vec![rsx! {
             AlignmentInputs {
                 node_id,
@@ -45,6 +43,8 @@ pub fn AlignmentEditor(
                 on_change,
             }
         }]
+    } else {
+        vec![]
     };
     rsx! {
         AccordionItem {
@@ -180,17 +180,11 @@ pub fn PositioningInputs(
     on_change: EventHandler<NodeChangeEvent>,
     node_id: Memo<Uuid>,
 ) -> Element {
-    let mut position_opt_sig = use_signal(|| position_opt.clone());
+    let mut position_opt_sig = use_signal(|| position_opt);
     let position_memo = use_memo(move || position_opt_sig.read().unwrap_or_default());
 
     let mut is_relative_positioned = use_signal(|| position_opt.is_none());
-    let mut last_absolute_position = use_signal(|| {
-        if let Some(position) = position_opt {
-            position
-        } else {
-            Isometry::default()
-        }
-    });
+    let mut last_absolute_position = use_signal(|| position_opt.unwrap_or_default());
 
     let on_save = EventHandler::new(move |new_iso_opt: Option<Isometry>| {
         on_change.call(NodeChangeEvent {

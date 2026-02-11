@@ -47,7 +47,7 @@ pub fn PropertiesEditor(
 ) -> Element {
     let editor_inputs = if node_attr.read().node_id == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
-        for (property_key, property) in node_attr.read().properties.iter() {
+        for (property_key, property) in &node_attr.read().properties {
             if let Some(editor) =
                 get_editor(node_id, property, property_key.clone(), on_change_property)
             {
@@ -246,15 +246,15 @@ fn get_geometric_editor(
     }
 }
 
-/// Creates an EventHandler for saving a property change, which updates the signal and calls the on_change handler with a NodeChangeEvent.
+/// Creates an `EventHandler` for saving a property change, which updates the signal and calls the `on_change` handler with a `NodeChangeEvent`.
 /// This function can be used in property editors to handle changes to properties and ensure that the UI updates accordingly.
 /// # Arguments
-/// * `sig` - A Signal that holds the current value of the property being edited. This signal will be updated when the property changes This signal should be defined in the calling component.
-/// * `property_key` - The key of the property being edited. This is used in the NodeChangeEvent to specify which property has changed.
-/// * `change_handler` - An EventHandler that will be called with a NodeChangeEvent when the property changes. This is typically the on_change handler passed down from the parent component.
-/// * `node_id` - A ReadSignal that provides the ID of the node whose property is being edited. This is used in the NodeChangeEvent to specify which node has changed.
+/// * `sig` - A `Signal` that holds the current value of the property being edited. This signal will be updated when the property changes This signal should be defined in the calling component.
+/// * `property_key` - The key of the property being edited. This is used in the `NodeChangeEvent` to specify which property has changed.
+/// * `change_handler` - An `EventHandler` that will be called with a `NodeChangeEvent` when the property changes. This is typically the `on_change` handler passed down from the parent component.
+/// * `node_id` - A `ReadSignal` that provides the ID of the node whose property is being edited. This is used in the `NodeChangeEvent` to specify which node has changed.
 /// # Returns
-/// An EventHandler that can be used in the property editor to handle changes to the property.
+/// An `EventHandler` that can be used in the property editor to handle changes to the property.
 pub fn on_save_proptype_handler<T: Into<Proptype> + PartialEq + Clone + 'static>(
     mut sig: Signal<T>,
     property_key: String,

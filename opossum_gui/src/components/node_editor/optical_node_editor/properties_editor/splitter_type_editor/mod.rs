@@ -21,7 +21,7 @@ pub fn SplitterTypeEditor(
     let splitting_config_builder_sig = use_signal(|| splitting_config_builder.clone());
     let on_save = on_save_proptype_handler(
         splitting_config_builder_sig,
-        property_key.clone(),
+        property_key,
         on_change,
         node_id.into(),
     );
