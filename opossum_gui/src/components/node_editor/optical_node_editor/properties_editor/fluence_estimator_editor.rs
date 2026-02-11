@@ -1,5 +1,4 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop,
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,

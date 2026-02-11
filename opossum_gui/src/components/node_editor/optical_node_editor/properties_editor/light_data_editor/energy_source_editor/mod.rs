@@ -8,8 +8,6 @@ use laser_line_editor::EnergyLaserLineEditor;
 use opossum_core::prelude::{EnergyDataBuilder, LightDataBuilder};
 use spectrum_from_file_editor::SpectrumFromFileEditor;
 
-use crate::components::node_editor::hooks::use_update_signal_with_reactive_prop;
-
 #[component]
 pub fn EnergySourceEditor(
     energy_data_builder: EnergyDataBuilder,

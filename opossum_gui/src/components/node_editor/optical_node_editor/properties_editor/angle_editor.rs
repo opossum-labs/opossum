@@ -1,6 +1,6 @@
 use crate::components::node_editor::{
     inputs::input_components::NodeConfigUnitInput,
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use approx::relative_ne;

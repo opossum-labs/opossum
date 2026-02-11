@@ -44,13 +44,12 @@ use crate::components::node_editor::{
     },
 };
 use dioxus::prelude::*;
-use opossum_core::prelude::{Properties, Property, Proptype};
+use opossum_core::prelude::{ Property, Proptype};
 use uuid::Uuid;
 
 #[component]
 pub fn PropertiesEditor(
     node_id: Memo<Uuid>,
-    // node_properties_sig: Signal<Properties>,
     node_attr: ReadSignal<UINodeAttr>,
     on_change_property: EventHandler<NodeChangeEvent>,
 ) -> Element {
@@ -252,30 +251,6 @@ fn get_geometric_editor(
         }),
         _ => None,
     }
-}
-pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone + 'static>(
-    node_id: Uuid,
-    property_key: &str,
-    prop_type_value: T,
-    prop_type_value_sig: Signal<T>,
-    on_change: EventHandler<NodeChangeEvent>,
-) {
-    use_update_signal_with_reactive_prop(prop_type_value.clone(), prop_type_value_sig);
-
-    use_effect({
-        let property_key = property_key.to_owned();
-        move || {
-            if prop_type_value != *prop_type_value_sig.read() {
-                on_change.call(NodeChangeEvent {
-                    node_id,
-                    action: NodeChangeAction::Property(
-                        property_key.clone(),
-                        prop_type_value_sig.read().clone().into(),
-                    ),
-                });
-            }
-        }
-    });
 }
 
 /// Creates an EventHandler for saving a property change, which updates the signal and calls the on_change handler with a NodeChangeEvent.

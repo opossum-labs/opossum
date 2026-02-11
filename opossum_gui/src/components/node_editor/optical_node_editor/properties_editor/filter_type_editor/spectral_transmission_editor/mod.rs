@@ -12,7 +12,6 @@ use strum::EnumIter;
 
 use crate::components::node_editor::{
     accordion::ElementList,
-    hooks::use_update_signal_with_reactive_prop,
     inputs::{
         InputParam, IntoInputData, IntoInputDataStrings,
         input_components::{InputParamLabeledInput, LabeledSelect},

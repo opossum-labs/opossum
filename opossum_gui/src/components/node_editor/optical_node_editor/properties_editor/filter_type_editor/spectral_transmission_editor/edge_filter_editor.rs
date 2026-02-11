@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use opossum_core::prelude::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder, meter};
 use strum::{EnumIter, IntoEnumIterator};
-use uom::si::length::nanometer;
 
 use crate::{
     OPOSSUM_UI_LOGS,

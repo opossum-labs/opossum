@@ -4,8 +4,7 @@ use std::vec;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        hooks::use_update_signal_with_reactive_prop,
-        inputs::input_components::{LabeledInput, LabeledSelect, NodeConfigUnitInput},
+        inputs::input_components::{LabeledSelect, NodeConfigUnitInput},
         optical_node_editor::alignment_editor::{
             RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation,
             on_new_translation,
@@ -20,7 +19,7 @@ use opossum_core::{
 use uom::si::{
     angle::degree,
     f64::{Angle, Length, LinearNumberDensity},
-    length::{meter, nanometer},
+    length::meter,
     linear_number_density::per_meter,
 };
 use uuid::Uuid;
@@ -48,13 +47,12 @@ pub fn GratingAlignmentInputs(
             num_per_mm!(1740.)
         }
     });
-    // use_update_signal_with_reactive_prop(*alignment_sig_outside.read(), alignment_sig);
 
     let mut element_list = vec![rsx! {
         GratingAlignmentSelector { alignment_select_sig, on_alignment_change: move |new_state| alignment_select_sig.set(new_state) }
     }];
 
-    if let (true, Ok(Proptype::I32(diffraction_order)), Ok(Proptype::LinearDensity(line_density))) = (
+    if let (true, Ok(Proptype::I32(_)), Ok(Proptype::LinearDensity(_))) = (
         *alignment_select_sig.read(),
         node_properties.read().get("diffraction order").cloned(),
         node_properties.read().get("line density").cloned(),

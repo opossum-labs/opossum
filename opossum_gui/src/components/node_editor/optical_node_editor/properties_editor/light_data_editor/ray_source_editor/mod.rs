@@ -9,7 +9,6 @@ use ray_type_selection::RayDataBuilderSelector;
 
 use crate::components::node_editor::{
     accordion::ElementList,
-    hooks::use_update_signal_with_reactive_prop,
     inputs::input_components::RowedInputs,
     optical_node_editor::properties_editor::light_data_editor::ray_source_editor::{
         distribution_editor::DistributionEditor,

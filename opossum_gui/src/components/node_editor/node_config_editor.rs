@@ -7,8 +7,7 @@ use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
 use opossum_core::nodes::fluence_detector::Fluence;
-use opossum_core::prelude::{AnalyzerType, Isometry, Properties, Proptype};
-use std::ops::AddAssign;
+use opossum_core::prelude::{AnalyzerType, Isometry, Proptype};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]

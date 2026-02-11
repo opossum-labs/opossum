@@ -61,7 +61,7 @@ pub fn OpticalNodeEditor(
 
     let on_change_property = EventHandler::new(move |evt: NodeChangeEvent| {
         if let NodeChangeAction::Property(ref key, ref proptype) = evt.action {
-            ui_node_attr_sig.write().properties.set(&key, proptype.clone());
+            let _ = ui_node_attr_sig.write().properties.set(&key, proptype.clone());
         }
         on_change.call(evt);
     });

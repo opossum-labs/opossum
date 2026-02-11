@@ -1,7 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    hooks::use_update_signal_with_reactive_prop,
     inputs::input_components::{
         FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput,
     },
@@ -9,7 +8,7 @@ use crate::components::node_editor::{
     optical_node_editor::UINodeAttr,
 };
 use dioxus::prelude::*;
-use opossum_core::{J_per_cm2, nodes::fluence_detector::Fluence};
+use opossum_core::J_per_cm2;
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uuid::Uuid;
 
@@ -19,9 +18,6 @@ pub fn GeneralEditor(
     node_id: Memo<Uuid>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    // let mut lidt_sig = use_signal(|| node_attr.lidt.get::<joule_per_square_centimeter>());
-    // use_update_signal_with_reactive_prop(lidt.get::<joule_per_square_centimeter>(), lidt_sig);
-
     let accordion_content = if node_attr.read().node_id == *node_id.read() {
         let node_id = node_attr.read().node_id;
         let node_type = node_attr.read().node_type.clone();
