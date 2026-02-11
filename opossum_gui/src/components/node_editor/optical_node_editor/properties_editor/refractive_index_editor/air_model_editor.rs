@@ -53,10 +53,12 @@ impl IntoInputData<f64, RefrIndexAir, RefractiveIndexType> for AirParam {
     fn setter_from_obj(&self) -> impl FnMut(&mut RefrIndexAir, f64) {
         match self {
             Self::Temperature => move |obj: &mut RefrIndexAir, val: f64| {
-                obj.set_temperature(degree_celsius!(val));
+                obj.set_temperature(degree_celsius!(val))
+                    .log_err_with_context("validation failed in `set_temperature` of RefrIndexAir");
             },
             Self::Pressure => move |obj: &mut RefrIndexAir, val: f64| {
-                obj.set_pressure(hectopascal!(val));
+                obj.set_pressure(hectopascal!(val))
+                    .log_err_with_context("validation failed in `set_pressure` of RefrIndexAir");
             },
             Self::Humidity => move |obj: &mut RefrIndexAir, val: f64| {
                 obj.set_humidity(val)
