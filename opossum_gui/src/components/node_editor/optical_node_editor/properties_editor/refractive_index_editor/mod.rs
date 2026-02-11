@@ -66,17 +66,11 @@ fn get_refractive_index_input_data(
     on_save: EventHandler<RefractiveIndexType>,
 ) -> Vec<InputData> {
     match &*ref_ind_type_sig.read() {
-        RefractiveIndexType::Const(ref_ind) => {
-            ConstRefParam::to_input_data_vec(ref_ind, on_save)
-        }
+        RefractiveIndexType::Const(ref_ind) => ConstRefParam::to_input_data_vec(ref_ind, on_save),
         RefractiveIndexType::Sellmeier1(ref_ind) => {
             Sellmeier1Param::to_input_data_vec(ref_ind, on_save)
         }
-        RefractiveIndexType::Schott(ref_ind) => {
-            SchottParam::to_input_data_vec(ref_ind, on_save)
-        }
-        RefractiveIndexType::Conrady(ref_ind) => {
-            ConradyParam::to_input_data_vec(ref_ind, on_save)
-        }
+        RefractiveIndexType::Schott(ref_ind) => SchottParam::to_input_data_vec(ref_ind, on_save),
+        RefractiveIndexType::Conrady(ref_ind) => ConradyParam::to_input_data_vec(ref_ind, on_save),
     }
 }

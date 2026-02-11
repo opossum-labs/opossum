@@ -11,7 +11,10 @@ use spectral_distribution_editor::SpectralDistributionEditor;
 use dioxus::prelude::*;
 
 #[component]
-pub fn DistributionEditor(ray_data_builder_sig: ReadSignal<RayDataBuilder>, on_save: EventHandler<RayDataBuilder>) -> Element {
+pub fn DistributionEditor(
+    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
+    on_save: EventHandler<RayDataBuilder>,
+) -> Element {
     rsx! {
         div {
             class: "accordion accordion-borderless bg-dark border-start",

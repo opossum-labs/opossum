@@ -6,7 +6,10 @@ use dioxus::prelude::*;
 use opossum_core::{prelude::LightDataBuilder, utils::default_from_name::DefaultFromName};
 
 #[component]
-pub fn SourceLightDataBuilderSelector(light_data_builder_sig: ReadSignal<LightDataBuilder>, on_save: EventHandler<LightDataBuilder>) -> Element {
+pub fn SourceLightDataBuilderSelector(
+    light_data_builder_sig: ReadSignal<LightDataBuilder>,
+    on_save: EventHandler<LightDataBuilder>,
+) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectSourceType",

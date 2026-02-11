@@ -8,7 +8,7 @@ use crate::components::node_editor::{
     accordion::AccordionItem,
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
-        light_data_editor::energy_source_editor::EnergySourceEditor, on_save_proptype_handler
+        light_data_editor::energy_source_editor::EnergySourceEditor, on_save_proptype_handler,
     },
 };
 use light_data_builder_selection::SourceLightDataBuilderSelector;

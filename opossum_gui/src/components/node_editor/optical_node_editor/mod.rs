@@ -6,7 +6,9 @@ pub mod properties_editor;
 use crate::components::node_editor::{
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::{
-        alignment_editor::{AlignmentEditor, PositioningEditor}, general_editor::GeneralEditor, properties_editor::PropertiesEditor
+        alignment_editor::{AlignmentEditor, PositioningEditor},
+        general_editor::GeneralEditor,
+        properties_editor::PropertiesEditor,
     },
 };
 use crate::{OPOSSUM_UI_LOGS, api};
@@ -30,10 +32,7 @@ pub struct UINodeAttr {
 }
 
 #[component]
-pub fn OpticalNodeEditor(
-    node_id: Memo<Uuid>,
-    on_change: EventHandler<NodeChangeEvent>,
-) -> Element {
+pub fn OpticalNodeEditor(node_id: Memo<Uuid>, on_change: EventHandler<NodeChangeEvent>) -> Element {
     let mut ui_node_attr_sig = use_signal(|| UINodeAttr::default());
     let resource_future = use_resource(move || async move {
         let node_id = *node_id.read();
@@ -61,12 +60,17 @@ pub fn OpticalNodeEditor(
 
     let on_change_property = EventHandler::new(move |evt: NodeChangeEvent| {
         if let NodeChangeAction::Property(ref key, ref proptype) = evt.action {
-            let _ = ui_node_attr_sig.write().properties.set(&key, proptype.clone());
+            let _ = ui_node_attr_sig
+                .write()
+                .properties
+                .set(&key, proptype.clone());
         }
         on_change.call(evt);
     });
 
-    if let Some(Some(node_attr))= &*resource_future.read_unchecked() && node_attr.node_id == ui_node_attr_sig.read().node_id {
+    if let Some(Some(node_attr)) = &*resource_future.read_unchecked()
+        && node_attr.node_id == ui_node_attr_sig.read().node_id
+    {
         rsx! {
             div { class: "noselect",
                 h6 { "Node Configuration" }

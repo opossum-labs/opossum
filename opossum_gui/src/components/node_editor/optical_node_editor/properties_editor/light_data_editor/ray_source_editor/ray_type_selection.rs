@@ -9,7 +9,10 @@ use opossum_core::{
 };
 
 #[component]
-pub fn RayDataBuilderSelector(ray_data_builder_sig: ReadSignal<RayDataBuilder>, on_save: EventHandler<RayDataBuilder>) -> Element {
+pub fn RayDataBuilderSelector(
+    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
+    on_save: EventHandler<RayDataBuilder>,
+) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectRaySourceType",

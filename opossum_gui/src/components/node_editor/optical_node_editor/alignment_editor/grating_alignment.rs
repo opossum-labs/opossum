@@ -14,7 +14,10 @@ use crate::{
 use approx::relative_ne;
 use dioxus::prelude::*;
 use opossum_core::{
-    degree, meter, nanometer, num_per_mm, prelude::{Isometry, Properties, Proptype}, radian, utils::{geom_transformation::RotationAxis, to_f64}
+    degree, meter, nanometer, num_per_mm,
+    prelude::{Isometry, Properties, Proptype},
+    radian,
+    utils::{geom_transformation::RotationAxis, to_f64},
 };
 use uom::si::{
     angle::degree,
@@ -89,7 +92,7 @@ pub fn GratingAlignmentInputs(
                 axes_skip: None,
                 on_new_rotation: on_new_rotation(on_save, alignment_memo.into()),
                 node_id,
-            
+
             }
             TranslationAlignmentInputs {
                 alignment: alignment_memo,
@@ -170,15 +173,15 @@ fn AngleToLittrowComponent(
     alignment_memo: ReadSignal<Isometry>,
     on_alignment_change: EventHandler<Isometry>,
 ) -> Element {
-    let angle_from_littrow  = use_memo(move || {
+    let angle_from_littrow = use_memo(move || {
         calc_deviation_angle_from_littrow(
-                        *diffraction_order_memo.read(),
-                        *line_density_memo.read(),
-                        alignment_memo.read().rotation_of_axis(RotationAxis::Pitch),
-                        *reference_wavelength_sig.read(),
-                        *incident_angle_sig.read(),
-                    )
-                    .get::<degree>()
+            *diffraction_order_memo.read(),
+            *line_density_memo.read(),
+            alignment_memo.read().rotation_of_axis(RotationAxis::Pitch),
+            *reference_wavelength_sig.read(),
+            *incident_angle_sig.read(),
+        )
+        .get::<degree>()
     });
     rsx! {
         NodeConfigUnitInput {
@@ -255,7 +258,10 @@ fn AngleToLittrowComponent(
 }
 
 #[component]
-pub fn GratingAlignmentSelector(alignment_select_sig: ReadSignal<bool>, on_alignment_change: EventHandler<bool>) -> Element {
+pub fn GratingAlignmentSelector(
+    alignment_select_sig: ReadSignal<bool>,
+    on_alignment_change: EventHandler<bool>,
+) -> Element {
     let via_littrow = "Define pitch via littrow";
     let direct_pitch = "Define pitch directly";
     rsx! {

@@ -63,10 +63,7 @@ impl IntoInputData<f64, LaserLines, SpecDistType> for LaserLinesParam {
 }
 
 #[component]
-pub fn LaserLineInput(
-    laser_lines: LaserLines,
-    on_save: EventHandler<SpecDistType>,
-) -> Element {
+pub fn LaserLineInput(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>) -> Element {
     let inputs = LaserLinesParam::to_input_data_vec(&laser_lines, on_save);
     rsx! {
         form {

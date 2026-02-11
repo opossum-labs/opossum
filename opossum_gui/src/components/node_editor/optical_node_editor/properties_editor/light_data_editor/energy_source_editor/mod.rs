@@ -29,7 +29,10 @@ pub fn EnergySourceEditor(
 }
 
 #[component]
-pub fn EnergyDataEditor(energy_data_builder_sig: ReadSignal<EnergyDataBuilder>, on_save: EventHandler<EnergyDataBuilder>) -> Element {
+pub fn EnergyDataEditor(
+    energy_data_builder_sig: ReadSignal<EnergyDataBuilder>,
+    on_save: EventHandler<EnergyDataBuilder>,
+) -> Element {
     match energy_data_builder_sig() {
         EnergyDataBuilder::Raw(_) => rsx! {},
         EnergyDataBuilder::FromFile(spec_file) => rsx! {

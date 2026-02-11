@@ -19,7 +19,10 @@ use opossum_core::{
 };
 
 #[component]
-pub fn RaySpectralDistributionEditor(spect_dist_type_sig: ReadSignal<SpecDistType>, on_save: EventHandler<SpecDistType>) -> Element {
+pub fn RaySpectralDistributionEditor(
+    spect_dist_type_sig: ReadSignal<SpecDistType>,
+    on_save: EventHandler<SpecDistType>,
+) -> Element {
     match &*spect_dist_type_sig.read() {
         SpecDistType::Gaussian(g) => {
             rsx! {
@@ -35,9 +38,13 @@ pub fn RaySpectralDistributionEditor(spect_dist_type_sig: ReadSignal<SpecDistTyp
 }
 
 #[component]
-pub fn SpectralDistributionEditor(spect_dist_type: SpecDistType, ray_data_builder_sig: ReadSignal<RayDataBuilder>, on_save: EventHandler<RayDataBuilder>) -> Element {
+pub fn SpectralDistributionEditor(
+    spect_dist_type: SpecDistType,
+    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
+    on_save: EventHandler<RayDataBuilder>,
+) -> Element {
     let mut spect_dist_type_sig = use_signal(|| spect_dist_type.clone());
-    
+
     let on_spect_dist_save = EventHandler::new(move |new_spect_dist_type: SpecDistType| {
         spect_dist_type_sig.set(new_spect_dist_type);
         let mut ray_data_builder = ray_data_builder_sig.read().clone();
@@ -62,7 +69,10 @@ pub fn SpectralDistributionEditor(spect_dist_type: SpecDistType, ray_data_builde
 }
 
 #[component]
-pub fn RaySpectralDistributionSelector(spect_dist_type_sig: ReadSignal<SpecDistType>, on_save: EventHandler<SpecDistType>) -> Element {
+pub fn RaySpectralDistributionSelector(
+    spect_dist_type_sig: ReadSignal<SpecDistType>,
+    on_save: EventHandler<SpecDistType>,
+) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectRaysSpectralDistribution",

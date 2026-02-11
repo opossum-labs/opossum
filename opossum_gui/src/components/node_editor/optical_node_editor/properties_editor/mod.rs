@@ -24,27 +24,20 @@ use crate::components::node_editor::{
     optical_node_editor::{
         UINodeAttr,
         properties_editor::{
-            angle_editor::AngleEditor,
-            bool_editor::BoolEditor,
-            curvature_editor::CurvatureEditor,
-            f64_editor::F64Editor,
-            filter_type_editor::FilterTypeEditor,
-            fluence_estimator_editor::FluenceEstimatorEditor,
-            i32_editor::I32Editor,
-            isometry_option_editor::IsometryOptionEditor,
-            length_editor::LengthEditor,
-            length_option_editor::LengthOptionEditor,
-            light_data_editor::LightDataEditor,
+            angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
+            f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
+            fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
+            isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
+            length_option_editor::LengthOptionEditor, light_data_editor::LightDataEditor,
             linear_density_editor::LinearDensityEditor,
             refractive_index_editor::RefractiveIndexEditor,
-            splitter_type_editor::SplitterTypeEditor,
-            string_editor::StringEditor,
+            splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
             vec2_editor::Vec2Editor,
         },
     },
 };
 use dioxus::prelude::*;
-use opossum_core::prelude::{ Property, Proptype};
+use opossum_core::prelude::{Property, Proptype};
 use uuid::Uuid;
 
 #[component]
@@ -56,7 +49,9 @@ pub fn PropertiesEditor(
     let editor_inputs = if node_attr.read().node_id == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
         for (property_key, property) in node_attr.read().properties.iter() {
-            if let Some(editor) = get_editor(node_id, property, property_key.clone(), on_change_property) {
+            if let Some(editor) =
+                get_editor(node_id, property, property_key.clone(), on_change_property)
+            {
                 editor_inputs.push(editor);
             }
         }

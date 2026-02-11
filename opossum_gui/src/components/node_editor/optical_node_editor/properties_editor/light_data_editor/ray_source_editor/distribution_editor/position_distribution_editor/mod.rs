@@ -29,7 +29,10 @@ use crate::components::node_editor::{
     },
 };
 use dioxus::prelude::*;
-fn get_pos_dist_input_data(pos_dist_type_sig: ReadSignal<PosDistType>, on_pos_dist_save: EventHandler<PosDistType>) -> Vec<InputData> {
+fn get_pos_dist_input_data(
+    pos_dist_type_sig: ReadSignal<PosDistType>,
+    on_pos_dist_save: EventHandler<PosDistType>,
+) -> Vec<InputData> {
     match &*pos_dist_type_sig.read() {
         PosDistType::Random(r) => RandomParam::to_input_data_vec(r, on_pos_dist_save),
         PosDistType::Sobol(s) => SobolParam::to_input_data_vec(s, on_pos_dist_save),
@@ -46,7 +49,10 @@ fn get_pos_dist_input_data(pos_dist_type_sig: ReadSignal<PosDistType>, on_pos_di
 }
 
 #[component]
-pub fn RayPositionDistributionSelector(pos_dist_type_sig: Signal<PosDistType>, on_pos_dist_save: EventHandler<PosDistType>) -> Element {
+pub fn RayPositionDistributionSelector(
+    pos_dist_type_sig: Signal<PosDistType>,
+    on_pos_dist_save: EventHandler<PosDistType>,
+) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectRaysPosDistribution",
@@ -63,7 +69,10 @@ pub fn RayPositionDistributionSelector(pos_dist_type_sig: Signal<PosDistType>, o
 }
 
 #[component]
-pub fn NodePosDistInputs(pos_dist_type_sig: ReadSignal<PosDistType>, on_pos_dist_save: EventHandler<PosDistType>) -> Element {
+pub fn NodePosDistInputs(
+    pos_dist_type_sig: ReadSignal<PosDistType>,
+    on_pos_dist_save: EventHandler<PosDistType>,
+) -> Element {
     let inputs: Vec<InputData> = get_pos_dist_input_data(pos_dist_type_sig, on_pos_dist_save);
     rsx! {
         RowedInputs { inputs }
@@ -71,7 +80,11 @@ pub fn NodePosDistInputs(pos_dist_type_sig: ReadSignal<PosDistType>, on_pos_dist
 }
 
 #[component]
-pub fn PositionDistributionEditor(pos_dist_type: PosDistType, ray_data_builder_sig: ReadSignal<RayDataBuilder>, on_save: EventHandler<RayDataBuilder>) -> Element {
+pub fn PositionDistributionEditor(
+    pos_dist_type: PosDistType,
+    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
+    on_save: EventHandler<RayDataBuilder>,
+) -> Element {
     let mut pos_dist_type_sig = use_signal(|| pos_dist_type);
 
     let on_pos_dist_save = EventHandler::new(move |new_pos_dist_type: PosDistType| {

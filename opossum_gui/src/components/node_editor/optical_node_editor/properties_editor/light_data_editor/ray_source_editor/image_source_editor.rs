@@ -16,7 +16,10 @@ use strum::{EnumIter, IntoEnumIterator};
 use uom::si::angle::degree;
 
 #[component]
-pub fn ImageSourceEditor(ray_data_builder_sig: ReadSignal<RayDataBuilder>, on_save: EventHandler<RayDataBuilder>) -> Element {
+pub fn ImageSourceEditor(
+    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
+    on_save: EventHandler<RayDataBuilder>,
+) -> Element {
     match &*ray_data_builder_sig.read() {
         RayDataBuilder::Image(img_src) => {
             let inputs = get_image_source_input_params(img_src, on_save);

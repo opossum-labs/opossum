@@ -24,12 +24,15 @@ pub fn RaySourceEditor(
 ) -> Element {
     let mut ray_data_builder_sig: Signal<RayDataBuilder> = use_signal(|| ray_data_builder.clone());
 
-    let on_ray_data_builder_save = EventHandler::new(move |new_ray_data_builder: RayDataBuilder| {
-        on_save.call(LightDataBuilder::Geometric(new_ray_data_builder.clone()));
-        ray_data_builder_sig.set(new_ray_data_builder);
-    });
+    let on_ray_data_builder_save =
+        EventHandler::new(move |new_ray_data_builder: RayDataBuilder| {
+            on_save.call(LightDataBuilder::Geometric(new_ray_data_builder.clone()));
+            ray_data_builder_sig.set(new_ray_data_builder);
+        });
 
-    let mut element_list = vec![rsx! {RayDataBuilderSelector { ray_data_builder_sig, on_save: on_ray_data_builder_save }}];
+    let mut element_list = vec![
+        rsx! {RayDataBuilderSelector { ray_data_builder_sig, on_save: on_ray_data_builder_save }},
+    ];
 
     match &*ray_data_builder_sig.read() {
         RayDataBuilder::Raw(_) => {}

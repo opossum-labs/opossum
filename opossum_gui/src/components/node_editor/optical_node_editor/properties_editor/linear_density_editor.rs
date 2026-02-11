@@ -1,6 +1,5 @@
 use crate::components::node_editor::{
-    inputs::input_components::NodeConfigUnitInput,
-    node_config_editor::NodeChangeEvent,
+    inputs::input_components::NodeConfigUnitInput, node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use dioxus::prelude::*;
