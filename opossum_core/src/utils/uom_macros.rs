@@ -522,6 +522,28 @@ macro_rules! num_per_mm {
     };
 }
 
+///macro to create a pressure in hectopascal
+#[macro_export]
+macro_rules! hectopascal {
+    ($( $x:expr_2021 ),*) =>{
+        {
+        use uom::si::{f64::Pressure, pressure::hectopascal};
+        $crate::uom_unit_creator![hectopascal, Pressure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a temperature in °C
+#[macro_export]
+macro_rules! degree_celsius {
+    ($( $x:expr_2021 ),*) =>{
+        {
+        use uom::si::{f64::ThermodynamicTemperature, thermodynamic_temperature::degree_celsius};
+        $crate::uom_unit_creator![degree_celsius, ThermodynamicTemperature, $( $x ),*]
+        }
+    };
+}
+
 #[cfg(test)]
 mod test {
     use approx::assert_relative_eq;

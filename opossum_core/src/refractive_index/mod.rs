@@ -1,25 +1,27 @@
 //! Module for handling the refractive index of an optical material.
 #![warn(missing_docs)]
-use std::fmt::Display;
-
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use strum::EnumIter;
 use uom::si::f64::Length;
 
+pub mod ref_index_air;
 pub mod refr_index_conrady;
 pub mod refr_index_const;
 pub mod refr_index_schott;
 pub mod refr_index_sellmeier1;
 
-pub use self::refr_index_schott::RefrIndexSchott;
+pub use ref_index_air::RefrIndexAir;
 pub use refr_index_conrady::RefrIndexConrady;
-pub use refr_index_const::RefrIndexConst;
-pub use refr_index_const::refr_index_vaccuum;
+pub use refr_index_const::{RefrIndexConst, refr_index_vaccuum};
+pub use refr_index_schott::RefrIndexSchott;
 pub use refr_index_sellmeier1::RefrIndexSellmeier1;
 
-use crate::error::{OpmResult, OpossumError};
-use crate::properties::Proptype;
-use crate::utils::default_from_name::DefaultFromName;
+use crate::{
+    error::{OpmResult, OpossumError},
+    properties::Proptype,
+    utils::default_from_name::DefaultFromName,
+};
 
 /// Available models for the calculation of refractive index
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, EnumIter)]
@@ -32,6 +34,8 @@ pub enum RefractiveIndexType {
     Schott(RefrIndexSchott),
     /// Conrady model
     Conrady(RefrIndexConrady),
+    /// Air model (Edlén formula modified by Birch and Downs)
+    Air(RefrIndexAir),
 }
 
 impl DefaultFromName for RefractiveIndexType {}
@@ -62,6 +66,7 @@ impl RefractiveIndexType {
             Self::Conrady(refr_index_conrady) => {
                 refr_index_conrady.get_refractive_index(wavelength)?
             }
+            Self::Air(refr_index_air) => refr_index_air.get_refractive_index(wavelength)?,
         };
         if refr_index < 1.0 || !refr_index.is_finite() {
             return Err(OpossumError::Other(
@@ -85,6 +90,7 @@ impl Display for RefractiveIndexType {
             Self::Sellmeier1(_) => write!(f, "Sellmeier equation"),
             Self::Schott(_) => write!(f, "Schott equation"),
             Self::Conrady(_) => write!(f, "Conrady equation"),
+            Self::Air(_) => write!(f, "Air model"),
         }
     }
 }

@@ -1,3 +1,4 @@
+mod air_model_editor;
 mod conrady_model_editor;
 mod const_model_editor;
 mod schott_model_editor;
@@ -22,7 +23,9 @@ use crate::components::node_editor::{
         select_options_from_enum_iterator,
     },
     node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::use_set_node_change_property,
+    optical_node_editor::properties_editor::{
+        refractive_index_editor::air_model_editor::AirParam, use_set_node_change_property,
+    },
 };
 use uuid::Uuid;
 
@@ -81,5 +84,6 @@ fn get_refractive_index_input_data(
         RefractiveIndexType::Conrady(ref_ind) => {
             ConradyParam::to_input_data_vec(ref_ind, ref_ind_type_sig)
         }
+        RefractiveIndexType::Air(ref_ind) => AirParam::to_input_data_vec(ref_ind, ref_ind_type_sig),
     }
 }
