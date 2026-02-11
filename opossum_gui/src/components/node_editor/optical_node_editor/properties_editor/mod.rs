@@ -51,13 +51,13 @@ use uuid::Uuid;
 pub fn PropertiesEditor(
     node_id: Memo<Uuid>,
     // node_properties_sig: Signal<Properties>,
-    node_attr: UINodeAttr,
-    on_change: EventHandler<NodeChangeEvent>,
+    node_attr: ReadSignal<UINodeAttr>,
+    on_change_property: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let editor_inputs = if node_attr.node_id == *node_id.read() {
+    let editor_inputs = if node_attr.read().node_id == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
-        for (property_key, property) in node_attr.properties.iter() {
-            if let Some(editor) = get_editor(node_id, property, property_key.clone(), on_change) {
+        for (property_key, property) in node_attr.read().properties.iter() {
+            if let Some(editor) = get_editor(node_id, property, property_key.clone(), on_change_property) {
                 editor_inputs.push(editor);
             }
         }

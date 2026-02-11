@@ -15,19 +15,19 @@ use uuid::Uuid;
 
 #[component]
 pub fn GeneralEditor(
-    node_attr: UINodeAttr,
+    node_attr: ReadSignal<UINodeAttr>,
     node_id: Memo<Uuid>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     // let mut lidt_sig = use_signal(|| node_attr.lidt.get::<joule_per_square_centimeter>());
     // use_update_signal_with_reactive_prop(lidt.get::<joule_per_square_centimeter>(), lidt_sig);
 
-    let accordion_content = if node_attr.node_id == *node_id.read() {
-        let node_id = node_attr.node_id;
-        let node_type = node_attr.node_type.clone();
-        let name = node_attr.name.clone();
-        let lidt = node_attr.lidt;
-        let inverted = node_attr.inverted;
+    let accordion_content = if node_attr.read().node_id == *node_id.read() {
+        let node_id = node_attr.read().node_id;
+        let node_type = node_attr.read().node_type.clone();
+        let name = node_attr.read().name.clone();
+        let lidt = node_attr.read().lidt;
+        let inverted = node_attr.read().inverted;
         vec![
             rsx! {
                 NodeTypeInput { node_type: node_type, label: "Node Type" }

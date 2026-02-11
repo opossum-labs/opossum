@@ -29,52 +29,79 @@ use uuid::Uuid;
 #[component]
 pub fn AlignmentEditor(
     node_id: Memo<Uuid>,
-    alignment: Isometry,
-    // node_properties_sig: Signal<Properties>,
-    node_type: String,
+    node_attr: ReadSignal<UINodeAttr>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let alignment_memo = use_memo(use_reactive!(|alignment| alignment));
-    let on_save = EventHandler::new(move |new_iso: Isometry| {
-        on_change.call(NodeChangeEvent {
-            node_id: *node_id.read(),
-            action: NodeChangeAction::Alignment(new_iso),
-        });
-    });
-
-    let accordion_content = if node_type == "reflective grating" {
-        rsx! {
-            {"nothing here yet"}
-            // GratingAlignmentInputs {
-            //     alignment_sig_outside: alignment_memo,
-            //     node_properties_sig,
-            //     on_save,
-            //     node_id,
-            // }
-        }
-    } else {
-        rsx! {
-            RotationAlignmentInputs {
-                alignment: alignment_memo,
-                axes_skip: None,
-                on_new_rotation: on_new_rotation(on_save, alignment_memo.into()),
-                node_id,
+    let node_prop_memo = use_memo(move || node_attr.read().properties.clone());
+    let accordion_content = if node_attr.read().node_id != *node_id.read() {
+        vec![]
+    }
+    else{
+        vec![
+            rsx! {
+                AlignmentInputs {
+                    node_id,
+                    alignment: node_attr.read().alignment.unwrap_or_default(),
+                    node_properties: node_prop_memo,
+                    node_type: node_attr.read().node_type.clone(),
+                    on_change,
+                }
             }
-            TranslationAlignmentInputs {
-                alignment: alignment_memo,
-                on_new_translation: on_new_translation(on_save, alignment_memo.into()),
-                node_id,
-            }
-        }
+        ]
     };
     rsx! {
         AccordionItem {
-            elements: vec![accordion_content],
+            elements: accordion_content,
             header: "Alignment",
             header_id: "alignmentHeading",
             parent_id: "accordionNodeConfig",
             content_id: "alignmentCollapse",
         }
+    }
+}
+
+#[component]
+pub fn AlignmentInputs(
+    node_id: Memo<Uuid>,
+    alignment: Isometry,
+    node_properties: ReadSignal<Properties>,
+    // node_properties_sig: Signal<Properties>,
+    node_type: String,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
+    let mut alignment_sig = use_signal(|| alignment);
+    let on_save = EventHandler::new(move |new_iso: Isometry| {
+        on_change.call(NodeChangeEvent {
+            node_id: *node_id.read(),
+            action: NodeChangeAction::Alignment(new_iso),
+        });
+        alignment_sig.set(new_iso);
+    });
+
+    if node_type == "reflective grating" {
+        rsx! {
+            GratingAlignmentInputs {
+                alignment_sig_outside: alignment_sig,
+                node_properties,
+                on_save,
+                node_id,
+            }
+        }
+    } else {
+
+    rsx! {
+        RotationAlignmentInputs {
+            alignment: alignment_sig,
+            axes_skip: None,
+            on_new_rotation: on_new_rotation(on_save, alignment_sig.into()),
+            node_id,
+        }
+        TranslationAlignmentInputs {
+            alignment: alignment_sig,
+            on_new_translation: on_new_translation(on_save, alignment_sig.into()),
+            node_id,
+        }
+    }
     }
 }
 
@@ -125,47 +152,20 @@ fn on_new_rotation(
 #[component]
 pub fn PositioningEditor(
     node_id: Memo<Uuid>,
-    node_attr: UINodeAttr,
+    node_attr: ReadSignal<UINodeAttr>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let accordion_content = if node_attr.node_id == *node_id.read() {
-        let position_opt = node_attr.position;
+    let accordion_content = if node_attr.read().node_id == *node_id.read() {
+        let position_opt = node_attr.read().position;
         vec![
             rsx!{
-                PositioningInputs__{
+                PositioningInputs{
                     position_opt,
                     on_change,
                     node_id,
                 }
             }
         ]
-        
-        // Vec::<Result<VNode, RenderError>>::new();
-        // accordion_content.push(rsx! {
-        //     LabeledSelect {
-        //         id: "nodePositioningSelector",
-        //         label: "Position Strategy",
-        //         options: vec![
-        //             (*is_relative_positioned.read(), "Relative".to_owned()),
-        //             (!*is_relative_positioned.read(), "Absolute".to_owned()),
-        //         ],
-        //         onchange: move |e: Event<FormData>| {
-        //             if e.data.value() == "Relative" {
-        //                 is_relative_positioned.set(true);
-        //             }
-        //             else{
-        //                 is_relative_positioned.set(false);
-        //             }
-        //         },
-        //     }
-        // });
-    
-        // if position_opt_sig.read().is_some() {
-        //     accordion_content.push(rsx! {
-        //         PositioningInputs { position_opt_sig, on_save, node_id }
-        //     });
-        // }
-        // accordion_content
     }
     else{
         vec![]
@@ -182,12 +182,14 @@ pub fn PositioningEditor(
 }
 
 #[component]
-pub fn PositioningInputs__(
+pub fn PositioningInputs(
     position_opt: Option<Isometry>,
     on_change: EventHandler<NodeChangeEvent>,
     node_id: Memo<Uuid>,
 ) -> Element {
     let mut position_opt_sig = use_signal(|| position_opt.clone());
+    let position_memo = use_memo(move || position_opt_sig.read().unwrap_or_default());
+
     let mut is_relative_positioned = use_signal(|| position_opt.is_none());
     let mut last_absolute_position = use_signal(|| {
             if let Some(position) = position_opt {
@@ -196,15 +198,18 @@ pub fn PositioningInputs__(
                 Isometry::default()
             }
         });
-    
-    let on_save = EventHandler::new(move |new_iso_opt: Option<Isometry>| {
+        
+        let on_save = EventHandler::new(move |new_iso_opt: Option<Isometry>| {
             on_change.call(NodeChangeEvent {
                 node_id: *node_id.read(),
                 action: NodeChangeAction::Isometry(new_iso_opt),
             });
             position_opt_sig.set(new_iso_opt);        
         });
-
+        let on_position_change =  EventHandler::new(move |new_iso: Isometry| {
+                on_save.call(Some(new_iso));
+        });
+        
     use_effect(move || {
         if *is_relative_positioned.read() {
             on_save.call(None);
@@ -241,56 +246,21 @@ pub fn PositioningInputs__(
     
     if position_opt_sig.read().is_some() {
         element_list.push(rsx! {
-            PositioningInputs { position_opt_sig, on_save, node_id }
+            RotationAlignmentInputs {
+                alignment: position_memo,
+                axes_skip: None,
+                on_new_rotation: on_new_rotation(on_position_change, position_memo.into()),
+                node_id,
+            }
+            TranslationAlignmentInputs {
+                alignment: position_memo,
+                on_new_translation: on_new_translation(on_position_change, position_memo.into()),
+                node_id,
+            }
         });
     }
-
-    // match &*splitting_config_builder_sig.read() {
-    //     SplittingConfigBuilder::FixedRatio(transmission) => {
-    //         element_list.push(rsx! {
-    //             ConstantFilterTypeEditor {
-    //                 transmission: *transmission,
-    //                 on_transmission_change: on_save,
-    //             }
-    //         });
-    //     }
-    //     SplittingConfigBuilder::Spectrum(spectral_filter_builder) => element_list.push(rsx! {
-    //         SpectralFilterTypeEditor {
-    //             spectral_filter_builder: spectral_filter_builder.clone(),
-    //             on_spectral_filter_change: on_save,
-    //         }
-    //     }),
-    // }
     rsx! {
         ElementList { element_list }
-    }
-}
-
-#[component]
-fn PositioningInputs(
-    position_opt_sig: Signal<Option<Isometry>>,
-    on_save: EventHandler<Option<Isometry>>,
-    node_id: Memo<Uuid>,
-) -> Element {
-    let position_sig = use_memo(move || position_opt_sig.read().unwrap_or_default());
-
-    let on_position_change =  EventHandler::new(move |new_iso: Isometry| {
-            on_save.call(Some(new_iso));
-    });
-
-
-    rsx! {
-        RotationAlignmentInputs {
-            alignment: position_sig,
-            axes_skip: None,
-            on_new_rotation: on_new_rotation(on_position_change, position_sig.into()),
-            node_id,
-        }
-        TranslationAlignmentInputs {
-            alignment: position_sig,
-            on_new_translation: on_new_translation(on_position_change, position_sig.into()),
-            node_id,
-        }
     }
 }
 
