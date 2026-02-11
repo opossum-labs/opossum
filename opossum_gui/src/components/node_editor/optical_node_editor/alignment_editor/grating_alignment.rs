@@ -32,7 +32,7 @@ pub fn GratingAlignmentInputs(
     alignment_sig_outside: ReadSignal<Isometry>,
     node_properties_sig: Signal<Properties>,
     on_save: EventHandler<Isometry>,
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
 ) -> Element {
     let alignment_select_sig = use_signal(|| true);
     let mut alignment_sig = use_signal(|| *alignment_sig_outside.read());
@@ -80,7 +80,7 @@ pub fn GratingAlignmentInputs(
                 axes_skip: None,
                 on_new_rotation: on_new_rotation(on_save, alignment_sig.into()),
                 node_id,
-
+            
             }
             TranslationAlignmentInputs {
                 alignment: alignment_sig,

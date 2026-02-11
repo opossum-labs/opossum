@@ -4,12 +4,9 @@ pub mod general_editor;
 pub mod properties_editor;
 
 use crate::components::node_editor::{
-    inputs::input_components::FlushableTextInput,
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::{
-        alignment_editor::{AlignmentEditor, PositioningEditor},
-        general_editor::GeneralEditor,
-        properties_editor::PropertiesEditor,
+        alignment_editor::PositioningEditor, general_editor::GeneralEditor, properties_editor::PropertiesEditor
     },
 };
 use crate::{OPOSSUM_UI_LOGS, api};
@@ -35,14 +32,12 @@ pub struct UINodeAttr {
 #[component]
 pub fn OpticalNodeEditor(
     node_id: Memo<Uuid>,
-    // node_properties_sig: Signal<Properties>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let resource_future = use_resource(move || async move {
         let node_id = *node_id.read();
         match api::get_node_properties(node_id).await {
             Ok(node_attr) => {
-                // node_properties_sig.set(node_attr.properties().clone());
                 let ui_node_attr = UINodeAttr {
                     node_id,
                     node_type: node_attr.node_type().to_string(),
@@ -80,14 +75,15 @@ pub fn OpticalNodeEditor(
                         node_attr: node_attr.clone(),
                         on_change,
                     }
-                                // PositioningEditor {
-                //     node_id,
-                //     position_opt: node_attr.position.clone(),
-                //     node_properties_sig,
-                //     node_type: node_attr.node_type.clone(),
-                //     on_change,
-                // }
-                // AlignmentEditor {
+                    PositioningEditor {
+                        node_id,
+                        node_attr: node_attr.clone(),
+                        // position_opt: node_attr.position.clone(),
+                        // node_properties_sig,
+                        // node_type: node_attr.node_type.clone(),
+                        on_change,
+                    }
+                                // AlignmentEditor {
                 //     node_id,
                 //     alignment: node_attr.alignment.unwrap_or(Isometry::identity()),
                 //     node_properties_sig,

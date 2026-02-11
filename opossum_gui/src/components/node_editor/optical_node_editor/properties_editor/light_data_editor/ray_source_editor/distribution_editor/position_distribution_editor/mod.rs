@@ -27,7 +27,6 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
-    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
 fn get_pos_dist_input_data(pos_dist_type_sig: ReadSignal<PosDistType>, on_pos_dist_save: EventHandler<PosDistType>) -> Vec<InputData> {

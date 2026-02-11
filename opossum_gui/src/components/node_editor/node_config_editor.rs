@@ -33,9 +33,6 @@ pub fn NodeConfigEditor(
     active_node_opt: Memo<Option<(NodeType, Uuid)>>,
     is_modified: Signal<bool>,
 ) -> Element {
-    let node_properties_sig = use_signal(Properties::default);
-    use_context_provider(|| node_properties_sig);
-
     let save_manager = use_save_manager();
     let flush_trigger = save_manager.flush_trigger;
     let dirty_count = save_manager.dirty_count;
@@ -69,11 +66,7 @@ pub fn NodeConfigEditor(
 
     match displayed_node() {
         Some((NodeType::Optical(_), _)) => rsx! {
-            OpticalNodeEditor {
-                node_id: memo_active_node_id,
-                // node_properties_sig,
-                on_change: on_node_change,
-            }
+            OpticalNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
         },
         Some((NodeType::Analyzer(_), node_id)) => rsx! {
             AnalyzerNodeEditor { node_id, on_change: on_node_change }
