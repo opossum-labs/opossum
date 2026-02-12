@@ -20,8 +20,8 @@ pub enum FibonacciRectParam {
 impl From<FibonacciRectParam> for InputParam {
     fn from(value: FibonacciRectParam) -> Self {
         match value {
-            FibonacciRectParam::SideLengthX => Self::Length("Length X".into()),
-            FibonacciRectParam::SideLengthY => Self::Length("Length Y".into()),
+            FibonacciRectParam::SideLengthX => Self::SIUnit("Length X".into(), "m".into()),
+            FibonacciRectParam::SideLengthY => Self::SIUnit("Length Y".into(), "m".into()),
             FibonacciRectParam::Points => Self::Usize("#Points".into()),
         }
     }

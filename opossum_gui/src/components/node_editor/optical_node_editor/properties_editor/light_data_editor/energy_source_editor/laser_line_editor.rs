@@ -23,9 +23,11 @@ pub enum EnergyLaserLinesParam {
 impl From<EnergyLaserLinesParam> for InputParam {
     fn from(value: EnergyLaserLinesParam) -> Self {
         match value {
-            EnergyLaserLinesParam::Wavelength => Self::Length("Wavelength".into()),
-            EnergyLaserLinesParam::Energy => Self::Energy("Energy".into()),
-            EnergyLaserLinesParam::SpectralResolution => Self::Length("Resolution".into()),
+            EnergyLaserLinesParam::Wavelength => Self::SIUnit("Wavelength".into(), "m".into()),
+            EnergyLaserLinesParam::Energy => Self::SIUnit("Energy".into(), "J".into()),
+            EnergyLaserLinesParam::SpectralResolution => {
+                Self::SIUnit("Resolution".into(), "m".into())
+            }
         }
     }
 }

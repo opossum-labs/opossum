@@ -238,47 +238,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 onchange: move |e| input_data.callback.call(e),
             }
         }
-    } else if let InputParam::Energy(_) = input_data.input_param {
-        rsx! {
-            NodeConfigUnitInput {
-                id: input_data.id,
-                label: input_data.input_param.label(),
-                value: input_data.value.parse::<f64>().unwrap_or_default(),
-                base_unit: "J",
-                onchange: move |new_energy: f64| {
-                    input_data.callback_str.call(new_energy.to_string());
-                },
-                readonly: input_data.readonly,
-            }
-        }
-    } else if let InputParam::Length(_) = input_data.input_param {
-        rsx! {
-            NodeConfigUnitInput {
-                id: input_data.id,
-                label: input_data.input_param.label(),
-                value: input_data.value.parse::<f64>().unwrap_or_default(),
-                base_unit: "m",
-                onchange: move |new_length: f64| {
-                    input_data.callback_str.call(new_length.to_string());
-                },
-                readonly: input_data.readonly,
-            }
-        }
-    } else if let InputParam::Angle(_) = input_data.input_param {
-        rsx! {
-            NodeConfigUnitInput {
-                id: input_data.id,
-                label: input_data.input_param.label(),
-                value: input_data.value.parse::<f64>().unwrap_or_default(),
-                base_unit: "°",
-                onchange: move |new_angle: f64| {
-                    input_data.callback_str.call(new_angle.to_string());
-                },
-                readonly: input_data.readonly,
-            }
-        }
-    } 
-    else if let InputParam::SIUnit(label, base_unit) = input_data.input_param {
+    } else if let InputParam::SIUnit(label, base_unit) = input_data.input_param {
         rsx! {
             NodeConfigUnitInput {
                 id: input_data.id,
@@ -291,8 +251,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 readonly: input_data.readonly,
             }
         }
-    }
-    else if let InputParam::F64(_) = input_data.input_param {
+    } else if let InputParam::F64(_) = input_data.input_param {
         rsx! {
             FlushableTextInput {
                 id: input_data.id,
@@ -455,16 +414,17 @@ pub fn UnitInput(
     use_effect({
         let base_unit = base_unit.clone();
         move || {
-        let current_str = val_str.peek().clone();
-        let new_str = format!(
-            "{}{}",
-            format_si_notation(*value.read(), reciprocal),
-            base_unit
-        );
-        if current_str != new_str {
-            val_str.set(new_str);
+            let current_str = val_str.peek().clone();
+            let new_str = format!(
+                "{}{}",
+                format_si_notation(*value.read(), reciprocal),
+                base_unit
+            );
+            if current_str != new_str {
+                val_str.set(new_str);
+            }
         }
-    }});
+    });
 
     let on_input_eval = {
         let base_unit = base_unit.clone();

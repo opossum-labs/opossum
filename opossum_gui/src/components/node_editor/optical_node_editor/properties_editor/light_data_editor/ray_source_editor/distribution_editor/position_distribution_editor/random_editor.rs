@@ -20,8 +20,8 @@ pub enum RandomParam {
 impl From<RandomParam> for InputParam {
     fn from(value: RandomParam) -> Self {
         match value {
-            RandomParam::SideLengthX => Self::Length("Length X".into()),
-            RandomParam::SideLengthY => Self::Length("Length Y".into()),
+            RandomParam::SideLengthX => Self::SIUnit("Length X".into(), "m".into()),
+            RandomParam::SideLengthY => Self::SIUnit("Length Y".into(), "m".into()),
             RandomParam::Points => Self::Usize("#Points".into()),
         }
     }

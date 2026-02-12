@@ -74,10 +74,10 @@ impl From<ImageSrcParam> for InputParam {
     fn from(value: ImageSrcParam) -> Self {
         match value {
             ImageSrcParam::FPath => Self::FilePath("File:".into(), ".png".into()),
-            ImageSrcParam::PxlSize => Self::Length("Pixel size".into()),
-            ImageSrcParam::Energy => Self::Energy("Energy".into()),
-            ImageSrcParam::Wavelength => Self::Length("Wavelength".into()),
-            ImageSrcParam::ConeAngle => Self::Angle("Cone Angle".into()),
+            ImageSrcParam::PxlSize => Self::SIUnit("Pixel size".into(), "m".into()),
+            ImageSrcParam::Energy => Self::SIUnit("Energy".into(), "J".into()),
+            ImageSrcParam::Wavelength => Self::SIUnit("Wavelength".into(), "m".into()),
+            ImageSrcParam::ConeAngle => Self::SIUnit("Cone Angle".into(), "deg".into()),
         }
     }
 }

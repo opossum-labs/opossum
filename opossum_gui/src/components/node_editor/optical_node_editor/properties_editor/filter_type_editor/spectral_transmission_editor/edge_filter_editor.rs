@@ -70,11 +70,11 @@ impl From<EdgeFilterParam> for InputParam {
             ),
             EdgeFilterParam::TransmissionStart => Self::F64("Min. transmission".to_string()),
             EdgeFilterParam::TransmissionEnd => Self::F64("Max. transmission".to_string()),
-            EdgeFilterParam::EdgeWavelength => Self::Length("Edge λ".to_string()),
-            EdgeFilterParam::SmoothStepWidth => Self::Length("Smoothing".to_string()),
-            EdgeFilterParam::RangeStart => Self::Length("Start λ".to_string()),
-            EdgeFilterParam::RangeEnd => Self::Length("End λ".to_string()),
-            EdgeFilterParam::Resolution => Self::Length("Resolution".to_string()),
+            EdgeFilterParam::EdgeWavelength => Self::SIUnit("Edge λ".to_string(), "m".into()),
+            EdgeFilterParam::SmoothStepWidth => Self::SIUnit("Smoothing".to_string(), "m".into()),
+            EdgeFilterParam::RangeStart => Self::SIUnit("Start λ".to_string(), "m".into()),
+            EdgeFilterParam::RangeEnd => Self::SIUnit("End λ".to_string(), "m".into()),
+            EdgeFilterParam::Resolution => Self::SIUnit("Resolution".to_string(), "m".into()),
         }
     }
 }

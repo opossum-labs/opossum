@@ -20,8 +20,8 @@ pub enum FibonacciEllipseParam {
 impl From<FibonacciEllipseParam> for InputParam {
     fn from(value: FibonacciEllipseParam) -> Self {
         match value {
-            FibonacciEllipseParam::MajorAxis => Self::Length("Major axis".into()),
-            FibonacciEllipseParam::MinorAxis => Self::Length("Minor axis".into()),
+            FibonacciEllipseParam::MajorAxis => Self::SIUnit("Major axis".into(), "m".into()),
+            FibonacciEllipseParam::MinorAxis => Self::SIUnit("Minor axis".into(), "m".into()),
             FibonacciEllipseParam::Points => Self::Usize("#Points".into()),
         }
     }

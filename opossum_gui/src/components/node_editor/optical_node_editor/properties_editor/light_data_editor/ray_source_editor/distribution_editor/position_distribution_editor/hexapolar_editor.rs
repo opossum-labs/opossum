@@ -17,7 +17,7 @@ impl From<HexapolarParam> for InputParam {
     fn from(value: HexapolarParam) -> Self {
         match value {
             HexapolarParam::NrOfRings => Self::U8("#Rings".into()),
-            HexapolarParam::Radius => Self::Length("Radius".into()),
+            HexapolarParam::Radius => Self::SIUnit("Radius".into(), "m".into()),
         }
     }
 }

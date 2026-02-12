@@ -4,7 +4,7 @@ use crate::components::{
 };
 use dioxus::{core::Event, html::FormData};
 use opossum_core::refractive_index::{RefrIndexAir, RefractiveIndexType};
-use opossum_core::{degree_celsius, bar};
+use opossum_core::{bar, degree_celsius};
 use strum::EnumIter;
 use uom::si::{pressure::bar, thermodynamic_temperature::degree_celsius};
 
@@ -20,7 +20,7 @@ impl From<AirParam> for InputParam {
         match value {
             AirParam::Temperature => Self::SIUnit("Temperature".into(), "°C".into()),
             AirParam::Pressure => Self::SIUnit("Pressure".into(), "bar".into()),
-            AirParam::Humidity => Self::F64("rel. Humidity".into()),
+            AirParam::Humidity => Self::F64("rel. Humidity in %".into()),
         }
     }
 }
@@ -39,7 +39,7 @@ impl IntoInputDataStrings<RefrIndexAir> for AirParam {
         match self {
             Self::Temperature => format!("{}", obj.temperature().get::<degree_celsius>()),
             Self::Pressure => format!("{}", obj.pressure().get::<bar>()),
-            Self::Humidity => format!("{}", obj.humidity()/100.),
+            Self::Humidity => format!("{}", obj.humidity()),
         }
     }
 }
@@ -61,7 +61,7 @@ impl IntoInputData<f64, RefrIndexAir, RefractiveIndexType> for AirParam {
                     .log_err_with_context("validation failed in `set_pressure` of RefrIndexAir");
             },
             Self::Humidity => move |obj: &mut RefrIndexAir, val: f64| {
-                obj.set_humidity(val*100.)
+                obj.set_humidity(val)
                     .log_err_with_context("validation failed in `set_humidity` of RefrIndexAir");
             },
         }
