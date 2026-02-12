@@ -4,9 +4,9 @@ use crate::components::{
 };
 use dioxus::{core::Event, html::FormData};
 use opossum_core::refractive_index::{RefrIndexAir, RefractiveIndexType};
-use opossum_core::{degree_celsius, hectopascal};
+use opossum_core::{bar, degree_celsius};
 use strum::EnumIter;
-use uom::si::{pressure::hectopascal, thermodynamic_temperature::degree_celsius};
+use uom::si::{pressure::bar, thermodynamic_temperature::degree_celsius};
 
 #[derive(Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum AirParam {
@@ -18,8 +18,8 @@ pub enum AirParam {
 impl From<AirParam> for InputParam {
     fn from(value: AirParam) -> Self {
         match value {
-            AirParam::Temperature => Self::F64("Temperature in °C".into()),
-            AirParam::Pressure => Self::F64("Pressure in hPa".into()),
+            AirParam::Temperature => Self::SIUnit("Temperature".into(), "°C".into()),
+            AirParam::Pressure => Self::SIUnit("Pressure".into(), "bar".into()),
             AirParam::Humidity => Self::F64("rel. Humidity in %".into()),
         }
     }
@@ -37,9 +37,9 @@ impl IntoInputDataStrings<RefrIndexAir> for AirParam {
     }
     fn create_value_string(&self, obj: &RefrIndexAir) -> String {
         match self {
-            Self::Temperature => format!("{:.3}", obj.temperature().get::<degree_celsius>()),
-            Self::Pressure => format!("{:.3}", obj.pressure().get::<hectopascal>()),
-            Self::Humidity => format!("{:.3}", obj.humidity()),
+            Self::Temperature => format!("{}", obj.temperature().get::<degree_celsius>()),
+            Self::Pressure => format!("{}", obj.pressure().get::<bar>()),
+            Self::Humidity => format!("{}", obj.humidity()),
         }
     }
 }
@@ -57,7 +57,7 @@ impl IntoInputData<f64, RefrIndexAir, RefractiveIndexType> for AirParam {
                     .log_err_with_context("validation failed in `set_temperature` of RefrIndexAir");
             },
             Self::Pressure => move |obj: &mut RefrIndexAir, val: f64| {
-                obj.set_pressure(hectopascal!(val))
+                obj.set_pressure(bar!(val))
                     .log_err_with_context("validation failed in `set_pressure` of RefrIndexAir");
             },
             Self::Humidity => move |obj: &mut RefrIndexAir, val: f64| {

@@ -19,9 +19,9 @@ impl From<HexagonalTilingParam> for InputParam {
     fn from(value: HexagonalTilingParam) -> Self {
         match value {
             HexagonalTilingParam::NrOfHex => Self::U8("#Hexagons".into()),
-            HexagonalTilingParam::Radius => Self::Length("Radius".into()),
-            HexagonalTilingParam::CenterX => Self::Length("Center X".into()),
-            HexagonalTilingParam::CenterY => Self::Length("Center Y".into()),
+            HexagonalTilingParam::Radius => Self::SIUnit("Radius".into(), "m".into()),
+            HexagonalTilingParam::CenterX => Self::SIUnit("Center X".into(), "m".into()),
+            HexagonalTilingParam::CenterY => Self::SIUnit("Center Y".into(), "m".into()),
         }
     }
 }

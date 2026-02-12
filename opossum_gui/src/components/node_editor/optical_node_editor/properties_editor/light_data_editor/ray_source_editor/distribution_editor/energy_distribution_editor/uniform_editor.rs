@@ -14,7 +14,7 @@ pub enum UniformParam {
 
 impl From<UniformParam> for InputParam {
     fn from(_: UniformParam) -> Self {
-        Self::Energy("Energy".into())
+        Self::SIUnit("Energy".into(), "J".into())
     }
 }
 

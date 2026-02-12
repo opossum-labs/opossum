@@ -77,11 +77,9 @@ pub enum InputParam {
     Usize(String),
     U8(String),
     F64(String),
-    Length(String),
     Selection(String, Vec<(bool, String)>),
-    Energy(String),
-    Angle(String),
     Bool(String),
+    SIUnit(String, String), // (Label, BaseUnit)
     FilePath(String, String),
 }
 
@@ -93,22 +91,16 @@ impl InputParam {
             | Self::U8(label)
             | Self::Selection(label, _)
             | Self::F64(label)
-            | Self::Length(label)
-            | Self::Energy(label)
-            | Self::Angle(label)
             | Self::Bool(label)
+            | Self::SIUnit(label, _)
             | Self::FilePath(label, _) => label.clone(),
         }
     }
     #[must_use]
     pub const fn rtype(&self) -> &'static str {
         match self {
-            Self::Usize(_)
-            | Self::U8(_)
-            | Self::F64(_)
-            | Self::Length(_)
-            | Self::Energy(_)
-            | Self::Angle(_) => "number",
+            Self::Usize(_) | Self::U8(_) | Self::F64(_) => "number",
+            Self::SIUnit(_, _) => "number",
             Self::Bool(_) => "checkbox",
             Self::FilePath(_, _) => "file",
             Self::Selection(_, _) => "select",
@@ -126,9 +118,9 @@ impl InputParam {
 impl From<TranslationAxis> for InputParam {
     fn from(axis: TranslationAxis) -> Self {
         match axis {
-            TranslationAxis::X => Self::Length("X translation".into()),
-            TranslationAxis::Y => Self::Length("Y translation".into()),
-            TranslationAxis::Z => Self::Length("Z translation".into()),
+            TranslationAxis::X => Self::SIUnit("X translation".into(), "m".into()),
+            TranslationAxis::Y => Self::SIUnit("Y translation".into(), "m".into()),
+            TranslationAxis::Z => Self::SIUnit("Z translation".into(), "m".into()),
         }
     }
 }
@@ -136,9 +128,9 @@ impl From<TranslationAxis> for InputParam {
 impl From<RotationAxis> for InputParam {
     fn from(axis: RotationAxis) -> Self {
         match axis {
-            RotationAxis::Roll => Self::Angle("Roll".into()),
-            RotationAxis::Pitch => Self::Angle("Pitch".into()),
-            RotationAxis::Yaw => Self::Angle("Yaw".into()),
+            RotationAxis::Roll => Self::SIUnit("Roll".into(), "deg".into()),
+            RotationAxis::Pitch => Self::SIUnit("Pitch".into(), "deg".into()),
+            RotationAxis::Yaw => Self::SIUnit("Yaw".into(), "deg".into()),
         }
     }
 }

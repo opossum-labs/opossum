@@ -20,8 +20,8 @@ pub enum SobolParam {
 impl From<SobolParam> for InputParam {
     fn from(value: SobolParam) -> Self {
         match value {
-            SobolParam::SideLengthX => Self::Length("Length X ".into()),
-            SobolParam::SideLengthY => Self::Length("Length Y ".into()),
+            SobolParam::SideLengthX => Self::SIUnit("Length X ".into(), "m".into()),
+            SobolParam::SideLengthY => Self::SIUnit("Length Y ".into(), "m".into()),
             SobolParam::Points => Self::Usize("#Points".into()),
         }
     }

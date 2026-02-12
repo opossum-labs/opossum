@@ -533,6 +533,17 @@ macro_rules! hectopascal {
     };
 }
 
+///macro to create a pressure in bar
+#[macro_export]
+macro_rules! bar {
+    ($( $x:expr_2021 ),*) =>{
+        {
+        use uom::si::{f64::Pressure, pressure::bar};
+        $crate::uom_unit_creator![bar, Pressure, $( $x ),*]
+        }
+    };
+}
+
 ///macro to create a temperature in °C
 #[macro_export]
 macro_rules! degree_celsius {

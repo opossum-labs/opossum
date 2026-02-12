@@ -73,12 +73,8 @@ fn get_refractive_index_input_data(
         RefractiveIndexType::Sellmeier1(ref_ind) => {
             Sellmeier1Param::to_input_data_vec(ref_ind, on_save)
         }
-        RefractiveIndexType::Schott(ref_ind) => {
-            SchottParam::to_input_data_vec(ref_ind, ref_ind_type_sig)
-        }
-        RefractiveIndexType::Conrady(ref_ind) => {
-            ConradyParam::to_input_data_vec(ref_ind, ref_ind_type_sig)
-        }
-        RefractiveIndexType::Air(ref_ind) => AirParam::to_input_data_vec(ref_ind, ref_ind_type_sig),
+        RefractiveIndexType::Schott(ref_ind) => SchottParam::to_input_data_vec(ref_ind, on_save),
+        RefractiveIndexType::Conrady(ref_ind) => ConradyParam::to_input_data_vec(ref_ind, on_save),
+        RefractiveIndexType::Air(ref_ind) => AirParam::to_input_data_vec(ref_ind, on_save),
     }
 }

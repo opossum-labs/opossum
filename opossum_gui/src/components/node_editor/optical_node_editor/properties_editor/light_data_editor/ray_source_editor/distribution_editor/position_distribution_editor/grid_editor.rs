@@ -23,8 +23,8 @@ impl From<GridParam> for InputParam {
         match value {
             GridParam::NrOfPointsX => Self::Usize("#Points X".into()),
             GridParam::NrOfPointsY => Self::Usize("#Points Y".into()),
-            GridParam::LengthX => Self::Length("Length X".into()),
-            GridParam::LengthY => Self::Length("Length Y".into()),
+            GridParam::LengthX => Self::SIUnit("Length X".into(), "m".into()),
+            GridParam::LengthY => Self::SIUnit("Length Y".into(), "m".into()),
         }
     }
 }

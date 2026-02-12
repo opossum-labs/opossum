@@ -69,14 +69,14 @@ impl From<BandFilterParam> for InputParam {
                 "Band filter type".to_string(),
                 select_options_from_enum_iterator(&bft, None),
             ),
-            BandFilterParam::CenterWavelength => Self::Length("Center λ".to_string()),
-            BandFilterParam::Width => Self::Length("FWHM".to_string()),
+            BandFilterParam::CenterWavelength => Self::SIUnit("Center λ".to_string(), "m".into()),
+            BandFilterParam::Width => Self::SIUnit("FWHM".to_string(), "m".into()),
             BandFilterParam::TransmissionStart => Self::F64("Min. transmission".to_string()),
             BandFilterParam::TransmissionEnd => Self::F64("Max. transmission".to_string()),
-            BandFilterParam::SmoothStepWidth => Self::Length("Smoothing".to_string()),
-            BandFilterParam::RangeStart => Self::Length("Start λ".to_string()),
-            BandFilterParam::RangeEnd => Self::Length("End λ".to_string()),
-            BandFilterParam::Resolution => Self::Length("Resolution".to_string()),
+            BandFilterParam::SmoothStepWidth => Self::SIUnit("Smoothing".to_string(), "m".into()),
+            BandFilterParam::RangeStart => Self::SIUnit("Start λ".to_string(), "m".into()),
+            BandFilterParam::RangeEnd => Self::SIUnit("End λ".to_string(), "m".into()),
+            BandFilterParam::Resolution => Self::SIUnit("Resolution".to_string(), "m".into()),
         }
     }
 }
