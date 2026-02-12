@@ -23,7 +23,7 @@ use crate::components::node_editor::{
     },
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
-        refractive_index_editor::air_model_editor::AirParam, on_save_proptype_handler,
+        on_save_proptype_handler, refractive_index_editor::air_model_editor::AirParam,
     },
 };
 use uuid::Uuid;
