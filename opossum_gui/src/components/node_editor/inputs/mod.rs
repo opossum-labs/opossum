@@ -99,8 +99,7 @@ impl InputParam {
     #[must_use]
     pub const fn rtype(&self) -> &'static str {
         match self {
-            Self::Usize(_) | Self::U8(_) | Self::F64(_) => "number",
-            Self::SIUnit(_, _) => "number",
+            Self::Usize(_) | Self::U8(_) | Self::F64(_) | Self::SIUnit(_, _) => "number",
             Self::Bool(_) => "checkbox",
             Self::FilePath(_, _) => "file",
             Self::Selection(_, _) => "select",
@@ -439,8 +438,7 @@ pub fn format_exp_number_notation(x: f64) -> String {
 
     if exponent == 0 {
         mantissa_str
-    }
-    else{
+    } else {
         format!("{mantissa_str}e{exponent}")
     }
 }
@@ -451,12 +449,8 @@ pub fn format_exp_number_notation(x: f64) -> String {
 /// and the specified base unit is appended. The `reciprocal` flag indicates
 /// whether the SI prefix should be inverted (e.g. "m" becomes "k").
 /// Infinite values are rendered as `"∞"` followed by the base unit.
-pub fn format_si_with_base_unit(value: f64, base_unit: &str, reciprocal: bool) -> String{
-    format!(
-                    "{}{}",
-                    format_si_notation(value, reciprocal),
-                    base_unit,
-                )
+pub fn format_si_with_base_unit(value: f64, base_unit: &str, reciprocal: bool) -> String {
+    format!("{}{}", format_si_notation(value, reciprocal), base_unit,)
 }
 
 /// Splits a floating-point value into an engineering mantissa and exponent.

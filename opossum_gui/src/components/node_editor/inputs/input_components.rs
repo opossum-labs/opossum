@@ -3,7 +3,9 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::inputs::{
-        InputData, InputParam, format_exp_number_notation, format_si_notation, format_si_with_base_unit, is_permissive_exp_input, is_permissive_unit_input, parse_exp_input_strict, parse_si_number, parse_unit_input_strict
+        InputData, InputParam, format_exp_number_notation, format_si_notation,
+        format_si_with_base_unit, is_permissive_exp_input, is_permissive_unit_input,
+        parse_exp_input_strict, parse_si_number, parse_unit_input_strict,
     },
 };
 use dioxus::prelude::*;
@@ -407,7 +409,7 @@ pub fn NodeConfigPlainF64Input(
     #[props(default = false)] readonly: bool,
 ) -> Element {
     let mut val_str = use_signal(|| format_exp_number_notation(*value.read()));
-        
+
     use_effect({
         move || {
             let current_str = val_str.peek().clone();
@@ -418,43 +420,38 @@ pub fn NodeConfigPlainF64Input(
         }
     });
 
-    let on_input_eval = {
-        move |input_val: String| is_permissive_exp_input(&input_val)
-    };
+    let on_input_eval = { move |input_val: String| is_permissive_exp_input(&input_val) };
 
     let on_input_submission = EventHandler::new({
-    move |val: String| {
-        if let Ok(num_str) = parse_exp_input_strict(
-            &val
-        ) {
-            if let Ok(parsed) = num_str.parse::<f64>() {
-                onchange.call(parsed);
-                val_str.set(format_exp_number_notation(parsed));
-            } else {
-                val_str.set(format_exp_number_notation(*value.read()));
-                OPOSSUM_UI_LOGS
-                    .write()
-                    .add_log("Cannot parse input number string to f64!");
+        move |val: String| {
+            if let Ok(num_str) = parse_exp_input_strict(&val) {
+                if let Ok(parsed) = num_str.parse::<f64>() {
+                    onchange.call(parsed);
+                    val_str.set(format_exp_number_notation(parsed));
+                } else {
+                    val_str.set(format_exp_number_notation(*value.read()));
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log("Cannot parse input number string to f64!");
+                }
             }
         }
-    }}
-);
+    });
 
-        rsx! {
-            FlushableTextInput {
-                id,
-                label,
-                value: val_str,
-                readonly,
-                container_class: "form-floating border-start".to_string(),
-                input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
-                label_class: "form-label text-secondary".to_string(),
-                eval_input: Some(Callback::new(on_input_eval)),
-                on_save: on_input_submission,
-            }
+    rsx! {
+        FlushableTextInput {
+            id,
+            label,
+            value: val_str,
+            readonly,
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
+            eval_input: Some(Callback::new(on_input_eval)),
+            on_save: on_input_submission,
         }
+    }
 }
-
 
 #[component]
 pub fn UnitInput(
@@ -495,28 +492,24 @@ pub fn UnitInput(
     };
 
     let on_input_submission = EventHandler::new({
-    let base_unit = base_unit.clone();
-    move |val: String| {
-        if let Ok((num_str, prefix_str)) = parse_unit_input_strict(
-            &val,
-            &base_unit,
-        ) {
-            if let Some(parsed) = parse_si_number(
-                &num_str,
-                &prefix_str,
-                reciprocal,
-            ) {
-                onchange.call(parsed);
-                val_str.set(format_si_with_base_unit(parsed, &base_unit, reciprocal));
-            } else {
-                val_str.set(format_si_with_base_unit(*value.read(), &base_unit, reciprocal));
-                OPOSSUM_UI_LOGS
-                    .write()
-                    .add_log("Cannot parse input number string to f64!");
+        move |val: String| {
+            if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, &base_unit) {
+                if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
+                    onchange.call(parsed);
+                    val_str.set(format_si_with_base_unit(parsed, &base_unit, reciprocal));
+                } else {
+                    val_str.set(format_si_with_base_unit(
+                        *value.read(),
+                        &base_unit,
+                        reciprocal,
+                    ));
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log("Cannot parse input number string to f64!");
+                }
             }
         }
-    }}
-);
+    });
 
     if flushable_input {
         rsx! {
