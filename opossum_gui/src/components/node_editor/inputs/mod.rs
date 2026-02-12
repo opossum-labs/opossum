@@ -437,7 +437,12 @@ pub fn format_exp_number_notation(x: f64) -> String {
     let decimals = 15 - mantissa.abs().log10().abs().ceil() as usize;
     let mantissa_str = format_fixed_decimal(mantissa, decimals);
 
-    format!("{mantissa_str}e{exponent}")
+    if exponent == 0 {
+        mantissa_str
+    }
+    else{
+        format!("{mantissa_str}e{exponent}")
+    }
 }
 
 /// Formats a floating-point value with an SI prefix and a base unit.
