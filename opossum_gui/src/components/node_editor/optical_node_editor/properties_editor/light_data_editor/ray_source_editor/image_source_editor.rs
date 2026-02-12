@@ -16,10 +16,13 @@ use strum::{EnumIter, IntoEnumIterator};
 use uom::si::angle::degree;
 
 #[component]
-pub fn ImageSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
+pub fn ImageSourceEditor(
+    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
+    on_save: EventHandler<RayDataBuilder>,
+) -> Element {
     match &*ray_data_builder_sig.read() {
         RayDataBuilder::Image(img_src) => {
-            let inputs = get_image_source_input_params(img_src, ray_data_builder_sig);
+            let inputs = get_image_source_input_params(img_src, on_save);
             rsx! {
                 RowedInputs { inputs }
             }
@@ -32,7 +35,7 @@ pub fn ImageSourceEditor(ray_data_builder_sig: Signal<RayDataBuilder>) -> Elemen
 
 pub fn get_image_source_input_params(
     img_src: &ImageSrc,
-    ray_data_builder_sig: Signal<RayDataBuilder>,
+    on_save: EventHandler<RayDataBuilder>,
 ) -> Vec<InputData> {
     let mut input_data = Vec::<InputData>::new();
     for enum_variant in ImageSrcParam::iter() {
@@ -42,7 +45,7 @@ pub fn get_image_source_input_params(
                     IntoInputData::<String, ImageSrc, RayDataBuilder>::to_input_data(
                         &enum_variant,
                         img_src.clone(),
-                        ray_data_builder_sig,
+                        on_save,
                     ),
                 );
             }
@@ -50,7 +53,7 @@ pub fn get_image_source_input_params(
                 IntoInputData::<f64, ImageSrc, RayDataBuilder>::to_input_data(
                     &enum_variant,
                     img_src.clone(),
-                    ray_data_builder_sig,
+                    on_save,
                 ),
             ),
         }

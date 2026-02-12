@@ -36,7 +36,7 @@ impl AnalysisGhostFocus for BeamSplitter {
             let (out1_data, out2_data) = self.analyze_raytrace(
                 Some(&LightData::Geometric(rays.clone())),
                 None,
-                &AnalyzerType::GhostFocus(config.clone()),
+                &AnalyzerType::GhostFocus(*config),
             )?;
             if let Some(LightData::Geometric(rays)) = out1_data {
                 light_data_out1.push(rays.clone());
@@ -49,7 +49,7 @@ impl AnalysisGhostFocus for BeamSplitter {
             let (out1_data, out2_data) = self.analyze_raytrace(
                 None,
                 Some(&LightData::Geometric(rays.clone())),
-                &AnalyzerType::GhostFocus(config.clone()),
+                &AnalyzerType::GhostFocus(*config),
             )?;
             if let Some(LightData::Geometric(rays)) = out1_data {
                 light_data_out1.push(rays.clone());

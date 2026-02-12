@@ -27,27 +27,32 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
-    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
-fn get_pos_dist_input_data(pos_dist_type_sig: Signal<PosDistType>) -> Vec<InputData> {
+fn get_pos_dist_input_data(
+    pos_dist_type_sig: ReadSignal<PosDistType>,
+    on_pos_dist_save: EventHandler<PosDistType>,
+) -> Vec<InputData> {
     match &*pos_dist_type_sig.read() {
-        PosDistType::Random(r) => RandomParam::to_input_data_vec(r, pos_dist_type_sig),
-        PosDistType::Sobol(s) => SobolParam::to_input_data_vec(s, pos_dist_type_sig),
-        PosDistType::Grid(g) => GridParam::to_input_data_vec(g, pos_dist_type_sig),
-        PosDistType::HexagonalTiling(h) => get_hexagonal_input_params(h, pos_dist_type_sig),
-        PosDistType::Hexapolar(h) => get_hexapolar_input_params(h, pos_dist_type_sig),
+        PosDistType::Random(r) => RandomParam::to_input_data_vec(r, on_pos_dist_save),
+        PosDistType::Sobol(s) => SobolParam::to_input_data_vec(s, on_pos_dist_save),
+        PosDistType::Grid(g) => GridParam::to_input_data_vec(g, on_pos_dist_save),
+        PosDistType::HexagonalTiling(h) => get_hexagonal_input_params(h, on_pos_dist_save),
+        PosDistType::Hexapolar(h) => get_hexapolar_input_params(h, on_pos_dist_save),
         PosDistType::FibonacciRectangle(f) => {
-            FibonacciRectParam::to_input_data_vec(f, pos_dist_type_sig)
+            FibonacciRectParam::to_input_data_vec(f, on_pos_dist_save)
         }
         PosDistType::FibonacciEllipse(f) => {
-            FibonacciEllipseParam::to_input_data_vec(f, pos_dist_type_sig)
+            FibonacciEllipseParam::to_input_data_vec(f, on_pos_dist_save)
         }
     }
 }
 
 #[component]
-pub fn RayPositionDistributionSelector(pos_dist_type_sig: Signal<PosDistType>) -> Element {
+pub fn RayPositionDistributionSelector(
+    pos_dist_type_sig: Signal<PosDistType>,
+    on_pos_dist_save: EventHandler<PosDistType>,
+) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectRaysPosDistribution",
@@ -56,7 +61,7 @@ pub fn RayPositionDistributionSelector(pos_dist_type_sig: Signal<PosDistType>) -
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(pdt) = PosDistType::default_from_name(val.as_str()) {
-                    pos_dist_type_sig.set(pdt);
+                    on_pos_dist_save.call(pdt);
                 }
             },
         }
@@ -64,28 +69,34 @@ pub fn RayPositionDistributionSelector(pos_dist_type_sig: Signal<PosDistType>) -
 }
 
 #[component]
-pub fn NodePosDistInputs(pos_dist_type_sig: Signal<PosDistType>) -> Element {
-    let inputs: Vec<InputData> = get_pos_dist_input_data(pos_dist_type_sig);
+pub fn NodePosDistInputs(
+    pos_dist_type_sig: ReadSignal<PosDistType>,
+    on_pos_dist_save: EventHandler<PosDistType>,
+) -> Element {
+    let inputs: Vec<InputData> = get_pos_dist_input_data(pos_dist_type_sig, on_pos_dist_save);
     rsx! {
         RowedInputs { inputs }
     }
 }
 
 #[component]
-pub fn PositionDistributionEditor(pos_dist_type: PosDistType) -> Element {
-    let mut ray_data_builder_sig = use_context::<Signal<RayDataBuilder>>();
-    let pos_dist_type_sig = use_signal(|| pos_dist_type);
-    use_update_signal_with_reactive_prop(pos_dist_type, pos_dist_type_sig);
+pub fn PositionDistributionEditor(
+    pos_dist_type: PosDistType,
+    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
+    on_save: EventHandler<RayDataBuilder>,
+) -> Element {
+    let mut pos_dist_type_sig = use_signal(|| pos_dist_type);
 
-    use_effect(move || {
-        ray_data_builder_sig
-            .write()
-            .set_pos_dist(*pos_dist_type_sig.read());
+    let on_pos_dist_save = EventHandler::new(move |new_pos_dist_type: PosDistType| {
+        pos_dist_type_sig.set(new_pos_dist_type);
+        let mut ray_data_builder = ray_data_builder_sig.read().clone();
+        ray_data_builder.set_pos_dist(*pos_dist_type_sig.read());
+        on_save.call(ray_data_builder);
     });
 
     let accordion_item_content = rsx! {
-        RayPositionDistributionSelector { pos_dist_type_sig }
-        NodePosDistInputs { pos_dist_type_sig }
+        RayPositionDistributionSelector { pos_dist_type_sig, on_pos_dist_save }
+        NodePosDistInputs { pos_dist_type_sig, on_pos_dist_save }
     };
 
     rsx! {

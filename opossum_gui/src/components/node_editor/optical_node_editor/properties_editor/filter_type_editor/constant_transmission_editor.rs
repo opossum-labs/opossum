@@ -1,49 +1,28 @@
-use crate::{
-    OPOSSUM_UI_LOGS,
-    components::node_editor::{
-        hooks::use_update_signal_with_reactive_prop, inputs::input_components::LabeledInput,
-    },
-};
+use crate::components::node_editor::inputs::input_components::FlushableTextInput;
 use approx::relative_ne;
 use dioxus::prelude::*;
-use opossum_core::prelude::{Property, Proptype};
 
 #[component]
-pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Into<Proptype> + 'static>(
+pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Clone + 'static>(
     transmission: f64,
-    builder_sig: Signal<T>,
+    on_transmission_change: EventHandler<T>,
 ) -> Element {
-    let mut transmission_sig = use_signal(|| transmission);
-    let property = use_context::<Property>();
-
-    use_update_signal_with_reactive_prop(transmission, transmission_sig);
-
-    use_effect(move || {
-        if relative_ne!(transmission, *transmission_sig.read()) {
-            builder_sig.set((*transmission_sig.read()).into());
-        }
-    });
+    let transmission_sig = use_signal(|| transmission);
     rsx! {
-        LabeledInput {
-            id: "constFilterTypeInput",
-            label: "Transmission",
+        FlushableTextInput {
+            id: "constFilterTypeInput".to_string(),
+            label: "Transmission".to_string(),
             value: format!("{:.3}", transmission_sig.read()),
-            r#type: "number",
-            step: Some("0.01"),
-            min: Some("0."),
-            max: Some("1."),
-            onchange: move |e: Event<FormData>| {
-                if let Ok(val) = e.data.value().parse::<f64>() {
-                    let last_val = *transmission_sig.read();
-                    match property.validate_proptype(&T::from(val).into()) {
-                        Ok(()) => transmission_sig.set(val),
-                        Err(e) => {
-                            OPOSSUM_UI_LOGS.write().add_log(format!("{e}").as_str());
-                            transmission_sig.set(last_val);
-                        }
-                    }
+            on_save: move |new_val: String| {
+                let old_val = *transmission_sig.read();
+                if let Ok(val) = new_val.parse::<f64>() && relative_ne!(old_val, val) {
+                    on_transmission_change.call(T::from(val));
                 }
             },
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
         }
+
     }
 }

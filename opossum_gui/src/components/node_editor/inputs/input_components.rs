@@ -71,7 +71,7 @@ pub fn FlushableTextInput(
                 id: id.as_str(),
                 name: id.as_str(),
                 placeholder: label,
-                value: "{local_value}",
+                value: local_value.read().clone(),
                 readonly,
                 disabled: readonly,
                 r#type,
@@ -277,6 +277,19 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 readonly: input_data.readonly,
             }
         }
+    } else if let InputParam::F64(_) = input_data.input_param {
+        rsx! {
+            FlushableTextInput {
+                id: input_data.id,
+                label: input_data.input_param.label(),
+                value: input_data.value,
+                on_save: input_data.callback_str,
+                readonly: input_data.readonly,
+                container_class: "form-floating border-start".to_string(),
+                input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+                label_class: "form-label text-secondary".to_string(),
+            }
+        }
     } else {
         rsx! {
             FlushableTextInput {
@@ -453,6 +466,12 @@ pub fn UnitInput(
                     if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, base_unit) {
                         if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
                             onchange.call(parsed);
+                            let val = format!(
+                                "{}{}",
+                                format_si_notation(parsed, reciprocal),
+                                base_unit,
+                            );
+                            val_str.set(val);
                         } else {
                             onchange.call(*value.read());
                             OPOSSUM_UI_LOGS
@@ -468,7 +487,6 @@ pub fn UnitInput(
             input {
                 class: input_class,
                 id,
-                // label,
                 value: val_str,
                 readonly,
                 oninput: move |e: Event<FormData>| {

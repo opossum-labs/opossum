@@ -1,22 +1,21 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        hooks::use_update_signal_with_reactive_prop,
         inputs::{
             InputData, InputParam,
             input_components::{LabeledSelect, RowedInputs},
             select_options_from_enum_iterator,
         },
-        node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
     },
 };
 use approx::relative_eq;
 use dioxus::prelude::*;
 use inflector::Inflector;
 use nalgebra::Vector2;
-use opossum_core::{
-    prelude::Proptype,
-    utils::{default_from_name::DefaultFromName, geom_transformation::TranslationAxis},
+use opossum_core::utils::{
+    default_from_name::DefaultFromName, geom_transformation::TranslationAxis,
 };
 use std::fmt::Display;
 use strum::EnumIter;
@@ -43,29 +42,18 @@ impl DefaultFromName for Vec2Options {}
 
 #[component]
 pub fn Vec2Editor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     vector: Vector2<f64>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let select_label = property_key.to_sentence_case();
-    let mut vec_sig = use_signal(|| vector);
+    let vec_sig = use_signal(|| vector);
 
-    use_update_signal_with_reactive_prop(vector, vec_sig);
-
-    // FIX: Clone property_key
-    let prop_key_clone = property_key.clone();
-    let on_save = EventHandler::new(move |new_vec: Vector2<f64>| {
-        on_change.call(NodeChangeEvent {
-            node_id,
-            action: NodeChangeAction::Property(prop_key_clone.clone(), Proptype::Vec2(new_vec)),
-        });
-    });
+    let on_save =
+        on_save_proptype_handler(vec_sig, property_key.clone(), on_change, node_id.into());
 
     let dummy_legacy_callback = EventHandler::new(|_| {});
-
-    // FIX: property_key Nutzung weiter unten -> muss geklont sein, wenn es oben moved wurde
-    // Aber da wir oben eine Kopie (prop_key_clone) nutzen, ist property_key noch hier verfügbar!
 
     let vec_x_input = InputData::new(
         InputParam::F64(format!("{select_label} x")),
@@ -73,7 +61,7 @@ pub fn Vec2Editor(
             .to_camel_case()
             .as_str(),
         dummy_legacy_callback,
-        on_vec_input_change_str(vec_sig, TranslationAxis::X, on_save),
+        on_vec_input_change_str(vec_sig.into(), TranslationAxis::X, on_save),
         format!("{:.3}", vec_sig.read().x),
     );
 
@@ -85,7 +73,7 @@ pub fn Vec2Editor(
             .to_camel_case()
             .as_str(),
         dummy_legacy_callback,
-        on_vec_input_change_str(vec_sig, TranslationAxis::Y, on_save),
+        on_vec_input_change_str(vec_sig.into(), TranslationAxis::Y, on_save),
         format!("{:.3}", vec_sig.read().y),
     );
 
@@ -113,7 +101,6 @@ pub fn Vec2Editor(
                         Vec2Options::Y => Vector2::new(0., 1.),
                         Vec2Options::Mix => Vector2::new(1., 1.),
                     };
-                    vec_sig.set(new_vec);
                     on_save.call(new_vec);
                 }
             },
@@ -131,9 +118,9 @@ pub fn Vec2Editor(
 }
 
 fn on_vec_input_change_str(
-    mut vec_sig: Signal<Vector2<f64>>,
+    vec_sig: ReadSignal<Vector2<f64>>,
     axis: TranslationAxis,
-    on_save: EventHandler<Vector2<f64>>,
+    on_vec_change: EventHandler<Vector2<f64>>,
 ) -> EventHandler<String> {
     EventHandler::new(move |val_str: String| {
         if let Ok(val) = val_str.parse::<f64>() {
@@ -145,8 +132,7 @@ fn on_vec_input_change_str(
                     .write()
                     .add_log("Z-axis is not valid vor Vec2 Proptype!"),
             }
-            vec_sig.set(vec);
-            on_save.call(vec);
+            on_vec_change.call(vec);
         }
     })
 }

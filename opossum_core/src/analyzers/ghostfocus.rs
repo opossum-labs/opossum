@@ -33,11 +33,11 @@ use super::{
 inventory::submit! {
     AnalyzerRegistration::new(
         || AnalyzerType::GhostFocus(GhostFocusConfig::default()),
-        |at| if let AnalyzerType::GhostFocus(config) = at { Some(Box::new(GhostFocusAnalyzer::new(config.clone()))) } else { None }
+        |at| if let AnalyzerType::GhostFocus(config) = at { Some(Box::new(GhostFocusAnalyzer::new(*config))) } else { None }
     )
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Copy)]
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
     max_bounces: usize,
@@ -273,11 +273,7 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
             return Ok(out_light_rays);
         };
         let mut rays = bouncing_rays.clone();
-        self.pass_through_detector_surface(
-            in_port,
-            &mut rays,
-            &AnalyzerType::GhostFocus(config.clone()),
-        )?;
+        self.pass_through_detector_surface(in_port, &mut rays, &AnalyzerType::GhostFocus(*config))?;
 
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.clone(), rays);

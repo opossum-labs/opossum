@@ -15,8 +15,12 @@ use opossum_core::prelude::*;
 use uuid::Uuid;
 
 #[component]
-pub fn AnalyzerNodeEditor(node_id: Uuid, on_change: EventHandler<NodeChangeEvent>) -> Element {
+pub fn AnalyzerNodeEditor(
+    node_id: Memo<Uuid>,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
     let resource_future = use_resource(move || async move {
+        let node_id = *node_id.read();
         match api::get_analyzer_info(node_id).await {
             Ok(analyzer_info) => Some(analyzer_info),
             Err(err_str) => {
@@ -27,33 +31,37 @@ pub fn AnalyzerNodeEditor(node_id: Uuid, on_change: EventHandler<NodeChangeEvent
     });
     match &*resource_future.read_unchecked() {
         Some(Some(analyzer_info)) => {
-            rsx! {
-                div {
-                    h6 { "Analyzer Configuration" }
+            if analyzer_info.id() == *node_id.read() {
+                rsx! {
                     div {
-                        class: "accordion accordion-borderless bg-dark ",
-                        id: "accordionAnalyzerConfig",
-                        NodeTypeInput {
-                            node_type: format!("{}", analyzer_info.analyzer_type()),
-                            label: "Analyzer Type",
-                        }
-                        {
-                            match analyzer_info.analyzer_type().clone() {
-                                AnalyzerType::Energy => rsx! {},
-                                AnalyzerType::RayTrace(ray_trace_config) => {
-                                    rsx! {
-                                        RayTraceEditor { node_id, ray_trace_config, on_change }
+                        h6 { "Analyzer Configuration" }
+                        div {
+                            class: "accordion accordion-borderless bg-dark ",
+                            id: "accordionAnalyzerConfig",
+                            NodeTypeInput {
+                                node_type: format!("{}", analyzer_info.analyzer_type()),
+                                label: "Analyzer Type",
+                            }
+                            {
+                                match analyzer_info.analyzer_type().clone() {
+                                    AnalyzerType::Energy => rsx! {},
+                                    AnalyzerType::RayTrace(ray_trace_config) => {
+                                        rsx! {
+                                            RayTraceEditor { node_id, ray_trace_config, on_change }
+                                        }
                                     }
-                                }
-                                AnalyzerType::GhostFocus(ghost_focus_config) => {
-                                    rsx! {
-                                        GhostFocusEditor { node_id, ghost_focus_config, on_change }
+                                    AnalyzerType::GhostFocus(ghost_focus_config) => {
+                                        rsx! {
+                                            GhostFocusEditor { node_id, ghost_focus_config, on_change }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+            } else {
+                rsx! {}
             }
         }
         _ => {

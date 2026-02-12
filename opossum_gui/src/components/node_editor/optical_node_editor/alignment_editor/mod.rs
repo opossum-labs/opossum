@@ -5,10 +5,10 @@ mod grating_alignment;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        accordion::AccordionItem,
-        hooks::use_update_signal_with_reactive_prop,
+        accordion::{AccordionItem, ElementList},
         inputs::input_components::{LabeledSelect, NodeConfigUnitInput, RowedElements},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        optical_node_editor::UINodeAttr,
     },
 };
 use approx::relative_ne;
@@ -28,25 +28,58 @@ use uuid::Uuid;
 
 #[component]
 pub fn AlignmentEditor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
+    node_attr: ReadSignal<UINodeAttr>,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
+    let node_prop_memo = use_memo(move || node_attr.read().properties.clone());
+    let accordion_content = if node_attr.read().node_id == *node_id.read() {
+        vec![rsx! {
+            AlignmentInputs {
+                node_id,
+                alignment: node_attr.read().alignment.unwrap_or_default(),
+                node_properties: node_prop_memo,
+                node_type: node_attr.read().node_type.clone(),
+                on_change,
+            }
+        }]
+    } else {
+        vec![]
+    };
+    rsx! {
+        AccordionItem {
+            elements: accordion_content,
+            header: "Alignment",
+            header_id: "alignmentHeading",
+            parent_id: "accordionNodeConfig",
+            content_id: "alignmentCollapse",
+        }
+    }
+}
+
+#[component]
+pub fn AlignmentInputs(
+    node_id: Memo<Uuid>,
     alignment: Isometry,
-    node_properties_sig: Signal<Properties>,
+    node_properties: ReadSignal<Properties>,
+    // node_properties_sig: Signal<Properties>,
     node_type: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let alignment_memo = use_memo(use_reactive!(|alignment| alignment));
+    let mut alignment_sig = use_signal(|| alignment);
     let on_save = EventHandler::new(move |new_iso: Isometry| {
         on_change.call(NodeChangeEvent {
-            node_id,
+            node_id: *node_id.read(),
             action: NodeChangeAction::Alignment(new_iso),
         });
+        alignment_sig.set(new_iso);
     });
 
-    let accordion_content = if node_type == "reflective grating" {
+    if node_type == "reflective grating" {
         rsx! {
             GratingAlignmentInputs {
-                alignment_sig_outside: alignment_memo,
-                node_properties_sig,
+                alignment_sig_outside: alignment_sig,
+                node_properties,
                 on_save,
                 node_id,
             }
@@ -54,25 +87,16 @@ pub fn AlignmentEditor(
     } else {
         rsx! {
             RotationAlignmentInputs {
-                alignment: alignment_memo,
+                alignment: alignment_sig,
                 axes_skip: None,
-                on_new_rotation: on_new_rotation(on_save, alignment_memo.into()),
+                on_new_rotation: on_new_rotation(on_save, alignment_sig.into()),
                 node_id,
             }
             TranslationAlignmentInputs {
-                alignment: alignment_memo,
-                on_new_translation: on_new_translation(on_save, alignment_memo.into()),
+                alignment: alignment_sig,
+                on_new_translation: on_new_translation(on_save, alignment_sig.into()),
                 node_id,
             }
-        }
-    };
-    rsx! {
-        AccordionItem {
-            elements: vec![accordion_content],
-            header: "Alignment",
-            header_id: "alignmentHeading",
-            parent_id: "accordionNodeConfig",
-            content_id: "alignmentCollapse",
         }
     }
 }
@@ -123,59 +147,22 @@ fn on_new_rotation(
 
 #[component]
 pub fn PositioningEditor(
-    node_id: Uuid,
-    position_opt: Option<Isometry>,
-    node_properties_sig: Signal<Properties>,
-    node_type: String,
+    node_id: Memo<Uuid>,
+    node_attr: ReadSignal<UINodeAttr>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut position_opt_sig = use_signal(|| position_opt);
-    use_context_provider(|| position_opt_sig);
-    use_update_signal_with_reactive_prop(position_opt, position_opt_sig);
-
-    let on_save = EventHandler::new(move |new_iso: Isometry| {
-        position_opt_sig.set(Some(new_iso));
-        on_change.call(NodeChangeEvent {
-            node_id,
-            action: NodeChangeAction::Isometry(Some(new_iso)),
-        });
-    });
-
-    let mut accordion_content = Vec::<Result<VNode, RenderError>>::new();
-    accordion_content.push(rsx! {
-        LabeledSelect {
-            id: "nodePositioningSelector",
-            label: "Position Strategy",
-            options: vec![
-                (position_opt_sig.read().is_none(), "Relative".to_owned()),
-                (position_opt_sig.read().is_some(), "Absolute".to_owned()),
-            ],
-            onchange: move |_: Event<FormData>| {
-                if position_opt_sig.read().is_some() {
-                    position_opt_sig.set(None);
-                    on_change
-                        .call(NodeChangeEvent {
-                            node_id,
-                            action: NodeChangeAction::Isometry(None),
-                        });
-                } else {
-                    let new_iso = Isometry::default();
-                    position_opt_sig.set(Some(new_iso));
-                    on_change
-                        .call(NodeChangeEvent {
-                            node_id,
-                            action: NodeChangeAction::Isometry(Some(new_iso)),
-                        });
-                }
-            },
-        }
-    });
-
-    if position_opt_sig.read().is_some() {
-        accordion_content.push(rsx! {
-            PositioningInputs { position_opt_sig, on_save, node_id }
-        });
-    }
+    let accordion_content = if node_attr.read().node_id == *node_id.read() {
+        let position_opt = node_attr.read().position;
+        vec![rsx! {
+            PositioningInputs{
+                position_opt,
+                on_change,
+                node_id,
+            }
+        }]
+    } else {
+        vec![]
+    };
     rsx! {
         AccordionItem {
             elements: accordion_content,
@@ -188,34 +175,79 @@ pub fn PositioningEditor(
 }
 
 #[component]
-fn PositioningInputs(
-    position_opt_sig: Signal<Option<Isometry>>,
-    on_save: EventHandler<Isometry>,
-    node_id: Uuid,
+pub fn PositioningInputs(
+    position_opt: Option<Isometry>,
+    on_change: EventHandler<NodeChangeEvent>,
+    node_id: Memo<Uuid>,
 ) -> Element {
-    let mut position_sig = use_signal(|| position_opt_sig.read().unwrap_or_default());
+    let mut position_opt_sig = use_signal(|| position_opt);
+    let position_memo = use_memo(move || position_opt_sig.read().unwrap_or_default());
+
+    let mut is_relative_positioned = use_signal(|| position_opt.is_none());
+    let mut last_absolute_position = use_signal(|| position_opt.unwrap_or_default());
+
+    let on_save = EventHandler::new(move |new_iso_opt: Option<Isometry>| {
+        on_change.call(NodeChangeEvent {
+            node_id: *node_id.read(),
+            action: NodeChangeAction::Isometry(new_iso_opt),
+        });
+        position_opt_sig.set(new_iso_opt);
+    });
+    let on_position_change = EventHandler::new(move |new_iso: Isometry| {
+        on_save.call(Some(new_iso));
+    });
 
     use_effect(move || {
-        #[allow(clippy::collapsible_if)]
-        if let Some(iso) = position_opt_sig.read().as_ref() {
-            if *position_sig.peek() != *iso {
-                position_sig.set(*iso);
-            }
+        if *is_relative_positioned.read() {
+            on_save.call(None);
+        } else {
+            on_save.call(Some(*last_absolute_position.read()));
         }
     });
 
+    use_effect(move || {
+        let current_val = *position_opt_sig.read();
+        if let Some(abs_pos) = current_val {
+            last_absolute_position.set(abs_pos);
+        }
+    });
+
+    let mut element_list = vec![rsx! {
+    LabeledSelect {
+            id: "nodePositioningSelector",
+            label: "Position Strategy",
+            options: vec![
+                (*is_relative_positioned.read(), "Relative".to_owned()),
+                (!*is_relative_positioned.read(), "Absolute".to_owned()),
+            ],
+            onchange: move |e: Event<FormData>| {
+                if e.data.value() == "Relative" {
+                    is_relative_positioned.set(true);
+                }
+                else{
+                    is_relative_positioned.set(false);
+                }
+            },
+        }
+    }];
+
+    if position_opt_sig.read().is_some() {
+        element_list.push(rsx! {
+            RotationAlignmentInputs {
+                alignment: position_memo,
+                axes_skip: None,
+                on_new_rotation: on_new_rotation(on_position_change, position_memo.into()),
+                node_id,
+            }
+            TranslationAlignmentInputs {
+                alignment: position_memo,
+                on_new_translation: on_new_translation(on_position_change, position_memo.into()),
+                node_id,
+            }
+        });
+    }
     rsx! {
-        RotationAlignmentInputs {
-            alignment: position_sig,
-            axes_skip: None,
-            on_new_rotation: on_new_rotation(on_save, position_sig.into()),
-            node_id,
-        }
-        TranslationAlignmentInputs {
-            alignment: position_sig,
-            on_new_translation: on_new_translation(on_save, position_sig.into()),
-            node_id,
-        }
+        ElementList { element_list }
     }
 }
 
@@ -223,61 +255,42 @@ fn PositioningInputs(
 fn TranslationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
     on_new_translation: EventHandler<(Length, TranslationAxis)>,
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
 ) -> Element {
     let id_add_on = "inputNodeAlignmentTrans";
 
-    let mut x_sig = use_signal(move || {
+    let x_sig = use_memo(move || {
         alignment
             .read()
             .translation_of_axis(TranslationAxis::X)
             .value
     });
-    let mut y_sig = use_signal(move || {
+    let y_sig = use_memo(move || {
         alignment
             .read()
             .translation_of_axis(TranslationAxis::Y)
             .value
     });
-    let mut z_sig = use_signal(move || {
+    let z_sig = use_memo(move || {
         alignment
             .read()
             .translation_of_axis(TranslationAxis::Z)
             .value
     });
-
-    use_update_signal_with_reactive_prop(
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::X)
-            .value,
-        x_sig,
-    );
-    use_update_signal_with_reactive_prop(
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::Y)
-            .value,
-        y_sig,
-    );
-    use_update_signal_with_reactive_prop(
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::Z)
-            .value,
-        z_sig,
-    );
 
     rsx! {
         div { class: "row gy-1 gx-2",
             div { class: "col-sm",
                 NodeConfigUnitInput {
-                    id: format!("{id_add_on}{}{}", TranslationAxis::X, node_id.as_simple().to_string()),
+                    id: format!(
+                        "{id_add_on}{}{}",
+                        TranslationAxis::X,
+                        node_id.read().as_simple().to_string(),
+                    ),
                     label: format!("{} translation", TranslationAxis::X),
                     value: x_sig,
                     base_unit: "m",
                     onchange: move |new_trans: f64| {
-                        x_sig.set(new_trans);
                         on_new_translation.call((meter!(new_trans), TranslationAxis::X));
                     },
                 }
@@ -289,7 +302,6 @@ fn TranslationAlignmentInputs(
                     value: y_sig,
                     base_unit: "m",
                     onchange: move |new_trans: f64| {
-                        y_sig.set(new_trans);
                         on_new_translation.call((meter!(new_trans), TranslationAxis::Y));
                     },
                 }
@@ -301,7 +313,6 @@ fn TranslationAlignmentInputs(
             value: z_sig,
             base_unit: "m",
             onchange: move |new_trans: f64| {
-                z_sig.set(new_trans);
                 on_new_translation.call((meter!(new_trans), TranslationAxis::Z));
             },
         }
@@ -313,7 +324,7 @@ fn RotationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
     axes_skip: Option<Vec<RotationAxis>>,
     on_new_rotation: EventHandler<(Angle, RotationAxis)>,
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
 ) -> Element {
     let id_add_on = "inputNodeAlignmentRot";
 
@@ -329,7 +340,7 @@ fn RotationAlignmentInputs(
             RotationInput {
                 alignment,
                 axis: rot_axis,
-                id: format!("{id_add_on}{}{}", rot_axis, node_id.as_simple().to_string()),
+                id: format!("{id_add_on}{}{}", rot_axis, node_id.read().as_simple().to_string()),
                 on_new_rotation,
             }
         });
@@ -346,17 +357,13 @@ pub fn RotationInput(
     id: String,
     on_new_rotation: EventHandler<(Angle, RotationAxis)>,
 ) -> Element {
-    let value_sig = use_signal(move || alignment.read().rotation_of_axis(axis).get::<degree>());
-    use_update_signal_with_reactive_prop(
-        alignment.read().rotation_of_axis(axis).get::<degree>(),
-        value_sig,
-    );
+    let value_memo = use_memo(move || alignment.read().rotation_of_axis(axis).get::<degree>());
 
     rsx! {
         NodeConfigUnitInput {
             id,
             label: format!("{} rotation", axis),
-            value: value_sig,
+            value: value_memo,
             base_unit: "°",
             onchange: move |new_rot: f64| {
                 on_new_rotation.call((degree!(new_rot), axis));

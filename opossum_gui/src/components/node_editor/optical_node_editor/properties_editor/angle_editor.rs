@@ -1,7 +1,6 @@
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop,
-    inputs::input_components::NodeConfigUnitInput,
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    inputs::input_components::NodeConfigUnitInput, node_config_editor::NodeChangeEvent,
+    optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use approx::relative_ne;
 use dioxus::prelude::*;
@@ -12,31 +11,24 @@ use uuid::Uuid;
 
 #[component]
 pub fn AngleEditor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     angle: Angle,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut angle_sig = use_signal(|| angle);
-    use_update_signal_with_reactive_prop(angle, angle_sig);
-    let value_memo = use_memo(move || angle_sig.read().get::<degree>());
+    let angle_sig = use_signal(|| angle);
+    let on_save =
+        on_save_proptype_handler(angle_sig, property_key.clone(), on_change, node_id.into());
+
     rsx! {
         NodeConfigUnitInput {
             id: format!("angleProperty{property_key}").to_camel_case().as_str(),
             label: property_key.to_sentence_case(),
-            value: value_memo,
+            value: angle_sig.read().get::<degree>(),
             base_unit: "°",
             onchange: move |new_angle: f64| {
                 if relative_ne!(angle_sig.read().get::< degree > (), new_angle) {
-                    angle_sig.set(degree!(new_angle % 360.0));
-                    on_change
-                        .call(NodeChangeEvent {
-                            node_id,
-                            action: NodeChangeAction::Property(
-                                property_key.clone(),
-                                degree!(new_angle % 360.0).into(),
-                            ),
-                        });
+                    on_save.call(degree!(new_angle));
                 }
             },
         }

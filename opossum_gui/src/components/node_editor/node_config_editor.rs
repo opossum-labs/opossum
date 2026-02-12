@@ -7,8 +7,7 @@ use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
 use opossum_core::nodes::fluence_detector::Fluence;
-use opossum_core::prelude::{AnalyzerType, Isometry, Properties, Proptype};
-use std::ops::AddAssign;
+use opossum_core::prelude::{AnalyzerType, Isometry, Proptype};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,12 +32,8 @@ pub fn NodeConfigEditor(
     active_node_opt: Memo<Option<(NodeType, Uuid)>>,
     is_modified: Signal<bool>,
 ) -> Element {
-    let node_properties_sig = use_signal(Properties::default);
-    use_context_provider(|| node_properties_sig);
-
-    // 1. SETUP PROTOCOLS (mut Signals) via shared hook
     let save_manager = use_save_manager();
-    let mut flush_trigger = save_manager.flush_trigger;
+    let flush_trigger = save_manager.flush_trigger;
     let dirty_count = save_manager.dirty_count;
 
     use_context_provider(|| FormContext {
@@ -46,49 +41,31 @@ pub fn NodeConfigEditor(
         dirty_count,
     });
 
-    // 2. STATE
     #[allow(clippy::redundant_closure)]
     let mut displayed_node = use_signal(|| active_node_opt());
 
-    // 3. FLUSH COMMAND
-    use_effect(move || {
-        active_node_opt(); // subscribe to node_id changes
-        flush_trigger.write().add_assign(1);
-    });
+    let memo_active_node_id =
+        use_memo(move || displayed_node().map_or_else(Uuid::nil, |(_, id)| id));
 
-    // 4. THE GATEKEEPER
     use_effect(move || {
-        let target = active_node_opt();
-        let current = displayed_node();
-        let pending = *dirty_count.read();
-
-        // If target differs from current...
-        if target != current {
-            // ... and everything is clean...
-            if pending == 0 {
-                // ... then switch
-                displayed_node.set(target);
-            }
+        if *dirty_count.read() == 0 {
+            displayed_node.set(active_node_opt());
         }
     });
 
     // Standard Processing
-    use_node_config_processor(node_properties_sig, is_modified);
+    use_node_config_processor(is_modified);
     let node_config_processor = use_coroutine_handle::<NodeChangeEvent>();
     let on_node_change = EventHandler::new(move |evt: NodeChangeEvent| {
         node_config_processor.send(evt);
     });
 
     match displayed_node() {
-        Some((NodeType::Optical(_), node_id)) => rsx! {
-            OpticalNodeEditor {
-                node_id,
-                node_properties_sig,
-                on_change: on_node_change,
-            }
+        Some((NodeType::Optical(_), _)) => rsx! {
+            OpticalNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
         },
-        Some((NodeType::Analyzer(_), node_id)) => rsx! {
-            AnalyzerNodeEditor { node_id, on_change: on_node_change }
+        Some((NodeType::Analyzer(_), _)) => rsx! {
+            AnalyzerNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
         },
         None => rsx! {
             div { "No node selected" }
@@ -96,10 +73,7 @@ pub fn NodeConfigEditor(
     }
 }
 
-fn use_node_config_processor(
-    mut node_properties_sig: Signal<Properties>,
-    mut is_modified: Signal<bool>,
-) {
+fn use_node_config_processor(mut is_modified: Signal<bool>) {
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
     let mut graph_store = use_context::<Signal<GraphStore>>();
 
@@ -123,19 +97,7 @@ fn use_node_config_processor(
                     NodeChangeAction::Property(key, prop) => {
                         api::update_node_property(uuid, (key.clone(), prop.clone()))
                             .await
-                            .map(|_| {
-                                if let Some(active_id) = graph_store.read().active_node()
-                                    && active_id == uuid
-                                {
-                                    node_properties_sig.write().set(&key, prop).unwrap_or_else(
-                                        |_| {
-                                            OPOSSUM_UI_LOGS.write().add_log(&format!(
-                                                "Failed to set local property: {key}"
-                                            ));
-                                        },
-                                    );
-                                }
-                            })
+                            .map(|_| ())
                     }
                     NodeChangeAction::Isometry(iso) => {
                         api::update_node_isometry(uuid, iso).await.map(|_| ())

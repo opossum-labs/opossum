@@ -19,55 +19,58 @@ mod vec2_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    hooks::use_update_signal_with_reactive_prop,
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::properties_editor::{
-        angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
-        f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
-        fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
-        isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
-        length_option_editor::LengthOptionEditor, light_data_editor::LightDataEditor,
-        linear_density_editor::LinearDensityEditor, refractive_index_editor::RefractiveIndexEditor,
-        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
-        vec2_editor::Vec2Editor,
+    optical_node_editor::{
+        UINodeAttr,
+        properties_editor::{
+            angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
+            f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
+            fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
+            isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
+            length_option_editor::LengthOptionEditor, light_data_editor::LightDataEditor,
+            linear_density_editor::LinearDensityEditor,
+            refractive_index_editor::RefractiveIndexEditor,
+            splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
+            vec2_editor::Vec2Editor,
+        },
     },
 };
 use dioxus::prelude::*;
-use opossum_core::prelude::{Properties, Property, Proptype};
+use opossum_core::prelude::{Property, Proptype};
 use uuid::Uuid;
 
 #[component]
 pub fn PropertiesEditor(
-    node_id: Uuid,
-    node_properties_sig: Signal<Properties>,
-    on_change: EventHandler<NodeChangeEvent>,
+    node_id: Memo<Uuid>,
+    node_attr: ReadSignal<UINodeAttr>,
+    on_change_property: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
-
-    for (property_key, property) in &*node_properties_sig.read() {
-        if let Some(editor) = get_editor(node_id, property, property_key.clone(), on_change) {
-            editor_inputs.push(editor);
-        }
-    }
-    if editor_inputs.is_empty() {
-        rsx! {}
-    } else {
-        rsx! {
-            AccordionItem {
-                elements: editor_inputs,
-                header: "Properties",
-                header_id: "propertyHeading",
-                parent_id: "accordionNodeConfig",
-                content_id: "propertyCollapse",
+    let editor_inputs = if node_attr.read().node_id == *node_id.read() {
+        let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
+        for (property_key, property) in &node_attr.read().properties {
+            if let Some(editor) =
+                get_editor(node_id, property, property_key.clone(), on_change_property)
+            {
+                editor_inputs.push(editor);
             }
+        }
+        editor_inputs
+    } else {
+        vec![]
+    };
+    rsx! {
+        AccordionItem {
+            elements: editor_inputs,
+            header: "Properties",
+            header_id: "propertyHeading",
+            parent_id: "accordionNodeConfig",
+            content_id: "propertyCollapse",
         }
     }
 }
 
-// Helper: creates the suitable editor
-// Helper: creates the suitable editor
 fn get_editor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -79,12 +82,11 @@ fn get_editor(
     if let Some(editor) = get_optical_editor(node_id, property, property_key.clone(), on_change) {
         return Some(editor);
     }
-
     get_geometric_editor(node_id, property, property_key, on_change)
 }
 
 fn get_primitive_editor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -111,7 +113,6 @@ fn get_primitive_editor(
                 node_id,
                 float64,
                 property_key,
-                property: property.clone(),
                 on_change,
             }
         }),
@@ -136,7 +137,7 @@ fn get_primitive_editor(
 }
 
 fn get_optical_editor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -147,7 +148,6 @@ fn get_optical_editor(
                 node_id,
                 splitting_config_builder,
                 property_key,
-                property: property.clone(),
                 on_change,
             }
         }),
@@ -156,7 +156,6 @@ fn get_optical_editor(
                 node_id,
                 filter_type_builder,
                 property_key,
-                property: property.clone(),
                 on_change,
             }
         }),
@@ -197,7 +196,7 @@ fn get_optical_editor(
 }
 
 fn get_geometric_editor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -246,31 +245,29 @@ fn get_geometric_editor(
         _ => None,
     }
 }
-pub fn use_set_node_change_property<T: Into<Proptype> + PartialEq + Clone + 'static>(
-    node_id: Uuid,
-    property_key: &str,
-    prop_type_value: T,
-    prop_type_value_sig: Signal<T>,
-    on_change: EventHandler<NodeChangeEvent>,
-) {
-    use_update_signal_with_reactive_prop(prop_type_value.clone(), prop_type_value_sig);
 
-    use_effect({
-        let property_key = property_key.to_owned();
-        move || {
-            // Wenn der User lokal etwas geändert hat (State != Prop)...
-            if prop_type_value != *prop_type_value_sig.read() {
-                // ... senden wir das Event.
-                // WICHTIG: Die node_id, die hier reinkommt, muss vom Aufrufer
-                // bereits via Lagging-ID-Pattern gesichert worden sein.
-                on_change.call(NodeChangeEvent {
-                    node_id,
-                    action: NodeChangeAction::Property(
-                        property_key.clone(),
-                        prop_type_value_sig.read().clone().into(),
-                    ),
-                });
-            }
+/// Creates an `EventHandler` for saving a property change, which updates the signal and calls the `on_change` handler with a `NodeChangeEvent`.
+/// This function can be used in property editors to handle changes to properties and ensure that the UI updates accordingly.
+/// # Arguments
+/// * `sig` - A `Signal` that holds the current value of the property being edited. This signal will be updated when the property changes This signal should be defined in the calling component.
+/// * `property_key` - The key of the property being edited. This is used in the `NodeChangeEvent` to specify which property has changed.
+/// * `change_handler` - An `EventHandler` that will be called with a `NodeChangeEvent` when the property changes. This is typically the `on_change` handler passed down from the parent component.
+/// * `node_id` - A `ReadSignal` that provides the ID of the node whose property is being edited. This is used in the `NodeChangeEvent` to specify which node has changed.
+/// # Returns
+/// An `EventHandler` that can be used in the property editor to handle changes to the property.
+pub fn on_save_proptype_handler<T: Into<Proptype> + PartialEq + Clone + 'static>(
+    mut sig: Signal<T>,
+    property_key: String,
+    change_handler: EventHandler<NodeChangeEvent>,
+    node_id: ReadSignal<Uuid>,
+) -> EventHandler<T> {
+    EventHandler::new(move |new_prop: T| {
+        if new_prop != *sig.read() {
+            change_handler.call(NodeChangeEvent {
+                node_id: *node_id.read(),
+                action: NodeChangeAction::Property(property_key.clone(), new_prop.clone().into()),
+            });
+            sig.set(new_prop);
         }
-    });
+    })
 }

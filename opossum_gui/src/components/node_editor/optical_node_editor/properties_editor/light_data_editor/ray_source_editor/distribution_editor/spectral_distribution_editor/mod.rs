@@ -9,7 +9,6 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
-    optical_node_editor::properties_editor::use_update_signal_with_reactive_prop,
 };
 use dioxus::prelude::*;
 use gaussian_editor::GaussianSpectrumParam;
@@ -20,37 +19,42 @@ use opossum_core::{
 };
 
 #[component]
-pub fn RaySpectralDistributionEditor(spect_dist_type_sig: Signal<SpecDistType>) -> Element {
+pub fn RaySpectralDistributionEditor(
+    spect_dist_type_sig: ReadSignal<SpecDistType>,
+    on_save: EventHandler<SpecDistType>,
+) -> Element {
     match &*spect_dist_type_sig.read() {
         SpecDistType::Gaussian(g) => {
             rsx! {
-                RowedInputs { inputs: GaussianSpectrumParam::to_input_data_vec(g, spect_dist_type_sig) }
+                RowedInputs { inputs: GaussianSpectrumParam::to_input_data_vec(g, on_save) }
             }
         }
         SpecDistType::LaserLines(laser_lines) => {
             rsx! {
-                LaserLineInput { laser_lines: laser_lines.clone(), spect_dist_type_sig }
+                LaserLineInput { laser_lines: laser_lines.clone(), on_save }
             }
         }
     }
 }
 
 #[component]
-pub fn SpectralDistributionEditor(spect_dist_type: SpecDistType) -> Element {
-    let mut ray_data_builder_sig = use_context::<Signal<RayDataBuilder>>();
+pub fn SpectralDistributionEditor(
+    spect_dist_type: SpecDistType,
+    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
+    on_save: EventHandler<RayDataBuilder>,
+) -> Element {
+    let mut spect_dist_type_sig = use_signal(|| spect_dist_type.clone());
 
-    let spect_dist_type_sig = use_signal(|| spect_dist_type.clone());
-    use_update_signal_with_reactive_prop(spect_dist_type, spect_dist_type_sig);
-
-    use_effect(move || {
-        ray_data_builder_sig
-            .write()
-            .set_spectral_dist(spect_dist_type_sig.read().clone());
+    let on_spect_dist_save = EventHandler::new(move |new_spect_dist_type: SpecDistType| {
+        spect_dist_type_sig.set(new_spect_dist_type);
+        let mut ray_data_builder = ray_data_builder_sig.read().clone();
+        ray_data_builder.set_spectral_dist(spect_dist_type_sig.read().clone());
+        on_save.call(ray_data_builder);
     });
 
     let accordion_item_content = rsx! {
-        RaySpectralDistributionSelector { spect_dist_type_sig }
-        RaySpectralDistributionEditor { spect_dist_type_sig }
+        RaySpectralDistributionSelector { spect_dist_type_sig, on_save: on_spect_dist_save }
+        RaySpectralDistributionEditor { spect_dist_type_sig, on_save: on_spect_dist_save }
     };
 
     rsx! {
@@ -65,7 +69,10 @@ pub fn SpectralDistributionEditor(spect_dist_type: SpecDistType) -> Element {
 }
 
 #[component]
-pub fn RaySpectralDistributionSelector(spect_dist_type_sig: Signal<SpecDistType>) -> Element {
+pub fn RaySpectralDistributionSelector(
+    spect_dist_type_sig: ReadSignal<SpecDistType>,
+    on_save: EventHandler<SpecDistType>,
+) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectRaysSpectralDistribution",
@@ -74,7 +81,7 @@ pub fn RaySpectralDistributionSelector(spect_dist_type_sig: Signal<SpecDistType>
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(sdt) = SpecDistType::default_from_name(val.as_str()) {
-                    spect_dist_type_sig.set(sdt);
+                    on_save.call(sdt);
                 }
             },
         }

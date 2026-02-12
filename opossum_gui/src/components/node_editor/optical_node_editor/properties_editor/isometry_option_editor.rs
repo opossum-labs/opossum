@@ -2,43 +2,58 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::AccordionItem,
-        hooks::use_update_signal_with_reactive_prop,
         inputs::{InputData, input_components::RowedInputs},
-        node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
     },
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    degree, millimeter,
-    prelude::{Isometry, Proptype},
+    degree, meter,
+    prelude::Isometry,
     utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis},
 };
 use strum::IntoEnumIterator;
-use uom::si::{angle::degree, length::millimeter};
+use uom::si::{
+    angle::degree,
+    f64::{Angle, Length},
+};
 use uuid::Uuid;
 
 #[component]
 pub fn IsometryOptionEditor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     isometry: Isometry,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let isometry_sig = use_signal(|| isometry);
-    use_update_signal_with_reactive_prop(isometry, isometry_sig);
+    let on_save = on_save_proptype_handler(isometry_sig, property_key, on_change, node_id.into());
 
-    let on_save = EventHandler::new(move |new_iso: Isometry| {
-        on_change.call(NodeChangeEvent {
-            node_id,
-            action: NodeChangeAction::Property(
-                property_key.clone(),
-                // FIX: Proptype::Isometry erwartet Option<Isometry> -> Some(...)
-                Proptype::Isometry(Some(new_iso)),
-            ),
-        });
+    let on_new_rotation = EventHandler::new(move |(axis, rotation): (RotationAxis, Angle)| {
+        let mut iso = *isometry_sig.read();
+        if iso.set_rotation_of_axis(axis, rotation).is_ok() {
+            on_save.call(iso);
+        } else {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(format!("Failed to set rotation for axis {axis}").as_str());
+        }
     });
+    let on_new_translation =
+        EventHandler::new(move |(axis, translation): (TranslationAxis, Length)| {
+            let mut iso = *isometry_sig.read();
+            if iso.set_translation_of_axis(axis, translation).is_ok() {
+                on_save.call(iso);
+            } else {
+                OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log(format!("Failed to set translation for axis {axis}").as_str());
+            }
+        });
 
-    let input_data = get_isometry_option_input_data(isometry_sig, on_save);
+    let input_data =
+        get_isometry_option_input_data(on_new_rotation, on_new_translation, isometry_sig.into());
     let accordion_content = vec![rsx! {
         RowedInputs { inputs: input_data }
     }];
@@ -57,38 +72,29 @@ pub fn IsometryOptionEditor(
         }
     }
 }
-// ... (Helper on_isometry_option_change_str und get_isometry_option_input_data bleiben gleich) ...
 fn on_isometry_option_change_str(
-    mut isometry_sig: Signal<Isometry>,
+    on_new_rotation: EventHandler<(RotationAxis, Angle)>,
+    on_new_translation: EventHandler<(TranslationAxis, Length)>,
     axis_type: AlignmentAxis,
-    on_save: EventHandler<Isometry>,
 ) -> EventHandler<String> {
     EventHandler::new(move |val_str: String| {
         if let Ok(val) = val_str.parse::<f64>() {
-            let mut iso = *isometry_sig.read();
-            let res = match axis_type {
+            match axis_type {
                 AlignmentAxis::Translation(translation_axis) => {
-                    iso.set_translation_of_axis(translation_axis, millimeter!(val))
+                    on_new_translation.call((translation_axis, meter!(val)));
                 }
                 AlignmentAxis::Rotation(rotation_axis) => {
-                    iso.set_rotation_of_axis(rotation_axis, degree!(val))
+                    on_new_rotation.call((rotation_axis, degree!(val)));
                 }
-            };
-            if let Err(err_str) = res {
-                OPOSSUM_UI_LOGS.write().add_log(
-                    format!("Failed to set alignment for axis {axis_type}: {err_str}",).as_str(),
-                );
-            } else {
-                isometry_sig.set(iso);
-                on_save.call(iso);
             }
         }
     })
 }
 
 fn get_isometry_option_input_data(
-    isometry_sig: Signal<Isometry>,
-    on_save: EventHandler<Isometry>,
+    on_new_rotation: EventHandler<(RotationAxis, Angle)>,
+    on_new_translation: EventHandler<(TranslationAxis, Length)>,
+    isometry_sig: ReadSignal<Isometry>,
 ) -> Vec<InputData> {
     let id_add_on = "isometryOptionInput";
     let mut alignment_inputs = Vec::<InputData>::new();
@@ -98,25 +104,26 @@ fn get_isometry_option_input_data(
             id_add_on,
             EventHandler::new(|_| {}),
             on_isometry_option_change_str(
-                isometry_sig,
+                on_new_rotation,
+                on_new_translation,
                 AlignmentAxis::Translation(trans_axis),
-                on_save,
             ),
             format!(
-                "{:.3}",
-                isometry_sig
-                    .read()
-                    .translation_of_axis(trans_axis)
-                    .get::<millimeter>()
+                "{}",
+                isometry_sig.read().translation_of_axis(trans_axis).value
             ),
         ));
         alignment_inputs.push(InputData::new(
             rot_axis.into(),
             id_add_on,
             EventHandler::new(|_| {}),
-            on_isometry_option_change_str(isometry_sig, AlignmentAxis::Rotation(rot_axis), on_save),
+            on_isometry_option_change_str(
+                on_new_rotation,
+                on_new_translation,
+                AlignmentAxis::Rotation(rot_axis),
+            ),
             format!(
-                "{:.3}",
+                "{}",
                 isometry_sig
                     .read()
                     .rotation_of_axis(rot_axis)

@@ -16,7 +16,6 @@ use dioxus::prelude::*;
 use inflector::Inflector;
 
 use crate::components::node_editor::{
-    hooks::use_update_signal_with_reactive_prop,
     inputs::{
         InputData, IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
@@ -24,33 +23,30 @@ use crate::components::node_editor::{
     },
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
-        refractive_index_editor::air_model_editor::AirParam, use_set_node_change_property,
+        on_save_proptype_handler, refractive_index_editor::air_model_editor::AirParam,
     },
 };
 use uuid::Uuid;
 
 #[component]
 pub fn RefractiveIndexEditor(
-    node_id: Uuid,
+    node_id: Memo<Uuid>,
     ref_ind_type: RefractiveIndexType,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut ref_ind_type_sig = use_signal(|| ref_ind_type.clone());
-    let bound_node_id = use_signal(|| node_id);
-    use_update_signal_with_reactive_prop(node_id, bound_node_id);
-    use_set_node_change_property(
-        *bound_node_id.read(),
-        &property_key,
-        ref_ind_type,
+    let ref_ind_type_sig = use_signal(|| ref_ind_type.clone());
+
+    let on_save = on_save_proptype_handler(
         ref_ind_type_sig,
+        property_key.clone(),
         on_change,
+        node_id.into(),
     );
 
-    let select_id = format!("refractiveIndexProperty{property_key}").to_camel_case();
     rsx! {
         LabeledSelect {
-            id: select_id,
+            id: format!("refractiveIndexProperty{property_key}").to_camel_case(),
             label: "Refractive index definition",
             options: select_options_from_enum_iterator(&*ref_ind_type_sig.read(), None),
             onchange: move |e: Event<FormData>| {
@@ -58,25 +54,24 @@ pub fn RefractiveIndexEditor(
                 if let Some(ref_ind_type) = RefractiveIndexType::default_from_name(
                     val.as_str(),
                 ) {
-                    ref_ind_type_sig.set(ref_ind_type);
+                    on_save.call(ref_ind_type);
                 }
             },
         }
         div { class: "accordion-content-wrapper-div border-start",
-            RowedInputs { inputs: get_refractive_index_input_data(ref_ind_type_sig) }
+            RowedInputs { inputs: get_refractive_index_input_data(ref_ind_type_sig.into(), on_save) }
         }
     }
 }
 
 fn get_refractive_index_input_data(
-    ref_ind_type_sig: Signal<RefractiveIndexType>,
+    ref_ind_type_sig: ReadSignal<RefractiveIndexType>,
+    on_save: EventHandler<RefractiveIndexType>,
 ) -> Vec<InputData> {
     match &*ref_ind_type_sig.read() {
-        RefractiveIndexType::Const(ref_ind) => {
-            ConstRefParam::to_input_data_vec(ref_ind, ref_ind_type_sig)
-        }
+        RefractiveIndexType::Const(ref_ind) => ConstRefParam::to_input_data_vec(ref_ind, on_save),
         RefractiveIndexType::Sellmeier1(ref_ind) => {
-            Sellmeier1Param::to_input_data_vec(ref_ind, ref_ind_type_sig)
+            Sellmeier1Param::to_input_data_vec(ref_ind, on_save)
         }
         RefractiveIndexType::Schott(ref_ind) => {
             SchottParam::to_input_data_vec(ref_ind, ref_ind_type_sig)

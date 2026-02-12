@@ -63,14 +63,12 @@ impl IntoInputData<f64, LaserLines, SpecDistType> for LaserLinesParam {
 }
 
 #[component]
-pub fn LaserLineInput(
-    laser_lines: LaserLines,
-    spect_dist_type_sig: Signal<SpecDistType>,
-) -> Element {
-    let inputs = LaserLinesParam::to_input_data_vec(&laser_lines, spect_dist_type_sig);
+pub fn LaserLineInput(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>) -> Element {
+    let inputs = LaserLinesParam::to_input_data_vec(&laser_lines, on_save);
     rsx! {
         form {
             onsubmit: {
+                let mut ll = laser_lines;
                 move |e: Event<FormData>| {
                     let wvl_opt = e.data().get_first(&inputs[0].id);
                     let rel_int_opt = e.data().get_first(&inputs[1].id);
@@ -85,12 +83,17 @@ pub fn LaserLineInput(
                             if let (Some(wvl), Ok(rel_int)) = (
                                 parse_si_number(&num_str, &prefix_str, false),
                                 rel_int_val.parse(),
-                            )
-                                && let SpecDistType::LaserLines(ll) = &mut *spect_dist_type_sig
-                                    .write()
-                            {
-                                ll.add_lines(vec![(meter!(wvl), rel_int)])
-                                    .log_err_with_context("Error adding laser line");
+                            ) {
+                                match ll.add_lines(vec![(meter!(wvl), rel_int)]) {
+                                    Ok(()) => {
+                                        on_save.call(SpecDistType::LaserLines(ll.clone()));
+                                    }
+                                    Err(e) => {
+                                        OPOSSUM_UI_LOGS
+                                            .write()
+                                            .add_log(format!("Error adding laser line: {e}").as_str());
+                                    }
+                                }
                             }
                         } else {
                             OPOSSUM_UI_LOGS
@@ -121,13 +124,13 @@ pub fn LaserLineInput(
                 id: "laserlinesubmit",
                 value: "Add laser line",
             }
-            LaserLineList { laser_lines, spect_dist_type_sig }
+            LaserLineList { laser_lines: laser_lines.clone(), on_save }
         }
     }
 }
 
 #[component]
-fn LaserLineList(laser_lines: LaserLines, spect_dist_type_sig: Signal<SpecDistType>) -> Element {
+fn LaserLineList(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "laserLineList",
             for (i , line) in laser_lines.clone().lines().iter().enumerate() {
@@ -148,7 +151,7 @@ fn LaserLineList(laser_lines: LaserLines, spect_dist_type_sig: Signal<SpecDistTy
                                     move |_| {
                                         let mut laser_lines = laser_lines.clone();
                                         laser_lines.delete_line(i).log_err_with_context("Deleting line failed");
-                                        spect_dist_type_sig.set(SpecDistType::LaserLines(laser_lines));
+                                        on_save.call(SpecDistType::LaserLines(laser_lines));
                                     }
                                 },
                                 role: "button",

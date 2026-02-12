@@ -9,7 +9,10 @@ use opossum_core::{
 };
 
 #[component]
-pub fn RayDataBuilderSelector(ray_data_builder_sig: Signal<RayDataBuilder>) -> Element {
+pub fn RayDataBuilderSelector(
+    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
+    on_save: EventHandler<RayDataBuilder>,
+) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectRaySourceType",
@@ -21,7 +24,7 @@ pub fn RayDataBuilderSelector(ray_data_builder_sig: Signal<RayDataBuilder>) -> E
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(rdb) = RayDataBuilder::default_from_name(val.as_str()) {
-                    ray_data_builder_sig.set(rdb);
+                    on_save.call(rdb);
                 }
             },
         }
