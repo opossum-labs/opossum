@@ -8,9 +8,10 @@ use super::{RefractiveIndex, RefractiveIndexType};
 use crate::{
     degree_celsius,
     error::{OpmResult, OpossumError},
-    generic_validators::{AllFinite, AllInRange},
+    generic_validators::{AllFinite, AllInRange, ValidateTrait},
     hectopascal, validated, validated_type,
 };
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::{Length, Pressure, ThermodynamicTemperature},
@@ -96,7 +97,7 @@ type ValidatedTemperature = validated_type!(
 );
 
 /// Refractive index model for air using the Edlén formula.
-#[derive(Clone, Serialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Debug, PartialEq, EnsureValidated)]
 pub struct RefrIndexAir {
     temperature: ValidatedTemperature,
     pressure: ValidatedPressure,
@@ -104,8 +105,10 @@ pub struct RefrIndexAir {
 
     // --- Cache Fields (Excluded from serialization) ---
     // These are calculated based on T, P, H to speed up get_refractive_index
+    #[validate(skip)]
     #[serde(skip)]
     dry_air_factor: f64,
+    #[validate(skip)]
     #[serde(skip)]
     water_vapor_factor: f64,
 }
