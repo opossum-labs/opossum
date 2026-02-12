@@ -71,14 +71,14 @@ impl HtmlReport {
     /// # Errors
     ///
     /// This function returns an error if the provided [`AnalysisReport`] has an empty scenery.
-    pub fn from_analysis_report(report: &AnalysisReport) -> OpmResult<Self> {
+    pub fn from_analysis_report(report: &AnalysisReport, report_number: usize) -> OpmResult<Self> {
         let Some(scenery) = &report.scenery() else {
             return Err(OpossumError::Other("no scenery found".into()));
         };
         let html_node_reports: Vec<HtmlNodeReport> = report
             .node_reports()
             .iter()
-            .map(HtmlNodeReport::from_node_report)
+            .map(|node_report| HtmlNodeReport::from_node_report(node_report, report_number))
             .collect();
 
         Ok(Self::new(
@@ -113,7 +113,7 @@ impl HtmlReport {
         report_number: usize,
     ) -> OpmResult<()> {
         // 1. Export associated data first
-        let data_dir = report_path.join("data");
+        let data_dir = report_path.join(format!("data_{report_number}"));
         fs::create_dir_all(&data_dir).map_err(|e| {
             OpossumError::Other(format!("Error creating data dir for html report: {e}"))
         })?;
@@ -161,11 +161,13 @@ pub struct HtmlNodeReport {
 impl HtmlNodeReport {
     /// Create this [`HtmlNodeReport`] from an [`NodeReport`].
     #[must_use]
-    pub fn from_node_report(node_report: &NodeReport) -> Self {
+    pub fn from_node_report(node_report: &NodeReport, report_number: usize) -> Self {
         Self {
             node_name: sanitize_filename(node_report.name()),
             node_type: node_report.node_type().to_string(),
-            props: node_report.properties().html_props(node_report.uuid()),
+            props: node_report
+                .properties()
+                .html_props(node_report.uuid(), report_number),
             uuid: node_report.uuid().to_string(),
             show_item: node_report.show_item(),
             notes: node_report
@@ -202,7 +204,7 @@ mod test {
         properties.create("test1", "desc1", 1.0.into()).unwrap();
         properties.create("test2", "desc2", "test".into()).unwrap();
         let report = NodeReport::new("test detector", "detector name", "123", properties);
-        let html_report = HtmlNodeReport::from_node_report(&report);
+        let html_report = HtmlNodeReport::from_node_report(&report, 0);
         assert_eq!(html_report.node_name, "detector name");
         assert_eq!(html_report.node_type, "test detector");
         assert_eq!(html_report.uuid, "123");

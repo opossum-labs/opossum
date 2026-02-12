@@ -1,9 +1,10 @@
 use opossum_core::prelude::*;
+use opossum_core::refractive_index::RefractiveIndexType;
 use uom::si::f64::Length;
 
 pub fn folded_martinez(
     telescope_distance: Length,
-    refr_index: &dyn RefractiveIndex,
+    refr_index: impl Into<RefractiveIndexType>,
     alignment_wvl: Length,
 ) -> OpmResult<NodeGroup> {
     //////////////////////////////////////////

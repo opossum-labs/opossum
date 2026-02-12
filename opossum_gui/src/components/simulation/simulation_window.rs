@@ -175,11 +175,11 @@ pub fn SimulationWindow(
             "tabindex": "-1",
             style: "background-color: rgba(0,0,0,0.5);",
             onkeydown: move |evt| {
-                if Key::Escape == evt.key() && !is_running() {
+                if evt.key() == Key::Escape && !is_running() {
                     show_simulation.set(false);
                 }
             },
-            onmounted: move |evt| async move {
+            onmounted: async move |evt| {
                 let _ = evt.set_focus(true).await;
             },
             div { class: "modal-dialog modal-dialog-centered modal-xl",

@@ -25,7 +25,10 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype, validator::Validator},
     rays::Rays,
-    reporting::node_report::NodeReport,
+    reporting::{
+        node_report::NodeReport,
+        report_note::{ReportLevel, ReportNote},
+    },
     spectrum::Spectrum,
 };
 
@@ -110,6 +113,9 @@ impl OpticNode for RayPropagationVisualizer {
     }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
+        let mut report =
+            NodeReport::new(&self.node_type(), &self.name(), uuid, Properties::default());
+
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data
             && let Ok(mut ray_position_histories) = rays.get_rays_position_history(true)
@@ -127,32 +133,26 @@ impl OpticNode for RayPropagationVisualizer {
                     Proptype::RayPositionHistory(ray_position_histories),
                 )
                 .unwrap();
+
+            // Re-create report with properties if any were added
+            report = NodeReport::new(&self.node_type(), &self.name(), uuid, props);
+
             if self.apodization_warning {
-                props
-                    .create(
-                        "Warning",
-                        "warning during analysis",
-                        "Rays have been apodized at input aperture. Results might not be accurate."
-                            .into(),
-                    )
-                    .unwrap();
+                report.add_note(ReportNote::new(
+                    ReportLevel::Warning,
+                    "Rays have been apodized at input aperture. Results might not be accurate.",
+                ));
             }
+        } else if let Some(LightData::Energy(_)) = data {
+            // In the else-if case, props is empty, so we can just use the empty report created earlier?
+            // Actually, the original code created a "Warning" property in props.
+            // We want to add a note instead.
+            report.add_note(ReportNote::new(
+                ReportLevel::Warning,
+                 "A propagation plot can only be calculated during a ray tracing or ghostfocus analysis.",
+             ));
         }
-        if let Some(LightData::Energy(_)) = data {
-            props
-                .create(
-                    "Warning",
-                    "warning during analysis",
-                    "A propagation plot can only be calculated during a ray tracing or ghostfocus analysis.".into(),
-                )
-                .unwrap();
-        }
-        Some(NodeReport::new(
-            &self.node_type(),
-            &self.name(),
-            uuid,
-            props,
-        ))
+        Some(report)
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -535,6 +535,32 @@ mod test {
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 1);
+        assert!(node_report.notes().is_empty());
+
+        // Test Apodization Warning
+        fd.set_apodization_warning(true);
+        let node_report = fd.node_report("").unwrap();
+        assert_eq!(node_report.notes().len(), 1);
+        assert_eq!(
+            node_report.notes()[0].level,
+            crate::reporting::report_note::ReportLevel::Warning
+        );
+        assert!(node_report.notes()[0].message.contains("apodized"));
+
+        // Test Energy Data Warning
+        fd.set_apodization_warning(false);
+        fd.light_data = Some(LightData::Energy(crate::spectrum::Spectrum::default()));
+        let node_report = fd.node_report("").unwrap();
+        assert_eq!(node_report.notes().len(), 1);
+        assert_eq!(
+            node_report.notes()[0].level,
+            crate::reporting::report_note::ReportLevel::Warning
+        );
+        assert!(
+            node_report.notes()[0]
+                .message
+                .contains("propagation plot can only be calculated")
+        );
     }
     #[test]
     fn new_ray_pos_hist_spec() {

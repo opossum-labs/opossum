@@ -4970,7 +4970,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_gui"
-version = "0.7.0-3"
+version = "0.7.0-beta.3"
 dependencies = [
  "Inflector",
  "approx",

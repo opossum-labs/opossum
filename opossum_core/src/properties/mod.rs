@@ -2,7 +2,6 @@
 pub mod property;
 pub mod proptype;
 pub mod validator;
-// pub mod validators;
 
 use log::warn;
 pub use property::Property;
@@ -160,10 +159,10 @@ impl Properties {
         )
     }
     #[must_use]
-    pub fn html_props(&self, id: &str) -> Vec<HtmlProperty> {
+    pub fn html_props(&self, id: &str, report_number: usize) -> Vec<HtmlProperty> {
         let mut html_props: Vec<HtmlProperty> = Vec::new();
         for prop in &self.props {
-            if let Ok(html_prop_value) = prop.1.prop().to_html(id, prop.0) {
+            if let Ok(html_prop_value) = prop.1.prop().to_html(id, prop.0, report_number) {
                 let html_prop = HtmlProperty {
                     name: prop.0.to_owned(),
                     description: prop.1.description().into(),
@@ -252,13 +251,13 @@ mod test {
         let mut props = Properties::default();
         props.create("my prop", "my description", 1.into()).unwrap();
         testing_logger::setup();
-        let html_props = props.html_props("test123");
+        let html_props = props.html_props("test123", 0);
         let html_props = html_props.first().unwrap();
         check_logs(Level::Warn, vec![]);
         assert_eq!(html_props.name, "my prop");
         assert_eq!(html_props.description, "my description");
         assert_eq!(html_props.prop_value, "1");
-        let html_props = props.html_props("test123");
+        let html_props = props.html_props("test123", 0);
         assert_eq!(html_props.len(), 1);
     }
 }

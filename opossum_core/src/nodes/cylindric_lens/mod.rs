@@ -2,6 +2,8 @@
 //! Cylindric lens with spherical or flat surfaces.
 
 use super::node_attr::NodeAttr;
+#[cfg(test)]
+use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
     error::{OpmResult, OpossumError},
@@ -11,7 +13,7 @@ use crate::{
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     radian,
-    refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
+    refractive_index::{RefrIndexConst, RefractiveIndexType},
     surface::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
@@ -118,7 +120,7 @@ impl CylindricLens {
         front_curvature: Length,
         rear_curvature: Length,
         center_thickness: Length,
-        refractive_index: &dyn RefractiveIndex,
+        refractive_index: impl Into<RefractiveIndexType>,
     ) -> OpmResult<Self> {
         let mut cyl_lens = Self::default();
         cyl_lens.node_attr.set_name(name);
@@ -133,7 +135,7 @@ impl CylindricLens {
             .set_property("center thickness", center_thickness.into())?;
         cyl_lens
             .node_attr
-            .set_property("refractive index", refractive_index.to_enum().into())?;
+            .set_property("refractive index", refractive_index.into().into())?;
         cyl_lens.update_surfaces()?;
         Ok(cyl_lens)
     }

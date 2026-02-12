@@ -95,9 +95,6 @@ impl RefractiveIndex for RefrIndexConst {
     fn get_refractive_index(&self, _wavelength: uom::si::f64::Length) -> OpmResult<f64> {
         Ok(self.refractive_index())
     }
-    fn to_enum(&self) -> super::RefractiveIndexType {
-        RefractiveIndexType::Const(*self)
-    }
 }
 impl From<RefrIndexConst> for RefractiveIndexType {
     fn from(i: RefrIndexConst) -> Self {
@@ -124,7 +121,10 @@ mod test {
     #[test]
     fn get_enum() {
         let i = RefrIndexConst::new(1.5).unwrap();
-        assert!(matches!(i.to_enum(), RefractiveIndexType::Const(_)));
+        assert!(matches!(
+            RefractiveIndexType::from(&i),
+            RefractiveIndexType::Const(_)
+        ));
     }
 
     #[test]
