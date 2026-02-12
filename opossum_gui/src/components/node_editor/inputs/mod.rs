@@ -82,6 +82,7 @@ pub enum InputParam {
     Energy(String),
     Angle(String),
     Bool(String),
+    SIUnit(String, String), // (Label, BaseUnit)
     FilePath(String, String),
 }
 
@@ -97,6 +98,7 @@ impl InputParam {
             | Self::Energy(label)
             | Self::Angle(label)
             | Self::Bool(label)
+            | Self::SIUnit(label, _)
             | Self::FilePath(label, _) => label.clone(),
         }
     }
@@ -109,6 +111,7 @@ impl InputParam {
             | Self::Length(_)
             | Self::Energy(_)
             | Self::Angle(_) => "number",
+            Self::SIUnit(_, _) => "number",
             Self::Bool(_) => "checkbox",
             Self::FilePath(_, _) => "file",
             Self::Selection(_, _) => "select",
