@@ -3,9 +3,9 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::inputs::{
-        InputData, InputParam, format_exp_number_notation, format_si_notation,
-        format_si_with_base_unit, is_permissive_exp_input, is_permissive_unit_input,
-        parse_exp_input_strict, parse_si_number, parse_unit_input_strict,
+        InputData, InputParam, format_exp_number_notation, format_si_with_base_unit,
+        is_permissive_exp_input, is_permissive_unit_input, parse_exp_input_strict, parse_si_number,
+        parse_unit_input_strict,
     },
 };
 use dioxus::prelude::*;
@@ -467,24 +467,8 @@ pub fn UnitInput(
     #[props(default = false)] readonly: bool,
     #[props(default = false)] flushable_input: bool,
 ) -> Element {
-    let mut val_str = use_signal(|| {
-        format!(
-            "{}{}",
-            format_si_notation(*value.read(), reciprocal),
-            base_unit
-        )
-    });
-
-    use_effect({
-        let base_unit = base_unit.clone();
-        move || {
-            let current_str = val_str.peek().clone();
-            let new_str = format_si_with_base_unit(*value.read(), &base_unit, reciprocal);
-            if current_str != new_str {
-                val_str.set(new_str);
-            }
-        }
-    });
+    let mut val_str =
+        use_signal(|| format_si_with_base_unit(*value.read(), &base_unit, reciprocal));
 
     let on_input_eval = {
         let base_unit = base_unit.clone();
@@ -495,8 +479,8 @@ pub fn UnitInput(
         move |val: String| {
             if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, &base_unit) {
                 if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
-                    onchange.call(parsed);
                     val_str.set(format_si_with_base_unit(parsed, &base_unit, reciprocal));
+                    onchange.call(parsed);
                 } else {
                     val_str.set(format_si_with_base_unit(
                         *value.read(),

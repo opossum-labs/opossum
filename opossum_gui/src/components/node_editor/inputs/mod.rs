@@ -281,12 +281,20 @@ pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Opt
 /// `true` if the input is syntactically acceptable in a permissive context,
 /// otherwise `false`.
 fn is_permissive_unit_input(input: &str, base_unit: &str) -> bool {
-    let regex = Regex::new(r"^[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?$").unwrap();
-    let mut split = input.split_whitespace();
-    let num = split.next().unwrap_or("");
-    let unit = split.next().unwrap_or("");
+    let re = Regex::new(
+        r"^\s*(?P<num>[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?)\s*(?P<unit>[a-zA-Zµ]*)?\s*$",
+    )
+    .unwrap();
 
-    if !regex.is_match(num) {
+    let Some(caps) = re.captures(input) else {
+        return false;
+    };
+
+    let num = caps.name("num").map_or("", |m| m.as_str());
+    let unit = caps.name("unit").map_or("", |m| m.as_str());
+
+    let num_re = Regex::new(r"^[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?$").unwrap();
+    if !num_re.is_match(num) {
         return false;
     }
 
@@ -298,15 +306,11 @@ fn is_permissive_unit_input(input: &str, base_unit: &str) -> bool {
         return false;
     };
 
-    let mut chars = prefix.chars();
-    let Some(c) = chars.next() else {
-        return false;
-    };
-    if chars.next().is_some() {
+    if prefix.chars().count() != 1 {
         return false;
     }
 
-    "qryzafpnµumkMGTPEZYRQ".contains(c)
+    "qryzafpnµumkMGTPEZYRQ".contains(prefix)
 }
 
 fn is_permissive_exp_input(input: &str) -> bool {
@@ -345,33 +349,35 @@ pub fn parse_exp_input_strict(input: &str) -> Result<String, ()> {
 /// is the extracted SI prefix (or empty if none is present).
 /// Returns `Err(())` if the input does not strictly conform to the expected format.
 pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, String), ()> {
-    let valid_prefixes: Vec<char> = vec![
+    let regex = Regex::new(
+        r"^(?P<value>[+-]?(?:\d*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d*)?)\s*(?P<unit>[a-zA-Zµ]+)$",
+    )
+    .unwrap();
+
+    let valid_prefixes = [
         'q', 'r', 'y', 'z', 'a', 'f', 'p', 'n', 'µ', 'u', 'm', 'k', 'M', 'G', 'T', 'P', 'E', 'Z',
         'Y', 'R', 'Q',
     ];
-    let regex = Regex::new(r"^[+-]?(?:\d*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d*)?$").unwrap();
-    let mut split_input = input.split_whitespace();
-    let value_str = split_input.next().ok_or(())?;
-    let prefix_str = split_input
-        .next()
-        .ok_or(())?
-        .strip_suffix(base_unit)
-        .unwrap_or("");
 
-    if prefix_str.is_empty() {
-        if regex.is_match(value_str) {
-            Ok((value_str.to_string(), String::new()))
-        } else {
-            Err(())
-        }
-    } else {
-        let mut chars = prefix_str.chars();
-        let prefix_char = chars.next_back().unwrap();
-        if valid_prefixes.contains(&prefix_char) && regex.is_match(value_str) {
-            return Ok((value_str.to_string(), prefix_char.to_string()));
-        }
-        Err(())
+    let caps = regex.captures(input).ok_or(())?;
+
+    let value = caps.name("value").unwrap().as_str();
+    let unit = caps.name("unit").unwrap().as_str();
+
+    if unit == base_unit {
+        return Ok((value.to_string(), String::new()));
     }
+
+    if let Some(prefix_part) = unit.strip_suffix(base_unit)
+        && prefix_part.chars().count() == 1
+    {
+        let prefix_char = prefix_part.chars().next().unwrap();
+        if valid_prefixes.contains(&prefix_char) {
+            return Ok((value.to_string(), prefix_char.to_string()));
+        }
+    }
+
+    Err(())
 }
 
 /// Formats a floating-point value using SI engineering notation.
