@@ -99,8 +99,7 @@ impl InputParam {
     #[must_use]
     pub const fn rtype(&self) -> &'static str {
         match self {
-            Self::Usize(_) | Self::U8(_) | Self::F64(_) => "number",
-            Self::SIUnit(_, _) => "number",
+            Self::Usize(_) | Self::U8(_) | Self::F64(_) | Self::SIUnit(_, _) => "number",
             Self::Bool(_) => "checkbox",
             Self::FilePath(_, _) => "file",
             Self::Selection(_, _) => "select",
@@ -310,6 +309,24 @@ fn is_permissive_unit_input(input: &str, base_unit: &str) -> bool {
     "qryzafpnµumkMGTPEZYRQ".contains(c)
 }
 
+fn is_permissive_exp_input(input: &str) -> bool {
+    let regex = Regex::new(r"^[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?$").unwrap();
+    let mut split = input.split_whitespace();
+    let num = split.next().unwrap_or("");
+    regex.is_match(num)
+}
+
+pub fn parse_exp_input_strict(input: &str) -> Result<String, ()> {
+    let regex = Regex::new(r"^[+-]?(?:\d*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d*)?$").unwrap();
+    let mut split_input = input.split_whitespace();
+    let value_str = split_input.next().ok_or(())?;
+
+    if regex.is_match(value_str) {
+        return Ok(value_str.to_string());
+    }
+    Err(())
+}
+
 /// Strictly parses a unit input consisting of a numeric value and an SI-prefixed unit.
 ///
 /// Unlike permissive parsing, this function requires a complete and valid
@@ -395,6 +412,45 @@ pub fn format_si_notation(x: f64, reciprocal: bool) -> String {
     let mantissa_str = format_fixed_decimal(mantissa, decimals);
 
     format!("{mantissa_str} {prefix}")
+}
+
+/// Formats a floating-point value in scientific notation with an exponent.
+///
+/// The value is expressed as a mantissa multiplied by 10 raised to an integer
+/// exponent, where the exponent changes in steps of 3. Infinite values are rendered as `"∞"`.
+/// This function is intended for display of numeric values where a fixed exponent
+/// format is preferred over SI engineering notation.
+pub fn format_exp_number_notation(x: f64) -> String {
+    if x.is_infinite() {
+        return "∞".into();
+    }
+
+    let (mantissa, exponent) = get_mantissa_and_exponent(x);
+
+    if relative_eq!(mantissa, 0.0) {
+        return "0.0 ".into();
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
+    let decimals = 15 - mantissa.abs().log10().abs().ceil() as usize;
+    let mantissa_str = format_fixed_decimal(mantissa, decimals);
+
+    if exponent == 0 {
+        mantissa_str
+    } else {
+        format!("{mantissa_str}e{exponent}")
+    }
+}
+
+/// Formats a floating-point value with an SI prefix and a base unit.
+///
+/// The value is converted to engineering notation with an appropriate SI prefix,
+/// and the specified base unit is appended. The `reciprocal` flag indicates
+/// whether the SI prefix should be inverted (e.g. "m" becomes "k").
+/// Infinite values are rendered as `"∞"` followed by the base unit.
+pub fn format_si_with_base_unit(value: f64, base_unit: &str, reciprocal: bool) -> String {
+    format!("{}{}", format_si_notation(value, reciprocal), base_unit,)
 }
 
 /// Splits a floating-point value into an engineering mantissa and exponent.

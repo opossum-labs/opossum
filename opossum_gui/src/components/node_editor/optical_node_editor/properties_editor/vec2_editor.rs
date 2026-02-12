@@ -62,7 +62,7 @@ pub fn Vec2Editor(
             .as_str(),
         dummy_legacy_callback,
         on_vec_input_change_str(vec_sig.into(), TranslationAxis::X, on_save),
-        format!("{:.3}", vec_sig.read().x),
+        format!("{}", vec_sig.read().x),
     );
 
     let dummy_legacy_callback = EventHandler::new(|_| {});
@@ -74,7 +74,7 @@ pub fn Vec2Editor(
             .as_str(),
         dummy_legacy_callback,
         on_vec_input_change_str(vec_sig.into(), TranslationAxis::Y, on_save),
-        format!("{:.3}", vec_sig.read().y),
+        format!("{}", vec_sig.read().y),
     );
 
     let vec2_select = use_memo(move || {
