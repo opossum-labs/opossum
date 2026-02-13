@@ -17,7 +17,6 @@ where
 {
     fn setter_from_obj(&self) -> impl FnMut(&mut D, T);
 
-    // Callback für Standard-Events (Checkboxen, Selects)
     fn create_callback(
         &self,
         mut obj: D,
@@ -33,7 +32,6 @@ where
         })
     }
 
-    // NEU: Callback für String-Events (FlushableTextInput)
     fn create_callback_str(&self, mut obj: D, handler: EventHandler<B>) -> EventHandler<String> {
         let this = *self;
         EventHandler::new(move |val_str: String| {
