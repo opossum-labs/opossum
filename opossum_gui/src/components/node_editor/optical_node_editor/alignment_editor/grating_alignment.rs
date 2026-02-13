@@ -129,7 +129,9 @@ pub fn LittrowConfigEditor(
             value: reference_wavelength_sig.read().value,
             base_unit: "m",
             onchange: move |new_length: f64| {
-                if relative_ne!(reference_wavelength_sig.read().value, new_length) {
+                if relative_ne!(
+                    reference_wavelength_sig.read().value, new_length, epsilon = 0.0
+                ) {
                     reference_wavelength_sig.set(meter!(new_length));
                 }
             },

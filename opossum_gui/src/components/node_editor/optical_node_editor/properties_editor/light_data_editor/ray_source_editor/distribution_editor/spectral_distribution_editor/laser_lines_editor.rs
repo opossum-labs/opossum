@@ -3,7 +3,7 @@ use crate::{
     components::{
         logger::LogResultExt,
         node_editor::inputs::{
-            InputParam, IntoInputData, IntoInputDataStrings, format_si_notation,
+            InputParam, IntoInputData, IntoInputDataStrings, format_si_with_base_unit,
             input_components::RowedInputs, parse_si_number, parse_unit_input_strict,
         },
     },
@@ -142,8 +142,8 @@ fn LaserLineList(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>) -
                     };
                     rsx! {
                         li { class,
-                            span { {format!("λ: {}m", format_si_notation(line.0.value, false))} }
-                            span { {format!("Int: {:.3}", line.1)} }
+                            span { {format!("λ: {}m", format_si_with_base_unit(line.0.value, "m", false))} }
+                            span { {format!("Int: {}", line.1)} }
                             a {
                                 class: "text-danger ms-auto",
                                 onclick: {

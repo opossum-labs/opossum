@@ -62,6 +62,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                     event.stop_propagation();
                 }
             },
+            onmousedown: |e: MouseEvent| e.stop_propagation(),
             fill: "transparent",
         }
         foreignObject {
@@ -74,6 +75,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 pointer_events: "auto",
                 class: "input-with-unit",
                 style: "display: flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; box-sizing: border-box;",
+                onmousedown: |e: MouseEvent| e.stop_propagation(),
                 UnitInput {
                     id: format!(
                         "distance-{}{}",

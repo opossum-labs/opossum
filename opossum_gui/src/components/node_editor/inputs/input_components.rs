@@ -43,7 +43,6 @@ pub fn FlushableTextInput(
     let mut local_value = use_signal(|| value.read().clone());
     let mut is_locally_dirty = use_signal(|| false);
 
-    // Sync bei Node-Wechsel
     use_effect(use_reactive!(|value| {
         local_value.set(value.read().clone());
         is_locally_dirty.set(false);
@@ -58,7 +57,6 @@ pub fn FlushableTextInput(
         }
     };
 
-    // Fix: Signal erst in Variable ziehen für use_effect
     let flush_sig = form_ctx.flush_trigger;
     use_effect(move || {
         flush_sig();
@@ -263,16 +261,6 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 },
                 readonly: input_data.readonly,
             }
-            // FlushableTextInput {
-            //     id: input_data.id,
-            //     label: input_data.input_param.label(),
-            //     value: input_data.value,
-            //     on_save: input_data.callback_str,
-            //     readonly: input_data.readonly,
-            //     container_class: "form-floating border-start".to_string(),
-            //     input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
-            //     label_class: "form-label text-secondary".to_string(),
-            // }
         }
     } else {
         rsx! {
@@ -470,27 +458,27 @@ pub fn UnitInput(
     let mut val_str =
         use_signal(|| format_si_with_base_unit(*value.read(), &base_unit, reciprocal));
 
-    let on_input_eval = {
-        let base_unit = base_unit.clone();
-        move |input_val: String| is_permissive_unit_input(&input_val, &base_unit)
-    };
+    let on_input_eval = { move |input_val: String| is_permissive_unit_input(&input_val) };
 
     let on_input_submission = EventHandler::new({
+        let label = label.clone();
         move |val: String| {
+            let old_val = val_str();
             if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, &base_unit) {
                 if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
                     val_str.set(format_si_with_base_unit(parsed, &base_unit, reciprocal));
                     onchange.call(parsed);
                 } else {
-                    val_str.set(format_si_with_base_unit(
-                        *value.read(),
-                        &base_unit,
-                        reciprocal,
-                    ));
+                    val_str.set(old_val);
                     OPOSSUM_UI_LOGS
                         .write()
                         .add_log("Cannot parse input number string to f64!");
                 }
+            } else {
+                val_str.set(old_val);
+                OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log(&format!("Wrong input format for field `{label}`! Must have unit `{base_unit}` and a valid prefix."));
             }
         }
     });
@@ -518,9 +506,7 @@ pub fn UnitInput(
                 readonly,
                 oninput: move |e: Event<FormData>| {
                     let new_value = e.data.value();
-                    if on_input_eval(new_value.clone()) {
-                        val_str.set(new_value);
-                    } else {
+                    if !on_input_eval(new_value) {
                         val_str.set(val_str());
                     }
                 },

@@ -107,7 +107,7 @@ fn on_new_translation(
 ) -> EventHandler<(Length, TranslationAxis)> {
     EventHandler::new(move |(new_trans, axis): (Length, TranslationAxis)| {
         let old_alignment_ax_val = alignment.read().translation_of_axis(axis);
-        if relative_ne!(old_alignment_ax_val.value, new_trans.value) {
+        if relative_ne!(old_alignment_ax_val.value, new_trans.value, epsilon = 0.0) {
             let mut new_alignment = *alignment.read();
             if new_alignment
                 .set_translation_of_axis(axis, new_trans)

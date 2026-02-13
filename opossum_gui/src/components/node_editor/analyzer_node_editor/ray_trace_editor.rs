@@ -105,50 +105,7 @@ pub fn RayTraceEditor(
                 }
             },
         }
-        // FlushableTextInput {
-        //     id: "rayTraceMinEnergy".to_string(),
-        //     label: "Minimum ray energy in pJ".to_string(),
-        //     value: format!("{}", ray_trace_config_sig.read().min_energy_per_ray().get::<picojoule>()),
-        //     r#type: "number",
-        //     step: "1.",
-        //     min: "0.",
-        //     container_class: "form-floating border-start".to_string(),
-        //     input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
-        //     label_class: "form-label text-secondary".to_string(),
-        //     on_save: move |val: String| {
-        //         let old_value = ray_trace_config_sig.read().min_energy_per_ray();
-        //         if let Ok(min_ray_energy) = val.parse::<f64>() {
-        //             if min_ray_energy < 0.0 {
-        //                 OPOSSUM_UI_LOGS
-        //                     .write()
-        //                     .add_log("Minimum ray energy must be non-negative.");
-        //                 ray_trace_config_sig
-        //                     .write()
-        //                     .set_min_energy_per_ray(old_value)
-        //                     .unwrap_or_else(|err| {
-        //                         OPOSSUM_UI_LOGS.write().add_log(&err.to_string());
-        //                     });
-        //             } else {
-        //                 let update_result = ray_trace_config_sig
-        //                     .write()
-        //                     .set_min_energy_per_ray(picojoule!(min_ray_energy));
 
-        //                 match update_result {
-        //                     Ok(()) => {
-        //                         on_change
-        //                             .call(NodeChangeEvent {
-        //                                 node_id: *node_id.read(),
-        //                                 action: NodeChangeAction::AnalyzerType(
-        //                                     AnalyzerType::RayTrace(*ray_trace_config_sig.read()),
-        //                                 ),
-        //                             });
-        //                     }
-        //                     Err(err) => OPOSSUM_UI_LOGS.write().add_log(&err.to_string()),
-        //                 }
-        //             }
-        //         }
-        //     },
-        // }
         // Selects brauchen kein Flushable, da sie sofort feuern
         LabeledSelect {
             id: "rayTraceMissedSurf".to_string(),
