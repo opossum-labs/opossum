@@ -27,7 +27,7 @@ pub fn AngleEditor(
             value: angle_sig.read().get::<degree>(),
             base_unit: "°",
             onchange: move |new_angle: f64| {
-                if relative_ne!(angle_sig.read().get::< degree > (), new_angle) {
+                if relative_ne!(angle_sig.read().get::< degree > (), new_angle, epsilon = 0.0) {
                     on_save.call(degree!(new_angle));
                 }
             },

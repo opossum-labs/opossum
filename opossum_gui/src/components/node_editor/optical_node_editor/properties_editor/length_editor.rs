@@ -27,7 +27,7 @@ pub fn LengthEditor(
             value: length_sig.read().value,
             base_unit: "m",
             onchange: move |new_length: f64| {
-                if relative_ne!(length_sig.read().value, new_length) {
+                if relative_ne!(length_sig.read().value, new_length, epsilon = 0.0) {
                     on_save.call(meter!(new_length));
                 }
             },

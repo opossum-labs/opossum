@@ -34,7 +34,7 @@ pub fn CurvatureEditor(
     let on_save = EventHandler::new({
         let property_key = property_key.clone();
         move |new_val: Length| {
-            if relative_ne!(curvature_sig.read().value, new_val.value) {
+            if relative_ne!(curvature_sig.read().value, new_val.value, epsilon = 0.0) {
                 on_change.call(NodeChangeEvent {
                     node_id: *node_id.read(),
                     action: NodeChangeAction::Property(
@@ -73,7 +73,7 @@ pub fn CurvatureEditor(
                     value: curvature_sig.read().value,
                     base_unit: "m",
                     onchange: move |new_curv: f64| {
-                        if relative_ne!(curvature_sig.read().value, new_curv) {
+                        if relative_ne!(curvature_sig.read().value, new_curv, epsilon = 0.0) {
                             on_save.call(meter!(new_curv));
                         }
                     },

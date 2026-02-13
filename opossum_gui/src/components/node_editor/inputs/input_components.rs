@@ -263,16 +263,6 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 },
                 readonly: input_data.readonly,
             }
-            // FlushableTextInput {
-            //     id: input_data.id,
-            //     label: input_data.input_param.label(),
-            //     value: input_data.value,
-            //     on_save: input_data.callback_str,
-            //     readonly: input_data.readonly,
-            //     container_class: "form-floating border-start".to_string(),
-            //     input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
-            //     label_class: "form-label text-secondary".to_string(),
-            // }
         }
     } else {
         rsx! {
@@ -470,10 +460,7 @@ pub fn UnitInput(
     let mut val_str =
         use_signal(|| format_si_with_base_unit(*value.read(), &base_unit, reciprocal));
 
-    let on_input_eval = {
-        let base_unit = base_unit.clone();
-        move |input_val: String| is_permissive_unit_input(&input_val, &base_unit)
-    };
+    let on_input_eval = { move |input_val: String| is_permissive_unit_input(&input_val) };
 
     let on_input_submission = EventHandler::new({
         let label = label.clone();

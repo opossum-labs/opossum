@@ -8,7 +8,6 @@ use strum::IntoEnumIterator;
 
 const EXP_NOTATION_MIN: i32 = -30;
 const EXP_NOTATION_MAX: i32 = 30;
-const ZERO_BELOW_EXP: i32 = -44;
 
 pub trait IntoInputData<T, D, B: 'static>: Into<InputParam>
 where
@@ -214,19 +213,17 @@ pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Opt
 ///
 /// This function is designed for interactive user input and allows partially
 /// entered numbers (e.g. `"1."`, `"-"`, `"3e"`). It validates the numeric part
-/// loosely and ensures that the unit consists of an optional single SI prefix
-/// followed by the given base unit.
+/// loosely
 ///
 /// # Arguments
 ///
 /// * `input` - The full user input string (number and unit).
-/// * `base_unit` - The expected base unit (e.g. `"V"`, `"Hz"`).
 ///
 /// # Returns
 ///
 /// `true` if the input is syntactically acceptable in a permissive context,
 /// otherwise `false`.
-fn is_permissive_unit_input(input: &str, base_unit: &str) -> bool {
+fn is_permissive_unit_input(input: &str) -> bool {
     let re = Regex::new(
         r"^\s*(?P<num>[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?)\s*(?P<unit>[a-zA-Zµ]*)?\s*$",
     )
@@ -237,7 +234,6 @@ fn is_permissive_unit_input(input: &str, base_unit: &str) -> bool {
     };
 
     let num = caps.name("num").map_or("", |m| m.as_str());
-    let unit = caps.name("unit").map_or("", |m| m.as_str());
 
     let num_re = Regex::new(r"^[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?$").unwrap();
     if !num_re.is_match(num) {
@@ -245,20 +241,6 @@ fn is_permissive_unit_input(input: &str, base_unit: &str) -> bool {
     } else {
         true
     }
-
-    // if unit == base_unit {
-    //     return true;
-    // }
-
-    // let Some(prefix) = unit.strip_suffix(base_unit) else {
-    //     return false;
-    // };
-
-    // if prefix.chars().count() != 1 {
-    //     return false;
-    // }
-
-    // "qryzafpnµumkMGTPEZYRQ".contains(prefix)
 }
 
 fn is_permissive_exp_input(input: &str) -> bool {

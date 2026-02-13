@@ -1,4 +1,4 @@
-use crate::components::node_editor::inputs::input_components::FlushableTextInput;
+use crate::components::node_editor::inputs::input_components::NodeConfigPlainF64Input;
 use approx::relative_ne;
 use dioxus::prelude::*;
 
@@ -9,19 +9,15 @@ pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Clone + 'static>(
 ) -> Element {
     let transmission_sig = use_signal(|| transmission);
     rsx! {
-        FlushableTextInput {
+        NodeConfigPlainF64Input {
             id: "constFilterTypeInput".to_string(),
             label: "Transmission".to_string(),
-            value: format!("{:.3}", transmission_sig.read()),
-            on_save: move |new_val: String| {
-                let old_val = *transmission_sig.read();
-                if let Ok(val) = new_val.parse::<f64>() && relative_ne!(old_val, val) {
-                    on_transmission_change.call(T::from(val));
+            value: transmission_sig,
+            onchange: move |new_val: f64| {
+                if relative_ne!(* transmission_sig.read(), new_val, epsilon = 0.0) {
+                    on_transmission_change.call(T::from(new_val));
                 }
             },
-            container_class: "form-floating border-start".to_string(),
-            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
-            label_class: "form-label text-secondary".to_string(),
         }
 
     }

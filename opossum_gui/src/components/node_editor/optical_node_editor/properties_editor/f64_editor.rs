@@ -1,7 +1,9 @@
 use crate::components::node_editor::{
-    inputs::input_components::FlushableTextInput, node_config_editor::NodeChangeEvent,
+    inputs::input_components::{FlushableTextInput, NodeConfigPlainF64Input},
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
 };
+use approx::relative_ne;
 use dioxus::prelude::*;
 use inflector::Inflector;
 use uuid::Uuid;
@@ -18,18 +20,15 @@ pub fn F64Editor(
         on_save_proptype_handler(float64_sig, property_key.clone(), on_change, node_id.into());
 
     rsx! {
-        FlushableTextInput {
+        NodeConfigPlainF64Input {
             id: format!("float64Property{property_key}").to_camel_case(),
-            label: format!("{}", property_key.to_sentence_case()),
-            value: float64_sig().to_string(),
-            on_save: move |new_val: String| {
-                if let Ok(val) = new_val.parse::<f64>() {
-                    on_save.call(val);
+            label: property_key.to_sentence_case(),
+            value: float64_sig,
+            onchange: move |new_val: f64| {
+                if relative_ne!(* float64_sig.read(), new_val, epsilon = 0.0) {
+                    on_save.call(new_val);
                 }
             },
-            container_class: "form-floating border-start".to_string(),
-            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
-            label_class: "form-label text-secondary".to_string(),
         }
     }
 }
