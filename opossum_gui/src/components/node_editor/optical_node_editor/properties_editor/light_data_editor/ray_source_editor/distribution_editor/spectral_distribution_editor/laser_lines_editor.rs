@@ -3,7 +3,8 @@ use crate::{
     components::{
         logger::LogResultExt,
         node_editor::inputs::{
-            InputParam, IntoInputData, IntoInputDataStrings, format_si_with_base_unit, input_components::RowedInputs, parse_si_number, parse_unit_input_strict
+            InputParam, IntoInputData, IntoInputDataStrings, format_si_with_base_unit,
+            input_components::RowedInputs, parse_si_number, parse_unit_input_strict,
         },
     },
 };

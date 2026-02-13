@@ -10,7 +10,6 @@ const EXP_NOTATION_MIN: i32 = -30;
 const EXP_NOTATION_MAX: i32 = 30;
 const ZERO_BELOW_EXP: i32 = -44;
 
-
 pub trait IntoInputData<T, D, B: 'static>: Into<InputParam>
 where
     D: Into<B> + Clone + 'static,
@@ -187,7 +186,6 @@ impl InputData {
     }
 }
 
-
 /// Parses a numeric string together with an SI prefix into a floating-point value.
 ///
 /// The numeric string may use either `.` or `,` as the decimal separator.
@@ -207,9 +205,9 @@ pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Opt
     let factor = si_prefix_to_exponent(prefix_str, reciprocal);
 
     let normalized = num_str.replace(',', ".");
-    normalized.parse::<f64>().map_or(None, |parsed| {
-        Some(parsed * 10f64.powi(factor))
-    })
+    normalized
+        .parse::<f64>()
+        .map_or(None, |parsed| Some(parsed * 10f64.powi(factor)))
 }
 
 /// Checks whether an input string resembles a valid, permissive unit input.
@@ -244,8 +242,7 @@ fn is_permissive_unit_input(input: &str, base_unit: &str) -> bool {
     let num_re = Regex::new(r"^[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?$").unwrap();
     if !num_re.is_match(num) {
         return false;
-    }
-    else{
+    } else {
         true
     }
 
@@ -417,13 +414,17 @@ fn get_mantissa_and_exponent(x: f64) -> (f64, i32) {
     let x_abs = x.abs();
 
     let exp3 = get_exponent(x_abs);
-    if exp3 < EXP_NOTATION_MIN{
-        (normalize_f64_noise(sign * (x_abs / 10f64.powi(EXP_NOTATION_MIN))), EXP_NOTATION_MIN)
-    }
-    else if exp3 > EXP_NOTATION_MAX{
-        (normalize_f64_noise(sign * (x_abs / 10f64.powi(EXP_NOTATION_MAX))), EXP_NOTATION_MAX)
-    }
-    else{
+    if exp3 < EXP_NOTATION_MIN {
+        (
+            normalize_f64_noise(sign * (x_abs / 10f64.powi(EXP_NOTATION_MIN))),
+            EXP_NOTATION_MIN,
+        )
+    } else if exp3 > EXP_NOTATION_MAX {
+        (
+            normalize_f64_noise(sign * (x_abs / 10f64.powi(EXP_NOTATION_MAX))),
+            EXP_NOTATION_MAX,
+        )
+    } else {
         (normalize_f64_noise(sign * (x_abs / 10f64.powi(exp3))), exp3)
     }
 }

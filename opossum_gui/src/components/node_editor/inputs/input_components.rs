@@ -488,8 +488,7 @@ pub fn UnitInput(
                         .write()
                         .add_log("Cannot parse input number string to f64!");
                 }
-            }
-            else{
+            } else {
                 val_str.set(val_str());
                 OPOSSUM_UI_LOGS
                         .write()
