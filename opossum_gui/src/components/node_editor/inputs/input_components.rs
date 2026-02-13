@@ -479,7 +479,7 @@ pub fn UnitInput(
                 val_str.set(val_str());
                 OPOSSUM_UI_LOGS
                         .write()
-                        .add_log(&format!("Wrong input format for field `{}`! Must have unit `{base_unit}` and a valid prefix.", label));
+                        .add_log(&format!("Wrong input format for field `{label}`! Must have unit `{base_unit}` and a valid prefix."));
             }
         }
     });

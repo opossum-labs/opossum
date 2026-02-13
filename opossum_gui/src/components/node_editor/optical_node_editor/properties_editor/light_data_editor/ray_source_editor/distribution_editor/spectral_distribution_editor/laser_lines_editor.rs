@@ -143,7 +143,7 @@ fn LaserLineList(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>) -
                     rsx! {
                         li { class,
                             span { {format!("λ: {}m", format_si_with_base_unit(line.0.value, "m", false))} }
-                            span { {format!("Int: {}", line.1.to_string())} }
+                            span { {format!("Int: {}", line.1)} }
                             a {
                                 class: "text-danger ms-auto",
                                 onclick: {

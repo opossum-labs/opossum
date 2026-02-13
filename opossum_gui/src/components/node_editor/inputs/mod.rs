@@ -188,8 +188,7 @@ impl InputData {
 /// Parses a numeric string together with an SI prefix into a floating-point value.
 ///
 /// The numeric string may use either `.` or `,` as the decimal separator.
-/// The parsed value is scaled according to the given SI prefix and clamped
-/// to a reasonable numeric range to avoid extreme magnitudes.
+/// The parsed value is scaled according to the given SI prefix.
 ///
 /// # Arguments
 ///
@@ -236,27 +235,20 @@ fn is_permissive_unit_input(input: &str) -> bool {
     let num = caps.name("num").map_or("", |m| m.as_str());
 
     let num_re = Regex::new(r"^[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?$").unwrap();
-    if !num_re.is_match(num) {
-        return false;
-    } else {
-        true
-    }
+    num_re.is_match(num)
 }
 
 fn is_permissive_exp_input(input: &str) -> bool {
     let regex = Regex::new(r"^[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?$").unwrap();
-    let mut split = input.split_whitespace();
-    let num = split.next().unwrap_or("");
-    regex.is_match(num)
+    let trimmed = input.trim();
+    regex.is_match(trimmed)
 }
 
 pub fn parse_exp_input_strict(input: &str) -> Result<String, ()> {
-    let regex = Regex::new(r"^[+-]?(?:\d*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d*)?$").unwrap();
-    let mut split_input = input.split_whitespace();
-    let value_str = split_input.next().ok_or(())?;
-
-    if regex.is_match(value_str) {
-        return Ok(value_str.to_string());
+    let regex = Regex::new(r"^[+-]?(?:(\d+([.,]\d*)?)|([.,]\d+))([eE][+-]?\d+)?$").unwrap();
+    let trimmed = input.trim().replace(',', ".");
+    if regex.is_match(&trimmed) {
+        return Ok(trimmed);
     }
     Err(())
 }
@@ -280,7 +272,7 @@ pub fn parse_exp_input_strict(input: &str) -> Result<String, ()> {
 /// Returns `Err(())` if the input does not strictly conform to the expected format.
 pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, String), ()> {
     let regex = Regex::new(
-        r"^(?P<value>[+-]?(?:\d*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d*)?)\s*(?P<unit>[a-zA-Zµ]+)$",
+        r"^(?P<value>[+-]?(?:\d*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d*)?)\s*(?P<unit>[\p{L}°µ]+)$",
     )
     .unwrap();
 
@@ -291,11 +283,14 @@ pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, 
 
     let caps = regex.captures(input).ok_or(())?;
 
-    let value = caps.name("value").unwrap().as_str();
-    let unit = caps.name("unit").unwrap().as_str();
+    let value = caps.name("value").unwrap().as_str().replace(',', ".");
+    if value.is_empty() {
+        return Err(());
+    }
 
+    let unit = caps.name("unit").unwrap().as_str();
     if unit == base_unit {
-        return Ok((value.to_string(), String::new()));
+        return Ok((value, String::new()));
     }
 
     if let Some(prefix_part) = unit.strip_suffix(base_unit)
@@ -303,7 +298,7 @@ pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, 
     {
         let prefix_char = prefix_part.chars().next().unwrap();
         if valid_prefixes.contains(&prefix_char) {
-            return Ok((value.to_string(), prefix_char.to_string()));
+            return Ok((value, prefix_char.to_string()));
         }
     }
 
@@ -342,7 +337,7 @@ pub fn format_si_notation(x: f64, reciprocal: bool) -> String {
         return "0.0 ".into();
     }
 
-    format!("{} {prefix}", mantissa.to_string())
+    format!("{mantissa} {prefix}")
 }
 
 /// Formats a floating-point value in scientific notation with an exponent.
@@ -365,7 +360,7 @@ pub fn format_exp_number_notation(x: f64) -> String {
     if exponent == 0 {
         mantissa.to_string()
     } else {
-        format!("{}e{exponent}", mantissa.to_string())
+        format!("{mantissa}e{exponent}")
     }
 }
 
@@ -519,4 +514,535 @@ fn si_prefix_to_exponent(prefix: &str, reciprocal: bool) -> i32 {
         _ => 0,
     };
     if reciprocal { -exp } else { exp }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_si_prefix_from_exponent_all_valid() {
+        let cases = vec![
+            (-30, "q"),
+            (-27, "r"),
+            (-24, "y"),
+            (-21, "z"),
+            (-18, "a"),
+            (-15, "f"),
+            (-12, "p"),
+            (-9, "n"),
+            (-6, "µ"),
+            (-3, "m"),
+            (3, "k"),
+            (6, "M"),
+            (9, "G"),
+            (12, "T"),
+            (15, "P"),
+            (18, "E"),
+            (21, "Z"),
+            (24, "Y"),
+            (27, "R"),
+            (30, "Q"),
+        ];
+
+        for (exp, expected) in cases {
+            assert_eq!(
+                si_prefix_from_exponent(exp),
+                expected,
+                "Exponent {} should map to '{}'",
+                exp,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_si_prefix_from_exponent_invalid_exponents() {
+        let invalid_exponents = vec![0, 1, 2, -1, -2, 4, 5, -31, 31, 100, -100];
+
+        for exp in invalid_exponents {
+            assert_eq!(
+                si_prefix_from_exponent(exp),
+                "",
+                "Exponent {} should return empty string",
+                exp
+            );
+        }
+    }
+
+    #[test]
+    fn test_si_prefix_from_exponent_edge_cases() {
+        let edge_cases = vec![
+            (-33, ""), // below supported range
+            (-29, ""), // between supported exponents
+            (2, ""),   // just below first positive prefix
+            (32, ""),  // above supported range
+        ];
+
+        for (exp, expected) in edge_cases {
+            assert_eq!(
+                si_prefix_from_exponent(exp),
+                expected,
+                "Exponent {} edge case should return '{}'",
+                exp,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_valid_inputs_is_permissive_unit_input() {
+        let valid_inputs = vec![
+            "123",     // simple number
+            "+123",    // positive sign
+            "-123",    // negative number
+            "123.45",  // decimal number
+            "-123.45", // negative decimal
+            "1e10",    // scientific notation
+            "-1E-10",  // scientific notation with sign
+            "  42  ",  // leading and trailing spaces
+            "42kg",    // number with unit
+            "3.14 m",  // number with unit and space
+            "2,718µs", // comma as decimal separator and µ unit
+        ];
+
+        for input in valid_inputs {
+            assert!(
+                is_permissive_unit_input(input),
+                "Input '{}' should be valid",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_invalid_inputs_is_permissive_unit_input() {
+        let invalid_inputs = vec![
+            "12.3.4",    // invalid decimal format
+            "1e10.5",    // invalid scientific notation
+            "123..45kg", // double dot
+            "1,2,3",     // multiple commas
+            "12 34",     // space inside number
+            "--123",     // double minus
+            "++123",     // double plus
+        ];
+
+        for input in invalid_inputs {
+            assert!(
+                !is_permissive_unit_input(input),
+                "Input '{}' should be invalid",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_standard_prefixes() {
+        let cases = vec![
+            ("q", false, -30),
+            ("r", false, -27),
+            ("y", false, -24),
+            ("z", false, -21),
+            ("a", false, -18),
+            ("f", false, -15),
+            ("p", false, -12),
+            ("n", false, -9),
+            ("µ", false, -6),
+            ("u", false, -6),
+            ("m", false, -3),
+            ("k", false, 3),
+            ("M", false, 6),
+            ("G", false, 9),
+            ("T", false, 12),
+            ("P", false, 15),
+            ("E", false, 18),
+            ("Z", false, 21),
+            ("Y", false, 24),
+            ("R", false, 27),
+            ("Q", false, 30),
+        ];
+
+        for (prefix, reciprocal, expected) in cases {
+            assert_eq!(
+                si_prefix_to_exponent(prefix, reciprocal),
+                expected,
+                "Prefix '{}' with reciprocal={} failed",
+                prefix,
+                reciprocal
+            );
+        }
+    }
+
+    #[test]
+    fn test_valid_without_prefix_parse_unit_input_strict() {
+        let base_unit = "A";
+        let cases = vec![
+            ("123A", "123", ""),
+            ("+123A", "+123", ""),
+            ("-123A", "-123", ""),
+            ("0.456A", "0.456", ""),
+            ("7,89A", "7,89", ""),
+            ("1e3A", "1e3", ""),
+            ("-2E-3A", "-2E-3", ""),
+        ];
+
+        for (input, expected_value, expected_prefix) in cases {
+            let result = parse_unit_input_strict(input, base_unit).unwrap();
+            assert_eq!(
+                result.0,
+                expected_value.replace(",", "."),
+                "Input '{}'",
+                input
+            );
+            assert_eq!(result.1, expected_prefix, "Input '{}'", input);
+        }
+    }
+
+    #[test]
+    fn test_valid_with_prefix_parse_unit_input_strict() {
+        let base_unit = "A";
+        let cases = vec![
+            ("3.5kA", "3.5", "k"),
+            ("-1.2mA", "-1.2", "m"),
+            ("7µA", "7", "µ"),
+            ("9uA", "9", "u"),
+            ("1GA", "1", "G"),
+        ];
+
+        for (input, expected_value, expected_prefix) in cases {
+            let result = parse_unit_input_strict(input, base_unit).unwrap();
+            assert_eq!(result.0, expected_value, "Input '{}'", input);
+            assert_eq!(result.1, expected_prefix, "Input '{}'", input);
+        }
+    }
+
+    #[test]
+    fn parse_unit_input_strict_valid_without_prefix() {
+        let cases = vec![
+            ("123A", "123", "A"),
+            ("+123A", "+123", "A"),
+            ("-123A", "-123", "A"),
+            ("0.456A", "0.456", "A"),
+            ("25°C", "25", "°C"),
+            ("220Ω", "220", "Ω"),
+        ];
+
+        for (input, expected_value, base_unit) in cases {
+            let result = parse_unit_input_strict(input, base_unit).unwrap();
+            assert_eq!(result.0, expected_value, "Input '{}'", input);
+            assert_eq!(result.1, "", "Input '{}'", input); // no prefix
+        }
+    }
+
+    #[test]
+    fn parse_unit_input_strict_valid_with_prefix() {
+        let cases = vec![
+            ("3.5kA", "3.5", "A", "k"),
+            ("-1.2mA", "-1.2", "A", "m"),
+            ("7µA", "7", "A", "µ"),
+            ("9uA", "9", "A", "u"),
+            ("1GA", "1", "A", "G"),
+            ("2.5mΩ", "2.5", "Ω", "m"),
+            ("1k°C", "1", "°C", "k"),
+        ];
+
+        for (input, expected_value, base_unit, expected_prefix) in cases {
+            let result = parse_unit_input_strict(input, base_unit).unwrap();
+            assert_eq!(result.0, expected_value, "Input '{}'", input);
+            assert_eq!(result.1, expected_prefix, "Input '{}'", input);
+        }
+    }
+
+    #[test]
+    fn parse_unit_input_strict_invalid_inputs() {
+        let base_unit = "A";
+        let invalid_cases = vec![
+            "",       // empty
+            "123",    // missing unit
+            "A",      // missing value
+            "12.3AA", // multiple units
+            "12.3xA", // invalid prefix
+            "12..3A", // malformed number
+            "1,2,3A", // malformed number with multiple commas
+            "123AB",  // unit mismatch
+            "--123A", // invalid sign
+            "++123A", // invalid sign
+        ];
+
+        for input in invalid_cases {
+            assert!(
+                parse_unit_input_strict(input, base_unit).is_err(),
+                "Input '{}' should fail strict parsing",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_unknown_prefix_si_prefix_to_exponent() {
+        let unknowns = vec!["", "x", "abc", "1", "#", " "];
+
+        for prefix in unknowns {
+            assert_eq!(
+                si_prefix_to_exponent(prefix, false),
+                0,
+                "Unknown prefix '{}' should return 0",
+                prefix
+            );
+            assert_eq!(
+                si_prefix_to_exponent(prefix, true),
+                0,
+                "Unknown prefix '{}' with reciprocal should return 0",
+                prefix
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_prefixes_reciprocal_si_prefix_to_exponent() {
+        let cases = vec![
+            ("q", true, 30),
+            ("r", true, 27),
+            ("y", true, 24),
+            ("z", true, 21),
+            ("a", true, 18),
+            ("f", true, 15),
+            ("p", true, 12),
+            ("n", true, 9),
+            ("µ", true, 6),
+            ("u", true, 6),
+            ("m", true, 3),
+            ("k", true, -3),
+            ("M", true, -6),
+            ("G", true, -9),
+            ("T", true, -12),
+            ("P", true, -15),
+            ("E", true, -18),
+            ("Z", true, -21),
+            ("Y", true, -24),
+            ("R", true, -27),
+            ("Q", true, -30),
+        ];
+
+        for (prefix, reciprocal, expected) in cases {
+            assert_eq!(
+                si_prefix_to_exponent(prefix, reciprocal),
+                expected,
+                "Prefix '{}' with reciprocal={} failed",
+                prefix,
+                reciprocal
+            );
+        }
+    }
+
+    #[test]
+    fn test_very_small_values_get_exponent() {
+        // Anything smaller than 1e-60 should return 0
+        let small_values = vec![0.0, 1e-100, 1e-61];
+        for &x in &small_values {
+            assert_eq!(get_exponent(x), 0, "x = {} should return 0", x);
+        }
+    }
+
+    #[test]
+    fn test_exact_powers_of_ten_get_exponent() {
+        let cases = vec![
+            (1e-30, -30),
+            (1e-3, -3),
+            (1.0, 0),
+            (1e3, 3),
+            (1e6, 6),
+            (1e9, 9),
+            (1e12, 12),
+        ];
+
+        for (x, expected) in cases {
+            assert_eq!(get_exponent(x), expected, "x = {}", x);
+        }
+    }
+
+    #[test]
+    fn test_numbers_between_powers_of_ten_get_exponent() {
+        let cases = vec![
+            (5e-2, -3), // between 1e-3 and 1e0
+            (7e1, 0),   // between 1e0 and 1e3
+            (3e5, 3),   // between 1e3 and 1e6
+            (9e8, 6),   // between 1e6 and 1e9
+            (2e-5, -6), // between 1e-6 and 1e-3
+        ];
+
+        for (x, expected) in cases {
+            assert_eq!(get_exponent(x), expected, "x = {}", x);
+        }
+    }
+
+    #[test]
+    fn test_edge_cases_near_multiple_of_three_get_exponent() {
+        let cases = vec![
+            (1e-3, -3),
+            (1e-2, -3),
+            (9e-4, -6),
+            (1e0, 0),
+            (9e0, 0),
+            (1e1, 0),
+            (1e3, 3),
+            (5e3, 3),
+            (9.99e3, 3),
+        ];
+
+        for (x, expected) in cases {
+            assert_eq!(get_exponent(x), expected, "x = {}", x);
+        }
+    }
+
+    #[test]
+    fn test_large_numbers_get_exponent() {
+        let cases = vec![(1e15, 15), (5e18, 18), (7e21, 21), (9e24, 24), (1e30, 30)];
+
+        for (x, expected) in cases {
+            assert_eq!(get_exponent(x), expected, "x = {}", x);
+        }
+    }
+    #[test]
+    fn test_is_permissive_exp_input_valid() {
+        let valid_inputs = vec![
+            "123", "+123", "-123", "0.456", "7,89", "1e10", "-1E-10", "+3.14E+2", ".5", "-.75",
+            "42 ", // trailing space
+            " 42", // leading space
+        ];
+
+        for input in valid_inputs {
+            assert!(
+                is_permissive_exp_input(input),
+                "Input '{}' should be valid (permissive)",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_permissive_exp_input_invalid() {
+        let invalid_inputs = vec!["abc", "12.3.4", "1e10.5", "1,2,3", "--123", "++123"];
+
+        for input in invalid_inputs {
+            assert!(
+                !is_permissive_exp_input(input),
+                "Input '{}' should be invalid (permissive)",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_exp_input_strict_valid() {
+        let valid_cases = vec![
+            "123", "+123", "-123", "0.456", "7,89", "1e10", "-1E-10", "+3.14E+2", ".5", "-.75",
+            "42 ", // trailing space
+            " 42", // leading space
+        ];
+
+        for input in valid_cases {
+            let result = parse_exp_input_strict(input).unwrap();
+            assert_eq!(
+                result,
+                input.trim().replace(",", "."),
+                "Input '{}' should parse strictly",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_exp_input_strict_invalid() {
+        let invalid_cases = vec![
+            "", "abc", "12.3.4", "1e10.5", "1,2,3", "--123", "++123", "+", "-",
+            "123 456", // extra tokens not allowed strictly
+        ];
+
+        for input in invalid_cases {
+            assert!(
+                parse_exp_input_strict(input).is_err(),
+                "Input '{}' should fail strict parsing",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_exp_input_strict_edge_cases() {
+        let edge_cases = vec!["0", "0.0", "-0", "+0", "1E0", "-1E0"];
+
+        for input in edge_cases {
+            let result = parse_exp_input_strict(input).unwrap();
+            assert_eq!(result, input, "Edge case '{}' should parse strictly", input);
+        }
+    }
+    #[test]
+    fn test_format_si_notation_normal() {
+        let cases = vec![
+            (1.0, false, "1 "),
+            (1e3, false, "1 k"),
+            (1e6, false, "1 M"),
+            (1e-3, false, "1 m"),
+            (2.5e-6, false, "2.5 µ"),
+            (-3.0e9, false, "-3 G"),
+            (7.89e-12, false, "7.89 p"),
+        ];
+
+        for (x, reciprocal, expected) in cases {
+            let result = format_si_notation(x, reciprocal);
+            assert_eq!(result, expected, "x={} reciprocal={}", x, reciprocal);
+        }
+    }
+
+    #[test]
+    fn test_format_si_notation_reciprocal() {
+        let cases = vec![
+            (1e3, true, "1 m"),
+            (1e6, true, "1 µ"),
+            (1e-3, true, "1 k"),
+            (2.5e-6, true, "2.5 M"),
+            (-3.0e9, true, "-3 n"),
+        ];
+
+        for (x, reciprocal, expected) in cases {
+            let result = format_si_notation(x, reciprocal);
+            assert_eq!(result, expected, "x={} reciprocal={}", x, reciprocal);
+        }
+    }
+
+    #[test]
+    fn test_format_si_notation_zero() {
+        let zeros = vec![0.0, -0.0];
+
+        for &x in &zeros {
+            let result = format_si_notation(x, false);
+            assert_eq!(result, "0.0 ");
+        }
+    }
+
+    #[test]
+    fn test_format_si_notation_infinite() {
+        let infinities = vec![f64::INFINITY, f64::NEG_INFINITY];
+
+        for &x in &infinities {
+            let result = format_si_notation(x, false);
+            assert_eq!(result, "∞");
+        }
+    }
+
+    #[test]
+    fn test_format_si_notation_edge_cases() {
+        let cases = vec![
+            (999.0, false, "999 "), // just below 1e3 → no prefix
+            (1000.0, false, "1 k"), // exact 1e3
+            (999.0, true, "999 "),  // reciprocal should still be same for small numbers
+            (1000.0, true, "1 m"),  // reciprocal flips exponent
+        ];
+
+        for (x, reciprocal, expected) in cases {
+            let result = format_si_notation(x, reciprocal);
+            assert_eq!(result, expected, "x={} reciprocal={}", x, reciprocal);
+        }
+    }
 }

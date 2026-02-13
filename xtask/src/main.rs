@@ -76,7 +76,7 @@ fn task_bundle() -> Result<(), anyhow::Error> {
             .map(PathBuf::from)
             .unwrap_or_else(|_| Path::new("target").to_path_buf());
         let release_dir = target_dir.join("release");
-        
+
         let exe_ext = env::consts::EXE_SUFFIX; // ".exe" oder ""
 
         for bin_name in ["opossum_backend", "opossum_cli"] {
@@ -106,7 +106,7 @@ fn task_bundle() -> Result<(), anyhow::Error> {
 fn get_host_target_triple() -> Result<String, anyhow::Error> {
     let output = Command::new("rustc").arg("-vV").output()?;
     let stdout = String::from_utf8(output.stdout)?;
-    
+
     for line in stdout.lines() {
         if line.starts_with("host: ") {
             return Ok(line.trim_start_matches("host: ").to_string());
