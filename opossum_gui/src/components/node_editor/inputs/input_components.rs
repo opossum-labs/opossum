@@ -476,21 +476,24 @@ pub fn UnitInput(
     };
 
     let on_input_submission = EventHandler::new({
+        let label = label.clone();
         move |val: String| {
             if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, &base_unit) {
                 if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
                     val_str.set(format_si_with_base_unit(parsed, &base_unit, reciprocal));
                     onchange.call(parsed);
                 } else {
-                    val_str.set(format_si_with_base_unit(
-                        *value.read(),
-                        &base_unit,
-                        reciprocal,
-                    ));
+                    val_str.set(val_str());
                     OPOSSUM_UI_LOGS
                         .write()
                         .add_log("Cannot parse input number string to f64!");
                 }
+            }
+            else{
+                val_str.set(val_str());
+                OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log(&format!("Wrong input format for field `{}`! Must have unit `{base_unit}` and a valid prefix.", label));
             }
         }
     });

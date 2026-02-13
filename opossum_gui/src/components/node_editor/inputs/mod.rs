@@ -6,6 +6,11 @@ use regex::Regex;
 use std::{fmt::Display, str::FromStr};
 use strum::IntoEnumIterator;
 
+const EXP_NOTATION_MIN: i32 = -30;
+const EXP_NOTATION_MAX: i32 = 30;
+const ZERO_BELOW_EXP: i32 = -44;
+
+
 pub trait IntoInputData<T, D, B: 'static>: Into<InputParam>
 where
     D: Into<B> + Clone + 'static,
@@ -182,55 +187,6 @@ impl InputData {
     }
 }
 
-/// Formats a floating-point value with a fixed number of decimal places.
-///
-/// The value is rounded to `decimals` decimal places. Trailing zeros in the
-/// fractional part are removed, but at least one decimal digit is retained
-/// if a decimal point is present.
-///
-/// This function is intended for numeric display purposes where predictable
-/// decimal formatting is required without scientific notation.
-///
-/// # Arguments
-///
-/// * `v` - The floating-point value to format.
-/// * `decimals` - The maximum number of decimal places to retain.
-///
-/// # Returns
-///
-/// A `String` containing the formatted decimal representation.
-fn format_fixed_decimal(v: f64, decimals: usize) -> String {
-    #[allow(clippy::cast_possible_wrap)]
-    #[allow(clippy::cast_possible_truncation)]
-    let factor = 10f64.powi(decimals as i32);
-    let scaled = (v * factor).round();
-    #[allow(clippy::cast_possible_truncation)]
-    let int_scaled = scaled as i128;
-
-    let s = int_scaled.to_string();
-
-    if decimals == 0 {
-        return s;
-    }
-
-    if s.len() <= decimals {
-        let zeros = decimals - s.len();
-        let mut out = String::from("0.");
-        out.push_str(&"0".repeat(zeros));
-        out.push_str(&s);
-        return out;
-    }
-
-    let split = s.len() - decimals;
-    let (int_part, frac_part) = s.split_at(split);
-
-    let trimmed = frac_part.trim_end_matches('0');
-    if trimmed.is_empty() {
-        format!("{int_part}.0")
-    } else {
-        format!("{int_part}.{trimmed}")
-    }
-}
 
 /// Parses a numeric string together with an SI prefix into a floating-point value.
 ///
@@ -248,19 +204,11 @@ fn format_fixed_decimal(v: f64, decimals: usize) -> String {
 /// `Some(f64)` containing the scaled value if parsing succeeds, or `None` if
 /// the numeric string is invalid.
 pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Option<f64> {
-    let max_num = 1e33 * (1. - 1e-14);
-    let min_num = 0.0;
     let factor = si_prefix_to_exponent(prefix_str, reciprocal);
 
     let normalized = num_str.replace(',', ".");
     normalized.parse::<f64>().map_or(None, |parsed| {
-        if (parsed.abs() * 10f64.powi(factor)) > max_num {
-            Some(parsed.signum() * max_num)
-        } else if (parsed.abs() * 10f64.powi(factor)) < min_num {
-            Some(parsed.signum() * min_num)
-        } else {
-            Some(parsed * 10f64.powi(factor))
-        }
+        Some(parsed * 10f64.powi(factor))
     })
 }
 
@@ -297,20 +245,23 @@ fn is_permissive_unit_input(input: &str, base_unit: &str) -> bool {
     if !num_re.is_match(num) {
         return false;
     }
-
-    if unit == base_unit {
-        return true;
+    else{
+        true
     }
 
-    let Some(prefix) = unit.strip_suffix(base_unit) else {
-        return false;
-    };
+    // if unit == base_unit {
+    //     return true;
+    // }
 
-    if prefix.chars().count() != 1 {
-        return false;
-    }
+    // let Some(prefix) = unit.strip_suffix(base_unit) else {
+    //     return false;
+    // };
 
-    "qryzafpnµumkMGTPEZYRQ".contains(prefix)
+    // if prefix.chars().count() != 1 {
+    //     return false;
+    // }
+
+    // "qryzafpnµumkMGTPEZYRQ".contains(prefix)
 }
 
 fn is_permissive_exp_input(input: &str) -> bool {
@@ -412,12 +363,7 @@ pub fn format_si_notation(x: f64, reciprocal: bool) -> String {
         return "0.0 ".into();
     }
 
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
-    let decimals = 15 - mantissa.abs().log10().abs().ceil() as usize;
-    let mantissa_str = format_fixed_decimal(mantissa, decimals);
-
-    format!("{mantissa_str} {prefix}")
+    format!("{} {prefix}", mantissa.to_string())
 }
 
 /// Formats a floating-point value in scientific notation with an exponent.
@@ -437,15 +383,10 @@ pub fn format_exp_number_notation(x: f64) -> String {
         return "0.0 ".into();
     }
 
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
-    let decimals = 15 - mantissa.abs().log10().abs().ceil() as usize;
-    let mantissa_str = format_fixed_decimal(mantissa, decimals);
-
     if exponent == 0 {
-        mantissa_str
+        mantissa.to_string()
     } else {
-        format!("{mantissa_str}e{exponent}")
+        format!("{}e{exponent}", mantissa.to_string())
     }
 }
 
@@ -472,17 +413,30 @@ pub fn format_si_with_base_unit(value: f64, base_unit: &str, reciprocal: bool) -
 ///
 /// A tuple `(mantissa, exponent)` where `x = mantissa × 10^exponent`.
 fn get_mantissa_and_exponent(x: f64) -> (f64, i32) {
-    if relative_eq!(x, 0.0) {
-        return (0.0, 0);
-    }
-
     let sign = if x < 0.0 { -1.0 } else { 1.0 };
     let x_abs = x.abs();
 
     let exp3 = get_exponent(x_abs);
-    let mantissa = sign * (x_abs / 10f64.powi(exp3));
+    if exp3 < EXP_NOTATION_MIN{
+        (normalize_f64_noise(sign * (x_abs / 10f64.powi(EXP_NOTATION_MIN))), EXP_NOTATION_MIN)
+    }
+    else if exp3 > EXP_NOTATION_MAX{
+        (normalize_f64_noise(sign * (x_abs / 10f64.powi(EXP_NOTATION_MAX))), EXP_NOTATION_MAX)
+    }
+    else{
+        (normalize_f64_noise(sign * (x_abs / 10f64.powi(exp3))), exp3)
+    }
+}
 
-    (mantissa, exp3)
+fn normalize_f64_noise(v: f64) -> f64 {
+    if v == 0.0 {
+        return 0.0;
+    }
+
+    let exp = v.abs().log10().floor();
+    let scale = 10f64.powf(14.0 - exp);
+
+    (v * scale).round() / scale
 }
 
 /// Computes the engineering exponent (multiple of three) for a positive value.
@@ -498,7 +452,7 @@ fn get_mantissa_and_exponent(x: f64) -> (f64, i32) {
 ///
 /// The engineering exponent as a multiple of three.
 fn get_exponent(x_abs: f64) -> i32 {
-    if relative_eq!(x_abs, 0.0) {
+    if x_abs < 1e-60 {
         return 0;
     }
     let exp10 = x_abs.log10();
