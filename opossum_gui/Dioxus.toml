@@ -90,7 +90,7 @@ short_description = "Open-source optic simulation system and unified modeler"
 long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
 category = "Utility"
 icon = ["assets/Logo_square.png"]
-external_bin = ["../target/release/opossum_backend", "../target/release/opossum_cli"]
+external_bin = ["staging/opossum_backend", "staging/opossum_cli"]
 
 [bundle.windows]
 icon_path = "assets/favicon.ico"
