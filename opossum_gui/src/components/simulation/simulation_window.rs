@@ -27,6 +27,23 @@ pub fn SimulationWindow(
 ) -> Element {
     let mut output = use_signal(String::new);
     let mut is_running = use_signal(|| false);
+
+    let mut close_and_refocus = move || {
+        // 1. Fenster schließen (Status ändern)
+        show_simulation.set(false);
+
+        // 2. Asynchron per JavaScript den Fokus auf den app-container zurückholen
+        spawn(async move {
+            // Wir nutzen querySelector, da wir wissen, dass das Element die Klasse 'app-container' hat.
+            // Falls du dem Element eine ID gegeben hast, wäre getElementById noch sicherer,
+            // aber das hier sollte mit deinen Debug-Logs übereinstimmen.
+            let _ = document::eval(
+                "let container = document.querySelector('.app-container');
+                if (container) {container.focus();}",
+            )
+            .await;
+        });
+    };
     let command_runner = use_coroutine(
         move |mut rx: UnboundedReceiver<CommandAction>| async move {
             #[allow(unused_assignments)]
@@ -152,7 +169,8 @@ pub fn SimulationWindow(
                         is_running.set(false);
                     }
                     CommandAction::Abort => {
-                        show_simulation.set(false);
+                        is_running.set(false);
+                        // show_simulation.set(false);
                     }
                 }
             }
@@ -176,7 +194,7 @@ pub fn SimulationWindow(
             style: "background-color: rgba(0,0,0,0.5);",
             onkeydown: move |evt| {
                 if evt.key() == Key::Escape && !is_running() {
-                    show_simulation.set(false);
+                    close_and_refocus();
                 }
             },
             onmounted: async move |evt| {
@@ -202,7 +220,7 @@ pub fn SimulationWindow(
                                 if is_running() {
                                     command_runner.send(CommandAction::Abort);
                                 } else {
-                                    show_simulation.set(false);
+                                    close_and_refocus();
                                 }
                             },
                         }
@@ -229,7 +247,7 @@ pub fn SimulationWindow(
                                 if is_running() {
                                     command_runner.send(CommandAction::Abort);
                                 } else {
-                                    show_simulation.set(false);
+                                    close_and_refocus();
                                 }
                             },
                             if is_running() {
