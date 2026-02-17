@@ -182,8 +182,6 @@ pub fn PositioningInputs(
 ) -> Element {
     let mut position_opt_sig = use_signal(|| position_opt);
     let position_memo = use_memo(move || position_opt_sig.read().unwrap_or_default());
-
-    let mut is_relative_positioned = use_signal(|| position_opt.is_none());
     let mut last_absolute_position = use_signal(|| position_opt.unwrap_or_default());
 
     let on_save = EventHandler::new(move |new_iso_opt: Option<Isometry>| {
@@ -198,14 +196,6 @@ pub fn PositioningInputs(
     });
 
     use_effect(move || {
-        if *is_relative_positioned.read() {
-            on_save.call(None);
-        } else {
-            on_save.call(Some(*last_absolute_position.read()));
-        }
-    });
-
-    use_effect(move || {
         let current_val = *position_opt_sig.read();
         if let Some(abs_pos) = current_val {
             last_absolute_position.set(abs_pos);
@@ -217,15 +207,15 @@ pub fn PositioningInputs(
             id: "nodePositioningSelector",
             label: "Position Strategy",
             options: vec![
-                (*is_relative_positioned.read(), "Relative".to_owned()),
-                (!*is_relative_positioned.read(), "Absolute".to_owned()),
+                (position_opt_sig.read().is_none(), "Relative".to_owned()),
+                (position_opt_sig.read().is_some(), "Absolute".to_owned()),
             ],
             onchange: move |e: Event<FormData>| {
                 if e.data.value() == "Relative" {
-                    is_relative_positioned.set(true);
+                    on_save.call(None);
                 }
                 else{
-                    is_relative_positioned.set(false);
+                    on_save.call(Some(*last_absolute_position.read()));
                 }
             },
         }
