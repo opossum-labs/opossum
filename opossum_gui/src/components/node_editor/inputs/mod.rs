@@ -206,42 +206,6 @@ pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Opt
         .map_or(None, |parsed| Some(parsed * 10f64.powi(factor)))
 }
 
-/// Checks whether an input string resembles a valid, permissive unit input.
-///
-/// This function is designed for interactive user input and allows partially
-/// entered numbers (e.g. `"1."`, `"-"`, `"3e"`). It validates the numeric part
-/// loosely
-///
-/// # Arguments
-///
-/// * `input` - The full user input string (number and unit).
-///
-/// # Returns
-///
-/// `true` if the input is syntactically acceptable in a permissive context,
-/// otherwise `false`.
-fn is_permissive_unit_input(input: &str) -> bool {
-    let re = Regex::new(
-        r"^\s*(?P<num>[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?)\s*(?P<unit>[a-zA-Zµ]*)?\s*$",
-    )
-    .unwrap();
-
-    let Some(caps) = re.captures(input) else {
-        return false;
-    };
-
-    let num = caps.name("num").map_or("", |m| m.as_str());
-
-    let num_re = Regex::new(r"^[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?$").unwrap();
-    num_re.is_match(num)
-}
-
-fn is_permissive_exp_input(input: &str) -> bool {
-    let regex = Regex::new(r"^[+-]?\d*(?:[.,]?\d*)?(?:[eE][+-]?\d*)?$").unwrap();
-    let trimmed = input.trim();
-    regex.is_match(trimmed)
-}
-
 pub fn parse_exp_input_strict(input: &str) -> Result<String, ()> {
     let regex = Regex::new(r"^[+-]?(?:(\d+([.,]\d*)?)|([.,]\d+))([eE][+-]?\d+)?$").unwrap();
     let trimmed = input.trim().replace(',', ".");
@@ -589,52 +553,6 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_inputs_is_permissive_unit_input() {
-        let valid_inputs = vec![
-            "123",     // simple number
-            "+123",    // positive sign
-            "-123",    // negative number
-            "123.45",  // decimal number
-            "-123.45", // negative decimal
-            "1e10",    // scientific notation
-            "-1E-10",  // scientific notation with sign
-            "  42  ",  // leading and trailing spaces
-            "42kg",    // number with unit
-            "3.14 m",  // number with unit and space
-            "2,718µs", // comma as decimal separator and µ unit
-        ];
-
-        for input in valid_inputs {
-            assert!(
-                is_permissive_unit_input(input),
-                "Input '{}' should be valid",
-                input
-            );
-        }
-    }
-
-    #[test]
-    fn test_invalid_inputs_is_permissive_unit_input() {
-        let invalid_inputs = vec![
-            "12.3.4",    // invalid decimal format
-            "1e10.5",    // invalid scientific notation
-            "123..45kg", // double dot
-            "1,2,3",     // multiple commas
-            "12 34",     // space inside number
-            "--123",     // double minus
-            "++123",     // double plus
-        ];
-
-        for input in invalid_inputs {
-            assert!(
-                !is_permissive_unit_input(input),
-                "Input '{}' should be invalid",
-                input
-            );
-        }
-    }
-
-    #[test]
     fn test_standard_prefixes() {
         let cases = vec![
             ("q", false, -30),
@@ -901,35 +819,7 @@ mod tests {
             assert_eq!(get_exponent(x), expected, "x = {}", x);
         }
     }
-    #[test]
-    fn test_is_permissive_exp_input_valid() {
-        let valid_inputs = vec![
-            "123", "+123", "-123", "0.456", "7,89", "1e10", "-1E-10", "+3.14E+2", ".5", "-.75",
-            "42 ", // trailing space
-            " 42", // leading space
-        ];
 
-        for input in valid_inputs {
-            assert!(
-                is_permissive_exp_input(input),
-                "Input '{}' should be valid (permissive)",
-                input
-            );
-        }
-    }
-
-    #[test]
-    fn test_is_permissive_exp_input_invalid() {
-        let invalid_inputs = vec!["abc", "12.3.4", "1e10.5", "1,2,3", "--123", "++123"];
-
-        for input in invalid_inputs {
-            assert!(
-                !is_permissive_exp_input(input),
-                "Input '{}' should be invalid (permissive)",
-                input
-            );
-        }
-    }
 
     #[test]
     fn test_parse_exp_input_strict_valid() {

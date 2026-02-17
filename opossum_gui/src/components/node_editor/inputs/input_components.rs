@@ -4,7 +4,7 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::inputs::{
         InputData, InputParam, format_exp_number_notation, format_si_with_base_unit,
-        is_permissive_exp_input, is_permissive_unit_input, parse_exp_input_strict, parse_si_number,
+        parse_exp_input_strict, parse_si_number,
         parse_unit_input_strict,
     },
 };
@@ -35,7 +35,6 @@ pub fn FlushableTextInput(
     #[props(optional)] step: Option<&'static str>,
     #[props(optional)] min: Option<&'static str>,
     #[props(optional)] max: Option<&'static str>,
-    #[props(optional)] eval_input: Option<Callback<String, bool>>,
     #[props(default = false)] readonly: bool,
 ) -> Element {
     let mut form_ctx = use_context::<FormContext>();
@@ -80,23 +79,12 @@ pub fn FlushableTextInput(
 
                 oninput: move |e: Event<FormData>| {
                     let new_value = e.data.value();
-                    if let Some(eval_input) = eval_input {
-                        if eval_input(new_value.clone()) {
-                            local_value.set(new_value);
-                            if !*is_locally_dirty.peek() {
-                                is_locally_dirty.set(true);
-                                form_ctx.dirty_count.write().add_assign(1);
-                            }
-                        } else {
-                            local_value.set(local_value());
-                        }
-                    } else {
-                        local_value.set(new_value);
-                        if !*is_locally_dirty.peek() {
-                            is_locally_dirty.set(true);
-                            form_ctx.dirty_count.write().add_assign(1);
-                        }
+                    local_value.set(new_value);
+                    if !*is_locally_dirty.peek() {
+                        is_locally_dirty.set(true);
+                        form_ctx.dirty_count.write().add_assign(1);
                     }
+
                 },
                 onblur: move |_| perform_save(),
                 onkeydown: move |e: Event<KeyboardData>| {
@@ -408,8 +396,6 @@ pub fn NodeConfigPlainF64Input(
         }
     });
 
-    let on_input_eval = { move |input_val: String| is_permissive_exp_input(&input_val) };
-
     let on_input_submission = EventHandler::new({
         move |val: String| {
             if let Ok(num_str) = parse_exp_input_strict(&val) {
@@ -435,7 +421,6 @@ pub fn NodeConfigPlainF64Input(
             container_class: "form-floating border-start".to_string(),
             input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
             label_class: "form-label text-secondary".to_string(),
-            eval_input: Some(Callback::new(on_input_eval)),
             on_save: on_input_submission,
         }
     }
@@ -457,8 +442,6 @@ pub fn UnitInput(
 ) -> Element {
     let mut val_str =
         use_signal(|| format_si_with_base_unit(*value.read(), &base_unit, reciprocal));
-
-    let on_input_eval = { move |input_val: String| is_permissive_unit_input(&input_val) };
 
     let on_input_submission = EventHandler::new({
         let label = label.clone();
@@ -493,7 +476,6 @@ pub fn UnitInput(
                 container_class,
                 input_class,
                 label_class,
-                eval_input: Some(Callback::new(on_input_eval)),
                 on_save: on_input_submission,
             }
         }
@@ -504,12 +486,6 @@ pub fn UnitInput(
                 id,
                 value: val_str,
                 readonly,
-                oninput: move |e: Event<FormData>| {
-                    let new_value = e.data.value();
-                    if !on_input_eval(new_value) {
-                        val_str.set(val_str());
-                    }
-                },
                 onchange: move |e: Event<FormData>| on_input_submission.call(e.data.value()),
             }
         }

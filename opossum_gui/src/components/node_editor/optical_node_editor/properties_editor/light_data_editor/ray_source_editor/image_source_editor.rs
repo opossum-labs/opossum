@@ -103,10 +103,10 @@ impl IntoInputDataStrings<ImageSrc> for ImageSrcParam {
                     f.to_str().unwrap_or("no file selected")
                 })
                 .to_string(),
-            Self::PxlSize => format!("{:.3e}", obj.pixel_size().value),
-            Self::Energy => format!("{:.3e}", obj.energy().value),
-            Self::Wavelength => format!("{:.3e}", obj.wavelength().value),
-            Self::ConeAngle => format!("{:.3e}", obj.cone_angle().get::<degree>()),
+            Self::PxlSize => format!("{}", obj.pixel_size().value),
+            Self::Energy => format!("{}", obj.energy().value),
+            Self::Wavelength => format!("{}", obj.wavelength().value),
+            Self::ConeAngle => format!("{}", obj.cone_angle().get::<degree>()),
         }
     }
 }

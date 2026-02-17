@@ -39,8 +39,8 @@ impl IntoInputDataStrings<SobolDist> for SobolParam {
 
     fn create_value_string(&self, obj: &SobolDist) -> String {
         match self {
-            Self::SideLengthX => format!("{:.3e}", obj.side_length_x().value),
-            Self::SideLengthY => format!("{:.3e}", obj.side_length_y().value),
+            Self::SideLengthX => format!("{}", obj.side_length_x().value),
+            Self::SideLengthY => format!("{}", obj.side_length_y().value),
             Self::Points => format!("{}", obj.nr_of_points()),
         }
     }
