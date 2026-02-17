@@ -529,7 +529,7 @@ impl NodeGroup {
             ));
         }
         let sorted = self.graph.topologically_sorted()?;
-         for idx in sorted {
+        for idx in sorted {
             let node_ref = self.graph.node_by_idx(idx)?;
             let uuid = node_ref.uuid();
             if self.graph.is_stale_node(uuid)? {
