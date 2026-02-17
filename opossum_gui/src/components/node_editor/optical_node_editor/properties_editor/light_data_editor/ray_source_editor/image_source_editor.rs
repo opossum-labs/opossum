@@ -77,7 +77,7 @@ impl From<ImageSrcParam> for InputParam {
             ImageSrcParam::PxlSize => Self::SIUnit("Pixel size".into(), "m".into()),
             ImageSrcParam::Energy => Self::SIUnit("Energy".into(), "J".into()),
             ImageSrcParam::Wavelength => Self::SIUnit("Wavelength".into(), "m".into()),
-            ImageSrcParam::ConeAngle => Self::SIUnit("Cone Angle".into(), "deg".into()),
+            ImageSrcParam::ConeAngle => Self::SIUnit("Cone Angle".into(), "°".into()),
         }
     }
 }
@@ -103,10 +103,10 @@ impl IntoInputDataStrings<ImageSrc> for ImageSrcParam {
                     f.to_str().unwrap_or("no file selected")
                 })
                 .to_string(),
-            Self::PxlSize => format!("{:.3e}", obj.pixel_size().value),
-            Self::Energy => format!("{:.3e}", obj.energy().value),
-            Self::Wavelength => format!("{:.3e}", obj.wavelength().value),
-            Self::ConeAngle => format!("{:.3e}", obj.cone_angle().get::<degree>()),
+            Self::PxlSize => format!("{}", obj.pixel_size().value),
+            Self::Energy => format!("{}", obj.energy().value),
+            Self::Wavelength => format!("{}", obj.wavelength().value),
+            Self::ConeAngle => format!("{}", obj.cone_angle().get::<degree>()),
         }
     }
 }
