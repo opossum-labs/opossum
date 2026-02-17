@@ -15,7 +15,7 @@ use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::{Length, Pressure, ThermodynamicTemperature},
-    pressure::pascal,
+    pressure::{bar, pascal},
     thermodynamic_temperature::{degree_celsius, kelvin},
 };
 
@@ -203,12 +203,11 @@ impl RefrIndexAir {
     /// Returns `OpossumError` if temperature is outside the range [-40°C, 100°C].
     #[allow(clippy::missing_panics_doc)]
     pub fn set_temperature(&mut self, temperature: ThermodynamicTemperature) -> OpmResult<()> {
-        self.temperature = validated!(
-            temperature,
-            AllFinite
-                && AllInRange::new(degree_celsius!(TEMP_MIN), degree_celsius!(TEMP_MAX), true)
-                    .unwrap()
-        )?;
+        self.temperature.set(temperature).map_err(|_| {
+            format!(
+                "Air model is only valid for temperature values from {TEMP_MIN} °C to {TEMP_MAX} °C"
+            )
+        })?;
         self.update_cache();
         Ok(())
     }
@@ -225,11 +224,13 @@ impl RefrIndexAir {
     /// Returns `OpossumError` if pressure is outside the range [100 hPa, 1400 hPa].
     #[allow(clippy::missing_panics_doc)]
     pub fn set_pressure(&mut self, pressure: Pressure) -> OpmResult<()> {
-        self.pressure = validated!(
-            pressure,
-            AllFinite
-                && AllInRange::new(hectopascal!(PRESS_MIN), hectopascal!(PRESS_MAX), true).unwrap()
-        )?;
+        self.pressure.set(pressure).map_err(|_| {
+            format!(
+                "Air model is only valid for pressure values from {} bar to {} bar",
+                hectopascal!(PRESS_MIN).get::<bar>(),
+                hectopascal!(PRESS_MAX).get::<bar>()
+            )
+        })?;
         self.update_cache();
         Ok(())
     }
@@ -246,10 +247,7 @@ impl RefrIndexAir {
     /// Returns `OpossumError` if humidity is outside the range [0.0, 100.0].
     #[allow(clippy::missing_panics_doc)]
     pub fn set_humidity(&mut self, humidity: f64) -> OpmResult<()> {
-        self.humidity = validated!(
-            humidity,
-            AllFinite && AllInRange::new(HUMIDITY_MIN, HUMIDITY_MAX, true).unwrap()
-        )?;
+        self.humidity.set(humidity).map_err(|_| format!("Air model is only valid for humidity values from {HUMIDITY_MIN} % to {HUMIDITY_MAX} %"))?;
         self.update_cache();
         Ok(())
     }
