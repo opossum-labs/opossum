@@ -203,7 +203,11 @@ impl RefrIndexAir {
     /// Returns `OpossumError` if temperature is outside the range [-40°C, 100°C].
     #[allow(clippy::missing_panics_doc)]
     pub fn set_temperature(&mut self, temperature: ThermodynamicTemperature) -> OpmResult<()> {
-        self.temperature.set(temperature).map_err(|_| format!("Air model is only valid for temperature values from {} °C to {} °C", degree_celsius!(TEMP_MIN).get::<degree_celsius>().to_string(), degree_celsius!(TEMP_MAX).get::<degree_celsius>().to_string()))?;
+        self.temperature.set(temperature).map_err(|_| {
+            format!(
+                "Air model is only valid for temperature values from {TEMP_MIN} °C to {TEMP_MAX} °C"
+            )
+        })?;
         self.update_cache();
         Ok(())
     }
@@ -220,7 +224,13 @@ impl RefrIndexAir {
     /// Returns `OpossumError` if pressure is outside the range [100 hPa, 1400 hPa].
     #[allow(clippy::missing_panics_doc)]
     pub fn set_pressure(&mut self, pressure: Pressure) -> OpmResult<()> {
-        self.pressure.set(pressure).map_err(|_| format!("Air model is only valid for pressure values from {} bar to {} bar", hectopascal!(PRESS_MIN).get::<bar>().to_string(), hectopascal!(PRESS_MAX).get::<bar>().to_string()))?;
+        self.pressure.set(pressure).map_err(|_| {
+            format!(
+                "Air model is only valid for pressure values from {} bar to {} bar",
+                hectopascal!(PRESS_MIN).get::<bar>(),
+                hectopascal!(PRESS_MAX).get::<bar>()
+            )
+        })?;
         self.update_cache();
         Ok(())
     }
