@@ -4,8 +4,7 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::inputs::{
         InputData, InputParam, format_exp_number_notation, format_si_with_base_unit,
-        parse_exp_input_strict, parse_si_number,
-        parse_unit_input_strict,
+        parse_exp_input_strict, parse_si_number, parse_unit_input_strict,
     },
 };
 use dioxus::prelude::*;
