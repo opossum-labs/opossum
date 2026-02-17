@@ -128,9 +128,9 @@ impl From<TranslationAxis> for InputParam {
 impl From<RotationAxis> for InputParam {
     fn from(axis: RotationAxis) -> Self {
         match axis {
-            RotationAxis::Roll => Self::SIUnit("Roll".into(), "deg".into()),
-            RotationAxis::Pitch => Self::SIUnit("Pitch".into(), "deg".into()),
-            RotationAxis::Yaw => Self::SIUnit("Yaw".into(), "deg".into()),
+            RotationAxis::Roll => Self::SIUnit("Roll".into(), "°".into()),
+            RotationAxis::Pitch => Self::SIUnit("Pitch".into(), "°".into()),
+            RotationAxis::Yaw => Self::SIUnit("Yaw".into(), "°".into()),
         }
     }
 }

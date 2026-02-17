@@ -77,7 +77,7 @@ impl From<ImageSrcParam> for InputParam {
             ImageSrcParam::PxlSize => Self::SIUnit("Pixel size".into(), "m".into()),
             ImageSrcParam::Energy => Self::SIUnit("Energy".into(), "J".into()),
             ImageSrcParam::Wavelength => Self::SIUnit("Wavelength".into(), "m".into()),
-            ImageSrcParam::ConeAngle => Self::SIUnit("Cone Angle".into(), "deg".into()),
+            ImageSrcParam::ConeAngle => Self::SIUnit("Cone Angle".into(), "°".into()),
         }
     }
 }

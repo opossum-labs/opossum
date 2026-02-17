@@ -29,7 +29,7 @@ impl From<General2DGaussianParam> for InputParam {
             General2DGaussianParam::SigmaY => Self::SIUnit("Sigma Y".into(), "m".into()),
             General2DGaussianParam::Energy => Self::SIUnit("Energy".into(), "J".into()),
             General2DGaussianParam::Power => Self::F64("Power".into()),
-            General2DGaussianParam::Theta => Self::SIUnit("Theta".into(), "deg".into()),
+            General2DGaussianParam::Theta => Self::SIUnit("Theta".into(), "°".into()),
             General2DGaussianParam::Rectangular => Self::Bool("Rectangular".into()),
         }
     }
