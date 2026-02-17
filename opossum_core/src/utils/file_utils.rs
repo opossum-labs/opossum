@@ -2,7 +2,7 @@
 use crate::error::{OpmResult, OpossumError};
 use log::info;
 use std::{
-    fs::{File, create_dir, remove_dir_all},
+    fs::{File, remove_dir_all},
     path::{Path, PathBuf},
 };
 
@@ -51,14 +51,15 @@ pub fn create_file_instance(path: &Path, f_name: &str, f_ext: &str) -> OpmResult
 /// * Returns an error if the existing `data/` directory cannot be deleted.
 /// * Returns an error if the `data/` directory cannot be created.
 pub fn recreate_data_dir<P: AsRef<Path>>(report_directory: P) -> OpmResult<()> {
-    let data_dir = report_directory.as_ref().join("data"); // Use .as_ref()
+    let data_dir = report_directory.as_ref().join("data");
     if data_dir.exists() {
         info!("Delete old report data dir");
         remove_dir_all(&data_dir)
             .map_err(|e| OpossumError::Other(format!("removing old data directory failed: {e}")))?;
     }
-    create_dir(&data_dir)
-        .map_err(|e| OpossumError::Other(format!("creating data directory failed: {e}")))
+    // create_dir(&data_dir)
+    //     .map_err(|e| OpossumError::Other(format!("creating data directory failed: {e}")))
+    Ok(())
 }
 
 /// Constructs a `PathBuf` from a directory, a filename (without extension), and a file extension.

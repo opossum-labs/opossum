@@ -21,7 +21,6 @@ use opossum_core::{
     opm_document::{AnalyzerInfo, OpmDocument},
     optic_node::OpticNode,
     types::api_types::NewAnalyzerInfo,
-    utils::file_utils::recreate_data_dir,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -224,29 +223,28 @@ async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Respond
         match PathBuf::from_str(&report_dir) {
             Ok(report_dir) => {
                 info!("Creating report directory: {}", report_dir.display());
-                if let Err(e) = recreate_data_dir(&report_dir) {
-                    error!("Error creating data directory: {e}");
-                } else {
-                    info!("Creating diagram files");
-                    document
-                        .create_dot_file(&report_dir)
-                        .unwrap_or_else(|e| warn!("{e}"));
-                    info!("Starting analysis");
-                    let analysis_reports = document.analyze();
-                    match analysis_reports {
-                        Ok(reports) => {
-                            info!("Generating report(s)");
-                            for report in reports.iter().enumerate() {
-                                report
-                                    .1
-                                    .save(&report_dir, report.0)
-                                    .unwrap_or_else(|e| warn!("{e}"));
-                            }
-                        }
-                        Err(e) => {
-                            error!("Error during analysis: {e}");
+                // if let Err(e) = recreate_data_dir(&report_dir) {
+                //     error!("Error creating data directory: {e}");
+                // } else {
+                info!("Creating diagram files");
+                document
+                    .create_dot_file(&report_dir)
+                    .unwrap_or_else(|e| warn!("{e}"));
+                info!("Starting analysis");
+                let analysis_reports = document.analyze();
+                match analysis_reports {
+                    Ok(reports) => {
+                        info!("Generating report(s)");
+                        for report in reports.iter().enumerate() {
+                            report
+                                .1
+                                .save(&report_dir, report.0)
+                                .unwrap_or_else(|e| warn!("{e}"));
                         }
                     }
+                    Err(e) => {
+                        error!("Error during analysis: {e}");
+                    } // }
                 }
             }
             Err(e) => {
