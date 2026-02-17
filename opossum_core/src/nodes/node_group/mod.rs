@@ -528,7 +528,9 @@ impl NodeGroup {
                 "The system contains unconnected sub-trees. Analysis might not be complete.",
             ));
         }
-        for node_ref in self.graph.nodes() {
+        let sorted = self.graph.topologically_sorted()?;
+         for idx in sorted {
+            let node_ref = self.graph.node_by_idx(idx)?;
             let uuid = node_ref.uuid();
             if self.graph.is_stale_node(uuid)? {
                 analysis_report.add_note(ReportNote::new(
