@@ -15,7 +15,7 @@ use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::{Length, Pressure, ThermodynamicTemperature},
-    pressure::pascal,
+    pressure::{bar, pascal},
     thermodynamic_temperature::{degree_celsius, kelvin},
 };
 
@@ -208,7 +208,8 @@ impl RefrIndexAir {
             AllFinite
                 && AllInRange::new(degree_celsius!(TEMP_MIN), degree_celsius!(TEMP_MAX), true)
                     .unwrap()
-        )?;
+        ).map_err(|_| format!("Air model is only valid for temperature values from {} °C to {} °C", degree_celsius!(TEMP_MIN).get::<degree_celsius>().to_string(), degree_celsius!(TEMP_MAX).get::<degree_celsius>().to_string()))?;
+
         self.update_cache();
         Ok(())
     }
@@ -229,7 +230,7 @@ impl RefrIndexAir {
             pressure,
             AllFinite
                 && AllInRange::new(hectopascal!(PRESS_MIN), hectopascal!(PRESS_MAX), true).unwrap()
-        )?;
+        ).map_err(|_| format!("Air model is only valid for pressure values from {} bar to {} bar", hectopascal!(PRESS_MIN).get::<bar>().to_string(), hectopascal!(PRESS_MAX).get::<bar>().to_string()))?;
         self.update_cache();
         Ok(())
     }
@@ -249,7 +250,7 @@ impl RefrIndexAir {
         self.humidity = validated!(
             humidity,
             AllFinite && AllInRange::new(HUMIDITY_MIN, HUMIDITY_MAX, true).unwrap()
-        )?;
+        ).map_err(|_| format!("Air model is only valid for humidity values from {HUMIDITY_MIN} % to {HUMIDITY_MAX} %"))?;
         self.update_cache();
         Ok(())
     }
