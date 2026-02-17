@@ -1,5 +1,11 @@
 #![allow(clippy::volatile_composites)]
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus::{
+    html::geometry::euclid::{
+        Size2D,
+        default::{Point2D, Rect},
+    },
+    prelude::*,
+};
 use opossum_core::{
     opm_document::AnalyzerInfo, prelude::*, types::api_types::NodeInfo, utils::to_f64,
 };
@@ -130,6 +136,18 @@ impl NodeElement {
     #[must_use]
     pub const fn pos(&self) -> Point2D<f64> {
         self.pos
+    }
+    #[must_use]
+    pub fn get_bounding_box(&self) -> Rect<f64> {
+        let min_x = self.pos().x;
+        let min_y = self.pos().y;
+        let max_x = self.pos().x + NODE_WIDTH;
+        let max_y = self.pos().y + HEADER_HEIGHT + self.node_body_height();
+
+        Rect::new(
+            Point2D::new(min_x, min_y),
+            Size2D::new(max_x - min_x, max_y - min_y),
+        )
     }
     #[must_use]
     pub fn name(&self) -> String {

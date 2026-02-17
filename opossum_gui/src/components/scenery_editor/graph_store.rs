@@ -7,8 +7,8 @@ use crate::{
     api::{self, eval_action_run},
     components::scenery_editor::{
         constants::{
-            HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
-            SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING,
+            MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, SUGIYAMA_VERT_PATH_FACTOR,
+            SUGIYAMA_VERTEX_SPACING,
         },
         graph_editor::graph_editor_component::EditorState,
     },
@@ -150,25 +150,15 @@ impl GraphStore {
             return Rect::new(Point2D::zero(), Size2D::zero());
         }
         // Use the first node to initialize the bounding box
-        let first_node = optic_nodes.iter().next().unwrap().1;
-        let mut min_x = first_node.pos().x;
-        let mut min_y = first_node.pos().y;
-        let mut max_x = first_node.pos().x + NODE_WIDTH;
-        let mut max_y = first_node.pos().y + HEADER_HEIGHT + first_node.node_body_height();
+        let mut rect = optic_nodes.iter().next().unwrap().1.get_bounding_box();
 
         // Iterate over the rest of the nodes to expand the bounding box
         for node in optic_nodes.iter().skip(1) {
-            let node_pos = node.1.pos();
-            min_x = min_x.min(node_pos.x);
-            min_y = min_y.min(node_pos.y);
-            max_x = max_x.max(node_pos.x + NODE_WIDTH);
-            max_y = max_y.max(node_pos.y + HEADER_HEIGHT + node.1.node_body_height());
+            rect = rect.union(&node.1.get_bounding_box());
         }
-        Rect::new(
-            Point2D::new(min_x, min_y),
-            Size2D::new(max_x - min_x, max_y - min_y),
-        )
+        rect
     }
+
     pub fn clear(&mut self) {
         self.nodes().write().clear();
         self.edges().write().clear();
