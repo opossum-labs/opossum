@@ -234,7 +234,7 @@ pub fn parse_exp_input_strict(input: &str) -> Result<String, ()> {
 /// Returns `Err(())` if the input does not strictly conform to the expected format.
 pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, String), ()> {
     let regex = Regex::new(
-        r"^(?P<value>[+-]?(?:\d*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d*)?)\s*(?P<unit>[\p{L}°µ]+)$",
+        r"^(?P<value>[+-]?(?:\d*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d*)?)\s*(?P<unit>\S+)$",
     )
     .unwrap();
 
@@ -243,7 +243,7 @@ pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, 
         'Y', 'R', 'Q',
     ];
 
-    let caps = regex.captures(input).ok_or(())?;
+    let caps = regex.captures(input.trim()).ok_or(())?;
 
     let value = caps.name("value").unwrap().as_str().replace(',', ".");
     if value.is_empty() {
