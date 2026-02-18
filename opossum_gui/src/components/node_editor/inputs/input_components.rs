@@ -442,6 +442,18 @@ pub fn UnitInput(
     let mut val_str =
         use_signal(|| format_si_with_base_unit(*value.read(), &base_unit, reciprocal));
 
+    let val_memo = use_memo(use_reactive!(|value| *value.read()));
+
+    use_effect({
+        let base_unit = base_unit.clone();
+        move || {
+            let new_str = format_si_with_base_unit(*val_memo.read(), &base_unit, reciprocal);
+            if new_str != *val_str.peek() {
+                val_str.set(new_str);
+            }
+        }
+    });
+
     let on_input_submission = EventHandler::new({
         let label = label.clone();
         move |val: String| {
