@@ -79,7 +79,7 @@ pub fn use_on_mouse_down(
                     {
                         editor_status
                             .write()
-                            .center_graph(graph_store.read().get_bounding_box(), false);
+                            .center_graph(graph_store.read().get_bounding_box(), true);
                         last_click.set(None);
                     }
                     last_click.set(Some(now));
