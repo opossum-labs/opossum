@@ -2,16 +2,11 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStoreAction,
-        constants::{MAX_ZOOM, MIN_ZOOM},
-        edges::edges_component::{
+        GraphState, GraphStore, GraphStoreAction, constants::{MAX_ZOOM, MIN_ZOOM}, edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-        },
-        graph_editor::hooks::{
+        }, graph_editor::hooks::{
             use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
-        },
-        nodes::Nodes,
-        use_graph_processor,
+        }, nodes::Nodes, use_graph_processor
     },
 };
 use dioxus::{
@@ -108,10 +103,10 @@ pub fn GraphEditor(
     model_modified: Signal<bool>,
     model_file_path: Signal<Option<PathBuf>>,
 ) -> Element {
-    let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
+    let current_mouse_pos = use_signal(Point2D::default);
 
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
-    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(graph_state);
+    use_graph_processor(graph_state);
 
     let active_node_opt = use_memo(move || {
         graph_state
@@ -125,21 +120,58 @@ pub fn GraphEditor(
     use_context_provider(|| graph_state().graph_store);
     use_context_provider(|| graph_state().editor_state);
 
-    let current_mouse_pos = use_signal(Point2D::default);
+
+    let onmouseleave_handler = use_drag_end();
+    let onkeydownhandler = use_on_key_down(current_mouse_pos);
+
+
+    rsx! {
+        div { class: "row main-content-row",
+            div { style: "min-width:256px;", class: "col-2 sidebar",
+                NodeConfigEditor {
+                    active_node_opt,
+                    is_modified: graph_state.peek().graph_store.peek().needs_saving(),
+                }
+            }
+            div {
+                class: "col px-0 graph-editor-container",
+                tabindex: 0,
+                onkeydown: onkeydownhandler,
+                onmouseleave: onmouseleave_handler,
+                GraphViewEditor {
+                    command,
+                    model_modified,
+                    model_file_path,
+                    current_mouse_pos,
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn GraphViewEditor(
+    command: ReadSignal<Option<NodeEditorCommand>>,
+    model_modified: Signal<bool>,
+    model_file_path: Signal<Option<PathBuf>>,
+    current_mouse_pos: Signal<Point2D<f64>>
+    ) -> Element{
+
+    let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
+    let graph_processor = use_context::<Coroutine<GraphStoreAction>>();
+    let editor_state = use_context::<Signal<EditorState>>();
+    let graph_store = use_context::<Signal<GraphStore>>();
     let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
     let onwheel_handler = use_zoom(on_mounted);
     let onmousedown_handler = use_on_mouse_down(current_mouse_pos, last_auxiliary_click);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
-    let onmouseleave_handler = use_drag_end();
-    let onkeydownhandler = use_on_key_down(current_mouse_pos);
     let onresizehandler = use_on_resize(on_mounted);
 
-    let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
-    let zoom = use_memo(move || *graph_state.read().editor_state.read().zoom.read());
+    let shift = use_memo(move || *editor_state.read().shift.read());
+    let zoom = use_memo(move || *editor_state.read().zoom.read());
 
     use_effect(move || {
-        let graph_store = graph_state.peek().graph_store;
         let needs_saving_signal = graph_store.peek().needs_saving();
         let is_unsaved = *needs_saving_signal.read();
         if *model_modified.peek() != is_unsaved {
@@ -152,6 +184,7 @@ pub fn GraphEditor(
             model_file_path.set(current_path);
         }
     });
+
     use_effect(move || {
         graph_processor.send(GraphStoreAction::GetSceneryId);
     });
@@ -191,50 +224,36 @@ pub fn GraphEditor(
         }
     });
 
-    rsx! {
-        div { class: "row main-content-row",
-            div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor {
-                    active_node_opt,
-                    is_modified: graph_state.peek().graph_store.peek().needs_saving(),
-                }
-            }
-            div {
-                class: "col px-0 graph-editor-container",
-                tabindex: 0,
-                onkeydown: onkeydownhandler,
-                onmouseleave: onmouseleave_handler,
-                div {
-                    class: "graph-editor",
-                    id: "editor",
-                    draggable: false,
+    rsx!{
+        div {
+            class: "graph-editor",
+            id: "editor",
+            draggable: false,
 
-                    onwheel: onwheel_handler,
-                    onmousedown: onmousedown_handler,
-                    onmouseup: onmouseup_handler,
-                    onmousemove: onmousemove_handler,
-                    onresize: onresizehandler,
-                    onmounted: move |event| { on_mounted.set(Some(event.data)) },
-                    div {
-                        draggable: false,
-                        style: format!(
-                            "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
-                            shift().x,
-                            shift().y,
-                            zoom(),
-                        ),
-                        Nodes {}
-                        svg {
-                            width: "100%",
-                            height: "100%",
-                            overflow: "visible",
-                            tabindex: 0,
-                            {
-                                rsx! {
-                                    EdgesComponent {}
-                                    EdgeCreationComponent {}
-                                }
-                            }
+            onwheel: onwheel_handler,
+            onmousedown: onmousedown_handler,
+            onmouseup: onmouseup_handler,
+            onmousemove: onmousemove_handler,
+            onresize: onresizehandler,
+            onmounted: move |event| { on_mounted.set(Some(event.data)) },
+            div {
+                draggable: false,
+                style: format!(
+                    "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
+                    shift().x,
+                    shift().y,
+                    zoom(),
+                ),
+                Nodes {}
+                svg {
+                    width: "100%",
+                    height: "100%",
+                    overflow: "visible",
+                    tabindex: 0,
+                    {
+                        rsx! {
+                            EdgesComponent {}
+                            EdgeCreationComponent {}
                         }
                     }
                 }
