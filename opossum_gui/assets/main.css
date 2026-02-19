@@ -19,19 +19,40 @@ body {
     /* This row will take all available space */
     display: flex;
     /* Make this row a flex container */
+
+    
 }
 
 .graph-editor-container {
     flex-grow: 1; /* This will make the graph editor area fill the remaining horizontal space */
     display: flex;
-    flex-direction: column;
+    /* flex-direction: column; */
+    /* height: 100%; */
 }
 
-.graph-editor {
+.editor-tabs {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    flex: 1;
+    min-height: 0;
+}
+
+.editor-tabs > [role="tabpanel"] {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+/* .graph-editor {
+    flex: 1;
+    min-height: 0;
+    } */
+    .graph-editor {
+    background-color: #414141;
     flex-grow: 1;
     display: flex;
     position: relative;
-    background-color: #414141;
     padding: 0;
     overflow: hidden;
     outline: none;

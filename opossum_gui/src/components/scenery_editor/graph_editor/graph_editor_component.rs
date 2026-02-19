@@ -16,6 +16,7 @@ use dioxus::{
     },
     prelude::*,
 };
+use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use opossum_core::{prelude::*, types::api_types::NewRefNode};
 use std::{path::PathBuf, rc::Rc, time::Instant};
 use uuid::Uuid;
@@ -97,12 +98,32 @@ pub enum DragStatus {
     Edge(NewEdgeCreationStart),
 }
 
+#[derive(Clone, PartialEq)]
+pub struct GraphTab {
+    pub graph_id: String,   // "root" oder group_node_id
+    pub title: String,
+}
+
 #[component]
 pub fn GraphEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
     model_modified: Signal<bool>,
     model_file_path: Signal<Option<PathBuf>>,
 ) -> Element {
+
+    let mut open_tabs = use_signal(|| {
+        vec![GraphTab {
+            graph_id: "root".to_string(),
+            title: "Main Graph".to_string(),
+        },
+        GraphTab {
+            graph_id: "random".to_string(),
+            title: "Random Graph".to_string(),
+        }]
+    });
+
+    let mut active_tab = use_signal(|| "root".to_string());
+
     let current_mouse_pos = use_signal(Point2D::default);
 
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
@@ -124,7 +145,6 @@ pub fn GraphEditor(
     let onmouseleave_handler = use_drag_end();
     let onkeydownhandler = use_on_key_down(current_mouse_pos);
 
-
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
@@ -138,11 +158,72 @@ pub fn GraphEditor(
                 tabindex: 0,
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
-                GraphViewEditor {
-                    command,
-                    model_modified,
-                    model_file_path,
-                    current_mouse_pos,
+
+                Tabs {
+                    class: "editor-tabs",
+                    value: active_tab.read().clone(),
+                    on_value_change: move |v| active_tab.set(v),
+
+                    TabList {
+                        {
+                            let open_tabs_read = open_tabs();
+                            rsx! {
+
+                                for (i , tab) in open_tabs_read.iter().cloned().enumerate() {
+                                    TabTrigger {
+                                        key: "{tab.graph_id}",
+                                        value: tab.graph_id.clone(),
+                                        index: i,
+                                        class: "editor-tab",
+
+                                        div { class: "tab-inner",
+
+                                            span { "{tab.title}" }
+
+                                            if tab.graph_id != "root" {
+                                                button {
+                                                    class: "tab-close",
+                                                    onclick: move |_| {
+                                                        open_tabs.write().retain(|t| t.graph_id != tab.graph_id);
+                                                        if active_tab() == tab.graph_id {
+                                                            active_tab.set("root".to_string());
+                                                        }
+                                                    },
+                                                    "×"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    for (i , tab) in open_tabs().iter().enumerate() {
+                        {
+                            if i == 0 {
+                                rsx! {
+                                    TabContent { key: "{tab.graph_id}", value: tab.graph_id.clone(), index: i,
+                                        GraphViewEditor {
+                                            command,
+                                            model_modified,
+                                            model_file_path,
+                                            current_mouse_pos,
+                                        }
+
+                                    }
+                                }
+
+                            }
+                            else{
+                                rsx! {
+                                    TabContent { key: "{tab.graph_id}", value: tab.graph_id.clone(), index: i,
+                                        div { "nothing to see here" }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
