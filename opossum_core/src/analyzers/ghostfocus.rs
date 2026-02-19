@@ -66,6 +66,24 @@ impl GhostFocusConfig {
     pub const fn set_fluence_estimator(&mut self, fluence_estimator: FluenceEstimator) {
         self.fluence_estimator = fluence_estimator;
     }
+    /// Maps an ray data builder to the given source UUID, returning any previously mapped builder.
+    pub fn map_source(&mut self, node_id: Uuid, ray_data_builder: RayDataBuilder) -> Option<RayDataBuilder> {
+        self.source_map.insert(node_id, ray_data_builder)
+    }
+    /// Returns the ray data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn get_source(&self, uuid: &Uuid) -> Option<&RayDataBuilder> {
+        self.source_map.get(uuid)
+    }
+    /// Removes and returns the ray data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
+        self.source_map.remove(uuid)
+    }
+    /// Removes all source mappings whose UUIDs no longer exist in the given model.
+    pub fn prune_source_map(&mut self, model: &NodeGroup) {
+        self.source_map.retain(|uuid, _builder| model.exists(*uuid));
+    }
 }
 impl Default for GhostFocusConfig {
     fn default() -> Self {

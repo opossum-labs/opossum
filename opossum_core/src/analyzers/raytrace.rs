@@ -428,8 +428,28 @@ impl RayTraceConfig {
     ) {
         self.missed_surface_strategy = missed_surface_strategy;
     }
+    /// Maps a source UUID to a ray data builder.
+    ///
+    /// If a builder was already mapped to the given UUID, it is replaced and returned.
+    pub fn map_source(&mut self, uuid: Uuid, builder: RayDataBuilder) -> Option<RayDataBuilder> {
+        self.source_map.insert(uuid, builder)
+    }
+    /// Returns a reference to the ray data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn get_source(&self, uuid: &Uuid) -> Option<&RayDataBuilder> {
+        self.source_map.get(uuid)
+    }
+    /// Removes and returns the ray data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
+        self.source_map.remove(uuid)
+    }
+    /// Removes all source mappings whose UUIDs no longer exist in the given model.
+    pub fn prune_source_map(&mut self, model: &NodeGroup) {
+        self.source_map.retain(|uuid, _builder| model.exists(*uuid));
+    }
 }
-
+    
 #[cfg(test)]
 mod test {
     use super::*;

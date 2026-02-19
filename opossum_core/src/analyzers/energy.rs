@@ -25,7 +25,26 @@ inventory::submit! {
 pub struct EnergyConfig {
     source_map: HashMap<Uuid, EnergyDataBuilder>,
 }
-
+impl EnergyConfig {
+    /// Maps an energy data builder to the given source UUID, returning any previously mapped builder.
+    pub fn map_source(&mut self, node_id: Uuid, energy_data_builder: EnergyDataBuilder) -> Option<EnergyDataBuilder> {
+        self.source_map.insert(node_id, energy_data_builder)
+    }
+    /// Returns the energy data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn get_source(&self, uuid: &Uuid) -> Option<&EnergyDataBuilder> {
+        self.source_map.get(uuid)
+    }
+    /// Removes and returns the energy data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn remove_source(&mut self, uuid: &Uuid) -> Option<EnergyDataBuilder> {
+        self.source_map.remove(uuid)
+    }
+    /// Removes all source mappings whose UUIDs no longer exist in the given model.
+    pub fn prune_source_map(&mut self, model: &NodeGroup) {
+        self.source_map.retain(|uuid, _builder| model.exists(*uuid));
+    }
+}
 /// Analyzer for simulating a simple energy flow
 #[derive(Debug, Default)]
 pub struct EnergyAnalyzer {
