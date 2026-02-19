@@ -22,7 +22,7 @@ impl AnalysisRayTrace for BeamSplitter {
         let in1 = incoming_data.get(input_port1);
         let in2 = incoming_data.get(input_port2);
         let (out1_data, out2_data) =
-            self.analyze_raytrace(in1, in2, &AnalyzerType::RayTrace(*config))?;
+            self.analyze_raytrace(in1, in2, &AnalyzerType::RayTrace(config.clone()))?;
         if let Some(out1_data) = out1_data
             && let Some(out2_data) = out2_data
         {

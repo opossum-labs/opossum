@@ -16,6 +16,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    prelude::RayDataBuilder,
     properties::{
         Properties, Proptype,
         proptype::{count_str, format_value_with_prefix},
@@ -33,15 +34,16 @@ use super::{
 inventory::submit! {
     AnalyzerRegistration::new(
         || AnalyzerType::GhostFocus(GhostFocusConfig::default()),
-        |at| if let AnalyzerType::GhostFocus(config) = at { Some(Box::new(GhostFocusAnalyzer::new(*config))) } else { None }
+        |at| if let AnalyzerType::GhostFocus(config) = at { Some(Box::new(GhostFocusAnalyzer::new(config.clone()))) } else { None }
     )
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Copy)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
     max_bounces: usize,
     fluence_estimator: FluenceEstimator,
+    source_map: HashMap<Uuid, RayDataBuilder>,
 }
 
 impl GhostFocusConfig {
@@ -70,6 +72,7 @@ impl Default for GhostFocusConfig {
         Self {
             max_bounces: 1,
             fluence_estimator: FluenceEstimator::Voronoi,
+            source_map: HashMap::new(),
         }
     }
 }
@@ -273,7 +276,11 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
             return Ok(out_light_rays);
         };
         let mut rays = bouncing_rays.clone();
-        self.pass_through_detector_surface(in_port, &mut rays, &AnalyzerType::GhostFocus(*config))?;
+        self.pass_through_detector_surface(
+            in_port,
+            &mut rays,
+            &AnalyzerType::GhostFocus(config.clone()),
+        )?;
 
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.clone(), rays);

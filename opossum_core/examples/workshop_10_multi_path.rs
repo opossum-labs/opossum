@@ -1,4 +1,4 @@
-use opossum_core::prelude::*;
+use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
@@ -95,7 +95,7 @@ fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::Energy);
+    doc.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_10_multi_path.opm",
     ))

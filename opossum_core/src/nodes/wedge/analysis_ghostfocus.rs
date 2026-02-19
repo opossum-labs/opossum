@@ -32,7 +32,7 @@ impl AnalysisGhostFocus for Wedge {
             in_port,
             &refri,
             &mut rays_bundle,
-            &AnalyzerType::GhostFocus(*config),
+            &AnalyzerType::GhostFocus(config.clone()),
             self.inverted(),
             refraction_intended,
         )?;
@@ -40,7 +40,7 @@ impl AnalysisGhostFocus for Wedge {
             out_port,
             &self.ambient_idx(),
             &mut rays_bundle,
-            &AnalyzerType::GhostFocus(*config),
+            &AnalyzerType::GhostFocus(config.clone()),
             self.inverted(),
             refraction_intended,
         )?;

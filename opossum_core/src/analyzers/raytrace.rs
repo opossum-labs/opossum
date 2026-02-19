@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! Analyzer for sequential ray tracing
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use super::{Analyzer, AnalyzerType};
 use crate::{
@@ -12,6 +12,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
     picojoule,
+    prelude::RayDataBuilder,
     properties::Proptype,
     rays::Rays,
     refractive_index::RefractiveIndexType,
@@ -20,6 +21,7 @@ use crate::{
 };
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::AnalyzerRegistration;
 use strum::EnumIter;
@@ -27,7 +29,7 @@ use strum::EnumIter;
 inventory::submit! {
     AnalyzerRegistration::new(
         || AnalyzerType::RayTrace(RayTraceConfig::default()),
-        |at| if let AnalyzerType::RayTrace(config) = at { Some(Box::new(RayTracingAnalyzer::new(*config))) } else { None }
+        |at| if let AnalyzerType::RayTrace(config) = at { Some(Box::new(RayTracingAnalyzer::new(config.clone()))) } else { None }
     )
 }
 use uom::si::f64::{Angle, Energy, Length};
@@ -124,7 +126,7 @@ pub trait AnalysisRayTrace: OpticNode {
             )));
         };
         let missed_surface_strategy = match analyzer_type {
-            AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
+            AnalyzerType::Energy(_) => &MissedSurfaceStrategy::Stop,
             AnalyzerType::RayTrace(ray_trace_config) => &ray_trace_config.missed_surface_strategy,
             AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
         };
@@ -173,7 +175,7 @@ pub trait AnalysisRayTrace: OpticNode {
             return Err(OpossumError::Analysis("no surface found".into()));
         };
         let missed_surface_strategy = match analyzer_type {
-            AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
+            AnalyzerType::Energy(_) => &MissedSurfaceStrategy::Stop,
             AnalyzerType::RayTrace(ray_trace_config) => &ray_trace_config.missed_surface_strategy,
             AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
         };
@@ -269,7 +271,7 @@ pub trait AnalysisRayTrace: OpticNode {
             self.pass_through_detector_surface(
                 &in_port_name,
                 &mut rays_bundle,
-                &AnalyzerType::RayTrace(*config),
+                &AnalyzerType::RayTrace(config.clone()),
             )?;
             Ok(LightResult::from([(
                 out_port_name,
@@ -338,7 +340,7 @@ impl Display for MissedSurfaceStrategy {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration data for a rays tracing analysis.
 ///
 /// The config contains the following info
@@ -352,6 +354,7 @@ pub struct RayTraceConfig {
     max_number_of_bounces: usize,
     max_number_of_refractions: usize,
     missed_surface_strategy: MissedSurfaceStrategy,
+    source_map: HashMap<Uuid, RayDataBuilder>,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
@@ -365,6 +368,7 @@ impl Default for RayTraceConfig {
             max_number_of_bounces: 1000,
             max_number_of_refractions: 1000,
             missed_surface_strategy: MissedSurfaceStrategy::default(),
+            source_map: HashMap::new(),
         }
     }
 }

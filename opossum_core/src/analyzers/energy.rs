@@ -1,23 +1,44 @@
 //! Performing a (simple) energy flow analysis
 #![warn(missing_docs)]
+use std::collections::HashMap;
+
 use super::Analyzer;
 use super::{AnalyzerRegistration, AnalyzerType};
+use crate::prelude::EnergyDataBuilder;
 use crate::{
     error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode,
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 inventory::submit! {
     AnalyzerRegistration::new(
-        || AnalyzerType::Energy,
-        |at| if matches!(at, AnalyzerType::Energy) { Some(Box::new(EnergyAnalyzer::default())) } else { None }
+        || AnalyzerType::Energy(EnergyConfig::default()),
+        |at| if let AnalyzerType::Energy(config) = at { Some(Box::new(EnergyAnalyzer::new(config.clone()))) } else { None }
     )
+}
+
+/// Configuration for the energy flow analysis.
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+pub struct EnergyConfig {
+    source_map: HashMap<Uuid, EnergyDataBuilder>,
 }
 
 /// Analyzer for simulating a simple energy flow
 #[derive(Debug, Default)]
-pub struct EnergyAnalyzer {}
+pub struct EnergyAnalyzer {
+    config: EnergyConfig,
+}
+
+impl EnergyAnalyzer {
+    /// Create a new energy analyzer with the given configuration.
+    #[must_use]
+    pub const fn new(config: EnergyConfig) -> Self {
+        Self { config }
+    }
+}
 
 impl Analyzer for EnergyAnalyzer {
     fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()> {
@@ -81,7 +102,7 @@ mod test {
     #[test]
     fn analyze_empty_scene() {
         let mut scenery = NodeGroup::default();
-        let energy_analyzer = EnergyAnalyzer {};
+        let energy_analyzer = EnergyAnalyzer::default();
         energy_analyzer.analyze(&mut scenery).unwrap();
     }
     fn create_scene() -> NodeGroup {
@@ -100,13 +121,13 @@ mod test {
     #[test]
     fn analyze_full_scene() {
         let mut scenery = create_scene();
-        let energy_analyzer = EnergyAnalyzer {};
+        let energy_analyzer = EnergyAnalyzer::default();
         energy_analyzer.analyze(&mut scenery).unwrap();
     }
     #[test]
     fn report_without_analysis() {
         let mut scenery = create_scene();
-        let energy_analyzer = EnergyAnalyzer {};
+        let energy_analyzer = EnergyAnalyzer::default();
         energy_analyzer.analyze(&mut scenery).unwrap();
         energy_analyzer.report(&mut scenery).unwrap();
     }
