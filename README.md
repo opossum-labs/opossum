@@ -6,7 +6,7 @@
 
 OPOSSUM is an advanced simulation platform for optical systems, with a special focus on designing and analyzing large-scale laser systems.
 
-![Screenshot](/doc/book/src/introduction/GUI%20Screenshot.PNG)
+![Screenshot](/doc/book/src/images/opossum_gui_example.png)
 
 ## 🚀 Core Concepts
 
