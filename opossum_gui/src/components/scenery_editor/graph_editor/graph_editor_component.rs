@@ -102,6 +102,7 @@ pub enum DragStatus {
 pub struct GraphTab {
     pub graph_id: String,   // "root" oder group_node_id
     pub title: String,
+    pub is_active: bool
 }
 
 #[component]
@@ -111,18 +112,29 @@ pub fn GraphEditor(
     model_file_path: Signal<Option<PathBuf>>,
 ) -> Element {
 
-    let mut open_tabs = use_signal(|| {
-        vec![GraphTab {
+    let mut open_tabs: Signal<Vec<GraphTab>> = use_signal(|| {
+        vec![
+            GraphTab {
             graph_id: "root".to_string(),
             title: "Main Graph".to_string(),
+            is_active:true
         },
         GraphTab {
             graph_id: "random".to_string(),
             title: "Random Graph".to_string(),
-        }]
+            is_active: false
+        },
+        GraphTab {
+            graph_id: "muh".to_string(),
+            title: "muh Graph".to_string(),
+            is_active: false
+        }
+        ]
+        
     });
 
-    let mut active_tab = use_signal(|| "root".to_string());
+    let active_tab = use_memo(move || 
+        open_tabs.read().iter().find(|t| t.is_active).map_or_else(|| "root".to_string(), |t| t.graph_id.clone()));
 
     let current_mouse_pos = use_signal(Point2D::default);
 
@@ -162,14 +174,24 @@ pub fn GraphEditor(
                 Tabs {
                     class: "editor-tabs",
                     value: active_tab.read().clone(),
-                    on_value_change: move |v| active_tab.set(v),
-
+                    on_value_change: move |v| {
+                        println!("value changing");
+                        open_tabs
+                            .write()
+                            .iter_mut()
+                            .for_each(|t| {
+                                if t.graph_id == v {
+                                    t.is_active = true;
+                                } else {
+                                    t.is_active = false;
+                                }
+                            });
+                    },
                     TabList {
                         {
-                            let open_tabs_read = open_tabs();
                             rsx! {
 
-                                for (i , tab) in open_tabs_read.iter().cloned().enumerate() {
+                                for (i , tab) in open_tabs().iter().enumerate() {
                                     TabTrigger {
                                         key: "{tab.graph_id}",
                                         value: tab.graph_id.clone(),
@@ -178,15 +200,25 @@ pub fn GraphEditor(
 
                                         div { class: "tab-inner",
 
-                                            span { "{tab.title}" }
+                                            {
+                                                if active_tab() == tab.graph_id {
+                                                    rsx! {
+                                                        span { style: "background-color: red;", "{tab.title}" }
+                                                    }
+                                                } else {
+                                                    rsx! {
+                                                        span { style: "background-color: blue;", "{tab.title}" }
+                                                    }
+                                                }
+                                            }
 
                                             if tab.graph_id != "root" {
                                                 button {
                                                     class: "tab-close",
-                                                    onclick: move |_| {
-                                                        open_tabs.write().retain(|t| t.graph_id != tab.graph_id);
-                                                        if active_tab() == tab.graph_id {
-                                                            active_tab.set("root".to_string());
+                                                    onclick: {
+                                                        let id = tab.graph_id.clone();
+                                                        move |_| {
+                                                            open_tabs.write().retain(|t| t.graph_id != id);
                                                         }
                                                     },
                                                     "×"
@@ -200,28 +232,11 @@ pub fn GraphEditor(
                     }
 
                     for (i , tab) in open_tabs().iter().enumerate() {
-                        {
-                            if i == 0 {
-                                rsx! {
-                                    TabContent { key: "{tab.graph_id}", value: tab.graph_id.clone(), index: i,
-                                        GraphViewEditor {
-                                            command,
-                                            model_modified,
-                                            model_file_path,
-                                            current_mouse_pos,
-                                        }
-
-                                    }
-                                }
-
-                            }
-                            else{
-                                rsx! {
-                                    TabContent { key: "{tab.graph_id}", value: tab.graph_id.clone(), index: i,
-                                        div { "nothing to see here" }
-                                    }
-                                }
-                            }
+                        TabContent {
+                            key: "{tab.graph_id}",
+                            value: tab.graph_id.clone(),
+                            index: i,
+                            div { "{i}, nothing to see here" }
                         }
                     }
                 }
@@ -229,7 +244,29 @@ pub fn GraphEditor(
         }
     }
 }
+ // {
+                        //     if i == 0 {
+                        //         rsx! {
+                        //             TabContent { key: "{tab.graph_id}", value: tab.graph_id.clone(), index: i,
+                        //                 GraphViewEditor {
+                        //                     command,
+                        //                     model_modified,
+                        //                     model_file_path,
+                        //                     current_mouse_pos,
+                        //                 }
 
+                        //             }
+                        //         }
+
+                        //     }
+                        //     else{
+                        //         rsx! {
+                        //             TabContent { key: "{tab.graph_id}", value: tab.graph_id.clone(), index: i,
+                        //                 div { "nothing to see here" }
+                        //             }
+                        //         }
+                        //     }
+                        // }
 #[component]
 pub fn GraphViewEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
