@@ -109,9 +109,10 @@ mod test {
     }
     #[test]
     fn debug() {
+        let at = AnalyzerType::Energy(EnergyConfig::default());
         assert_eq!(
-            format!("{:?}", AnalyzerType::Energy(EnergyConfig::default())),
-            "Energy"
+            format!("{:?}", at),
+            "Energy(EnergyConfig { source_map: {} })"
         );
     }
 }

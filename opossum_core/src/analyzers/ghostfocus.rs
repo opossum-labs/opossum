@@ -67,7 +67,11 @@ impl GhostFocusConfig {
         self.fluence_estimator = fluence_estimator;
     }
     /// Maps an ray data builder to the given source UUID, returning any previously mapped builder.
-    pub fn map_source(&mut self, node_id: Uuid, ray_data_builder: RayDataBuilder) -> Option<RayDataBuilder> {
+    pub fn map_source(
+        &mut self,
+        node_id: Uuid,
+        ray_data_builder: RayDataBuilder,
+    ) -> Option<RayDataBuilder> {
         self.source_map.insert(node_id, ray_data_builder)
     }
     /// Returns the ray data builder mapped to the given source UUID, if any.
@@ -649,6 +653,62 @@ mod test_ghost_focus_config {
         let mut c = GhostFocusConfig::default();
         c.set_fluence_estimator(FluenceEstimator::HelperRays);
         assert_eq!(c.fluence_estimator(), &FluenceEstimator::HelperRays);
+    }
+    #[test]
+    fn test_map_and_get_source() {
+        use crate::lightdata::ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder};
+        use uuid::Uuid;
+        let mut config = GhostFocusConfig::default();
+        let uuid = Uuid::new_v4();
+        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+
+        assert!(config.map_source(uuid, builder.clone()).is_none());
+        assert_eq!(config.get_source(&uuid), Some(&builder));
+
+        let builder2 = RayDataBuilder::PointSrc(PointSrc::default());
+        assert_eq!(config.map_source(uuid, builder2.clone()), Some(builder));
+        assert_eq!(config.get_source(&uuid), Some(&builder2));
+    }
+
+    #[test]
+    fn test_remove_source() {
+        use crate::lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder};
+        use uuid::Uuid;
+        let mut config = GhostFocusConfig::default();
+        let uuid = Uuid::new_v4();
+        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+
+        config.map_source(uuid, builder.clone());
+        assert_eq!(config.remove_source(&uuid), Some(builder));
+        assert!(config.get_source(&uuid).is_none());
+        assert!(config.remove_source(&uuid).is_none());
+    }
+
+    #[test]
+    fn test_prune_source_map() {
+        use crate::nodes::NodeGroup;
+        use crate::{
+            lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder},
+            nodes::Source,
+            prelude::LightDataBuilder,
+        };
+        use uuid::Uuid;
+
+        let mut config = GhostFocusConfig::default();
+        let uuid2 = Uuid::new_v4();
+        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+
+        let mut scene = NodeGroup::default();
+        let src = Source::new("source", LightDataBuilder::Geometric(builder.clone()));
+        let node_id = scene.add_node(src).unwrap();
+
+        config.map_source(node_id, builder.clone());
+        config.map_source(uuid2, builder.clone());
+
+        config.prune_source_map(&scene);
+
+        assert!(config.get_source(&node_id).is_some());
+        assert!(config.get_source(&uuid2).is_none());
     }
 }
 

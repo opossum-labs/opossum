@@ -44,7 +44,7 @@ pub fn AnalyzerNodeEditor(
                             }
                             {
                                 match analyzer_info.analyzer_type().clone() {
-                                    AnalyzerType::Energy => rsx! {},
+                                    AnalyzerType::Energy(_) => rsx! {},
                                     AnalyzerType::RayTrace(ray_trace_config) => {
                                         rsx! {
                                             RayTraceEditor { node_id, ray_trace_config, on_change }

@@ -27,7 +27,11 @@ pub struct EnergyConfig {
 }
 impl EnergyConfig {
     /// Maps an energy data builder to the given source UUID, returning any previously mapped builder.
-    pub fn map_source(&mut self, node_id: Uuid, energy_data_builder: EnergyDataBuilder) -> Option<EnergyDataBuilder> {
+    pub fn map_source(
+        &mut self,
+        node_id: Uuid,
+        energy_data_builder: EnergyDataBuilder,
+    ) -> Option<EnergyDataBuilder> {
         self.source_map.insert(node_id, energy_data_builder)
     }
     /// Returns the energy data builder mapped to the given source UUID, if any.
@@ -144,10 +148,66 @@ mod test {
         energy_analyzer.analyze(&mut scenery).unwrap();
     }
     #[test]
-    fn report_without_analysis() {
+    fn analyze_report_without_analysis() {
         let mut scenery = create_scene();
         let energy_analyzer = EnergyAnalyzer::default();
         energy_analyzer.analyze(&mut scenery).unwrap();
-        energy_analyzer.report(&mut scenery).unwrap();
+        energy_analyzer.report(&scenery).unwrap();
+    }
+
+    #[test]
+    fn test_map_and_get_source() {
+        use uuid::Uuid;
+        let mut config = super::EnergyConfig::default();
+        let uuid = Uuid::new_v4();
+        let builder = EnergyDataBuilder::LaserLines(
+            EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
+        );
+
+        assert!(config.map_source(uuid, builder.clone()).is_none());
+        assert_eq!(config.get_source(&uuid), Some(&builder));
+
+        let builder2 = EnergyDataBuilder::LaserLines(
+            EnergyLaserLines::new(vec![(nanometer!(532.0), joule!(2.0))], nanometer!(1.0)).unwrap(),
+        );
+        assert_eq!(config.map_source(uuid, builder2.clone()), Some(builder));
+        assert_eq!(config.get_source(&uuid), Some(&builder2));
+    }
+
+    #[test]
+    fn test_remove_source() {
+        use uuid::Uuid;
+        let mut config = super::EnergyConfig::default();
+        let uuid = Uuid::new_v4();
+        let builder = EnergyDataBuilder::LaserLines(
+            EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
+        );
+
+        config.map_source(uuid, builder.clone());
+        assert_eq!(config.remove_source(&uuid), Some(builder));
+        assert!(config.get_source(&uuid).is_none());
+        assert!(config.remove_source(&uuid).is_none());
+    }
+
+    #[test]
+    fn test_prune_source_map() {
+        use uuid::Uuid;
+        let mut config = super::EnergyConfig::default();
+        let uuid2 = Uuid::new_v4();
+        let builder = EnergyDataBuilder::LaserLines(
+            EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
+        );
+
+        let mut scene = NodeGroup::default();
+        let src = Source::new("source", LightDataBuilder::Energy(builder.clone()));
+        let node_id = scene.add_node(src).unwrap();
+
+        config.map_source(node_id, builder.clone());
+        config.map_source(uuid2, builder.clone());
+
+        config.prune_source_map(&scene);
+
+        assert!(config.get_source(&node_id).is_some());
+        assert!(config.get_source(&uuid2).is_none());
     }
 }
