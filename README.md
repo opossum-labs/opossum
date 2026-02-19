@@ -1,5 +1,7 @@
 # Opossum
 
+[![GitHub Downloads](https://img.shields.io/github/downloads/opossum-labs/opossum/total)](https://github.com/opossum-labs/opossum/releases)
+
 ![OPOSSUM Logo](https://raw.githubusercontent.com/opossum-labs/opossum/refs/heads/main/opossum_core/logo/Logo_text.svg)
 
 OPOSSUM is an advanced simulation platform for optical systems, with a special focus on designing and analyzing large-scale laser systems.
