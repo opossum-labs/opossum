@@ -37,6 +37,7 @@ pub struct GraphState {
     pub editor_state: Signal<EditorState>,
 }
 
+
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct GraphStore {
     nodes: Signal<HashMap<Uuid, NodeElement>>,

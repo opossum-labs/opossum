@@ -23,7 +23,7 @@ use dioxus::{
 };
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use opossum_core::{prelude::*, types::api_types::NewRefNode};
-use std::{path::PathBuf, rc::Rc, time::Instant};
+use std::{collections::HashMap, path::PathBuf, rc::Rc, time::Instant};
 use uuid::Uuid;
 #[derive(Debug)]
 pub enum NodeEditorCommand {
@@ -110,6 +110,12 @@ pub struct GraphTab {
     pub is_active: bool,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Default)]
+pub struct GraphsWorkspaceState {
+    pub tabs: Signal<HashMap<Uuid, GraphState>>,
+    pub active_tab: Signal<Option<Uuid>>,
+}
+
 #[component]
 pub fn GraphEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
@@ -120,7 +126,17 @@ pub fn GraphEditor(
         vec![]
     });
 
+    let workspace = use_signal(|| GraphsWorkspaceState::default());
+    let active_tab = use_memo(move || {
+        workspace
+            .read().active_tab.read()
+            .map_or_else(|| "root".to_string(), |t| t.as_simple().to_string())
+        });
+
+    let is_modified: Memo<Signal<bool>> = use_memo(move || workspace.read().tabs.read().iter().any(|(_,g)| g.graph_store.read().needs_saving()));
+
     let add_new_group_tab_handler = EventHandler::new(move |(title, id): (String, Uuid)|{
+        todo!();
         open_tabs
                             .write()
                             .push(GraphTab {
@@ -131,13 +147,6 @@ pub fn GraphEditor(
     });
 
     
-    let active_tab = use_memo(move || {
-        open_tabs
-            .read()
-            .iter()
-            .find(|t| t.is_active)
-            .map_or_else(|| "root".to_string(), |t| t.graph_id.clone())
-        });
         
     let current_mouse_pos = use_signal(Point2D::default);
         
@@ -167,10 +176,7 @@ pub fn GraphEditor(
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor {
-                    active_node_opt,
-                    is_modified: graph_state.peek().graph_store.peek().needs_saving(),
-                }
+                NodeConfigEditor { active_node_opt, is_modified: is_modified() }
             }
             div {
                 class: "col px-0 graph-editor-container",
@@ -240,21 +246,6 @@ pub fn GraphEditor(
                                 current_mouse_pos,
                                 add_new_group_tab_handler,
                             }
-                                                // div {
-                        //     button {
-                        //         onclick: move |_| {
-                        //             open_tabs
-                        //                 .write()
-                        //                 .push(GraphTab {
-                        //                     graph_id: Uuid::new_v4().as_simple().to_string(),
-                        //                     title: "new graph".to_string(),
-                        //                     is_active: true,
-                        //                 })
-                        //         },
-
-                        //     }
-                        //     "{i}, nothing to see here"
-                        // }
                         }
                     }
                 }
