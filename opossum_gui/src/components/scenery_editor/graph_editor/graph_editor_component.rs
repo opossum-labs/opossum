@@ -2,7 +2,7 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStoreAction,
+        GraphState, GraphStore, GraphStoreAction,
         constants::{MAX_ZOOM, MIN_ZOOM},
         edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
@@ -21,6 +21,7 @@ use dioxus::{
     },
     prelude::*,
 };
+use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use opossum_core::{prelude::*, types::api_types::NewRefNode};
 use std::{path::PathBuf, rc::Rc, time::Instant};
 use uuid::Uuid;
@@ -102,16 +103,39 @@ pub enum DragStatus {
     Edge(NewEdgeCreationStart),
 }
 
+#[derive(Clone, PartialEq)]
+pub struct GraphTab {
+    pub graph_id: String, // "root" oder group_node_id
+    pub title: String,
+    pub is_active: bool,
+}
+
 #[component]
 pub fn GraphEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
     model_modified: Signal<bool>,
     model_file_path: Signal<Option<PathBuf>>,
 ) -> Element {
-    let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
+    let mut open_tabs: Signal<Vec<GraphTab>> = use_signal(|| {
+        vec![GraphTab {
+            graph_id: "root".to_string(),
+            title: "Main Graph".to_string(),
+            is_active: true,
+        }]
+    });
+
+    let active_tab = use_memo(move || {
+        open_tabs
+            .read()
+            .iter()
+            .find(|t| t.is_active)
+            .map_or_else(|| "root".to_string(), |t| t.graph_id.clone())
+    });
+
+    let current_mouse_pos = use_signal(Point2D::default);
 
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
-    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(graph_state);
+    use_graph_processor(graph_state);
 
     let active_node_opt = use_memo(move || {
         graph_state
@@ -125,21 +149,129 @@ pub fn GraphEditor(
     use_context_provider(|| graph_state().graph_store);
     use_context_provider(|| graph_state().editor_state);
 
-    let current_mouse_pos = use_signal(Point2D::default);
+    let onmouseleave_handler = use_drag_end();
+    let onkeydownhandler = use_on_key_down(current_mouse_pos);
+
+    rsx! {
+        div { class: "row main-content-row",
+            div { style: "min-width:256px;", class: "col-2 sidebar",
+                NodeConfigEditor {
+                    active_node_opt,
+                    is_modified: graph_state.peek().graph_store.peek().needs_saving(),
+                }
+            }
+            div {
+                class: "col px-0 graph-editor-container",
+                tabindex: 0,
+                onkeydown: onkeydownhandler,
+                onmouseleave: onmouseleave_handler,
+
+                Tabs {
+                    class: "editor-tabs",
+                    value: active_tab.read().clone(),
+                    on_value_change: move |v| {
+                        println!("value changing");
+                        open_tabs
+                            .write()
+                            .iter_mut()
+                            .for_each(|t| {
+                                if t.graph_id == v {
+                                    t.is_active = true;
+                                } else {
+                                    t.is_active = false;
+                                }
+                            });
+                    },
+                    TabList { class: "editor-tab-list",
+                        {
+
+                            rsx! {
+
+                                for (i , tab) in open_tabs().iter().enumerate() {
+
+                                    TabTrigger {
+                                        key: "{tab.graph_id}",
+                                        value: tab.graph_id.clone(),
+                                        index: i,
+                                        class: if active_tab() == tab.graph_id { "editor-tab active-tab" } else { "editor-tab" },
+
+                                        div { class: "tab-inner",
+                                            span { "{tab.title}" }
+                                            if tab.graph_id != "root" {
+                                                button {
+                                                    class: "tab-close",
+                                                    onclick: {
+                                                        let id = tab.graph_id.clone();
+                                                        move |_| {
+                                                            open_tabs.write().retain(|t| t.graph_id != id);
+                                                        }
+                                                    },
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        div { class: "editor-tab-filler" }
+                    }
+
+                    for (i , tab) in open_tabs().iter().enumerate() {
+                        TabContent {
+                            key: "{tab.graph_id}",
+                            value: tab.graph_id.clone(),
+                            index: i,
+                            GraphViewEditor {
+                                command,
+                                model_modified,
+                                model_file_path,
+                                current_mouse_pos,
+                            }
+                                                // div {
+                        //     button {
+                        //         onclick: move |_| {
+                        //             open_tabs
+                        //                 .write()
+                        //                 .push(GraphTab {
+                        //                     graph_id: Uuid::new_v4().as_simple().to_string(),
+                        //                     title: "new graph".to_string(),
+                        //                     is_active: true,
+                        //                 })
+                        //         },
+
+                        //     }
+                        //     "{i}, nothing to see here"
+                        // }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn GraphViewEditor(
+    command: ReadSignal<Option<NodeEditorCommand>>,
+    model_modified: Signal<bool>,
+    model_file_path: Signal<Option<PathBuf>>,
+    current_mouse_pos: Signal<Point2D<f64>>,
+) -> Element {
+    let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
+    let graph_processor = use_context::<Coroutine<GraphStoreAction>>();
+    let editor_state = use_context::<Signal<EditorState>>();
+    let graph_store = use_context::<Signal<GraphStore>>();
     let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
     let onwheel_handler = use_zoom(on_mounted);
     let onmousedown_handler = use_on_mouse_down(current_mouse_pos, last_auxiliary_click);
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmouseup_handler = use_drag_end();
-    let onmouseleave_handler = use_drag_end();
-    let onkeydownhandler = use_on_key_down(current_mouse_pos);
     let onresizehandler = use_on_resize(on_mounted);
 
-    let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
-    let zoom = use_memo(move || *graph_state.read().editor_state.read().zoom.read());
+    let shift = use_memo(move || *editor_state.read().shift.read());
+    let zoom = use_memo(move || *editor_state.read().zoom.read());
 
     use_effect(move || {
-        let graph_store = graph_state.peek().graph_store;
         let needs_saving_signal = graph_store.peek().needs_saving();
         let is_unsaved = *needs_saving_signal.read();
         if *model_modified.peek() != is_unsaved {
@@ -152,6 +284,7 @@ pub fn GraphEditor(
             model_file_path.set(current_path);
         }
     });
+
     use_effect(move || {
         graph_processor.send(GraphStoreAction::GetSceneryId);
     });
@@ -192,49 +325,35 @@ pub fn GraphEditor(
     });
 
     rsx! {
-        div { class: "row main-content-row",
-            div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor {
-                    active_node_opt,
-                    is_modified: graph_state.peek().graph_store.peek().needs_saving(),
-                }
-            }
-            div {
-                class: "col px-0 graph-editor-container",
-                tabindex: 0,
-                onkeydown: onkeydownhandler,
-                onmouseleave: onmouseleave_handler,
-                div {
-                    class: "graph-editor",
-                    id: "editor",
-                    draggable: false,
+        div {
+            class: "graph-editor",
+            id: "editor",
+            draggable: false,
 
-                    onwheel: onwheel_handler,
-                    onmousedown: onmousedown_handler,
-                    onmouseup: onmouseup_handler,
-                    onmousemove: onmousemove_handler,
-                    onresize: onresizehandler,
-                    onmounted: move |event| { on_mounted.set(Some(event.data)) },
-                    div {
-                        draggable: false,
-                        style: format!(
-                            "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
-                            shift().x,
-                            shift().y,
-                            zoom(),
-                        ),
-                        Nodes {}
-                        svg {
-                            width: "100%",
-                            height: "100%",
-                            overflow: "visible",
-                            tabindex: 0,
-                            {
-                                rsx! {
-                                    EdgesComponent {}
-                                    EdgeCreationComponent {}
-                                }
-                            }
+            onwheel: onwheel_handler,
+            onmousedown: onmousedown_handler,
+            onmouseup: onmouseup_handler,
+            onmousemove: onmousemove_handler,
+            onresize: onresizehandler,
+            onmounted: move |event| { on_mounted.set(Some(event.data)) },
+            div {
+                draggable: false,
+                style: format!(
+                    "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
+                    shift().x,
+                    shift().y,
+                    zoom(),
+                ),
+                Nodes {}
+                svg {
+                    width: "100%",
+                    height: "100%",
+                    overflow: "visible",
+                    tabindex: 0,
+                    {
+                        rsx! {
+                            EdgesComponent {}
+                            EdgeCreationComponent {}
                         }
                     }
                 }
