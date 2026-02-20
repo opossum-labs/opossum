@@ -222,11 +222,31 @@ impl OpticGraph {
         );
         Ok(nr_of_outgoing_edges < nr_of_output_ports)
     }
+    /// Recursively finds all nodes of type "source port" and returns their UUIDs.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a mutex lock on a node fails.
+    pub fn find_source_ports(&self) -> OpmResult<Vec<Uuid>> {
+        let mut source_ports = Vec::new();
+        for node_ref in self.nodes() {
+            let node_id = node_ref.uuid();
+            let mut node = node_ref.optical_ref.lock_opm()?;
+            if node.node_attr().node_type() == "source port" {
+                source_ports.push(node_id);
+            }
+            if let Ok(group) = node.as_group_mut() {
+                let sub_ports = group.graph.find_source_ports()?;
+                source_ports.extend(sub_ports);
+            }
+        }
+        Ok(source_ports)
+    }
 }
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::nodes::Dummy;
+    use crate::nodes::{Dummy, NodeGroup, SourcePort};
     use num::Zero;
     use uom::si::f64::Length;
     #[test]
@@ -261,5 +281,32 @@ mod test {
             .connect_nodes(n2, "output_1", n3, "input_1", Length::zero())
             .unwrap();
         assert_eq!(graph.is_single_tree(), true);
+    }
+    #[test]
+    fn find_source_ports_simple() {
+        let mut graph = OpticGraph::default();
+        let dummy_id = graph.add_node(Dummy::default()).unwrap();
+        let source_port_id = graph.add_node(SourcePort::default()).unwrap();
+        let source_ports = graph.find_source_ports().unwrap();
+        assert_eq!(source_ports.len(), 1);
+        assert!(source_ports.contains(&source_port_id));
+        assert!(!source_ports.contains(&dummy_id));
+    }
+    #[test]
+    fn find_source_ports_nested() {
+        let mut graph = OpticGraph::default();
+        let sp_main_id = graph.add_node(SourcePort::default()).unwrap();
+        let mut group1 = NodeGroup::default();
+        let _dummy_g1_id = group1.add_node(Dummy::default()).unwrap();
+        let sp_g1_id = group1.add_node(SourcePort::default()).unwrap();
+        let mut group2 = NodeGroup::default();
+        let sp_g2_id = group2.add_node(SourcePort::default()).unwrap();
+        let _group2_id = group1.add_node(group2).unwrap();
+        let _group1_id = graph.add_node(group1).unwrap();
+        let source_ports = graph.find_source_ports().unwrap();
+        assert_eq!(source_ports.len(), 3);
+        assert!(source_ports.contains(&sp_main_id));
+        assert!(source_ports.contains(&sp_g1_id));
+        assert!(source_ports.contains(&sp_g2_id));
     }
 }

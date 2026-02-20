@@ -57,6 +57,7 @@ impl Default for SourcePort {
 
 impl SourcePort {
     /// Creates a new source port with the specified name.
+    #[must_use]
     pub fn new(name: &str) -> Self {
         let mut node = Self::default();
         node.node_attr.set_name(name);
@@ -85,8 +86,8 @@ impl OpticNode for SourcePort {
 
 #[cfg(test)]
 mod test {
-    use crate::{nanometer, prelude::PortType};
     use super::*;
+    use crate::{nanometer, prelude::PortType};
     #[test]
     fn default() {
         let mut node = SourcePort::default();

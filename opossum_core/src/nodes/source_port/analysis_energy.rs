@@ -34,7 +34,11 @@ mod test {
         let output_error =
             AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())
                 .unwrap_err();
-        assert!(output_error.to_string().contains("No source data found in analyzer for"));
+        assert!(
+            output_error
+                .to_string()
+                .contains("No source data found in analyzer for")
+        );
     }
     #[test]
     fn analyze_energy_ok() {
@@ -42,13 +46,11 @@ mod test {
         let mut node = SourcePort::default();
         let mut config = EnergyConfig::default();
         config.map_source(node.node_attr().uuid(), light_builder.clone());
-        let output =
-            AnalysisEnergy::analyze(&mut node, LightResult::default(), &config)
-                .unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, LightResult::default(), &config).unwrap();
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let LightData::Energy(spectrum)= output.clone().unwrap() else {
+        let LightData::Energy(spectrum) = output.clone().unwrap() else {
             panic!("wrong type for output")
         };
         assert_eq!(*spectrum, light_builder.build().unwrap());

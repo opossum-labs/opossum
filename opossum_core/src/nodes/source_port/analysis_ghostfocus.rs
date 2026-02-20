@@ -36,7 +36,7 @@ impl AnalysisGhostFocus for SourcePort {
             }
             let iso = self.effective_surface_iso("output_1")?;
             rays = rays.transformed_by_iso(&iso);
-            vec![rays.clone()]
+            vec![rays]
         } else {
             Vec::<Rays>::new()
         };
@@ -82,4 +82,4 @@ mod test {
                 .contains("No source data found in analyzer for")
         );
     }
-  }
+}
