@@ -18,17 +18,126 @@ body {
     flex-grow: 1;
     /* This row will take all available space */
     display: flex;
-    /* Make this row a flex container */
+    /* Make this row a flex container */    
+}
 
+.editor-tab-list {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background-color: #2d2d2d;
+    border-top: 1px solid rgb(71, 71, 71);
+    border-left: 1px solid rgb(71, 71, 71);
+    scrollbar-width: thin;  
+    scrollbar-color: #7c7c7c #2d2d2d; 
+}
+
+.editor-tab {
+    position: relative;       
+    display: flex;
+    align-items: center;
+    justify-content: center;  
+    height: 30px;
+    padding: 0 24px;         
+    font-size: 13px;
+    color: #cccccc;
+    background-color: #2d2d2d;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.1s ease;
+    border: none;
+    border-right: 1px solid rgb(71, 71, 71);
+    border-bottom: 1px solid rgb(71, 71, 71);
+    flex: 0 0 auto;
     
 }
 
-.graph-editor-container {
-    flex-grow: 1; /* This will make the graph editor area fill the remaining horizontal space */
-    display: flex;
-    /* flex-direction: column; */
-    /* height: 100%; */
+.editor-tab.active-tab{
+    background-color: #414141;
+    border-bottom: none; 
 }
+
+.editor-tab-filler {
+    flex-grow: 1;
+    min-width: 0;
+    border-bottom: 1px solid rgb(71, 71, 71);
+}
+
+
+.tab-container{
+        border-bottom: 1px solid rgb(71, 71, 71);
+}
+
+.editor-tab .tab-inner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.editor-tab .tab-inner span {
+    pointer-events: none; 
+    text-align: center;
+    line-height: 1;
+}
+
+
+.editor-tab .tab-close {
+    position: absolute;
+    right: 5px;              
+    top: 50%;
+    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+    cursor: pointer;
+    opacity: 0;             
+    border: none;
+    background: none;
+    padding: 8px;
+    border-radius: 3px;
+}
+
+.editor-tab:hover .tab-close {
+    opacity: 1;
+}
+
+.editor-tab .tab-close::before,
+.editor-tab .tab-close::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 2px;
+    height: 12px;
+    background-color: #969696;
+    transform-origin: center;
+    transition: background-color 0.2s ease;
+}
+
+.editor-tab .tab-close::before {
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+.editor-tab .tab-close::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.editor-tab .tab-close:hover::before,
+.editor-tab .tab-close:hover::after {
+    background-color: rgb(212, 212, 212);
+}
+
+.editor-tab .tab-close:hover{
+    background-color: rgb(92, 92, 92);
+}
+
+.graph-editor-container {
+    flex-grow: 1; 
+    display: flex;
+    min-width: 0;  
+    flex-direction: column;
+}
+
+
 
 .editor-tabs {
     display: flex;
@@ -36,6 +145,7 @@ body {
     height: 100%;
     flex: 1;
     min-height: 0;
+
 }
 
 .editor-tabs > [role="tabpanel"] {
@@ -44,11 +154,7 @@ body {
     min-height: 0;
 }
 
-/* .graph-editor {
-    flex: 1;
-    min-height: 0;
-    } */
-    .graph-editor {
+.graph-editor {
     background-color: #414141;
     flex-grow: 1;
     display: flex;
@@ -58,9 +164,6 @@ body {
     outline: none;
 }
 
-/* .zoom-shift-container { */
-    /* outline-color: red; */
-/* } */
 
 .context-menu-item {
     margin: 1px;
@@ -89,22 +192,18 @@ body {
     z-index: 100000000000000;
 }
 
-/* width */
 ::-webkit-scrollbar {
     width: 10px;
 }
 
-/* Track */
 ::-webkit-scrollbar-track {
     background: rgb(39, 39, 39);
 }
 
-/* Handle */
 ::-webkit-scrollbar-thumb {
     background: rgb(82, 82, 82);
 }
 
-/* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
     background: rgb(100, 100, 100);
 }
@@ -141,7 +240,6 @@ body {
     color: white;
     overflow: hidden;
     white-space: nowrap;
-    /* Kein Zeilenumbruch */
 }
 
 .optical-node {
@@ -232,23 +330,7 @@ body {
     outline: none; 
     padding: 0;
 }
-/* .log-container {
-    z-index: 99999;
-    height: 100px;
-    overflow-y: scroll;
-} */
 
-/* .log-info {
-    color: rgb(1, 201, 1);
-    margin: 0;
-    padding: 0;
-}
-.log-warn {
-    color: yellow;
-}
-.log-error {
-    color: red;
-} */
 .node_attributes {
     position: relative;
     display: flex;
@@ -298,6 +380,7 @@ canvas {
     height: 100vh;
     overflow: hidden; /* Prevents scrollbars if content overflows slightly */
 }
+
 
 /* Base style for all handles */
 .resize-handle-top,

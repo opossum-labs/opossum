@@ -2,11 +2,16 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStore, GraphStoreAction, constants::{MAX_ZOOM, MIN_ZOOM}, edges::edges_component::{
+        GraphState, GraphStore, GraphStoreAction,
+        constants::{MAX_ZOOM, MIN_ZOOM},
+        edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-        }, graph_editor::hooks::{
+        },
+        graph_editor::hooks::{
             use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
-        }, nodes::Nodes, use_graph_processor
+        },
+        nodes::Nodes,
+        use_graph_processor,
     },
 };
 use dioxus::{
@@ -100,9 +105,9 @@ pub enum DragStatus {
 
 #[derive(Clone, PartialEq)]
 pub struct GraphTab {
-    pub graph_id: String,   // "root" oder group_node_id
+    pub graph_id: String, // "root" oder group_node_id
     pub title: String,
-    pub is_active: bool
+    pub is_active: bool,
 }
 
 #[component]
@@ -111,30 +116,21 @@ pub fn GraphEditor(
     model_modified: Signal<bool>,
     model_file_path: Signal<Option<PathBuf>>,
 ) -> Element {
-
     let mut open_tabs: Signal<Vec<GraphTab>> = use_signal(|| {
-        vec![
-            GraphTab {
+        vec![GraphTab {
             graph_id: "root".to_string(),
             title: "Main Graph".to_string(),
-            is_active:true
-        },
-        GraphTab {
-            graph_id: "random".to_string(),
-            title: "Random Graph".to_string(),
-            is_active: false
-        },
-        GraphTab {
-            graph_id: "muh".to_string(),
-            title: "muh Graph".to_string(),
-            is_active: false
-        }
-        ]
-        
+            is_active: true,
+        }]
     });
 
-    let active_tab = use_memo(move || 
-        open_tabs.read().iter().find(|t| t.is_active).map_or_else(|| "root".to_string(), |t| t.graph_id.clone()));
+    let active_tab = use_memo(move || {
+        open_tabs
+            .read()
+            .iter()
+            .find(|t| t.is_active)
+            .map_or_else(|| "root".to_string(), |t| t.graph_id.clone())
+    });
 
     let current_mouse_pos = use_signal(Point2D::default);
 
@@ -152,7 +148,6 @@ pub fn GraphEditor(
 
     use_context_provider(|| graph_state().graph_store);
     use_context_provider(|| graph_state().editor_state);
-
 
     let onmouseleave_handler = use_drag_end();
     let onkeydownhandler = use_on_key_down(current_mouse_pos);
@@ -187,31 +182,21 @@ pub fn GraphEditor(
                                 }
                             });
                     },
-                    TabList {
+                    TabList { class: "editor-tab-list",
                         {
+
                             rsx! {
 
                                 for (i , tab) in open_tabs().iter().enumerate() {
+
                                     TabTrigger {
                                         key: "{tab.graph_id}",
                                         value: tab.graph_id.clone(),
                                         index: i,
-                                        class: "editor-tab",
+                                        class: if active_tab() == tab.graph_id { "editor-tab active-tab" } else { "editor-tab" },
 
                                         div { class: "tab-inner",
-
-                                            {
-                                                if active_tab() == tab.graph_id {
-                                                    rsx! {
-                                                        span { style: "background-color: red;", "{tab.title}" }
-                                                    }
-                                                } else {
-                                                    rsx! {
-                                                        span { style: "background-color: blue;", "{tab.title}" }
-                                                    }
-                                                }
-                                            }
-
+                                            span { "{tab.title}" }
                                             if tab.graph_id != "root" {
                                                 button {
                                                     class: "tab-close",
@@ -221,7 +206,6 @@ pub fn GraphEditor(
                                                             open_tabs.write().retain(|t| t.graph_id != id);
                                                         }
                                                     },
-                                                    "×"
                                                 }
                                             }
                                         }
@@ -229,6 +213,7 @@ pub fn GraphEditor(
                                 }
                             }
                         }
+                        div { class: "editor-tab-filler" }
                     }
 
                     for (i , tab) in open_tabs().iter().enumerate() {
@@ -236,7 +221,27 @@ pub fn GraphEditor(
                             key: "{tab.graph_id}",
                             value: tab.graph_id.clone(),
                             index: i,
-                            div { "{i}, nothing to see here" }
+                            GraphViewEditor {
+                                command,
+                                model_modified,
+                                model_file_path,
+                                current_mouse_pos,
+                            }
+                                                // div {
+                        //     button {
+                        //         onclick: move |_| {
+                        //             open_tabs
+                        //                 .write()
+                        //                 .push(GraphTab {
+                        //                     graph_id: Uuid::new_v4().as_simple().to_string(),
+                        //                     title: "new graph".to_string(),
+                        //                     is_active: true,
+                        //                 })
+                        //         },
+
+                        //     }
+                        //     "{i}, nothing to see here"
+                        // }
                         }
                     }
                 }
@@ -244,37 +249,14 @@ pub fn GraphEditor(
         }
     }
 }
- // {
-                        //     if i == 0 {
-                        //         rsx! {
-                        //             TabContent { key: "{tab.graph_id}", value: tab.graph_id.clone(), index: i,
-                        //                 GraphViewEditor {
-                        //                     command,
-                        //                     model_modified,
-                        //                     model_file_path,
-                        //                     current_mouse_pos,
-                        //                 }
 
-                        //             }
-                        //         }
-
-                        //     }
-                        //     else{
-                        //         rsx! {
-                        //             TabContent { key: "{tab.graph_id}", value: tab.graph_id.clone(), index: i,
-                        //                 div { "nothing to see here" }
-                        //             }
-                        //         }
-                        //     }
-                        // }
 #[component]
 pub fn GraphViewEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
     model_modified: Signal<bool>,
     model_file_path: Signal<Option<PathBuf>>,
-    current_mouse_pos: Signal<Point2D<f64>>
-    ) -> Element{
-
+    current_mouse_pos: Signal<Point2D<f64>>,
+) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let graph_processor = use_context::<Coroutine<GraphStoreAction>>();
     let editor_state = use_context::<Signal<EditorState>>();
@@ -342,7 +324,7 @@ pub fn GraphViewEditor(
         }
     });
 
-    rsx!{
+    rsx! {
         div {
             class: "graph-editor",
             id: "editor",
