@@ -7,7 +7,7 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig,
-        energy::AnalysisEnergy,
+        energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
     },
@@ -172,7 +172,11 @@ impl OpticNode for Source {
     }
 }
 impl AnalysisEnergy for Source {
-    fn analyze(&mut self, _incoming_data: LightResult) -> OpmResult<LightResult> {
+    fn analyze(
+        &mut self,
+        _incoming_data: LightResult,
+        _config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
         if let Ok(Proptype::LightDataBuilder(light_data_builder)) =
             self.node_attr.get_property("light data")
         {
@@ -432,7 +436,9 @@ mod test {
     fn analyze_energy_ok() {
         let light_builder = LightDataBuilder::Energy(create_he_ne_spec(1.0).unwrap().into());
         let mut node = Source::new("test", light_builder.clone());
-        let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
+        let output =
+            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())
+                .unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");

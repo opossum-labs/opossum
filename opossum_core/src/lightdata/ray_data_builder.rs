@@ -2,9 +2,6 @@
 //!
 //! This module provides a builder for the generation of [`LightData`] to be used in `Source`.
 //! This builder allows easier serialization / deserialization in OPM files.
-use std::{fmt::Display, path::PathBuf};
-
-use super::LightData;
 use crate::{
     degree,
     energy_distributions::EnergyDistType,
@@ -19,6 +16,7 @@ use crate::{
 };
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
+use std::{fmt::Display, path::PathBuf};
 use strum::EnumIter;
 use uom::si::{
     f64::{Angle, Energy, Length},
@@ -557,20 +555,20 @@ impl Default for RayDataBuilder {
     }
 }
 impl RayDataBuilder {
-    /// Create [`LightData::Geometric`] from the builder definition.
+    /// Create [`Rays`] from the builder definition.
     ///
     /// # Errors
     /// This function will return an error if the concrete implementation of the builder fails.
-    pub fn build(self) -> OpmResult<LightData> {
+    pub fn build(self) -> OpmResult<Rays> {
         match self {
-            Self::Raw(rays) => Ok(LightData::Geometric(rays)),
+            Self::Raw(rays) => Ok(rays),
             Self::Collimated(collimated_src) => {
                 let rays = Rays::new_collimated_with_spectrum(
                     collimated_src.spect_dist().generate(),
                     collimated_src.energy_dist().generate(),
                     collimated_src.pos_dist().generate(),
                 )?;
-                Ok(LightData::Geometric(rays))
+                Ok(rays)
             }
             Self::PointSrc(point_src) => {
                 let rays = Rays::new_point_src_with_spectrum(
@@ -579,15 +577,15 @@ impl RayDataBuilder {
                     point_src.pos_dist().generate(),
                     *point_src.reference_length(),
                 )?;
-                Ok(LightData::Geometric(rays))
+                Ok(rays)
             }
-            Self::Image(image_src) => Ok(LightData::Geometric(Rays::from_image(
+            Self::Image(image_src) => Ok(Rays::from_image(
                 image_src.file_path.get(),
                 *image_src.pixel_size.get(),
                 *image_src.total_energy.get(),
                 *image_src.wave_length.get(),
                 *image_src.cone_angle.get(),
-            )?)),
+            )?),
         }
     }
 

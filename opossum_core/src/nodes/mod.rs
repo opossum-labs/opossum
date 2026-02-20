@@ -38,6 +38,7 @@ mod reference;
 pub mod reflective_grating;
 mod source;
 mod source_helper;
+mod source_port;
 mod spectrometer;
 mod spot_diagram;
 mod test_helper;
@@ -66,6 +67,7 @@ pub use source::Source;
 pub use source_helper::{
     collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
 };
+pub use source_port::SourcePort;
 pub use spot_diagram::SpotDiagram;
 use std::sync::{Arc, Mutex};
 pub use wedge::Wedge;

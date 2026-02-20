@@ -1,7 +1,9 @@
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        RayTraceConfig,
+        energy::{AnalysisEnergy, EnergyConfig},
+        ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
@@ -141,7 +143,11 @@ impl OpticNode for NodeReference {
 }
 impl AnalysisGhostFocus for NodeReference {}
 impl AnalysisEnergy for NodeReference {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
         let rf = &self
             .reference
             .clone()
@@ -153,7 +159,7 @@ impl AnalysisEnergy for NodeReference {
                 OpossumError::Analysis(format!("referenced node {ref_node} cannot be inverted"))
             })?;
         }
-        let output = AnalysisEnergy::analyze(&mut *ref_node, incoming_data);
+        let output = AnalysisEnergy::analyze(&mut *ref_node, incoming_data, config);
         if self.inverted() {
             ref_node.set_inverted(false)?;
         }
@@ -191,7 +197,7 @@ mod test {
     use super::*;
     use crate::{
         lightdata::LightData,
-        nodes::{Dummy, NodeGroup, Source, test_helper::test_helper::*},
+        nodes::{Dummy, NodeGroup, test_helper::test_helper::*},
         optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
         utils::LockExt,
@@ -266,13 +272,16 @@ mod test {
         let mut scenery = NodeGroup::default();
         let node_id = scenery.add_node(Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(node_id).unwrap());
-        let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
+        let output =
+            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())
+                .unwrap();
         assert!(output.is_empty());
     }
     #[test]
     fn analyze_no_reference() {
         let mut node = NodeReference::default();
-        let output = AnalysisEnergy::analyze(&mut node, LightResult::default());
+        let output =
+            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default());
         assert!(output.is_err());
     }
     #[test]
@@ -284,7 +293,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
@@ -302,27 +311,12 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
-    }
-    #[test]
-    #[ignore]
-    //obsolete test since source references are now allowed to be inverted
-    fn analyze_non_invertible_ref() {
-        let mut scenery = NodeGroup::default();
-        let node_id = scenery.add_node(Source::default()).unwrap();
-        let mut node = NodeReference::from_node(&scenery.node(node_id).unwrap());
-        node.set_inverted(true).unwrap();
-        let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
-        input.insert("output_1".into(), input_light.clone());
-
-        let output = AnalysisEnergy::analyze(&mut node, input);
-        assert!(output.is_ok());
     }
 }

@@ -5,7 +5,7 @@ use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
-    analyzers::energy::AnalysisEnergy,
+    analyzers::energy::{AnalysisEnergy, EnergyConfig},
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
@@ -131,7 +131,11 @@ impl OpticGraph {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub fn analyze_energy(&mut self, incoming_data: &LightResult) -> OpmResult<LightResult> {
+    pub fn analyze_energy(
+        &mut self,
+        incoming_data: &LightResult,
+        config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
         if self.is_inverted() {
             self.invert_graph()?;
         }
@@ -151,13 +155,13 @@ impl OpticGraph {
             } else {
                 let incoming_edges = self.take_incoming(node_id, incoming_data)?;
                 let node_name = format!("{}", node.lock_opm()?);
-                let outgoing_edges = AnalysisEnergy::analyze(
-                    &mut *node.lock_opm()?,
-                    incoming_edges,
-                )
-                .map_err(|e| {
-                    OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
-                })?;
+                let outgoing_edges =
+                    AnalysisEnergy::analyze(&mut *node.lock_opm()?, incoming_edges, config)
+                        .map_err(|e| {
+                            OpossumError::Analysis(format!(
+                                "analysis of node {node_name} failed: {e}"
+                            ))
+                        })?;
                 // If node is sink node, rewrite port names according to output mapping
                 if self.is_output_node(node_id)? {
                     let portmap = if self.is_inverted() {
@@ -346,7 +350,9 @@ mod test {
     #[test]
     fn analyze_empty() {
         let mut node = OpticGraph::default();
-        let output = node.analyze_energy(&LightResult::default()).unwrap();
+        let output = node
+            .analyze_energy(&LightResult::default(), &EnergyConfig::default())
+            .unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -375,7 +381,9 @@ mod test {
             .unwrap();
         let input = LightResult::default();
         testing_logger::setup();
-        graph.analyze_energy(&input).unwrap();
+        graph
+            .analyze_energy(&input, &EnergyConfig::default())
+            .unwrap();
         check_logs(
             log::Level::Warn,
             vec!["group contains unconnected sub-trees. Analysis might not be complete."],
@@ -394,7 +402,11 @@ mod test {
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Fourier);
         testing_logger::setup();
-        assert!(graph.analyze_energy(&input).is_ok());
+        assert!(
+            graph
+                .analyze_energy(&input, &EnergyConfig::default())
+                .is_ok()
+        );
         check_logs(
             log::Level::Warn,
             vec![
@@ -426,7 +438,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
-        let output = graph.analyze_energy(&input);
+        let output = graph.analyze_energy(&input, &EnergyConfig::default());
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("output_1"));
@@ -444,7 +456,9 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("wrong".into(), input_light.clone());
-        let output = graph.analyze_energy(&input).unwrap();
+        let output = graph
+            .analyze_energy(&input, &EnergyConfig::default())
+            .unwrap();
         assert!(output.is_empty());
     }
 
@@ -455,7 +469,7 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         graph.set_is_inverted(true);
         input.insert("output_1".into(), input_light);
-        let output = graph.analyze_energy(&input);
+        let output = graph.analyze_energy(&input, &EnergyConfig::default());
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("input_1"));
@@ -482,7 +496,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light);
-        let output = graph.analyze_energy(&input);
+        let output = graph.analyze_energy(&input, &EnergyConfig::default());
         assert!(output.is_ok());
     }
 }

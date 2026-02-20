@@ -1,7 +1,11 @@
 #[cfg(test)]
 pub mod test_helper {
     use crate::{
-        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
+        analyzers::{
+            RayTraceConfig,
+            energy::{AnalysisEnergy, EnergyConfig},
+            raytrace::AnalysisRayTrace,
+        },
         apertures::{Aperture, ApertureType, CircleShape},
         joule,
         light_result::LightResult,
@@ -53,7 +57,7 @@ pub mod test_helper {
     pub fn test_analyze_empty<T: Default + AnalysisEnergy>() {
         let mut node = T::default();
         let input = LightResult::default();
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     pub fn test_analyze_wrong_data_type<T: Default + AnalysisRayTrace>(input_port_name: &str) {

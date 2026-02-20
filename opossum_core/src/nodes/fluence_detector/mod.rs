@@ -229,6 +229,7 @@ impl AnalysisRayTrace for FluenceDetector {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::analyzers::energy::EnergyConfig;
     use crate::lightdata::LightData;
     use crate::optic_ports::PortType;
     use crate::{nodes::test_helper::test_helper::*, spectrum_helper::create_he_ne_spec};
@@ -273,7 +274,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("wrong".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -282,7 +283,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
@@ -302,7 +303,7 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");

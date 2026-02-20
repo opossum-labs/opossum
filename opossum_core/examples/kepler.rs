@@ -1,13 +1,15 @@
-use opossum_core::prelude::*;
+use nalgebra::Point2;
+use num::Zero;
+use opossum_core::{
+    energy_distributions::UniformDist, nodes::SourcePort, position_distributions::Grid, prelude::*,
+    spectral_distribution::LaserLines,
+};
 use std::path::Path;
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(collimated_line_ray_source(
-        millimeter!(20.0),
-        joule!(1.0),
-        3,
-    )?)?;
+    let i_src = scenery.add_node(SourcePort::default())?;
     let mut lens1 = ParaxialSurface::new("100 mm lens", millimeter!(100.0))?;
     let aperture = Aperture::new_circle(millimeter!(25.), millimeter!(0., 0.), ApertureType::Hole)?;
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
@@ -19,6 +21,18 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    
+    let ray_data_builder = RayDataBuilder::Collimated(CollimatedSrc::new(
+        Grid::new(
+            Point2::new(Length::zero(), millimeter!(20.0)),
+            Point2::new(1, 3),
+        )?
+        .into(),
+        UniformDist::new(joule!(1.0))?.into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    ));
+    let mut ray_trace_config = RayTraceConfig::default();
+    ray_trace_config.map_source(i_src, ray_data_builder);
+    doc.add_analyzer(AnalyzerType::RayTrace(ray_trace_config));
     doc.save_to_file(Path::new("./opossum_core/playground/kepler.opm"))
 }

@@ -44,8 +44,8 @@ impl LightDataBuilder {
     /// This function will return an error if the concrete implementation of the builder fails.
     pub fn build(self) -> OpmResult<LightData> {
         match self {
-            Self::Energy(e) => e.build(),
-            Self::Geometric(r) => r.build(),
+            Self::Energy(e) => Ok(LightData::Energy(e.build()?)),
+            Self::Geometric(r) => Ok(LightData::Geometric(r.build()?)),
             // Self::Fourier => Ok(LightData::Fourier),
         }
     }

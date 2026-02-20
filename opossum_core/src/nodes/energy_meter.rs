@@ -2,7 +2,9 @@
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        RayTraceConfig,
+        energy::{AnalysisEnergy, EnergyConfig},
+        ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
@@ -219,7 +221,11 @@ impl AnalysisGhostFocus for EnergyMeter {
     }
 }
 impl AnalysisEnergy for EnergyMeter {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        _config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
         let result = self.analyze_pass_through(incoming_data)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
         if let Some(data) = result.get(out_port) {
@@ -306,7 +312,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -315,7 +321,7 @@ mod test {
         let mut input = LightResult::default();
         let input_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_data.clone());
-        let result = AnalysisEnergy::analyze(&mut meter, input).unwrap();
+        let result = AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default()).unwrap();
         assert!(result.contains_key("output_1"));
         assert_eq!(result.get("output_1").unwrap(), &input_data);
     }
@@ -330,7 +336,7 @@ mod test {
         meter.set_inverted(true).unwrap();
         let input_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_data.clone());
-        let result = AnalysisEnergy::analyze(&mut meter, input).unwrap();
+        let result = AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default()).unwrap();
         assert!(result.contains_key("input_1"));
         assert_eq!(result.get("input_1").unwrap(), &input_data);
     }
@@ -341,7 +347,7 @@ mod test {
         let mut input = LightResult::default();
         let input_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_data.clone());
-        AnalysisEnergy::analyze(&mut meter, input).unwrap();
+        AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default()).unwrap();
         assert_eq!(format!("{meter:?}"), "Energy: 1 J (Type: IdealEnergyMeter)");
     }
     #[test]
@@ -365,7 +371,7 @@ mod test {
         let mut input = LightResult::default();
         let input_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_data.clone());
-        AnalysisEnergy::analyze(&mut meter, input).unwrap();
+        AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default()).unwrap();
         let report = meter.node_report("123").unwrap();
         if let Ok(Proptype::Energy(e)) = report.properties().get("Energy") {
             assert_eq!(e, &joule!(1.0));
