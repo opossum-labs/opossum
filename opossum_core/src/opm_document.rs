@@ -26,6 +26,9 @@ use std::{
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+use ron::{extensions::Extensions, ser::PrettyConfig};
+
 /// A structure containing the [`AnalyzerType`] together with its position on a frontend GUI.
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnalyzerInfo {
@@ -166,13 +169,16 @@ impl OpmDocument {
         })?;
         Ok(())
     }
-    /// Return the content of the `.opm` file from this [`OpmDocument`]
+    /// Returns the content of the `.opm` file from this [`OpmDocument`]
     ///
     /// # Errors
     ///
     /// This function will return an error if the serialization of the internal structures fail.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
-        ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::new().new_line("\n")).map_err(
+        let config = PrettyConfig::new()
+            .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
+            .new_line("\n");
+        ron::ser::to_string_pretty(&self, config).map_err(
             |e| OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}")),
         )
     }

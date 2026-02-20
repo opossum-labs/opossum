@@ -55,6 +55,14 @@ impl Default for SourcePort {
     }
 }
 
+impl SourcePort {
+    /// Creates a new source port with the specified name.
+    pub fn new(name: &str) -> Self {
+        let mut node = Self::default();
+        node.node_attr.set_name(name);
+        node
+    }
+}
 impl Display for SourcePort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}' (source port)", self.node_attr.name())
@@ -72,5 +80,64 @@ impl OpticNode for SourcePort {
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{nanometer, prelude::PortType};
+    use super::*;
+    #[test]
+    fn default() {
+        let mut node = SourcePort::default();
+        assert_eq!(node.name(), "source port");
+        assert_eq!(node.node_type(), "source port");
+        assert_eq!(node.isometry(), Some(Isometry::identity()));
+        if let Proptype::Isometry(iso) = node.properties().get("light data iso").unwrap() {
+            assert!(iso.is_none());
+        } else {
+            panic!("wrong type for `light data iso` property");
+        };
+        if let Proptype::LengthOption(wvl) = node.properties().get("alignment wavelength").unwrap()
+        {
+            assert!(wvl.is_none());
+        } else {
+            panic!("wrong type for `alignment wavelength` property");
+        };
+        assert_eq!(node.node_attr().inverted(), false);
+        assert_eq!(node.node_color(), "slateblue");
+        assert!(node.as_group_mut().is_err());
+    }
+    #[test]
+    fn new() {
+        let source = SourcePort::new("test");
+        assert_eq!(source.name(), "test");
+    }
+    #[test]
+    fn set_property() {
+        let mut node = SourcePort::default();
+        node.set_property(
+            "alignment wavelength",
+            Proptype::LengthOption(Some(nanometer!(600.0))),
+        )
+        .unwrap();
+        let Proptype::LengthOption(wavelength) =
+            node.node_attr.get_property("alignment wavelength").unwrap()
+        else {
+            panic!("wrong proptype")
+        };
+        assert_eq!(wavelength, &Some(nanometer!(600.0)));
+    }
+    #[test]
+    fn is_invertable() {
+        let mut node = SourcePort::default();
+        assert!(node.set_inverted(false).is_ok());
+        assert!(node.set_inverted(true).is_ok());
+    }
+    #[test]
+    fn ports() {
+        let node = SourcePort::default();
+        assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
 }

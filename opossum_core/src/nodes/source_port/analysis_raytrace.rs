@@ -84,3 +84,59 @@ impl AnalysisRayTrace for SourcePort {
         Ok(new_outgoing_edges)
     }
 }
+#[cfg(test)]
+mod test {
+    use crate::{
+        energy_distributions::UniformDist,
+        nanometer,
+        position_distributions::Hexapolar,
+        prelude::{CollimatedSrc, RayDataBuilder},
+        spectral_distribution::LaserLines,
+    };
+
+    use super::*;
+
+    #[test]
+    fn analyze_raytrace_no_source_definition() {
+        let mut node = SourcePort::default();
+        let output_error = AnalysisRayTrace::analyze(
+            &mut node,
+            LightResult::default(),
+            &RayTraceConfig::default(),
+        )
+        .unwrap_err();
+        assert!(
+            output_error
+                .to_string()
+                .contains("No source data found in analyzer for")
+        );
+    }
+    #[test]
+    fn analyze_raytrace_ok() {
+        let mut node = SourcePort::default();
+        let ray_data_builder = RayDataBuilder::Collimated(CollimatedSrc::new(
+            Hexapolar::new(millimeter!(10.), 1).unwrap().into(),
+            UniformDist::new(joule!(1.)).unwrap().into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])
+                .unwrap()
+                .into(),
+        ));
+        let mut ray_tracing_config = RayTraceConfig::default();
+        ray_tracing_config.map_source(node.node_attr().uuid(), ray_data_builder.clone());
+        let output =
+            AnalysisRayTrace::analyze(&mut node, LightResult::default(), &ray_tracing_config)
+                .unwrap();
+        let LightData::Geometric(rays) = output.get("output_1").unwrap().clone() else {
+            panic!("Expected LightData::Geometric");
+        };
+        let rays_from_ray_data_builder = ray_data_builder.build().unwrap();
+        assert_eq!(
+            rays.nr_of_rays(true),
+            rays_from_ray_data_builder.nr_of_rays(true)
+        );
+        assert_eq!(
+            rays.total_energy(),
+            rays_from_ray_data_builder.total_energy()
+        );
+    }
+}

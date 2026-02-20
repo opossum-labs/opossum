@@ -21,6 +21,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
+    
     let ray_data_builder = RayDataBuilder::Collimated(CollimatedSrc::new(
         Grid::new(
             Point2::new(Length::zero(), millimeter!(20.0)),
