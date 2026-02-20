@@ -69,6 +69,9 @@ impl GraphStore {
     pub const fn set_scenery_id(&mut self, id: Uuid) {
         self.scenery_id = id;
     }
+    pub const fn scenery_id(&self) -> Uuid {
+        self.scenery_id
+    }
     pub fn add_nodes(&mut self, nodes: &[NodeInfo]) {
         self.nodes
             .write()
@@ -352,7 +355,7 @@ impl UuidRegistry {
         self.backward.get(&id).copied()
     }
 }
-pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<GraphStoreAction> {
+pub fn use_graph_processor(mut graph_state: Signal<GraphState>, add_new_group_tab_handler: EventHandler<(String, Uuid)>) -> Coroutine<GraphStoreAction> {
     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
         async move {
             // This loop runs forever in the background, waiting for actions.
@@ -373,7 +376,7 @@ pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<Gra
                             .set(true);
                     }
                     GraphStoreAction::LoadFromFile(path) => {
-                        process_load_from_file(path, graph_state).await;
+                        process_load_from_file(path, graph_state, add_new_group_tab_handler).await;
                         process_center_graph(graph_state, false);
                     }
                     GraphStoreAction::SaveToFile(path) => {
@@ -422,7 +425,7 @@ pub fn use_graph_processor(mut graph_state: Signal<GraphState>) -> Coroutine<Gra
                         process_optimize_layout(graph_state).await;
                     }
                     GraphStoreAction::GetSceneryId => {
-                        process_get_scenery_id(graph_state).await;
+                        process_get_scenery_id(graph_state, add_new_group_tab_handler).await;
                     }
                     GraphStoreAction::CenterGraph { zoom_to_fit } => {
                         process_center_graph(graph_state, zoom_to_fit);
@@ -440,21 +443,22 @@ fn process_center_graph(graph_state: Signal<GraphState>, zoom_to_fit: bool) {
         .center_graph(bounding_box, zoom_to_fit);
 }
 #[allow(clippy::future_not_send)]
-async fn process_get_scenery_id(graph_state: Signal<GraphState>) {
+async fn process_get_scenery_id(graph_state: Signal<GraphState>, add_new_group_tab_handler: EventHandler<(String, Uuid)>) {
     eval_action_run(
         api::get_scenery_uuid().await,
         Some(move |id| {
             let mut graph_store_signal = graph_state.read().graph_store;
             graph_store_signal.write().set_scenery_id(id);
+            add_new_group_tab_handler.call(("Main Graph".to_string(), id))
         }),
     );
 }
 // this flag is set because clippy expects Signal<GraphStore> to be Send.
 // However graphstore is only used locally and not within another async thread
 #[allow(clippy::future_not_send)]
-async fn process_load_from_file(path: PathBuf, graph_state: Signal<GraphState>) {
+async fn process_load_from_file(path: PathBuf, graph_state: Signal<GraphState>, add_new_group_tab_handler: EventHandler<(String, Uuid)>) {
     process_delete_scenery(graph_state).await;
-    process_get_scenery_id(graph_state).await;
+    process_get_scenery_id(graph_state, add_new_group_tab_handler).await;
     let mut graph_store = graph_state.read().graph_store;
     let mut file_path_signal = graph_store.peek().file_path;
     file_path_signal.set(None);
@@ -467,7 +471,7 @@ async fn process_load_from_file(path: PathBuf, graph_state: Signal<GraphState>) 
     };
     match api::post_opm_file(opm_string).await {
         Ok(_) => {
-            process_get_scenery_id(graph_state).await;
+            process_get_scenery_id(graph_state, add_new_group_tab_handler).await;
             let mut needs_saving_signal = graph_store.peek().needs_saving;
             needs_saving_signal.set(false);
             file_path_signal.set(Some(path));

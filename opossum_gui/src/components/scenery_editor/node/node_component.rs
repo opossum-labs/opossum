@@ -3,6 +3,7 @@ use super::NodeElement;
 use crate::CONTEXT_MENU;
 use crate::components::context_menu::cx_menu::CxMenu;
 use crate::components::context_menu::cx_menu::CxtCommand;
+use crate::components::scenery_editor::NodeType;
 use crate::components::scenery_editor::constants::{BORDER_WIDTH, NODE_WIDTH};
 use crate::components::scenery_editor::graph_store::GraphStoreAction;
 use crate::components::scenery_editor::{
@@ -13,9 +14,10 @@ use crate::components::scenery_editor::{
 };
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
+use uuid::Uuid;
 
 #[component]
-pub fn Node(node: NodeElement) -> Element {
+pub fn Node(node: NodeElement, add_new_group_tab_handler: EventHandler<(String, Uuid)>) -> Element {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
@@ -45,13 +47,16 @@ pub fn Node(node: NodeElement) -> Element {
                 position.y.fract(),
                 BORDER_WIDTH,
             ),
-            onmousedown: move |event: MouseEvent| {
-                editor_status.write().drag_status.set(DragStatus::Node(id, position));
-                let previously_selected = graph_store().active_node();
-                if previously_selected != Some(id) {
-                    graph_store().set_node_active(id, node.z_index());
+            onmousedown: {
+                let z_index = node.z_index();
+                move |event: MouseEvent| {
+                    editor_status.write().drag_status.set(DragStatus::Node(id, position));
+                    let previously_selected = graph_store().active_node();
+                    if previously_selected != Some(id) {
+                        graph_store().set_node_active(id, z_index);
+                    }
+                    event.stop_propagation();
                 }
-                event.stop_propagation();
             },
             onkeydown: move |event| {
                 if event.data().key() == Key::Delete {
@@ -81,6 +86,16 @@ pub fn Node(node: NodeElement) -> Element {
                         );
                         let mut ctx = CONTEXT_MENU.write();
                         *ctx = Some(cx_menu);
+                    }
+                }
+            },
+            ondoubleclick: {
+                let node = node.clone();
+                move |_| {
+                    if let NodeType::Optical(node_type) = node.node_type()
+                        && node_type == "group"
+                    {
+                        add_new_group_tab_handler.call((node.name(), node.id()));
                     }
                 }
             },

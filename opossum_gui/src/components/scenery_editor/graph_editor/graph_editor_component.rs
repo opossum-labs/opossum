@@ -117,25 +117,37 @@ pub fn GraphEditor(
     model_file_path: Signal<Option<PathBuf>>,
 ) -> Element {
     let mut open_tabs: Signal<Vec<GraphTab>> = use_signal(|| {
-        vec![GraphTab {
-            graph_id: "root".to_string(),
-            title: "Main Graph".to_string(),
-            is_active: true,
-        }]
+        vec![]
     });
 
+    let add_new_group_tab_handler = EventHandler::new(move |(title, id): (String, Uuid)|{
+        open_tabs
+                            .write()
+                            .push(GraphTab {
+                                graph_id: id.as_simple().to_string(),
+                                title,
+                                is_active: true,
+                            })
+    });
+
+    
     let active_tab = use_memo(move || {
         open_tabs
             .read()
             .iter()
             .find(|t| t.is_active)
             .map_or_else(|| "root".to_string(), |t| t.graph_id.clone())
-    });
-
+        });
+        
     let current_mouse_pos = use_signal(Point2D::default);
-
+        
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
-    use_graph_processor(graph_state);
+    let graph_processor = use_graph_processor(graph_state, add_new_group_tab_handler);
+            
+    let root_graph_id = use_memo(move || graph_state.read().graph_store.read().scenery_id());
+    use_effect(move || {
+        graph_processor.send(GraphStoreAction::GetSceneryId);
+    });
 
     let active_node_opt = use_memo(move || {
         graph_state
@@ -197,7 +209,7 @@ pub fn GraphEditor(
 
                                         div { class: "tab-inner",
                                             span { "{tab.title}" }
-                                            if tab.graph_id != "root" {
+                                            if tab.graph_id != root_graph_id().as_simple().to_string() {
                                                 button {
                                                     class: "tab-close",
                                                     onclick: {
@@ -226,6 +238,7 @@ pub fn GraphEditor(
                                 model_modified,
                                 model_file_path,
                                 current_mouse_pos,
+                                add_new_group_tab_handler,
                             }
                                                 // div {
                         //     button {
@@ -256,6 +269,7 @@ pub fn GraphViewEditor(
     model_modified: Signal<bool>,
     model_file_path: Signal<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
+    add_new_group_tab_handler: EventHandler<(String, Uuid)>
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let graph_processor = use_context::<Coroutine<GraphStoreAction>>();
@@ -283,10 +297,6 @@ pub fn GraphViewEditor(
         if *model_file_path.peek() != current_path {
             model_file_path.set(current_path);
         }
-    });
-
-    use_effect(move || {
-        graph_processor.send(GraphStoreAction::GetSceneryId);
     });
 
     use_effect(move || {
@@ -344,7 +354,7 @@ pub fn GraphViewEditor(
                     shift().y,
                     zoom(),
                 ),
-                Nodes {}
+                Nodes { add_new_group_tab_handler }
                 svg {
                     width: "100%",
                     height: "100%",
