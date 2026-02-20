@@ -77,9 +77,15 @@ pub trait AnalysisRayTrace: OpticNode {
     /// This function will return an error if .
     fn analyze(
         &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult>;
+        _incoming_data: LightResult,
+        _config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        warn!(
+            "{}: No ray trace analysis function defined.",
+            self.node_type()
+        );
+        Ok(LightResult::default())
+    }
     /// Calculate the position of this [`OpticNode`] element.
     ///
     /// This function calculates the position of this [`OpticNode`] element in 3D space. This is based on the analysis of a single,

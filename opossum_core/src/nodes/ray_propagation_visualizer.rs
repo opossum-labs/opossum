@@ -13,7 +13,9 @@ use uom::si::{
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        GhostFocusConfig, RayTraceConfig,
+        energy::{AnalysisEnergy, EnergyConfig},
+        ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
@@ -177,7 +179,11 @@ impl AnalysisGhostFocus for RayPropagationVisualizer {
     }
 }
 impl AnalysisEnergy for RayPropagationVisualizer {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        _config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
         let result = self.analyze_pass_through(incoming_data)?;
         // It does not make sense to use a RayPropagationVisualizer with energy analysis.
         // The following is only necessary to show a warning in the node report;
@@ -473,7 +479,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -482,7 +488,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
@@ -502,7 +508,7 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");

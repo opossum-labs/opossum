@@ -27,8 +27,6 @@ use uom::{
     },
 };
 
-use super::LightData;
-
 /// Builder for the generation of energy spectra.
 #[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated)]
 pub enum EnergyDataBuilder {
@@ -44,16 +42,16 @@ impl EnergyDataBuilder {
     ///
     /// # Errors
     /// This function will return an error if the concrete implementation of the builder fails.
-    pub fn build(&self) -> OpmResult<LightData> {
+    pub fn build(&self) -> OpmResult<Spectrum> {
         match self {
-            Self::Raw(s) => Ok(LightData::Energy(s.clone())),
+            Self::Raw(s) => Ok(s.clone()),
             Self::FromFile(p) => {
                 let spectrum = Spectrum::from_csv(p.f_path())?;
-                Ok(LightData::Energy(spectrum))
+                Ok(spectrum)
             }
             Self::LaserLines(e) => {
                 let spectrum = Spectrum::from_laser_lines(e)?;
-                Ok(LightData::Energy(spectrum))
+                Ok(spectrum)
             }
         }
     }

@@ -203,6 +203,7 @@ impl NodeGroup {
     /// Return `true` if a node with the given [`Uuid`] exists in the graph.
     ///
     /// This function is similar to [`node`](NodeGroup::node()), but it only returns a boolean value.
+    #[must_use]
     pub fn exists(&self, node_id: Uuid) -> bool {
         self.node_recursive(node_id).is_ok()
     }
@@ -789,7 +790,11 @@ impl Analyzable for NodeGroup {}
 mod test {
     use super::*;
     use crate::{
-        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
+        analyzers::{
+            RayTraceConfig,
+            energy::{AnalysisEnergy, EnergyConfig},
+            raytrace::AnalysisRayTrace,
+        },
         joule,
         light_result::LightResult,
         lightdata::light_data_builder::LightDataBuilder,
@@ -887,7 +892,12 @@ mod test {
     #[test]
     fn report_empty() {
         let mut scenery = NodeGroup::default();
-        AnalysisEnergy::analyze(&mut scenery, LightResult::default()).unwrap();
+        AnalysisEnergy::analyze(
+            &mut scenery,
+            LightResult::default(),
+            &EnergyConfig::default(),
+        )
+        .unwrap();
         scenery.toplevel_report().unwrap();
     }
     #[test]
@@ -898,12 +908,22 @@ mod test {
         scenery
             .connect_nodes(node1, "output_1", node2, "input_1", Length::zero())
             .unwrap();
-        AnalysisEnergy::analyze(&mut scenery, LightResult::default()).unwrap();
+        AnalysisEnergy::analyze(
+            &mut scenery,
+            LightResult::default(),
+            &EnergyConfig::default(),
+        )
+        .unwrap();
     }
     #[test]
     fn analyze_empty() {
         let mut scenery = NodeGroup::default();
-        AnalysisEnergy::analyze(&mut scenery, LightResult::default()).unwrap();
+        AnalysisEnergy::analyze(
+            &mut scenery,
+            LightResult::default(),
+            &EnergyConfig::default(),
+        )
+        .unwrap();
     }
     #[test]
     fn analyze_energy_threshold() {

@@ -9,7 +9,9 @@ use uom::si::f64::Length;
 
 use crate::{
     analyzers::{
-        RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        RayTraceConfig,
+        energy::{AnalysisEnergy, EnergyConfig},
+        ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
@@ -285,7 +287,11 @@ impl AnalysisGhostFocus for WaveFront {
     }
 }
 impl AnalysisEnergy for WaveFront {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        _config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
         let result = self.analyze_pass_through(incoming_data)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
         if let Some(data) = result.get(out_port) {
@@ -560,7 +566,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -577,7 +583,7 @@ mod test {
             .unwrap(),
         );
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input.clone());
+        let output = AnalysisEnergy::analyze(&mut node, input.clone(), &EnergyConfig::default());
         assert!(output.is_ok());
         let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default());
         assert!(output.is_ok());
@@ -599,7 +605,7 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input);
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default());
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("input_1"));

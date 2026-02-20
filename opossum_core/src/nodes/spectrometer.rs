@@ -7,7 +7,9 @@ use uom::si::length::nanometer;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        GhostFocusConfig, RayTraceConfig,
+        energy::{AnalysisEnergy, EnergyConfig},
+        ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
@@ -253,7 +255,11 @@ impl AnalysisGhostFocus for Spectrometer {
     }
 }
 impl AnalysisEnergy for Spectrometer {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        _config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
         let result = self.analyze_pass_through(incoming_data)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
         if let Some(data) = result.get(out_port) {
@@ -299,12 +305,12 @@ mod test {
         assert_eq!(format!("{:?}", node), "no data");
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Fourier);
-        let _ = AnalysisEnergy::analyze(&mut node, input);
+        let _ = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default());
         assert_eq!(format!("{:?}", node), "no spectrum data to display");
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_visible_spec());
         input.insert("input_1".into(), input_light.clone());
-        AnalysisEnergy::analyze(&mut node, input).unwrap();
+        AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert_eq!(
             format!("{:?}", node),
             "Spectrum 380.000 - 749.900 nm (Type: Ideal)"
@@ -363,7 +369,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -372,7 +378,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
@@ -392,7 +398,7 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");

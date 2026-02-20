@@ -71,7 +71,7 @@ impl Analyzer for EnergyAnalyzer {
             format!(" '{}'", scenery.node_attr().name())
         };
         info!("Performing energy flow analysis of scenery{scenery_name}.");
-        AnalysisEnergy::analyze(scenery, LightResult::default())?;
+        AnalysisEnergy::analyze(scenery, LightResult::default(), &self.config)?;
         Ok(())
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
@@ -86,7 +86,11 @@ pub trait AnalysisEnergy: OpticNode {
     ///
     /// # Errors
     /// This function will return an error if the concrete implementation of the [`OpticNode`] fails.
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        _config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
         self.analyze_pass_through(incoming_data)
     }
 
