@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 #[component]
 pub fn FilePathDisplay(
     model_file_path: ReadSignal<Option<PathBuf>>,
-    model_modified: ReadSignal<bool>,
+    model_modified_sig: ReadSignal<bool>,
 ) -> Element {
     let path_info = use_memo(move || {
         model_file_path().as_ref().map_or_else(
@@ -25,7 +25,7 @@ pub fn FilePathDisplay(
         )
     });
     let (display_path, full_path) = path_info();
-    let modified_marker = if model_modified() { "*" } else { "" };
+    let modified_marker = if model_modified_sig() { "*" } else { "" };
     rsx! {
         li { class: "nav-item d-flex align-items-center",
             span { class: "navbar-text text-white-50 ms-3", title: "{full_path}",

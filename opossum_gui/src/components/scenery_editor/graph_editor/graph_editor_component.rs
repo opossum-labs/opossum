@@ -119,7 +119,8 @@ pub struct GraphsWorkspaceState {
 #[component]
 pub fn GraphEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
-    model_modified: Signal<bool>,
+    model_modified_sig: ReadSignal<bool>,
+    model_modified_handler: EventHandler<bool>,
     model_file_path: Signal<Option<PathBuf>>,
 ) -> Element {
     let mut open_tabs: Signal<Vec<GraphTab>> = use_signal(|| {
@@ -279,8 +280,8 @@ pub fn GraphViewEditor(
     use_effect(move || {
         let needs_saving_signal = graph_store.peek().needs_saving();
         let is_unsaved = *needs_saving_signal.read();
-        if *model_modified.peek() != is_unsaved {
-            model_modified.set(is_unsaved);
+        if *model_modified_sig.peek() != is_unsaved {
+            model_modified_handler.call(is_unsaved);
         }
         let file_path_signal = graph_store.peek().file_path();
         let current_path = (*file_path_signal.read()).clone();

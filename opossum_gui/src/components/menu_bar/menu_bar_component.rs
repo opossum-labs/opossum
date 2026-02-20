@@ -40,7 +40,7 @@ pub enum AppCommand {
 #[component]
 pub fn MenuBar(
     model_file_path: ReadSignal<Option<PathBuf>>,
-    model_modified: ReadSignal<bool>,
+    model_modified_sig: ReadSignal<bool>,
     on_menu_action: EventHandler<AppCommand>,
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
@@ -211,7 +211,7 @@ pub fn MenuBar(
                         }
                     }
                     // Display File Path
-                    FilePathDisplay { model_file_path, model_modified }
+                    FilePathDisplay { model_file_path, model_modified_sig }
                 }
             }
             ExpandOnClick { maximize_symbol }
