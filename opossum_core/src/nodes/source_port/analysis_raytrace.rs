@@ -1,7 +1,16 @@
 use log::info;
 
 use crate::{
-    analyzers::raytrace::AnalysisRayTrace, error::{OpmResult, OpossumError}, joule, light_result::LightResult, lightdata::LightData, millimeter, nodes::SourcePort, prelude::{OpticNode, PortType, Proptype, RayTraceConfig}, ray::Ray, rays::Rays
+    analyzers::raytrace::AnalysisRayTrace,
+    error::{OpmResult, OpossumError},
+    joule,
+    light_result::LightResult,
+    lightdata::LightData,
+    millimeter,
+    nodes::SourcePort,
+    prelude::{OpticNode, PortType, Proptype, RayTraceConfig},
+    ray::Ray,
+    rays::Rays,
 };
 
 impl AnalysisRayTrace for SourcePort {
@@ -41,10 +50,10 @@ impl AnalysisRayTrace for SourcePort {
         )]))
     }
     fn calc_node_positions(
-            &mut self,
-            incoming_data: LightResult,
-            config: &RayTraceConfig,
-        ) -> OpmResult<LightResult> {
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
         let outgoing_edges = AnalysisRayTrace::analyze(self, incoming_data, config)?;
         // generate a single beam (= optical axis) from source
         let mut new_outgoing_edges = LightResult::new();

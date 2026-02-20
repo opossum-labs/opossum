@@ -2,7 +2,6 @@
 //!
 //! This module provides a builder for the generation of [`LightData`] to be used in `Source`.
 //! This builder allows easier serialization / deserialization in OPM files.
-use std::{fmt::Display, path::PathBuf};
 use crate::{
     degree,
     energy_distributions::EnergyDistType,
@@ -17,6 +16,7 @@ use crate::{
 };
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
+use std::{fmt::Display, path::PathBuf};
 use strum::EnumIter;
 use uom::si::{
     f64::{Angle, Energy, Length},
