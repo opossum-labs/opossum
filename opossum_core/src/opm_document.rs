@@ -178,9 +178,9 @@ impl OpmDocument {
         let config = PrettyConfig::new()
             .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
             .new_line("\n");
-        ron::ser::to_string_pretty(&self, config).map_err(
-            |e| OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}")),
-        )
+        ron::ser::to_string_pretty(&self, config).map_err(|e| {
+            OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
+        })
     }
     /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]

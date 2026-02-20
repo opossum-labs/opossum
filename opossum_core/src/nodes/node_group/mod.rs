@@ -674,6 +674,19 @@ impl NodeGroup {
     pub fn set_graph(&mut self, graph: OpticGraph) {
         self.graph = graph;
     }
+    /// Find all source ports in the graph.
+    ///
+    /// This function returns a vector of UUIDs identifying all nodes of the type "source port"
+    /// in the optical graph.
+    ///
+    /// # Returns
+    /// A vector of [`Uuid`]s representing the source port nodes.
+    ///
+    /// # Errors
+    /// This function will return an error if the resources could not be locked.
+    pub fn find_source_ports(&self) -> OpmResult<Vec<Uuid>> {
+        self.graph.find_source_ports()
+    }
 }
 
 impl OpticNode for NodeGroup {
