@@ -1,5 +1,5 @@
 use num::Zero;
-use opossum_core::prelude::*;
+use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
 use std::path::Path;
 use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
@@ -19,6 +19,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(reference, "output_1", detector, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::Energy);
+    doc.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
     doc.save_to_file(Path::new("./opossum_core/playground/reference_test.opm"))
 }

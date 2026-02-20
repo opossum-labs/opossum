@@ -34,7 +34,7 @@ impl AnalysisRayTrace for Wedge {
             in_port,
             &refri,
             &mut rays_bundle,
-            &AnalyzerType::RayTrace(*config),
+            &AnalyzerType::RayTrace(config.clone()),
             self.inverted(),
             refraction_intended,
         )?;
@@ -42,7 +42,7 @@ impl AnalysisRayTrace for Wedge {
             out_port,
             &self.ambient_idx(),
             &mut rays_bundle,
-            &AnalyzerType::RayTrace(*config),
+            &AnalyzerType::RayTrace(config.clone()),
             self.inverted(),
             refraction_intended,
         )?;

@@ -200,6 +200,12 @@ impl NodeGroup {
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
         self.graph.node(node_id)
     }
+    /// Return `true` if a node with the given [`Uuid`] exists in the graph.
+    ///
+    /// This function is similar to [`node`](NodeGroup::node()), but it only returns a boolean value.
+    pub fn exists(&self, node_id: Uuid) -> bool {
+        self.node_recursive(node_id).is_ok()
+    }
     /// Return a reference to the optical node specified by its [`Uuid`] and the Uuid of the group in which it is contained.
     ///
     /// This function is similar to [`node`](NodeGroup::node()), but it also recursively searches

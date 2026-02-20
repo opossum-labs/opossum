@@ -34,13 +34,13 @@ pub fn RayTraceEditor(
         ray_trace_config_sig
             .write()
             .set_max_number_of_refractions(max_refractions);
-        ray_trace_config_handler.call(*ray_trace_config_sig.read());
+        ray_trace_config_handler.call((*ray_trace_config_sig.read()).clone());
     });
     let max_bounces_handler = EventHandler::new(move |max_bounces: usize| {
         ray_trace_config_sig
             .write()
             .set_max_number_of_bounces(max_bounces);
-        ray_trace_config_handler.call(*ray_trace_config_sig.read());
+        ray_trace_config_handler.call((*ray_trace_config_sig.read()).clone());
     });
     let min_ray_energy_handler = EventHandler::new(move |min_ray_energy: Energy| {
         if ray_trace_config_sig
@@ -48,7 +48,7 @@ pub fn RayTraceEditor(
             .set_min_energy_per_ray(min_ray_energy)
             .is_ok()
         {
-            ray_trace_config_handler.call(*ray_trace_config_sig.read());
+            ray_trace_config_handler.call((*ray_trace_config_sig.read()).clone());
         }
     });
     let missed_surface_strategy_handler =
@@ -56,7 +56,7 @@ pub fn RayTraceEditor(
             ray_trace_config_sig
                 .write()
                 .set_missed_surface_strategy(missed_surface_strategy);
-            ray_trace_config_handler.call(*ray_trace_config_sig.read());
+            ray_trace_config_handler.call((*ray_trace_config_sig.read()).clone());
         });
 
     rsx! {

@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! Analyzer for sequential ray tracing
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use super::{Analyzer, AnalyzerType};
 use crate::{
@@ -12,6 +12,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
     picojoule,
+    prelude::RayDataBuilder,
     properties::Proptype,
     rays::Rays,
     refractive_index::RefractiveIndexType,
@@ -20,6 +21,7 @@ use crate::{
 };
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::AnalyzerRegistration;
 use strum::EnumIter;
@@ -27,7 +29,7 @@ use strum::EnumIter;
 inventory::submit! {
     AnalyzerRegistration::new(
         || AnalyzerType::RayTrace(RayTraceConfig::default()),
-        |at| if let AnalyzerType::RayTrace(config) = at { Some(Box::new(RayTracingAnalyzer::new(*config))) } else { None }
+        |at| if let AnalyzerType::RayTrace(config) = at { Some(Box::new(RayTracingAnalyzer::new(config.clone()))) } else { None }
     )
 }
 use uom::si::f64::{Angle, Energy, Length};
@@ -124,7 +126,7 @@ pub trait AnalysisRayTrace: OpticNode {
             )));
         };
         let missed_surface_strategy = match analyzer_type {
-            AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
+            AnalyzerType::Energy(_) => &MissedSurfaceStrategy::Stop,
             AnalyzerType::RayTrace(ray_trace_config) => &ray_trace_config.missed_surface_strategy,
             AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
         };
@@ -173,7 +175,7 @@ pub trait AnalysisRayTrace: OpticNode {
             return Err(OpossumError::Analysis("no surface found".into()));
         };
         let missed_surface_strategy = match analyzer_type {
-            AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
+            AnalyzerType::Energy(_) => &MissedSurfaceStrategy::Stop,
             AnalyzerType::RayTrace(ray_trace_config) => &ray_trace_config.missed_surface_strategy,
             AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
         };
@@ -269,7 +271,7 @@ pub trait AnalysisRayTrace: OpticNode {
             self.pass_through_detector_surface(
                 &in_port_name,
                 &mut rays_bundle,
-                &AnalyzerType::RayTrace(*config),
+                &AnalyzerType::RayTrace(config.clone()),
             )?;
             Ok(LightResult::from([(
                 out_port_name,
@@ -338,7 +340,7 @@ impl Display for MissedSurfaceStrategy {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration data for a rays tracing analysis.
 ///
 /// The config contains the following info
@@ -352,6 +354,7 @@ pub struct RayTraceConfig {
     max_number_of_bounces: usize,
     max_number_of_refractions: usize,
     missed_surface_strategy: MissedSurfaceStrategy,
+    source_map: HashMap<Uuid, RayDataBuilder>,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
@@ -365,6 +368,7 @@ impl Default for RayTraceConfig {
             max_number_of_bounces: 1000,
             max_number_of_refractions: 1000,
             missed_surface_strategy: MissedSurfaceStrategy::default(),
+            source_map: HashMap::new(),
         }
     }
 }
@@ -424,6 +428,26 @@ impl RayTraceConfig {
     ) {
         self.missed_surface_strategy = missed_surface_strategy;
     }
+    /// Maps a source UUID to a ray data builder.
+    ///
+    /// If a builder was already mapped to the given UUID, it is replaced and returned.
+    pub fn map_source(&mut self, uuid: Uuid, builder: RayDataBuilder) -> Option<RayDataBuilder> {
+        self.source_map.insert(uuid, builder)
+    }
+    /// Returns a reference to the ray data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn get_source(&self, uuid: &Uuid) -> Option<&RayDataBuilder> {
+        self.source_map.get(uuid)
+    }
+    /// Removes and returns the ray data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
+        self.source_map.remove(uuid)
+    }
+    /// Removes all source mappings whose UUIDs no longer exist in the given model.
+    pub fn prune_source_map(&mut self, model: &NodeGroup) {
+        self.source_map.retain(|uuid, _builder| model.exists(*uuid));
+    }
 }
 
 #[cfg(test)]
@@ -471,7 +495,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {} }"
         );
     }
     #[test]
@@ -528,5 +552,71 @@ mod test {
             .unwrap();
         let analyzer = RayTracingAnalyzer::default();
         analyzer.analyze(&mut group).unwrap();
+    }
+
+    #[test]
+    fn test_map_and_get_source() {
+        use crate::lightdata::ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder};
+        use uuid::Uuid;
+        let mut config = RayTraceConfig::default();
+        let uuid = Uuid::new_v4();
+        // Use CollimatedSrc which implements Default
+        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+
+        assert!(config.map_source(uuid, builder.clone()).is_none());
+        assert_eq!(config.get_source(&uuid), Some(&builder));
+
+        let mut builder2 = RayDataBuilder::Collimated(CollimatedSrc::default());
+        if let RayDataBuilder::Collimated(ref mut _c) = builder2 {
+            // Modify it slightly to be different, though default equality check might suffice if we just use a different instance
+            // For safety let's just use the same type but maybe a different property if I could easy set it.
+            // But valid builders are complex to construct manually due to validators.
+            // Let's just trust that a new default is equal to another new default, so we need to validly change something.
+            // or just use a PointSrc for the second one.
+        }
+        // Let's use PointSrc for the second one to be sure it's different
+        let builder2 = RayDataBuilder::PointSrc(PointSrc::default());
+
+        assert_eq!(config.map_source(uuid, builder2.clone()), Some(builder));
+        assert_eq!(config.get_source(&uuid), Some(&builder2));
+    }
+
+    #[test]
+    fn test_remove_source() {
+        use crate::lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder};
+        use uuid::Uuid;
+        let mut config = RayTraceConfig::default();
+        let uuid = Uuid::new_v4();
+        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+
+        config.map_source(uuid, builder.clone());
+        assert_eq!(config.remove_source(&uuid), Some(builder));
+        assert!(config.get_source(&uuid).is_none());
+        assert!(config.remove_source(&uuid).is_none());
+    }
+
+    #[test]
+    fn test_prune_source_map() {
+        use crate::{
+            lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder},
+            nodes::Source,
+            prelude::LightDataBuilder, // Correct import
+        };
+        use uuid::Uuid;
+        let mut config = RayTraceConfig::default();
+        let uuid2 = Uuid::new_v4();
+        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+
+        let mut scene = NodeGroup::default();
+        let src = Source::new("source", LightDataBuilder::Geometric(builder.clone()));
+        let node_id = scene.add_node(src).unwrap();
+
+        config.map_source(node_id, builder.clone());
+        config.map_source(uuid2, builder.clone());
+
+        config.prune_source_map(&scene);
+
+        assert!(config.get_source(&node_id).is_some());
+        assert!(config.get_source(&uuid2).is_none());
     }
 }

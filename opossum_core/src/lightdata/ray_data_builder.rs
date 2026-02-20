@@ -42,17 +42,6 @@ pub enum RayDataBuilder {
     Image(ImageSrc),
 }
 
-// impl Validate for RayDataBuilder{
-//     fn validate(&self) -> OpmResult<()>{
-//         match self{
-//             RayDataBuilder::Raw(rays) => rays.validate(),
-//             RayDataBuilder::Collimated(collimated_src) => collimated_src.validate(),
-//             RayDataBuilder::PointSrc(point_src) => point_src.validate(),
-//             RayDataBuilder::Image(image_src) => image_src.validate(),
-//         }
-//     }
-// }
-
 impl From<ImageSrc> for RayDataBuilder {
     fn from(value: ImageSrc) -> Self {
         Self::Image(value)

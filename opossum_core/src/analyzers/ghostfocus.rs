@@ -16,6 +16,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    prelude::RayDataBuilder,
     properties::{
         Properties, Proptype,
         proptype::{count_str, format_value_with_prefix},
@@ -33,15 +34,16 @@ use super::{
 inventory::submit! {
     AnalyzerRegistration::new(
         || AnalyzerType::GhostFocus(GhostFocusConfig::default()),
-        |at| if let AnalyzerType::GhostFocus(config) = at { Some(Box::new(GhostFocusAnalyzer::new(*config))) } else { None }
+        |at| if let AnalyzerType::GhostFocus(config) = at { Some(Box::new(GhostFocusAnalyzer::new(config.clone()))) } else { None }
     )
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Copy)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
     max_bounces: usize,
     fluence_estimator: FluenceEstimator,
+    source_map: HashMap<Uuid, RayDataBuilder>,
 }
 
 impl GhostFocusConfig {
@@ -64,12 +66,35 @@ impl GhostFocusConfig {
     pub const fn set_fluence_estimator(&mut self, fluence_estimator: FluenceEstimator) {
         self.fluence_estimator = fluence_estimator;
     }
+    /// Maps an ray data builder to the given source UUID, returning any previously mapped builder.
+    pub fn map_source(
+        &mut self,
+        node_id: Uuid,
+        ray_data_builder: RayDataBuilder,
+    ) -> Option<RayDataBuilder> {
+        self.source_map.insert(node_id, ray_data_builder)
+    }
+    /// Returns the ray data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn get_source(&self, uuid: &Uuid) -> Option<&RayDataBuilder> {
+        self.source_map.get(uuid)
+    }
+    /// Removes and returns the ray data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
+        self.source_map.remove(uuid)
+    }
+    /// Removes all source mappings whose UUIDs no longer exist in the given model.
+    pub fn prune_source_map(&mut self, model: &NodeGroup) {
+        self.source_map.retain(|uuid, _builder| model.exists(*uuid));
+    }
 }
 impl Default for GhostFocusConfig {
     fn default() -> Self {
         Self {
             max_bounces: 1,
             fluence_estimator: FluenceEstimator::Voronoi,
+            source_map: HashMap::new(),
         }
     }
 }
@@ -273,7 +298,11 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
             return Ok(out_light_rays);
         };
         let mut rays = bouncing_rays.clone();
-        self.pass_through_detector_surface(in_port, &mut rays, &AnalyzerType::GhostFocus(*config))?;
+        self.pass_through_detector_surface(
+            in_port,
+            &mut rays,
+            &AnalyzerType::GhostFocus(config.clone()),
+        )?;
 
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.clone(), rays);
@@ -624,6 +653,62 @@ mod test_ghost_focus_config {
         let mut c = GhostFocusConfig::default();
         c.set_fluence_estimator(FluenceEstimator::HelperRays);
         assert_eq!(c.fluence_estimator(), &FluenceEstimator::HelperRays);
+    }
+    #[test]
+    fn test_map_and_get_source() {
+        use crate::lightdata::ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder};
+        use uuid::Uuid;
+        let mut config = GhostFocusConfig::default();
+        let uuid = Uuid::new_v4();
+        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+
+        assert!(config.map_source(uuid, builder.clone()).is_none());
+        assert_eq!(config.get_source(&uuid), Some(&builder));
+
+        let builder2 = RayDataBuilder::PointSrc(PointSrc::default());
+        assert_eq!(config.map_source(uuid, builder2.clone()), Some(builder));
+        assert_eq!(config.get_source(&uuid), Some(&builder2));
+    }
+
+    #[test]
+    fn test_remove_source() {
+        use crate::lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder};
+        use uuid::Uuid;
+        let mut config = GhostFocusConfig::default();
+        let uuid = Uuid::new_v4();
+        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+
+        config.map_source(uuid, builder.clone());
+        assert_eq!(config.remove_source(&uuid), Some(builder));
+        assert!(config.get_source(&uuid).is_none());
+        assert!(config.remove_source(&uuid).is_none());
+    }
+
+    #[test]
+    fn test_prune_source_map() {
+        use crate::nodes::NodeGroup;
+        use crate::{
+            lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder},
+            nodes::Source,
+            prelude::LightDataBuilder,
+        };
+        use uuid::Uuid;
+
+        let mut config = GhostFocusConfig::default();
+        let uuid2 = Uuid::new_v4();
+        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+
+        let mut scene = NodeGroup::default();
+        let src = Source::new("source", LightDataBuilder::Geometric(builder.clone()));
+        let node_id = scene.add_node(src).unwrap();
+
+        config.map_source(node_id, builder.clone());
+        config.map_source(uuid2, builder.clone());
+
+        config.prune_source_map(&scene);
+
+        assert!(config.get_source(&node_id).is_some());
+        assert!(config.get_source(&uuid2).is_none());
     }
 }
 

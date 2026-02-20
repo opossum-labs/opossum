@@ -28,15 +28,6 @@ pub enum LightDataBuilder {
     // Fourier,
 }
 
-// impl Validate for LightDataBuilder{
-//     fn validate(&self) -> OpmResult<()> {
-//         match self{
-//             LightDataBuilder::Energy(energy_data_builder) => energy_data_builder.validate(),
-//             LightDataBuilder::Geometric(ray_data_builder) => ray_data_builder.validate(),
-//         }
-//     }
-// }
-
 impl DefaultFromName for LightDataBuilder {}
 
 impl Default for LightDataBuilder {

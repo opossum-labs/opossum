@@ -59,8 +59,8 @@ impl AnalyzerInfo {
         &self.analyzer_type
     }
     /// Sets the analyzer type of this [`AnalyzerInfo`].
-    pub const fn set_analyzer_type(&mut self, analyzer_type: AnalyzerType) {
-        self.analyzer_type = analyzer_type;
+    pub fn set_analyzer_type(&mut self, analyzer_type: &AnalyzerType) {
+        self.analyzer_type = analyzer_type.clone();
     }
     /// Returns the id of this [`AnalyzerInfo`].
     #[must_use]
@@ -328,8 +328,8 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{
-            Analyzer, GhostFocusConfig, RayTraceConfig, ghostfocus::GhostFocusAnalyzer,
-            raytrace::RayTracingAnalyzer,
+            Analyzer, GhostFocusConfig, RayTraceConfig, energy::EnergyConfig,
+            ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
         degree, joule, millimeter, nanometer,
         nodes::{
@@ -393,27 +393,28 @@ mod test {
     fn add_analyzer() {
         let mut document = OpmDocument::default();
         assert!(document.analyzers.is_empty());
-        document.add_analyzer(AnalyzerType::Energy);
+        document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
         assert_eq!(document.analyzers.len(), 1);
     }
     #[test]
     fn add_analyzer_with_position() {
         let mut document = OpmDocument::default();
-        let uuid = document.add_analyzer_with_position(AnalyzerType::Energy, None);
+        let uuid = document
+            .add_analyzer_with_position(AnalyzerType::Energy(EnergyConfig::default()), None);
         assert!(!uuid.is_nil());
     }
     #[test]
     fn analyzers() {
         let mut document = OpmDocument::default();
-        document.add_analyzer(AnalyzerType::Energy);
+        document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
         document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
         assert_eq!(document.analyzers().len(), 2);
     }
     #[test]
     fn analyzer() {
         let mut document = OpmDocument::default();
-        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
-        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
 
         assert!(document.analyzer(uuid1).is_ok());
         assert!(document.analyzer(uuid2).is_ok());
@@ -422,8 +423,8 @@ mod test {
     #[test]
     fn analyzer_mut() {
         let mut document = OpmDocument::default();
-        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
-        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
 
         assert!(document.analyzer_mut(uuid1).is_some());
         assert!(document.analyzer_mut(uuid2).is_some());
@@ -432,8 +433,8 @@ mod test {
     #[test]
     fn remove_analyzer() {
         let mut document = OpmDocument::default();
-        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
-        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
 
         assert!(document.remove_analyzer(uuid1).is_ok());
         assert_eq!(document.analyzers.len(), 1);
@@ -603,13 +604,21 @@ mod test {
     }
     #[test]
     fn analyzer_info_set_analyzer_type() {
-        let mut at = AnalyzerInfo::new(AnalyzerType::Energy, Uuid::nil(), Point2::new(1.0, 2.0));
-        at.set_analyzer_type(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
+        let mut at = AnalyzerInfo::new(
+            AnalyzerType::Energy(EnergyConfig::default()),
+            Uuid::nil(),
+            Point2::new(1.0, 2.0),
+        );
+        at.set_analyzer_type(&AnalyzerType::GhostFocus(GhostFocusConfig::default()));
         assert!(matches!(at.analyzer_type, AnalyzerType::GhostFocus(_)));
     }
     #[test]
     fn analyzer_info_set_gui_position() {
-        let mut at = AnalyzerInfo::new(AnalyzerType::Energy, Uuid::nil(), Point2::new(1.0, 2.0));
+        let mut at = AnalyzerInfo::new(
+            AnalyzerType::Energy(EnergyConfig::default()),
+            Uuid::nil(),
+            Point2::new(1.0, 2.0),
+        );
         let new_position = Point2::new(3.0, 4.0);
         at.set_gui_position(Some(new_position));
         assert_eq!(at.gui_position(), Some(new_position))

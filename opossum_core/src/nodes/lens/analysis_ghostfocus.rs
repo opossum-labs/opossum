@@ -30,7 +30,7 @@ impl AnalysisGhostFocus for Lens {
             in_port,
             &refri,
             &mut rays_bundle,
-            &AnalyzerType::GhostFocus(*config),
+            &AnalyzerType::GhostFocus(config.clone()),
             self.inverted(),
             refraction_intended,
         )?;
@@ -38,7 +38,7 @@ impl AnalysisGhostFocus for Lens {
             out_port,
             &self.ambient_idx(),
             &mut rays_bundle,
-            &AnalyzerType::GhostFocus(*config),
+            &AnalyzerType::GhostFocus(config.clone()),
             self.inverted(),
             refraction_intended,
         )?;
