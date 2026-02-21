@@ -30,7 +30,7 @@ pub enum NodeChangeAction {
 #[component]
 pub fn NodeConfigEditor(
     active_node_opt: Memo<Option<(NodeType, Uuid)>>,
-    is_modified: Signal<bool>,
+    model_modified_handler: EventHandler<bool>,
 ) -> Element {
     let save_manager = use_save_manager();
     let flush_trigger = save_manager.flush_trigger;
@@ -54,7 +54,7 @@ pub fn NodeConfigEditor(
     });
 
     // Standard Processing
-    use_node_config_processor(is_modified);
+    use_node_config_processor(model_modified_handler);
     let node_config_processor = use_coroutine_handle::<NodeChangeEvent>();
     let on_node_change = EventHandler::new(move |evt: NodeChangeEvent| {
         node_config_processor.send(evt);
@@ -73,7 +73,7 @@ pub fn NodeConfigEditor(
     }
 }
 
-fn use_node_config_processor(mut is_modified: Signal<bool>) {
+fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
     let mut graph_store = use_context::<Signal<GraphStore>>();
 
@@ -121,7 +121,7 @@ fn use_node_config_processor(mut is_modified: Signal<bool>) {
 
                 match result {
                     Ok(()) => {
-                        is_modified.set(true);
+                        is_modified_handler.call(true);
                     }
                     Err(err_str) => {
                         OPOSSUM_UI_LOGS.write().add_log(&err_str);

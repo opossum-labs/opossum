@@ -127,24 +127,19 @@ pub fn GraphEditor(
         vec![]
     });
 
-    let workspace = use_signal(|| GraphsWorkspaceState::default());
+    let mut workspace = use_signal(|| GraphsWorkspaceState::default());
     let active_tab = use_memo(move || {
         workspace
             .read().active_tab.read()
             .map_or_else(|| "root".to_string(), |t| t.as_simple().to_string())
         });
 
-    let is_modified: Memo<Signal<bool>> = use_memo(move || workspace.read().tabs.read().iter().any(|(_,g)| g.graph_store.read().needs_saving()));
 
     let add_new_group_tab_handler = EventHandler::new(move |(title, id): (String, Uuid)|{
-        todo!();
-        open_tabs
-                            .write()
-                            .push(GraphTab {
-                                graph_id: id.as_simple().to_string(),
-                                title,
-                                is_active: true,
-                            })
+        workspace.write().tabs.write().insert(id, GraphState::default());
+    });
+    let remove_tab_handler = EventHandler::new(move |id: Uuid|{
+        workspace.write().tabs.write().remove(&id);
     });
 
     
@@ -177,7 +172,7 @@ pub fn GraphEditor(
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { active_node_opt, is_modified: is_modified() }
+                NodeConfigEditor { active_node_opt, model_modified_handler }
             }
             div {
                 class: "col px-0 graph-editor-container",
@@ -219,17 +214,7 @@ pub fn GraphEditor(
                                             if tab.graph_id != root_graph_id().as_simple().to_string() {
                                                 button {
                                                     class: "tab-close",
-                                                    onclick: {
-                                                        let id = tab.graph_id.clone();
-                                                        move |_| {
-                                                            open_tabs.write().retain(|t| t.graph_id != id);
-                                                        }
-                                                    },
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                                    onclick: 
                             }
                         }
                         div { class: "editor-tab-filler" }
@@ -242,7 +227,8 @@ pub fn GraphEditor(
                             index: i,
                             GraphViewEditor {
                                 command,
-                                model_modified,
+                                model_modified_sig,
+                                model_modified_handler,
                                 model_file_path,
                                 current_mouse_pos,
                                 add_new_group_tab_handler,
@@ -255,10 +241,44 @@ pub fn GraphEditor(
     }
 }
 
+
+pub fn use_workspace_processor(mut workspace: Signal<GraphsWorkspaceState>, add_new_group_tab_handler: EventHandler<(String, Uuid)>) -> Coroutine<GraphStoreAction> {
+    use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
+        async move {
+            // This loop runs forever in the background, waiting for actions.
+            while let Some(action) = rx.next().await {
+                match action {
+                    GraphsWorkspaceAction::LoadFromFile(path) => {
+                        process_load_from_file(path, graph_state, add_new_group_tab_handler).await;
+                        process_center_graph(graph_state, false);
+                    }
+                    GraphsWorkspaceAction::SaveToFile(path) => {
+                        process_save_to_file(path, graph_state).await;
+                    }
+                    GraphsWorkspaceAction::DeleteScenery => {
+                        process_delete_scenery(graph_state).await;
+                    }
+                    GraphsWorkspaceAction::GetSceneryId => {
+                        process_get_scenery_id(graph_state, add_new_group_tab_handler).await;
+                    }
+                }
+            }
+        }
+    })
+}
+
+pub enum GraphsWorkspaceAction {
+    LoadFromFile(PathBuf),
+    SaveToFile(PathBuf),
+    GetSceneryId,
+    DeleteScenery,
+}
+
 #[component]
 pub fn GraphViewEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
-    model_modified: Signal<bool>,
+    model_modified_sig: ReadSignal<bool>,
+    model_modified_handler: EventHandler<bool>,
     model_file_path: Signal<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
     add_new_group_tab_handler: EventHandler<(String, Uuid)>
