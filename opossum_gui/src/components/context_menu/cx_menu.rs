@@ -30,7 +30,7 @@ impl CxMenu {
 }
 
 #[component]
-pub fn ContextMenu(command: Signal<Option<CxtCommand>>) -> Element {
+pub fn ContextMenu(cxt_command_handler: EventHandler<Option<CxtCommand>>) -> Element {
     let cx_menu_opt = CONTEXT_MENU();
 
     if let Some(cx_menu) = cx_menu_opt {
@@ -47,7 +47,7 @@ pub fn ContextMenu(command: Signal<Option<CxtCommand>>) -> Element {
                         key: "{index}",
                         class: "context-menu-item",
                         onclick: move |_| {
-                            command.set(Some(cmd.clone()));
+                            cxt_command_handler.call(Some(cmd.clone()));
                             *CONTEXT_MENU.write() = None;
                         },
                         "{label}"
