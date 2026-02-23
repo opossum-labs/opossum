@@ -31,12 +31,13 @@ use rust_sugiyama::{configure::Config, from_edges};
 use std::{collections::HashMap, fs, path::PathBuf};
 use uuid::Uuid;
 
-#[derive(Clone, Copy, Eq, PartialEq, Default)]
+#[derive(Clone, Eq, PartialEq, Default)]
 pub struct GraphState {
     pub graph_store: Signal<GraphStore>,
     pub editor_state: Signal<EditorState>,
+    pub name: String,
+    pub id: Uuid
 }
-
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct GraphStore {
@@ -69,9 +70,6 @@ pub enum GraphStoreAction {
 impl GraphStore {
     pub const fn set_scenery_id(&mut self, id: Uuid) {
         self.scenery_id = id;
-    }
-    pub const fn scenery_id(&self) -> Uuid {
-        self.scenery_id
     }
     pub fn add_nodes(&mut self, nodes: &[NodeInfo]) {
         self.nodes
@@ -446,12 +444,11 @@ fn process_center_graph(graph_state: Signal<GraphState>, zoom_to_fit: bool) {
         .center_graph(bounding_box, zoom_to_fit);
 }
 #[allow(clippy::future_not_send)]
-async fn process_get_scenery_id(graph_state: Signal<GraphState>, add_new_group_tab_handler: EventHandler<(String, Uuid)>) {
+async fn process_get_scenery_id(mut graph_state: Signal<GraphState>, add_new_group_tab_handler: EventHandler<(String, Uuid)>) {
     eval_action_run(
         api::get_scenery_uuid().await,
         Some(move |id| {
-            let mut graph_store_signal = graph_state.read().graph_store;
-            graph_store_signal.write().set_scenery_id(id);
+            graph_state.write().id = id;
             add_new_group_tab_handler.call(("Main Graph".to_string(), id))
         }),
     );
@@ -462,6 +459,7 @@ async fn process_get_scenery_id(graph_state: Signal<GraphState>, add_new_group_t
 async fn process_load_from_file(path: PathBuf, graph_state: Signal<GraphState>, add_new_group_tab_handler: EventHandler<(String, Uuid)>) {
     process_delete_scenery(graph_state).await;
     process_get_scenery_id(graph_state, add_new_group_tab_handler).await;
+    let scenery_id = graph_state.read().id;
     let mut graph_store = graph_state.read().graph_store;
     let mut file_path_signal = graph_store.peek().file_path;
     file_path_signal.set(None);
@@ -478,7 +476,6 @@ async fn process_load_from_file(path: PathBuf, graph_state: Signal<GraphState>, 
             let mut needs_saving_signal = graph_store.peek().needs_saving;
             needs_saving_signal.set(false);
             file_path_signal.set(Some(path));
-            let scenery_id = graph_store.peek().scenery_id;
             eval_action_run(
                 api::get_nodes(scenery_id).await,
                 Some(move |nodes: Vec<NodeInfo>| graph_store.write().add_nodes(&nodes)),
@@ -566,6 +563,7 @@ async fn process_delete_optical_node(node_id: Uuid, graph_state: Signal<GraphSta
 async fn process_add_optic_node(new_node_type_string: &str, graph_state: Signal<GraphState>) {
     let editor_state = graph_state.read().editor_state;
     let mut graph_store = graph_state.read().graph_store;
+    let scenery_id = graph_state.read().id;
 
     // calculate center of viewport (in graph coordinates)
     let zoom = *editor_state.peek().zoom.peek();
@@ -583,7 +581,6 @@ async fn process_add_optic_node(new_node_type_string: &str, graph_state: Signal<
     let element_position =
         find_suitable_element_position(proposed_element_position, &existing_element_positions);
     let new_node_info = NewNode::new(new_node_type_string.to_lowercase(), element_position);
-    let scenery_id = graph_store.peek().scenery_id;
     eval_action_run(
         api::post_add_node(new_node_info, scenery_id).await,
         Some(move |node_info| {
@@ -618,7 +615,7 @@ fn find_suitable_element_position(
 #[allow(clippy::future_not_send)]
 async fn process_add_reference_node(new_ref_node: NewRefNode, graph_state: Signal<GraphState>) {
     let mut graph_store = graph_state.read().graph_store;
-    let scenery_id = graph_store.peek().scenery_id;
+    let scenery_id = graph_state.read().id;
     eval_action_run(
         api::post_add_ref_node(new_ref_node, scenery_id).await,
         Some(move |node_info| {
@@ -711,7 +708,7 @@ async fn process_copy_node(node_type: NodeType, node_id: Uuid) {
 #[allow(clippy::future_not_send)]
 async fn process_paste_node(pos: Point2D<f64>, graph_state: Signal<GraphState>) {
     let mut graph_store = graph_state.read().graph_store;
-    let group_id = graph_store.read().scenery_id;
+    let group_id = graph_state.read().id;
     match api::get_copied_node_type().await {
         Ok(node_type) => {
             if node_type {

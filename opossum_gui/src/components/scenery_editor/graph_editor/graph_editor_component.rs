@@ -111,7 +111,7 @@ pub struct GraphTab {
     pub is_active: bool,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Default)]
+#[derive(Clone, Eq, PartialEq, Default)]
 pub struct GraphsWorkspaceState {
     pub tabs: Signal<BTreeMap<Uuid, GraphState>>,
     pub active_tab: Signal<Option<Uuid>>,
@@ -134,7 +134,8 @@ pub fn GraphEditor(
     //Handler definition
     let add_new_group_tab_handler = EventHandler::new(move |(title, id): (String, Uuid)|{
         let mut graph_state = GraphState::default();
-        graph_state.graph_store.write().set_scenery_id(id);
+        graph_state.id = id;
+        graph_state.name = title;
         workspace.write().tabs.write().insert(id, graph_state);
         workspace.write().active_tab.set(Some(id));
     });
@@ -261,14 +262,14 @@ pub fn GraphEditor(
                         let tabs = workspace.read().tabs.read().clone();
                         rsx! {
                             TabList { class: "editor-tab-list",
-                                for (i , id) in tabs.keys().enumerate() {
+                                for (i , (id , graphstate)) in tabs.iter().enumerate() {
                                     TabTrigger {
                                         key: "{id.as_simple().to_string()}",
                                         value: id.as_simple().to_string(),
                                         index: i,
                                         class: if active_tab() == *id { "editor-tab active-tab" } else { "editor-tab" },
                                         div { class: "tab-inner",
-                                            span { "todo: naming" }
+                                            span { {graphstate.name.clone()} }
                                             if *id != root_graph_id() {
                                                 button {
                                                     class: "tab-close",
