@@ -41,7 +41,7 @@ pub fn App() -> Element {
 
     // global signals
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
-    let model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
+    let mut model_file_path_sig: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut model_modified_sig: Signal<bool> = use_signal(|| false);
 
     // status for "Unsaved Changes" dialog
@@ -66,7 +66,7 @@ pub fn App() -> Element {
             });
         }
         AppCommand::Save => {
-            if let Some(path) = model_file_path.read().clone() {
+            if let Some(path) = model_file_path_sig.read().clone() {
                 node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
             } else {
                 spawn(async move {
@@ -158,7 +158,7 @@ pub fn App() -> Element {
             }
         }
         AppCommand::Save => {
-            if let Some(path) = model_file_path.read().clone() {
+            if let Some(path) = model_file_path_sig.read().clone() {
                 node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
             } else {
                 execute_immediate(AppCommand::SaveAs);
@@ -280,10 +280,13 @@ pub fn App() -> Element {
             CommonAppLayout {
                 cxt_command,
                 on_menu_action: process_command_for_menu,
-                model_file_path,
+                model_file_path_sig,
+                model_file_path_handler: EventHandler::new(move |path_opt: Option<PathBuf>| {
+                    model_file_path_sig.set(path_opt);
+                }),
                 model_modified_sig,
-                model_modified_handler: EventHandler::new(move |b| model_modified_sig.set(b)),
-                node_editor_command: Into::<ReadSignal<Option<NodeEditorCommand>>>::into(node_editor_command),
+                model_modified_handler: EventHandler::new(move |is_modified: bool| model_modified_sig.set(is_modified)),
+                node_editor_command,
                 show_alert,
                 on_alert_confirm,
                 on_alert_cancel,
@@ -321,7 +324,8 @@ pub fn App() -> Element {
 fn CommonAppLayout(
     cxt_command: Signal<Option<CxtCommand>>,
     on_menu_action: EventHandler<AppCommand>,
-    model_file_path: Signal<Option<PathBuf>>,
+    model_file_path_sig: ReadSignal<Option<PathBuf>>,
+    model_file_path_handler: EventHandler<Option<PathBuf>>,
     model_modified_handler: EventHandler<bool>,
     model_modified_sig: ReadSignal<bool>,
     node_editor_command: ReadSignal<Option<NodeEditorCommand>>,
@@ -360,7 +364,7 @@ fn CommonAppLayout(
             div { class: "row",
                 div { class: "col",
                     MenuBar {
-                        model_file_path: Into::<ReadSignal<Option<PathBuf>>>::into(model_file_path),
+                        model_file_path_sig,
                         model_modified_sig,
                         on_menu_action,
                     }
@@ -370,7 +374,8 @@ fn CommonAppLayout(
                 command: node_editor_command,
                 model_modified_handler,
                 model_modified_sig,
-                model_file_path,
+                model_file_path_sig,
+                model_file_path_handler,
             }
             Logger { drag_handler: on_mousedown, height }
         }
