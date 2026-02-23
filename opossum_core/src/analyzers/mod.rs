@@ -9,6 +9,7 @@ pub mod analyzable;
 pub mod energy;
 pub mod ghostfocus;
 pub mod raytrace;
+pub mod propagation_strategy;
 
 use crate::{
     analyzers::energy::EnergyConfig, error::OpmResult, nodes::NodeGroup,

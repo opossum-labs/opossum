@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Wavefront measurment node
+//! Wavefront measurement node
 use log::warn;
 use nalgebra::{DVector, DVectorView, MatrixXx2, MatrixXx3};
 use opm_macros_lib::OpmNode;
@@ -9,13 +9,12 @@ use uom::si::f64::Length;
 
 use crate::{
     analyzers::{
-        RayTraceConfig,
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
-    light_result::{LightRays, LightResult},
+    light_result::LightResult,
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
@@ -23,7 +22,6 @@ use crate::{
     optic_ports::PortType,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
-    rays::Rays,
     reporting::node_report::NodeReport,
     utils::{
         geom_transformation::Isometry,
@@ -275,24 +273,15 @@ impl From<WaveFrontErrorMap> for Proptype {
         Self::WaveFrontData(value)
     }
 }
-impl AnalysisGhostFocus for WaveFront {
-    fn analyze(
-        &mut self,
-        incoming_data: LightRays,
-        config: &crate::analyzers::GhostFocusConfig,
-        _ray_collection: &mut Vec<Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
-    }
-}
+impl AnalysisGhostFocus for WaveFront {}
 impl AnalysisEnergy for WaveFront {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
-        _config: &EnergyConfig,
+        config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
-        let result = self.analyze_pass_through(incoming_data)?;
+        let result =
+            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
         if let Some(data) = result.get(out_port) {
             self.light_data = Some(data.clone());
@@ -301,14 +290,6 @@ impl AnalysisEnergy for WaveFront {
     }
 }
 impl AnalysisRayTrace for WaveFront {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
-    }
-
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
         self.light_data.as_mut()
     }

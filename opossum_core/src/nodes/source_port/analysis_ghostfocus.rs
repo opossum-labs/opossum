@@ -1,5 +1,5 @@
 use crate::{
-    analyzers::{ghostfocus::AnalysisGhostFocus, raytrace::MissedSurfaceStrategy},
+    analyzers::{ghostfocus::AnalysisGhostFocus, propagation_strategy::MissedSurfaceStrategy},
     error::{OpmResult, OpossumError},
     light_result::LightRays,
     nodes::SourcePort,

@@ -4,14 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    J_per_cm2,
-    apertures::Aperture,
-    coatings::CoatingType,
-    error::{OpmResult, OpossumError},
-    nodes::fluence_detector::Fluence,
-    rays::Rays,
-    surface::hit_map::HitMap,
-    utils::{LockExt, geom_transformation::Isometry},
+    J_per_cm2, analyzers::propagation_strategy::PropagationStrategy, apertures::Aperture, coatings::CoatingType, error::{OpmResult, OpossumError}, nodes::fluence_detector::Fluence, rays::Rays, refractive_index::RefractiveIndexType, surface::hit_map::HitMap, utils::{LockExt, geom_transformation::Isometry}
 };
 
 use super::{
@@ -255,6 +248,58 @@ impl OpticSurface {
     #[must_use]
     pub const fn anchor_point_iso(&self) -> &Isometry {
         &self.anchor_point_iso
+    }
+    /// Propagiert ein Strahlenbündel durch diese spezifische Oberfläche.
+    /// Nutzt das Strategy Pattern, um analyse-spezifisches Verhalten auszuführen.
+    ///
+    /// # Parameter
+    /// * `rays_bundle`: Das zu propagierende Strahlenbündel.
+    /// * `node_uuid`: Die UUID der übergeordneten Node (für reflektierte Strahlen).
+    /// * `iso`: Die effektive Isometrie dieser Oberfläche im Raum.
+    /// * `refri_after_surf`: Der Brechungsindex nach der Oberfläche.
+    /// * `backward`: Propagationsrichtung.
+    /// * `refraction_intended`: Gibt an, ob Brechung berechnet werden soll.
+    /// * `strategy`: Die Strategie des aktuellen Analyse-Modus.
+    pub fn propagate_rays(
+        &mut self,
+        rays_bundle: &mut Vec<Rays>,
+        node_uuid: Uuid,
+        iso: &Isometry,
+        refri_after_surf: Option<&RefractiveIndexType>,
+        backward: bool,
+        refraction_intended: bool,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()> {
+        let missed_strategy = strategy.missed_surface_strategy();
+
+        for rays in &mut *rays_bundle {
+            // 1. Brechung/Reflexion an der Geometrie berechnen
+            let mut reflected = rays.refract_on_surface(
+                self,
+                refri_after_surf,
+                refraction_intended,
+                &missed_strategy,
+            )?;
+
+            // 2. Ursprung der reflektierten Strahlen auf die übergeordnete Node setzen
+            reflected.set_node_origin_uuid(node_uuid);
+
+            // 3. Strategie-Hook für die Oberflächeninteraktion (z.B. Fluenz für GhostFocus)
+            strategy.on_surface_interaction(self, rays, reflected, backward)?;
+
+            // 4. Strahlen an der Apertur abschneiden (Apodisierung)
+            rays.apodize(self.aperture(), iso)?;
+
+            // 5. Strategie-Hook nach der Apodisierung (z.B. Energie-Schwellenwert für RayTrace)
+            strategy.on_after_apodization(rays)?;
+        }
+
+        // 6. Eventuell von der Strategie gecachte Strahlen (z.B. GhostFocus) dem Bündel hinzufügen
+        for rays in self.get_rays_cache(backward) {
+            rays_bundle.push(rays.clone());
+        }
+
+        Ok(())
     }
 }
 

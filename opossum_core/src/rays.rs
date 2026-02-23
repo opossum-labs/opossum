@@ -1,29 +1,11 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
 use crate::{
-    J_per_cm2,
-    analyzers::raytrace::MissedSurfaceStrategy,
-    apertures::Aperture,
-    centimeter, degree,
-    energy_distributions::EnergyDistribution,
-    error::{OpmResult, OpossumError},
-    fluence_distributions::FluenceDistribution,
-    joule, meter, millimeter, nanometer,
-    nodes::{
+    J_per_cm2, analyzers::propagation_strategy::MissedSurfaceStrategy, apertures::Aperture, centimeter, degree, energy_distributions::EnergyDistribution, error::{OpmResult, OpossumError}, fluence_distributions::FluenceDistribution, joule, meter, millimeter, nanometer, nodes::{
         FilterType, SplittingConfig, WaveFrontData, WaveFrontErrorMap,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
-    },
-    plottable::AxLims,
-    position_distributions::{Hexapolar, PositionDistribution},
-    prelude::EnergyLaserLines,
-    properties::Proptype,
-    ray::Ray,
-    refractive_index::RefractiveIndexType,
-    spectral_distribution::SpectralDistribution,
-    spectrum::Spectrum,
-    surface::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
-    utils::{
+    }, plottable::AxLims, position_distributions::{Hexapolar, PositionDistribution}, prelude::EnergyLaserLines, properties::Proptype, ray::Ray, refractive_index::RefractiveIndexType, spectral_distribution::SpectralDistribution, spectrum::Spectrum, surface::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface}, utils::{
         filter_data::get_unique_finite_values_sorted,
         geom_transformation::Isometry,
         griddata::{
@@ -31,7 +13,7 @@ use crate::{
             grid_interpolate_3d_triangulated_scatter_data, linspace,
         },
         to_f64,
-    },
+    }
 };
 
 use approx::relative_eq;

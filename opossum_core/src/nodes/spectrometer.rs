@@ -7,13 +7,12 @@ use uom::si::length::nanometer;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig,
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
-    light_result::{LightRays, LightResult},
+    light_result::LightResult,
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
@@ -243,24 +242,15 @@ impl Debug for Spectrometer {
         }
     }
 }
-impl AnalysisGhostFocus for Spectrometer {
-    fn analyze(
-        &mut self,
-        incoming_data: LightRays,
-        config: &GhostFocusConfig,
-        _ray_collection: &mut Vec<Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
-    }
-}
+impl AnalysisGhostFocus for Spectrometer {}
 impl AnalysisEnergy for Spectrometer {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
-        _config: &EnergyConfig,
+        config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
-        let result = self.analyze_pass_through(incoming_data)?;
+        let result =
+            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
         if let Some(data) = result.get(out_port) {
             self.light_data = Some(data.clone());
@@ -269,14 +259,6 @@ impl AnalysisEnergy for Spectrometer {
     }
 }
 impl AnalysisRayTrace for Spectrometer {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
-    }
-
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
         self.light_data.as_mut()
     }

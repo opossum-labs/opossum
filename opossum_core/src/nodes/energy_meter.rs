@@ -2,14 +2,13 @@
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        RayTraceConfig,
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
     joule,
-    light_result::{LightRays, LightResult},
+    light_result::LightResult,
     lightdata::LightData,
     nodes::NodeRegistration,
     optic_node::OpticNode,
@@ -209,24 +208,15 @@ impl Debug for EnergyMeter {
         }
     }
 }
-impl AnalysisGhostFocus for EnergyMeter {
-    fn analyze(
-        &mut self,
-        incoming_data: crate::light_result::LightRays,
-        config: &crate::analyzers::GhostFocusConfig,
-        _ray_collection: &mut Vec<crate::rays::Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
-    }
-}
+impl AnalysisGhostFocus for EnergyMeter {}
 impl AnalysisEnergy for EnergyMeter {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
-        _config: &EnergyConfig,
+        config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
-        let result = self.analyze_pass_through(incoming_data)?;
+        let result =
+            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
         if let Some(data) = result.get(out_port) {
             self.light_data = Some(data.clone());
@@ -235,14 +225,6 @@ impl AnalysisEnergy for EnergyMeter {
     }
 }
 impl AnalysisRayTrace for EnergyMeter {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
-    }
-
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
         self.light_data.as_mut()
     }

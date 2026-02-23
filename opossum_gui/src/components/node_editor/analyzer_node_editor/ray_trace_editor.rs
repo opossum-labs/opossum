@@ -8,8 +8,9 @@ use crate::components::node_editor::{
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
 use dioxus::prelude::*;
+use opossum_core::analyzers::propagation_strategy::MissedSurfaceStrategy;
 use opossum_core::{
-    analyzers::raytrace::MissedSurfaceStrategy, joule, prelude::*,
+    joule, prelude::*,
     utils::default_from_name::DefaultFromName,
 };
 use uom::si::f64::Energy;
