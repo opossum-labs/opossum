@@ -115,7 +115,8 @@ pub fn GraphEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
     model_modified_sig: ReadSignal<bool>,
     model_modified_handler: EventHandler<bool>,
-    model_file_path: Signal<Option<PathBuf>>,
+    model_file_path_sig: ReadSignal<Option<PathBuf>>,
+    model_file_path_handler: EventHandler<Option<PathBuf>>,
 ) -> Element {
     let mut open_tabs: Signal<Vec<GraphTab>> = use_signal(|| {
         vec![GraphTab {
@@ -281,8 +282,8 @@ pub fn GraphViewEditor(
         let file_path_signal = graph_store.peek().file_path();
         let current_path = (*file_path_signal.read()).clone();
 
-        if *model_file_path.peek() != current_path {
-            model_file_path.set(current_path);
+        if *model_file_path_sig.peek() != current_path {
+            model_file_path_handler.call(current_path);
         }
     });
 
