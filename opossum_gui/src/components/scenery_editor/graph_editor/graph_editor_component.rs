@@ -124,7 +124,8 @@ pub fn GraphEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
     model_modified_sig: ReadSignal<bool>,
     model_modified_handler: EventHandler<bool>,
-    mut model_file_path: Signal<Option<PathBuf>>,
+    model_file_path_sig: ReadSignal<Option<PathBuf>>,
+    model_file_path_handler: EventHandler<Option<PathBuf>>,
 ) -> Element {
 
     let mut workspace = use_signal(|| GraphsWorkspaceState::default());
@@ -143,7 +144,7 @@ pub fn GraphEditor(
         workspace.write().tabs.write().remove(&id);
     });
     let set_file_path_handler = EventHandler::new(move | path_opt: Option<PathBuf>|{
-        model_file_path.set(path_opt);
+        model_file_path_handler.call(path_opt);
     });
     let set_needs_saving_handler = EventHandler::new(move | needs_saving: bool|{
         workspace.write().needs_saving.set(needs_saving);
@@ -289,7 +290,8 @@ pub fn GraphEditor(
                                         command,
                                         model_modified_sig,
                                         model_modified_handler,
-                                        model_file_path,
+                                        model_file_path_sig,
+                                        model_file_path_handler,
                                         current_mouse_pos,
                                         add_new_group_tab_handler,
                                     }
@@ -454,7 +456,8 @@ pub fn GraphViewEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
     model_modified_sig: ReadSignal<bool>,
     model_modified_handler: EventHandler<bool>,
-    model_file_path: Signal<Option<PathBuf>>,
+    model_file_path_sig: ReadSignal<Option<PathBuf>>,
+    model_file_path_handler: EventHandler<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
     add_new_group_tab_handler: EventHandler<(String, Uuid)>
 ) -> Element {
@@ -481,8 +484,8 @@ pub fn GraphViewEditor(
         let file_path_signal = graph_store.peek().file_path();
         let current_path = (*file_path_signal.read()).clone();
 
-        if *model_file_path.peek() != current_path {
-            model_file_path.set(current_path);
+        if *model_file_path_sig.peek() != current_path {
+            model_file_path_handler.call(current_path);
         }
     });
 
