@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::components::{
+use crate::{OPOSSUM_UI_LOGS, api::{self, eval_action_run}, components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
         GraphState, GraphStore, GraphStoreAction,
@@ -13,7 +13,7 @@ use crate::components::{
         nodes::Nodes,
         use_graph_processor,
     },
-};
+}};
 use dioxus::{
     html::geometry::{
         Pixels, PixelsSize,
@@ -22,8 +22,9 @@ use dioxus::{
     prelude::*,
 };
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
-use opossum_core::{prelude::*, types::api_types::NewRefNode};
-use std::{collections::HashMap, path::PathBuf, rc::Rc, time::Instant};
+use futures_util::StreamExt;
+use opossum_core::{opm_document::AnalyzerInfo, prelude::*, types::api_types::{ConnectInfo, NewRefNode, NodeInfo}};
+use std::{collections::{BTreeMap, HashMap}, fs, path::PathBuf, rc::Rc, time::Instant};
 use uuid::Uuid;
 #[derive(Debug)]
 pub enum NodeEditorCommand {
@@ -112,8 +113,10 @@ pub struct GraphTab {
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct GraphsWorkspaceState {
-    pub tabs: Signal<HashMap<Uuid, GraphState>>,
+    pub tabs: Signal<BTreeMap<Uuid, GraphState>>,
     pub active_tab: Signal<Option<Uuid>>,
+    pub root_scenery_id: Signal<Uuid>,
+    pub needs_saving: Signal<bool>
 }
 
 #[component]
@@ -121,26 +124,87 @@ pub fn GraphEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
     model_modified_sig: ReadSignal<bool>,
     model_modified_handler: EventHandler<bool>,
-    model_file_path: Signal<Option<PathBuf>>,
+    mut model_file_path: Signal<Option<PathBuf>>,
 ) -> Element {
-    let mut open_tabs: Signal<Vec<GraphTab>> = use_signal(|| {
-        vec![]
-    });
 
     let mut workspace = use_signal(|| GraphsWorkspaceState::default());
-    let active_tab = use_memo(move || {
-        workspace
-            .read().active_tab.read()
-            .map_or_else(|| "root".to_string(), |t| t.as_simple().to_string())
-        });
+    let root_graph_id = use_memo(move || *workspace.read().root_scenery_id.read());
 
-
+    //Handler definition
     let add_new_group_tab_handler = EventHandler::new(move |(title, id): (String, Uuid)|{
+        let mut graph_state = GraphState::default();
+        graph_state.graph_store.write().set_scenery_id(id);
         workspace.write().tabs.write().insert(id, GraphState::default());
+    });
+    let set_root_scenery_id_handler = EventHandler::new(move | id: Uuid|{
+        workspace.write().root_scenery_id.set(id);
     });
     let remove_tab_handler = EventHandler::new(move |id: Uuid|{
         workspace.write().tabs.write().remove(&id);
     });
+    let set_file_path_handler = EventHandler::new(move | path_opt: Option<PathBuf>|{
+        model_file_path.set(path_opt);
+    });
+    let set_needs_saving_handler = EventHandler::new(move | needs_saving: bool|{
+        workspace.write().needs_saving.set(needs_saving);
+    });
+    let clear_workspace_handler = EventHandler::new(move |()|{
+        workspace.write().tabs.write().clear();
+        workspace.write().active_tab.set(None);
+        workspace.write().root_scenery_id.set(Uuid::nil());
+        workspace.write().needs_saving.set(false);
+    });
+    let add_root_scenery_nodes_handler = EventHandler::new(move | nodes: Vec<NodeInfo>|{
+        let id = *root_graph_id.read();
+        if let Some(graph_state) = workspace.write().tabs.write().get_mut(&id){
+            graph_state.graph_store.write().add_nodes(&nodes);
+        }
+        else{
+            OPOSSUM_UI_LOGS.write().add_log("no root scenery found! Cannot add nodes!");
+        }
+    });
+    let add_root_scenery_analyzers_handler = EventHandler::new(move | analyzers: Vec<AnalyzerInfo>|{
+        let id = *root_graph_id.read();
+        if let Some(graph_state) = workspace.write().tabs.write().get_mut(&id){
+            graph_state.graph_store.write().add_analyzers(&analyzers);
+        }
+        else{
+            OPOSSUM_UI_LOGS.write().add_log("no root scenery found! Cannot add analyzers!");
+        }
+    });
+    let add_root_scenery_edges_handler = EventHandler::new(move | connect_infos: Vec<ConnectInfo>|{
+        let id = *root_graph_id.read();
+        if let Some(graph_state) = workspace.write().tabs.write().get_mut(&id){
+            graph_state.graph_store.write().edges_mut().set(connect_infos);
+        }
+        else{
+            OPOSSUM_UI_LOGS.write().add_log("no root scenery found! Cannot add edges!");
+        }
+    });
+
+    let set_active_tab_handler = EventHandler::new(move |active_tab: Option<Uuid>|{
+        workspace.write().active_tab.set(active_tab);
+    });
+
+    let workspace_processor = use_workspace_processor(
+        root_graph_id.into(), 
+        add_new_group_tab_handler, 
+        set_root_scenery_id_handler, 
+        set_file_path_handler, 
+        set_needs_saving_handler,
+        clear_workspace_handler,
+        add_root_scenery_nodes_handler,
+        add_root_scenery_analyzers_handler,
+        add_root_scenery_edges_handler);
+
+
+    let active_tab = use_memo(move || {
+        workspace
+            .read().active_tab.read()
+            .map_or_else(|| Uuid::nil(), |t| t)
+        });
+
+
 
     
         
@@ -149,9 +213,8 @@ pub fn GraphEditor(
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
     let graph_processor = use_graph_processor(graph_state, add_new_group_tab_handler);
             
-    let root_graph_id = use_memo(move || graph_state.read().graph_store.read().scenery_id());
     use_effect(move || {
-        graph_processor.send(GraphStoreAction::GetSceneryId);
+        workspace_processor.send(GraphsWorkspaceAction::GetSceneryId);
     });
 
     let active_node_opt = use_memo(move || {
@@ -172,7 +235,8 @@ pub fn GraphEditor(
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { active_node_opt, model_modified_handler }
+                {"nothing"}
+                        // //NodeConfigEditor { active_node_opt, model_modified_handler }
             }
             div {
                 class: "col px-0 graph-editor-container",
@@ -182,56 +246,54 @@ pub fn GraphEditor(
 
                 Tabs {
                     class: "editor-tabs",
-                    value: active_tab.read().clone(),
-                    on_value_change: move |v| {
+                    value: active_tab.read().as_simple().to_string(),
+                    on_value_change: move |v: String| {
                         println!("value changing");
-                        open_tabs
-                            .write()
-                            .iter_mut()
-                            .for_each(|t| {
-                                if t.graph_id == v {
-                                    t.is_active = true;
-                                } else {
-                                    t.is_active = false;
-                                }
-                            });
+                        if let Ok(new_id) = Uuid::parse_str(&v) {
+                            set_active_tab_handler.call(Some(new_id));
+                        }
                     },
-                    TabList { class: "editor-tab-list",
-                        {
-
-                            rsx! {
-
-                                for (i , tab) in open_tabs().iter().enumerate() {
-
+                    {
+                        let tabs = workspace.read().tabs.read().clone();
+                        rsx! {
+                            TabList { class: "editor-tab-list",
+                                for (i , id) in tabs.keys().enumerate() {
                                     TabTrigger {
-                                        key: "{tab.graph_id}",
-                                        value: tab.graph_id.clone(),
+                                        key: "{id.as_simple().to_string()}",
+                                        value: id.as_simple().to_string(),
                                         index: i,
-                                        class: if active_tab() == tab.graph_id { "editor-tab active-tab" } else { "editor-tab" },
-
+                                        class: if active_tab() == *id { "editor-tab active-tab" } else { "editor-tab" },
                                         div { class: "tab-inner",
-                                            span { "{tab.title}" }
-                                            if tab.graph_id != root_graph_id().as_simple().to_string() {
+                                            span { "todo: naming" }
+                                            if *id != root_graph_id() {
                                                 button {
                                                     class: "tab-close",
-                                                    onclick: 
-                            }
-                        }
-                        div { class: "editor-tab-filler" }
-                    }
+                                                    onclick: {
+                                                        let id_copy = *id;
+                                                        move |_| remove_tab_handler.call(id_copy)
+                                                    },
 
-                    for (i , tab) in open_tabs().iter().enumerate() {
-                        TabContent {
-                            key: "{tab.graph_id}",
-                            value: tab.graph_id.clone(),
-                            index: i,
-                            GraphViewEditor {
-                                command,
-                                model_modified_sig,
-                                model_modified_handler,
-                                model_file_path,
-                                current_mouse_pos,
-                                add_new_group_tab_handler,
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                div { class: "editor-tab-filler" }
+                            }
+                            for (i , id) in tabs.keys().enumerate() {
+                                TabContent {
+                                    key: "{id.as_simple().to_string()}",
+                                    value: id.as_simple().to_string(),
+                                    index: i,
+                                    GraphViewEditor {
+                                        command,
+                                        model_modified_sig,
+                                        model_modified_handler,
+                                        model_file_path,
+                                        current_mouse_pos,
+                                        add_new_group_tab_handler,
+                                    }
+                                }
                             }
                         }
                     }
@@ -242,29 +304,142 @@ pub fn GraphEditor(
 }
 
 
-pub fn use_workspace_processor(mut workspace: Signal<GraphsWorkspaceState>, add_new_group_tab_handler: EventHandler<(String, Uuid)>) -> Coroutine<GraphStoreAction> {
-    use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
+pub fn use_workspace_processor(
+    root_graph_id: ReadSignal<Uuid>, 
+    add_new_group_tab_handler: EventHandler<(String, Uuid)>, 
+    set_root_scenery_id_handler: EventHandler<Uuid>, 
+    set_file_path_handler: EventHandler<Option<PathBuf>>, 
+    set_needs_saving_handler: EventHandler<bool>,
+    clear_workspace_handler: EventHandler<()>,
+    add_root_scenery_nodes_handler: EventHandler<Vec<NodeInfo>>,
+    add_root_scenery_analyzers_handler: EventHandler<Vec<AnalyzerInfo>>,
+    add_root_scenery_edges_handler: EventHandler<Vec<ConnectInfo>>
+) -> Coroutine<GraphsWorkspaceAction> {
+    use_coroutine(move |mut rx: UnboundedReceiver<GraphsWorkspaceAction>| {
         async move {
             // This loop runs forever in the background, waiting for actions.
             while let Some(action) = rx.next().await {
                 match action {
                     GraphsWorkspaceAction::LoadFromFile(path) => {
-                        process_load_from_file(path, graph_state, add_new_group_tab_handler).await;
-                        process_center_graph(graph_state, false);
+                        process_load_from_file(
+                            path, 
+                            root_graph_id,
+                            clear_workspace_handler, 
+                            add_new_group_tab_handler, 
+                            set_root_scenery_id_handler, 
+                            set_file_path_handler, 
+                            set_needs_saving_handler,
+                            add_root_scenery_nodes_handler,
+                            add_root_scenery_analyzers_handler,
+                            add_root_scenery_edges_handler
+                        ).await;
+                        // process_center_graph(graph_state, false);
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
-                        process_save_to_file(path, graph_state).await;
+                        process_save_root_scenery_to_file(path, set_file_path_handler, set_needs_saving_handler).await;
                     }
                     GraphsWorkspaceAction::DeleteScenery => {
-                        process_delete_scenery(graph_state).await;
+                        process_delete_root_scenery(clear_workspace_handler).await;
                     }
                     GraphsWorkspaceAction::GetSceneryId => {
-                        process_get_scenery_id(graph_state, add_new_group_tab_handler).await;
+                        process_get_root_scenery_id(add_new_group_tab_handler, set_root_scenery_id_handler).await;
                     }
                 }
             }
         }
     })
+}
+
+#[allow(clippy::future_not_send)]
+async fn process_load_from_file(
+    path: PathBuf, 
+    scenery_id_sig: ReadSignal<Uuid>,
+    clear_workspace_handler: EventHandler<()>, 
+    add_new_group_tab_handler: EventHandler<(String, Uuid)>,
+    set_root_scenery_id_handler: EventHandler<Uuid>,
+    set_file_path_handler: EventHandler<Option<PathBuf>>,
+    set_needs_saving_handler: EventHandler<bool>,
+    add_root_scenery_nodes_handler: EventHandler<Vec<NodeInfo>>,
+    add_root_scenery_analyzers_handler: EventHandler<Vec<AnalyzerInfo>>,
+    add_root_scenery_edges_handler: EventHandler<Vec<ConnectInfo>>
+) {
+    process_delete_root_scenery(clear_workspace_handler).await;
+    //is process_get_root_scenery_id necessary here?
+    process_get_root_scenery_id(add_new_group_tab_handler, set_root_scenery_id_handler).await;
+    set_file_path_handler.call(None);
+
+    let opm_string = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            OPOSSUM_UI_LOGS.write().add_log(&e.to_string());
+            return;
+        }
+    };
+    match api::post_opm_file(opm_string).await {
+        Ok(_) => {
+            process_get_root_scenery_id(add_new_group_tab_handler, set_root_scenery_id_handler).await;
+            set_needs_saving_handler.call(false);
+            set_file_path_handler.call(Some(path));
+            let scenery_id = *scenery_id_sig.read();
+            eval_action_run(
+                api::get_nodes(scenery_id).await,
+                Some(move |nodes: Vec<NodeInfo>| add_root_scenery_nodes_handler.call(nodes)), // graph_store.write().add_nodes(&nodes)),
+            );
+            eval_action_run(
+                api::get_analyzers().await,
+                Some(move |analyzers: Vec<AnalyzerInfo>| {
+                    add_root_scenery_analyzers_handler.call(analyzers);
+                    // graph_store.write().add_analyzers(&analyzers);
+                }),
+            );
+            eval_action_run(
+                api::get_connections(scenery_id).await,
+                Some(move |connect_infos: Vec<ConnectInfo>| {
+                    add_root_scenery_edges_handler.call(connect_infos)
+                    // graph_store.write().edges.set(connect_infos);
+                }),
+            );
+        }
+        Err(err_str) => {
+            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+        }
+    }
+}
+
+#[allow(clippy::future_not_send)]
+async fn process_delete_root_scenery(clear_workspace_handler: EventHandler<()>) {
+    eval_action_run(
+        api::delete_scenery().await,
+        Some(move |_| {
+            clear_workspace_handler.call(());
+        }),
+    );
+}
+
+
+#[allow(clippy::future_not_send)]
+async fn process_save_root_scenery_to_file(path: PathBuf, set_file_path_handler: EventHandler<Option<PathBuf>>, set_needs_saving_handler: EventHandler<bool>) {
+    eval_action_run(
+        api::get_opm_file().await,
+        Some(move |opm_string| {
+            if let Err(err_str) = fs::write(&path, opm_string) {
+                OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
+            } else {
+                set_file_path_handler.call(Some(path));
+                set_needs_saving_handler.call(false);
+            }
+        }),
+    );
+}
+
+async fn process_get_root_scenery_id(add_new_group_tab_handler: EventHandler<(String, Uuid)>,  set_root_scenery_id_handler: EventHandler<Uuid>) {
+    eval_action_run(
+        api::get_scenery_uuid().await,
+        Some(move |id| {
+            set_root_scenery_id_handler.call(id);
+            add_new_group_tab_handler.call(("Main Graph".to_string(), id))
+        }),
+    );
 }
 
 pub enum GraphsWorkspaceAction {
