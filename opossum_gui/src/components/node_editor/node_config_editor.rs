@@ -2,7 +2,7 @@ use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
 use crate::components::node_editor::hooks::use_save_manager;
 use crate::components::node_editor::inputs::input_components::FormContext;
 use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
-use crate::components::scenery_editor::{GraphStore, GraphStoreAction, NodeType};
+use crate::components::scenery_editor::{GraphStore, GraphsWorkspaceAction, NodeType};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
@@ -18,10 +18,10 @@ pub struct NodeChangeEvent {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChangeAction {
-    Name(String),
+    Name{name: String, graph_id: Uuid},
     Lidt(Fluence),
     Alignment(Isometry),
-    Inverted(bool),
+    Inverted{inverted: bool, graph_id: Uuid},
     Property(String, Proptype),
     Isometry(Option<Isometry>),
     AnalyzerType(AnalyzerType),
@@ -74,18 +74,16 @@ pub fn NodeConfigEditor(
 }
 
 fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
-    let graph_processor = use_coroutine_handle::<GraphStoreAction>();
-    let mut graph_store = use_context::<Signal<GraphStore>>();
-
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     use_coroutine(
         move |mut rx: UnboundedReceiver<NodeChangeEvent>| async move {
             while let Some(event) = rx.next().await {
                 let uuid = event.node_id;
 
                 let result: Result<(), String> = match event.action {
-                    NodeChangeAction::Name(name) => {
+                    NodeChangeAction::Name{name, graph_id} => {
                         api::update_node_name(uuid, name.clone()).await.map(|_| {
-                            graph_store.write().set_name_of_node(uuid, name);
+                            workspace_processor.send(GraphsWorkspaceAction::SetNodeName{name, graph_id, node_id: uuid});
                         })
                     }
                     NodeChangeAction::Lidt(lidt_new) => {
@@ -102,11 +100,11 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                     NodeChangeAction::Isometry(iso) => {
                         api::update_node_isometry(uuid, iso).await.map(|_| ())
                     }
-                    NodeChangeAction::Inverted(inverted) => {
+                    NodeChangeAction::Inverted{inverted, graph_id} => {
                         match api::update_node_inversion(uuid, inverted).await {
                             Ok(connections) => {
-                                graph_processor.send(GraphStoreAction::UpdateEdges(connections));
-                                graph_store.write().set_node_inverted(uuid, inverted);
+                                workspace_processor.send(GraphsWorkspaceAction::UpdateEdges{connections, graph_id});
+                                workspace_processor.send(GraphsWorkspaceAction::InvertNode{inverted, graph_id, node_id: uuid});
                                 Ok(())
                             }
                             Err(e) => Err(e),
