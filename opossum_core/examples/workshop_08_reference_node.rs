@@ -9,7 +9,7 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
 
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
+    let light_data_builder = LightDataBuilder::Geometric(RayDataSource::PointSrc(PointSrc::new(
         Grid::new(
             Point2::new(millimeter!(0.0), millimeter!(5.0)),
             Point2::new(1, 5),

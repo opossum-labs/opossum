@@ -11,7 +11,7 @@ use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler chromatism");
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
             Grid::new(
                 Point2::new(Length::zero(), millimeter!(45.0)),
                 Point2::new(1, 9),

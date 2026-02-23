@@ -20,7 +20,7 @@ pub fn main() -> OpmResult<()> {
     )?;
     let mut scenery = NodeGroup::default();
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(10.), 10)?.into(),
             UniformDist::new(joule!(1.))?.into(),
             Gaussian::new(

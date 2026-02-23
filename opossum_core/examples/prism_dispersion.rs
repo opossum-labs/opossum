@@ -24,7 +24,7 @@ fn main() -> OpmResult<()> {
 
     let mut scenery = NodeGroup::default();
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
             Grid::new(
                 Point2::new(Length::zero(), beam_size_y),
                 Point2::new(1, nr_of_rays),

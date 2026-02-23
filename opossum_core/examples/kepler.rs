@@ -22,7 +22,7 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
 
-    let ray_data_builder = RayDataBuilder::Collimated(CollimatedSrc::new(
+    let ray_data_builder = RayDataSource::Collimated(CollimatedSrc::new(
         Grid::new(
             Point2::new(Length::zero(), millimeter!(20.0)),
             Point2::new(1, 3),
@@ -32,7 +32,7 @@ fn main() -> OpmResult<()> {
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
     ));
     let mut ray_trace_config = RayTraceConfig::default();
-    ray_trace_config.map_source(i_src, ray_data_builder);
+    ray_trace_config.map_source(i_src, ray_data_builder.into());
     doc.add_analyzer(AnalyzerType::RayTrace(ray_trace_config));
     doc.save_to_file(Path::new("./opossum_core/playground/kepler.opm"))
 }

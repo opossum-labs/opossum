@@ -8,7 +8,7 @@ use crate::{
     lightdata::LightData,
     millimeter,
     nodes::SourcePort,
-    prelude::{OpticNode, PortType, Proptype, RayTraceConfig},
+    prelude::{OpticNode, PortType, RayTraceConfig},
     ray::Ray,
     rays::Rays,
 };
@@ -26,9 +26,7 @@ impl AnalysisRayTrace for SourcePort {
             })?
             .clone()
             .build()?;
-        if let Ok(Proptype::Isometry(Some(iso))) = self.node_attr.get_property("light data iso") {
-            rays = rays.transformed_by_iso(iso);
-        }
+
         if let Ok(iso) = self.effective_surface_iso("input_1") {
             rays = rays.transformed_by_iso(&iso);
             // consider aperture only if not inverted (there is only an output port)
@@ -49,26 +47,30 @@ impl AnalysisRayTrace for SourcePort {
             LightData::Geometric(rays),
         )]))
     }
+
     fn calc_node_positions(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
         let outgoing_edges = AnalysisRayTrace::analyze(self, incoming_data, config)?;
+
+        // Retrieve the source builder to read the alignment wavelength
+        let source_builder = config.get_source(&self.node_attr().uuid()).ok_or_else(|| {
+            OpossumError::Analysis(format!("No source data found in analyzer for {self}"))
+        })?;
+
         // generate a single beam (= optical axis) from source
         let mut new_outgoing_edges = LightResult::new();
         for outgoing_edge in &outgoing_edges {
             if let LightData::Geometric(rays) = outgoing_edge.1 {
-                let mut axis_ray = if let Ok(Proptype::LengthOption(Some(alignment_wvl))) =
-                    self.node_attr.get_property("alignment wavelength")
-                {
-                    Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), *alignment_wvl, joule!(1.0))
-                } else {
-                    info!(
-                        "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
-                    );
-                    rays.get_optical_axis_ray()
-                }?;
+                let mut axis_ray = source_builder.alignment_wavelength().map_or_else(|| {
+                     info!(
+                         "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
+                     );
+                     rays.get_optical_axis_ray()
+                 }, |alignment_wvl| Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), alignment_wvl, joule!(1.0)))?;
+
                 let iso = self.effective_surface_iso("input_1")?;
                 axis_ray = axis_ray.transformed_ray(&iso);
                 let mut new_rays = Rays::default();
@@ -84,13 +86,15 @@ impl AnalysisRayTrace for SourcePort {
         Ok(new_outgoing_edges)
     }
 }
+
 #[cfg(test)]
 mod test {
     use crate::{
         energy_distributions::UniformDist,
+        lightdata::ray_data_builder::RayDataBuilder,
         nanometer,
         position_distributions::Hexapolar,
-        prelude::{CollimatedSrc, RayDataBuilder},
+        prelude::{CollimatedSrc, RayDataSource},
         spectral_distribution::LaserLines,
     };
 
@@ -111,24 +115,33 @@ mod test {
                 .contains("No source data found in analyzer for")
         );
     }
+
     #[test]
     fn analyze_raytrace_ok() {
         let mut node = SourcePort::default();
-        let ray_data_builder = RayDataBuilder::Collimated(CollimatedSrc::new(
+
+        let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(10.), 1).unwrap().into(),
             UniformDist::new(joule!(1.)).unwrap().into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])
                 .unwrap()
                 .into(),
         ));
+
+        // Wrap the data source inside the new RayDataBuilder
+        let ray_data_builder = RayDataBuilder::from(ray_data_source);
+
         let mut ray_tracing_config = RayTraceConfig::default();
         ray_tracing_config.map_source(node.node_attr().uuid(), ray_data_builder.clone());
+
         let output =
             AnalysisRayTrace::analyze(&mut node, LightResult::default(), &ray_tracing_config)
                 .unwrap();
+
         let LightData::Geometric(rays) = output.get("output_1").unwrap().clone() else {
             panic!("Expected LightData::Geometric");
         };
+
         let rays_from_ray_data_builder = ray_data_builder.build().unwrap();
         assert_eq!(
             rays.nr_of_rays(true),

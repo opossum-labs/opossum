@@ -49,7 +49,7 @@ fn main() -> OpmResult<()> {
 
     // collimated source
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
             HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0., 0.))?.into(),
             General2DGaussian::new(
                 joule!(150.0),

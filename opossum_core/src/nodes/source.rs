@@ -332,7 +332,7 @@ impl AnalysisGhostFocus for Source {
 mod test {
     use super::*;
     use crate::{
-        lightdata::ray_data_builder::RayDataBuilder, nanometer, optic_ports::PortType,
+        lightdata::ray_data_source::RayDataSource, nanometer, optic_ports::PortType,
         position_distributions::Hexapolar, prelude::EnergyDataBuilder,
         spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
@@ -364,7 +364,7 @@ mod test {
     fn new() {
         let source = Source::new(
             "test",
-            LightDataBuilder::Geometric(RayDataBuilder::default()),
+            LightDataBuilder::Geometric(RayDataSource::default()),
         );
         assert_eq!(source.name(), "test");
     }
@@ -559,7 +559,7 @@ mod test {
                 "{:?}",
                 Source::new(
                     "hallo",
-                    LightDataBuilder::Geometric(RayDataBuilder::default())
+                    LightDataBuilder::Geometric(RayDataSource::default())
                 )
             ),
             "Source: Rays"

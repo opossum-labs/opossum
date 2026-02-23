@@ -12,7 +12,7 @@ use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("PHELIX MainAmp");
 
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
+    let light_data_builder = LightDataBuilder::Geometric(RayDataSource::PointSrc(PointSrc::new(
         Grid::new(
             Point2::new(millimeter!(60.0), Length::zero()),
             Point2::new(5, 1),
