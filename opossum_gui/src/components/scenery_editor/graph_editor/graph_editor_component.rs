@@ -135,16 +135,14 @@ pub fn GraphEditor(
     let add_new_group_tab_handler = EventHandler::new(move |(title, id): (String, Uuid)|{
         let mut graph_state = GraphState::default();
         graph_state.graph_store.write().set_scenery_id(id);
-        workspace.write().tabs.write().insert(id, GraphState::default());
+        workspace.write().tabs.write().insert(id, graph_state);
+        workspace.write().active_tab.set(Some(id));
     });
     let set_root_scenery_id_handler = EventHandler::new(move | id: Uuid|{
         workspace.write().root_scenery_id.set(id);
     });
     let remove_tab_handler = EventHandler::new(move |id: Uuid|{
         workspace.write().tabs.write().remove(&id);
-    });
-    let set_file_path_handler = EventHandler::new(move | path_opt: Option<PathBuf>|{
-        model_file_path_handler.call(path_opt);
     });
     let set_needs_saving_handler = EventHandler::new(move | needs_saving: bool|{
         workspace.write().needs_saving.set(needs_saving);
@@ -191,7 +189,7 @@ pub fn GraphEditor(
         root_graph_id.into(), 
         add_new_group_tab_handler, 
         set_root_scenery_id_handler, 
-        set_file_path_handler, 
+        model_file_path_handler, 
         set_needs_saving_handler,
         clear_workspace_handler,
         add_root_scenery_nodes_handler,
@@ -200,10 +198,15 @@ pub fn GraphEditor(
 
 
     let active_tab = use_memo(move || {
+        let tab = workspace
+            .read().active_tab.read()
+            .map_or_else(|| Uuid::nil(), |t| t);
+        println!("{}", tab.as_simple());
         workspace
             .read().active_tab.read()
             .map_or_else(|| Uuid::nil(), |t| t)
-        });
+        }
+    );
 
 
 
