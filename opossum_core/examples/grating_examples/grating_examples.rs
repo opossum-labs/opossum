@@ -31,7 +31,7 @@ fn main() -> OpmResult<()> {
         nanometer!(300.)..nanometer!(1200.),
     )?;
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(1.), 4)?.into(),
             UniformDist::new(joule!(1.))?.into(),
             Gaussian::new(
@@ -301,7 +301,7 @@ fn main() -> OpmResult<()> {
     )?;
     let mut scenery = NodeGroup::new("telescope");
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(50.), 8)?.into(),
             UniformDist::new(joule!(1.))?.into(),
             Gaussian::new(

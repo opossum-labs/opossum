@@ -4,7 +4,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler image field");
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Image(ImageSrc::new(
+    let light_data_builder = LightDataBuilder::Geometric(RayDataSource::Image(ImageSrc::new(
         Path::new("./logo/Logo_square_tiny_grey_inverted.png").to_path_buf(),
         micrometer!(50.0),
         joule!(1.0),

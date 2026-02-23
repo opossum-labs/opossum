@@ -9,7 +9,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     scenery.node_attr_mut().set_name("Folded Telescope");
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
             HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
             General2DGaussian::new(
                 joule!(2.),

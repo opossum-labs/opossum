@@ -3,7 +3,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightRays,
     nodes::SourcePort,
-    prelude::{GhostFocusConfig, OpticNode, Proptype},
+    prelude::{GhostFocusConfig, OpticNode},
     rays::Rays,
 };
 
@@ -20,7 +20,7 @@ impl AnalysisGhostFocus for SourcePort {
                 return Err(OpossumError::Analysis("no light at port".into()));
             };
             bouncing_rays.clone()
-            // first pass: generate rays from RayDataBuild in GhostFocusConfig
+            // first pass: generate rays from RayDataBuilder in GhostFocusConfig
         } else if bounce_lvl == 0 {
             let mut rays = config
                 .get_source(&self.node_attr.uuid())
@@ -30,10 +30,7 @@ impl AnalysisGhostFocus for SourcePort {
                 .clone()
                 .build()?;
 
-            if let Ok(Proptype::Isometry(Some(iso))) = self.node_attr.get_property("light data iso")
-            {
-                rays = rays.transformed_by_iso(iso);
-            }
+            // Apply node's surface isometry (the local space transformation)
             let iso = self.effective_surface_iso("output_1")?;
             rays = rays.transformed_by_iso(&iso);
             vec![rays]
@@ -61,6 +58,7 @@ impl AnalysisGhostFocus for SourcePort {
         Ok(out_light_rays)
     }
 }
+
 #[cfg(test)]
 mod test {
     use super::*;

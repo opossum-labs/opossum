@@ -7,12 +7,11 @@ use crate::{
     degree,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
-    lightdata::LightData,
+    lightdata::{LightData, ray_data_builder::RayDataBuilder},
     nodes::{NodeAttr, NodeGroup},
     optic_node::OpticNode,
     optic_ports::PortType,
     picojoule,
-    prelude::RayDataBuilder,
     properties::Proptype,
     rays::Rays,
     refractive_index::RefractiveIndexType,
@@ -436,9 +435,10 @@ impl RayTraceConfig {
     }
     /// Maps a source UUID to a ray data builder.
     ///
-    /// If a builder was already mapped to the given UUID, it is replaced and returned.
-    pub fn map_source(&mut self, uuid: Uuid, builder: RayDataBuilder) -> Option<RayDataBuilder> {
-        self.source_map.insert(uuid, builder)
+    /// If a builder was already mapped this function returns `true`. A new mapping
+    /// reutrns `false`
+    pub fn map_source(&mut self, uuid: Uuid, builder: RayDataBuilder) -> bool {
+        self.source_map.insert(uuid, builder).is_some()
     }
     /// Returns a reference to the ray data builder mapped to the given source UUID, if any.
     #[must_use]
@@ -461,7 +461,7 @@ mod test {
     use super::*;
     use crate::{
         joule, millimeter,
-        nodes::{ParaxialSurface, round_collimated_ray_source},
+        nodes::{ParaxialSurface, SourcePort, round_collimated_ray_source},
         utils::test_helper::test_helper::check_logs,
     };
     #[test]
@@ -562,63 +562,51 @@ mod test {
 
     #[test]
     fn test_map_and_get_source() {
-        use crate::lightdata::ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder};
+        use crate::lightdata::ray_data_source::{CollimatedSrc, PointSrc, RayDataSource};
         use uuid::Uuid;
         let mut config = RayTraceConfig::default();
         let uuid = Uuid::new_v4();
-        // Use CollimatedSrc which implements Default
-        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+        let source = RayDataSource::Collimated(CollimatedSrc::default());
 
-        assert!(config.map_source(uuid, builder.clone()).is_none());
-        assert_eq!(config.get_source(&uuid), Some(&builder));
+        assert_eq!(config.map_source(uuid, source.clone().into()), false);
+        assert_eq!(config.get_source(&uuid), Some(&source.clone().into()));
 
-        let mut builder2 = RayDataBuilder::Collimated(CollimatedSrc::default());
-        if let RayDataBuilder::Collimated(ref mut _c) = builder2 {
-            // Modify it slightly to be different, though default equality check might suffice if we just use a different instance
-            // For safety let's just use the same type but maybe a different property if I could easy set it.
-            // But valid builders are complex to construct manually due to validators.
-            // Let's just trust that a new default is equal to another new default, so we need to validly change something.
-            // or just use a PointSrc for the second one.
-        }
         // Let's use PointSrc for the second one to be sure it's different
-        let builder2 = RayDataBuilder::PointSrc(PointSrc::default());
+        let source2 = RayDataSource::PointSrc(PointSrc::default());
 
-        assert_eq!(config.map_source(uuid, builder2.clone()), Some(builder));
-        assert_eq!(config.get_source(&uuid), Some(&builder2));
+        assert_eq!(config.map_source(uuid, source2.clone().into()), true);
+        assert_eq!(config.get_source(&uuid), Some(&source2.clone().into()));
     }
 
     #[test]
     fn test_remove_source() {
-        use crate::lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder};
+        use crate::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
         use uuid::Uuid;
         let mut config = RayTraceConfig::default();
         let uuid = Uuid::new_v4();
-        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
+        let source = RayDataSource::Collimated(CollimatedSrc::default());
 
-        config.map_source(uuid, builder.clone());
-        assert_eq!(config.remove_source(&uuid), Some(builder));
+        config.map_source(uuid, source.clone().into());
+        assert_eq!(config.remove_source(&uuid), Some(source.into()));
         assert!(config.get_source(&uuid).is_none());
         assert!(config.remove_source(&uuid).is_none());
     }
 
     #[test]
     fn test_prune_source_map() {
-        use crate::{
-            lightdata::ray_data_builder::{CollimatedSrc, RayDataBuilder},
-            nodes::Source,
-            prelude::LightDataBuilder, // Correct import
-        };
+        use crate::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
         use uuid::Uuid;
-        let mut config = RayTraceConfig::default();
-        let uuid2 = Uuid::new_v4();
-        let builder = RayDataBuilder::Collimated(CollimatedSrc::default());
 
         let mut scene = NodeGroup::default();
-        let src = Source::new("source", LightDataBuilder::Geometric(builder.clone()));
+        let src = SourcePort::default();
         let node_id = scene.add_node(src).unwrap();
 
-        config.map_source(node_id, builder.clone());
-        config.map_source(uuid2, builder.clone());
+        let mut config = RayTraceConfig::default();
+        let source = RayDataSource::Collimated(CollimatedSrc::default());
+        config.map_source(node_id, source.clone().into());
+
+        let uuid2 = Uuid::new_v4();
+        config.map_source(uuid2, source.into());
 
         config.prune_source_map(&scene);
 

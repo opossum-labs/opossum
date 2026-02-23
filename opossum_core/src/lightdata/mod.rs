@@ -4,6 +4,7 @@
 pub mod energy_data_builder;
 pub mod light_data_builder;
 pub mod ray_data_builder;
+pub mod ray_data_source;
 use crate::{joule, rays::Rays, spectrum::Spectrum};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -43,7 +44,7 @@ impl Display for LightData {
 #[cfg(test)]
 mod test {
     use crate::{
-        lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+        lightdata::{light_data_builder::LightDataBuilder, ray_data_source::RayDataSource},
         properties::Proptype,
         spectrum_helper::create_visible_spec,
     };
@@ -68,7 +69,7 @@ mod test {
     }
     #[test]
     fn from() {
-        let ld = Proptype::from(LightDataBuilder::Geometric(RayDataBuilder::default()));
+        let ld = Proptype::from(LightDataBuilder::Geometric(RayDataSource::default()));
         assert_matches!(ld, Proptype::LightDataBuilder(_));
     }
 }

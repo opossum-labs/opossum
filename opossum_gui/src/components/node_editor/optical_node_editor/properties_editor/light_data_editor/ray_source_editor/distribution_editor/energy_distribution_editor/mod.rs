@@ -13,7 +13,7 @@ use crate::components::node_editor::{
 use dioxus::prelude::*;
 use gaussian_editor::get_general_2d_gaussian_input_params;
 use opossum_core::{
-    energy_distributions::EnergyDistType, prelude::RayDataBuilder,
+    energy_distributions::EnergyDistType, prelude::RayDataSource,
     utils::default_from_name::DefaultFromName,
 };
 use uniform_editor::UniformParam;
@@ -32,8 +32,8 @@ pub fn RayEnergyDistributionEditor(
 #[component]
 pub fn EnergyDistributionEditor(
     energy_dist_type: EnergyDistType,
-    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
-    on_save: EventHandler<RayDataBuilder>,
+    ray_data_builder_sig: ReadSignal<RayDataSource>,
+    on_save: EventHandler<RayDataSource>,
 ) -> Element {
     let mut energy_dist_type_sig = use_signal(|| energy_dist_type);
 

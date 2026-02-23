@@ -4,7 +4,7 @@ mod position_distribution_editor;
 mod spectral_distribution_editor;
 
 use energy_distribution_editor::EnergyDistributionEditor;
-use opossum_core::prelude::RayDataBuilder;
+use opossum_core::prelude::RayDataSource;
 use position_distribution_editor::PositionDistributionEditor;
 use spectral_distribution_editor::SpectralDistributionEditor;
 
@@ -12,8 +12,8 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn DistributionEditor(
-    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
-    on_save: EventHandler<RayDataBuilder>,
+    ray_data_builder_sig: ReadSignal<RayDataSource>,
+    on_save: EventHandler<RayDataSource>,
 ) -> Element {
     rsx! {
         div {

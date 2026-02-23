@@ -5,7 +5,7 @@ pub use super::error::{OpmResult, OpossumError};
 pub use super::lightdata::{
     energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
     light_data_builder::LightDataBuilder,
-    ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder},
+    ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
 };
 pub use super::nodes::{
     BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens, Metertype,

@@ -6,7 +6,7 @@ use opossum_core::{
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Raysource demo");
     let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
+        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(1.0), 3)?.into(),
             UniformDist::new(joule!(1.0))?.into(),
             LaserLines::new(vec![

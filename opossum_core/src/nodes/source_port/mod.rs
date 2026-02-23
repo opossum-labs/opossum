@@ -31,23 +31,8 @@ inventory::submit! {
 
 impl Default for SourcePort {
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("source port");
+        let node_attr = NodeAttr::new("source port");
 
-        // Note: This property should move to RayDataBuilder in the future, but for now it is easier to keep it here, since it is needed for both ray tracing and energy analysis. See #801.
-        node_attr
-            .create_property(
-                "light data iso",
-                "isometry of the emitted light field",
-                Option::<Isometry>::None.into(),
-            )
-            .unwrap();
-        node_attr
-            .create_property(
-                "alignment wavelength",
-                "wavelength to be used for alignment. Necessary e.g. for grating alignments",
-                Proptype::LengthOption(None),
-            )
-            .unwrap();
         let mut src = Self { node_attr };
         src.set_isometry(Isometry::identity()).unwrap();
         src.update_surfaces().unwrap();
@@ -64,11 +49,13 @@ impl SourcePort {
         node
     }
 }
+
 impl Display for SourcePort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}' (source port)", self.node_attr.name())
     }
 }
+
 impl OpticNode for SourcePort {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.node_attr.set_property(name, prop)
@@ -87,54 +74,32 @@ impl OpticNode for SourcePort {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{nanometer, prelude::PortType};
+    use crate::prelude::PortType;
+
     #[test]
     fn default() {
         let mut node = SourcePort::default();
         assert_eq!(node.name(), "source port");
         assert_eq!(node.node_type(), "source port");
         assert_eq!(node.isometry(), Some(Isometry::identity()));
-        if let Proptype::Isometry(iso) = node.properties().get("light data iso").unwrap() {
-            assert!(iso.is_none());
-        } else {
-            panic!("wrong type for `light data iso` property");
-        };
-        if let Proptype::LengthOption(wvl) = node.properties().get("alignment wavelength").unwrap()
-        {
-            assert!(wvl.is_none());
-        } else {
-            panic!("wrong type for `alignment wavelength` property");
-        };
         assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.node_color(), "slateblue");
         assert!(node.as_group_mut().is_err());
     }
+
     #[test]
     fn new() {
         let source = SourcePort::new("test");
         assert_eq!(source.name(), "test");
     }
-    #[test]
-    fn set_property() {
-        let mut node = SourcePort::default();
-        node.set_property(
-            "alignment wavelength",
-            Proptype::LengthOption(Some(nanometer!(600.0))),
-        )
-        .unwrap();
-        let Proptype::LengthOption(wavelength) =
-            node.node_attr.get_property("alignment wavelength").unwrap()
-        else {
-            panic!("wrong proptype")
-        };
-        assert_eq!(wavelength, &Some(nanometer!(600.0)));
-    }
+
     #[test]
     fn is_invertable() {
         let mut node = SourcePort::default();
         assert!(node.set_inverted(false).is_ok());
         assert!(node.set_inverted(true).is_ok());
     }
+
     #[test]
     fn ports() {
         let node = SourcePort::default();

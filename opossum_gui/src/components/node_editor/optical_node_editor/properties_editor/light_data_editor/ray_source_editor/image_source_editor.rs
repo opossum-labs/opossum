@@ -10,18 +10,18 @@ use dioxus::prelude::*;
 use opossum_core::{degree, joule};
 use opossum_core::{
     meter,
-    prelude::{ImageSrc, RayDataBuilder},
+    prelude::{ImageSrc, RayDataSource},
 };
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::angle::degree;
 
 #[component]
 pub fn ImageSourceEditor(
-    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
-    on_save: EventHandler<RayDataBuilder>,
+    ray_data_builder_sig: ReadSignal<RayDataSource>,
+    on_save: EventHandler<RayDataSource>,
 ) -> Element {
     match &*ray_data_builder_sig.read() {
-        RayDataBuilder::Image(img_src) => {
+        RayDataSource::Image(img_src) => {
             let inputs = get_image_source_input_params(img_src, on_save);
             rsx! {
                 RowedInputs { inputs }
@@ -35,14 +35,14 @@ pub fn ImageSourceEditor(
 
 pub fn get_image_source_input_params(
     img_src: &ImageSrc,
-    on_save: EventHandler<RayDataBuilder>,
+    on_save: EventHandler<RayDataSource>,
 ) -> Vec<InputData> {
     let mut input_data = Vec::<InputData>::new();
     for enum_variant in ImageSrcParam::iter() {
         match enum_variant {
             ImageSrcParam::FPath => {
                 input_data.push(
-                    IntoInputData::<String, ImageSrc, RayDataBuilder>::to_input_data(
+                    IntoInputData::<String, ImageSrc, RayDataSource>::to_input_data(
                         &enum_variant,
                         img_src.clone(),
                         on_save,
@@ -50,7 +50,7 @@ pub fn get_image_source_input_params(
                 );
             }
             _ => input_data.push(
-                IntoInputData::<f64, ImageSrc, RayDataBuilder>::to_input_data(
+                IntoInputData::<f64, ImageSrc, RayDataSource>::to_input_data(
                     &enum_variant,
                     img_src.clone(),
                     on_save,
@@ -111,7 +111,7 @@ impl IntoInputDataStrings<ImageSrc> for ImageSrcParam {
     }
 }
 
-impl IntoInputData<f64, ImageSrc, RayDataBuilder> for ImageSrcParam {
+impl IntoInputData<f64, ImageSrc, RayDataSource> for ImageSrcParam {
     fn parse_value(&self, e: Event<FormData>) -> Option<f64> {
         let e_value = e.value();
         e_value.parse::<f64>().ok()
@@ -139,7 +139,7 @@ impl IntoInputData<f64, ImageSrc, RayDataBuilder> for ImageSrcParam {
     }
 }
 
-impl IntoInputData<String, ImageSrc, RayDataBuilder> for ImageSrcParam {
+impl IntoInputData<String, ImageSrc, RayDataSource> for ImageSrcParam {
     fn parse_value(&self, e: Event<FormData>) -> Option<String> {
         // 1. First, check if there is a text value (by using the rfd file selector)
         let value = e.value();

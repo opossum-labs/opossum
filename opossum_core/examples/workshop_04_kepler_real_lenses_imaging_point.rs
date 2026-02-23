@@ -7,7 +7,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler imaging point src");
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
+    let light_data_builder = LightDataBuilder::Geometric(RayDataSource::PointSrc(PointSrc::new(
         Hexapolar::new(millimeter!(15.0), 8)?.into(),
         UniformDist::new(joule!(1.0))?.into(),
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
