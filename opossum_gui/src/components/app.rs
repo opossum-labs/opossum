@@ -37,7 +37,7 @@ pub fn App() -> Element {
     let mut run_simulation = use_signal(|| false);
 
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> = use_signal(|| None);
-    let cxt_command = use_signal(|| None::<CxtCommand>);
+    let mut cxt_command = use_signal(|| None::<CxtCommand>);
 
     // global signals
     let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
@@ -278,7 +278,9 @@ pub fn App() -> Element {
                 },
             }
             CommonAppLayout {
-                cxt_command,
+                cxt_command_handler: EventHandler::new(move |cxt_cmd_opt: Option<CxtCommand>| {
+                    cxt_command.set(cxt_cmd_opt);
+                }),
                 on_menu_action: process_command_for_menu,
                 model_file_path_sig,
                 model_file_path_handler: EventHandler::new(move |path_opt: Option<PathBuf>| {
@@ -322,7 +324,7 @@ pub fn App() -> Element {
 
 #[component]
 fn CommonAppLayout(
-    cxt_command: Signal<Option<CxtCommand>>,
+    cxt_command_handler: EventHandler<Option<CxtCommand>>,
     on_menu_action: EventHandler<AppCommand>,
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
@@ -356,7 +358,7 @@ fn CommonAppLayout(
     };
 
     rsx! {
-        ContextMenu { command: cxt_command }
+        ContextMenu { cxt_command_handler }
         div {
             class: "container-fluid text-bg-dark",
             onmousemove: on_mousemove,
