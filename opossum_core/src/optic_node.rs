@@ -116,7 +116,6 @@ pub trait OpticNode: Dottable {
         )?;
 
         let rays_after: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
-        // Wenn Strahlen fehlen, Warnung setzen und loggen
         if rays_after < rays_before {
             self.set_apodization_warning(true);
             log::warn!(
