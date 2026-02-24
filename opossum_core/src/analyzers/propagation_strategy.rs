@@ -42,7 +42,7 @@ pub trait PropagationStrategy {
 
     /// Hook executed immediately after a ray bundle interacts with a surface.
     /// Allows the analyzer to perform specific tasks, like evaluating fluence
-    /// or storing caching data (e.g., for GhostFocus).
+    /// or storing caching data (e.g., for `GhostFocus`).
     fn on_surface_interaction(
         &self,
         _surf: &mut OpticSurface,

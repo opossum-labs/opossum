@@ -38,7 +38,7 @@ use uom::si::f64::{Angle, Energy, Length};
 ///   - minimum energy / ray
 ///   - maximum number of bounces (reflections) / ray
 ///   - maximum number of refractions / ray
-///   - map of SourcePort nodes to the respective light definition
+///   - map of `SourcePort` nodes to the respective light definition
 pub struct RayTraceConfig {
     min_energy_per_ray: Energy,
     max_number_of_bounces: usize,

@@ -92,8 +92,8 @@ pub trait OpticNode: Dottable {
         // Node-spezifische Daten abrufen
         let uuid = self.node_attr().uuid();
         let iso = self.effective_surface_iso(optic_surf_name)?;
-        let node_name = self.node_attr().name().to_string();
-        let node_type = self.node_attr().node_type().to_string();
+        let node_name = self.node_attr().name();
+        let node_type = self.node_attr().node_type();
 
         // Oberfläche aus der Node holen
         let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
@@ -120,16 +120,14 @@ pub trait OpticNode: Dottable {
         if rays_after < rays_before {
             self.set_apodization_warning(true);
             log::warn!(
-                "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
-                node_name,
-                node_type
+                "Rays have been apodized at input aperture of '{node_name}' ({node_type}). Results might not be accurate."
             );
         }
         Ok(())
     }
     /// A unified helper function to analyze optical nodes that feature a single interacting surface.
     ///
-    /// This function simplifies the implementation of the analysis traits (Energy, RayTrace, GhostFocus)
+    /// This function simplifies the implementation of the analysis traits (`Energy`, `RayTrace`, `GhostFocus`)
     /// for simple transmissive nodes like detectors, monitors, or dummy nodes. It automatically:
     /// 1. Extracts the incoming light from the first input port.
     /// 2. Propagates the light through the specified surface using the given [`PropagationStrategy`].

@@ -27,7 +27,7 @@ pub struct EnergyConfig {
     source_map: HashMap<Uuid, EnergyDataBuilder>,
 }
 impl EnergyConfig {
-    /// Maps an energy data builder to the SourcePort node with the given UUID
+    /// Maps an energy data builder to the `SourcePort` node with the given UUID
     ///
     /// If a builder was already mapped this function returns `true`. A new mapping
     /// reutrns `false`
