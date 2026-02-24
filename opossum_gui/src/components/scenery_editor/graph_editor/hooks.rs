@@ -6,7 +6,8 @@ use std::{
 use crate::{
     CONTEXT_MENU,
     components::scenery_editor::{
-        GraphState, GraphsWorkspaceAction, NodeElement, constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY}, edges::edges_component::EdgeCreation, graph_editor::graph_editor_component::{DragStatus, EditorState, GraphsWorkspaceState}, graph_store::{GraphStore, GraphStoreAction}
+        GraphsWorkspaceAction, NodeElement, constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY}, 
+        edges::edges_component::EdgeCreation, graph_editor::graph_editor_component::{DragStatus, EditorState, GraphsWorkspaceState}, graph_store::GraphStore
     },
 };
 use dioxus::{

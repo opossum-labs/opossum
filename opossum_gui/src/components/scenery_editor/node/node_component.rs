@@ -7,7 +7,6 @@ use crate::components::scenery_editor::GraphState;
 use crate::components::scenery_editor::GraphsWorkspaceAction;
 use crate::components::scenery_editor::NodeType;
 use crate::components::scenery_editor::constants::{BORDER_WIDTH, NODE_WIDTH};
-use crate::components::scenery_editor::graph_store::GraphStoreAction;
 use crate::components::scenery_editor::{
     graph_editor::graph_editor_component::{DragStatus, EditorState},
     graph_store::GraphStore,

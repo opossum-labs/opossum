@@ -9,12 +9,6 @@ pub fn Nodes(add_new_group_tab_handler: EventHandler<(String, Uuid)>, graph_stor
     rsx! {
         for node in graph_store().nodes().read().iter() {
             {
-                println!(
-                    "graph: {}, node_name: {}, node_id: {}",
-                    graph_id.as_simple(),
-                    node.1.name(),
-                    node.0.as_simple(),
-                );
                 rsx! {
                     Node { node: node.1.clone(), add_new_group_tab_handler }
                 }

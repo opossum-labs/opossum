@@ -2,7 +2,7 @@
 use crate::{OPOSSUM_UI_LOGS, api::{self, eval_action_run}, components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStore, GraphStoreAction, NodeType, constants::{MAX_ZOOM, MIN_NODE_DISTANCE_RADIUS, MIN_ZOOM, NODE_PLACEMENT_MAX_ITERATIONS}, edges::edges_component::{
+        GraphState, NodeType, constants::{MAX_ZOOM, MIN_NODE_DISTANCE_RADIUS, MIN_ZOOM, NODE_PLACEMENT_MAX_ITERATIONS}, edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
         }, graph_editor::hooks::{
             use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
@@ -19,7 +19,7 @@ use dioxus::{
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use futures_util::StreamExt;
 use opossum_core::{opm_document::AnalyzerInfo, prelude::*, types::api_types::{ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo}};
-use std::{collections::{BTreeMap, HashMap}, fs, path::PathBuf, rc::Rc, time::Instant};
+use std::{collections::BTreeMap, fs, path::PathBuf, rc::Rc, time::Instant};
 use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub enum NodeEditorCommand {
@@ -111,7 +111,8 @@ pub struct GraphsWorkspaceState {
     pub tabs: Signal<BTreeMap<Uuid, Signal<GraphState>>>,
     pub active_tab: Signal<Option<Uuid>>,
     pub root_scenery_id: Signal<Uuid>,
-    pub needs_saving: Signal<bool>
+    pub needs_saving: Signal<bool>,
+    pub file_path: Signal<Option<PathBuf>>,
 }
 
 #[component]
@@ -256,18 +257,17 @@ pub fn GraphEditor(
     });
 
     use_effect(move || {
-        let is_unsaved = workspace.peek().tabs.peek().iter().any(|(_,g)| *g.peek().graph_store.peek().needs_saving().read());
+        let is_unsaved = *workspace.peek().needs_saving.read();
         // graph_store.peek().needs_saving();
         // let is_unsaved = *needs_saving_signal.read();
         if *model_modified_sig.peek() != is_unsaved {
             model_modified_handler.call(is_unsaved);
         }
-        // let file_path_signal = graph_store.peek().file_path();
-        // let current_path = (*file_path_signal.read()).clone();
+        let current_path = workspace.peek().file_path.read().clone();
 
-        // if *model_file_path_sig.peek() != current_path {
-        //     model_file_path_handler.call(current_path);
-        // }
+        if *model_file_path_sig.peek() != current_path {
+            model_file_path_handler.call(current_path);
+        }
     });
 
     // let active_node_opt = use_memo(move || {
@@ -493,91 +493,6 @@ pub fn use_workspace_processor(
         }
     })
 }
-
-
-// pub fn use_graph_processor(mut workspace: Signal<GraphsWorkspaceState>, add_new_group_tab_handler: EventHandler<(String, Uuid)>) -> Coroutine<GraphStoreAction> {
-//     use_coroutine(move |mut rx: UnboundedReceiver<GraphStoreAction>| {
-//         async move {
-//             // This loop runs forever in the background, waiting for actions.
-//             while let Some(action) = rx.next().await {
-//                 match action {
-//                     GraphStoreAction::UpdateEdges(connect_infos, graph_id) => {
-//                         let mut graph_state = workspace.write().tabs.get(graph_id)
-//                         graph_state
-//                             .write()
-//                             .graph_store
-//                             .write()
-//                             .edges
-//                             .set(connect_infos.clone());
-//                         graph_state
-//                             .write()
-//                             .graph_store
-//                             .write()
-//                             .needs_saving
-//                             .set(true);
-//                     }
-//                     GraphStoreAction::LoadFromFile(path) => {
-//                         process_load_from_file(path, graph_state, add_new_group_tab_handler).await;
-//                         process_center_graph(graph_state, false);
-//                     }
-//                     GraphStoreAction::SaveToFile(path) => {
-//                         process_save_to_file(path, graph_state).await;
-//                     }
-//                     GraphStoreAction::SyncNodePosition(node_id, pos) => {
-//                         eval_action_run(
-//                             api::update_gui_position(node_id, pos).await,
-//                             Some(move |_| {
-//                                 let mut graph_store = graph_state.read().graph_store;
-//                                 graph_store.write().needs_saving.set(true);
-//                             }),
-//                         );
-//                     }
-//                     GraphStoreAction::DeleteNode(node_id) => {
-//                         process_delete_node(node_id, graph_state).await;
-//                     }
-//                     GraphStoreAction::AddOpticNode(new_node) => {
-//                         process_add_optic_node(&new_node, graph_state).await;
-//                     }
-//                     GraphStoreAction::AddOpticReference(new_ref_node) => {
-//                         process_add_reference_node(new_ref_node, graph_state).await;
-//                     }
-//                     GraphStoreAction::AddAnalyzer(analyzer_type) => {
-//                         process_add_analyzer(analyzer_type, graph_state).await;
-//                     }
-//                     GraphStoreAction::AddEdge(connect_info) => {
-//                         process_add_edge(connect_info, graph_state).await;
-//                     }
-//                     GraphStoreAction::UpdateEdge(connect_info) => {
-//                         process_update_edge(connect_info, graph_state).await;
-//                     }
-//                     GraphStoreAction::DeleteEdge(connect_info) => {
-//                         process_delete_edge(connect_info, graph_state).await;
-//                     }
-//                     GraphStoreAction::CopyNode((node_type, node_id)) => {
-//                         process_copy_node(node_type, node_id).await;
-//                     }
-//                     GraphStoreAction::PasteNode(pos) => {
-//                         process_paste_node(pos, graph_state).await;
-//                     }
-//                     GraphStoreAction::DeleteScenery => {
-//                         process_delete_scenery(graph_state).await;
-//                     }
-//                     GraphStoreAction::OptimizeLayout => {
-//                         process_optimize_layout(graph_state).await;
-//                     }
-//                     GraphStoreAction::GetSceneryId => {
-//                         process_get_scenery_id(graph_state, add_new_group_tab_handler).await;
-//                     }
-//                     GraphStoreAction::CenterGraph { zoom_to_fit } => {
-//                         process_center_graph(graph_state, zoom_to_fit);
-//                     }
-//                 }
-//             }
-//         }
-//     })
-// }
-
-
 
 async fn process_add_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
     let mut graph_store = graph_state.read().graph_store;
@@ -958,7 +873,6 @@ pub fn GraphViewEditor(
     let graph_store = graph_state.read().graph_store;
     let graph_id = graph_state.read().id;
 
-    println!("render grapheditor for {}",graph_id.as_simple());
     use_context_provider(|| graph_state);
     use_context_provider(|| editor_state);
     use_context_provider(|| graph_store);
@@ -971,11 +885,6 @@ pub fn GraphViewEditor(
 
     let shift = use_memo(move || *editor_state.read().shift.read());
     let zoom = use_memo(move || *editor_state.read().zoom.read());
-
-    for node in graph_store().nodes().read().iter() {
-            
-            println!("graph: {}, node_name: {}, node_id: {}", graph_id.as_simple(), node.1.name(), node.0.as_simple());
-    }
 
     rsx! {
         div {
