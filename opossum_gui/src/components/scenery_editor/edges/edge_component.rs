@@ -9,8 +9,8 @@ use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 
 #[component]
 pub fn EdgeComponent(edge: ConnectInfo) -> Element {
-    let graph_state = use_context::<GraphState>();
-    let graph_store = graph_state.graph_store;
+    let graph_state = use_context::<Signal<GraphState>>();
+    let graph_store = graph_state.read().graph_store;
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
     // Memoize the start and end positions. This will only re-read the node
@@ -59,7 +59,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                         workspace_processor
                             .send(GraphsWorkspaceAction::DeleteEdge {
                                 connection: edge.clone(),
-                                graph_id: graph_state.id,
+                                graph_id: graph_state.read().id,
                             });
                     }
                     event.stop_propagation();
@@ -97,7 +97,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                             workspace_processor
                                 .send(GraphsWorkspaceAction::UpdateEdge {
                                     connection: edge,
-                                    graph_id: graph_state.id,
+                                    graph_id: graph_state.read().id,
                                 });
                         }
                     },

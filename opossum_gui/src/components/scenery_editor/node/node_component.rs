@@ -22,7 +22,7 @@ use uuid::Uuid;
 pub fn Node(node: NodeElement, add_new_group_tab_handler: EventHandler<(String, Uuid)>) -> Element {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
-    let graph_state = use_context::<GraphState>();
+    let graph_state = use_context::<Signal<GraphState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let position = node.pos();
     let active_node_id = graph_store().active_node();
@@ -39,6 +39,7 @@ pub fn Node(node: NodeElement, add_new_group_tab_handler: EventHandler<(String, 
     let is_optical_node = node.is_optical_node();
     rsx! {
         div {
+            id: format!("node_container_{}", node_id.as_simple()),
             tabindex: 0, // necessary to allow to receive keyboard focus
             class: "node {is_active}",
             draggable: false,
@@ -67,7 +68,7 @@ pub fn Node(node: NodeElement, add_new_group_tab_handler: EventHandler<(String, 
                         workspace_processor
                             .send(GraphsWorkspaceAction::DeleteNode {
                                 node_id,
-                                graph_id: graph_state.id,
+                                graph_id: graph_state.read().id,
                             });
                     }
                     event.stop_propagation();

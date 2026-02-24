@@ -155,8 +155,8 @@ pub fn use_on_key_down(mouse_pos: Signal<Point2D<f64>>, workspace: Signal<Graphs
     move |event| {
         if let Some(active_graph_id) = *active_graph.read(){
             if let Some(graph_state) = workspace.read().tabs.read().get(&active_graph_id){
-                let editor_status = graph_state.editor_state;
-                let graph_store = graph_state.graph_store;
+                let editor_status = graph_state.read().editor_state;
+                let graph_store = graph_state.read().graph_store;
                 if !event.is_auto_repeating() {
                     let modifiers = event.modifiers();
                     let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
@@ -187,7 +187,7 @@ pub fn use_on_key_down(mouse_pos: Signal<Point2D<f64>>, workspace: Signal<Graphs
                                 (mouse.x - shift.x - rect.min_x()) / zoom,
                                 (mouse.y - shift.y - rect.min_y()) / zoom,
                             );
-                            workspace_processor.send(GraphsWorkspaceAction::PasteNode{pos, graph_id: graph_state.id});
+                            workspace_processor.send(GraphsWorkspaceAction::PasteNode{pos, graph_id: graph_state.read().id});
                         }
                         event.stop_propagation();
                     }
@@ -203,8 +203,8 @@ pub fn use_drag_end(workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(Mouse
     move |_| {
         if let Some(active_graph_id) = *active_graph.read(){
             if let Some(graph_state) = workspace.read().tabs.read().get(&active_graph_id){
-                let mut editor_status = graph_state.editor_state;
-                let graph_store = graph_state.graph_store;
+                let mut editor_status = graph_state.read().editor_state;
+                let graph_store = graph_state.read().graph_store;
                 let drag_status = editor_status.read().drag_status.read().clone();
                 match drag_status {
                     DragStatus::Node(node_id, old_position) => {
@@ -217,7 +217,7 @@ pub fn use_drag_end(workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(Mouse
                         {
                             // Update node GUI position (only if really changed)
                             if pos != old_position {
-                                workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition{pos, graph_id: graph_state.id, node_id});
+                                workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition{pos, graph_id: graph_state.read().id, node_id});
                             }
                         }
                     }
@@ -239,7 +239,7 @@ pub fn use_drag_end(workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(Mouse
                                 end_port.port_name.clone(),
                                 0.0,
                             );
-                            workspace_processor.send(GraphsWorkspaceAction::AddEdge{new_edge, graph_id: graph_state.id});
+                            workspace_processor.send(GraphsWorkspaceAction::AddEdge{new_edge, graph_id: graph_state.read().id});
                         }
                     }
                     _ => {}
