@@ -1,12 +1,17 @@
+//! Defines the Strategy Pattern for optical ray propagation.
+//!
+//! This module abstracts the analyzer-specific behavior (e.g., sequential ray tracing, ghost focus, or energy analysis)
+//! away from the core physical surface interactions. By implementing the [`PropagationStrategy`] trait,
+//! different analysis modes can inject custom rules—such as handling missed surfaces, evaluating fluences,
+//! or applying energy thresholds—directly into the propagation pipeline without modifying the optical nodes themselves.
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
 use crate::{
-    error::OpmResult,
-    rays::Rays,
-    surface::optic_surface::OpticSurface, utils::default_from_name::DefaultFromName,
+    error::OpmResult, rays::Rays, surface::optic_surface::OpticSurface,
+    utils::default_from_name::DefaultFromName,
 };
 
 /// Strategy to use if a [`Ray`](crate::ray::Ray) misses a surface

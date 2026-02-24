@@ -6,7 +6,11 @@ use uom::si::f64::Length;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::{AnalysisEnergy, EnergyConfig}, ghostfocus::AnalysisGhostFocus, propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace
+        GhostFocusConfig, RayTraceConfig,
+        energy::{AnalysisEnergy, EnergyConfig},
+        ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::MissedSurfaceStrategy,
+        raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
     joule,

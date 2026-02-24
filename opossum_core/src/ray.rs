@@ -15,10 +15,16 @@ use uom::si::{
 use uuid::Uuid;
 
 use crate::{
-    analyzers::propagation_strategy::MissedSurfaceStrategy, error::{OpmResult, OpossumError}, joule, meter, nodes::{FilterType, SplittingConfig, fluence_detector::Fluence}, rays::{FluenceRays, Rays}, surface::{
+    analyzers::propagation_strategy::MissedSurfaceStrategy,
+    error::{OpmResult, OpossumError},
+    joule, meter,
+    nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
+    rays::{FluenceRays, Rays},
+    surface::{
         hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
         optic_surface::OpticSurface,
-    }, utils::{LockExt, geom_transformation::Isometry}
+    },
+    utils::{LockExt, geom_transformation::Isometry},
 };
 
 ///Struct that contains all information about an optical ray

@@ -1,8 +1,6 @@
 use super::Lens;
 use crate::{
-    analyzers::{
-        AnalyzerType, GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-    },
+    analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace},
     error::OpmResult,
     light_result::LightRays,
     optic_node::OpticNode,
@@ -26,19 +24,21 @@ impl AnalysisGhostFocus for Lens {
             .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
 
         let refraction_intended = true;
-        self.pass_through_surface(
+        self.pass_through_surface_generic(
             in_port,
-            &refri,
+            Some(refri),
             &mut rays_bundle,
-            &AnalyzerType::GhostFocus(config.clone()),
+            config,
             self.inverted(),
             refraction_intended,
         )?;
-        self.pass_through_surface(
+
+        // 2. Durch die Austrittsfläche propagieren
+        self.pass_through_surface_generic(
             out_port,
-            &self.ambient_idx(),
+            Some(self.ambient_idx()),
             &mut rays_bundle,
-            &AnalyzerType::GhostFocus(config.clone()),
+            config,
             self.inverted(),
             refraction_intended,
         )?;

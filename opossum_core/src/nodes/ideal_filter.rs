@@ -9,7 +9,9 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
-    light_result::{LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays},
+    light_result::{
+        LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
+    },
     lightdata::LightData,
     micrometer, nanometer,
     nodes::NodeRegistration,
@@ -1412,10 +1414,10 @@ impl AnalysisGhostFocus for IdealFilter {
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
         let filter_type = self.filter_type()?;
-           let incoming_result = light_rays_to_light_result(incoming_data);
+        let incoming_result = light_rays_to_light_result(incoming_data);
         let output =
             self.unified_analyze_single_surface_node(incoming_result, config, "input_1", None)?;
-        let light_rays=light_result_to_light_rays(output)?;
+        let light_rays = light_result_to_light_rays(output)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
         if let Some(rays_bundles) = light_rays.clone().get_mut(out_port) {
             for rays in rays_bundles {

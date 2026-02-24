@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex};
 use super::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace
+        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     coatings::CoatingType,
     error::{OpmResult, OpossumError},

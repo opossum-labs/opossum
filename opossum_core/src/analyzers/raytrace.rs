@@ -8,7 +8,7 @@ use crate::{
     degree,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
-    lightdata::{LightData, ray_data_builder::RayDataBuilder},
+    lightdata::ray_data_builder::RayDataBuilder,
     nodes::{NodeAttr, NodeGroup},
     optic_node::OpticNode,
     picojoule,
@@ -213,13 +213,6 @@ pub trait AnalysisRayTrace: OpticNode {
     ) -> OpmResult<LightResult> {
         self.analyze(incoming_data, config)
     }
-    ///returns a mutable reference to the light data.
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        None
-    }
-    ///sets the light data field of this detector
-    fn set_light_data(&mut self, _ld: LightData) {}
-
     ///returns the necessary node attributes for ray tracing
     /// # Errors
     /// This function errors if the node attributes: Isometry, Refractive Index or Center Thickness cannot be read,

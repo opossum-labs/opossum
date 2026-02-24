@@ -7,17 +7,13 @@ use uom::si::length::nanometer;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        energy::{AnalysisEnergy, EnergyConfig},
-        ghostfocus::AnalysisGhostFocus,
-        raytrace::AnalysisRayTrace,
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
-    light_result::LightResult,
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
     optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
@@ -221,6 +217,12 @@ impl OpticNode for Spectrometer {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
+    }
 }
 impl Debug for Spectrometer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -243,35 +245,16 @@ impl Debug for Spectrometer {
     }
 }
 impl AnalysisGhostFocus for Spectrometer {}
-impl AnalysisEnergy for Spectrometer {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &EnergyConfig,
-    ) -> OpmResult<LightResult> {
-        let result =
-            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        if let Some(data) = result.get(out_port) {
-            self.light_data = Some(data.clone());
-        }
-        Ok(result)
-    }
-}
-impl AnalysisRayTrace for Spectrometer {
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        self.light_data.as_mut()
-    }
-    fn set_light_data(&mut self, ld: LightData) {
-        self.light_data = Some(ld);
-    }
-}
+impl AnalysisEnergy for Spectrometer {}
+impl AnalysisRayTrace for Spectrometer {}
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
+        analyzers::energy::EnergyConfig,
         joule,
+        light_result::LightResult,
         nodes::{EnergyMeter, test_helper::test_helper::*},
         optic_ports::PortType,
         position_distributions::Hexapolar,

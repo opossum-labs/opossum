@@ -1,6 +1,6 @@
 use super::Lens;
 use crate::{
-    analyzers::{AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace},
+    analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
@@ -29,19 +29,22 @@ impl AnalysisRayTrace for Lens {
         let (refri, _, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
         let mut rays_bundle = vec![rays];
         let refraction_intended = true;
-        self.pass_through_surface(
+        // 1. Eintrittsfläche
+        self.pass_through_surface_generic(
             in_port,
-            &refri,
+            Some(refri),
             &mut rays_bundle,
-            &AnalyzerType::RayTrace(config.clone()),
+            config,
             self.inverted(),
             refraction_intended,
         )?;
-        self.pass_through_surface(
+
+        // 2. Austrittsfläche
+        self.pass_through_surface_generic(
             out_port,
-            &self.ambient_idx(),
+            Some(self.ambient_idx()),
             &mut rays_bundle,
-            &AnalyzerType::RayTrace(config.clone()),
+            config,
             self.inverted(),
             refraction_intended,
         )?;

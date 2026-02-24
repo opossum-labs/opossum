@@ -4,7 +4,16 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    J_per_cm2, analyzers::propagation_strategy::PropagationStrategy, apertures::Aperture, coatings::CoatingType, error::{OpmResult, OpossumError}, nodes::fluence_detector::Fluence, rays::Rays, refractive_index::RefractiveIndexType, surface::hit_map::HitMap, utils::{LockExt, geom_transformation::Isometry}
+    J_per_cm2,
+    analyzers::propagation_strategy::PropagationStrategy,
+    apertures::Aperture,
+    coatings::CoatingType,
+    error::{OpmResult, OpossumError},
+    nodes::fluence_detector::Fluence,
+    rays::Rays,
+    refractive_index::RefractiveIndexType,
+    surface::hit_map::HitMap,
+    utils::{LockExt, geom_transformation::Isometry},
 };
 
 use super::{
@@ -298,7 +307,7 @@ impl OpticSurface {
         for rays in self.get_rays_cache(backward) {
             rays_bundle.push(rays.clone());
         }
-
+        self.prune_hit_map(iso);
         Ok(())
     }
 }

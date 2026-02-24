@@ -6,7 +6,22 @@ use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
 use crate::{
-    analyzers::{Analyzable, propagation_strategy::PropagationStrategy}, apertures::Aperture, coatings::CoatingType, dottable::Dottable, error::{OpmResult, OpossumError}, light_result::LightResult, lightdata::LightData, nodes::{NodeAttr, NodeGroup, NodeReference, fluence_detector::Fluence}, optic_ports::{OpticPorts, PortType}, optic_scenery_rsc::SceneryResources, properties::{Properties, Proptype}, rays::Rays, refractive_index::RefractiveIndexType, reporting::node_report::NodeReport, surface::{Plane, geo_surface::GeoSurfaceRef, hit_map::HitMap, optic_surface::OpticSurface}, utils::{LockExt, geom_transformation::Isometry}
+    analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
+    apertures::Aperture,
+    coatings::CoatingType,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    light_result::LightResult,
+    lightdata::LightData,
+    nodes::{NodeAttr, NodeGroup, NodeReference, fluence_detector::Fluence},
+    optic_ports::{OpticPorts, PortType},
+    optic_scenery_rsc::SceneryResources,
+    properties::{Properties, Proptype},
+    rays::Rays,
+    refractive_index::RefractiveIndexType,
+    reporting::node_report::NodeReport,
+    surface::{Plane, geo_surface::GeoSurfaceRef, hit_map::HitMap, optic_surface::OpticSurface},
+    utils::{LockExt, geom_transformation::Isometry},
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -78,6 +93,7 @@ pub trait OpticNode: Dottable {
         let uuid = self.node_attr().uuid();
         let iso = self.effective_surface_iso(optic_surf_name)?;
         let node_name = self.node_attr().name().to_string();
+        let node_type = self.node_attr().node_type().to_string();
 
         // Oberfläche aus der Node holen
         let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
@@ -85,6 +101,8 @@ pub trait OpticNode: Dottable {
                 "Cannot find surface: \"{optic_surf_name}\" of node: \"{node_name}\""
             )));
         };
+
+        let rays_before: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
 
         // Die eigentliche Arbeit an die Oberfläche delegieren
         surf.propagate_rays(
@@ -94,17 +112,46 @@ pub trait OpticNode: Dottable {
             refri_after_surf.as_ref(),
             backward,
             refraction_intended,
-            strategy
-        )
+            strategy,
+        )?;
+
+        let rays_after: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
+        // Wenn Strahlen fehlen, Warnung setzen und loggen
+        if rays_after < rays_before {
+            self.set_apodization_warning(true);
+            log::warn!(
+                "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
+                node_name,
+                node_type
+            );
+        }
+        Ok(())
     }
+    /// A unified helper function to analyze optical nodes that feature a single interacting surface.
+    ///
+    /// This function simplifies the implementation of the analysis traits (Energy, RayTrace, GhostFocus)
+    /// for simple transmissive nodes like detectors, monitors, or dummy nodes. It automatically:
+    /// 1. Extracts the incoming light from the first input port.
+    /// 2. Propagates the light through the specified surface using the given [`PropagationStrategy`].
+    /// 3. Triggers the internal `set_light_data` hook so detector nodes can store the results for reporting.
+    /// 4. Packages the processed light data and maps it to the first output port.
+    ///
+    /// # Parameters
+    /// * `incoming_data`: The [`LightResult`] arriving at the node's input port.
+    /// * `strategy`: The analyzer-specific [`PropagationStrategy`] determining thresholds and physical rules.
+    /// * `optic_surf_name`: The name of the interacting surface (typically `"input_1"`).
+    /// * `refri_after_surf`: An optional refractive index after the surface. Usually `None` for non-refracting detectors.
+    ///
+    /// # Errors
+    /// This function returns an error if the specified optical surface cannot be found or if the underlying
+    /// geometric surface propagation fails.
     fn unified_analyze_single_surface_node(
         &mut self,
         mut incoming_data: LightResult, //
         strategy: &dyn PropagationStrategy,
         optic_surf_name: &str, // Name der Oberfläche im Bauteil
-        refri_after_surf: Option<RefractiveIndexType>
+        refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult> {
-        
         // 1. Finde Input- und Output-Port (hier stark vereinfacht dargestellt)
         let in_port_name = self.ports().names(&PortType::Input)[0].clone();
         let out_port_name = self.ports().names(&PortType::Output)[0].clone();
@@ -118,7 +165,7 @@ pub trait OpticNode: Dottable {
         match data {
             LightData::Geometric(rays) => {
                 let mut rays_bundle = vec![rays];
-                
+
                 self.pass_through_surface_generic(
                     optic_surf_name,
                     refri_after_surf, // Detektoren brechen meistens nicht
@@ -127,8 +174,9 @@ pub trait OpticNode: Dottable {
                     false, // backward = false
                     false, // refraction_intended = false
                 )?;
-                
-                Ok(LightResult::from([(out_port_name, LightData::Geometric(rays_bundle.remove(0)))]))
+                let out_data = LightData::Geometric(rays_bundle.remove(0));
+                self.set_light_data(out_data.clone());
+                Ok(LightResult::from([(out_port_name, out_data)]))
             }
             LightData::GhostFocus(mut rays_bundle) => {
                 self.pass_through_surface_generic(
@@ -139,18 +187,26 @@ pub trait OpticNode: Dottable {
                     false,
                     false,
                 )?;
-                
-                Ok(LightResult::from([(out_port_name, LightData::GhostFocus(rays_bundle))]))
+                let out_data = LightData::GhostFocus(rays_bundle);
+                self.set_light_data(out_data.clone());
+                Ok(LightResult::from([(out_port_name, out_data)]))
             }
             LightData::Energy(energy) => {
-                // Bei reiner Energie-Analyse wird das Licht einfach durchgereicht
-                Ok(LightResult::from([(out_port_name, LightData::Energy(energy))]))
+                let out_data = LightData::Energy(energy);
+                self.set_light_data(out_data.clone());
+                Ok(LightResult::from([(out_port_name, out_data)]))
             }
-            LightData::Fourier => {
-                Ok(LightResult::default())
-            }
+            LightData::Fourier => Ok(LightResult::default()),
         }
     }
+    /// Returns a mutable reference to the light data.
+    /// Overridden by detector nodes to allow data modification.
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        None
+    }
+    /// Hook to store light data during analysis.
+    /// Overridden by detector nodes to capture passing data for reports.
+    fn set_light_data(&mut self, _ld: LightData) {}
     /// Resets the data-holding fields of all [`OpticSurface`]s of this node
     /// This includes the forward and backward rays cache, as well as the hitmaps
     fn reset_optic_surfaces(&mut self) {

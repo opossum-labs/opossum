@@ -96,10 +96,49 @@ pub trait AnalysisEnergy: OpticNode {
     /// This function will return an error if the concrete implementation of the [`OpticNode`] fails.
     fn analyze(
         &mut self,
-        incoming_data: LightResult,
-        config: &EnergyConfig,
+        mut incoming_data: LightResult,
+        _config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
-        self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)
+        let in_ports = self.ports().names(&crate::optic_ports::PortType::Input);
+        let out_ports = self.ports().names(&crate::optic_ports::PortType::Output);
+
+        // If the node doesn't have at least one input and output, we can't pass energy through
+        if in_ports.is_empty() || out_ports.is_empty() {
+            return Ok(LightResult::default());
+        }
+
+        let in_port = &in_ports[0];
+        let out_port = &out_ports[0];
+
+        let Some(data) = incoming_data.remove(in_port) else {
+            return Ok(LightResult::default());
+        };
+
+        // 1. APERTUR-PRÜFUNG: Warnung werfen, falls eine Blende den Strahl beschneiden würde
+        let mut apodized = false;
+        if let Some(surf) = self.get_optic_surface(in_port) {
+            if !surf.aperture().is_none() {
+                apodized = true;
+            }
+        }
+        if let Some(surf) = self.get_optic_surface(out_port) {
+            if !surf.aperture().is_none() {
+                apodized = true;
+            }
+        }
+        if apodized {
+            self.set_apodization_warning(true);
+            log::warn!(
+                "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
+                self.node_attr().name(),
+                self.node_type()
+            );
+        }
+        self.set_light_data(data.clone());
+
+        // TODO for the future: Calculate transmission factor via coatings -> scale energy
+
+        Ok(LightResult::from([(out_port.clone(), data)]))
     }
 }
 

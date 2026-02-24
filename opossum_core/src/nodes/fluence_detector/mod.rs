@@ -5,8 +5,7 @@ pub mod fluence_data;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
-        raytrace::AnalysisRayTrace,
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
     lightdata::LightData,
@@ -195,10 +194,6 @@ impl OpticNode for FluenceDetector {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
-}
-impl AnalysisGhostFocus for FluenceDetector {}
-impl AnalysisEnergy for FluenceDetector {}
-impl AnalysisRayTrace for FluenceDetector {
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
         self.light_data.as_mut()
     }
@@ -206,6 +201,9 @@ impl AnalysisRayTrace for FluenceDetector {
         self.light_data = Some(ld);
     }
 }
+impl AnalysisGhostFocus for FluenceDetector {}
+impl AnalysisEnergy for FluenceDetector {}
+impl AnalysisRayTrace for FluenceDetector {}
 
 #[cfg(test)]
 mod test {

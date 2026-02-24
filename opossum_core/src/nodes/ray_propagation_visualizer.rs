@@ -164,6 +164,12 @@ impl OpticNode for RayPropagationVisualizer {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, new_data: LightData) {
+        self.light_data = Some(new_data);
+    }
 }
 impl AnalysisGhostFocus for RayPropagationVisualizer {}
 impl AnalysisEnergy for RayPropagationVisualizer {
@@ -180,14 +186,7 @@ impl AnalysisEnergy for RayPropagationVisualizer {
         Ok(result)
     }
 }
-impl AnalysisRayTrace for RayPropagationVisualizer {
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        self.light_data.as_mut()
-    }
-    fn set_light_data(&mut self, ld: LightData) {
-        self.light_data = Some(ld);
-    }
-}
+impl AnalysisRayTrace for RayPropagationVisualizer {}
 /// struct that holds the history of the rays' positions for rays of a specific wavelength
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RayPositionHistorySpectrum {

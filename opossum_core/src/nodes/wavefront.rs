@@ -267,6 +267,12 @@ impl OpticNode for WaveFront {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
+    }
 }
 impl From<WaveFrontErrorMap> for Proptype {
     fn from(value: WaveFrontErrorMap) -> Self {
@@ -289,14 +295,7 @@ impl AnalysisEnergy for WaveFront {
         Ok(result)
     }
 }
-impl AnalysisRayTrace for WaveFront {
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        self.light_data.as_mut()
-    }
-    fn set_light_data(&mut self, ld: LightData) {
-        self.light_data = Some(ld);
-    }
-}
+impl AnalysisRayTrace for WaveFront {}
 
 impl Plottable for WaveFrontErrorMap {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
@@ -596,24 +595,6 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-    // #[test]
-    // fn export_data() {
-    //     let mut wf = WaveFront::default();
-    //     assert!(wf.export_data(Path::new(""), "").is_ok());
-    //     wf.light_data = Some(LightData::Geometric(Rays::default()));
-    //     let path = NamedTempFile::new().unwrap();
-    //     assert!(wf.export_data(path.path().parent().unwrap(), "").is_ok());
-    //     wf.light_data = Some(LightData::Geometric(
-    //         Rays::new_uniform_collimated(
-    //             nanometer!(1053.0),
-    //             joule!(1.0),
-    //             &Hexapolar::new(Length::zero(), 1).unwrap(),
-    //         )
-    //         .unwrap(),
-    //     ));
-    //     assert!(wf.export_data(path.path().parent().unwrap(), "").is_ok());
-    //     // todo! check for warnings
-    // }
     #[test]
     fn report() {
         let mut wf = WaveFront::default();
