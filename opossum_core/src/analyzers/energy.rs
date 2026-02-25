@@ -115,17 +115,17 @@ pub trait AnalysisEnergy: OpticNode {
         };
 
         // 1. APERTUR-PRÜFUNG: Warnung werfen, falls eine Blende den Strahl beschneiden würde
-        let mut apodized = false;
-        if let Some(surf) = self.get_optic_surface(in_port) {
-            if !surf.aperture().is_none() {
-                apodized = true;
-            }
-        }
-        if let Some(surf) = self.get_optic_surface(out_port) {
-            if !surf.aperture().is_none() {
-                apodized = true;
-            }
-        }
+        let apodized = if let Some(surf) = self.get_optic_surface(out_port)
+            && !surf.aperture().is_none()
+        {
+            true
+        } else if let Some(surf) = self.get_optic_surface(in_port)
+            && !surf.aperture().is_none()
+        {
+            true
+        } else {
+            false
+        };
         if apodized {
             self.set_apodization_warning(true);
             log::warn!(

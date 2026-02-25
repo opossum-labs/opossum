@@ -46,7 +46,7 @@ pub struct OpticSurface {
 impl Default for OpticSurface {
     /// Returns a default [`OpticSurface`].
     ///
-    /// The default is a flat surface with an ideal antireflective caoting (=no reflection), no limiting aperture
+    /// The default is a flat surface with an ideal antireflective coating (=no reflection), no limiting aperture
     /// and a lidt of 1 J/cm².
     fn default() -> Self {
         Self {
@@ -258,17 +258,22 @@ impl OpticSurface {
     pub const fn anchor_point_iso(&self) -> &Isometry {
         &self.anchor_point_iso
     }
-    /// Propagiert ein Strahlenbündel durch diese spezifische Oberfläche.
-    /// Nutzt das Strategy Pattern, um analyse-spezifisches Verhalten auszuführen.
+    /// Propagates a bundle of rays through this specific surface.
+    /// Utilizes the Strategy Pattern to execute analyzer-specific behavior.
     ///
-    /// # Parameter
-    /// * `rays_bundle`: Das zu propagierende Strahlenbündel.
-    /// * `node_uuid`: Die UUID der übergeordneten Node (für reflektierte Strahlen).
-    /// * `iso`: Die effektive Isometrie dieser Oberfläche im Raum.
-    /// * `refri_after_surf`: Der Brechungsindex nach der Oberfläche.
-    /// * `backward`: Propagationsrichtung.
-    /// * `refraction_intended`: Gibt an, ob Brechung berechnet werden soll.
-    /// * `strategy`: Die Strategie des aktuellen Analyse-Modus.
+    /// # Parameters
+    /// * `rays_bundle`: The bundle of rays to be propagated.
+    /// * `node_uuid`: The UUID of the parent optical node (used for setting the origin of reflected rays).
+    /// * `iso`: The effective isometry of this surface in 3D space.
+    /// * `refri_after_surf`: The refractive index after the surface.
+    /// * `backward`: The direction of propagation (`true` if backwards).
+    /// * `refraction_intended`: Indicates whether refraction should be calculated.
+    /// * `strategy`: The strategy defining the behavior of the current analysis mode.
+    ///
+    /// # Errors
+    /// This function errors if the optical calculations (refraction/reflection) or the
+    /// strategy-specific hooks (e.g., fluence evaluation) fail.
+    #[allow(clippy::too_many_arguments)]
     pub fn propagate_rays(
         &mut self,
         rays_bundle: &mut Vec<Rays>,
@@ -282,28 +287,17 @@ impl OpticSurface {
         let missed_strategy = strategy.missed_surface_strategy();
 
         for rays in &mut *rays_bundle {
-            // 1. Brechung/Reflexion an der Geometrie berechnen
             let mut reflected = rays.refract_on_surface(
                 self,
                 refri_after_surf,
                 refraction_intended,
                 &missed_strategy,
             )?;
-
-            // 2. Ursprung der reflektierten Strahlen auf die übergeordnete Node setzen
             reflected.set_node_origin_uuid(node_uuid);
-
-            // 3. Strategie-Hook für die Oberflächeninteraktion (z.B. Fluenz für GhostFocus)
             strategy.on_surface_interaction(self, rays, reflected, backward)?;
-
-            // 4. Strahlen an der Apertur abschneiden (Apodisierung)
             rays.apodize(self.aperture(), iso)?;
-
-            // 5. Strategie-Hook nach der Apodisierung (z.B. Energie-Schwellenwert für RayTrace)
             strategy.on_after_apodization(rays)?;
         }
-
-        // 6. Eventuell von der Strategie gecachte Strahlen (z.B. GhostFocus) dem Bündel hinzufügen
         for rays in self.get_rays_cache(backward) {
             rays_bundle.push(rays.clone());
         }

@@ -79,7 +79,16 @@ pub trait OpticNode: Dottable {
 
         Ok(())
     }
-    /// Sucht eine Oberfläche anhand ihres Namens und leitet das Strahlenbündel hindurch.
+    /// Finds a surface by its name and guides the ray bundle through it.
+    ///
+    /// This function handles the boilerplate of retrieving the correct surface, calculating
+    /// the ray count before and after propagation to detect apodization, and logging a warning
+    /// if rays were blocked by the surface's aperture.
+    ///
+    /// # Errors
+    ///
+    /// This function errors if the specified surface cannot be found, if the geometric propagation fails,
+    /// or if the strategy-specific hooks (e.g., fluence evaluation) fail.
     fn pass_through_surface_generic(
         &mut self,
         optic_surf_name: &str,
@@ -89,22 +98,17 @@ pub trait OpticNode: Dottable {
         backward: bool,
         refraction_intended: bool,
     ) -> OpmResult<()> {
-        // Node-spezifische Daten abrufen
         let uuid = self.node_attr().uuid();
         let iso = self.effective_surface_iso(optic_surf_name)?;
         let node_name = self.node_attr().name();
         let node_type = self.node_attr().node_type();
 
-        // Oberfläche aus der Node holen
         let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
             return Err(OpossumError::Analysis(format!(
                 "Cannot find surface: \"{optic_surf_name}\" of node: \"{node_name}\""
             )));
         };
-
         let rays_before: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
-
-        // Die eigentliche Arbeit an die Oberfläche delegieren
         surf.propagate_rays(
             rays_bundle,
             uuid,
@@ -114,7 +118,6 @@ pub trait OpticNode: Dottable {
             refraction_intended,
             strategy,
         )?;
-
         let rays_after: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
         if rays_after < rays_before {
             self.set_apodization_warning(true);

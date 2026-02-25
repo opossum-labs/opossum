@@ -43,6 +43,11 @@ pub trait PropagationStrategy {
     /// Hook executed immediately after a ray bundle interacts with a surface.
     /// Allows the analyzer to perform specific tasks, like evaluating fluence
     /// or storing caching data (e.g., for `GhostFocus`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the analyzer-specific interaction tasks (such as fluence
+    /// evaluation or hit-map calculations) fail
     fn on_surface_interaction(
         &self,
         _surf: &mut OpticSurface,
@@ -55,6 +60,9 @@ pub trait PropagationStrategy {
     }
 
     /// Hook executed after apodization to apply thresholds or energy invalidation.
+    ///
+    /// # Errors
+    /// Returns an error if the analyzer-specific post-apodization tasks (such as energy thresholding) fail.
     fn on_after_apodization(&self, _rays: &mut Rays) -> OpmResult<()> {
         // Default implementation does nothing
         Ok(())
