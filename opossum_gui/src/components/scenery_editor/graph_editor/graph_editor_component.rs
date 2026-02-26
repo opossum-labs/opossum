@@ -2,7 +2,7 @@
 use crate::{OPOSSUM_UI_LOGS, api::{self, eval_action_run}, components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, NodeType, constants::{MAX_ZOOM, MIN_NODE_DISTANCE_RADIUS, MIN_ZOOM, NODE_PLACEMENT_MAX_ITERATIONS}, edges::edges_component::{
+        GraphState, GraphStore, NodeElement, NodeType, constants::{MAX_ZOOM, MIN_NODE_DISTANCE_RADIUS, MIN_ZOOM, NODE_PLACEMENT_MAX_ITERATIONS}, edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
         }, graph_editor::hooks::{
             use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
@@ -19,7 +19,7 @@ use dioxus::{
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use futures_util::StreamExt;
 use opossum_core::{opm_document::AnalyzerInfo, prelude::*, types::api_types::{ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo}};
-use std::{collections::BTreeMap, fs, path::PathBuf, rc::Rc, time::Instant};
+use std::{collections::{BTreeMap, HashMap}, fs, path::PathBuf, rc::Rc, time::Instant};
 use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub enum NodeEditorCommand {
@@ -99,13 +99,6 @@ pub enum DragStatus {
     Edge(NewEdgeCreationStart),
 }
 
-#[derive(Clone, PartialEq)]
-pub struct GraphTab {
-    pub graph_id: String, // "root" oder group_node_id
-    pub title: String,
-    pub is_active: bool,
-}
-
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct GraphsWorkspaceState {
     pub tabs: Signal<BTreeMap<Uuid, Signal<GraphState>>>,
@@ -113,6 +106,350 @@ pub struct GraphsWorkspaceState {
     pub root_scenery_id: Signal<Uuid>,
     pub needs_saving: Signal<bool>,
     pub file_path: Signal<Option<PathBuf>>,
+}
+
+impl GraphsWorkspaceState{
+    pub fn get_graph_state(&self, graph_id: Uuid) -> Option<ReadSignal<GraphState>>{
+        self.tabs.read().get(&graph_id).map(|g| (*g).into())
+    }
+    pub fn get_graph_store(&self, graph_id: Uuid) -> Option<ReadSignal<GraphStore>>{
+        self.tabs.read().get(&graph_id).map(|g| g.read().graph_store.into())
+    }
+    pub fn get_editor_state(&self, graph_id: Uuid) -> Option<ReadSignal<EditorState>>{
+        self.tabs.read().get(&graph_id).map(|g| g.read().editor_state.into())
+    }
+    pub fn get_graph_edges(&self, graph_id: Uuid) -> Option<ReadSignal<Vec<ConnectInfo>>>{
+        self.tabs.read().get(&graph_id).map(|g| g.read().graph_store.read().edges().into())
+    }
+    pub fn get_graph_nodes(&self, graph_id: Uuid) -> Option<ReadSignal<HashMap<Uuid, NodeElement>>>{
+        self.tabs.read().get(&graph_id).map(|g| g.read().graph_store.read().nodes().into())
+    }
+    pub fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64, UnknownUnit>>{
+        self.tabs.read().get(&graph_id).map(|g| g.read().graph_store.read().get_bounding_box())
+    }
+}
+
+#[derive(Clone, PartialEq, Copy)]
+pub struct WorkSpaceSignalHandlers {
+    pub add_new_group_tab: EventHandler<(String, Uuid)>,
+    pub set_root_scenery_id: EventHandler<Uuid>,
+    pub remove_tab: EventHandler<Uuid>,
+    pub set_needs_saving: EventHandler<bool>,
+    pub clear_workspace: EventHandler<()>,
+    pub add_root_scenery_nodes: EventHandler<Vec<NodeInfo>>,
+    pub add_root_scenery_analyzers: EventHandler<Vec<AnalyzerInfo>>,
+    pub add_root_scenery_edges: EventHandler<Vec<ConnectInfo>>,
+    pub set_active_tab: EventHandler<Option<Uuid>>,
+    pub add_optical_node: EventHandler<(NodeInfo, Uuid)>,
+    pub add_reference_node: EventHandler<(NodeInfo, Uuid)>,
+    pub add_analyzer_node: EventHandler<(NewAnalyzerInfo, Uuid, Uuid)>,
+    pub remove_nodes: EventHandler<(Vec<Uuid>, Uuid)>,
+    pub update_node_positions: EventHandler<(HashMap<Uuid, Point2D<f64>>, Uuid)>,
+    pub add_edge: EventHandler<(ConnectInfo, Uuid)>,
+    pub delete_edge: EventHandler<(ConnectInfo, Uuid)>,
+    pub update_edge: EventHandler<(ConnectInfo, Uuid)>,
+    pub center_graph: EventHandler<(Rect<f64, UnknownUnit>, bool, Uuid)>,
+    pub invert_node: EventHandler<(Uuid, bool, Uuid)>,
+    pub update_edges: EventHandler<(Vec<ConnectInfo>, Uuid)>,
+    pub set_node_name: EventHandler<(String, Uuid, Uuid)>
+}
+
+impl WorkSpaceSignalHandlers {
+    pub fn new(
+        workspace: Signal<GraphsWorkspaceState>,
+    ) -> Self {
+        let add_new_group_tab = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(title, id): (String, Uuid)| {
+                let mut graph_state = GraphState::default();
+                graph_state.id = id;
+                graph_state.name = title;
+
+                workspace
+                    .write()
+                    .tabs
+                    .write()
+                    .insert(id, Signal::new(graph_state));
+
+                workspace.write().active_tab.set(Some(id));
+            })
+        };
+
+        let set_node_name = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(name, node_id, graph_id)| {
+                if let Some(graph_state) = workspace.write().tabs.write().get_mut(&graph_id){
+                    graph_state.write().graph_store.write().set_name_of_node(node_id, name);
+                }
+            })
+        };
+
+        let set_root_scenery_id = {
+            let mut workspace = workspace;
+            EventHandler::new(move |id: Uuid| {
+                workspace.write().root_scenery_id.set(id);
+            })
+        };
+
+        let remove_tab = {
+            let mut workspace = workspace;
+            EventHandler::new(move |id: Uuid| {
+                workspace.write().tabs.write().remove(&id);
+            })
+        };
+
+        let set_needs_saving = {
+            let mut workspace = workspace;
+            EventHandler::new(move |needs_saving: bool| {
+                workspace.write().needs_saving.set(needs_saving);
+            })
+        };
+
+        let clear_workspace = {
+            let mut workspace = workspace;
+            EventHandler::new(move |()| {
+                workspace.set(GraphsWorkspaceState::default());
+            })
+        };
+
+        let update_node_positions = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(new_positions, graph_id): (HashMap<Uuid, Point2D<f64>>, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    graph_state.write().graph_store.write().update_node_positions(new_positions);
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        let add_edge = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(connect_info , graph_id): (ConnectInfo, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    graph_state.write().graph_store.write().edges_mut().write().push(connect_info);
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        let delete_edge = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(edge_to_delete , graph_id): (ConnectInfo, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    graph_state.write().graph_store
+                .write()
+                .edges
+                .write()
+                .retain(|e| e != &edge_to_delete);
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        
+        let update_edge = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(ci , graph_id): (ConnectInfo, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    if let Some(e) =graph_state.write().graph_store
+                .write()
+                .edges
+                .write()
+                .iter_mut()
+                .find(|e| e.src_uuid() == ci.src_uuid() && e.target_uuid() == ci.target_uuid())
+                {
+                *e = ci;
+            }
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        let update_edges = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(connections , graph_id): (Vec<ConnectInfo>, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    graph_state.write()
+                                .graph_store
+                                .write()
+                                .edges
+                                .set(connections);
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        let add_optical_node = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(node_info , graph_id): (NodeInfo, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    graph_state.write().graph_store.write().add_new_optical_node(&node_info);
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        let add_analyzer_node = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(analyzer_info, analyzer_id , graph_id): (NewAnalyzerInfo, Uuid, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    graph_state.write().graph_store.write().add_new_analyzer(analyzer_info, analyzer_id);
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        let add_reference_node = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(node_info , graph_id): (NodeInfo, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    graph_state.write().graph_store.write().add_new_reference_node(&node_info);
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        let remove_nodes = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(node_ids , graph_id): (Vec<Uuid>, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    graph_state.write().graph_store.write().remove_nodes_by_id(node_ids);
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        let add_root_scenery_nodes = {
+            let mut workspace = workspace;
+            let root_graph_id = workspace.read().root_scenery_id;
+
+            EventHandler::new(move |nodes: Vec<NodeInfo>| {
+                let id = *root_graph_id.read();
+
+                if let Some(graph_state) =
+                    workspace.write().tabs.write().get_mut(&id)
+                {
+                    graph_state
+                        .write()
+                        .graph_store
+                        .write()
+                        .add_nodes(&nodes);
+                } else {
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log("no root scenery found! Cannot add nodes!");
+                }
+            })
+        };
+
+        let invert_node = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(node_id, inverted , graph_id): (Uuid, bool, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    graph_state.write().graph_store.write().set_node_inverted(node_id, inverted);
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        let add_root_scenery_analyzers = {
+            let mut workspace = workspace;
+            let root_graph_id = workspace.read().root_scenery_id;
+            EventHandler::new(move |analyzers: Vec<AnalyzerInfo>| {
+                let id = *root_graph_id.read();
+
+                if let Some(graph_state) =
+                    workspace.write().tabs.write().get_mut(&id)
+                {
+                    graph_state
+                        .write()
+                        .graph_store
+                        .write()
+                        .add_analyzers(&analyzers);
+                } else {
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log("no root scenery found! Cannot add analyzers!");
+                }
+            })
+        };
+
+        let add_root_scenery_edges = {
+            let mut workspace = workspace;
+            let root_graph_id = workspace.read().root_scenery_id;
+            EventHandler::new(move |connect_infos: Vec<ConnectInfo>| {
+                let id = *root_graph_id.read();
+
+                if let Some(graph_state) =
+                    workspace.write().tabs.write().get_mut(&id)
+                {
+                    graph_state
+                        .write()
+                        .graph_store
+                        .write()
+                        .edges_mut()
+                        .set(connect_infos);
+                } else {
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log("no root scenery found! Cannot add edges!");
+                }
+            })
+        };
+
+        let center_graph = {
+            let mut workspace = workspace;
+            EventHandler::new(move |(bounding_box, zoom_to_fit , graph_id): (Rect<f64, UnknownUnit>, bool, Uuid)| {
+                let mut workspace_write = workspace.write();
+                if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    graph_state.write().editor_state.write().center_graph(bounding_box, zoom_to_fit);
+                }
+                workspace_write.needs_saving.set(true);
+            })
+        };
+
+        let set_active_tab = {
+            let mut workspace = workspace;
+            EventHandler::new(move |active_tab: Option<Uuid>| {
+                workspace.write().active_tab.set(active_tab);
+            })
+        };
+
+
+        Self {
+            add_new_group_tab,
+            set_root_scenery_id,
+            remove_tab,
+            set_needs_saving,
+            clear_workspace,
+            add_root_scenery_nodes,
+            add_root_scenery_analyzers,
+            add_root_scenery_edges,
+            set_active_tab,
+            add_optical_node,
+            add_reference_node,
+            add_analyzer_node,
+            remove_nodes, 
+            update_node_positions,
+            add_edge, 
+            center_graph,
+            delete_edge,
+            update_edge, 
+            invert_node, 
+            update_edges,
+            set_node_name
+        }
+    }
 }
 
 #[component]
@@ -125,76 +462,69 @@ pub fn GraphEditor(
     model_file_path_handler: EventHandler<Option<PathBuf>>,
 ) -> Element {
 
-    let mut workspace = use_signal(|| GraphsWorkspaceState::default());
+    let workspace = use_signal(|| GraphsWorkspaceState::default());
     let root_graph_id = use_memo(move || *workspace.read().root_scenery_id.read());
 
-    //Handler definition
-    let add_new_group_tab_handler = EventHandler::new(move |(title, id): (String, Uuid)|{
-        let mut graph_state = GraphState::default();
-        graph_state.id = id;
-        graph_state.name = title;
-        workspace.write().tabs.write().insert(id, Signal::new(graph_state));
-        workspace.write().active_tab.set(Some(id));
-    });
-    let set_root_scenery_id_handler = EventHandler::new(move | id: Uuid|{
-        workspace.write().root_scenery_id.set(id);
-    });
-    let remove_tab_handler = EventHandler::new(move |id: Uuid|{
-        workspace.write().tabs.write().remove(&id);
-    });
-    let set_needs_saving_handler = EventHandler::new(move | needs_saving: bool|{
-        workspace.write().needs_saving.set(needs_saving);
-    });
-    let clear_workspace_handler = EventHandler::new(move |()|{
-        workspace.set(GraphsWorkspaceState::default());
-        // workspace.write().tabs.write().clear();
-        // workspace.write().active_tab.set(None);
-        // workspace.write().root_scenery_id.set(Uuid::nil());
-        // workspace.write().needs_saving.set(false);
-    });
-    let add_root_scenery_nodes_handler = EventHandler::new(move | nodes: Vec<NodeInfo>|{
-        let id = *root_graph_id.read();
-        if let Some(graph_state) = workspace.write().tabs.write().get_mut(&id){
-            graph_state.write().graph_store.write().add_nodes(&nodes);
-        }
-        else{
-            OPOSSUM_UI_LOGS.write().add_log("no root scenery found! Cannot add nodes!");
-        }
-    });
-    let add_root_scenery_analyzers_handler = EventHandler::new(move | analyzers: Vec<AnalyzerInfo>|{
-        let id = *root_graph_id.read();
-        if let Some(graph_state) = workspace.write().tabs.write().get_mut(&id){
-            graph_state.write().graph_store.write().add_analyzers(&analyzers);
-        }
-        else{
-            OPOSSUM_UI_LOGS.write().add_log("no root scenery found! Cannot add analyzers!");
-        }
-    });
-    let add_root_scenery_edges_handler = EventHandler::new(move | connect_infos: Vec<ConnectInfo>|{
-        let id = *root_graph_id.read();
-        if let Some(graph_state) = workspace.write().tabs.write().get_mut(&id){
-            graph_state.write().graph_store.write().edges_mut().set(connect_infos);
-        }
-        else{
-            OPOSSUM_UI_LOGS.write().add_log("no root scenery found! Cannot add edges!");
-        }
-    });
+    let workspace_handlers = WorkSpaceSignalHandlers::new(workspace);
 
-    let set_active_tab_handler = EventHandler::new(move |active_tab: Option<Uuid>|{
-        workspace.write().active_tab.set(active_tab);
-    });
+    // //Handler definition
+    // let add_new_group_tab_handler = EventHandler::new(move |(title, id): (String, Uuid)|{
+    //     let mut graph_state = GraphState::default();
+    //     graph_state.id = id;
+    //     graph_state.name = title;
+    //     workspace.write().tabs.write().insert(id, Signal::new(graph_state));
+    //     workspace.write().active_tab.set(Some(id));
+    // });
+    // let set_root_scenery_id_handler = EventHandler::new(move | id: Uuid|{
+    //     workspace.write().root_scenery_id.set(id);
+    // });
+    // let remove_tab_handler = EventHandler::new(move |id: Uuid|{
+    //     workspace.write().tabs.write().remove(&id);
+    // });
+    // let set_needs_saving_handler = EventHandler::new(move | needs_saving: bool|{
+    //     workspace.write().needs_saving.set(needs_saving);
+    // });
+    // let clear_workspace_handler = EventHandler::new(move |()|{
+    //     workspace.set(GraphsWorkspaceState::default());
+    // });
+    // let add_root_scenery_nodes_handler = EventHandler::new(move | nodes: Vec<NodeInfo>|{
+    //     let id = *root_graph_id.read();
+    //     if let Some(graph_state) = workspace.write().tabs.write().get_mut(&id){
+    //         graph_state.write().graph_store.write().add_nodes(&nodes);
+    //     }
+    //     else{
+    //         OPOSSUM_UI_LOGS.write().add_log("no root scenery found! Cannot add nodes!");
+    //     }
+    // });
+    // let add_root_scenery_analyzers_handler = EventHandler::new(move | analyzers: Vec<AnalyzerInfo>|{
+    //     let id = *root_graph_id.read();
+    //     if let Some(graph_state) = workspace.write().tabs.write().get_mut(&id){
+    //         graph_state.write().graph_store.write().add_analyzers(&analyzers);
+    //     }
+    //     else{
+    //         OPOSSUM_UI_LOGS.write().add_log("no root scenery found! Cannot add analyzers!");
+    //     }
+    // });
+    // let add_root_scenery_edges_handler = EventHandler::new(move | connect_infos: Vec<ConnectInfo>|{
+    //     let id = *root_graph_id.read();
+    //     if let Some(graph_state) = workspace.write().tabs.write().get_mut(&id){
+    //         graph_state.write().graph_store.write().edges_mut().set(connect_infos);
+    //     }
+    //     else{
+    //         OPOSSUM_UI_LOGS.write().add_log("no root scenery found! Cannot add edges!");
+    //     }
+    // });
+
+    // let set_active_tab_handler = EventHandler::new(move |active_tab: Option<Uuid>|{
+    //     workspace.write().active_tab.set(active_tab);
+    // });
 
     let workspace_processor = use_workspace_processor(
-        workspace, 
+        workspace.into(), 
         root_graph_id.into(), 
-        add_new_group_tab_handler, 
-        set_root_scenery_id_handler, 
-        model_file_path_handler, 
-        set_needs_saving_handler,
-        clear_workspace_handler,
-        add_root_scenery_nodes_handler,
-        add_root_scenery_analyzers_handler,
-        add_root_scenery_edges_handler);
+        workspace_handlers,
+        model_file_path_handler
+);
 
 
     let active_tab = use_memo(move || {
@@ -303,7 +633,7 @@ pub fn GraphEditor(
                     on_value_change: move |v: String| {
                         println!("value changing");
                         if let Ok(new_id) = Uuid::parse_str(&v) {
-                            set_active_tab_handler.call(Some(new_id));
+                            workspace_handlers.set_active_tab.call(Some(new_id));
                         }
                     },
                     {
@@ -323,7 +653,7 @@ pub fn GraphEditor(
                                                     class: "tab-close",
                                                     onclick: {
                                                         let id_copy = *id;
-                                                        move |_| remove_tab_handler.call(id_copy)
+                                                        move |_| workspace_handlers.remove_tab.call(id_copy)
                                                     },
 
                                                 }
@@ -346,7 +676,7 @@ pub fn GraphEditor(
                                         model_file_path_sig,
                                         model_file_path_handler,
                                         current_mouse_pos,
-                                        add_new_group_tab_handler,
+                                        add_new_group_tab_handler: workspace_handlers.add_new_group_tab,
                                         graph_state: *graph_state,
                                     }
                                 }
@@ -361,16 +691,10 @@ pub fn GraphEditor(
 
 
 pub fn use_workspace_processor(
-    mut workspace: Signal<GraphsWorkspaceState>,
+    workspace: ReadSignal<GraphsWorkspaceState>,
     root_graph_id: ReadSignal<Uuid>, 
-    add_new_group_tab_handler: EventHandler<(String, Uuid)>, 
-    set_root_scenery_id_handler: EventHandler<Uuid>, 
-    set_file_path_handler: EventHandler<Option<PathBuf>>, 
-    set_needs_saving_handler: EventHandler<bool>,
-    clear_workspace_handler: EventHandler<()>,
-    add_root_scenery_nodes_handler: EventHandler<Vec<NodeInfo>>,
-    add_root_scenery_analyzers_handler: EventHandler<Vec<AnalyzerInfo>>,
-    add_root_scenery_edges_handler: EventHandler<Vec<ConnectInfo>>
+    workspace_handlers: WorkSpaceSignalHandlers,
+    set_file_path_handler: EventHandler<Option<PathBuf>>
 ) -> Coroutine<GraphsWorkspaceAction> {
     use_coroutine(move |mut rx: UnboundedReceiver<GraphsWorkspaceAction>| {
         async move {
@@ -381,112 +705,69 @@ pub fn use_workspace_processor(
                         process_load_from_file(
                             path, 
                             root_graph_id,
-                            clear_workspace_handler, 
-                            add_new_group_tab_handler, 
-                            set_root_scenery_id_handler, 
-                            set_file_path_handler, 
-                            set_needs_saving_handler,
-                            add_root_scenery_nodes_handler,
-                            add_root_scenery_analyzers_handler,
-                            add_root_scenery_edges_handler
+                            workspace_handlers,
+                            set_file_path_handler
                         ).await;
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&*root_graph_id.read()){
-                            process_center_graph(*graph_state, false)
-                        }
+                        process_center_graph(workspace, workspace_handlers, *root_graph_id.read(), false)
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
-                        process_save_root_scenery_to_file(path, set_file_path_handler, set_needs_saving_handler).await;
+                        process_save_root_scenery_to_file(path, set_file_path_handler, workspace_handlers).await;
                     }
                     GraphsWorkspaceAction::DeleteRootScenery => {
-                        process_delete_root_scenery(clear_workspace_handler).await;
+                        process_delete_root_scenery(workspace_handlers).await;
                     }
                     GraphsWorkspaceAction::GetRootSceneryId => {
-                        process_get_root_scenery_id(add_new_group_tab_handler, set_root_scenery_id_handler).await;
+                        process_get_root_scenery_id(workspace_handlers).await;
                     }
                     GraphsWorkspaceAction::AddOpticNode { node_type, graph_id } => {
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id){
-                            process_add_optic_node(&node_type, *graph_state).await;
-                        }
+                        process_add_optic_node(&node_type, workspace, workspace_handlers, graph_id).await;
                     },
                     GraphsWorkspaceAction::AddOpticReference { new_ref_node, graph_id } => {
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id){
-                            process_add_reference_node(new_ref_node, *graph_state).await;
-                        }
+                        process_add_reference_node(new_ref_node, workspace_handlers, graph_id).await;
                     },
-                    GraphsWorkspaceAction::AddAnalyzer { analyzer_type, graph_id } => 
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id){
-                            process_add_analyzer(analyzer_type, *graph_state).await;
-                        }
+                    GraphsWorkspaceAction::AddAnalyzer { analyzer_type, graph_id } => {
+                        process_add_analyzer(analyzer_type, workspace, workspace_handlers, graph_id).await;
+                    }
                     GraphsWorkspaceAction::OptimizeLayout { graph_id } => {
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id){
-                            process_optimize_layout(*graph_state).await;
-                        }
+                        process_optimize_layout(workspace, workspace_handlers, graph_id).await;
                     },
                     GraphsWorkspaceAction::CenterGraph { zoom_to_fit, graph_id } => {
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id){
-                            process_center_graph(*graph_state, zoom_to_fit)
-                        }
+                        process_center_graph(workspace, workspace_handlers, graph_id, zoom_to_fit)
                     },
                     GraphsWorkspaceAction::UpdateEdges { connections, graph_id } => {
-                        if let Some(graph_state) = workspace.write().tabs.write().get_mut(&graph_id){
-                            graph_state.write()
-                                .graph_store
-                                .write()
-                                .edges
-                                .set(connections.clone());
-                            graph_state.write()
-                                .graph_store
-                                .write()
-                                .needs_saving
-                                .set(true);
-                        }
+                        workspace_handlers.update_edges.call((connections, graph_id))
                     },
                     GraphsWorkspaceAction::InvertNode { inverted, graph_id, node_id } => {
-                        if let Some(graph_state) = workspace.write().tabs.write().get_mut(&graph_id){
-                            graph_state.write().graph_store.write().set_node_inverted(node_id, inverted);
-                        }
+                        workspace_handlers.invert_node.call((node_id, inverted, graph_id))
                     },
                     GraphsWorkspaceAction::SetNodeName { name, graph_id, node_id } => {
-                        if let Some(graph_state) = workspace.write().tabs.write().get_mut(&graph_id){
-                            graph_state.write().graph_store.write().set_name_of_node(node_id, name);
-                        }
+                        workspace_handlers.set_node_name.call((name, node_id, graph_id))
                     }
                     GraphsWorkspaceAction::UpdateEdge { connection, graph_id } => {
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id){
-                            process_update_edge(connection, *graph_state).await;
-                        }
+                        process_update_edge(connection, workspace_handlers, graph_id).await;
                     },
                     GraphsWorkspaceAction::DeleteEdge { connection, graph_id } => {
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id){
-                            process_delete_edge(connection, *graph_state).await;
-                        }
+                        process_delete_edge(connection, workspace_handlers, graph_id).await;
                     },
                     GraphsWorkspaceAction::CopyNode { node_type, node_id } => process_copy_node(node_type, node_id).await,
                     GraphsWorkspaceAction::PasteNode { pos, graph_id } => {
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id){
-                            process_paste_node(pos, *graph_state).await;                        
-                        }
+                        process_paste_node(pos, workspace_handlers, graph_id).await;                        
                     }
                     GraphsWorkspaceAction::SyncNodePosition { node_id, pos, graph_id } => {
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id).cloned(){
-                            eval_action_run(
-                                api::update_gui_position(node_id, pos).await,
-                                Some(move |_| {
-                                    let mut graph_store = graph_state.read().graph_store;
-                                    graph_store.write().needs_saving.set(true);
-                                }),
-                            );
-                        }
+                        eval_action_run(
+                            api::update_gui_position(node_id, pos).await,
+                            Some(move |_| {
+                                workspace_handlers.set_needs_saving.call(true);
+                            }),
+                        );
                     },
                     GraphsWorkspaceAction::AddEdge { new_edge, graph_id } => {
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id){
-                            process_add_edge(new_edge, *graph_state).await;                      
-                        }
+                        println!("group_id: {}", graph_id.as_simple());
+                        process_add_edge(new_edge, workspace_handlers, graph_id).await;                      
+
                     },
                     GraphsWorkspaceAction::DeleteNode { node_id, graph_id } => {
-                        if let Some(graph_state) = workspace.read().tabs.read().get(&graph_id){
-                            process_delete_node(node_id, *graph_state).await;                      
-                        }
+                        process_delete_node(node_id, workspace, workspace_handlers, graph_id).await;                      
                     }
                 }
             }
@@ -494,50 +775,52 @@ pub fn use_workspace_processor(
     })
 }
 
-async fn process_add_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
-    let mut graph_store = graph_state.read().graph_store;
+async fn process_add_edge(connect_info: ConnectInfo, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
     eval_action_run(
         api::post_add_connection(connect_info).await,
         Some(move |ci| {
-            graph_store.write().edges_mut().write().push(ci);
-            graph_store.write().needs_saving.set(true);
+            ws_handler.add_edge.call((ci, graph_id));
         }),
     );
 }
 
-async fn process_delete_analyzer_node(analyzer_id: Uuid, graph_state: Signal<GraphState>) {
-    eval_action_run(
-        api::delete_analyzer(analyzer_id).await,
-        Some(move |deleted_id| {
-            let mut graph_store = graph_state.read().graph_store;
-            graph_store.write().remove_nodes_by_id(vec![deleted_id]);
-        }),
-    );
-}
+async fn process_delete_node(node_id: Uuid, workspace: ReadSignal<GraphsWorkspaceState>, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
+    let node_type_to_delete = {
+        let graph = workspace
+                .read()
+                .tabs
+                .read()
+                .get(&graph_id)
+                .cloned();
 
-async fn process_delete_optical_node(node_id: Uuid, graph_state: Signal<GraphState>) {
-    eval_action_run(
-        api::delete_node(node_id).await,
-        Some(move |deleted_ids| {
-            let mut graph_store = graph_state.read().graph_store;
-            graph_store.write().remove_nodes_by_id(deleted_ids);
-        }),
-    );
-}
+        let Some(graph) = graph else {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("No graph with id '{}' found", graph_id.as_simple()));
+            return;
+        };
 
-async fn process_delete_node(node_id: Uuid, graph_state: Signal<GraphState>) {
-    let mut graph_store = graph_state.read().graph_store;
-    let node_type_opt = graph_store.read().get_node_type(node_id);
-    if let Some(node_type) = node_type_opt {
+        graph.read().graph_store.read().get_node_type(node_id)
+    };
+    if let Some(node_type) = node_type_to_delete {
         match node_type {
             NodeType::Optical(_) => {
-                process_delete_optical_node(node_id, graph_state).await;
+                    eval_action_run(
+                    api::delete_node(node_id).await,
+                    Some(move |deleted_ids| {
+                        ws_handler.remove_nodes.call((deleted_ids, graph_id));
+                    }),
+                );
             }
             NodeType::Analyzer(_) => {
-                process_delete_analyzer_node(node_id, graph_state).await;
+                eval_action_run(
+                    api::delete_analyzer(node_id).await,
+                    Some(move |deleted_id| {
+                        ws_handler.remove_nodes.call((vec![deleted_id], graph_id));
+                    }),
+                );
             }
         }
-        graph_store.write().needs_saving.set(true);
     } else {
         OPOSSUM_UI_LOGS
             .write()
@@ -546,18 +829,15 @@ async fn process_delete_node(node_id: Uuid, graph_state: Signal<GraphState>) {
 }
 
 
-async fn process_paste_node(pos: Point2D<f64>, graph_state: Signal<GraphState>) {
-    let mut graph_store = graph_state.read().graph_store;
-    let group_id = graph_state.read().id;
+async fn process_paste_node(pos: Point2D<f64>, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
     match api::get_copied_node_type().await {
         Ok(node_type) => {
             if node_type {
                 eval_action_run(
-                    api::post_paste_optical_node(group_id, pos).await,
+                    api::post_paste_optical_node(graph_id, pos).await,
                     Some(move |node_info_opt| {
                         if let Some(node_info) = node_info_opt {
-                            graph_store.write().add_new_optical_node(&node_info);
-                            graph_store.write().needs_saving.set(true);
+                            ws_handler.add_optical_node.call((node_info, graph_id))
                         }
                     }),
                 );
@@ -565,11 +845,8 @@ async fn process_paste_node(pos: Point2D<f64>, graph_state: Signal<GraphState>) 
                 eval_action_run(
                     api::post_paste_analyzer_node(pos).await,
                     Some(move |analyzer_info: AnalyzerInfo| {
-                        let id = analyzer_info.id();
-                        graph_store
-                            .write()
-                            .add_new_analyzer(NewAnalyzerInfo::from(analyzer_info), id);
-                        graph_store.write().needs_saving.set(true);
+                        let analyzer_id = analyzer_info.id();
+                        ws_handler.add_analyzer_node.call((NewAnalyzerInfo::from(analyzer_info), analyzer_id, graph_id))
                     }),
                 );
             }
@@ -593,133 +870,167 @@ async fn process_copy_node(node_type: NodeType, node_id: Uuid) {
     }
 }
 
-async fn process_delete_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
-    let mut graph_store = graph_state.read().graph_store;
-    let edge_to_delete = connect_info.clone();
-
+async fn process_delete_edge(connect_info: ConnectInfo, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
     eval_action_run(
-        api::delete_connection(connect_info).await,
+        api::delete_connection(connect_info.clone()).await,
         Some(move |_| {
-            graph_store
-                .write()
-                .edges
-                .write()
-                .retain(|e| e != &edge_to_delete);
-            graph_store.write().needs_saving.set(true);
+            ws_handler.delete_edge.call((connect_info, graph_id))
         }),
     );
 }
 
-async fn process_update_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
-    let mut graph_store = graph_state.read().graph_store;
+async fn process_update_edge(connect_info: ConnectInfo, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
     eval_action_run(
         api::update_distance(connect_info).await,
         Some(move |ci: ConnectInfo| {
-            if let Some(e) = graph_store
-                .write()
-                .edges
-                .write()
-                .iter_mut()
-                .find(|e| e.src_uuid() == ci.src_uuid() && e.target_uuid() == ci.target_uuid())
-            {
-                *e = ci;
-            }
+            ws_handler.update_edge.call((ci, graph_id))
+            
         }),
     );
 }
 
-fn process_center_graph(graph_state: Signal<GraphState>, zoom_to_fit: bool) {
-    let mut editor_state_signal = graph_state.read().editor_state;
-    let bounding_box = graph_state.read().graph_store.read().get_bounding_box();
-    editor_state_signal
-        .write()
-        .center_graph(bounding_box, zoom_to_fit);
+fn process_center_graph(workspace: ReadSignal<GraphsWorkspaceState>, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid, zoom_to_fit: bool) {
+    let Some(bounding_box) = workspace.read().get_graph_bounding_box(graph_id)
+    else {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("No graph with id '{}' found", graph_id.as_simple()));
+            return;
+        };
+    ws_handler.center_graph.call((bounding_box, zoom_to_fit, graph_id))
+    
 }
 
-async fn process_optimize_layout(graph_state: Signal<GraphState>) {
-    let mut graph_store = graph_state.read().graph_store;
-    let edges = graph_store.read().edges().read().clone();
+async fn process_optimize_layout(workspace: ReadSignal<GraphsWorkspaceState>, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
+    let Some(edges) = workspace
+            .peek()
+            .tabs
+            .peek()
+            .get(&graph_id).map(|g|g.read().graph_store.read().edges().read().clone())else {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("No graph with id '{}' found", graph_id.as_simple()));
+            return;
+        };
+
     eval_action_run(
         optimize_layout_and_sync(edges).await,
         Some(move |new_positions| {
-            graph_store.write().update_node_positions(new_positions);
-            graph_store.write().needs_saving.set(true);
+            ws_handler.update_node_positions.call((new_positions, graph_id))
         }),
     );
 }
 
-async fn process_add_analyzer(analyzer_type: AnalyzerType, graph_state: Signal<GraphState>) {
-    let editor_state = graph_state.read().editor_state;
-    let mut graph_store = graph_state.read().graph_store;
+async fn process_add_analyzer(analyzer_type: AnalyzerType, workspace: ReadSignal<GraphsWorkspaceState>, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
+    // ----- READ PHASE -----
+    let new_analyzer_info = {
+        let graph = workspace
+            .peek()
+            .tabs
+            .peek()
+            .get(&graph_id)
+            .cloned();
 
-    // calculate center of viewport (in graph coordinates)
-    let zoom = *editor_state.peek().zoom.peek();
-    let view_port_center = editor_state.peek().get_view_port_center();
-    let shift = *editor_state.peek().shift.peek();
+        let Some(graph) = graph else {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("No graph with id '{}' found", graph_id.as_simple()));
+            return;
+        };
 
-    let proposed_element_position = (
-        (view_port_center.x - shift.x) / zoom,
-        (view_port_center.y - shift.y) / zoom,
-    );
-    let existing_element_positions: Vec<(f64, f64)> = graph_store.peek().nodes()()
-        .values()
-        .map(|element| (element.pos().x, element.pos().y))
-        .collect();
-    let element_position =
-        find_suitable_element_position(proposed_element_position, &existing_element_positions);
-    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type, element_position);
+        let editor_state = *graph.peek().editor_state.peek();
+        let graph_store = *graph.peek().graph_store.peek();
+
+        let zoom = *editor_state.zoom.peek();
+        let shift = *editor_state.shift.peek();
+        let center = editor_state.get_view_port_center();
+
+        let proposed_pos = (
+            (center.x - shift.x) / zoom,
+            (center.y - shift.y) / zoom,
+        );
+
+        let existing_positions: Vec<_> = graph_store
+            .nodes()()
+            .values()
+            .map(|n| (n.pos().x, n.pos().y))
+            .collect();
+
+        let final_pos =
+            find_suitable_element_position(proposed_pos, &existing_positions);
+
+        NewAnalyzerInfo::new(analyzer_type, final_pos)
+    };
+
     eval_action_run(
         api::post_add_analyzer(new_analyzer_info.clone()).await,
         Some(move |analyzer_id| {
-            graph_store
+            ws_handler.add_analyzer_node.call((new_analyzer_info, analyzer_id, graph_id))
+        }),
+    );
+}
+
+async fn process_add_reference_node(new_ref_node: NewRefNode, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
+    let result = api::post_add_ref_node(new_ref_node, graph_id).await;
+    eval_action_run(
+        result,
+        Some(move |node_info| {
+            ws_handler.add_reference_node.call((node_info, graph_id))
+        }),
+    );
+}
+
+
+async fn process_add_optic_node(new_node_type_string: &str, workspace: ReadSignal<GraphsWorkspaceState>, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
+    // ----- READ PHASE -----
+    let new_node_info = {
+        let graph = workspace
+            .peek()
+            .tabs
+            .peek()
+            .get(&graph_id)
+            .cloned();
+
+        let Some(graph) = graph else {
+            OPOSSUM_UI_LOGS
                 .write()
-                .add_new_analyzer(new_analyzer_info, analyzer_id);
-            graph_store.write().needs_saving.set(true);
-        }),
-    );
-}
+                .add_log(&format!("No graph with id '{}' found", graph_id.as_simple()));
+            return;
+        };
 
-async fn process_add_reference_node(new_ref_node: NewRefNode, graph_state: Signal<GraphState>) {
-    let mut graph_store = graph_state.read().graph_store;
-    let scenery_id = graph_state.read().id;
-    eval_action_run(
-        api::post_add_ref_node(new_ref_node, scenery_id).await,
-        Some(move |node_info| {
-            graph_store.write().add_new_reference_node(&node_info);
-            graph_store.write().needs_saving.set(true);
-        }),
-    );
-}
+        let editor_state = *graph.peek().editor_state.peek();
+        let graph_store = *graph.peek().graph_store.peek();
 
+        let zoom = *editor_state.zoom.peek();
+        let shift = *editor_state.shift.peek();
+        let center = editor_state.get_view_port_center();
 
-async fn process_add_optic_node(new_node_type_string: &str, graph_state: Signal<GraphState>) {
-    let editor_state = graph_state.read().editor_state;
-    let mut graph_store = graph_state.read().graph_store;
-    let scenery_id = graph_state.read().id;
+        let proposed_pos = (
+            (center.x - shift.x) / zoom,
+            (center.y - shift.y) / zoom,
+        );
 
-    // calculate center of viewport (in graph coordinates)
-    let zoom = *editor_state.peek().zoom.peek();
-    let view_port_center = editor_state.peek().get_view_port_center();
-    let shift = *editor_state.peek().shift.peek();
+        let existing_positions: Vec<_> = graph_store
+            .nodes()()
+            .values()
+            .map(|n| (n.pos().x, n.pos().y))
+            .collect();
 
-    let proposed_element_position = (
-        (view_port_center.x - shift.x) / zoom,
-        (view_port_center.y - shift.y) / zoom,
-    );
-    let existing_element_positions: Vec<(f64, f64)> = graph_store.peek().nodes()()
-        .values()
-        .map(|element| (element.pos().x, element.pos().y))
-        .collect();
-    let element_position =
-        find_suitable_element_position(proposed_element_position, &existing_element_positions);
-    let new_node_info = NewNode::new(new_node_type_string.to_lowercase(), element_position);
-    eval_action_run(
-        api::post_add_node(new_node_info, scenery_id).await,
-        Some(move |node_info| {
-            graph_store.write().add_new_optical_node(&node_info);
-            graph_store.write().needs_saving.set(true);
-        }),
-    );
+        let final_pos =
+            find_suitable_element_position(proposed_pos, &existing_positions);
+
+        NewNode::new(new_node_type_string.to_lowercase(), final_pos)
+    };
+
+    // ----- ASYNC PHASE -----
+    let result = api::post_add_node(new_node_info, graph_id).await;
+
+    // ----- WRITE PHASE -----
+    eval_action_run(result, Some(move |node_info| {
+        ws_handler
+            .add_optical_node
+            .call((node_info, graph_id));
+    }));
 }
 
 
@@ -749,18 +1060,12 @@ fn find_suitable_element_position(
 async fn process_load_from_file(
     path: PathBuf, 
     scenery_id_sig: ReadSignal<Uuid>,
-    clear_workspace_handler: EventHandler<()>, 
-    add_new_group_tab_handler: EventHandler<(String, Uuid)>,
-    set_root_scenery_id_handler: EventHandler<Uuid>,
-    set_file_path_handler: EventHandler<Option<PathBuf>>,
-    set_needs_saving_handler: EventHandler<bool>,
-    add_root_scenery_nodes_handler: EventHandler<Vec<NodeInfo>>,
-    add_root_scenery_analyzers_handler: EventHandler<Vec<AnalyzerInfo>>,
-    add_root_scenery_edges_handler: EventHandler<Vec<ConnectInfo>>
+    ws_handler: WorkSpaceSignalHandlers,
+    set_file_path_handler: EventHandler<Option<PathBuf>>
 ) {
-    process_delete_root_scenery(clear_workspace_handler).await;
+    process_delete_root_scenery(ws_handler).await;
     //is process_get_root_scenery_id necessary here?
-    process_get_root_scenery_id(add_new_group_tab_handler, set_root_scenery_id_handler).await;
+    process_get_root_scenery_id(ws_handler).await;
     set_file_path_handler.call(None);
 
     let opm_string = match fs::read_to_string(&path) {
@@ -772,24 +1077,24 @@ async fn process_load_from_file(
     };
     match api::post_opm_file(opm_string).await {
         Ok(_) => {
-            process_get_root_scenery_id(add_new_group_tab_handler, set_root_scenery_id_handler).await;
-            set_needs_saving_handler.call(false);
+            process_get_root_scenery_id(ws_handler).await;
+            ws_handler.set_needs_saving.call(false);
             set_file_path_handler.call(Some(path));
             let scenery_id = *scenery_id_sig.read();
             eval_action_run(
                 api::get_nodes(scenery_id).await,
-                Some(move |nodes: Vec<NodeInfo>| add_root_scenery_nodes_handler.call(nodes)), 
+                Some(move |nodes: Vec<NodeInfo>| ws_handler.add_root_scenery_nodes.call(nodes)), 
             );
             eval_action_run(
                 api::get_analyzers().await,
                 Some(move |analyzers: Vec<AnalyzerInfo>| {
-                    add_root_scenery_analyzers_handler.call(analyzers);
+                    ws_handler.add_root_scenery_analyzers.call(analyzers);
                 }),
             );
             eval_action_run(
                 api::get_connections(scenery_id).await,
                 Some(move |connect_infos: Vec<ConnectInfo>| {
-                    add_root_scenery_edges_handler.call(connect_infos)
+                    ws_handler.add_root_scenery_edges.call(connect_infos)
                 }),
             );
         }
@@ -799,16 +1104,16 @@ async fn process_load_from_file(
     }
 }
 
-async fn process_delete_root_scenery(clear_workspace_handler: EventHandler<()>) {
+async fn process_delete_root_scenery(workspace_handlers: WorkSpaceSignalHandlers) {
     eval_action_run(
         api::delete_scenery().await,
         Some(move |_| {
-            clear_workspace_handler.call(());
+            workspace_handlers.clear_workspace.call(());
         }),
     );
 }
 
-async fn process_save_root_scenery_to_file(path: PathBuf, set_file_path_handler: EventHandler<Option<PathBuf>>, set_needs_saving_handler: EventHandler<bool>) {
+async fn process_save_root_scenery_to_file(path: PathBuf, set_file_path_handler: EventHandler<Option<PathBuf>>, ws_handler: WorkSpaceSignalHandlers) {
     eval_action_run(
         api::get_opm_file().await,
         Some(move |opm_string| {
@@ -816,18 +1121,18 @@ async fn process_save_root_scenery_to_file(path: PathBuf, set_file_path_handler:
                 OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
             } else {
                 set_file_path_handler.call(Some(path));
-                set_needs_saving_handler.call(false);
+                ws_handler.set_needs_saving.call(false);
             }
         }),
     );
 }
 
-async fn process_get_root_scenery_id(add_new_group_tab_handler: EventHandler<(String, Uuid)>,  set_root_scenery_id_handler: EventHandler<Uuid>) {
+async fn process_get_root_scenery_id(ws_handler: WorkSpaceSignalHandlers) {
     eval_action_run(
         api::get_scenery_uuid().await,
         Some(move |id| {
-            set_root_scenery_id_handler.call(id);
-            add_new_group_tab_handler.call(("Main Graph".to_string(), id))
+            ws_handler.set_root_scenery_id.call(id);
+            ws_handler.add_new_group_tab.call(("Main Graph".to_string(), id))
         }),
     );
 }
