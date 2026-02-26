@@ -140,22 +140,6 @@ impl AnalysisGhostFocus for ParaxialSurface {
             }
             surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
         }
-        // merge all rays
-        if let Some(ld) = this.get_light_data_mut() {
-            if let LightData::GhostFocus(rays) = ld {
-                for r in &*rays_bundle {
-                    rays.push(r.clone());
-                }
-            }
-            if let LightData::Geometric(rays) = ld {
-                for r in &*rays_bundle {
-                    rays.merge(r);
-                }
-            }
-        } else {
-            this.set_light_data(LightData::GhostFocus(rays_bundle.clone()));
-        }
-
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.clone(), rays);
         Ok(out_light_rays)
