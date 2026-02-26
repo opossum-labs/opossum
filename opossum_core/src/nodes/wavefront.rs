@@ -267,9 +267,6 @@ impl OpticNode for WaveFront {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        self.light_data.as_mut()
-    }
     fn set_light_data(&mut self, ld: LightData) {
         self.light_data = Some(ld);
     }

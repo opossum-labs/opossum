@@ -199,11 +199,6 @@ pub trait OpticNode: Dottable {
             LightData::Fourier => Ok(LightResult::default()),
         }
     }
-    /// Returns a mutable reference to the light data.
-    /// Overridden by detector nodes to allow data modification.
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        None
-    }
     /// Hook to store light data during analysis.
     /// Overridden by detector nodes to capture passing data for reports.
     fn set_light_data(&mut self, _ld: LightData) {}
