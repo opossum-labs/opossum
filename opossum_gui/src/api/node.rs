@@ -186,9 +186,9 @@ pub async fn get_analyzer_info(uuid: Uuid) -> Result<AnalyzerInfo, String> {
 /// # Errors
 ///
 /// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
-pub async fn post_add_connection(connection: ConnectInfo) -> Result<ConnectInfo, String> {
+pub async fn post_add_connection(connection: ConnectInfo, group_id: Uuid) -> Result<ConnectInfo, String> {
     HTTP_API_CLIENT()
-        .post::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
+        .post::<ConnectInfo, ConnectInfo>(&format!("/api/scenery/{}/connection",group_id.as_simple()), connection)
         .await
 }
 /// Delete a connection between two nodes.

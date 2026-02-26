@@ -739,8 +739,9 @@ async fn process_paste_node(pos: Point2D<f64>, graph_state: Signal<GraphState>) 
 #[allow(clippy::future_not_send)]
 async fn process_add_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
     let mut graph_store = graph_state.read().graph_store;
+    let scenery_id = graph_store.read().scenery_id;
     eval_action_run(
-        api::post_add_connection(connect_info).await,
+        api::post_add_connection(connect_info, scenery_id).await,
         Some(move |ci| {
             graph_store.write().edges_mut().write().push(ci);
             graph_store.write().needs_saving.set(true);
