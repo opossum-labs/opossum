@@ -2,18 +2,13 @@
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        RayTraceConfig,
-        energy::{AnalysisEnergy, EnergyConfig},
-        ghostfocus::AnalysisGhostFocus,
-        raytrace::AnalysisRayTrace,
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
     joule,
-    light_result::{LightRays, LightResult},
     lightdata::LightData,
     nodes::NodeRegistration,
     optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
 };
@@ -199,6 +194,12 @@ impl OpticNode for EnergyMeter {
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, new_data: LightData) {
+        self.light_data = Some(new_data);
+    }
 }
 
 impl Debug for EnergyMeter {
@@ -209,51 +210,14 @@ impl Debug for EnergyMeter {
         }
     }
 }
-impl AnalysisGhostFocus for EnergyMeter {
-    fn analyze(
-        &mut self,
-        incoming_data: crate::light_result::LightRays,
-        config: &crate::analyzers::GhostFocusConfig,
-        _ray_collection: &mut Vec<crate::rays::Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
-    }
-}
-impl AnalysisEnergy for EnergyMeter {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        _config: &EnergyConfig,
-    ) -> OpmResult<LightResult> {
-        let result = self.analyze_pass_through(incoming_data)?;
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        if let Some(data) = result.get(out_port) {
-            self.light_data = Some(data.clone());
-        }
-        Ok(result)
-    }
-}
-impl AnalysisRayTrace for EnergyMeter {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
-    }
-
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        self.light_data.as_mut()
-    }
-    fn set_light_data(&mut self, ld: LightData) {
-        self.light_data = Some(ld);
-    }
-}
+impl AnalysisGhostFocus for EnergyMeter {}
+impl AnalysisEnergy for EnergyMeter {}
+impl AnalysisRayTrace for EnergyMeter {}
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
+        analyzers::energy::EnergyConfig, light_result::LightResult,
         nodes::test_helper::test_helper::*, optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
     };

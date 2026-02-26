@@ -6,7 +6,7 @@ mod analysis_raytrace;
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::{AnalyzerType, raytrace::MissedSurfaceStrategy},
+    analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},

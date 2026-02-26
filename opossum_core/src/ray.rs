@@ -15,7 +15,7 @@ use uom::si::{
 use uuid::Uuid;
 
 use crate::{
-    analyzers::raytrace::MissedSurfaceStrategy,
+    analyzers::propagation_strategy::MissedSurfaceStrategy,
     error::{OpmResult, OpossumError},
     joule, meter,
     nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},

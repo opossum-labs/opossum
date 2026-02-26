@@ -95,7 +95,6 @@ impl NodeRegistration {
         Self {
             name,
             description,
-            // Hier wird der Boilerplate-Code generiert:
             constructor: Self::build_node_wrapper::<T>,
         }
     }
@@ -114,12 +113,6 @@ inventory::collect!(NodeRegistration);
 /// # Errors
 ///
 /// This function will return an [`OpossumError`] if there is no node with the given type.
-// pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
-//     NODE_FACTORY
-//         .get(node_type)
-//         .map(|info| (info.constructor)())
-//         .ok_or_else(|| OpossumError::Other(format!("cannot create node type <{node_type}>")))
-// }
 pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
     // Wir iterieren durch das Inventory und suchen den passenden Namen.
     inventory::iter::<NodeRegistration>
@@ -138,7 +131,7 @@ pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
 pub fn node_types() -> Vec<(&'static str, &'static str)> {
     inventory::iter::<NodeRegistration>
         .into_iter()
-        .filter(|info| info.name != "reference") // Filterlogik wie zuvor
+        .filter(|info| info.name != "reference")
         .map(|info| (info.name, info.description))
         .collect()
 }

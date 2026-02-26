@@ -8,6 +8,7 @@
 pub mod analyzable;
 pub mod energy;
 pub mod ghostfocus;
+pub mod propagation_strategy;
 pub mod raytrace;
 
 use crate::{
@@ -122,13 +123,12 @@ pub trait Analyzer {
     /// Analyze a [`NodeGroup`].
     ///
     /// # Errors
-    /// This function will return an error if the concrete implementation of the [`Analyzer`] returns an error.
+    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error.
     fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()>;
-
     /// Generate an analysis report for this [`NodeGroup`].
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error..
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport>;
 }

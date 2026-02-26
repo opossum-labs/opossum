@@ -1,5 +1,6 @@
 # Opossum
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![GitHub Downloads](https://img.shields.io/github/downloads/opossum-labs/opossum/total)](https://github.com/opossum-labs/opossum/releases)
 
 ![OPOSSUM Logo](https://raw.githubusercontent.com/opossum-labs/opossum/refs/heads/main/opossum_core/logo/Logo_text.svg)

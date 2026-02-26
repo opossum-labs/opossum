@@ -13,20 +13,18 @@ use uom::si::{
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig,
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
-    light_result::{LightRays, LightResult},
+    light_result::LightResult,
     lightdata::LightData,
     millimeter,
     nodes::NodeRegistration,
     optic_node::OpticNode,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype, validator::Validator},
-    rays::Rays,
     reporting::{
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
@@ -166,46 +164,29 @@ impl OpticNode for RayPropagationVisualizer {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
-}
-impl AnalysisGhostFocus for RayPropagationVisualizer {
-    fn analyze(
-        &mut self,
-        incoming_data: LightRays,
-        config: &GhostFocusConfig,
-        _ray_collection: &mut Vec<Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, new_data: LightData) {
+        self.light_data = Some(new_data);
     }
 }
+impl AnalysisGhostFocus for RayPropagationVisualizer {}
 impl AnalysisEnergy for RayPropagationVisualizer {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
-        _config: &EnergyConfig,
+        config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
-        let result = self.analyze_pass_through(incoming_data)?;
+        let result =
+            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
         // It does not make sense to use a RayPropagationVisualizer with energy analysis.
         // The following is only necessary to show a warning in the node report;
         self.light_data = Some(LightData::Energy(Spectrum::default()));
         Ok(result)
     }
 }
-impl AnalysisRayTrace for RayPropagationVisualizer {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
-    }
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        self.light_data.as_mut()
-    }
-    fn set_light_data(&mut self, ld: LightData) {
-        self.light_data = Some(ld);
-    }
-}
+impl AnalysisRayTrace for RayPropagationVisualizer {}
 /// struct that holds the history of the rays' positions for rays of a specific wavelength
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RayPositionHistorySpectrum {

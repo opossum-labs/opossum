@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use super::Analyzer;
 use super::{AnalyzerRegistration, AnalyzerType};
+use crate::analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy};
 use crate::prelude::EnergyDataBuilder;
 use crate::{
     error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode,
@@ -26,13 +27,14 @@ pub struct EnergyConfig {
     source_map: HashMap<Uuid, EnergyDataBuilder>,
 }
 impl EnergyConfig {
-    /// Maps an energy data builder to the given source UUID, returning any previously mapped builder.
-    pub fn map_source(
-        &mut self,
-        node_id: Uuid,
-        energy_data_builder: EnergyDataBuilder,
-    ) -> Option<EnergyDataBuilder> {
-        self.source_map.insert(node_id, energy_data_builder)
+    /// Maps an energy data builder to the `SourcePort` node with the given UUID
+    ///
+    /// If a builder was already mapped this function returns `true`. A new mapping
+    /// reutrns `false`
+    pub fn map_source(&mut self, node_id: Uuid, energy_data_builder: EnergyDataBuilder) -> bool {
+        self.source_map
+            .insert(node_id, energy_data_builder)
+            .is_some()
     }
     /// Returns the energy data builder mapped to the given source UUID, if any.
     #[must_use]
@@ -47,6 +49,12 @@ impl EnergyConfig {
     /// Removes all source mappings whose UUIDs no longer exist in the given model.
     pub fn prune_source_map(&mut self, model: &NodeGroup) {
         self.source_map.retain(|uuid, _builder| model.exists(*uuid));
+    }
+}
+
+impl PropagationStrategy for EnergyConfig {
+    fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
+        MissedSurfaceStrategy::Stop
     }
 }
 /// Analyzer for simulating a simple energy flow
@@ -88,25 +96,54 @@ pub trait AnalysisEnergy: OpticNode {
     /// This function will return an error if the concrete implementation of the [`OpticNode`] fails.
     fn analyze(
         &mut self,
-        incoming_data: LightResult,
+        mut incoming_data: LightResult,
         _config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
-        self.analyze_pass_through(incoming_data)
-    }
+        let in_ports = self.ports().names(&crate::optic_ports::PortType::Input);
+        let out_ports = self.ports().names(&crate::optic_ports::PortType::Output);
 
-    /// Analyze energy in a simple pass through mode:
-    ///
-    /// The light at the first input port is transparently forwarded to the first output port.
-    ///
-    /// # Errors
-    /// This function will return an error if the concrete implementation of the [`OpticNode`] fails.
-    fn analyze_pass_through(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let in_port = &self.ports().names(&crate::optic_ports::PortType::Input)[0];
-        let out_port = &self.ports().names(&crate::optic_ports::PortType::Output)[0];
-        let Some(data) = incoming_data.get(in_port) else {
+        // If the node doesn't have at least one input and output, we can't pass energy through
+        // which would be a programming error in the implementation of the node. We use debug asserts here to catch this.
+        debug_assert!(
+            !in_ports.is_empty(),
+            "OpticNode '{}' ({}) has no input ports defined! The defined energy flow analysis requires at least one input port.",
+            self.name(),
+            self.node_type()
+        );
+        debug_assert!(
+            !out_ports.is_empty(),
+            "OpticNode '{}' ({}) has no output ports defined! The defined energy flow analysis requires at least one output port.",
+            self.name(),
+            self.node_type()
+        );
+
+        let in_port = &in_ports[0];
+        let out_port = &out_ports[0];
+
+        let Some(data) = incoming_data.remove(in_port) else {
             return Ok(LightResult::default());
         };
-        Ok(LightResult::from([(out_port.into(), data.clone())]))
+        let apodized = if let Some(surf) = self.get_optic_surface(out_port)
+            && !surf.aperture().is_none()
+        {
+            true
+        } else if let Some(surf) = self.get_optic_surface(in_port)
+            && !surf.aperture().is_none()
+        {
+            true
+        } else {
+            false
+        };
+        if apodized {
+            self.set_apodization_warning(true);
+            log::warn!(
+                "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
+                self.node_attr().name(),
+                self.node_type()
+            );
+        }
+        self.set_light_data(data.clone());
+        Ok(LightResult::from([(out_port.clone(), data)]))
     }
 }
 
@@ -168,13 +205,13 @@ mod test {
             EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
         );
 
-        assert!(config.map_source(uuid, builder.clone()).is_none());
+        assert_eq!(config.map_source(uuid, builder.clone()), false);
         assert_eq!(config.get_source(&uuid), Some(&builder));
 
         let builder2 = EnergyDataBuilder::LaserLines(
             EnergyLaserLines::new(vec![(nanometer!(532.0), joule!(2.0))], nanometer!(1.0)).unwrap(),
         );
-        assert_eq!(config.map_source(uuid, builder2.clone()), Some(builder));
+        assert_eq!(config.map_source(uuid, builder2.clone()), true);
         assert_eq!(config.get_source(&uuid), Some(&builder2));
     }
 

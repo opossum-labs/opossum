@@ -2,10 +2,8 @@
 //! A paraxial surface (ideal lens)
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig,
-        energy::AnalysisEnergy,
-        ghostfocus::AnalysisGhostFocus,
-        raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
+        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
@@ -65,7 +63,6 @@ impl Default for ParaxialSurface {
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsFinite, Validator::NumericIsNotZero],
                 },
-                // and_validator(vec![numeric_is_not_zero(), numeric_is_finite()]),
                 millimeter!(10.0).into(),
             )
             .unwrap();
@@ -81,11 +78,6 @@ impl ParaxialSurface {
     /// This function returns an error if
     ///  - the given `focal_length` is 0.0 or not finite.
     pub fn new(name: &str, focal_length: Length) -> OpmResult<Self> {
-        // if focal_length.is_zero() || !focal_length.is_normal() {
-        //     return Err(OpossumError::Other(
-        //         "focal length must be != 0.0 and finite".into(),
-        //     ));
-        // }
         let mut parsurf = Self::default();
         parsurf.node_attr.set_name(name);
         parsurf

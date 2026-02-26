@@ -5,16 +5,13 @@ pub mod fluence_data;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
-        raytrace::AnalysisRayTrace,
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
-    light_result::{LightRays, LightResult},
     lightdata::LightData,
     nodes::NodeRegistration,
     optic_node::OpticNode,
     properties::{Properties, Proptype},
-    rays::Rays,
     reporting::node_report::NodeReport,
     surface::hit_map::fluence_estimator::FluenceEstimator,
 };
@@ -152,34 +149,6 @@ impl OpticNode for FluenceDetector {
                 )
                 .unwrap();
         }
-        // if let Some(LightData::Geometric(r)) = &self.light_data{
-        //     if let Ok(f_data) = r.calc_fluence_array_from_helper_rays(&self.effective_node_iso().unwrap()){
-        //         props
-        //         .create(
-        //             &format!("helper ray Fluence"),
-        //             "2D spatial energy distribution",
-        //             None,
-        //             f_data.clone().into(),
-        //         )
-        //         .unwrap();
-        //     props
-        //         .create(
-        //             &format!("helper ray Peak Fluence "),
-        //             "Peak fluence of the distribution",
-        //             None,
-        //             Proptype::Fluence(f_data.peak()),
-        //         )
-        //         .unwrap();
-        //     props
-        //         .create(
-        //             &format!("helper ray Total energy "),
-        //             "Total energy of the distribution",
-        //             None,
-        //             Proptype::Energy(f_data.total_energy()),
-        //         )
-        //         .unwrap();
-        //     }
-        // }
         Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
@@ -197,27 +166,6 @@ impl OpticNode for FluenceDetector {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
-}
-impl AnalysisGhostFocus for FluenceDetector {
-    fn analyze(
-        &mut self,
-        incoming_data: LightRays,
-        config: &GhostFocusConfig,
-        _ray_collection: &mut Vec<Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
-    }
-}
-impl AnalysisEnergy for FluenceDetector {}
-impl AnalysisRayTrace for FluenceDetector {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
-    }
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
         self.light_data.as_mut()
     }
@@ -225,11 +173,15 @@ impl AnalysisRayTrace for FluenceDetector {
         self.light_data = Some(ld);
     }
 }
+impl AnalysisGhostFocus for FluenceDetector {}
+impl AnalysisEnergy for FluenceDetector {}
+impl AnalysisRayTrace for FluenceDetector {}
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::analyzers::energy::EnergyConfig;
+    use crate::light_result::LightResult;
     use crate::lightdata::LightData;
     use crate::optic_ports::PortType;
     use crate::{nodes::test_helper::test_helper::*, spectrum_helper::create_he_ne_spec};

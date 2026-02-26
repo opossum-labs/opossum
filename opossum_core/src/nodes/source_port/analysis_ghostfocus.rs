@@ -1,5 +1,5 @@
 use crate::{
-    analyzers::{ghostfocus::AnalysisGhostFocus, raytrace::MissedSurfaceStrategy},
+    analyzers::{ghostfocus::AnalysisGhostFocus, propagation_strategy::MissedSurfaceStrategy},
     error::{OpmResult, OpossumError},
     light_result::LightRays,
     nodes::SourcePort,
@@ -20,7 +20,7 @@ impl AnalysisGhostFocus for SourcePort {
                 return Err(OpossumError::Analysis("no light at port".into()));
             };
             bouncing_rays.clone()
-            // first pass: generate rays from RayDataBuilder in GhostFocusConfig
+            // if first pass: generate rays from RayDataBuilder in GhostFocusConfig
         } else if bounce_lvl == 0 {
             let mut rays = config
                 .get_source(&self.node_attr.uuid())
@@ -29,8 +29,6 @@ impl AnalysisGhostFocus for SourcePort {
                 })?
                 .clone()
                 .build()?;
-
-            // Apply node's surface isometry (the local space transformation)
             let iso = self.effective_surface_iso("output_1")?;
             rays = rays.transformed_by_iso(&iso);
             vec![rays]

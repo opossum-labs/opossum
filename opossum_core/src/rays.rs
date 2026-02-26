@@ -2,7 +2,7 @@
 //! Module for handling bundles of [`Ray`]s
 use crate::{
     J_per_cm2,
-    analyzers::raytrace::MissedSurfaceStrategy,
+    analyzers::propagation_strategy::MissedSurfaceStrategy,
     apertures::Aperture,
     centimeter, degree,
     energy_distributions::EnergyDistribution,

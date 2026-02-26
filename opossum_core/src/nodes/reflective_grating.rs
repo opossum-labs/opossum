@@ -5,10 +5,8 @@ use std::f64::consts::PI;
 use super::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig,
-        energy::AnalysisEnergy,
-        ghostfocus::AnalysisGhostFocus,
-        raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
+        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},

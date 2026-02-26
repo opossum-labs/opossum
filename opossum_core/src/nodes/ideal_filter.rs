@@ -9,7 +9,9 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
-    light_result::{LightRays, LightResult},
+    light_result::{
+        LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
+    },
     lightdata::LightData,
     micrometer, nanometer,
     nodes::NodeRegistration,
@@ -1376,7 +1378,6 @@ impl SpectralFilterBuilder {
             }
         }
     }
-
     /// Returns the File path of this [`SpectralFilterBuilder`], wrapped into an option if the type matches. Returns None otherwise
     #[must_use]
     pub fn file_path(&self) -> Option<PathBuf> {
@@ -1398,10 +1399,6 @@ impl OpticNode for IdealFilter {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn set_apodization_warning(&mut self, _apodized: bool) {}
-    fn reset_data(&mut self) {
-        self.reset_optic_surfaces();
-    }
 }
 impl AnalysisGhostFocus for IdealFilter {
     fn analyze(
@@ -1412,14 +1409,16 @@ impl AnalysisGhostFocus for IdealFilter {
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
         let filter_type = self.filter_type()?;
-        let mut output =
-            AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)?;
+        let incoming_result = light_rays_to_light_result(incoming_data);
+        let output =
+            self.unified_analyze_single_surface_node(incoming_result, config, "input_1", None)?;
+        let light_rays = light_result_to_light_rays(output)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
-        if let Some(rays_bundles) = output.get_mut(out_port) {
+        if let Some(rays_bundles) = light_rays.clone().get_mut(out_port) {
             for rays in rays_bundles {
                 rays.filter_energy(&filter_type)?;
             }
-            Ok(output)
+            Ok(light_rays)
         } else {
             Err(OpossumError::Analysis("filtering of rays failed".into()))
         }
@@ -1666,7 +1665,6 @@ mod test {
         let expected_output_light = LightData::Energy(create_he_ne_spec(0.5).unwrap());
         assert_eq!(*output, expected_output_light);
     }
-
     #[test]
     fn test_short_pass_filter() {
         testing_logger::setup();

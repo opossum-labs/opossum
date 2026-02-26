@@ -295,7 +295,6 @@ impl OpticNode for Lens {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    ///updates the lidt of the optical surfaces after deserialization
     fn update_lidt(&mut self) -> OpmResult<()> {
         let lidt = *self.node_attr().lidt();
         let in_ports = self.ports().names(&PortType::Input);

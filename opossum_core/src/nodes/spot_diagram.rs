@@ -12,13 +12,12 @@ use uom::si::{
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig,
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
-    light_result::{LightRays, LightResult},
+    light_result::LightResult,
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
@@ -179,45 +178,9 @@ impl OpticNode for SpotDiagram {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
-
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-}
-impl AnalysisEnergy for SpotDiagram {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        _config: &EnergyConfig,
-    ) -> OpmResult<LightResult> {
-        let result = self.analyze_pass_through(incoming_data)?;
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        if let Some(data @ LightData::Geometric(_)) = result.get(out_port) {
-            self.light_data = Some(data.clone());
-        }
-        Ok(result)
-    }
-}
-impl AnalysisGhostFocus for SpotDiagram {
-    fn analyze(
-        &mut self,
-        incoming_data: LightRays,
-        config: &GhostFocusConfig,
-        _ray_collection: &mut Vec<Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
-    }
-}
-impl AnalysisRayTrace for SpotDiagram {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
-    }
-
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
         self.light_data.as_mut()
     }
@@ -225,6 +188,23 @@ impl AnalysisRayTrace for SpotDiagram {
         self.light_data = Some(ld);
     }
 }
+impl AnalysisEnergy for SpotDiagram {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
+        let result =
+            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        if let Some(data) = result.get(out_port) {
+            self.light_data = Some(data.clone());
+        }
+        Ok(result)
+    }
+}
+impl AnalysisGhostFocus for SpotDiagram {}
+impl AnalysisRayTrace for SpotDiagram {}
 
 impl Plottable for SpotDiagram {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
@@ -370,7 +350,9 @@ impl Plottable for SpotDiagram {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::light_result::LightRays;
     use crate::optic_ports::PortType;
+    use crate::prelude::GhostFocusConfig;
     use crate::{
         joule, nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
         spectrum_helper::create_he_ne_spec,
