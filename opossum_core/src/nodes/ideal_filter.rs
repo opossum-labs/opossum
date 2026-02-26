@@ -1378,7 +1378,6 @@ impl SpectralFilterBuilder {
             }
         }
     }
-
     /// Returns the File path of this [`SpectralFilterBuilder`], wrapped into an option if the type matches. Returns None otherwise
     #[must_use]
     pub fn file_path(&self) -> Option<PathBuf> {
@@ -1399,10 +1398,6 @@ impl OpticNode for IdealFilter {
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
-    }
-    fn set_apodization_warning(&mut self, _apodized: bool) {}
-    fn reset_data(&mut self) {
-        self.reset_optic_surfaces();
     }
 }
 impl AnalysisGhostFocus for IdealFilter {
@@ -1670,7 +1665,6 @@ mod test {
         let expected_output_light = LightData::Energy(create_he_ne_spec(0.5).unwrap());
         assert_eq!(*output, expected_output_light);
     }
-
     #[test]
     fn test_short_pass_filter() {
         testing_logger::setup();

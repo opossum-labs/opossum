@@ -55,16 +55,13 @@ pub trait PropagationStrategy {
         _reflected_rays: Rays,
         _backward: bool,
     ) -> OpmResult<()> {
-        // Default implementation does nothing
         Ok(())
     }
-
     /// Hook executed after apodization to apply thresholds or energy invalidation.
     ///
     /// # Errors
     /// Returns an error if the analyzer-specific post-apodization tasks (such as energy thresholding) fail.
     fn on_after_apodization(&self, _rays: &mut Rays) -> OpmResult<()> {
-        // Default implementation does nothing
         Ok(())
     }
 }

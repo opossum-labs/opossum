@@ -769,7 +769,6 @@ impl OpticNode for NodeGroup {
     fn get_optic_surface_mut(&mut self, _surf_name: &str) -> Option<&mut OpticSurface> {
         None
     }
-
     fn update_surfaces(&mut self) -> OpmResult<()> {
         Ok(())
     }

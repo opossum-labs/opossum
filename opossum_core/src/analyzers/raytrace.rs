@@ -35,10 +35,10 @@ use uom::si::f64::{Angle, Energy, Length};
 /// Configuration data for a rays tracing analysis.
 ///
 /// The config contains the following info
-///   - minimum energy / ray
-///   - maximum number of bounces (reflections) / ray
-///   - maximum number of refractions / ray
-///   - map of `SourcePort` nodes to the respective light definition
+///  - minimum energy / ray
+///  - maximum number of bounces (reflections) / ray
+///  - maximum number of refractions / ray
+///  - map of `SourcePort` nodes to their respective light definition
 pub struct RayTraceConfig {
     min_energy_per_ray: Energy,
     max_number_of_bounces: usize,
@@ -48,16 +48,17 @@ pub struct RayTraceConfig {
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
-    ///   - mininum energy / ray: `1 pJ`
-    ///   - maximum number of bounces / ray: `1000`
-    ///   - maximum number of refractions / ray: `1000`
-    ///   - missed surface strategy: ray is stopped
+    ///  - mininum energy / ray: `1 pJ`
+    ///  - maximum number of bounces / ray: `1000`
+    ///  - maximum number of refractions / ray: `1000`
+    ///  - missed surface strategy: ray is stopped
+    ///  - empty source map
     fn default() -> Self {
         Self {
             min_energy_per_ray: picojoule!(1.0),
             max_number_of_bounces: 1000,
             max_number_of_refractions: 1000,
-            missed_surface_strategy: MissedSurfaceStrategy::default(),
+            missed_surface_strategy: MissedSurfaceStrategy::Stop,
             source_map: HashMap::new(),
         }
     }
@@ -68,12 +69,6 @@ impl RayTraceConfig {
     pub fn min_energy_per_ray(&self) -> Energy {
         self.min_energy_per_ray
     }
-
-    /// Returns the ray-tracing mode of this config.
-    // #[must_use]
-    // pub const fn mode(&self) -> RayTracingMode {
-    //     self.mode
-    // }
     /// Sets the min energy per ray during analysis. Rays with energies lower than this limit will be dropped.
     ///
     /// # Errors
@@ -145,9 +140,7 @@ impl PropagationStrategy for RayTraceConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         *self.missed_surface_strategy()
     }
-
     fn on_after_apodization(&self, rays: &mut Rays) -> OpmResult<()> {
-        // Ray trace specific invalidation
         rays.invalidate_by_threshold_energy(self.min_energy_per_ray())?;
         Ok(())
     }
@@ -190,7 +183,7 @@ pub trait AnalysisRayTrace: OpticNode {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if internal element-specific errors occur and the analysis cannot be performed.
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -213,7 +206,8 @@ pub trait AnalysisRayTrace: OpticNode {
     ) -> OpmResult<LightResult> {
         self.analyze(incoming_data, config)
     }
-    ///returns the necessary node attributes for ray tracing
+    /// Returns the necessary node attributes for ray tracing
+    ///
     /// # Errors
     /// This function errors if the node attributes: Isometry, Refractive Index or Center Thickness cannot be read,
     fn get_node_attributes_ray_trace(
@@ -232,13 +226,11 @@ pub trait AnalysisRayTrace: OpticNode {
                 "cannot read center thickness".into(),
             ));
         };
-
         let angle = if let Ok(Proptype::Angle(wedge)) = node_attr.get_property("wedge") {
             *wedge
         } else {
             degree!(0.)
         };
-
         Ok((index_model.clone(), *center_thickness, angle))
     }
 }

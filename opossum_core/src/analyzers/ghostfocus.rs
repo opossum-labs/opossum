@@ -58,7 +58,6 @@ impl GhostFocusConfig {
     pub const fn set_max_bounces(&mut self, max_bounces: usize) {
         self.max_bounces = max_bounces;
     }
-
     /// Returns the fluence estimator of this [`GhostFocusConfig`].
     #[must_use]
     pub const fn fluence_estimator(&self) -> &FluenceEstimator {
@@ -99,12 +98,10 @@ impl Default for GhostFocusConfig {
         }
     }
 }
-
 impl PropagationStrategy for GhostFocusConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         MissedSurfaceStrategy::Ignore
     }
-
     fn on_surface_interaction(
         &self,
         surf: &mut OpticSurface,
@@ -118,7 +115,6 @@ impl PropagationStrategy for GhostFocusConfig {
         Ok(())
     }
 }
-
 /// Analyzer for ghost focus simulation
 #[derive(Default, Debug)]
 pub struct GhostFocusAnalyzer {
@@ -275,7 +271,11 @@ impl Analyzer for GhostFocusAnalyzer {
     }
 }
 
-/// Trait for implementing the energy flow analysis.
+/// Trait for implementing ghost focus analysis.
+///
+/// This trait extends the [`AnalysisRayTrace`] trait and provides a default implementation
+/// of the `analyze` function that performs a ghost focus analysis of an [`OpticNode`]. The
+/// `analyze` function takes into account possible reflected [`Rays`] and returns the resulting [`LightRays`].
 pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     /// Perform a ghost focus analysis of an [`OpticNode`].
     ///
@@ -284,7 +284,8 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if the analysis fails for any reason, such as if
+    /// the input data is invalid or if the node cannot be analyzed.
     fn analyze(
         &mut self,
         incoming_data: LightRays,
@@ -329,12 +330,10 @@ impl RaysNodeCorrelation {
         correlation.insert(rays_uuid, rays_origin.clone());
         Self { correlation }
     }
-
     /// inserts a key value pair in the correlation hashmap
     pub fn insert(&mut self, k: Uuid, v: &RaysOrigin) {
         self.correlation.insert(k, v.clone());
     }
-
     /// returns the values of the correlation hashmap
     #[must_use]
     pub fn values(&self) -> Values<'_, Uuid, RaysOrigin> {
@@ -349,11 +348,13 @@ pub struct GhostFocusHistory {
     pub rays_pos_history: Vec<Vec<Vec<MatrixXx3<Length>>>>,
     /// view direction if the ray position history is plotted
     pub plot_view_direction: Option<Vector3<f64>>,
-    ///stores the corrleation between a rays bundle and its parent node as well as parent ray bundle for each bounce in a vector
+    /// stores the corrleation between a rays bundle and its parent node as well as parent
+    /// ray bundle for each bounce in a vector
     pub ray_node_correlation: Vec<RaysNodeCorrelation>,
 }
 impl GhostFocusHistory {
-    /// Projects the positions o fthie [`GhostFocusHistory`] onto a 2D plane
+    /// Projects the positions of the [`GhostFocusHistory`] onto a 2D plane
+    ///
     /// # Attributes
     /// `plane_normal_vec`: normal vector of the plane to project onto
     ///
@@ -372,12 +373,11 @@ impl GhostFocusHistory {
                 "The plane normal vector must have a non-zero length!".into(),
             ));
         }
-
         let normed_normal_vec = plane_normal_vec / vec_norm;
 
-        //define an axis on the plane.
-        //Do this by projection of one of the main coordinate axes onto that plane
-        //Beforehand check, if these axes are not parallel to the normal vec
+        // define an axis on the plane.
+        // Do this by projection of one of the main coordinate axes onto that plane
+        // Beforehand check, if these axes are not parallel to the normal vec
         let (co_ax_1, co_ax_2) = if plane_normal_vec.cross(&Vector3::x()).norm() < f64::EPSILON {
             //parallel to the x-axis
             (Vector3::z(), Vector3::y())
@@ -386,12 +386,13 @@ impl GhostFocusHistory {
         } else if plane_normal_vec.cross(&Vector3::z()).norm() < f64::EPSILON {
             (Vector3::x(), Vector3::y())
         } else {
-            //arbitrarily project x-axis onto that plane
+            // arbitrarily project x-axis onto that plane
             let x_vec = Vector3::x();
             let mut proj_x = x_vec - x_vec.dot(&normed_normal_vec) * plane_normal_vec;
             proj_x /= proj_x.norm();
 
-            //second axis defined by cross product of x-axis projection and plane normal, which yields another vector that is perpendicular to both others
+            // second axis defined by cross product of x-axis projection and plane normal,
+            // which yields another vector that is perpendicular to both others.
             (proj_x, proj_x.cross(&normed_normal_vec))
         };
 
@@ -406,7 +407,6 @@ impl GhostFocusHistory {
                 for ray_pos in ray_bundle {
                     let mut projected_ray_pos = MatrixXx2::<Length>::zeros(ray_pos.column(0).len());
                     for (row, pos) in ray_pos.row_iter().enumerate() {
-                        // let pos_t = Vector3::from_vec(pos.transpose().iter().map(|p| p.get::<millimeter>()).collect::<Vec<f64>>());
                         let pos_t = Vector3::from_vec(
                             pos.iter()
                                 .map(uom::si::f64::Length::get::<millimeter>)
@@ -423,7 +423,6 @@ impl GhostFocusHistory {
             }
             projected_history.push(rays_vec_pos_projection);
         }
-
         Ok(projected_history)
     }
 
@@ -450,7 +449,6 @@ impl GhostFocusHistory {
                         rays.uuid(),
                         &RaysOrigin::new(rays.parent_id(), *rays.node_origin()),
                     );
-
                     self.rays_pos_history[bounce] = rays_per_bounce_history;
                     if let Some(parent_uuid) = rays.parent_id() {
                         self.add_specific_ray_history(
@@ -528,7 +526,7 @@ impl From<Vec<HashMap<Uuid, Rays>>> for GhostFocusHistory {
 }
 
 impl From<(&Vec<HashMap<Uuid, Rays>>, Uuid, usize)> for GhostFocusHistory {
-    ///value contains :
+    /// value contains :
     /// 0: a vector of Hashmaps that contain Rays. Same structure as the `accumulated_rays` in [`NodeGroup`]
     /// 1: the uuid of a ray bundle within field 0
     /// 2: the index of the position in the ray position history up to which it should be displayed

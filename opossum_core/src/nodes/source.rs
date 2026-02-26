@@ -159,9 +159,6 @@ impl Debug for Source {
     }
 }
 impl OpticNode for Source {
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }

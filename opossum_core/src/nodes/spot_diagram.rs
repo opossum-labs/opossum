@@ -178,7 +178,6 @@ impl OpticNode for SpotDiagram {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
-
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }

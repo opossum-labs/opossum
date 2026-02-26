@@ -129,10 +129,6 @@ impl OpticNode for Dummy {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn reset_data(&mut self) {
-        self.reset_optic_surfaces();
-    }
-    fn set_apodization_warning(&mut self, _apodized: bool) {}
 }
 #[cfg(test)]
 mod test {

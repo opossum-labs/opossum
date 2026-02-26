@@ -149,34 +149,6 @@ impl OpticNode for FluenceDetector {
                 )
                 .unwrap();
         }
-        // if let Some(LightData::Geometric(r)) = &self.light_data{
-        //     if let Ok(f_data) = r.calc_fluence_array_from_helper_rays(&self.effective_node_iso().unwrap()){
-        //         props
-        //         .create(
-        //             &format!("helper ray Fluence"),
-        //             "2D spatial energy distribution",
-        //             None,
-        //             f_data.clone().into(),
-        //         )
-        //         .unwrap();
-        //     props
-        //         .create(
-        //             &format!("helper ray Peak Fluence "),
-        //             "Peak fluence of the distribution",
-        //             None,
-        //             Proptype::Fluence(f_data.peak()),
-        //         )
-        //         .unwrap();
-        //     props
-        //         .create(
-        //             &format!("helper ray Total energy "),
-        //             "Total energy of the distribution",
-        //             None,
-        //             Proptype::Energy(f_data.total_energy()),
-        //         )
-        //         .unwrap();
-        //     }
-        // }
         Some(NodeReport::new(
             &self.node_type(),
             &self.name(),

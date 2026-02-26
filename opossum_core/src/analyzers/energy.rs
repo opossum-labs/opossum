@@ -103,9 +103,19 @@ pub trait AnalysisEnergy: OpticNode {
         let out_ports = self.ports().names(&crate::optic_ports::PortType::Output);
 
         // If the node doesn't have at least one input and output, we can't pass energy through
-        if in_ports.is_empty() || out_ports.is_empty() {
-            return Ok(LightResult::default());
-        }
+        // which would be a programming error in the implementation of the node. We use debug asserts here to catch this.
+        debug_assert!(
+            !in_ports.is_empty(),
+            "OpticNode '{}' ({}) has no input ports defined! The defined energy flow analysis requires at least one input port.",
+            self.name(),
+            self.node_type()
+        );
+        debug_assert!(
+            !out_ports.is_empty(),
+            "OpticNode '{}' ({}) has no output ports defined! The defined energy flow analysis requires at least one output port.",
+            self.name(),
+            self.node_type()
+        );
 
         let in_port = &in_ports[0];
         let out_port = &out_ports[0];
@@ -113,8 +123,6 @@ pub trait AnalysisEnergy: OpticNode {
         let Some(data) = incoming_data.remove(in_port) else {
             return Ok(LightResult::default());
         };
-
-        // 1. APERTUR-PRÜFUNG: Warnung werfen, falls eine Blende den Strahl beschneiden würde
         let apodized = if let Some(surf) = self.get_optic_surface(out_port)
             && !surf.aperture().is_none()
         {
@@ -135,9 +143,6 @@ pub trait AnalysisEnergy: OpticNode {
             );
         }
         self.set_light_data(data.clone());
-
-        // TODO for the future: Calculate transmission factor via coatings -> scale energy
-
         Ok(LightResult::from([(out_port.clone(), data)]))
     }
 }

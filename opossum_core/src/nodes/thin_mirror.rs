@@ -141,7 +141,6 @@ impl OpticNode for ThinMirror {
                 anchor_point_iso_front,
             )
         };
-
         self.update_surface(
             &"input_1".to_string(),
             geosurface.clone(),
@@ -154,7 +153,6 @@ impl OpticNode for ThinMirror {
             anchor_point_iso,
             &PortType::Output,
         )?;
-
         Ok(())
     }
 }
