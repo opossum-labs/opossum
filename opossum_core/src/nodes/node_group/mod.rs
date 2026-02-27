@@ -198,13 +198,12 @@ impl NodeGroup {
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
-        if node_id == self.node_attr.uuid(){
+        if node_id == self.node_attr.uuid() {
             Ok(OpticRef::new(
-                    Arc::new(Mutex::new(self.clone())),
-                    self.global_conf().clone(),
-                ))
-        }
-        else{
+                Arc::new(Mutex::new(self.clone())),
+                self.global_conf().clone(),
+            ))
+        } else {
             self.graph.node(node_id)
         }
     }
