@@ -656,8 +656,10 @@ async fn process_add_analyzer(analyzer_type: AnalyzerType, graph_state: Signal<G
 #[allow(clippy::future_not_send)]
 async fn process_update_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
     let mut graph_store = graph_state.read().graph_store;
+    let group_id = graph_store.read().scenery_id;
+
     eval_action_run(
-        api::update_distance(connect_info).await,
+        api::update_distance(connect_info, group_id).await,
         Some(move |ci: ConnectInfo| {
             if let Some(e) = graph_store
                 .write()
@@ -675,9 +677,10 @@ async fn process_update_edge(connect_info: ConnectInfo, graph_state: Signal<Grap
 async fn process_delete_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
     let mut graph_store = graph_state.read().graph_store;
     let edge_to_delete = connect_info.clone();
+    let group_id = graph_store.read().scenery_id;
 
     eval_action_run(
-        api::delete_connection(connect_info).await,
+        api::delete_connection(connect_info, group_id).await,
         Some(move |_| {
             graph_store
                 .write()
@@ -739,8 +742,9 @@ async fn process_paste_node(pos: Point2D<f64>, graph_state: Signal<GraphState>) 
 #[allow(clippy::future_not_send)]
 async fn process_add_edge(connect_info: ConnectInfo, graph_state: Signal<GraphState>) {
     let mut graph_store = graph_state.read().graph_store;
+    let scenery_id = graph_store.read().scenery_id;
     eval_action_run(
-        api::post_add_connection(connect_info).await,
+        api::post_add_connection(connect_info, scenery_id).await,
         Some(move |ci| {
             graph_store.write().edges_mut().write().push(ci);
             graph_store.write().needs_saving.set(true);
