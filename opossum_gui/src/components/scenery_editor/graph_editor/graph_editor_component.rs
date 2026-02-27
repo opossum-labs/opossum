@@ -148,7 +148,7 @@ pub struct WorkSpaceSignalHandlers {
     pub add_edge: EventHandler<(ConnectInfo, Uuid)>,
     pub delete_edge: EventHandler<(ConnectInfo, Uuid)>,
     pub update_edge: EventHandler<(ConnectInfo, Uuid)>,
-    pub center_graph: EventHandler<(Rect<f64, UnknownUnit>, bool, Uuid)>,
+    pub center_graph: EventHandler<(Rect<f64, UnknownUnit>, bool, Uuid, bool)>,
     pub invert_node: EventHandler<(Uuid, bool, Uuid)>,
     pub update_edges: EventHandler<(Vec<ConnectInfo>, Uuid)>,
     pub set_node_name: EventHandler<(String, Uuid, Uuid)>
@@ -330,11 +330,8 @@ impl WorkSpaceSignalHandlers {
 
         let add_root_scenery_nodes = {
             let mut workspace = workspace;
-            let root_graph_id = workspace.read().root_scenery_id;
-
             EventHandler::new(move |nodes: Vec<NodeInfo>| {
-                let id = *root_graph_id.read();
-
+                let id = *workspace.read().root_scenery_id.read();
                 if let Some(graph_state) =
                     workspace.write().tabs.write().get_mut(&id)
                 {
@@ -364,9 +361,8 @@ impl WorkSpaceSignalHandlers {
 
         let add_root_scenery_analyzers = {
             let mut workspace = workspace;
-            let root_graph_id = workspace.read().root_scenery_id;
             EventHandler::new(move |analyzers: Vec<AnalyzerInfo>| {
-                let id = *root_graph_id.read();
+                let id = *workspace.read().root_scenery_id.read();
 
                 if let Some(graph_state) =
                     workspace.write().tabs.write().get_mut(&id)
@@ -386,9 +382,8 @@ impl WorkSpaceSignalHandlers {
 
         let add_root_scenery_edges = {
             let mut workspace = workspace;
-            let root_graph_id = workspace.read().root_scenery_id;
             EventHandler::new(move |connect_infos: Vec<ConnectInfo>| {
-                let id = *root_graph_id.read();
+                let id = *workspace.read().root_scenery_id.read();
 
                 if let Some(graph_state) =
                     workspace.write().tabs.write().get_mut(&id)
@@ -409,12 +404,15 @@ impl WorkSpaceSignalHandlers {
 
         let center_graph = {
             let mut workspace = workspace;
-            EventHandler::new(move |(bounding_box, zoom_to_fit , graph_id): (Rect<f64, UnknownUnit>, bool, Uuid)| {
+            EventHandler::new(move |(bounding_box, zoom_to_fit , graph_id, save_changes): (Rect<f64, UnknownUnit>, bool, Uuid, bool)| {
                 let mut workspace_write = workspace.write();
                 if let Some(graph_state) = workspace_write.tabs.write().get_mut(&graph_id){
+                    println!("centering graph! bounding box: {:?}", bounding_box);
                     graph_state.write().editor_state.write().center_graph(bounding_box, zoom_to_fit);
                 }
-                workspace_write.needs_saving.set(true);
+                if save_changes{
+                    workspace_write.needs_saving.set(true);
+                }
             })
         };
 
@@ -545,7 +543,6 @@ pub fn GraphEditor(
                     workspace_processor.send(GraphsWorkspaceAction::GetRootSceneryId);
                 }
                 NodeEditorCommand::AddNode(node_type) => {
-                    println!("NodeEditorCommand::AddNode triggered");
                     workspace_processor.send(GraphsWorkspaceAction::AddOpticNode{
                         node_type: node_type.clone(),
                         graph_id: active_tab()
@@ -559,12 +556,13 @@ pub fn GraphEditor(
                 }
                 NodeEditorCommand::AutoLayout => {
                     workspace_processor.send(GraphsWorkspaceAction::OptimizeLayout{graph_id: active_tab()});
-                    workspace_processor.send(GraphsWorkspaceAction::CenterGraph { zoom_to_fit: true , graph_id: active_tab()});
+                    workspace_processor.send(GraphsWorkspaceAction::CenterGraph { zoom_to_fit: true , graph_id: active_tab(), save_changes: true});
                 }
                 NodeEditorCommand::CenterGraph { zoom_to_fit } => {
                     workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
                         zoom_to_fit: zoom_to_fit,
-                        graph_id: active_tab()
+                        graph_id: active_tab(),
+                        save_changes: true
                     });
                 }
                 NodeEditorCommand::LoadFile(path) => {
@@ -631,7 +629,6 @@ pub fn GraphEditor(
                     class: "editor-tabs",
                     value: active_tab.read().as_simple().to_string(),
                     on_value_change: move |v: String| {
-                        println!("value changing");
                         if let Ok(new_id) = Uuid::parse_str(&v) {
                             workspace_handlers.set_active_tab.call(Some(new_id));
                         }
@@ -692,7 +689,7 @@ pub fn GraphEditor(
 
 pub fn use_workspace_processor(
     workspace: ReadSignal<GraphsWorkspaceState>,
-    root_graph_id: ReadSignal<Uuid>, 
+    root_graph_id: Memo<Uuid>, 
     workspace_handlers: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>
 ) -> Coroutine<GraphsWorkspaceAction> {
@@ -708,7 +705,6 @@ pub fn use_workspace_processor(
                             workspace_handlers,
                             set_file_path_handler
                         ).await;
-                        process_center_graph(workspace, workspace_handlers, *root_graph_id.read(), false)
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
                         process_save_root_scenery_to_file(path, set_file_path_handler, workspace_handlers).await;
@@ -731,8 +727,8 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::OptimizeLayout { graph_id } => {
                         process_optimize_layout(workspace, workspace_handlers, graph_id).await;
                     },
-                    GraphsWorkspaceAction::CenterGraph { zoom_to_fit, graph_id } => {
-                        process_center_graph(workspace, workspace_handlers, graph_id, zoom_to_fit)
+                    GraphsWorkspaceAction::CenterGraph { zoom_to_fit, graph_id , save_changes} => {
+                        process_center_graph(workspace, workspace_handlers, graph_id, zoom_to_fit, save_changes)
                     },
                     GraphsWorkspaceAction::UpdateEdges { connections, graph_id } => {
                         workspace_handlers.update_edges.call((connections, graph_id))
@@ -762,7 +758,6 @@ pub fn use_workspace_processor(
                         );
                     },
                     GraphsWorkspaceAction::AddEdge { new_edge, graph_id } => {
-                        println!("group_id: {}", graph_id.as_simple());
                         process_add_edge(new_edge, workspace_handlers, graph_id).await;                      
 
                     },
@@ -889,7 +884,7 @@ async fn process_update_edge(connect_info: ConnectInfo, ws_handler: WorkSpaceSig
     );
 }
 
-fn process_center_graph(workspace: ReadSignal<GraphsWorkspaceState>, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid, zoom_to_fit: bool) {
+fn process_center_graph(workspace: ReadSignal<GraphsWorkspaceState>, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid, zoom_to_fit: bool, save_changes: bool) {
     let Some(bounding_box) = workspace.read().get_graph_bounding_box(graph_id)
     else {
             OPOSSUM_UI_LOGS
@@ -897,7 +892,7 @@ fn process_center_graph(workspace: ReadSignal<GraphsWorkspaceState>, ws_handler:
                 .add_log(&format!("No graph with id '{}' found", graph_id.as_simple()));
             return;
         };
-    ws_handler.center_graph.call((bounding_box, zoom_to_fit, graph_id))
+    ws_handler.center_graph.call((bounding_box, zoom_to_fit, graph_id, save_changes))
     
 }
 
@@ -1059,13 +1054,12 @@ fn find_suitable_element_position(
 
 async fn process_load_from_file(
     path: PathBuf, 
-    scenery_id_sig: ReadSignal<Uuid>,
+    scenery_id_sig: Memo<Uuid>,
     ws_handler: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>
 ) {
+    // let old_root_editor = workspace.read().get_editor_state(scenery_id_sig()).unwrap().read().
     process_delete_root_scenery(ws_handler).await;
-    //is process_get_root_scenery_id necessary here?
-    process_get_root_scenery_id(ws_handler).await;
     set_file_path_handler.call(None);
 
     let opm_string = match fs::read_to_string(&path) {
@@ -1132,8 +1126,7 @@ async fn process_get_root_scenery_id(ws_handler: WorkSpaceSignalHandlers) {
         api::get_scenery_uuid().await,
         Some(move |id| {
             ws_handler.set_root_scenery_id.call(id);
-            ws_handler.add_new_group_tab.call(("Main Graph".to_string(), id))
-        }),
+            ws_handler.add_new_group_tab.call(("Main Graph".to_string(), id));        }),
     );
 }
 
@@ -1146,7 +1139,7 @@ pub enum GraphsWorkspaceAction {
     AddOpticReference{new_ref_node: NewRefNode, graph_id: Uuid},
     AddAnalyzer{analyzer_type: AnalyzerType, graph_id: Uuid},
     OptimizeLayout{graph_id: Uuid},
-    CenterGraph{zoom_to_fit: bool, graph_id: Uuid},
+    CenterGraph{zoom_to_fit: bool, graph_id: Uuid, save_changes: bool},
     UpdateEdges{connections: Vec<ConnectInfo>, graph_id: Uuid},
     UpdateEdge{connection: ConnectInfo, graph_id: Uuid},
     DeleteEdge{connection: ConnectInfo, graph_id: Uuid},
@@ -1190,6 +1183,10 @@ pub fn GraphViewEditor(
 
     let shift = use_memo(move || *editor_state.read().shift.read());
     let zoom = use_memo(move || *editor_state.read().zoom.read());
+
+    use_effect(move ||{
+        workspace_processor.send(GraphsWorkspaceAction::CenterGraph { zoom_to_fit: false, graph_id, save_changes: false });
+    });
 
     rsx! {
         div {
