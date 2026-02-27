@@ -18,6 +18,7 @@ use opossum_core::{
     nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
+    prelude::OpticNode,
     properties::Proptype,
     types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     utils::{LockExt, geom_transformation::Isometry},
@@ -971,51 +972,79 @@ async fn patch_properties(
 /// Connect two nodes
 ///
 /// Connect to optical nodes by the given connection info.
-#[utoipa::path(tag = "node")]
-#[post("/connection")]
+#[utoipa::path(tag = "node",
+    responses(
+        (status = OK, description = "node connection created", content_type="application/json"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "group UUID not found", content_type="application/json")
+    )
+)]
+#[post("/{uuid}/connection")]
 async fn post_connection(
     data: web::Data<AppState>,
+    path: web::Path<Uuid>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
+    let group_uuid = path.into_inner();
     let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
-    scenery.connect_nodes(
-        connect_info.src_uuid(),
-        connect_info.src_port(),
-        connect_info.target_uuid(),
-        connect_info.target_port(),
-        meter!(connect_info.distance()),
-    )?;
+    document
+        .scenery_mut()
+        .with_group_node_mut(group_uuid, |group| {
+            group.connect_nodes(
+                connect_info.src_uuid(),
+                connect_info.src_port(),
+                connect_info.target_uuid(),
+                connect_info.target_port(),
+                meter!(connect_info.distance()),
+            )
+        })??;
     drop(document);
     Ok(connect_info)
 }
 /// Disconnect two nodes
-#[utoipa::path(tag = "node")]
-#[delete("/connection")]
+#[utoipa::path(tag = "node",
+    responses(
+        (status = OK, description = "node connection deleted", content_type="application/json"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "group UUID not found", content_type="application/json")
+))]
+#[delete("/{uuid}/connection")]
 async fn delete_connection(
     data: web::Data<AppState>,
+    path: web::Path<Uuid>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
+    let group_uuid = path.into_inner();
     let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
-    scenery.disconnect_nodes(connect_info.src_uuid(), connect_info.src_port())?;
+    document
+        .scenery_mut()
+        .with_group_node_mut(group_uuid, |group| {
+            group.disconnect_nodes(connect_info.src_uuid(), connect_info.src_port())
+        })??;
     drop(document);
     Ok(connect_info)
 }
 /// Update a connection distance
-#[utoipa::path(tag = "node")]
-#[put("/connection")]
+#[utoipa::path(tag = "node",
+    responses(
+        (status = OK, description = "node connection updated", content_type="application/json"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "group UUID not found", content_type="application/json")
+))]
+#[put("/{uuid}/connection")]
 async fn update_distance(
     data: web::Data<AppState>,
+    path: web::Path<Uuid>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
+    let group_uuid = path.into_inner();
     let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
-    scenery.update_connection_distance(
-        connect_info.src_uuid(),
-        connect_info.src_port(),
-        meter!(connect_info.distance()),
-    )?;
+    document
+        .scenery_mut()
+        .with_group_node_mut(group_uuid, |group| {
+            group.update_connection_distance(
+                connect_info.src_uuid(),
+                connect_info.src_port(),
+                meter!(connect_info.distance()),
+            )
+        })??;
     drop(document);
     Ok(connect_info)
 }
