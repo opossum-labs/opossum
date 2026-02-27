@@ -149,30 +149,26 @@ pub trait OpticNode: Dottable {
         &mut self,
         mut incoming_data: LightResult, //
         strategy: &dyn PropagationStrategy,
-        optic_surf_name: &str, // Name der Oberfläche im Bauteil
+        optic_surf_name: &str,
         refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult> {
-        // 1. Finde Input- und Output-Port (hier stark vereinfacht dargestellt)
         let in_port_name = self.ports().names(&PortType::Input)[0].clone();
         let out_port_name = self.ports().names(&PortType::Output)[0].clone();
 
-        // 2. Hole das Licht vom Input-Port
         let Some(data) = incoming_data.remove(&in_port_name) else {
             return Ok(LightResult::default());
         };
 
-        // 3. Licht basierend auf dem Typ verarbeiten
         match data {
             LightData::Geometric(rays) => {
                 let mut rays_bundle = vec![rays];
-
                 self.pass_through_surface_generic(
                     optic_surf_name,
-                    refri_after_surf, // Detektoren brechen meistens nicht
+                    refri_after_surf,
                     &mut rays_bundle,
                     strategy,
-                    false, // backward = false
-                    false, // refraction_intended = false
+                    false,
+                    true,
                 )?;
                 let out_data = LightData::Geometric(rays_bundle.remove(0));
                 self.set_light_data(out_data.clone());
@@ -185,7 +181,7 @@ pub trait OpticNode: Dottable {
                     &mut rays_bundle,
                     strategy,
                     false,
-                    false,
+                    true,
                 )?;
                 let out_data = LightData::GhostFocus(rays_bundle);
                 self.set_light_data(out_data.clone());

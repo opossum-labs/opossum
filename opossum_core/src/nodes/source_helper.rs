@@ -7,6 +7,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::{
         light_data_builder::LightDataBuilder,
+        ray_data_builder::RayDataBuilder,
         ray_data_source::{CollimatedSrc, PointSrc, RayDataSource},
     },
     millimeter, nanometer,
@@ -69,6 +70,34 @@ pub fn collimated_line_ray_source(
         )));
     let src = Source::new("collimated line ray source", light_data_builder);
     Ok(src)
+}
+/// Create a [`RayDataBuilder`] constructing a line of collimated rays.
+///
+/// This helper functions creates a ray [`RayDataBuilder`] containing a given number of collimated rays evenly
+/// spaced along the `y` axis. (one dimensional [`Grid`]).
+/// The grid has the given length (`size_y`) and is centered on the optical axis.
+///
+/// # Errors
+///
+/// This function will return an error if the
+///   - the energy is ngeative of not finite.
+///   - the given `size_y` is negative, zero or not finite.
+///   - the given `nr_of_points_y` is zero.
+pub fn collimated_line_ray_builder(
+    size_y: Length,
+    energy: Energy,
+    nr_of_points_y: usize,
+) -> OpmResult<RayDataBuilder> {
+    Ok(RayDataSource::Collimated(CollimatedSrc::new(
+        Grid::new(
+            Point2::new(Length::zero(), size_y),
+            Point2::new(1, nr_of_points_y),
+        )?
+        .into(),
+        UniformDist::new(energy)?.into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    ))
+    .into())
 }
 /// Create a point [`Source`] on the optical axis with a given cone angle.
 ///

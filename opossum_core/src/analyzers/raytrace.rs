@@ -338,7 +338,59 @@ mod test {
         let analyzer = RayTracingAnalyzer::default();
         analyzer.analyze(&mut group).unwrap();
     }
+    #[test]
+    fn test_position_history_integration() {
+        use crate::{
+            analyzers::{Analyzer, raytrace::RayTracingAnalyzer},
+            nodes::{ParaxialSurface, RayPropagationVisualizer, round_collimated_ray_source},
+            properties::Proptype,
+            utils::lock_ext::LockExt,
+        };
 
+        // Source -> Lens -> Visualizer
+        let mut group = NodeGroup::default();
+        let i_src = group
+            .add_node(round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 1).unwrap())
+            .unwrap();
+        let i_lens = group
+            .add_node(ParaxialSurface::new("lens", millimeter!(100.0)).unwrap())
+            .unwrap();
+        let i_det = group.add_node(RayPropagationVisualizer::default()).unwrap();
+        group
+            .connect_nodes(i_src, "output_1", i_lens, "input_1", millimeter!(50.0))
+            .unwrap();
+        group
+            .connect_nodes(i_lens, "output_1", i_det, "input_1", millimeter!(50.0))
+            .unwrap();
+
+        let analyzer = RayTracingAnalyzer::default();
+        analyzer.analyze(&mut group).unwrap();
+        let node_ref = group.graph().node(i_det).unwrap();
+        let det_node = node_ref.optical_ref.lock_opm().unwrap();
+        let report = det_node.node_report("test_uuid").unwrap();
+        let prop = report
+            .properties()
+            .get("Ray plot")
+            .expect("Integration Test Failed: 'Ray plot' property is missing!");
+        if let Proptype::RayPositionHistory(hist) = prop {
+            assert!(
+                !hist.rays_pos_history.is_empty(),
+                "No spectral history buckets found"
+            );
+            let ray_histories = hist.rays_pos_history[0].get_history();
+            assert!(!ray_histories.is_empty(), "No rays found in history bucket");
+
+            let first_ray_hist = &ray_histories[0];
+            let num_points = first_ray_hist.nrows();
+            assert!(
+                num_points >= 3,
+                "Ray history is broken! Expected at least 3 points (Source, Lens, Detector), but got only {}",
+                num_points
+            );
+        } else {
+            panic!("'Ray plot' property has the wrong Proptype!");
+        }
+    }
     #[test]
     fn test_map_and_get_source() {
         use crate::lightdata::ray_data_source::{CollimatedSrc, PointSrc, RayDataSource};
