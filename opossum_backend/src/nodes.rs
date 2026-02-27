@@ -12,7 +12,16 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    analyzers::AnalyzerType, error::OpossumError, meter, nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence}, opm_document::AnalyzerInfo, optic_ports::PortType, prelude::OpticNode, properties::Proptype, types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo}, utils::{LockExt, geom_transformation::Isometry}
+    analyzers::AnalyzerType,
+    error::OpossumError,
+    meter,
+    nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
+    opm_document::AnalyzerInfo,
+    optic_ports::PortType,
+    prelude::OpticNode,
+    properties::Proptype,
+    types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
+    utils::{LockExt, geom_transformation::Isometry},
 };
 use uom::si::length::meter;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -975,62 +984,67 @@ async fn post_connection(
     path: web::Path<Uuid>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
-    let uuid = path.into_inner();
+    let group_uuid = path.into_inner();
     let mut document = data.document.lock();
-    if uuid == document.scenery().node_attr().uuid(){
-        let group_node = document.scenery_mut();
-        group_node.connect_nodes(
-            connect_info.src_uuid(),
-            connect_info.src_port(),
-            connect_info.target_uuid(),
-            connect_info.target_port(),
-            meter!(connect_info.distance()),
-            )?;
-    }
-    else{
-        let (group_ref, _) = document.scenery().node_recursive(uuid)?;
-        let mut group_lock = group_ref.optical_ref.lock_opm()?;
-        let group_node = group_lock.as_group_mut()?;
-        group_node.connect_nodes(
-            connect_info.src_uuid(),
-            connect_info.src_port(),
-            connect_info.target_uuid(),
-            connect_info.target_port(),
-            meter!(connect_info.distance()),
-            )?;
-        drop(group_lock);
-    };
-
+    document
+        .scenery_mut()
+        .with_group_node_mut(group_uuid, |group| {
+            group.connect_nodes(
+                connect_info.src_uuid(),
+                connect_info.src_port(),
+                connect_info.target_uuid(),
+                connect_info.target_port(),
+                meter!(connect_info.distance()),
+            )
+        })??;
     drop(document);
     Ok(connect_info)
 }
 /// Disconnect two nodes
-#[utoipa::path(tag = "node")]
-#[delete("/connection")]
+#[utoipa::path(tag = "node",
+    responses(
+        (status = OK, description = "node connection deleted", content_type="application/json"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "group UUID not found", content_type="application/json")
+))]
+#[delete("/{uuid}/connection")]
 async fn delete_connection(
     data: web::Data<AppState>,
+    path: web::Path<Uuid>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
+    let group_uuid = path.into_inner();
     let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
-    scenery.disconnect_nodes(connect_info.src_uuid(), connect_info.src_port())?;
+    document
+        .scenery_mut()
+        .with_group_node_mut(group_uuid, |group| {
+            group.disconnect_nodes(connect_info.src_uuid(), connect_info.src_port())
+        })??;
     drop(document);
     Ok(connect_info)
 }
 /// Update a connection distance
-#[utoipa::path(tag = "node")]
-#[put("/connection")]
+#[utoipa::path(tag = "node",
+    responses(
+        (status = OK, description = "node connection updated", content_type="application/json"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "group UUID not found", content_type="application/json")
+))]
+#[put("/{uuid}/connection")]
 async fn update_distance(
     data: web::Data<AppState>,
+    path: web::Path<Uuid>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
+    let group_uuid = path.into_inner();
     let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
-    scenery.update_connection_distance(
-        connect_info.src_uuid(),
-        connect_info.src_port(),
-        meter!(connect_info.distance()),
-    )?;
+    document
+        .scenery_mut()
+        .with_group_node_mut(group_uuid, |group| {
+            group.update_connection_distance(
+                connect_info.src_uuid(),
+                connect_info.src_port(),
+                meter!(connect_info.distance()),
+            )
+        })??;
     drop(document);
     Ok(connect_info)
 }
