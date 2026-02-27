@@ -209,17 +209,18 @@ impl NodeGroup {
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<(OpticRef, Uuid)> {
-        self.graph.node_recursive(node_id, self.node_attr().uuid())
-    }
-
-    fn optical_arc(&self, node_id: Uuid) -> OpmResult<Arc<Mutex<dyn Analyzable>>> {
-        let arc = self
-            .graph
-            .node_recursive(node_id, self.node_attr().uuid())?
-            .0
-            .optical_ref
-            .clone();
-        Ok(arc)
+        let group_id = self.node_attr().uuid();
+        if group_id == node_id {
+            Ok((
+                OpticRef::new(
+                    Arc::new(Mutex::new(self.clone())),
+                    self.global_conf().clone(),
+                ),
+                group_id,
+            ))
+        } else {
+            self.graph.node_recursive(node_id, self.node_attr().uuid())
+        }
     }
 
     /// Execute a read-only operation on the `NodeGroup` identified by `node_id`.
@@ -249,8 +250,7 @@ impl NodeGroup {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self));
         }
-
-        let arc = self.optical_arc(node_id)?;
+        let arc = self.node_recursive(node_id)?.0.optical_ref;
         let guard = arc.lock_opm()?;
         let group = guard.as_group()?;
         let out = f(group);
@@ -296,7 +296,7 @@ impl NodeGroup {
             return Ok(f(self));
         }
 
-        let arc = self.optical_arc(node_id)?;
+        let arc = self.node_recursive(node_id)?.0.optical_ref;
         let mut guard = arc.lock_opm()?;
 
         let group = guard.as_group_mut()?;
