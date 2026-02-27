@@ -777,7 +777,7 @@ pub fn use_workspace_processor(
 
 async fn process_add_edge(connect_info: ConnectInfo, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
     eval_action_run(
-        api::post_add_connection(connect_info).await,
+        api::post_add_connection(connect_info, graph_id).await,
         Some(move |ci| {
             ws_handler.add_edge.call((ci, graph_id));
         }),
@@ -872,7 +872,7 @@ async fn process_copy_node(node_type: NodeType, node_id: Uuid) {
 
 async fn process_delete_edge(connect_info: ConnectInfo, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
     eval_action_run(
-        api::delete_connection(connect_info.clone()).await,
+        api::delete_connection(connect_info.clone(), graph_id).await,
         Some(move |_| {
             ws_handler.delete_edge.call((connect_info, graph_id))
         }),
@@ -881,7 +881,7 @@ async fn process_delete_edge(connect_info: ConnectInfo, ws_handler: WorkSpaceSig
 
 async fn process_update_edge(connect_info: ConnectInfo, ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
     eval_action_run(
-        api::update_distance(connect_info).await,
+        api::update_distance(connect_info, graph_id).await,
         Some(move |ci: ConnectInfo| {
             ws_handler.update_edge.call((ci, graph_id))
             
