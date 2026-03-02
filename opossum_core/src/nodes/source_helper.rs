@@ -42,6 +42,28 @@ pub fn round_collimated_ray_source(
     let src = Source::new("collimated line ray source", light_data_builder);
     Ok(src)
 }
+/// Create a collimated [`RayDataBuilder`].
+///
+/// This is a convenience function, which generates a [`RayDataBuilder`] consisting of collinear [`Ray`](crate::ray::Ray) bundle symmetrically around the optical axis
+/// at 1000 nm and a given energy. The ray distribution is hexapolar with the given number of rings (see [`Hexapolar`] for details). If
+/// the `nr_of_rings` is zero, the function genereates a [`RayDataBuilder`] with a single [`Ray`](crate::ray::Ray) on the optical axis.
+///
+/// # Errors
+/// This functions returns an error if
+///  - the given energy is ngeative or not finite.
+///  - the given radius is negative or not finite.
+pub fn round_collimated_ray_builder(
+    radius: Length,
+    energy: Energy,
+    nr_of_rings: u8,
+) -> OpmResult<RayDataBuilder> {
+    Ok(RayDataSource::Collimated(CollimatedSrc::new(
+        Hexapolar::new(radius, nr_of_rings)?.into(),
+        UniformDist::new(energy)?.into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    ))
+    .into())
+}
 /// Create a [`Source`] containing a line of collimated rays.
 ///
 /// This functions creates a ray [`Source`] containing a given number of collimated rays evenly spaced along the `y` axis. (one dimensional [`Grid`]).

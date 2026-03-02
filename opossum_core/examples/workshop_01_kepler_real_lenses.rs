@@ -3,11 +3,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler spherical lenses");
-    let i_src = scenery.add_node(collimated_line_ray_source(
-        millimeter!(45.0),
-        joule!(1.0),
-        9,
-    )?)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     let refr_index_hzf52 = RefrIndexSchott::new(
         3.26760058E+000,
         -2.05384566E-002,
@@ -44,7 +40,12 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        collimated_line_ray_builder(millimeter!(45.0), joule!(1.0), 9)?,
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_01_kepler_real_lenses.opm",
     ))

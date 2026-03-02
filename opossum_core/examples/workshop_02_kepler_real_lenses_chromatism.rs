@@ -10,18 +10,7 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler chromatism");
-    let light_data_builder =
-        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
-            Grid::new(
-                Point2::new(Length::zero(), millimeter!(45.0)),
-                Point2::new(1, 9),
-            )?
-            .into(),
-            UniformDist::new(joule!(1.0))?.into(),
-            LaserLines::new(vec![(nanometer!(1000.0), 1.0), (nanometer!(350.0), 1.0)])?.into(),
-        )));
-    let src = Source::new("bichromatic ray source", light_data_builder);
-    let i_src = scenery.add_node(src)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     let refr_index_hzf52 = RefrIndexSchott::new(
         3.26760058E+000,
         -2.05384566E-002,
@@ -58,7 +47,23 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let ray_data_source =
+        RayDataSource::Collimated(CollimatedSrc::new(
+            Grid::new(
+                Point2::new(Length::zero(), millimeter!(45.0)),
+                Point2::new(1, 9),
+            )?
+            .into(),
+            UniformDist::new(joule!(1.0))?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0), (nanometer!(350.0), 1.0)])?.into(),
+        ));
+
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        ray_data_source.into()
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));    
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_02_kepler_chromatism.opm",
     ))
