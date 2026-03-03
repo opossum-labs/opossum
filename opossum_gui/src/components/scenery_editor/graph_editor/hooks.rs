@@ -6,11 +6,14 @@ use std::{
 use crate::{
     CONTEXT_MENU,
     components::scenery_editor::{
-        GraphsWorkspaceAction, NodeElement,
+        NodeElement,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
         edges::edges_component::EdgeCreation,
-        graph_editor::graph_editor_component::{
-            DragStatus, EditorState, GraphsWorkspaceState, WorkSpaceSignalHandlers,
+        graph_editor::{
+            graph_editor_component::{DragStatus, EditorState},
+            graph_workspace::{
+                GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
+            },
         },
         graph_store::GraphStore,
     },

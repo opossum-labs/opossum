@@ -1,17 +1,16 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
 use crate::CONTEXT_MENU;
-use crate::components::context_menu::cx_menu::CxMenu;
-use crate::components::context_menu::cx_menu::CxtCommand;
-use crate::components::scenery_editor::GraphState;
-use crate::components::scenery_editor::GraphsWorkspaceAction;
-use crate::components::scenery_editor::NodeType;
-use crate::components::scenery_editor::constants::{BORDER_WIDTH, NODE_WIDTH};
-use crate::components::scenery_editor::{
-    graph_editor::graph_editor_component::{DragStatus, EditorState},
-    graph_store::GraphStore,
-    node::graph_node_components::GraphNodeContent,
-    ports::ports_component::NodePorts,
+use crate::components::{
+    context_menu::cx_menu::{CxMenu, CxtCommand},
+    scenery_editor::{
+        constants::{BORDER_WIDTH, NODE_WIDTH},
+        graph_editor::graph_editor_component::{DragStatus, EditorState},
+        graph_store::GraphStore,
+        node::graph_node_components::GraphNodeContent,
+        ports::ports_component::NodePorts,
+        {GraphState, GraphsWorkspaceAction, NodeType},
+    },
 };
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
