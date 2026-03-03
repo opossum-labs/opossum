@@ -18,10 +18,10 @@ pub struct NodeChangeEvent {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChangeAction {
-    Name{name: String, graph_id: Uuid},
+    Name { name: String, graph_id: Uuid },
     Lidt(Fluence),
     Alignment(Isometry),
-    Inverted{inverted: bool, graph_id: Uuid},
+    Inverted { inverted: bool, graph_id: Uuid },
     Property(String, Proptype),
     Isometry(Option<Isometry>),
     AnalyzerType(AnalyzerType),
@@ -81,9 +81,13 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                 let uuid = event.node_id;
 
                 let result: Result<(), String> = match event.action {
-                    NodeChangeAction::Name{name, graph_id} => {
+                    NodeChangeAction::Name { name, graph_id } => {
                         api::update_node_name(uuid, name.clone()).await.map(|_| {
-                            workspace_processor.send(GraphsWorkspaceAction::SetNodeName{name, graph_id, node_id: uuid});
+                            workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
+                                name,
+                                graph_id,
+                                node_id: uuid,
+                            });
                         })
                     }
                     NodeChangeAction::Lidt(lidt_new) => {
@@ -100,11 +104,18 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                     NodeChangeAction::Isometry(iso) => {
                         api::update_node_isometry(uuid, iso).await.map(|_| ())
                     }
-                    NodeChangeAction::Inverted{inverted, graph_id} => {
+                    NodeChangeAction::Inverted { inverted, graph_id } => {
                         match api::update_node_inversion(uuid, inverted).await {
                             Ok(connections) => {
-                                workspace_processor.send(GraphsWorkspaceAction::UpdateEdges{connections, graph_id});
-                                workspace_processor.send(GraphsWorkspaceAction::InvertNode{inverted, graph_id, node_id: uuid});
+                                workspace_processor.send(GraphsWorkspaceAction::UpdateEdges {
+                                    connections,
+                                    graph_id,
+                                });
+                                workspace_processor.send(GraphsWorkspaceAction::InvertNode {
+                                    inverted,
+                                    graph_id,
+                                    node_id: uuid,
+                                });
                                 Ok(())
                             }
                             Err(e) => Err(e),

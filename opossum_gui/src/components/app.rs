@@ -37,9 +37,11 @@ pub fn App() -> Element {
     let mut run_simulation = use_signal(|| false);
 
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> = use_signal(|| None);
-    let node_editor_command_handler = EventHandler::new(move |node_editor_command_opt: Option<NodeEditorCommand>| {
-                    node_editor_command.set(node_editor_command_opt)
-                });
+    let node_editor_command_memo = use_memo(move || node_editor_command.read().clone());
+    let node_editor_command_handler =
+        EventHandler::new(move |node_editor_command_opt: Option<NodeEditorCommand>| {
+            node_editor_command.set(node_editor_command_opt)
+        });
     let mut cxt_command = use_signal(|| None::<CxtCommand>);
 
     // global signals
@@ -108,9 +110,14 @@ pub fn App() -> Element {
                 window_for_quit.close();
             }
         }
-        AppCommand::AutoLayout => node_editor_command_handler.call(Some(NodeEditorCommand::AutoLayout)),
-        AppCommand::CenterGraph { zoom_to_fit } => {
-            node_editor_command_handler.call(Some(NodeEditorCommand::CenterGraph { zoom_to_fit }));
+        AppCommand::AutoLayout => {
+            node_editor_command_handler.call(Some(NodeEditorCommand::AutoLayout))
+        }
+        AppCommand::CenterGraph => {
+            node_editor_command_handler.call(Some(NodeEditorCommand::CenterGraph));
+        }
+        AppCommand::ZoomToFit => {
+            node_editor_command_handler.call(Some(NodeEditorCommand::ZoomToFit));
         }
         AppCommand::AddNode(name) => {
             node_editor_command_handler.call(Some(NodeEditorCommand::AddNode(name)));
@@ -193,7 +200,8 @@ pub fn App() -> Element {
         if let Some(cmd) = &*(cxt_command_val) {
             match cmd {
                 CxtCommand::AddRefNode(new_ref_node) => {
-                    node_editor_command_handler.call(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
+                    node_editor_command_handler
+                        .call(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
                 }
             }
         }
@@ -290,8 +298,10 @@ pub fn App() -> Element {
                     model_file_path_sig.set(path_opt);
                 }),
                 model_modified_sig,
-                model_modified_handler: EventHandler::new(move |is_modified: bool| model_modified_sig.set(is_modified)),
-                node_editor_command,
+                model_modified_handler: EventHandler::new(move |is_modified: bool| {
+                    model_modified_sig.set(is_modified);
+                }),
+                node_editor_command: node_editor_command_memo,
                 node_editor_command_handler,
                 show_alert,
                 on_alert_confirm,
@@ -334,7 +344,7 @@ fn CommonAppLayout(
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     model_modified_handler: EventHandler<bool>,
     model_modified_sig: ReadSignal<bool>,
-    node_editor_command: ReadSignal<Option<NodeEditorCommand>>,
+    node_editor_command: Memo<Option<NodeEditorCommand>>,
     node_editor_command_handler: EventHandler<Option<NodeEditorCommand>>,
     show_alert: Signal<bool>,
     on_alert_confirm: EventHandler<MouseEvent>,

@@ -1,7 +1,9 @@
 use crate::components::{
     node_editor::inputs::input_components::UnitInput,
     scenery_editor::{
-        GraphState, GraphsWorkspaceAction, constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH}, edges::define_bezier_path
+        GraphState, GraphsWorkspaceAction,
+        constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
+        edges::define_bezier_path,
     },
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};

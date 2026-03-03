@@ -130,13 +130,30 @@ body {
     background-color: rgb(92, 92, 92);
 }
 
-.graph-editor-container {
-    flex-grow: 1; 
+.graph-editor-container,
+.graph-editor-tab-content,
+.graph-editor,
+.tab-content {
     display: flex;
+    flex-grow: 1; 
+    min-height: 0;
     min-width: 0;  
-    flex-direction: column;
 }
 
+.graph-editor-tab-content{
+    position: relative;
+    padding: 0;
+    overflow: hidden;
+    outline: none;
+}
+
+.graph-editor {
+    background-color: #414141;
+    position: relative;
+    padding: 0;
+    overflow: hidden;
+    outline: none;
+}
 
 
 .editor-tabs {
@@ -154,15 +171,6 @@ body {
     min-height: 0;
 }
 
-.graph-editor {
-    background-color: #414141;
-    flex-grow: 1;
-    display: flex;
-    position: relative;
-    padding: 0;
-    overflow: hidden;
-    outline: none;
-}
 
 
 .context-menu-item {

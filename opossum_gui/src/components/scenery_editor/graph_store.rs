@@ -36,7 +36,7 @@ pub struct GraphState {
     pub graph_store: Signal<GraphStore>,
     pub editor_state: Signal<EditorState>,
     pub name: String,
-    pub id: Uuid
+    pub id: Uuid,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]

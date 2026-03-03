@@ -1,12 +1,15 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::components::{node_editor::{
-    accordion::AccordionItem,
-    inputs::input_components::{
-        FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput,
+use crate::components::{
+    node_editor::{
+        accordion::AccordionItem,
+        inputs::input_components::{
+            FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput,
+        },
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        optical_node_editor::UINodeAttr,
     },
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::UINodeAttr,
-}, scenery_editor::GraphState};
+    scenery_editor::GraphState,
+};
 use dioxus::prelude::*;
 use opossum_core::J_per_cm2;
 use uom::si::radiant_exposure::joule_per_square_centimeter;

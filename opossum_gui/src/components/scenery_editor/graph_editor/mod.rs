@@ -1,3 +1,3 @@
 pub mod graph_editor_component;
 mod hooks;
-pub use graph_editor_component::{GraphEditor, NodeEditorCommand, GraphsWorkspaceAction};
+pub use graph_editor_component::{GraphEditor, GraphsWorkspaceAction, NodeEditorCommand};
