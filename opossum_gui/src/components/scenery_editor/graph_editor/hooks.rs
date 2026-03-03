@@ -145,13 +145,20 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
     }
 }
 
-pub fn use_on_resize() -> EventHandler<ResizeEvent> {
+pub fn use_on_resize(mut workspace: Signal<GraphsWorkspaceState>, on_mounted: Signal<Option<Rc<MountedData>>>) -> EventHandler<ResizeEvent> {
     let mut editor_status = use_context::<Signal<GraphsWorkspaceState>>();
 
     EventHandler::new(move |event: Event<ResizeData>| {
         if let Ok(size) = event.data().get_content_box_size() {
             editor_status.write().editor_size.set(size);
         }
+        spawn(async move {
+            if let Some(rect_opt) = on_mounted() {
+                if let Ok(rect) = rect_opt.get_client_rect().await {
+                    workspace.write().rect.set(rect);
+                }
+            }
+        });
     })
 }
 
@@ -183,8 +190,11 @@ pub fn use_on_key_down(
                         && !modifiers.shift()
                         && event.data().key() == Key::Character("v".to_string())
                     {
+                        println!("past combination pressed");
                         let rect = *workspace().rect.read();
                         let mouse = *mouse_pos.read();
+                        println!("rect workspace: {:?}", rect);
+                        println!("mouse: {:?}", mouse);
                         if mouse.x > rect.min_x()
                             && mouse.x < rect.max_x()
                             && mouse.y > rect.min_y()

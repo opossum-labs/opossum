@@ -224,6 +224,7 @@ async fn process_paste_node(
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
+    println!("pasting node");
     match api::get_copied_node_type().await {
         Ok(node_type) => {
             if node_type {

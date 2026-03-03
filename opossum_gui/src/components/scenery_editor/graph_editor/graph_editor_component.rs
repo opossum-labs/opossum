@@ -207,7 +207,7 @@ pub fn GraphEditor(
     let onmouseleave_handler = use_drag_end(workspace);
     let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);
     let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
-    let onresizehandler = use_on_resize();
+    let onresizehandler = use_on_resize(workspace, on_mounted);
 
     use_effect(move || {
         spawn(async move {
