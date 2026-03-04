@@ -172,7 +172,7 @@ impl NodeGroup {
         self.graph.delete_node(node_id)
     }
 
-        /// Recursively collects the UUIDs of all nodes contained in this graph,
+    /// Recursively collects the UUIDs of all nodes contained in this graph,
     /// including nodes inside nested group nodes.
     ///
     /// This function traverses the graph hierarchy depth-first and returns
