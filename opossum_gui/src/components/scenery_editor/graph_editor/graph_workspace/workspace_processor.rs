@@ -151,6 +151,11 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::DeleteNode { node_id, graph_id } => {
                         process_delete_node(node_id, workspace, workspace_handlers, graph_id).await;
                     }
+                    GraphsWorkspaceAction::OpenGroupTab { tab_name, group_id } => {
+                        process_open_group_tab(tab_name, group_id, workspace_handlers).await;
+                                                // add_new_group_tab_handler.call((node.name(), node.id()));
+
+                    },
                 }
             }
         }
@@ -446,6 +451,31 @@ fn find_suitable_element_position(
     final_position // fallback: return last position after reaching max iterations
 }
 
+async fn process_open_group_tab(tab_name: String, group_id: Uuid, ws_handler: WorkSpaceSignalHandlers)
+{
+    ws_handler.add_new_group_tab.call((tab_name, group_id));
+    process_fill_graph_of_group(group_id, ws_handler).await;
+}
+
+async fn process_fill_graph_of_group(group_id: Uuid, ws_handler: WorkSpaceSignalHandlers){
+            eval_action_run(
+            api::get_nodes(group_id).await,
+            Some(move |nodes: Vec<NodeInfo>| ws_handler.add_group_nodes.call((group_id, nodes))),
+        );
+        eval_action_run(
+            api::get_analyzers().await,
+            Some(move |analyzers: Vec<AnalyzerInfo>| {
+                ws_handler.add_group_analyzers.call((group_id, analyzers));
+            }),
+        );
+        eval_action_run(
+            api::get_connections(group_id).await,
+            Some(move |connect_infos: Vec<ConnectInfo>| {
+                ws_handler.add_group_edges.call((group_id, connect_infos))
+            }),
+        );
+        ws_handler.center_graph.call((group_id, false));
+}
 async fn process_load_from_file(
     path: PathBuf,
     scenery_id_sig: Memo<Uuid>,
@@ -468,24 +498,7 @@ async fn process_load_from_file(
             ws_handler.set_needs_saving.call(false);
             set_file_path_handler.call(Some(path));
             let scenery_id = *scenery_id_sig.read();
-            eval_action_run(
-                api::get_nodes(scenery_id).await,
-                Some(move |nodes: Vec<NodeInfo>| ws_handler.add_root_scenery_nodes.call(nodes)),
-            );
-            eval_action_run(
-                api::get_analyzers().await,
-                Some(move |analyzers: Vec<AnalyzerInfo>| {
-                    ws_handler.add_root_scenery_analyzers.call(analyzers);
-                }),
-            );
-            eval_action_run(
-                api::get_connections(scenery_id).await,
-                Some(move |connect_infos: Vec<ConnectInfo>| {
-                    ws_handler.add_root_scenery_edges.call(connect_infos)
-                }),
-            );
-
-            ws_handler.center_graph.call((scenery_id, false));
+            process_fill_graph_of_group(scenery_id, ws_handler).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);

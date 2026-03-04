@@ -238,7 +238,6 @@ pub fn GraphEditor(
                                             model_file_path_sig,
                                             model_file_path_handler,
                                             current_mouse_pos,
-                                            add_new_group_tab_handler: workspace_handlers.add_new_group_tab,
                                             graph_state: *graph_state,
                                         }
                                     }
@@ -260,7 +259,6 @@ pub fn GraphViewEditor(
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
-    add_new_group_tab_handler: EventHandler<(String, Uuid)>,
     graph_state: Signal<GraphState>,
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
@@ -304,11 +302,7 @@ pub fn GraphViewEditor(
                     shift().y,
                     zoom(),
                 ),
-                Nodes {
-                    add_new_group_tab_handler,
-                    graph_store,
-                    graph_id,
-                }
+                Nodes { graph_store, graph_id }
                 svg {
                     width: "100%",
                     height: "100%",

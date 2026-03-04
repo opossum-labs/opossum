@@ -123,9 +123,9 @@ pub struct WorkSpaceSignalHandlers {
     pub remove_tab: EventHandler<Uuid>,
     pub set_needs_saving: EventHandler<bool>,
     pub clear_workspace: EventHandler<()>,
-    pub add_root_scenery_nodes: EventHandler<Vec<NodeInfo>>,
-    pub add_root_scenery_analyzers: EventHandler<Vec<AnalyzerInfo>>,
-    pub add_root_scenery_edges: EventHandler<Vec<ConnectInfo>>,
+    pub add_group_nodes: EventHandler<(Uuid, Vec<NodeInfo>)>,
+    pub add_group_analyzers: EventHandler<(Uuid, Vec<AnalyzerInfo>)>,
+    pub add_group_edges: EventHandler<(Uuid, Vec<ConnectInfo>)>,
     pub set_active_tab: EventHandler<Option<Uuid>>,
     pub add_optical_node: EventHandler<(NodeInfo, Uuid)>,
     pub add_reference_node: EventHandler<(NodeInfo, Uuid)>,
@@ -284,10 +284,9 @@ impl WorkSpaceSignalHandlers {
             })
         };
 
-        let add_root_scenery_nodes = {
-            EventHandler::new(move |nodes: Vec<NodeInfo>| {
-                let graph_id = *workspace.read().root_scenery_id.read();
-                if let Some(mut graph_store) = workspace.write().get_graph_store(graph_id) {
+        let add_group_nodes = {
+            EventHandler::new(move |(group_id, nodes): (Uuid, Vec<NodeInfo>)| {
+                if let Some(mut graph_store) = workspace.write().get_graph_store(group_id) {
                     graph_store.write().add_nodes(&nodes);
                 } else {
                     OPOSSUM_UI_LOGS
@@ -306,10 +305,9 @@ impl WorkSpaceSignalHandlers {
             })
         };
 
-        let add_root_scenery_analyzers = {
-            EventHandler::new(move |analyzers: Vec<AnalyzerInfo>| {
-                let graph_id = *workspace.read().root_scenery_id.read();
-                if let Some(mut graph_store) = workspace.write().get_graph_store(graph_id) {
+        let add_group_analyzers = {
+            EventHandler::new(move |(group_id, analyzers): (Uuid, Vec<AnalyzerInfo>)| {
+                if let Some(mut graph_store) = workspace.write().get_graph_store(group_id) {
                     graph_store.write().add_analyzers(&analyzers);
                 } else {
                     OPOSSUM_UI_LOGS
@@ -319,10 +317,9 @@ impl WorkSpaceSignalHandlers {
             })
         };
 
-        let add_root_scenery_edges = {
-            EventHandler::new(move |connect_infos: Vec<ConnectInfo>| {
-                let graph_id = *workspace.read().root_scenery_id.read();
-                if let Some(mut edges) = workspace.write().get_graph_edges(graph_id) {
+        let add_group_edges = {
+            EventHandler::new(move |(group_id, connect_infos): (Uuid, Vec<ConnectInfo>)| {
+                if let Some(mut edges) = workspace.write().get_graph_edges(group_id) {
                     edges.set(connect_infos);
                 } else {
                     OPOSSUM_UI_LOGS
@@ -364,9 +361,9 @@ impl WorkSpaceSignalHandlers {
             remove_tab,
             set_needs_saving,
             clear_workspace,
-            add_root_scenery_nodes,
-            add_root_scenery_analyzers,
-            add_root_scenery_edges,
+            add_group_nodes,
+            add_group_analyzers,
+            add_group_edges,
             set_active_tab,
             add_optical_node,
             add_reference_node,

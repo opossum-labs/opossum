@@ -17,7 +17,7 @@ use opossum_core::types::api_types::NewRefNode;
 use uuid::Uuid;
 
 #[component]
-pub fn Node(node: NodeElement, add_new_group_tab_handler: EventHandler<(String, Uuid)>) -> Element {
+pub fn Node(node: NodeElement) -> Element {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_state = use_context::<Signal<GraphState>>();
@@ -101,7 +101,11 @@ pub fn Node(node: NodeElement, add_new_group_tab_handler: EventHandler<(String, 
                     if let NodeType::Optical(node_type) = node.node_type()
                         && node_type == "group"
                     {
-                        add_new_group_tab_handler.call((node.name(), node.id()));
+                        workspace_processor
+                            .send(GraphsWorkspaceAction::OpenGroupTab {
+                                tab_name: node.name(),
+                                group_id: node.id(),
+                            });
                     }
                 }
             },
