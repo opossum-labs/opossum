@@ -19,45 +19,50 @@ use crate::{
     },
 };
 use dioxus::{
-    html::{geometry::euclid::default::Point2D, input_data::MouseButton},
+    html::{
+        geometry::{
+            Pixels,
+            euclid::{Point2D, Rect, Size2D, UnknownUnit},
+        },
+        input_data::MouseButton,
+    },
     prelude::*,
 };
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
+use serde_json::Value;
 
-pub fn use_zoom(
-    on_mounted: ReadSignal<Option<std::rc::Rc<MountedData>>>,
-) -> impl FnMut(WheelEvent) {
+pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let editor_status = use_context::<Signal<EditorState>>();
+    let workspace = use_context::<Signal<GraphsWorkspaceState>>();
 
     move |wheel_event| {
         let mut zoom = editor_status().zoom;
         let mut shift = editor_status().shift;
-        spawn(async move {
-            if let Ok(rect) = on_mounted().unwrap().get_client_rect().await {
-                let client_pos = wheel_event.data.client_coordinates();
-                let mouse_pos =
-                    Point2D::new(client_pos.x - rect.min_x(), client_pos.y - rect.min_y());
-                let current_graph_shift = *shift.read();
-                let current_graph_zoom = *zoom.read();
-                let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
-                let mouse_on_graph_y = (mouse_pos.y - current_graph_shift.y) / current_graph_zoom;
-                let delta = wheel_event.delta().strip_units().y;
-                let new_graph_zoom = if delta > 0.0 {
-                    (current_graph_zoom * ZOOM_SENSITIVITY).min(MAX_ZOOM)
-                } else {
-                    (current_graph_zoom / ZOOM_SENSITIVITY).max(MIN_ZOOM)
-                };
-                let new_shift_x = mouse_on_graph_x.mul_add(-new_graph_zoom, mouse_pos.x);
-                let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
-                zoom.set(new_graph_zoom);
-                shift.set(Point2D::new(new_shift_x, new_shift_y));
-            }
-        });
+        let rect = *workspace.read().editor_rect.read();
+        let client_pos = wheel_event.data.client_coordinates();
+        let mouse_pos = Point2D::<f64, UnknownUnit>::new(
+            client_pos.x - rect.min_x(),
+            client_pos.y - rect.min_y(),
+        );
+        let current_graph_shift = *shift.read();
+        let current_graph_zoom = *zoom.read();
+        let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
+        let mouse_on_graph_y = (mouse_pos.y - current_graph_shift.y) / current_graph_zoom;
+        let delta = wheel_event.delta().strip_units().y;
+        let new_graph_zoom = if delta > 0.0 {
+            (current_graph_zoom * ZOOM_SENSITIVITY).min(MAX_ZOOM)
+        } else {
+            (current_graph_zoom / ZOOM_SENSITIVITY).max(MIN_ZOOM)
+        };
+        let new_shift_x = mouse_on_graph_x.mul_add(-new_graph_zoom, mouse_pos.x);
+        let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
+        zoom.set(new_graph_zoom);
+        shift.set(Point2D::new(new_shift_x, new_shift_y));
     }
 }
 
 pub fn use_on_mouse_down(
-    mut current_mouse_pos: Signal<Point2D<f64>>,
+    mut current_mouse_pos: Signal<Point2D<f64, UnknownUnit>>,
     mut last_click: Signal<Option<Instant>>,
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
@@ -98,7 +103,9 @@ pub fn use_on_mouse_down(
         }
     }
 }
-pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
+pub fn use_drag(
+    mut current_mouse_pos: Signal<Point2D<f64, UnknownUnit>>,
+) -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
 
@@ -145,17 +152,42 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
     }
 }
 
-pub fn use_on_resize(mut workspace: Signal<GraphsWorkspaceState>, on_mounted: Signal<Option<Rc<MountedData>>>) -> EventHandler<ResizeEvent> {
+pub fn use_on_resize(
+    mut workspace: Signal<GraphsWorkspaceState>,
+    element_id: String,
+) -> EventHandler<ResizeEvent> {
     let mut editor_status = use_context::<Signal<GraphsWorkspaceState>>();
 
     EventHandler::new(move |event: Event<ResizeData>| {
-        if let Ok(size) = event.data().get_content_box_size() {
-            editor_status.write().editor_size.set(size);
-        }
-        spawn(async move {
-            if let Some(rect_opt) = on_mounted() {
-                if let Ok(rect) = rect_opt.get_client_rect().await {
-                    workspace.write().rect.set(rect);
+        spawn({
+            let element_id = element_id.clone();
+            async move {
+                let js = format!(
+                    r#"
+                    let el = document.getElementById('{element_id}');
+                    if (!el) {{
+                        dioxus.send(null);
+                    }} else {{
+                        let r = el.getBoundingClientRect();
+                        dioxus.send({{
+                            x: r.x,
+                            y: r.y,
+                            width: r.width,
+                            height: r.height
+                        }});
+                    }}
+                    "#
+                );
+                let mut eval = dioxus::document::eval(&js);
+                if let Ok(rect) = eval.recv::<Value>().await {
+                    let x = rect["x"].as_f64().unwrap();
+                    let y = rect["y"].as_f64().unwrap();
+                    let width = rect["width"].as_f64().unwrap();
+                    let height = rect["height"].as_f64().unwrap();
+                    workspace.write().editor_rect.set(Rect::<f64, Pixels>::new(
+                        Point2D::<f64, Pixels>::new(x, y),
+                        Size2D::<f64, Pixels>::new(width, height),
+                    ));
                 }
             }
         });
@@ -163,7 +195,7 @@ pub fn use_on_resize(mut workspace: Signal<GraphsWorkspaceState>, on_mounted: Si
 }
 
 pub fn use_on_key_down(
-    mouse_pos: Signal<Point2D<f64>>,
+    mouse_pos: Signal<Point2D<f64, UnknownUnit>>,
     workspace: Signal<GraphsWorkspaceState>,
 ) -> impl FnMut(KeyboardEvent) {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
@@ -190,11 +222,8 @@ pub fn use_on_key_down(
                         && !modifiers.shift()
                         && event.data().key() == Key::Character("v".to_string())
                     {
-                        println!("past combination pressed");
-                        let rect = *workspace().rect.read();
+                        let rect = *workspace().editor_rect.read();
                         let mouse = *mouse_pos.read();
-                        println!("rect workspace: {:?}", rect);
-                        println!("mouse: {:?}", mouse);
                         if mouse.x > rect.min_x()
                             && mouse.x < rect.max_x()
                             && mouse.y > rect.min_y()
@@ -239,11 +268,8 @@ pub fn use_drag_end(workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(Mouse
                         {
                             // Update node GUI position (only if really changed)
                             if pos != old_position {
-                                workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition {
-                                    pos,
-                                    graph_id: graph_state.read().id,
-                                    node_id,
-                                });
+                                workspace_processor
+                                    .send(GraphsWorkspaceAction::SyncNodePosition { pos, node_id });
                             }
                         }
                     }

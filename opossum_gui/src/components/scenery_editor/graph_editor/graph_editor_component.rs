@@ -200,25 +200,10 @@ pub fn GraphEditor(
     //         .get_active_node()
     //         .map(|n| (n.node_type().clone(), n.id()))
     // });
-
-    // use_context_provider(|| graph_state().graph_store);
-    // use_context_provider(|| graph_state().editor_state);
-
     let onmouseleave_handler = use_drag_end(workspace);
     let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);
-    let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
-    let onresizehandler = use_on_resize(workspace, on_mounted);
-
-    use_effect(move || {
-        spawn(async move {
-            if let Some(rect_opt) = on_mounted() {
-                if let Ok(rect) = rect_opt.get_client_rect().await {
-                    workspace.write().rect.set(rect);
-                }
-            }
-        });
-    });
-
+    let graph_editor_content_container_id = "graphEditorContentContainer";
+    let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
@@ -266,9 +251,9 @@ pub fn GraphEditor(
                                 div { class: "editor-tab-filler" }
                             }
                             div {
+                                id: graph_editor_content_container_id,
                                 class: "graph-editor-tab-content",
                                 onresize: move |event| onresizehandler.call(event),
-                                onmounted: move |event| { on_mounted.set(Some(event.data)) },
                                 for (i , (id , graph_state)) in tabs.iter().enumerate() {
                                     TabContent {
                                         class: "tab-content",
@@ -284,7 +269,6 @@ pub fn GraphEditor(
                                             current_mouse_pos,
                                             add_new_group_tab_handler: workspace_handlers.add_new_group_tab,
                                             graph_state: *graph_state,
-                                            on_mounted,
                                         }
                                     }
                                 }
@@ -307,7 +291,6 @@ pub fn GraphViewEditor(
     current_mouse_pos: Signal<Point2D<f64>>,
     add_new_group_tab_handler: EventHandler<(String, Uuid)>,
     graph_state: Signal<GraphState>,
-    on_mounted: ReadSignal<Option<Rc<MountedData>>>,
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
@@ -318,8 +301,7 @@ pub fn GraphViewEditor(
     use_context_provider(|| graph_state);
     use_context_provider(|| editor_state);
     use_context_provider(|| graph_store);
-    // let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
-    let onwheel_handler = use_zoom(on_mounted);
+    let onwheel_handler = use_zoom();
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmousedown_handler = use_on_mouse_down(current_mouse_pos, last_auxiliary_click);
 

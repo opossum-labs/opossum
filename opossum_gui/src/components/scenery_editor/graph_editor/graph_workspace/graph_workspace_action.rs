@@ -72,7 +72,6 @@ pub enum GraphsWorkspaceAction {
     },
     SyncNodePosition {
         pos: Point2D<f64>,
-        graph_id: Uuid,
         node_id: Uuid,
     },
     DeleteNode {

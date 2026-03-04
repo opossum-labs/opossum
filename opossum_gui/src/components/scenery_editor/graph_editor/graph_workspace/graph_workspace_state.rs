@@ -28,8 +28,7 @@ pub struct GraphsWorkspaceState {
     pub active_tab: Signal<Option<Uuid>>,
     pub root_scenery_id: Signal<Uuid>,
     pub needs_saving: Signal<bool>,
-    pub editor_size: Signal<PixelsSize>,
-    pub rect: Signal<Rect<f64, Pixels>>,
+    pub editor_rect: Signal<Rect<f64, Pixels>>,
 }
 
 impl GraphsWorkspaceState {
@@ -110,11 +109,11 @@ impl GraphsWorkspaceState {
     }
 
     pub fn get_view_port_center(&self) -> Point2D<f64> {
-        let editor_size = *self.editor_size.read();
-        Point2D::new(editor_size.width / 2., editor_size.height / 2.)
+        let editor_size = *self.editor_rect.read();
+        Point2D::new(editor_size.width() / 2., editor_size.height() / 2.)
     }
     pub fn get_view_port_size(&self) -> Size2D<f64, Pixels> {
-        *self.editor_size.read()
+        self.editor_rect.read().size
     }
 }
 
