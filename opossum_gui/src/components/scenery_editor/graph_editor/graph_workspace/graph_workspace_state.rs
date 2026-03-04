@@ -23,7 +23,8 @@ use crate::{
 
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct GraphsWorkspaceState {
-    pub tabs: Signal<BTreeMap<Uuid, Signal<GraphState>>>,
+    pub tabs: Signal<HashMap<Uuid, Signal<GraphState>>>,
+    pub tab_order: Signal<Vec<Uuid>>,
     pub active_tab: Signal<Option<Uuid>>,
     pub root_scenery_id: Signal<Uuid>,
     pub needs_saving: Signal<bool>,
@@ -157,6 +158,7 @@ impl WorkSpaceSignalHandlers {
                     .write()
                     .insert(id, Signal::new(graph_state));
 
+                workspace.write().tab_order.write().push(id);
                 workspace.write().active_tab.set(Some(id));
             })
         };
@@ -178,6 +180,9 @@ impl WorkSpaceSignalHandlers {
         let remove_tab = {
             EventHandler::new(move |id: Uuid| {
                 workspace.write().tabs.write().remove(&id);
+                workspace.write().tab_order.write().retain(|x| *x != id);
+                let root_id = *workspace.read().root_scenery_id.read();
+                workspace.write().active_tab.set(Some(root_id));
             })
         };
 

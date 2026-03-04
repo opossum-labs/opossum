@@ -199,24 +199,28 @@ pub fn GraphEditor(
                     },
                     {
                         let tabs = workspace.read().tabs.read().clone();
+                        let tab_order = workspace.read().tab_order.read().clone();
                         rsx! {
                             TabList { class: "editor-tab-list",
-                                for (i , (id , graph_state)) in tabs.iter().enumerate() {
-                                    TabTrigger {
-                                        key: "{id.as_simple().to_string()}",
-                                        value: id.as_simple().to_string(),
-                                        index: i,
-                                        class: if active_tab() == *id { "editor-tab active-tab" } else { "editor-tab" },
-                                        div { class: "tab-inner",
-                                            span { {graph_state.read().name.clone()} }
-                                            if *id != root_graph_id() {
-                                                button {
-                                                    class: "tab-close",
-                                                    onclick: {
-                                                        let id_copy = *id;
-                                                        move |_| workspace_handlers.remove_tab.call(id_copy)
-                                                    },
+                                for (i , id) in tab_order.iter().enumerate() {
+                                    if let Some(graph_state) = tabs.get(id) {
+                                        // for (i , (id , graph_state)) in tabs.iter().enumerate() {
+                                        TabTrigger {
+                                            key: "{id.as_simple().to_string()}",
+                                            value: id.as_simple().to_string(),
+                                            index: i,
+                                            class: if active_tab() == *id { "editor-tab active-tab" } else { "editor-tab" },
+                                            div { class: "tab-inner",
+                                                span { {graph_state.read().name.clone()} }
+                                                if *id != root_graph_id() {
+                                                    button {
+                                                        class: "tab-close",
+                                                        onclick: {
+                                                            let id_copy = *id;
+                                                            move |_| workspace_handlers.remove_tab.call(id_copy)
+                                                        },
 
+                                                    }
                                                 }
                                             }
                                         }
@@ -228,20 +232,24 @@ pub fn GraphEditor(
                                 id: graph_editor_content_container_id,
                                 class: "graph-editor-tab-content",
                                 onresize: move |_| onresizehandler.call(()),
-                                for (i , (id , graph_state)) in tabs.iter().enumerate() {
-                                    TabContent {
-                                        class: "tab-content",
-                                        key: "{id.as_simple().to_string()}",
-                                        value: id.as_simple().to_string(),
-                                        index: i,
-                                        GraphViewEditor {
-                                            onmouseup_handler: EventHandler::new(use_drag_end(workspace)),
-                                            model_modified_sig,
-                                            model_modified_handler,
-                                            model_file_path_sig,
-                                            model_file_path_handler,
-                                            current_mouse_pos,
-                                            graph_state: *graph_state,
+                                for (i , id) in tab_order.iter().enumerate() {
+                                    if let Some(graph_state) = tabs.get(id) {
+                                        // for (i , (id , graph_state)) in tabs.iter().enumerate()
+
+                                        TabContent {
+                                            class: "tab-content",
+                                            key: "{id.as_simple().to_string()}",
+                                            value: id.as_simple().to_string(),
+                                            index: i,
+                                            GraphViewEditor {
+                                                onmouseup_handler: EventHandler::new(use_drag_end(workspace)),
+                                                model_modified_sig,
+                                                model_modified_handler,
+                                                model_file_path_sig,
+                                                model_file_path_handler,
+                                                current_mouse_pos,
+                                                graph_state: *graph_state,
+                                            }
                                         }
                                     }
                                 }
