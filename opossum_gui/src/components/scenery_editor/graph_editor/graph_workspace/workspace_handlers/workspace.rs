@@ -88,7 +88,7 @@ fn set_needs_saving_handler(mut workspace: Signal<GraphsWorkspaceState>) -> Even
 }
 
 fn clear_workspace_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<()> {
-    EventHandler::new(move |_| {
+    EventHandler::new(move |()| {
         workspace.set(GraphsWorkspaceState::default());
     })
 }

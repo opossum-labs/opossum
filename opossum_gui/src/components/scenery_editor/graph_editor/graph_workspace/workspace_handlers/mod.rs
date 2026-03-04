@@ -1,7 +1,7 @@
-mod edge_handlers;
-mod graphs_workspace_handlers;
+mod edges;
+mod graphs_workspace;
 mod node_handlers;
-mod view_handlers;
-mod workspace_handlers;
+mod view;
+mod workspace;
 
-pub use graphs_workspace_handlers::WorkSpaceSignalHandlers;
+pub use graphs_workspace::WorkSpaceSignalHandlers;

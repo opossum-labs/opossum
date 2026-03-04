@@ -1,8 +1,8 @@
 use crate::components::scenery_editor::graph_editor::graph_workspace::{
     GraphsWorkspaceState,
     workspace_handlers::{
-        edge_handlers::EdgeHandlers, node_handlers::NodeHandlers, view_handlers::ViewHandlers,
-        workspace_handlers::WorkspaceHandlers,
+        edges::EdgeHandlers, node_handlers::NodeHandlers, view::ViewHandlers,
+        workspace::WorkspaceHandlers,
     },
 };
 use dioxus::prelude::*;

@@ -4,19 +4,13 @@ use dioxus::{
     html::geometry::euclid::default::{Point2D, Rect, Size2D},
     prelude::*,
 };
-use opossum_core::{
-    opm_document::AnalyzerInfo,
-    types::api_types::{ConnectInfo, NewAnalyzerInfo, NodeInfo},
-};
+use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
-use crate::{
-    OPOSSUM_UI_LOGS,
-    components::scenery_editor::{
-        GraphState, GraphStore, NodeType,
-        constants::{MAX_ZOOM, MIN_ZOOM},
-        graph_editor::graph_editor_component::EditorState,
-    },
+use crate::components::scenery_editor::{
+    GraphState, GraphStore, NodeType,
+    constants::{MAX_ZOOM, MIN_ZOOM},
+    graph_editor::graph_editor_component::EditorState,
 };
 
 #[derive(Clone, PartialEq)]
