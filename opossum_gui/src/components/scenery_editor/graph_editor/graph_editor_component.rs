@@ -99,7 +99,7 @@ pub fn GraphEditor(
             match command {
                 NodeEditorCommand::DeleteAll => {
                     workspace_processor.send(GraphsWorkspaceAction::DeleteRootScenery);
-                    workspace_processor.send(GraphsWorkspaceAction::GetRootSceneryId);
+                    workspace_processor.send(GraphsWorkspaceAction::AddRootSceneryTab);
                 }
                 NodeEditorCommand::AddNode(node_type) => {
                     workspace_processor.send(GraphsWorkspaceAction::AddOpticNode {
@@ -154,7 +154,7 @@ pub fn GraphEditor(
     let current_mouse_pos = use_signal(Point2D::<f64>::default);
 
     use_effect(move || {
-        workspace_processor.send(GraphsWorkspaceAction::GetRootSceneryId);
+        workspace_processor.send(GraphsWorkspaceAction::AddRootSceneryTab);
     });
 
     use_effect(move || {

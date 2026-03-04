@@ -55,8 +55,8 @@ pub fn use_workspace_processor(
                         process_delete_root_scenery(workspace_handlers, set_file_path_handler)
                             .await;
                     }
-                    GraphsWorkspaceAction::GetRootSceneryId => {
-                        process_get_root_scenery_id(workspace_handlers).await;
+                    GraphsWorkspaceAction::AddRootSceneryTab => {
+                        process_add_root_scenery_tab(workspace_handlers).await;
                     }
                     GraphsWorkspaceAction::AddOpticNode {
                         node_type,
@@ -152,9 +152,7 @@ pub fn use_workspace_processor(
                         process_delete_node(node_id, workspace, workspace_handlers, graph_id).await;
                     }
                     GraphsWorkspaceAction::OpenGroupTab { tab_name, group_id } => {
-                        process_open_group_tab(tab_name, group_id, workspace_handlers).await;
-                                                // add_new_group_tab_handler.call((node.name(), node.id()));
-
+                        process_open_group_tab(tab_name, group_id, workspace_handlers, root_graph_id).await;
                     },
                 }
             }
@@ -451,22 +449,16 @@ fn find_suitable_element_position(
     final_position // fallback: return last position after reaching max iterations
 }
 
-async fn process_open_group_tab(tab_name: String, group_id: Uuid, ws_handler: WorkSpaceSignalHandlers)
+async fn process_open_group_tab(tab_name: String, group_id: Uuid, ws_handler: WorkSpaceSignalHandlers, root_scenery_id: Memo<Uuid>)
 {
     ws_handler.add_new_group_tab.call((tab_name, group_id));
-    process_fill_graph_of_group(group_id, ws_handler).await;
+    process_fill_graph_of_group(root_scenery_id, group_id, ws_handler).await;
 }
 
-async fn process_fill_graph_of_group(group_id: Uuid, ws_handler: WorkSpaceSignalHandlers){
-            eval_action_run(
+async fn process_fill_graph_of_group(root_scenery_id: Memo<Uuid>, group_id: Uuid, ws_handler: WorkSpaceSignalHandlers){
+        eval_action_run(
             api::get_nodes(group_id).await,
             Some(move |nodes: Vec<NodeInfo>| ws_handler.add_group_nodes.call((group_id, nodes))),
-        );
-        eval_action_run(
-            api::get_analyzers().await,
-            Some(move |analyzers: Vec<AnalyzerInfo>| {
-                ws_handler.add_group_analyzers.call((group_id, analyzers));
-            }),
         );
         eval_action_run(
             api::get_connections(group_id).await,
@@ -474,6 +466,14 @@ async fn process_fill_graph_of_group(group_id: Uuid, ws_handler: WorkSpaceSignal
                 ws_handler.add_group_edges.call((group_id, connect_infos))
             }),
         );
+        if *root_scenery_id.read() == group_id{
+            eval_action_run(
+                api::get_analyzers().await,
+                Some(move |analyzers: Vec<AnalyzerInfo>| {
+                    ws_handler.add_group_analyzers.call((group_id, analyzers));
+                }),
+            );
+        }
         ws_handler.center_graph.call((group_id, false));
 }
 async fn process_load_from_file(
@@ -482,8 +482,6 @@ async fn process_load_from_file(
     ws_handler: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
 ) {
-    // let old_root_editor = workspace.read().get_editor_state(scenery_id_sig()).unwrap().read().
-
     process_delete_root_scenery(ws_handler, set_file_path_handler).await;
     let opm_string = match fs::read_to_string(&path) {
         Ok(s) => s,
@@ -494,11 +492,10 @@ async fn process_load_from_file(
     };
     match api::post_opm_file(opm_string).await {
         Ok(_) => {
-            process_get_root_scenery_id(ws_handler).await;
-            ws_handler.set_needs_saving.call(false);
+            process_add_root_scenery_tab(ws_handler).await;
             set_file_path_handler.call(Some(path));
             let scenery_id = *scenery_id_sig.read();
-            process_fill_graph_of_group(scenery_id, ws_handler).await;
+            process_fill_graph_of_group(scenery_id_sig, scenery_id, ws_handler).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -537,15 +534,14 @@ async fn process_save_root_scenery_to_file(
     );
 }
 
-async fn process_get_root_scenery_id(ws_handler: WorkSpaceSignalHandlers) {
+async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers) {
     eval_action_run(
         api::get_scenery_uuid().await,
         Some(move |id| {
             ws_handler.set_root_scenery_id.call(id);
-            ws_handler
-                .add_new_group_tab
-                .call(("Main Graph".to_string(), id));
-            ws_handler.center_graph.call((id, false));
+            ws_handler.add_new_group_tab
+            .call(("Main Graph".to_string(), id));
         }),
     );
 }
+
