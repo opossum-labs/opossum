@@ -185,12 +185,12 @@ impl GraphStore {
     /// removes each node from the store, and updates the edges accordingly.
     /// # Arguments:
     /// * `deleted_ids`: A vector of `Uuid` representing the IDs of the nodes to be removed.
-    pub fn remove_nodes_by_id(&mut self, node_ids: Vec<Uuid>) {
+    pub fn remove_nodes_by_id(&mut self, node_ids: &Vec<Uuid>) {
         for node_id in node_ids {
-            self.nodes_mut().write().remove(&node_id);
+            self.nodes_mut().write().remove(node_id);
             self.renumber_z_levels();
             self.edges.with_mut(|edges| {
-                edges.retain_mut(|e| e.src_uuid() != node_id && e.target_uuid() != node_id);
+                edges.retain_mut(|e| e.src_uuid() != *node_id && e.target_uuid() != *node_id);
             });
         }
         self.set_active_node_none();

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use dioxus::{
     html::geometry::{
@@ -82,6 +82,19 @@ impl GraphsWorkspaceState {
         }
     }
 
+    fn remove_tabs(&mut self, tab_ids: Vec<Uuid>){
+        for id in tab_ids{
+                    self.tabs.write().remove(&id);
+                    self.tab_order.write().retain(|x| *x != id);
+                }
+        let act_tab_opt = *self.active_tab.read();
+        let tabs = self.tabs.read().clone();
+        if let Some(active_tab) = act_tab_opt && !tabs.contains_key(&active_tab){
+            let root_id = *self.root_scenery_id.read();
+            self.active_tab.set(Some(root_id));
+        }
+    }
+
     fn zoom_to_fit(&mut self, graph_id: Uuid) {
         let bounding_box_opt = self.get_graph_bounding_box(graph_id);
         let view_box = self.get_view_port_size();
@@ -121,7 +134,7 @@ impl GraphsWorkspaceState {
 pub struct WorkSpaceSignalHandlers {
     pub add_new_group_tab: EventHandler<(String, Uuid)>,
     pub set_root_scenery_id: EventHandler<Uuid>,
-    pub remove_tab: EventHandler<Uuid>,
+    pub remove_tabs: EventHandler<Vec<Uuid>>,
     pub set_needs_saving: EventHandler<bool>,
     pub clear_workspace: EventHandler<()>,
     pub add_group_nodes: EventHandler<(Uuid, Vec<NodeInfo>)>,
@@ -177,12 +190,9 @@ impl WorkSpaceSignalHandlers {
             })
         };
 
-        let remove_tab = {
-            EventHandler::new(move |id: Uuid| {
-                workspace.write().tabs.write().remove(&id);
-                workspace.write().tab_order.write().retain(|x| *x != id);
-                let root_id = *workspace.read().root_scenery_id.read();
-                workspace.write().active_tab.set(Some(root_id));
+        let remove_tabs = {
+            EventHandler::new(move |ids: Vec<Uuid>| {
+                workspace.write().remove_tabs(ids)
             })
         };
 
@@ -283,8 +293,9 @@ impl WorkSpaceSignalHandlers {
         let remove_nodes = {
             EventHandler::new(move |(node_ids, graph_id): (Vec<Uuid>, Uuid)| {
                 if let Some(mut graph_store) = workspace.write().get_graph_store(graph_id) {
-                    graph_store.write().remove_nodes_by_id(node_ids);
+                    graph_store.write().remove_nodes_by_id(&node_ids);
                 }
+                workspace.write().remove_tabs(node_ids);
                 workspace.write().needs_saving.set(true);
             })
         };
@@ -363,7 +374,7 @@ impl WorkSpaceSignalHandlers {
         Self {
             add_new_group_tab,
             set_root_scenery_id,
-            remove_tab,
+            remove_tabs,
             set_needs_saving,
             clear_workspace,
             add_group_nodes,

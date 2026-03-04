@@ -15,10 +15,9 @@ use crate::components::scenery_editor::{
     },
     nodes::Nodes,
 };
-use dioxus::{html::geometry::euclid::default::{Point2D, Rect, Size2D}, prelude::*};
+use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use opossum_core::{prelude::*, types::api_types::NewRefNode};
-use serde_json::Value;
 use std::{path::PathBuf, time::Instant};
 use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq)]
@@ -217,7 +216,7 @@ pub fn GraphEditor(
                                                         class: "tab-close",
                                                         onclick: {
                                                             let id_copy = *id;
-                                                            move |_| workspace_handlers.remove_tab.call(id_copy)
+                                                            move |_| workspace_handlers.remove_tabs.call(vec![id_copy])
                                                         },
 
                                                     }
@@ -234,8 +233,6 @@ pub fn GraphEditor(
                                 onresize: move |_| onresizehandler.call(()),
                                 for (i , id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = tabs.get(id) {
-                                        // for (i , (id , graph_state)) in tabs.iter().enumerate()
-
                                         TabContent {
                                             class: "tab-content",
                                             key: "{id.as_simple().to_string()}",
