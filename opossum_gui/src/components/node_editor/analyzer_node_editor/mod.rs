@@ -2,13 +2,16 @@
 pub mod ghost_focus_editor;
 pub mod ray_trace_editor;
 
-use crate::components::{node_editor::{
-    analyzer_node_editor::{
-        ghost_focus_editor::GhostFocusEditor, ray_trace_editor::RayTraceEditor,
+use crate::components::{
+    node_editor::{
+        analyzer_node_editor::{
+            ghost_focus_editor::GhostFocusEditor, ray_trace_editor::RayTraceEditor,
+        },
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::general_editor::NodeTypeInput,
     },
-    node_config_editor::NodeChangeEvent,
-    optical_node_editor::general_editor::NodeTypeInput,
-}, scenery_editor::ActiveNode};
+    scenery_editor::ActiveNode,
+};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_core::prelude::*;

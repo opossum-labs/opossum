@@ -14,12 +14,15 @@ use crate::{
     api::{self, eval_action_run},
     components::scenery_editor::{
         NodeType,
-        constants::{HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH},
+        constants::{
+            HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
+        },
         graph_editor::graph_workspace::{
             GraphsWorkspaceState, WorkSpaceSignalHandlers,
             graph_workspace_action::GraphsWorkspaceAction,
         },
-        graph_store::optimize_layout_and_sync, node::MIN_NODE_BODY_HEIGHT,
+        graph_store::optimize_layout_and_sync,
+        node::MIN_NODE_BODY_HEIGHT,
     },
 };
 
@@ -152,14 +155,20 @@ pub fn use_workspace_processor(
                         process_delete_node(node_id, workspace, workspace_handlers, graph_id).await;
                     }
                     GraphsWorkspaceAction::OpenGroupTab { tab_name, group_id } => {
-                        let group_tab_already_open = workspace.read().tabs.read().contains_key(&group_id);
-                        if group_tab_already_open{
+                        let group_tab_already_open =
+                            workspace.read().tabs.read().contains_key(&group_id);
+                        if group_tab_already_open {
                             workspace_handlers.set_active_tab.call(Some(group_id));
+                        } else {
+                            process_open_group_tab(
+                                tab_name,
+                                group_id,
+                                workspace_handlers,
+                                root_graph_id,
+                            )
+                            .await;
                         }
-                        else{
-                            process_open_group_tab(tab_name, group_id, workspace_handlers, root_graph_id).await;
-                        }
-                    },
+                    }
                 }
             }
         }
@@ -408,7 +417,10 @@ async fn process_add_optic_node(
 
         let shift = *editor_state.shift.peek();
         let center = workspace.read().get_view_port_center();
-        let proposed_pos = ((center.x - shift.x-NODE_WIDTH/2.) / zoom, (center.y - shift.y-(MIN_NODE_BODY_HEIGHT + HEADER_HEIGHT)/2.) / zoom);
+        let proposed_pos = (
+            (center.x - shift.x - NODE_WIDTH / 2.) / zoom,
+            (center.y - shift.y - (MIN_NODE_BODY_HEIGHT + HEADER_HEIGHT) / 2.) / zoom,
+        );
 
         let existing_positions: Vec<_> = graph_store.nodes()()
             .values()
@@ -455,32 +467,40 @@ fn find_suitable_element_position(
     final_position // fallback: return last position after reaching max iterations
 }
 
-async fn process_open_group_tab(tab_name: String, group_id: Uuid, ws_handler: WorkSpaceSignalHandlers, root_scenery_id: Memo<Uuid>)
-{
+async fn process_open_group_tab(
+    tab_name: String,
+    group_id: Uuid,
+    ws_handler: WorkSpaceSignalHandlers,
+    root_scenery_id: Memo<Uuid>,
+) {
     ws_handler.add_new_group_tab.call((tab_name, group_id));
     process_fill_graph_of_group(root_scenery_id, group_id, ws_handler).await;
 }
 
-async fn process_fill_graph_of_group(root_scenery_id: Memo<Uuid>, group_id: Uuid, ws_handler: WorkSpaceSignalHandlers){
+async fn process_fill_graph_of_group(
+    root_scenery_id: Memo<Uuid>,
+    group_id: Uuid,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    eval_action_run(
+        api::get_nodes(group_id).await,
+        Some(move |nodes: Vec<NodeInfo>| ws_handler.add_group_nodes.call((group_id, nodes))),
+    );
+    eval_action_run(
+        api::get_connections(group_id).await,
+        Some(move |connect_infos: Vec<ConnectInfo>| {
+            ws_handler.add_group_edges.call((group_id, connect_infos))
+        }),
+    );
+    if *root_scenery_id.read() == group_id {
         eval_action_run(
-            api::get_nodes(group_id).await,
-            Some(move |nodes: Vec<NodeInfo>| ws_handler.add_group_nodes.call((group_id, nodes))),
-        );
-        eval_action_run(
-            api::get_connections(group_id).await,
-            Some(move |connect_infos: Vec<ConnectInfo>| {
-                ws_handler.add_group_edges.call((group_id, connect_infos))
+            api::get_analyzers().await,
+            Some(move |analyzers: Vec<AnalyzerInfo>| {
+                ws_handler.add_group_analyzers.call((group_id, analyzers));
             }),
         );
-        if *root_scenery_id.read() == group_id{
-            eval_action_run(
-                api::get_analyzers().await,
-                Some(move |analyzers: Vec<AnalyzerInfo>| {
-                    ws_handler.add_group_analyzers.call((group_id, analyzers));
-                }),
-            );
-        }
-        ws_handler.center_graph.call((group_id, false));
+    }
+    ws_handler.center_graph.call((group_id, false));
 }
 async fn process_load_from_file(
     path: PathBuf,
@@ -545,9 +565,9 @@ async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers) {
         api::get_scenery_uuid().await,
         Some(move |id| {
             ws_handler.set_root_scenery_id.call(id);
-            ws_handler.add_new_group_tab
-            .call(("Main Graph".to_string(), id));
+            ws_handler
+                .add_new_group_tab
+                .call(("Main Graph".to_string(), id));
         }),
     );
 }
-

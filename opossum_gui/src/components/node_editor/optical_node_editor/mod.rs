@@ -3,14 +3,17 @@ pub mod alignment_editor;
 pub mod general_editor;
 pub mod properties_editor;
 
-use crate::components::{node_editor::{
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::{
-        alignment_editor::{AlignmentEditor, PositioningEditor},
-        general_editor::GeneralEditor,
-        properties_editor::PropertiesEditor,
+use crate::components::{
+    node_editor::{
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        optical_node_editor::{
+            alignment_editor::{AlignmentEditor, PositioningEditor},
+            general_editor::GeneralEditor,
+            properties_editor::PropertiesEditor,
+        },
     },
-}, scenery_editor::ActiveNode};
+    scenery_editor::ActiveNode,
+};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_core::{
@@ -32,7 +35,10 @@ pub struct UINodeAttr {
 }
 
 #[component]
-pub fn OpticalNodeEditor(active_node: Memo<ActiveNode>, on_change: EventHandler<NodeChangeEvent>) -> Element {
+pub fn OpticalNodeEditor(
+    active_node: Memo<ActiveNode>,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
     let node_id = use_memo(move || active_node.read().node_id);
 
     let mut ui_node_attr_sig = use_signal(UINodeAttr::default);

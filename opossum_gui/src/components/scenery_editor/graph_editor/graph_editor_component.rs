@@ -1,17 +1,23 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::components::{node_editor::NodeConfigEditor, scenery_editor::{
-    ActiveNode, GraphState, edges::edges_component::{
-        EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-    }, graph_editor::{
-        graph_workspace::{
-            GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
-            use_workspace_processor,
+use crate::components::{
+    node_editor::NodeConfigEditor,
+    scenery_editor::{
+        ActiveNode, GraphState,
+        edges::edges_component::{
+            EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
         },
-        hooks::{
-            use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
+        graph_editor::{
+            graph_workspace::{
+                GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
+                use_workspace_processor,
+            },
+            hooks::{
+                use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
+            },
         },
-    }, nodes::Nodes
-}};
+        nodes::Nodes,
+    },
+};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use opossum_core::{prelude::*, types::api_types::NewRefNode};
@@ -160,29 +166,25 @@ pub fn GraphEditor(
         }
     });
 
-
     let active_node_opt = use_memo(move || {
         let read_workspace = workspace.read();
 
         let active_tab = *read_workspace.active_tab.read();
 
         active_tab.and_then(|tab_id| {
-            read_workspace
-                .get_graph_store_read(tab_id)
-                .and_then(|g| {
-                    g.read().get_active_node().map(|n| ActiveNode {
-                        node_id: n.id(),
-                        graph_id: tab_id,
-                        node_type: n.node_type().clone(),
-                    })
+            read_workspace.get_graph_store_read(tab_id).and_then(|g| {
+                g.read().get_active_node().map(|n| ActiveNode {
+                    node_id: n.id(),
+                    graph_id: tab_id,
+                    node_type: n.node_type().clone(),
                 })
+            })
         })
     });
     let onmouseleave_handler = use_drag_end(workspace);
     let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);
     let graph_editor_content_container_id = "graphEditorContentContainer";
     let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
-
 
     rsx! {
         div { class: "row main-content-row",

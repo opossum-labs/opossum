@@ -44,8 +44,13 @@ pub fn NodeConfigEditor(
     #[allow(clippy::redundant_closure)]
     let mut displayed_node = use_signal(|| active_node_opt());
 
-    let memo_active_node_id =
-        use_memo(move || displayed_node().unwrap_or(ActiveNode { node_id: Uuid::nil(), graph_id: Uuid::nil(), node_type: NodeType::Optical("dummy".to_string()) }));
+    let memo_active_node_id = use_memo(move || {
+        displayed_node().unwrap_or(ActiveNode {
+            node_id: Uuid::nil(),
+            graph_id: Uuid::nil(),
+            node_type: NodeType::Optical("dummy".to_string()),
+        })
+    });
 
     use_effect(move || {
         if *dirty_count.read() == 0 {

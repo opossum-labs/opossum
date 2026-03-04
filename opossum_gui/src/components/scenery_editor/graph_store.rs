@@ -10,9 +10,10 @@ use crate::{
     },
 };
 use dioxus::{
-    html::geometry::{euclid::{
-        Size2D, default::{Rect, Point2D}
-    }},
+    html::geometry::euclid::{
+        Size2D,
+        default::{Point2D, Rect},
+    },
     prelude::*,
 };
 use opossum_core::{

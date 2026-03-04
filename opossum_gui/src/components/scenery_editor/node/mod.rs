@@ -1,7 +1,8 @@
 #![allow(clippy::volatile_composites)]
 use dioxus::{
     html::geometry::euclid::{
-        Size2D, default::{Rect, Point2D}
+        Size2D,
+        default::{Point2D, Rect},
     },
     prelude::*,
 };

@@ -7,6 +7,6 @@ mod node;
 mod nodes;
 mod ports;
 
-pub use graph_editor::{GraphEditor, GraphsWorkspaceAction, NodeEditorCommand, ActiveNode};
+pub use graph_editor::{ActiveNode, GraphEditor, GraphsWorkspaceAction, NodeEditorCommand};
 pub use graph_store::{GraphState, GraphStore};
 pub use node::{NodeElement, NodeType};

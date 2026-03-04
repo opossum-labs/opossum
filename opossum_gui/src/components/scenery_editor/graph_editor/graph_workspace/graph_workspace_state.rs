@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use dioxus::{
-    html::geometry::{
-        euclid::default::{Point2D, Rect, Size2D},
-    },
+    html::geometry::euclid::default::{Point2D, Rect, Size2D},
     prelude::*,
 };
 use opossum_core::{
@@ -15,15 +13,17 @@ use uuid::Uuid;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::scenery_editor::{
-        GraphState, GraphStore, NodeType, constants::{MAX_ZOOM, MIN_ZOOM}, graph_editor::graph_editor_component::EditorState
+        GraphState, GraphStore, NodeType,
+        constants::{MAX_ZOOM, MIN_ZOOM},
+        graph_editor::graph_editor_component::EditorState,
     },
 };
 
 #[derive(Clone, PartialEq)]
-pub struct ActiveNode{
+pub struct ActiveNode {
     pub node_id: Uuid,
     pub graph_id: Uuid,
-    pub node_type: NodeType
+    pub node_type: NodeType,
 }
 
 #[derive(Clone, PartialEq, Default)]
@@ -93,14 +93,16 @@ impl GraphsWorkspaceState {
         }
     }
 
-    fn remove_tabs(&mut self, tab_ids: Vec<Uuid>){
-        for id in tab_ids{
-                    self.tabs.write().remove(&id);
-                    self.tab_order.write().retain(|x| *x != id);
-                }
+    fn remove_tabs(&mut self, tab_ids: Vec<Uuid>) {
+        for id in tab_ids {
+            self.tabs.write().remove(&id);
+            self.tab_order.write().retain(|x| *x != id);
+        }
         let act_tab_opt = *self.active_tab.read();
         let tabs = self.tabs.read().clone();
-        if let Some(active_tab) = act_tab_opt && !tabs.contains_key(&active_tab){
+        if let Some(active_tab) = act_tab_opt
+            && !tabs.contains_key(&active_tab)
+        {
             let root_id = *self.root_scenery_id.read();
             self.active_tab.set(Some(root_id));
         }
@@ -201,11 +203,8 @@ impl WorkSpaceSignalHandlers {
             })
         };
 
-        let remove_tabs = {
-            EventHandler::new(move |ids: Vec<Uuid>| {
-                workspace.write().remove_tabs(ids)
-            })
-        };
+        let remove_tabs =
+            { EventHandler::new(move |ids: Vec<Uuid>| workspace.write().remove_tabs(ids)) };
 
         let set_needs_saving = {
             EventHandler::new(move |needs_saving: bool| {

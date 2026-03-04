@@ -34,10 +34,7 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         let mut shift = editor_status().shift;
         let rect = *workspace.read().editor_rect.read();
         let client_pos = wheel_event.data.client_coordinates();
-        let mouse_pos = Point2D::new(
-            client_pos.x - rect.min_x(),
-            client_pos.y - rect.min_y(),
-        );
+        let mouse_pos = Point2D::new(client_pos.x - rect.min_x(), client_pos.y - rect.min_y());
         let current_graph_shift = *shift.read();
         let current_graph_zoom = *zoom.read();
         let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
@@ -97,9 +94,7 @@ pub fn use_on_mouse_down(
         }
     }
 }
-pub fn use_drag(
-    mut current_mouse_pos: Signal<Point2D<f64>>,
-) -> impl FnMut(MouseEvent) {
+pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
 
@@ -150,7 +145,6 @@ pub fn use_on_resize(
     mut workspace: Signal<GraphsWorkspaceState>,
     element_id: String,
 ) -> EventHandler<()> {
-
     EventHandler::new(move |_| {
         spawn({
             let element_id = element_id.clone();
@@ -177,10 +171,10 @@ pub fn use_on_resize(
                     let y = rect["y"].as_f64().unwrap();
                     let width = rect["width"].as_f64().unwrap();
                     let height = rect["height"].as_f64().unwrap();
-                    workspace.write().editor_rect.set(Rect::new(
-                        Point2D::new(x, y),
-                        Size2D::new(width, height),
-                    ));
+                    workspace
+                        .write()
+                        .editor_rect
+                        .set(Rect::new(Point2D::new(x, y), Size2D::new(width, height)));
                 }
             }
         });
