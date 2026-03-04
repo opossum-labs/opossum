@@ -73,7 +73,7 @@ pub fn GraphEditor(
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
 ) -> Element {
-    let workspace = use_signal(|| GraphsWorkspaceState::default());
+    let workspace = use_signal(GraphsWorkspaceState::default);
     use_context_provider(|| workspace);
     let root_graph_id = use_memo(move || *workspace.read().root_scenery_id.read());
 
@@ -82,7 +82,7 @@ pub fn GraphEditor(
 
     let workspace_processor = use_workspace_processor(
         workspace.into(),
-        root_graph_id.into(),
+        root_graph_id,
         workspace_handlers,
         model_file_path_handler,
     );
@@ -92,7 +92,7 @@ pub fn GraphEditor(
             .read()
             .active_tab
             .read()
-            .map_or_else(|| Uuid::nil(), |t| t)
+            .map_or_else(Uuid::nil, |t| t)
     });
 
     use_effect(move || {
@@ -105,19 +105,19 @@ pub fn GraphEditor(
                 }
                 NodeEditorCommand::AddNode(node_type) => {
                     workspace_processor.send(GraphsWorkspaceAction::AddOpticNode {
-                        node_type: node_type.clone(),
+                        node_type,
                         graph_id: active_tab(),
                     });
                 }
                 NodeEditorCommand::AddNodeRef(new_ref_node) => {
                     workspace_processor.send(GraphsWorkspaceAction::AddOpticReference {
-                        new_ref_node: new_ref_node.clone(),
+                        new_ref_node,
                         graph_id: active_tab(),
                     });
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
                     workspace_processor.send(GraphsWorkspaceAction::AddAnalyzer {
-                        analyzer_type: analyzer_type.clone(),
+                        analyzer_type,
                         graph_id: active_tab(),
                     });
                 }
@@ -143,10 +143,10 @@ pub fn GraphEditor(
                     });
                 }
                 NodeEditorCommand::LoadFile(path) => {
-                    workspace_processor.send(GraphsWorkspaceAction::LoadFromFile(path.to_owned()));
+                    workspace_processor.send(GraphsWorkspaceAction::LoadFromFile(path));
                 }
                 NodeEditorCommand::SaveFile(path) => {
-                    workspace_processor.send(GraphsWorkspaceAction::SaveToFile(path.to_owned()));
+                    workspace_processor.send(GraphsWorkspaceAction::SaveToFile(path));
                 }
             }
             node_editor_command_handler.call(None);
@@ -202,7 +202,7 @@ pub fn GraphEditor(
                     value: active_tab.read().as_simple().to_string(),
                     on_value_change: move |v: String| {
                         if let Ok(new_id) = Uuid::parse_str(&v) {
-                            workspace_handlers.set_active_tab.call(Some(new_id));
+                            workspace_handlers.workspace.set_active_tab(Some(new_id));
                         }
                     },
                     {
@@ -225,7 +225,7 @@ pub fn GraphEditor(
                                                         class: "tab-close",
                                                         onclick: {
                                                             let id_copy = *id;
-                                                            move |_| workspace_handlers.remove_tabs.call(vec![id_copy])
+                                                            move |_| workspace_handlers.workspace.remove_tabs(vec![id_copy])
                                                         },
 
                                                     }

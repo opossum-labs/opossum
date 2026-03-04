@@ -83,7 +83,7 @@ pub fn use_on_mouse_down(
                     {
                         let active_tab_opt = *workspace.read().active_tab.read();
                         if let Some(graph_id) = active_tab_opt {
-                            workspace_handlers.center_graph.call((graph_id, true));
+                            workspace_handlers.view.center_graph(graph_id, true);
                         }
                         last_click.set(None);
                     }
@@ -145,12 +145,12 @@ pub fn use_on_resize(
     mut workspace: Signal<GraphsWorkspaceState>,
     element_id: String,
 ) -> EventHandler<()> {
-    EventHandler::new(move |_| {
+    EventHandler::new(move |()| {
         spawn({
             let element_id = element_id.clone();
             async move {
                 let js = format!(
-                    r#"
+                    r"
                     let el = document.getElementById('{element_id}');
                     if (!el) {{
                         dioxus.send(null);
@@ -163,7 +163,7 @@ pub fn use_on_resize(
                             height: r.height
                         }});
                     }}
-                    "#
+                    "
                 );
                 let mut eval = dioxus::document::eval(&js);
                 if let Ok(rect) = eval.recv::<Value>().await {
@@ -188,47 +188,47 @@ pub fn use_on_key_down(
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     move |event| {
         let active_graph = workspace.read().active_tab;
-        if let Some(active_graph_id) = *active_graph.read() {
-            if let Some(graph_state) = workspace.read().tabs.read().get(&active_graph_id) {
-                let editor_status = graph_state.read().editor_state;
-                let graph_store = graph_state.read().graph_store;
-                if !event.is_auto_repeating() {
-                    let modifiers = event.modifiers();
-                    let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
-                    if ctrl_or_meta
-                        && !modifiers.shift()
-                        && event.data().key() == Key::Character("c".to_string())
-                        && let Some(node) = graph_store.read().get_active_node()
+        if let Some(active_graph_id) = *active_graph.read()
+            && let Some(graph_state) = workspace.read().tabs.read().get(&active_graph_id)
+        {
+            let editor_status = graph_state.read().editor_state;
+            let graph_store = graph_state.read().graph_store;
+            if !event.is_auto_repeating() {
+                let modifiers = event.modifiers();
+                let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
+                if ctrl_or_meta
+                    && !modifiers.shift()
+                    && event.data().key() == Key::Character("c".to_string())
+                    && let Some(node) = graph_store.read().get_active_node()
+                {
+                    workspace_processor.send(GraphsWorkspaceAction::CopyNode {
+                        node_type: node.node_type().clone(),
+                        node_id: node.id(),
+                    });
+                    event.stop_propagation();
+                } else if ctrl_or_meta
+                    && !modifiers.shift()
+                    && event.data().key() == Key::Character("v".to_string())
+                {
+                    let rect = *workspace().editor_rect.read();
+                    let mouse = *mouse_pos.read();
+                    if mouse.x > rect.min_x()
+                        && mouse.x < rect.max_x()
+                        && mouse.y > rect.min_y()
+                        && mouse.y < rect.max_y()
                     {
-                        workspace_processor.send(GraphsWorkspaceAction::CopyNode {
-                            node_type: node.node_type().clone(),
-                            node_id: node.id(),
+                        let shift = *editor_status().shift.read();
+                        let zoom = *editor_status().zoom.read();
+                        let pos = Point2D::new(
+                            (mouse.x - shift.x - rect.min_x()) / zoom,
+                            (mouse.y - shift.y - rect.min_y()) / zoom,
+                        );
+                        workspace_processor.send(GraphsWorkspaceAction::PasteNode {
+                            pos,
+                            graph_id: graph_state.read().id,
                         });
-                        event.stop_propagation();
-                    } else if ctrl_or_meta
-                        && !modifiers.shift()
-                        && event.data().key() == Key::Character("v".to_string())
-                    {
-                        let rect = *workspace().editor_rect.read();
-                        let mouse = *mouse_pos.read();
-                        if mouse.x > rect.min_x()
-                            && mouse.x < rect.max_x()
-                            && mouse.y > rect.min_y()
-                            && mouse.y < rect.max_y()
-                        {
-                            let shift = *editor_status().shift.read();
-                            let zoom = *editor_status().zoom.read();
-                            let pos = Point2D::new(
-                                (mouse.x - shift.x - rect.min_x()) / zoom,
-                                (mouse.y - shift.y - rect.min_y()) / zoom,
-                            );
-                            workspace_processor.send(GraphsWorkspaceAction::PasteNode {
-                                pos,
-                                graph_id: graph_state.read().id,
-                            });
-                        }
-                        event.stop_propagation();
                     }
+                    event.stop_propagation();
                 }
             }
         }
@@ -239,57 +239,55 @@ pub fn use_drag_end(workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(Mouse
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     move |_| {
         let active_graph = workspace.read().active_tab;
-        if let Some(active_graph_id) = *active_graph.read() {
-            if let Some(graph_state) = workspace.read().tabs.read().get(&active_graph_id) {
-                let mut editor_status = graph_state.read().editor_state;
-                let graph_store = graph_state.read().graph_store;
-                let drag_status = editor_status.read().drag_status.read().clone();
-                match drag_status {
-                    DragStatus::Node(node_id, old_position) => {
-                        if let Some(pos) = graph_store
-                            .read()
-                            .nodes()
-                            .read()
-                            .get(&node_id)
-                            .map(NodeElement::pos)
-                        {
-                            // Update node GUI position (only if really changed)
-                            if pos != old_position {
-                                workspace_processor
-                                    .send(GraphsWorkspaceAction::SyncNodePosition { pos, node_id });
-                            }
+        if let Some(active_graph_id) = *active_graph.read()
+            && let Some(graph_state) = workspace.read().tabs.read().get(&active_graph_id)
+        {
+            let mut editor_status = graph_state.read().editor_state;
+            let graph_store = graph_state.read().graph_store;
+            let drag_status = editor_status.read().drag_status.read().clone();
+            match drag_status {
+                DragStatus::Node(node_id, old_position) => {
+                    if let Some(pos) = graph_store
+                        .read()
+                        .nodes()
+                        .read()
+                        .get(&node_id)
+                        .map(NodeElement::pos)
+                    {
+                        // Update node GUI position (only if really changed)
+                        if pos != old_position {
+                            workspace_processor
+                                .send(GraphsWorkspaceAction::SyncNodePosition { pos, node_id });
                         }
                     }
-                    DragStatus::Edge(_) => {
-                        if let Some(edge) = editor_status.write().edge_in_creation.write().take()
-                            && edge.is_valid()
-                            && let (Some(end_port), start_port) =
-                                (edge.end_port(), edge.start_port())
-                        {
-                            let (start_port, end_port) = if start_port.port_type == PortType::Output
-                            {
-                                (start_port, end_port)
-                            } else {
-                                (end_port, start_port)
-                            };
-
-                            let new_edge = ConnectInfo::new(
-                                start_port.node_id,
-                                start_port.port_name.clone(),
-                                end_port.node_id,
-                                end_port.port_name.clone(),
-                                0.0,
-                            );
-                            workspace_processor.send(GraphsWorkspaceAction::AddEdge {
-                                new_edge,
-                                graph_id: graph_state.read().id,
-                            });
-                        }
-                    }
-                    _ => {}
                 }
-                editor_status.write().drag_status.set(DragStatus::None);
+                DragStatus::Edge(_) => {
+                    if let Some(edge) = editor_status.write().edge_in_creation.write().take()
+                        && edge.is_valid()
+                        && let (Some(end_port), start_port) = (edge.end_port(), edge.start_port())
+                    {
+                        let (start_port, end_port) = if start_port.port_type == PortType::Output {
+                            (start_port, end_port)
+                        } else {
+                            (end_port, start_port)
+                        };
+
+                        let new_edge = ConnectInfo::new(
+                            start_port.node_id,
+                            start_port.port_name.clone(),
+                            end_port.node_id,
+                            end_port.port_name.clone(),
+                            0.0,
+                        );
+                        workspace_processor.send(GraphsWorkspaceAction::AddEdge {
+                            new_edge,
+                            graph_id: graph_state.read().id,
+                        });
+                    }
+                }
+                _ => {}
             }
+            editor_status.write().drag_status.set(DragStatus::None);
         }
     }
 }

@@ -40,7 +40,7 @@ pub fn App() -> Element {
     let node_editor_command_memo = use_memo(move || node_editor_command.read().clone());
     let node_editor_command_handler =
         EventHandler::new(move |node_editor_command_opt: Option<NodeEditorCommand>| {
-            node_editor_command.set(node_editor_command_opt)
+            node_editor_command.set(node_editor_command_opt);
         });
     let mut cxt_command = use_signal(|| None::<CxtCommand>);
 
@@ -111,7 +111,7 @@ pub fn App() -> Element {
             }
         }
         AppCommand::AutoLayout => {
-            node_editor_command_handler.call(Some(NodeEditorCommand::AutoLayout))
+            node_editor_command_handler.call(Some(NodeEditorCommand::AutoLayout));
         }
         AppCommand::CenterGraph => {
             node_editor_command_handler.call(Some(NodeEditorCommand::CenterGraph));
