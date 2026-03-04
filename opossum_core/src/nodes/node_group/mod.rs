@@ -171,6 +171,46 @@ impl NodeGroup {
     pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
         self.graph.delete_node(node_id)
     }
+
+        /// Recursively collects the UUIDs of all nodes contained in this graph,
+    /// including nodes inside nested group nodes.
+    ///
+    /// This function traverses the graph hierarchy depth-first and returns
+    /// the UUID of every node that is structurally contained within this graph.
+    /// If a node is a group, all nodes inside its internal graph are collected
+    /// recursively.
+    ///
+    /// The returned list:
+    /// - Includes all directly contained nodes
+    /// - Includes all nodes inside nested groups (at any depth)
+    /// - Does NOT include the UUID of any parent or owning node outside this graph
+    /// - Does NOT perform any deduplication (UUIDs are assumed to be unique by design)
+    ///
+    /// This is primarily intended for operations where structural containment
+    /// matters (e.g., cascading deletions of group nodes).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if acquiring a lock on any contained node fails.
+    pub fn collect_all_contained_node_ids_recursive(&self) -> OpmResult<Vec<Uuid>> {
+        let mut result = Vec::new();
+
+        for node_ref in self.nodes() {
+            let node = node_ref.optical_ref.lock_opm()?;
+            let uuid = node.node_attr().uuid();
+
+            result.push(uuid);
+
+            // If it is a group -> collect recursively
+            if let Ok(group) = node.as_group() {
+                let mut sub_ids = group.collect_all_contained_node_ids_recursive()?;
+                result.append(&mut sub_ids);
+            }
+        }
+
+        Ok(result)
+    }
+
     fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
         let node_ref = self.graph.node(node_id)?;
         let node = node_ref.optical_ref.lock_opm()?;
