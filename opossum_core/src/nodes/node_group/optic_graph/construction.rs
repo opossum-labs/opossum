@@ -102,6 +102,18 @@ impl OpticGraph {
             while let Some(node_idx) = self.find_first_node_with_uuid(current_id_to_check) {
                 // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
                 let actual_node_id = self.node_by_idx(node_idx).unwrap().uuid();
+                // collect all node ids of nodes that are contained in a group
+                if let Ok(node_ref) = self.node_by_idx(node_idx) {
+                    let node = node_ref.optical_ref.lock_opm()?;
+                    if let Ok(group) = node.as_group() {
+                        if let Ok(sub_ids) = group.collect_all_contained_node_ids_recursive() {
+                            for id in sub_ids {
+                                deletion_queue.push(id);
+                                nodes_deleted.push(id);
+                            }
+                        }
+                    }
+                }
                 self.g.remove_node(node_idx);
                 // Remove possibly no longer valid port mappings
                 self.input_port_map.remove_all_from_uuid(actual_node_id);
@@ -1091,6 +1103,84 @@ mod test {
         assert_eq!(deleted_nodes.len(), 2);
         assert!(deleted_nodes.contains(&i_d1));
         assert!(deleted_nodes.contains(&i_ref));
+    }
+    #[test]
+    fn delete_group_node_collects_subnodes() {
+        let mut graph = OpticGraph::default();
+
+        let _i_d1 = graph.add_node(Dummy::default()).unwrap();
+
+        let mut group = NodeGroup::default();
+        let i_g_d1 = group.add_node(Dummy::default()).unwrap();
+        let i_g_d2 = group.add_node(Dummy::default()).unwrap();
+        let i_group = graph.add_node(group).unwrap();
+
+        assert_eq!(graph.g.node_count(), 2);
+
+        let deleted_nodes = graph.delete_node(i_group).unwrap();
+
+        assert_eq!(graph.g.node_count(), 1);
+        assert!(deleted_nodes.contains(&i_group));
+        assert!(deleted_nodes.contains(&i_g_d1));
+        assert!(deleted_nodes.contains(&i_g_d2));
+        assert!(deleted_nodes.len() == 3);
+    }
+    #[test]
+    fn delete_group_node_with_reference_node() {
+        let mut graph = OpticGraph::default();
+
+        let i_root = graph.add_node(Dummy::default()).unwrap();
+
+        let mut group = NodeGroup::default();
+        let ref_node = NodeReference::from_node(&graph.node(i_root).unwrap());
+        let i_ref = group.add_node(ref_node).unwrap();
+        let i_group = graph.add_node(group).unwrap();
+
+        let deleted_nodes = graph.delete_node(i_group).unwrap();
+
+        assert!(deleted_nodes.contains(&i_group));
+        assert!(deleted_nodes.contains(&i_ref));
+        assert!(!deleted_nodes.contains(&i_root));
+    }
+    #[test]
+    fn delete_nested_group_nodes() {
+        let mut graph = OpticGraph::default();
+
+        let i_root = graph.add_node(Dummy::default()).unwrap();
+
+        let mut inner_group = NodeGroup::default();
+        let ref_node = NodeReference::from_node(&graph.node(i_root).unwrap());
+        let i_ref = inner_group.add_node(ref_node).unwrap();
+        let i_inner_group = NodeGroup::default();
+        let i_inner_group_node = inner_group.add_node(i_inner_group).unwrap();
+
+        let mut outer_group = NodeGroup::default();
+        let i_outer_group = outer_group.add_node(inner_group).unwrap();
+        let i_outer_group_node = graph.add_node(outer_group).unwrap();
+
+        let deleted_nodes = graph.delete_node(i_outer_group_node).unwrap();
+
+        assert!(deleted_nodes.contains(&i_outer_group_node));
+        assert!(deleted_nodes.contains(&i_outer_group));
+        assert!(deleted_nodes.contains(&i_ref));
+        assert!(deleted_nodes.contains(&i_inner_group_node));
+    }
+    #[test]
+    fn delete_group_node_reference_oustide() {
+        let mut graph = OpticGraph::default();
+
+        let dummy = Dummy::default();
+        let mut group = NodeGroup::default();
+        let i_dummy = group.add_node(dummy).unwrap();
+        let dummy_ref = NodeReference::from_node(&group.graph.node(i_dummy).unwrap());
+        let i_dummy_ref = graph.add_node(dummy_ref).unwrap();
+        let i_group = graph.add_node(group).unwrap();
+
+        let deleted_nodes = graph.delete_node(i_group).unwrap();
+
+        assert!(deleted_nodes.contains(&i_group));
+        assert!(deleted_nodes.contains(&i_dummy));
+        assert!(deleted_nodes.contains(&i_dummy_ref));
     }
     #[test]
     fn disconnect_nodes() {
