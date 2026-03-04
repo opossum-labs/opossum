@@ -2,7 +2,7 @@ use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
 use crate::components::node_editor::hooks::use_save_manager;
 use crate::components::node_editor::inputs::input_components::FormContext;
 use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
-use crate::components::scenery_editor::{GraphStore, GraphsWorkspaceAction, NodeType};
+use crate::components::scenery_editor::{ActiveNode, GraphsWorkspaceAction, NodeType};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
@@ -29,7 +29,7 @@ pub enum NodeChangeAction {
 
 #[component]
 pub fn NodeConfigEditor(
-    active_node_opt: Memo<Option<(NodeType, Uuid)>>,
+    active_node_opt: Memo<Option<ActiveNode>>,
     model_modified_handler: EventHandler<bool>,
 ) -> Element {
     let save_manager = use_save_manager();
@@ -45,7 +45,7 @@ pub fn NodeConfigEditor(
     let mut displayed_node = use_signal(|| active_node_opt());
 
     let memo_active_node_id =
-        use_memo(move || displayed_node().map_or_else(Uuid::nil, |(_, id)| id));
+        use_memo(move || displayed_node().unwrap_or(ActiveNode { node_id: Uuid::nil(), graph_id: Uuid::nil(), node_type: NodeType::Optical("dummy".to_string()) }));
 
     use_effect(move || {
         if *dirty_count.read() == 0 {
@@ -60,12 +60,12 @@ pub fn NodeConfigEditor(
         node_config_processor.send(evt);
     });
 
-    match displayed_node() {
-        Some((NodeType::Optical(_), _)) => rsx! {
-            OpticalNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
+    match displayed_node().map(|n| n.node_type) {
+        Some(NodeType::Optical(_)) => rsx! {
+            OpticalNodeEditor { active_node: memo_active_node_id, on_change: on_node_change }
         },
-        Some((NodeType::Analyzer(_), _)) => rsx! {
-            AnalyzerNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
+        Some(NodeType::Analyzer(_)) => rsx! {
+            AnalyzerNodeEditor { active_node: memo_active_node_id, on_change: on_node_change }
         },
         None => rsx! {
             div { "No node selected" }

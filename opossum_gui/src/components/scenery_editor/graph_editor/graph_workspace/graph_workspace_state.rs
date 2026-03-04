@@ -15,13 +15,18 @@ use uuid::Uuid;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::scenery_editor::{
-        GraphState, GraphStore,
-        constants::{MAX_ZOOM, MIN_ZOOM},
-        graph_editor::graph_editor_component::EditorState,
+        GraphState, GraphStore, NodeType, constants::{MAX_ZOOM, MIN_ZOOM}, graph_editor::graph_editor_component::EditorState
     },
 };
 
-#[derive(Clone, Eq, PartialEq, Default)]
+#[derive(Clone, PartialEq)]
+pub struct ActiveNode{
+    pub node_id: Uuid,
+    pub graph_id: Uuid,
+    pub node_type: NodeType
+}
+
+#[derive(Clone, PartialEq, Default)]
 pub struct GraphsWorkspaceState {
     pub tabs: Signal<HashMap<Uuid, Signal<GraphState>>>,
     pub tab_order: Signal<Vec<Uuid>>,
@@ -37,6 +42,12 @@ impl GraphsWorkspaceState {
             .read()
             .get(&graph_id)
             .map(|g| g.read().graph_store)
+    }
+    pub fn get_graph_store_read(&self, graph_id: Uuid) -> Option<ReadSignal<GraphStore>> {
+        self.tabs
+            .read()
+            .get(&graph_id)
+            .map(|g| g.read().graph_store.into())
     }
     fn get_editor_state(&self, graph_id: Uuid) -> Option<Signal<EditorState>> {
         self.tabs

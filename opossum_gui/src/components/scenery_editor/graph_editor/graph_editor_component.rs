@@ -1,10 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::components::scenery_editor::{
-    GraphState,
-    edges::edges_component::{
+use crate::components::{node_editor::NodeConfigEditor, scenery_editor::{
+    ActiveNode, GraphState, edges::edges_component::{
         EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-    },
-    graph_editor::{
+    }, graph_editor::{
         graph_workspace::{
             GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
             use_workspace_processor,
@@ -12,9 +10,8 @@ use crate::components::scenery_editor::{
         hooks::{
             use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
         },
-    },
-    nodes::Nodes,
-};
+    }, nodes::Nodes
+}};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use opossum_core::{prelude::*, types::api_types::NewRefNode};
@@ -70,7 +67,7 @@ pub fn GraphEditor(
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
 ) -> Element {
-    let mut workspace = use_signal(|| GraphsWorkspaceState::default());
+    let workspace = use_signal(|| GraphsWorkspaceState::default());
     use_context_provider(|| workspace);
     let root_graph_id = use_memo(move || *workspace.read().root_scenery_id.read());
 
@@ -163,14 +160,24 @@ pub fn GraphEditor(
         }
     });
 
-    // let active_node_opt = use_memo(move || {
-    //     graph_state
-    //         .read()
-    //         .graph_store
-    //         .read()
-    //         .get_active_node()
-    //         .map(|n| (n.node_type().clone(), n.id()))
-    // });
+
+    let active_node_opt = use_memo(move || {
+        let read_workspace = workspace.read();
+
+        let active_tab = *read_workspace.active_tab.read();
+
+        active_tab.and_then(|tab_id| {
+            read_workspace
+                .get_graph_store_read(tab_id)
+                .and_then(|g| {
+                    g.read().get_active_node().map(|n| ActiveNode {
+                        node_id: n.id(),
+                        graph_id: tab_id,
+                        node_type: n.node_type().clone(),
+                    })
+                })
+        })
+    });
     let onmouseleave_handler = use_drag_end(workspace);
     let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);
     let graph_editor_content_container_id = "graphEditorContentContainer";
@@ -181,7 +188,7 @@ pub fn GraphEditor(
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
                 {"nothing"}
-                        // //NodeConfigEditor { active_node_opt, model_modified_handler }
+                NodeConfigEditor { active_node_opt, model_modified_handler }
             }
             div {
                 class: "col px-0 graph-editor-container",

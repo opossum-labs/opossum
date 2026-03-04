@@ -14,7 +14,6 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
-use uuid::Uuid;
 
 #[component]
 pub fn Node(node: NodeElement) -> Element {

@@ -18,7 +18,6 @@ use opossum_core::{
     nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
-    prelude::OpticNode,
     properties::Proptype,
     types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     utils::{LockExt, geom_transformation::Isometry},

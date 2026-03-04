@@ -17,10 +17,7 @@ use crate::{
 };
 use dioxus::{
     html::{
-        geometry::{
-            Pixels,
-            euclid::default::{Point2D, Rect, Size2D},
-        },
+        geometry::euclid::default::{Point2D, Rect, Size2D},
         input_data::MouseButton,
     },
     prelude::*,
