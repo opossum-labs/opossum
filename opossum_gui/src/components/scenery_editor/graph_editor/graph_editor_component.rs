@@ -1,14 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{
-    OPOSSUM_UI_LOGS,
-    api::{self, eval_action_run},
     components::{
-        node_editor::NodeConfigEditor,
         scenery_editor::{
-            GraphState, GraphStore, NodeElement, NodeType,
-            constants::{
-                MAX_ZOOM, MIN_NODE_DISTANCE_RADIUS, MIN_ZOOM, NODE_PLACEMENT_MAX_ITERATIONS,
-            },
+            GraphState, 
             edges::edges_component::{
                 EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
             },
@@ -22,30 +16,23 @@ use crate::{
                     use_zoom,
                 },
             },
-            graph_store::optimize_layout_and_sync,
             nodes::Nodes,
         },
     },
 };
 use dioxus::{
     html::geometry::{
-        Pixels, PixelsSize,
-        euclid::{Rect, Size2D, UnknownUnit, default::Point2D},
+        euclid::default::Point2D,
     },
     prelude::*,
 };
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
-use futures_util::StreamExt;
 use opossum_core::{
-    opm_document::AnalyzerInfo,
     prelude::*,
-    types::api_types::{ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo},
+    types::api_types::NewRefNode,
 };
 use std::{
-    collections::{BTreeMap, HashMap},
-    fs,
     path::PathBuf,
-    rc::Rc,
     time::Instant,
 };
 use uuid::Uuid;

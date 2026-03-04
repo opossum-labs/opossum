@@ -4,10 +4,9 @@ use super::{
 };
 use crate::{
     OPOSSUM_UI_LOGS,
-    api::{self, eval_action_run},
+    api,
     components::scenery_editor::{
-        constants::{
-            MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, SUGIYAMA_VERT_PATH_FACTOR,
+        constants::{SUGIYAMA_VERT_PATH_FACTOR,
             SUGIYAMA_VERTEX_SPACING,
         },
         graph_editor::graph_editor_component::EditorState,
@@ -20,15 +19,13 @@ use dioxus::{
     },
     prelude::*,
 };
-use futures_util::StreamExt;
 use opossum_core::{
     opm_document::AnalyzerInfo,
-    prelude::*,
-    types::api_types::{ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo},
+    types::api_types::{ConnectInfo, NewAnalyzerInfo, NodeInfo},
     utils::to_f64,
 };
 use rust_sugiyama::{configure::Config, from_edges};
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 use uuid::Uuid;
 
 #[derive(Clone, Eq, PartialEq, Default)]
@@ -50,9 +47,6 @@ pub struct GraphStore {
 }
 
 impl GraphStore {
-    pub const fn set_scenery_id(&mut self, id: Uuid) {
-        self.scenery_id = id;
-    }
     pub fn add_nodes(&mut self, nodes: &[NodeInfo]) {
         self.nodes
             .write()
@@ -90,10 +84,6 @@ impl GraphStore {
             .get(&node_id)
             .map(super::node::NodeElement::node_type)
             .cloned()
-    }
-    #[must_use]
-    pub const fn edges_mut(&mut self) -> &mut Signal<Vec<ConnectInfo>> {
-        &mut self.edges
     }
     pub const fn nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
         &mut self.nodes
@@ -141,15 +131,6 @@ impl GraphStore {
             rect = rect.union(&node.1.get_bounding_box());
         }
         rect
-    }
-
-    pub fn clear(&mut self) {
-        self.nodes().write().clear();
-        self.edges().write().clear();
-        self.file_path.set(None);
-        self.needs_saving.set(false);
-        let mut active_node = self.active_node.write();
-        *active_node = None;
     }
     pub fn renumber_z_levels(&mut self) {
         let mut node_elements: Vec<(Uuid, usize)> = self
@@ -258,12 +239,6 @@ impl GraphStore {
         node_element.set_z_index(nr_of_nodes + 1);
         self.nodes.write().insert(analyzer_id, node_element.clone());
         self.set_node_active(analyzer_id, node_element.z_index());
-    }
-    pub const fn needs_saving(&self) -> Signal<bool, UnsyncStorage> {
-        self.needs_saving
-    }
-    pub const fn file_path(&self) -> Signal<Option<PathBuf>, UnsyncStorage> {
-        self.file_path
     }
 }
 

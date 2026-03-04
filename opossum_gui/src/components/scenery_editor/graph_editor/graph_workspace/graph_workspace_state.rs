@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use dioxus::{
     html::geometry::{
-        Pixels, PixelsSize,
+        Pixels,
         euclid::{Rect, Size2D, UnknownUnit, default::Point2D},
     },
     prelude::*,
