@@ -102,6 +102,15 @@ impl OpticGraph {
             while let Some(node_idx) = self.find_first_node_with_uuid(current_id_to_check) {
                 // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
                 let actual_node_id = self.node_by_idx(node_idx).unwrap().uuid();
+                // collect all node ids of nodes that are contained in a group
+                if let Ok(node_ref) = self.node_by_idx(node_idx) {
+                    let node = node_ref.optical_ref.lock_opm()?;
+                    if let Ok(group) = node.as_group() {
+                        if let Ok(sub_ids) = group.collect_all_contained_node_ids_recursive(){
+                            nodes_deleted.extend(sub_ids);
+                        }
+                    }
+                }
                 self.g.remove_node(node_idx);
                 // Remove possibly no longer valid port mappings
                 self.input_port_map.remove_all_from_uuid(actual_node_id);
