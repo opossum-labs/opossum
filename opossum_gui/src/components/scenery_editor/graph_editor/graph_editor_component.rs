@@ -15,9 +15,10 @@ use crate::components::scenery_editor::{
     },
     nodes::Nodes,
 };
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus::{html::geometry::euclid::default::{Point2D, Rect, Size2D}, prelude::*};
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use opossum_core::{prelude::*, types::api_types::NewRefNode};
+use serde_json::Value;
 use std::{path::PathBuf, time::Instant};
 use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq)]
@@ -175,6 +176,8 @@ pub fn GraphEditor(
     let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);
     let graph_editor_content_container_id = "graphEditorContentContainer";
     let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
+
+
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
@@ -224,7 +227,7 @@ pub fn GraphEditor(
                             div {
                                 id: graph_editor_content_container_id,
                                 class: "graph-editor-tab-content",
-                                onresize: move |event| onresizehandler.call(event),
+                                onresize: move |_| onresizehandler.call(()),
                                 for (i , (id , graph_state)) in tabs.iter().enumerate() {
                                     TabContent {
                                         class: "tab-content",

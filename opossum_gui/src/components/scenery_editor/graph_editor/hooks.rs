@@ -152,10 +152,9 @@ pub fn use_drag(
 pub fn use_on_resize(
     mut workspace: Signal<GraphsWorkspaceState>,
     element_id: String,
-) -> EventHandler<ResizeEvent> {
-    let mut editor_status = use_context::<Signal<GraphsWorkspaceState>>();
+) -> EventHandler<()> {
 
-    EventHandler::new(move |event: Event<ResizeData>| {
+    EventHandler::new(move |_| {
         spawn({
             let element_id = element_id.clone();
             async move {
