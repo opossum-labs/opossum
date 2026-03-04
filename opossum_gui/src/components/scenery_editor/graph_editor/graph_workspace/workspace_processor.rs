@@ -152,7 +152,13 @@ pub fn use_workspace_processor(
                         process_delete_node(node_id, workspace, workspace_handlers, graph_id).await;
                     }
                     GraphsWorkspaceAction::OpenGroupTab { tab_name, group_id } => {
-                        process_open_group_tab(tab_name, group_id, workspace_handlers, root_graph_id).await;
+                        let group_tab_already_open = workspace.read().tabs.read().contains_key(&group_id);
+                        if group_tab_already_open{
+                            workspace_handlers.set_active_tab.call(Some(group_id));
+                        }
+                        else{
+                            process_open_group_tab(tab_name, group_id, workspace_handlers, root_graph_id).await;
+                        }
                     },
                 }
             }
