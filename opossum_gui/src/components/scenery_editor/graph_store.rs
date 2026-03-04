@@ -3,20 +3,16 @@ use super::{
     ports::ports_component::Ports,
 };
 use crate::{
-    OPOSSUM_UI_LOGS,
-    api,
+    OPOSSUM_UI_LOGS, api,
     components::scenery_editor::{
-        constants::{SUGIYAMA_VERT_PATH_FACTOR,
-            SUGIYAMA_VERTEX_SPACING,
-        },
+        constants::{SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
         graph_editor::graph_editor_component::EditorState,
     },
 };
 use dioxus::{
-    html::geometry::euclid::{
-        Size2D,
-        default::{Point2D, Rect},
-    },
+    html::geometry::{euclid::{
+        Size2D, default::{Rect, Point2D}
+    }},
     prelude::*,
 };
 use opossum_core::{

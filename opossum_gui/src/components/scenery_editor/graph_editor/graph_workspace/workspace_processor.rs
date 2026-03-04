@@ -14,12 +14,12 @@ use crate::{
     api::{self, eval_action_run},
     components::scenery_editor::{
         NodeType,
-        constants::{MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS},
+        constants::{HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH},
         graph_editor::graph_workspace::{
             GraphsWorkspaceState, WorkSpaceSignalHandlers,
             graph_workspace_action::GraphsWorkspaceAction,
         },
-        graph_store::optimize_layout_and_sync,
+        graph_store::optimize_layout_and_sync, node::MIN_NODE_BODY_HEIGHT,
     },
 };
 
@@ -396,10 +396,10 @@ async fn process_add_optic_node(
         let graph_store = *graph.peek().graph_store.peek();
 
         let zoom = *editor_state.zoom.peek();
+
         let shift = *editor_state.shift.peek();
         let center = workspace.read().get_view_port_center();
-
-        let proposed_pos = ((center.x - shift.x) / zoom, (center.y - shift.y) / zoom);
+        let proposed_pos = ((center.x - shift.x-NODE_WIDTH/2.) / zoom, (center.y - shift.y-(MIN_NODE_BODY_HEIGHT + HEADER_HEIGHT)/2.) / zoom);
 
         let existing_positions: Vec<_> = graph_store.nodes()()
             .values()
@@ -532,6 +532,7 @@ async fn process_get_root_scenery_id(ws_handler: WorkSpaceSignalHandlers) {
             ws_handler
                 .add_new_group_tab
                 .call(("Main Graph".to_string(), id));
+            ws_handler.center_graph.call((id, false));
         }),
     );
 }

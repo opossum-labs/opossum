@@ -1,40 +1,24 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::{
-    components::{
-        scenery_editor::{
-            GraphState, 
-            edges::edges_component::{
-                EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-            },
-            graph_editor::{
-                graph_workspace::{
-                    GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
-                    use_workspace_processor,
-                },
-                hooks::{
-                    use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize,
-                    use_zoom,
-                },
-            },
-            nodes::Nodes,
+use crate::components::scenery_editor::{
+    GraphState,
+    edges::edges_component::{
+        EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
+    },
+    graph_editor::{
+        graph_workspace::{
+            GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
+            use_workspace_processor,
+        },
+        hooks::{
+            use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
         },
     },
+    nodes::Nodes,
 };
-use dioxus::{
-    html::geometry::{
-        euclid::default::Point2D,
-    },
-    prelude::*,
-};
+use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
-use opossum_core::{
-    prelude::*,
-    types::api_types::NewRefNode,
-};
-use std::{
-    path::PathBuf,
-    time::Instant,
-};
+use opossum_core::{prelude::*, types::api_types::NewRefNode};
+use std::{path::PathBuf, time::Instant};
 use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeEditorCommand {

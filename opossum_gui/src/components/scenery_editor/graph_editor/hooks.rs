@@ -19,7 +19,7 @@ use dioxus::{
     html::{
         geometry::{
             Pixels,
-            euclid::{Point2D, Rect, Size2D, UnknownUnit},
+            euclid::default::{Point2D, Rect, Size2D},
         },
         input_data::MouseButton,
     },
@@ -37,7 +37,7 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         let mut shift = editor_status().shift;
         let rect = *workspace.read().editor_rect.read();
         let client_pos = wheel_event.data.client_coordinates();
-        let mouse_pos = Point2D::<f64, UnknownUnit>::new(
+        let mouse_pos = Point2D::new(
             client_pos.x - rect.min_x(),
             client_pos.y - rect.min_y(),
         );
@@ -59,7 +59,7 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
 }
 
 pub fn use_on_mouse_down(
-    mut current_mouse_pos: Signal<Point2D<f64, UnknownUnit>>,
+    mut current_mouse_pos: Signal<Point2D<f64>>,
     mut last_click: Signal<Option<Instant>>,
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
@@ -101,7 +101,7 @@ pub fn use_on_mouse_down(
     }
 }
 pub fn use_drag(
-    mut current_mouse_pos: Signal<Point2D<f64, UnknownUnit>>,
+    mut current_mouse_pos: Signal<Point2D<f64>>,
 ) -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
@@ -181,9 +181,9 @@ pub fn use_on_resize(
                     let y = rect["y"].as_f64().unwrap();
                     let width = rect["width"].as_f64().unwrap();
                     let height = rect["height"].as_f64().unwrap();
-                    workspace.write().editor_rect.set(Rect::<f64, Pixels>::new(
-                        Point2D::<f64, Pixels>::new(x, y),
-                        Size2D::<f64, Pixels>::new(width, height),
+                    workspace.write().editor_rect.set(Rect::new(
+                        Point2D::new(x, y),
+                        Size2D::new(width, height),
                     ));
                 }
             }
@@ -192,7 +192,7 @@ pub fn use_on_resize(
 }
 
 pub fn use_on_key_down(
-    mouse_pos: Signal<Point2D<f64, UnknownUnit>>,
+    mouse_pos: Signal<Point2D<f64>>,
     workspace: Signal<GraphsWorkspaceState>,
 ) -> impl FnMut(KeyboardEvent) {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();

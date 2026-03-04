@@ -2,8 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use dioxus::{
     html::geometry::{
-        Pixels,
-        euclid::{Rect, Size2D, UnknownUnit, default::Point2D},
+        euclid::default::{Point2D, Rect, Size2D},
     },
     prelude::*,
 };
@@ -28,7 +27,7 @@ pub struct GraphsWorkspaceState {
     pub active_tab: Signal<Option<Uuid>>,
     pub root_scenery_id: Signal<Uuid>,
     pub needs_saving: Signal<bool>,
-    pub editor_rect: Signal<Rect<f64, Pixels>>,
+    pub editor_rect: Signal<Rect<f64>>,
 }
 
 impl GraphsWorkspaceState {
@@ -60,7 +59,7 @@ impl GraphsWorkspaceState {
             .get(&graph_id)
             .map(|g| g.read().graph_store.read().edges().into())
     }
-    fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64, UnknownUnit>> {
+    fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64>> {
         self.tabs
             .read()
             .get(&graph_id)
@@ -112,7 +111,7 @@ impl GraphsWorkspaceState {
         let editor_size = *self.editor_rect.read();
         Point2D::new(editor_size.width() / 2., editor_size.height() / 2.)
     }
-    pub fn get_view_port_size(&self) -> Size2D<f64, Pixels> {
+    pub fn get_view_port_size(&self) -> Size2D<f64> {
         self.editor_rect.read().size
     }
 }
