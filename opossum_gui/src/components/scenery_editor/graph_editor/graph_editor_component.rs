@@ -2,38 +2,21 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        ActiveNode,
-        edges::edges_component::NewEdgeCreationStart,
+        ActiveNode, NodeEditorCommand,
         graph_editor::{
-            GraphViewEditor, graph_workspace::{
+            GraphViewEditor,
+            graph_workspace::{
                 GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
-                use_workspace_processor,
-            }, hooks::{
-                use_drag_end, use_on_key_down, use_on_resize,
-            }
+                use_workspace_processor, workspace_action::use_node_editor_command,
+            },
+            hooks::{use_drag_end, use_on_key_down, use_on_resize},
         },
     },
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
-use opossum_core::{prelude::*, types::api_types::NewRefNode};
 use std::path::PathBuf;
 use uuid::Uuid;
-#[derive(Debug, Clone, PartialEq)]
-pub enum NodeEditorCommand {
-    DeleteAll,
-    AddNode(String),
-    AddNodeRef(NewRefNode),
-    AddAnalyzer(AnalyzerType),
-    LoadFile(PathBuf),
-    SaveFile(PathBuf),
-    AutoLayout,
-    CenterGraph,
-    ZoomToFit,
-}
-
-
-
 
 #[component]
 pub fn GraphEditor(
@@ -67,61 +50,12 @@ pub fn GraphEditor(
     });
 
     use_effect(move || {
-        let cmd = command.read().clone();
-        if let Some(command) = cmd {
-            match command {
-                NodeEditorCommand::DeleteAll => {
-                    workspace_processor.send(GraphsWorkspaceAction::DeleteRootScenery);
-                    workspace_processor.send(GraphsWorkspaceAction::AddRootSceneryTab);
-                }
-                NodeEditorCommand::AddNode(node_type) => {
-                    workspace_processor.send(GraphsWorkspaceAction::AddOpticNode {
-                        node_type,
-                        graph_id: active_tab(),
-                    });
-                }
-                NodeEditorCommand::AddNodeRef(new_ref_node) => {
-                    workspace_processor.send(GraphsWorkspaceAction::AddOpticReference {
-                        new_ref_node,
-                        graph_id: active_tab(),
-                    });
-                }
-                NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                    workspace_processor.send(GraphsWorkspaceAction::AddAnalyzer {
-                        analyzer_type,
-                        graph_id: active_tab(),
-                    });
-                }
-                NodeEditorCommand::AutoLayout => {
-                    workspace_processor.send(GraphsWorkspaceAction::OptimizeLayout {
-                        graph_id: active_tab(),
-                    });
-                    workspace_processor.send(GraphsWorkspaceAction::ZoomToFit {
-                        graph_id: active_tab(),
-                        save_changes: true,
-                    });
-                }
-                NodeEditorCommand::CenterGraph => {
-                    workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
-                        graph_id: active_tab(),
-                        save_changes: true,
-                    });
-                }
-                NodeEditorCommand::ZoomToFit => {
-                    workspace_processor.send(GraphsWorkspaceAction::ZoomToFit {
-                        graph_id: active_tab(),
-                        save_changes: true,
-                    });
-                }
-                NodeEditorCommand::LoadFile(path) => {
-                    workspace_processor.send(GraphsWorkspaceAction::LoadFromFile(path));
-                }
-                NodeEditorCommand::SaveFile(path) => {
-                    workspace_processor.send(GraphsWorkspaceAction::SaveToFile(path));
-                }
-            }
-            node_editor_command_handler.call(None);
-        }
+        use_node_editor_command(
+            node_editor_command_handler,
+            active_tab,
+            workspace_processor,
+            command,
+        )
     });
 
     let current_mouse_pos = use_signal(Point2D::<f64>::default);
@@ -236,6 +170,3 @@ pub fn GraphEditor(
         }
     }
 }
-
-
-

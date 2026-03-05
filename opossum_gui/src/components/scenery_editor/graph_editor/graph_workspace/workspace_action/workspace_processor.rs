@@ -18,8 +18,8 @@ use crate::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
         },
         graph_editor::graph_workspace::{
-            GraphsWorkspaceState, WorkSpaceSignalHandlers,
-            graph_workspace_action::GraphsWorkspaceAction, workspace_state::optimize_layout_and_sync,
+            GraphsWorkspaceState, WorkSpaceSignalHandlers, workspace_action::GraphsWorkspaceAction,
+            workspace_state::optimize_layout_and_sync,
         },
         node::MIN_NODE_BODY_HEIGHT,
     },

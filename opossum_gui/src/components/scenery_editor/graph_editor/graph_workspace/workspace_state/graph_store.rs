@@ -1,8 +1,10 @@
-
 use crate::{
     OPOSSUM_UI_LOGS, api,
     components::scenery_editor::{
-        NodeElement, NodeType, constants::{SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING}, graph_editor::graph_workspace::EditorState, ports::ports_component::Ports
+        NodeElement, NodeType,
+        constants::{SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
+        graph_editor::graph_workspace::EditorState,
+        ports::ports_component::Ports,
     },
 };
 use dioxus::{

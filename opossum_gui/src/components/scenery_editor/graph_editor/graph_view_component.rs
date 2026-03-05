@@ -1,13 +1,11 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::components::{
-    scenery_editor::{
-        nodes::Nodes,
-        edges::edges_component::{EdgeCreationComponent, EdgesComponent},
-        graph_editor::{
-            graph_workspace::{GraphsWorkspaceAction, GraphState}, 
-            hooks::{use_drag, use_on_mouse_down, use_zoom},
-        },
+use crate::components::scenery_editor::{
+    edges::edges_component::{EdgeCreationComponent, EdgesComponent},
+    graph_editor::{
+        graph_workspace::{GraphState, GraphsWorkspaceAction},
+        hooks::{use_drag, use_on_mouse_down, use_zoom},
     },
+    nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use std::{path::PathBuf, time::Instant};

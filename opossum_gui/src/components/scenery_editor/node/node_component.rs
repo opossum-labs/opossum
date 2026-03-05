@@ -1,7 +1,9 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
 use crate::CONTEXT_MENU;
-use crate::components::scenery_editor::graph_editor::{DragStatus, EditorState, GraphStore, GraphState};
+use crate::components::scenery_editor::graph_editor::{
+    DragStatus, EditorState, GraphState, GraphStore,
+};
 use crate::components::{
     context_menu::cx_menu::{CxMenu, CxtCommand},
     scenery_editor::{

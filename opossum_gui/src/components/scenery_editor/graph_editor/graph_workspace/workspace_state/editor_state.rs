@@ -1,6 +1,8 @@
+use crate::components::scenery_editor::edges::edges_component::{
+    EdgeCreation, NewEdgeCreationStart,
+};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use uuid::Uuid;
-use crate::components::scenery_editor::{edges::edges_component::{EdgeCreation, NewEdgeCreationStart}};
 
 #[derive(Clone, Copy)]
 pub struct EditorState {

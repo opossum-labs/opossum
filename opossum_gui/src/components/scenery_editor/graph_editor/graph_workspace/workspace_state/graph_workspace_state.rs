@@ -7,8 +7,10 @@ use dioxus::{
 use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
-use crate::components::scenery_editor::{ NodeType,
-    constants::{MAX_ZOOM, MIN_ZOOM}, graph_editor::graph_workspace::{EditorState, GraphState, GraphStore},
+use crate::components::scenery_editor::{
+    NodeType,
+    constants::{MAX_ZOOM, MIN_ZOOM},
+    graph_editor::graph_workspace::{EditorState, GraphState, GraphStore},
 };
 
 #[derive(Clone, PartialEq)]
@@ -55,7 +57,10 @@ impl GraphsWorkspaceState {
                 .map(|g| g.read().editor_state)
         })
     }
-    pub(in super::super) fn get_graph_edges(&self, graph_id: Uuid) -> Option<Signal<Vec<ConnectInfo>>> {
+    pub(in super::super) fn get_graph_edges(
+        &self,
+        graph_id: Uuid,
+    ) -> Option<Signal<Vec<ConnectInfo>>> {
         self.tabs
             .read()
             .get(&graph_id)
