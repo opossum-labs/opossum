@@ -2,26 +2,24 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        ActiveNode, GraphState,
+        ActiveNode,
         edges::edges_component::{
-            EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
+            EdgeCreation, NewEdgeCreationStart,
         },
         graph_editor::{
-            graph_workspace::{
+            GraphViewEditor, graph_workspace::{
                 GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
                 use_workspace_processor,
-            },
-            hooks::{
-                use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
-            },
+            }, hooks::{
+                use_drag_end, use_on_key_down, use_on_resize,
+            }
         },
-        nodes::Nodes,
     },
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use opossum_core::{prelude::*, types::api_types::NewRefNode};
-use std::{path::PathBuf, time::Instant};
+use std::path::PathBuf;
 use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeEditorCommand {
@@ -189,7 +187,6 @@ pub fn GraphEditor(
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                {"nothing"}
                 NodeConfigEditor { active_node_opt, model_modified_handler }
             }
             div {
@@ -212,7 +209,6 @@ pub fn GraphEditor(
                             TabList { class: "editor-tab-list",
                                 for (i , id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = tabs.get(id) {
-                                        // for (i , (id , graph_state)) in tabs.iter().enumerate() {
                                         TabTrigger {
                                             key: "{id.as_simple().to_string()}",
                                             value: id.as_simple().to_string(),
@@ -268,71 +264,5 @@ pub fn GraphEditor(
     }
 }
 
-#[component]
-pub fn GraphViewEditor(
-    onmouseup_handler: EventHandler<Event<MouseData>>,
-    model_modified_sig: ReadSignal<bool>,
-    model_modified_handler: EventHandler<bool>,
-    model_file_path_sig: ReadSignal<Option<PathBuf>>,
-    model_file_path_handler: EventHandler<Option<PathBuf>>,
-    current_mouse_pos: Signal<Point2D<f64>>,
-    graph_state: Signal<GraphState>,
-) -> Element {
-    let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
-    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let editor_state = graph_state.read().editor_state;
-    let graph_store = graph_state.read().graph_store;
-    let graph_id = graph_state.read().id;
 
-    use_context_provider(|| graph_state);
-    use_context_provider(|| editor_state);
-    use_context_provider(|| graph_store);
-    let onwheel_handler = use_zoom();
-    let onmousemove_handler = use_drag(current_mouse_pos);
-    let onmousedown_handler = use_on_mouse_down(current_mouse_pos, last_auxiliary_click);
 
-    let shift = use_memo(move || *editor_state.read().shift.read());
-    let zoom = use_memo(move || *editor_state.read().zoom.read());
-
-    use_effect(move || {
-        workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
-            graph_id,
-            save_changes: false,
-        });
-    });
-
-    rsx! {
-        div {
-            class: "graph-editor",
-            id: format!("editor_{}", graph_id.as_simple()),
-            draggable: false,
-
-            onwheel: onwheel_handler,
-            onmousedown: onmousedown_handler,
-            onmouseup: move |e| onmouseup_handler.call(e),
-            onmousemove: onmousemove_handler,
-            div {
-                draggable: false,
-                style: format!(
-                    "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
-                    shift().x,
-                    shift().y,
-                    zoom(),
-                ),
-                Nodes { graph_store, graph_id }
-                svg {
-                    width: "100%",
-                    height: "100%",
-                    overflow: "visible",
-                    tabindex: 0,
-                    {
-                        rsx! {
-                            EdgesComponent {}
-                            EdgeCreationComponent {}
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
