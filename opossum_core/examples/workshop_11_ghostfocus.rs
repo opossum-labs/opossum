@@ -7,21 +7,8 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Ghostfocus demo");
-    let light_data_builder =
-        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
-            HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
-            General2DGaussian::new(
-                joule!(2.),
-                millimeter!(0., 0.),
-                millimeter!(8., 8.),
-                5.,
-                radian!(0.),
-                false,
-            )?
-            .into(),
-            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-        )));
-    let mut src = Source::new("collimated ray source", light_data_builder);
+
+    let mut src = SourcePort::new("collimated ray source");
     src.node_attr_mut().set_lidt(&J_per_cm2!(2.0))?;
     let i_src = scenery.add_node(src)?;
 
@@ -70,7 +57,21 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_l2, "output_1", mir3, "input_1", millimeter!(150.0))?;
 
     let mut doc = OpmDocument::new(scenery);
+    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+        HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
+        General2DGaussian::new(
+            joule!(2.),
+            millimeter!(0., 0.),
+            millimeter!(8., 8.),
+            5.,
+            radian!(0.),
+            false,
+        )?
+        .into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    ));
     let mut config = GhostFocusConfig::default();
+    config.map_source(i_src, ray_data_source.into());
     config.set_max_bounces(2);
     doc.add_analyzer(AnalyzerType::GhostFocus(config));
     doc.save_to_file(Path::new(

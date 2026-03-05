@@ -8,19 +8,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-
-    let light_data_builder = LightDataBuilder::Geometric(RayDataSource::PointSrc(PointSrc::new(
-        Grid::new(
-            Point2::new(millimeter!(0.0), millimeter!(5.0)),
-            Point2::new(1, 5),
-        )?
-        .into(),
-        UniformDist::new(joule!(1.0))?.into(),
-        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-        millimeter!(75.0),
-    )?));
-    let src = Source::new("point ray source", light_data_builder);
-    let i_src = scenery.add_node(src)?;
+    let i_src = scenery.add_node(SourcePort::new("point ray source"))?;
 
     let refr_index_hzf52 = RefrIndexSchott::new(
         3.26760058E+000,
@@ -52,7 +40,22 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_l1_ref, "input_1", i_sd3, "input_1", millimeter!(75.5))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let ray_data_source = RayDataSource::PointSrc(PointSrc::new(
+        Grid::new(
+            Point2::new(millimeter!(0.0), millimeter!(5.0)),
+            Point2::new(1, 5),
+        )?
+        .into(),
+        UniformDist::new(joule!(1.0))?.into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        millimeter!(75.0),
+    )?);
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+       ray_data_source.into(),
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_08_reference_node.opm",
     ))
