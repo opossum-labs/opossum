@@ -8,8 +8,8 @@ use crate::components::scenery_editor::{
     nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use uuid::Uuid;
 use std::{path::PathBuf, time::Instant};
+use uuid::Uuid;
 
 #[component]
 pub fn GraphViewEditor(
@@ -96,8 +96,11 @@ pub fn GraphViewEditor(
 }
 
 #[component]
-pub fn BreadCrumbs(bread_crumbs: Vec<(Uuid, String)>, bread_crumb_click_event: EventHandler<(Uuid, String)>) -> Element{
-    rsx!{
+pub fn BreadCrumbs(
+    bread_crumbs: Vec<(Uuid, String)>,
+    bread_crumb_click_event: EventHandler<(Uuid, String)>,
+) -> Element {
+    rsx! {
         div { class: "graph-breadcrumbs",
             for (i , (id , name)) in bread_crumbs.iter().enumerate() {
                 {

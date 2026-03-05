@@ -1,5 +1,6 @@
 use crate::components::scenery_editor::{
-    GraphState, graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_state::GraphInfo},
+    GraphState,
+    graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_state::GraphInfo},
 };
 use dioxus::prelude::*;
 use uuid::Uuid;
@@ -93,9 +94,7 @@ fn clear_workspace_handler(mut workspace: Signal<GraphsWorkspaceState>) -> Event
     })
 }
 
-fn set_active_tab_handler(
-    mut workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<Uuid> {
+fn set_active_tab_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<Uuid> {
     EventHandler::new(move |id| {
         workspace.write().active_tab.set(id);
     })

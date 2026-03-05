@@ -2,7 +2,9 @@ use dioxus::prelude::*;
 use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
-use crate::components::scenery_editor::{GraphState, GraphStore, graph_editor::graph_workspace::GraphsWorkspaceState};
+use crate::components::scenery_editor::{
+    GraphState, GraphStore, graph_editor::graph_workspace::GraphsWorkspaceState,
+};
 
 pub(super) fn with_graph_store<F>(
     mut workspace: Signal<GraphsWorkspaceState>,
@@ -23,8 +25,12 @@ pub(super) fn with_graph_store<F>(
     }
 }
 
-pub(super) fn with_tab<F>(mut workspace: Signal<GraphsWorkspaceState>, tab_id: Uuid, mark_dirty: bool, f: F)
-where
+pub(super) fn with_tab<F>(
+    mut workspace: Signal<GraphsWorkspaceState>,
+    tab_id: Uuid,
+    mark_dirty: bool,
+    f: F,
+) where
     F: FnOnce(&mut GraphState),
 {
     let mut ws = workspace.write();

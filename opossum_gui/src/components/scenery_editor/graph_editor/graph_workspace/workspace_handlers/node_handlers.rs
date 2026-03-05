@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use crate::components::scenery_editor::{
-    graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_handlers::helper_functions::{with_graph_store, with_tab}},
+use crate::components::scenery_editor::graph_editor::graph_workspace::{
+    GraphsWorkspaceState,
+    workspace_handlers::helper_functions::{with_graph_store, with_tab},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{

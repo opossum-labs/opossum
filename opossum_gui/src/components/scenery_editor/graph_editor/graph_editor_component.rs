@@ -41,12 +41,7 @@ pub fn GraphEditor(
         model_file_path_handler,
     );
 
-    let active_tab = use_memo(move || {
-        *workspace
-            .read()
-            .active_tab
-            .read()
-    });
+    let active_tab = use_memo(move || *workspace.read().active_tab.read());
 
     use_effect(move || {
         use_node_editor_command(
@@ -74,13 +69,15 @@ pub fn GraphEditor(
         let read_workspace = workspace.read();
         let active_tab = *read_workspace.active_tab.read();
 
-        read_workspace.get_graph_store_read(active_tab).and_then(|g| {
-            g.read().get_active_node().map(|n| ActiveNode {
-                node_id: n.id(),
-                graph_id: active_tab,
-                node_type: n.node_type().clone(),
+        read_workspace
+            .get_graph_store_read(active_tab)
+            .and_then(|g| {
+                g.read().get_active_node().map(|n| ActiveNode {
+                    node_id: n.id(),
+                    graph_id: active_tab,
+                    node_type: n.node_type().clone(),
+                })
             })
-        })
     });
     let onmouseleave_handler = use_drag_end(workspace);
     let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);

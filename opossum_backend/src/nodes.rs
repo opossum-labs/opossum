@@ -888,7 +888,6 @@ async fn get_node_hierarchy(
     group_hierarchy.reverse();
 
     Ok(Json(group_hierarchy))
-    
 }
 
 #[utoipa::path(tag = "node",

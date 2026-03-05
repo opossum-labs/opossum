@@ -13,7 +13,10 @@ pub enum GraphsWorkspaceAction {
     SaveToFile(PathBuf),
     AddRootSceneryTab,
     DeleteRootScenery,
-    OpenGroupTab { group_id: Uuid, group_name: String },
+    OpenGroupTab {
+        group_id: Uuid,
+        group_name: String,
+    },
     AddOpticNode {
         node_type: String,
         graph_id: Uuid,

@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::components::scenery_editor::{
     NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
-    graph_editor::graph_workspace::{EditorState, GraphState, GraphStore}
+    graph_editor::graph_workspace::{EditorState, GraphState, GraphStore},
 };
 
 #[derive(Clone, PartialEq)]
@@ -90,8 +90,7 @@ impl GraphsWorkspaceState {
         }
 
         let act_tab = *self.active_tab.read();
-        if tab_ids.contains(&act_tab)
-        {
+        if tab_ids.contains(&act_tab) {
             let root_id = *self.root_scenery_id.read();
             self.active_tab.set(root_id);
         }

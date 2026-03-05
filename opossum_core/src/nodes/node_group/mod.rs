@@ -234,13 +234,17 @@ impl NodeGroup {
     ///
     /// This function performs a recursive traversal using `node_recursive`
     /// to resolve parent nodes until the root node is reached.
-    pub fn get_node_hierarchy_bottom_up(&self, node_id: Uuid) -> OpmResult<Vec<(Uuid, String)>>{
+    pub fn get_node_hierarchy_bottom_up(&self, node_id: Uuid) -> OpmResult<Vec<(Uuid, String)>> {
         let mut group_hierarchy = Vec::<(Uuid, String)>::new();
 
         let (optic_ref, parent_id) = self.node_recursive(node_id)?;
-        let name = optic_ref.optical_ref.lock().map_err(|_| OpossumError::Other("cannot lock optic ref".into()))?.name();
+        let name = optic_ref
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other("cannot lock optic ref".into()))?
+            .name();
         group_hierarchy.push((node_id, name));
-        if parent_id != node_id{
+        if parent_id != node_id {
             let group_vec = self.get_node_hierarchy_bottom_up(parent_id)?;
             group_hierarchy.extend(group_vec);
         }

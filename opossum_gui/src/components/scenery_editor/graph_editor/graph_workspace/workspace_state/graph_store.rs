@@ -27,7 +27,7 @@ use uuid::Uuid;
 pub struct GraphState {
     pub graph_store: Signal<GraphStore>,
     pub editor_state: Signal<EditorState>,
-    pub graph_info: GraphInfo
+    pub graph_info: GraphInfo,
 }
 
 #[derive(Clone, Eq, PartialEq, Default)]
@@ -36,8 +36,6 @@ pub struct GraphInfo {
     pub id: Uuid,
     pub hierarchy: Vec<(Uuid, String)>,
 }
-
-
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct GraphStore {

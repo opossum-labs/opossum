@@ -1,4 +1,6 @@
-use crate::components::scenery_editor::graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_handlers::helper_functions::with_edges};
+use crate::components::scenery_editor::graph_editor::graph_workspace::{
+    GraphsWorkspaceState, workspace_handlers::helper_functions::with_edges,
+};
 use dioxus::prelude::*;
 use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
@@ -43,7 +45,6 @@ impl EdgeHandlers {
         self.add_group_edges.call((group_id, edges));
     }
 }
-
 
 fn add_edge_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(ConnectInfo, Uuid)> {
     EventHandler::new(move |(edge, graph_id)| {
