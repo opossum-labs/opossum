@@ -288,6 +288,12 @@ pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result
         .await
 }
 
+pub async fn get_group_hierarchy(group_id: Uuid) -> Result<Vec<(Uuid, String)>, String> {
+    HTTP_API_CLIENT()
+        .get::<Vec<(Uuid, String)>>(&format!("/api/scenery/{}/hierarchy", group_id.as_simple()))
+        .await
+}
+
 /// Update the property of the node with the given `node_id`.
 /// The property value is already passes as a `serde_json::Value` to avoid implementing `PartialEq` for every property type.
 ///

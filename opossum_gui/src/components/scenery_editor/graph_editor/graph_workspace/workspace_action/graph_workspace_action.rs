@@ -14,8 +14,8 @@ pub enum GraphsWorkspaceAction {
     AddRootSceneryTab,
     DeleteRootScenery,
     OpenGroupTab {
-        tab_name: String,
         group_id: Uuid,
+        group_name: String,
     },
     AddOpticNode {
         node_type: String,

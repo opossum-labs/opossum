@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use crate::components::scenery_editor::{
-    GraphState, GraphStore, graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_handlers::helper_functions::{with_graph_store, with_tab}},
+use crate::components::scenery_editor::graph_editor::graph_workspace::{
+    GraphsWorkspaceState,
+    workspace_handlers::helper_functions::{with_graph_store, with_tab},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{
@@ -121,7 +122,7 @@ fn remove_nodes_handler(
             graph_store.write().remove_nodes_by_id(&node_ids);
         }
 
-        ws.remove_tabs(node_ids);
+        ws.remove_tabs(&node_ids);
         ws.needs_saving.set(true);
     })
 }
@@ -142,7 +143,7 @@ fn set_node_name_handler(
             store.set_name_of_node(node_id, name.clone());
         });
         with_tab(workspace, node_id, false, |tab| {
-            tab.name = name;
+            tab.graph_info.name = name;
         });
     })
 }

@@ -212,6 +212,45 @@ impl NodeGroup {
         Ok(result)
     }
 
+    /// Returns the hierarchy of nodes starting from the given node and walking up
+    /// through its parent groups until the root is reached.
+    ///
+    /// The returned vector contains tuples of `(Uuid, String)` where:
+    /// - `Uuid` is the node ID
+    /// - `String` is the node's name
+    ///
+    /// The hierarchy is ordered **bottom-up**, meaning:
+    /// - The first element is the provided `node_id`
+    /// - Each following element is the parent group
+    /// - The last element is the root node of the hierarchy
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The node cannot be resolved via `node_recursive`
+    /// - The internal optic reference cannot be locked
+    ///
+    /// # Notes
+    ///
+    /// This function performs a recursive traversal using `node_recursive`
+    /// to resolve parent nodes until the root node is reached.
+    pub fn get_node_hierarchy_bottom_up(&self, node_id: Uuid) -> OpmResult<Vec<(Uuid, String)>> {
+        let mut group_hierarchy = Vec::<(Uuid, String)>::new();
+
+        let (optic_ref, parent_id) = self.node_recursive(node_id)?;
+        let name = optic_ref
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other("cannot lock optic ref".into()))?
+            .name();
+        group_hierarchy.push((node_id, name));
+        if parent_id != node_id {
+            let group_vec = self.get_node_hierarchy_bottom_up(parent_id)?;
+            group_hierarchy.extend(group_vec);
+        }
+        Ok(group_hierarchy)
+    }
+
     fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
         let node_ref = self.graph.node(node_id)?;
         let node = node_ref.optical_ref.lock_opm()?;

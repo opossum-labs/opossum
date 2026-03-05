@@ -66,7 +66,7 @@ pub fn Node(node: NodeElement) -> Element {
                         workspace_processor
                             .send(GraphsWorkspaceAction::DeleteNode {
                                 node_id,
-                                graph_id: graph_state.read().id,
+                                graph_id: graph_state.read().graph_info.id,
                             });
                     }
                     event.stop_propagation();
@@ -103,8 +103,8 @@ pub fn Node(node: NodeElement) -> Element {
                     {
                         workspace_processor
                             .send(GraphsWorkspaceAction::OpenGroupTab {
-                                tab_name: node.name(),
                                 group_id: node.id(),
+                                group_name: node.name(),
                             });
                     }
                 }

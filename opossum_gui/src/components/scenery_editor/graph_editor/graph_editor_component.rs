@@ -41,18 +41,12 @@ pub fn GraphEditor(
         model_file_path_handler,
     );
 
-    let active_tab = use_memo(move || {
-        workspace
-            .read()
-            .active_tab
-            .read()
-            .map_or_else(Uuid::nil, |t| t)
-    });
+    let active_tab = use_memo(move || *workspace.read().active_tab.read());
 
     use_effect(move || {
         use_node_editor_command(
             node_editor_command_handler,
-            active_tab,
+            active_tab.into(),
             workspace_processor,
             command,
         );
@@ -73,18 +67,17 @@ pub fn GraphEditor(
 
     let active_node_opt = use_memo(move || {
         let read_workspace = workspace.read();
-
         let active_tab = *read_workspace.active_tab.read();
 
-        active_tab.and_then(|tab_id| {
-            read_workspace.get_graph_store_read(tab_id).and_then(|g| {
+        read_workspace
+            .get_graph_store_read(active_tab)
+            .and_then(|g| {
                 g.read().get_active_node().map(|n| ActiveNode {
                     node_id: n.id(),
-                    graph_id: tab_id,
+                    graph_id: active_tab,
                     node_type: n.node_type().clone(),
                 })
             })
-        })
     });
     let onmouseleave_handler = use_drag_end(workspace);
     let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);
@@ -101,12 +94,13 @@ pub fn GraphEditor(
                 tabindex: 0,
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
+
                 Tabs {
                     class: "editor-tabs",
-                    value: active_tab.read().as_simple().to_string(),
+                    value: (*workspace.read().active_tab.read()).as_simple().to_string(),
                     on_value_change: move |v: String| {
                         if let Ok(new_id) = Uuid::parse_str(&v) {
-                            workspace_handlers.workspace.set_active_tab(Some(new_id));
+                            workspace_handlers.workspace.set_active_tab(new_id);
                         }
                     },
                     {
@@ -122,13 +116,16 @@ pub fn GraphEditor(
                                             index: i,
                                             class: if active_tab() == *id { "editor-tab active-tab" } else { "editor-tab" },
                                             div { class: "tab-inner",
-                                                span { {graph_state.read().name.clone()} }
+                                                span { {graph_state.read().graph_info.name.clone()} }
                                                 if *id != root_graph_id() {
                                                     button {
                                                         class: "tab-close",
                                                         onclick: {
                                                             let id_copy = *id;
-                                                            move |_| workspace_handlers.workspace.remove_tabs(vec![id_copy])
+                                                            move |e: MouseEvent| {
+                                                                e.stop_propagation();
+                                                                workspace_handlers.workspace.remove_tabs(vec![id_copy]);
+                                                            }
                                                         },
 
                                                     }
@@ -146,8 +143,8 @@ pub fn GraphEditor(
                                 for (i , id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = tabs.get(id) {
                                         TabContent {
-                                            class: "tab-content",
                                             key: "{id.as_simple().to_string()}",
+                                            class: "tab-content",
                                             value: id.as_simple().to_string(),
                                             index: i,
                                             GraphViewEditor {

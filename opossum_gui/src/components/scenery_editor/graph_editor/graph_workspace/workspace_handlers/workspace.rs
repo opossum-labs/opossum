@@ -1,17 +1,18 @@
 use crate::components::scenery_editor::{
-    GraphState, graph_editor::graph_workspace::GraphsWorkspaceState,
+    GraphState,
+    graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_state::GraphInfo},
 };
 use dioxus::prelude::*;
 use uuid::Uuid;
 
 #[derive(Clone, PartialEq, Copy)]
 pub struct WorkspaceHandlers {
-    add_new_group_tab: EventHandler<(String, Uuid)>,
+    add_new_group_tab: EventHandler<GraphInfo>,
     set_root_scenery_id: EventHandler<Uuid>,
     remove_tabs: EventHandler<Vec<Uuid>>,
     set_needs_saving: EventHandler<bool>,
     clear_workspace: EventHandler<()>,
-    set_active_tab: EventHandler<Option<Uuid>>,
+    set_active_tab: EventHandler<Uuid>,
 }
 
 impl WorkspaceHandlers {
@@ -25,8 +26,8 @@ impl WorkspaceHandlers {
             set_active_tab: set_active_tab_handler(workspace),
         }
     }
-    pub fn add_new_group_tab(&self, name: String, id: Uuid) {
-        self.add_new_group_tab.call((name, id));
+    pub fn add_new_group_tab(&self, graph_info: GraphInfo) {
+        self.add_new_group_tab.call(graph_info);
     }
 
     pub fn set_root_scenery_id(&self, id: Uuid) {
@@ -45,27 +46,27 @@ impl WorkspaceHandlers {
         self.clear_workspace.call(());
     }
 
-    pub fn set_active_tab(&self, id: Option<Uuid>) {
+    pub fn set_active_tab(&self, id: Uuid) {
         self.set_active_tab.call(id);
     }
 }
 
 fn add_new_group_tab_handler(
     mut workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<(String, Uuid)> {
-    EventHandler::new(move |(name, id)| {
+) -> EventHandler<GraphInfo> {
+    EventHandler::new(move |graph_info: GraphInfo| {
         let mut ws = workspace.write();
 
+        let id = graph_info.id;
         let graph_state = GraphState {
-            name,
-            id,
+            graph_info,
             ..Default::default()
         };
 
         ws.tabs.write().insert(id, Signal::new(graph_state));
 
         ws.tab_order.write().push(id);
-        ws.active_tab.set(Some(id));
+        ws.active_tab.set(id);
     })
 }
 
@@ -77,7 +78,7 @@ fn set_root_scenery_id_handler(mut workspace: Signal<GraphsWorkspaceState>) -> E
 
 fn remove_tabs_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<Vec<Uuid>> {
     EventHandler::new(move |ids| {
-        workspace.write().remove_tabs(ids);
+        workspace.write().remove_tabs(&ids);
     })
 }
 
@@ -93,9 +94,7 @@ fn clear_workspace_handler(mut workspace: Signal<GraphsWorkspaceState>) -> Event
     })
 }
 
-fn set_active_tab_handler(
-    mut workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<Option<Uuid>> {
+fn set_active_tab_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<Uuid> {
     EventHandler::new(move |id| {
         workspace.write().active_tab.set(id);
     })

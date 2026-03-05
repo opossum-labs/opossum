@@ -21,7 +21,7 @@ pub enum NodeEditorCommand {
 
 pub fn use_node_editor_command(
     node_editor_command_handler: EventHandler<Option<NodeEditorCommand>>,
-    active_tab: Memo<Uuid>,
+    active_tab: ReadSignal<Uuid>,
     workspace_processor: Coroutine<GraphsWorkspaceAction>,
     command: Memo<Option<NodeEditorCommand>>,
 ) {

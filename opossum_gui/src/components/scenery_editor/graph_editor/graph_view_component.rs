@@ -9,6 +9,7 @@ use crate::components::scenery_editor::{
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use std::{path::PathBuf, time::Instant};
+use uuid::Uuid;
 
 #[component]
 pub fn GraphViewEditor(
@@ -24,7 +25,7 @@ pub fn GraphViewEditor(
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let editor_state = graph_state.read().editor_state;
     let graph_store = graph_state.read().graph_store;
-    let graph_id = graph_state.read().id;
+    let graph_id = graph_state.read().graph_info.id;
 
     use_context_provider(|| graph_state);
     use_context_provider(|| editor_state);
@@ -43,34 +44,77 @@ pub fn GraphViewEditor(
         });
     });
 
-    rsx! {
-        div {
-            class: "graph-editor",
-            id: format!("editor_{}", graph_id.as_simple()),
-            draggable: false,
+    let bread_crumbs = graph_state.read().graph_info.hierarchy.clone();
 
-            onwheel: onwheel_handler,
-            onmousedown: onmousedown_handler,
-            onmouseup: move |e| onmouseup_handler.call(e),
-            onmousemove: onmousemove_handler,
+    rsx! {
+        div { class: "graph-view-container",
+
+            BreadCrumbs {
+                bread_crumbs,
+                bread_crumb_click_event: EventHandler::new(move |(group_id, group_name)| {
+                    workspace_processor
+                        .send(GraphsWorkspaceAction::OpenGroupTab {
+                            group_id,
+                            group_name,
+                        });
+                }),
+            }
             div {
+                class: "graph-editor",
+                id: format!("editor_{}", graph_id.as_simple()),
                 draggable: false,
-                style: format!(
-                    "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
-                    shift().x,
-                    shift().y,
-                    zoom(),
-                ),
-                Nodes { graph_store, graph_id }
-                svg {
-                    width: "100%",
-                    height: "100%",
-                    overflow: "visible",
-                    tabindex: 0,
-                    {
-                        rsx! {
-                            EdgesComponent {}
-                            EdgeCreationComponent {}
+
+                onwheel: onwheel_handler,
+                onmousedown: onmousedown_handler,
+                onmouseup: move |e| onmouseup_handler.call(e),
+                onmousemove: onmousemove_handler,
+                div {
+                    draggable: false,
+                    style: format!(
+                        "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
+                        shift().x,
+                        shift().y,
+                        zoom(),
+                    ),
+                    Nodes { graph_store, graph_id }
+                    svg {
+                        width: "100%",
+                        height: "100%",
+                        overflow: "visible",
+                        tabindex: 0,
+                        {
+                            rsx! {
+                                EdgesComponent {}
+                                EdgeCreationComponent {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn BreadCrumbs(
+    bread_crumbs: Vec<(Uuid, String)>,
+    bread_crumb_click_event: EventHandler<(Uuid, String)>,
+) -> Element {
+    rsx! {
+        div { class: "graph-breadcrumbs",
+            for (i , (id , name)) in bread_crumbs.iter().enumerate() {
+                {
+                    let name = name.clone();
+                    let id = *id;
+                    rsx! {
+                        span {
+                            class: "breadcrumb",
+                            onclick: move |_| bread_crumb_click_event.call((id, name.clone())),
+                            "{name}"
+                        }
+
+                        if i < bread_crumbs.len() - 1 {
+                            span { class: "breadcrumb-sep", " › " }
                         }
                     }
                 }

@@ -61,7 +61,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                         workspace_processor
                             .send(GraphsWorkspaceAction::DeleteEdge {
                                 connection: edge.clone(),
-                                graph_id: graph_state.read().id,
+                                graph_id: graph_state.read().graph_info.id,
                             });
                     }
                     event.stop_propagation();
@@ -99,7 +99,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                             workspace_processor
                                 .send(GraphsWorkspaceAction::UpdateEdge {
                                     connection: edge,
-                                    graph_id: graph_state.read().id,
+                                    graph_id: graph_state.read().graph_info.id,
                                 });
                         }
                     },

@@ -18,8 +18,9 @@ use crate::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
         },
         graph_editor::graph_workspace::{
-            GraphsWorkspaceState, WorkSpaceSignalHandlers, workspace_action::GraphsWorkspaceAction,
-            workspace_state::optimize_layout_and_sync,
+            GraphsWorkspaceState, WorkSpaceSignalHandlers,
+            workspace_action::GraphsWorkspaceAction,
+            workspace_state::{GraphInfo, optimize_layout_and_sync},
         },
         node::MIN_NODE_BODY_HEIGHT,
     },
@@ -148,15 +149,18 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::DeleteNode { node_id, graph_id } => {
                         process_delete_node(node_id, workspace, workspace_handlers, graph_id).await;
                     }
-                    GraphsWorkspaceAction::OpenGroupTab { tab_name, group_id } => {
+                    GraphsWorkspaceAction::OpenGroupTab {
+                        group_id,
+                        group_name,
+                    } => {
                         let group_tab_already_open =
                             workspace.read().tabs.read().contains_key(&group_id);
                         if group_tab_already_open {
-                            workspace_handlers.workspace.set_active_tab(Some(group_id));
+                            workspace_handlers.workspace.set_active_tab(group_id);
                         } else {
                             process_open_group_tab(
-                                tab_name,
                                 group_id,
+                                group_name,
                                 workspace_handlers,
                                 root_graph_id,
                             )
@@ -484,12 +488,22 @@ fn find_suitable_element_position(
 #[allow(clippy::future_not_send)]
 #[allow(clippy::large_types_passed_by_value)]
 async fn process_open_group_tab(
-    tab_name: String,
     group_id: Uuid,
+    group_name: String,
     ws_handler: WorkSpaceSignalHandlers,
     root_scenery_id: Memo<Uuid>,
 ) {
-    ws_handler.workspace.add_new_group_tab(tab_name, group_id);
+    eval_action_run(
+        api::get_group_hierarchy(group_id).await,
+        Some(move |group_hierarchy: Vec<(Uuid, String)>| {
+            let graph_info = GraphInfo {
+                name: group_name,
+                id: group_id,
+                hierarchy: group_hierarchy,
+            };
+            ws_handler.workspace.add_new_group_tab(graph_info);
+        }),
+    );
     process_fill_graph_of_group(root_scenery_id, group_id, ws_handler).await;
 }
 
@@ -590,10 +604,13 @@ async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers) {
     eval_action_run(
         api::get_scenery_uuid().await,
         Some(move |id| {
+            let name = "Main Graph".to_string();
             ws_handler.workspace.set_root_scenery_id(id);
-            ws_handler
-                .workspace
-                .add_new_group_tab("Main Graph".to_string(), id);
+            ws_handler.workspace.add_new_group_tab(GraphInfo {
+                name: name.clone(),
+                id,
+                hierarchy: vec![(id, name)],
+            });
         }),
     );
 }

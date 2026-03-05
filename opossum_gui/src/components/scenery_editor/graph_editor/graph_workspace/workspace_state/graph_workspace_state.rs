@@ -24,7 +24,7 @@ pub struct ActiveNode {
 pub struct GraphsWorkspaceState {
     pub tabs: Signal<HashMap<Uuid, Signal<GraphState>>>,
     pub tab_order: Signal<Vec<Uuid>>,
-    pub active_tab: Signal<Option<Uuid>>,
+    pub active_tab: Signal<Uuid>,
     pub root_scenery_id: Signal<Uuid>,
     pub needs_saving: Signal<bool>,
     pub editor_rect: Signal<Rect<f64>>,
@@ -83,18 +83,16 @@ impl GraphsWorkspaceState {
         }
     }
 
-    pub(in super::super) fn remove_tabs(&mut self, tab_ids: Vec<Uuid>) {
+    pub(in super::super) fn remove_tabs(&mut self, tab_ids: &Vec<Uuid>) {
         for id in tab_ids {
-            self.tabs.write().remove(&id);
-            self.tab_order.write().retain(|x| *x != id);
+            self.tabs.write().remove(id);
+            self.tab_order.write().retain(|x| x != id);
         }
-        let act_tab_opt = *self.active_tab.read();
-        let tabs = self.tabs.read().clone();
-        if let Some(active_tab) = act_tab_opt
-            && !tabs.contains_key(&active_tab)
-        {
+
+        let act_tab = *self.active_tab.read();
+        if tab_ids.contains(&act_tab) {
             let root_id = *self.root_scenery_id.read();
-            self.active_tab.set(Some(root_id));
+            self.active_tab.set(root_id);
         }
     }
 
