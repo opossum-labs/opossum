@@ -501,7 +501,7 @@ async fn process_open_group_tab(
                 id: group_id,
                 hierarchy: group_hierarchy,
             };
-            ws_handler.workspace.add_new_group_tab(graph_info)
+            ws_handler.workspace.add_new_group_tab(graph_info);
         }),
     );
     process_fill_graph_of_group(root_scenery_id, group_id, ws_handler).await;

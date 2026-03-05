@@ -885,6 +885,7 @@ async fn get_node_hierarchy(
     let document = data.document.lock();
     let scenery = document.scenery();
     let mut group_hierarchy = scenery.get_node_hierarchy_bottom_up(node_id)?;
+    drop(document);
     group_hierarchy.reverse();
 
     Ok(Json(group_hierarchy))

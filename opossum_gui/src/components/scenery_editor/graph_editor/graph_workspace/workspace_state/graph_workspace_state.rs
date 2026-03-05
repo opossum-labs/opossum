@@ -83,8 +83,8 @@ impl GraphsWorkspaceState {
         }
     }
 
-    pub(in super::super) fn remove_tabs(&mut self, tab_ids: Vec<Uuid>) {
-        for id in &tab_ids {
+    pub(in super::super) fn remove_tabs(&mut self, tab_ids: &Vec<Uuid>) {
+        for id in tab_ids {
             self.tabs.write().remove(id);
             self.tab_order.write().retain(|x| x != id);
         }

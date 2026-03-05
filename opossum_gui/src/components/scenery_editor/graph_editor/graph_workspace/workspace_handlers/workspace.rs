@@ -78,7 +78,7 @@ fn set_root_scenery_id_handler(mut workspace: Signal<GraphsWorkspaceState>) -> E
 
 fn remove_tabs_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<Vec<Uuid>> {
     EventHandler::new(move |ids| {
-        workspace.write().remove_tabs(ids);
+        workspace.write().remove_tabs(&ids);
     })
 }
 

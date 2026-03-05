@@ -122,7 +122,7 @@ fn remove_nodes_handler(
             graph_store.write().remove_nodes_by_id(&node_ids);
         }
 
-        ws.remove_tabs(node_ids);
+        ws.remove_tabs(&node_ids);
         ws.needs_saving.set(true);
     })
 }
