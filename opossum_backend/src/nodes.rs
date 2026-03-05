@@ -866,6 +866,31 @@ async fn get_properties_ron(
         .content_type("application/ron")
         .body(body))
 }
+
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the node"),
+    ),
+    responses(
+        (status = OK, description = "get the group hierarchy of a node", content(("application/json"))),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "node with UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/hierarchy")]
+async fn get_node_hierarchy(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<Vec<(Uuid, String)>>, BackEndErrorResponse> {
+    let node_id = path.into_inner();
+    let document = data.document.lock();
+    let scenery = document.scenery();
+    let mut group_hierarchy = scenery.get_node_hierarchy_bottom_up(node_id)?;
+    group_hierarchy.reverse();
+
+    Ok(Json(group_hierarchy))
+    
+}
+
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "UUID of the optical node"),
@@ -1119,6 +1144,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_properties_json);
     cfg.service(get_analyzer_info_ron);
     cfg.service(get_analyzer_info_json);
+    cfg.service(get_node_hierarchy);
     cfg.service(patch_properties);
 
     cfg.service(post_connection);

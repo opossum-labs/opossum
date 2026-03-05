@@ -142,7 +142,7 @@ fn set_node_name_handler(
             store.set_name_of_node(node_id, name.clone());
         });
         with_tab(workspace, node_id, false, |tab| {
-            tab.name = name;
+            tab.graph_info.name = name;
         });
     })
 }

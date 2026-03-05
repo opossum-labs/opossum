@@ -91,8 +91,6 @@ pub fn GraphEditor(
     let graph_editor_content_container_id = "graphEditorContentContainer";
     let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
 
-
-
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
@@ -125,7 +123,7 @@ pub fn GraphEditor(
                                             index: i,
                                             class: if active_tab() == *id { "editor-tab active-tab" } else { "editor-tab" },
                                             div { class: "tab-inner",
-                                                span { {graph_state.read().name.clone()} }
+                                                span { {graph_state.read().graph_info.name.clone()} }
                                                 if *id != root_graph_id() {
                                                     button {
                                                         class: "tab-close",

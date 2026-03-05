@@ -2,12 +2,13 @@
 use crate::components::scenery_editor::{
     edges::edges_component::{EdgeCreationComponent, EdgesComponent},
     graph_editor::{
-        graph_workspace::{GraphState, GraphsWorkspaceAction, GraphsWorkspaceState},
+        graph_workspace::{GraphState, GraphsWorkspaceAction},
         hooks::{use_drag, use_on_mouse_down, use_zoom},
     },
     nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use uuid::Uuid;
 use std::{path::PathBuf, time::Instant};
 
 #[component]
@@ -22,10 +23,9 @@ pub fn GraphViewEditor(
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let workspace = use_context::<Signal<GraphsWorkspaceState>>();
     let editor_state = graph_state.read().editor_state;
     let graph_store = graph_state.read().graph_store;
-    let graph_id = graph_state.read().id;
+    let graph_id = graph_state.read().graph_info.id;
 
     use_context_provider(|| graph_state);
     use_context_provider(|| editor_state);
@@ -44,27 +44,20 @@ pub fn GraphViewEditor(
         });
     });
 
-    let breadcrumbs: Memo<Vec<(uuid::Uuid, String)>> = use_memo(move || {
-        let workspace_read = workspace.read();
-        workspace_read.build_breadcrumbs(graph_state.read().id)
-    });
+    let bread_crumbs = graph_state.read().graph_info.hierarchy.clone();
 
     rsx! {
         div { class: "graph-view-container",
 
-            div { class: "graph-breadcrumbs",
-                {
-                    let path = breadcrumbs();
-                    rsx! {
-                        for (i , (_ , name)) in path.iter().enumerate() {
-                            span { class: "breadcrumb", "{name}" }
-
-                            if i < path.len() - 1 {
-                                span { class: "breadcrumb-sep", " / " }
-                            }
-                        }
-                    }
-                }
+            BreadCrumbs {
+                bread_crumbs,
+                bread_crumb_click_event: EventHandler::new(move |(group_id, group_name)| {
+                    workspace_processor
+                        .send(GraphsWorkspaceAction::OpenGroupTab {
+                            group_id,
+                            group_name,
+                        });
+                }),
             }
             div {
                 class: "graph-editor",
@@ -94,6 +87,31 @@ pub fn GraphViewEditor(
                                 EdgesComponent {}
                                 EdgeCreationComponent {}
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn BreadCrumbs(bread_crumbs: Vec<(Uuid, String)>, bread_crumb_click_event: EventHandler<(Uuid, String)>) -> Element{
+    rsx!{
+        div { class: "graph-breadcrumbs",
+            for (i , (id , name)) in bread_crumbs.iter().enumerate() {
+                {
+                    let name = name.clone();
+                    let id = *id;
+                    rsx! {
+                        span {
+                            class: "breadcrumb",
+                            onclick: move |_| bread_crumb_click_event.call((id, name.clone())),
+                            "{name}"
+                        }
+
+                        if i < bread_crumbs.len() - 1 {
+                            span { class: "breadcrumb-sep", " / " }
                         }
                     }
                 }

@@ -222,7 +222,7 @@ pub fn use_on_key_down(
                         );
                         workspace_processor.send(GraphsWorkspaceAction::PasteNode {
                             pos,
-                            graph_id: graph_state.read().id,
+                            graph_id: graph_state.read().graph_info.id,
                         });
                     }
                     event.stop_propagation();
@@ -278,7 +278,7 @@ pub fn use_drag_end(workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(Mouse
                         );
                         workspace_processor.send(GraphsWorkspaceAction::AddEdge {
                             new_edge,
-                            graph_id: graph_state.read().id,
+                            graph_id: graph_state.read().graph_info.id,
                         });
                     }
                 }

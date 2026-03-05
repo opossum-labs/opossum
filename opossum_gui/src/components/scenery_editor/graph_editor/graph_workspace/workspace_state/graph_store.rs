@@ -27,10 +27,16 @@ use uuid::Uuid;
 pub struct GraphState {
     pub graph_store: Signal<GraphStore>,
     pub editor_state: Signal<EditorState>,
+    pub graph_info: GraphInfo
+}
+
+#[derive(Clone, Eq, PartialEq, Default)]
+pub struct GraphInfo {
     pub name: String,
     pub id: Uuid,
-    pub parent: Option<Uuid>,
+    pub hierarchy: Vec<(Uuid, String)>,
 }
+
 
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]

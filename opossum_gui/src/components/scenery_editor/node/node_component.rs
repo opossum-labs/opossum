@@ -2,7 +2,7 @@
 use super::NodeElement;
 use crate::CONTEXT_MENU;
 use crate::components::scenery_editor::graph_editor::{
-    DragStatus, EditorState, GraphState, GraphStore,
+    DragStatus, EditorState, GraphState, GraphStore
 };
 use crate::components::{
     context_menu::cx_menu::{CxMenu, CxtCommand},
@@ -66,7 +66,7 @@ pub fn Node(node: NodeElement) -> Element {
                         workspace_processor
                             .send(GraphsWorkspaceAction::DeleteNode {
                                 node_id,
-                                graph_id: graph_state.read().id,
+                                graph_id: graph_state.read().graph_info.id,
                             });
                     }
                     event.stop_propagation();
@@ -103,9 +103,8 @@ pub fn Node(node: NodeElement) -> Element {
                     {
                         workspace_processor
                             .send(GraphsWorkspaceAction::OpenGroupTab {
-                                tab_name: node.name(),
                                 group_id: node.id(),
-                                parent: Some(graph_state.read().id),
+                                group_name: node.name(),
                             });
                     }
                 }

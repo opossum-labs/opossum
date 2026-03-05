@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::components::scenery_editor::{
     NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
-    graph_editor::graph_workspace::{EditorState, GraphState, GraphStore},
+    graph_editor::graph_workspace::{EditorState, GraphState, GraphStore}
 };
 
 #[derive(Clone, PartialEq)]
@@ -130,26 +130,5 @@ impl GraphsWorkspaceState {
     }
     pub fn get_view_port_size(&self) -> Size2D<f64> {
         self.editor_rect.read().size
-    }
-
-    pub fn build_breadcrumbs(
-        &self,
-        start_graph: Uuid,
-    ) -> Vec<(Uuid, String)> {
-        let mut path = Vec::new();
-        let mut current = Some(start_graph);
-
-        while let Some(id) = current {
-            if let Some(graph) = self.tabs.read().get(&id) {
-                let graph = graph.read();
-                path.push((id, graph.name.clone()));
-                current = graph.parent;
-            } else {
-                break;
-            }
-        }
-
-        path.reverse();
-        path
     }
 }
