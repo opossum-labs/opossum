@@ -42,15 +42,17 @@ body {
     color: #c4c4c4;
     margin: 0px 0px !important;
     font-size: 12 !important;
+    cursor: pointer;
 }
 
-.breadcrumb:last-child {
-    font-weight: 600 !important;
-    }
+.breadcrumb:hover {
+    color: #ffffff;
+}
 
 .breadcrumb-sep {
     margin: 0 4px;
-    color: #666;
+    color: #c4c4c4;
+    font-size: 16px;
 }
 
 

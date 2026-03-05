@@ -152,7 +152,7 @@ pub fn use_workspace_processor(
                         let group_tab_already_open =
                             workspace.read().tabs.read().contains_key(&group_id);
                         if group_tab_already_open {
-                            workspace_handlers.workspace.set_active_tab(Some(group_id));
+                            workspace_handlers.workspace.set_active_tab(group_id);
                         } else {
                             process_open_group_tab(
                                 group_id,

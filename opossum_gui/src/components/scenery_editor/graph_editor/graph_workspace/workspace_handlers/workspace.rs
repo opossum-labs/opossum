@@ -11,7 +11,7 @@ pub struct WorkspaceHandlers {
     remove_tabs: EventHandler<Vec<Uuid>>,
     set_needs_saving: EventHandler<bool>,
     clear_workspace: EventHandler<()>,
-    set_active_tab: EventHandler<Option<Uuid>>,
+    set_active_tab: EventHandler<Uuid>,
 }
 
 impl WorkspaceHandlers {
@@ -45,7 +45,7 @@ impl WorkspaceHandlers {
         self.clear_workspace.call(());
     }
 
-    pub fn set_active_tab(&self, id: Option<Uuid>) {
+    pub fn set_active_tab(&self, id: Uuid) {
         self.set_active_tab.call(id);
     }
 }
@@ -65,7 +65,7 @@ fn add_new_group_tab_handler(
         ws.tabs.write().insert(id, Signal::new(graph_state));
 
         ws.tab_order.write().push(id);
-        ws.active_tab.set(Some(id));
+        ws.active_tab.set(id);
     })
 }
 
@@ -95,7 +95,7 @@ fn clear_workspace_handler(mut workspace: Signal<GraphsWorkspaceState>) -> Event
 
 fn set_active_tab_handler(
     mut workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<Option<Uuid>> {
+) -> EventHandler<Uuid> {
     EventHandler::new(move |id| {
         workspace.write().active_tab.set(id);
     })

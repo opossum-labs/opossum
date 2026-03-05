@@ -111,7 +111,7 @@ pub fn BreadCrumbs(bread_crumbs: Vec<(Uuid, String)>, bread_crumb_click_event: E
                         }
 
                         if i < bread_crumbs.len() - 1 {
-                            span { class: "breadcrumb-sep", " / " }
+                            span { class: "breadcrumb-sep", " › " }
                         }
                     }
                 }

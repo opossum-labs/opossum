@@ -78,10 +78,7 @@ pub fn use_on_mouse_down(
                     if let Some(t0) = t0_opt
                         && now.duration_since(t0) < dc_time
                     {
-                        let active_tab_opt = *workspace.read().active_tab.read();
-                        if let Some(graph_id) = active_tab_opt {
-                            workspace_handlers.view.center_graph(graph_id, true);
-                        }
+                        workspace_handlers.view.center_graph(*workspace.read().active_tab.read(), true);
                         last_click.set(None);
                     }
                     last_click.set(Some(now));
@@ -185,8 +182,7 @@ pub fn use_on_key_down(
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     move |event| {
         let active_graph = workspace.read().active_tab;
-        if let Some(active_graph_id) = *active_graph.read()
-            && let Some(graph_state) = workspace.read().tabs.read().get(&active_graph_id)
+        if let Some(graph_state) = workspace.read().tabs.read().get(&*active_graph.read())
         {
             let editor_status = graph_state.read().editor_state;
             let graph_store = graph_state.read().graph_store;
@@ -236,8 +232,7 @@ pub fn use_drag_end(workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(Mouse
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     move |_| {
         let active_graph = workspace.read().active_tab;
-        if let Some(active_graph_id) = *active_graph.read()
-            && let Some(graph_state) = workspace.read().tabs.read().get(&active_graph_id)
+        if let Some(graph_state) = workspace.read().tabs.read().get(&*active_graph.read())
         {
             let mut editor_status = graph_state.read().editor_state;
             let graph_store = graph_state.read().graph_store;
