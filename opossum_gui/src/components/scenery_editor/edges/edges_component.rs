@@ -2,8 +2,7 @@
 use crate::components::scenery_editor::{
     constants::EDGE_BEZIER_OFFSET,
     edges::{define_bezier_path, edge_component::EdgeComponent},
-    graph_editor::graph_editor_component::EditorState,
-    graph_store::GraphStore,
+    graph_editor::{EditorState, GraphStore},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::prelude::*;

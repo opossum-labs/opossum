@@ -1,15 +1,17 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
 use crate::CONTEXT_MENU;
-use crate::components::context_menu::cx_menu::CxMenu;
-use crate::components::context_menu::cx_menu::CxtCommand;
-use crate::components::scenery_editor::constants::{BORDER_WIDTH, NODE_WIDTH};
-use crate::components::scenery_editor::graph_store::GraphStoreAction;
-use crate::components::scenery_editor::{
-    graph_editor::graph_editor_component::{DragStatus, EditorState},
-    graph_store::GraphStore,
-    node::graph_node_components::GraphNodeContent,
-    ports::ports_component::NodePorts,
+use crate::components::scenery_editor::graph_editor::{
+    DragStatus, EditorState, GraphState, GraphStore,
+};
+use crate::components::{
+    context_menu::cx_menu::{CxMenu, CxtCommand},
+    scenery_editor::{
+        constants::{BORDER_WIDTH, NODE_WIDTH},
+        node::graph_node_components::GraphNodeContent,
+        ports::ports_component::NodePorts,
+        {GraphsWorkspaceAction, NodeType},
+    },
 };
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
@@ -18,7 +20,8 @@ use opossum_core::types::api_types::NewRefNode;
 pub fn Node(node: NodeElement) -> Element {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
-    let graph_processor = use_coroutine_handle::<GraphStoreAction>();
+    let graph_state = use_context::<Signal<GraphState>>();
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let position = node.pos();
     let active_node_id = graph_store().active_node();
     let is_active = active_node_id.map_or("", |active_node_id| {
@@ -28,12 +31,13 @@ pub fn Node(node: NodeElement) -> Element {
             ""
         }
     });
-    let id = node.id();
+    let node_id = node.id();
     let z_index = node.z_index();
     let node_icon = node.node_type.icon();
     let is_optical_node = node.is_optical_node();
     rsx! {
         div {
+            id: format!("node_container_{}", node_id.as_simple()),
             tabindex: 0, // necessary to allow to receive keyboard focus
             class: "node {is_active}",
             draggable: false,
@@ -45,18 +49,25 @@ pub fn Node(node: NodeElement) -> Element {
                 position.y.fract(),
                 BORDER_WIDTH,
             ),
-            onmousedown: move |event: MouseEvent| {
-                editor_status.write().drag_status.set(DragStatus::Node(id, position));
-                let previously_selected = graph_store().active_node();
-                if previously_selected != Some(id) {
-                    graph_store().set_node_active(id, node.z_index());
+            onmousedown: {
+                let z_index = node.z_index();
+                move |event: MouseEvent| {
+                    editor_status.write().drag_status.set(DragStatus::Node(node_id, position));
+                    let previously_selected = graph_store().active_node();
+                    if previously_selected != Some(node_id) {
+                        graph_store().set_node_active(node_id, z_index);
+                    }
+                    event.stop_propagation();
                 }
-                event.stop_propagation();
             },
             onkeydown: move |event| {
                 if event.data().key() == Key::Delete {
                     if !is_active.is_empty() {
-                        graph_processor.send(GraphStoreAction::DeleteNode(id));
+                        workspace_processor
+                            .send(GraphsWorkspaceAction::DeleteNode {
+                                node_id,
+                                graph_id: graph_state.read().id,
+                            });
                     }
                     event.stop_propagation();
                 }
@@ -66,7 +77,7 @@ pub fn Node(node: NodeElement) -> Element {
                     event.prevent_default();
                     if is_optical_node {
                         let new_ref_node = NewRefNode::new(
-                            id,
+                            node_id,
                             (position.x + NODE_WIDTH, position.y + 100.0),
                         );
                         let cx_menu = CxMenu::new(
@@ -81,6 +92,20 @@ pub fn Node(node: NodeElement) -> Element {
                         );
                         let mut ctx = CONTEXT_MENU.write();
                         *ctx = Some(cx_menu);
+                    }
+                }
+            },
+            ondoubleclick: {
+                let node = node.clone();
+                move |_| {
+                    if let NodeType::Optical(node_type) = node.node_type()
+                        && node_type == "group"
+                    {
+                        workspace_processor
+                            .send(GraphsWorkspaceAction::OpenGroupTab {
+                                tab_name: node.name(),
+                                group_id: node.id(),
+                            });
                     }
                 }
             },

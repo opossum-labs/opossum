@@ -114,6 +114,7 @@ impl NodeGroup {
         group.node_attr.set_name(name);
         group
     }
+
     /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
     ///
     /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is

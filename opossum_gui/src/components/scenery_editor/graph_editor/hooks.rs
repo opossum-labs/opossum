@@ -1,7 +1,4 @@
-use std::{
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use crate::{
     CONTEXT_MENU,
@@ -9,43 +6,46 @@ use crate::{
         NodeElement,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
         edges::edges_component::EdgeCreation,
-        graph_editor::graph_editor_component::{DragStatus, EditorState},
-        graph_store::{GraphStore, GraphStoreAction},
+        graph_editor::graph_workspace::{
+            DragStatus, EditorState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
+            WorkSpaceSignalHandlers,
+        },
     },
 };
 use dioxus::{
-    html::{geometry::euclid::default::Point2D, input_data::MouseButton},
+    html::{
+        geometry::euclid::default::{Point2D, Rect, Size2D},
+        input_data::MouseButton,
+    },
     prelude::*,
 };
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
+use serde_json::Value;
 
-pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl FnMut(WheelEvent) {
+pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let editor_status = use_context::<Signal<EditorState>>();
+    let workspace = use_context::<Signal<GraphsWorkspaceState>>();
 
     move |wheel_event| {
         let mut zoom = editor_status().zoom;
         let mut shift = editor_status().shift;
-        spawn(async move {
-            if let Ok(rect) = on_mounted().unwrap().get_client_rect().await {
-                let client_pos = wheel_event.data.client_coordinates();
-                let mouse_pos =
-                    Point2D::new(client_pos.x - rect.min_x(), client_pos.y - rect.min_y());
-                let current_graph_shift = *shift.read();
-                let current_graph_zoom = *zoom.read();
-                let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
-                let mouse_on_graph_y = (mouse_pos.y - current_graph_shift.y) / current_graph_zoom;
-                let delta = wheel_event.delta().strip_units().y;
-                let new_graph_zoom = if delta > 0.0 {
-                    (current_graph_zoom * ZOOM_SENSITIVITY).min(MAX_ZOOM)
-                } else {
-                    (current_graph_zoom / ZOOM_SENSITIVITY).max(MIN_ZOOM)
-                };
-                let new_shift_x = mouse_on_graph_x.mul_add(-new_graph_zoom, mouse_pos.x);
-                let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
-                zoom.set(new_graph_zoom);
-                shift.set(Point2D::new(new_shift_x, new_shift_y));
-            }
-        });
+        let rect = *workspace.read().editor_rect.read();
+        let client_pos = wheel_event.data.client_coordinates();
+        let mouse_pos = Point2D::new(client_pos.x - rect.min_x(), client_pos.y - rect.min_y());
+        let current_graph_shift = *shift.read();
+        let current_graph_zoom = *zoom.read();
+        let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
+        let mouse_on_graph_y = (mouse_pos.y - current_graph_shift.y) / current_graph_zoom;
+        let delta = wheel_event.delta().strip_units().y;
+        let new_graph_zoom = if delta > 0.0 {
+            (current_graph_zoom * ZOOM_SENSITIVITY).min(MAX_ZOOM)
+        } else {
+            (current_graph_zoom / ZOOM_SENSITIVITY).max(MIN_ZOOM)
+        };
+        let new_shift_x = mouse_on_graph_x.mul_add(-new_graph_zoom, mouse_pos.x);
+        let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
+        zoom.set(new_graph_zoom);
+        shift.set(Point2D::new(new_shift_x, new_shift_y));
     }
 }
 
@@ -54,10 +54,11 @@ pub fn use_on_mouse_down(
     mut last_click: Signal<Option<Instant>>,
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
-    let graph_store = use_context::<Signal<GraphStore>>();
     let mut editor_status = use_context::<Signal<EditorState>>();
+    let workspace_handlers = use_context::<WorkSpaceSignalHandlers>();
+    let workspace = use_context::<Signal<GraphsWorkspaceState>>();
 
-    move |event| {
+    move |event: MouseEvent| {
         event.stop_propagation();
         if let Some(trigger_button) = event.trigger_button() {
             match trigger_button {
@@ -77,9 +78,10 @@ pub fn use_on_mouse_down(
                     if let Some(t0) = t0_opt
                         && now.duration_since(t0) < dc_time
                     {
-                        editor_status
-                            .write()
-                            .center_graph(graph_store.read().get_bounding_box(), true);
+                        let active_tab_opt = *workspace.read().active_tab.read();
+                        if let Some(graph_id) = active_tab_opt {
+                            workspace_handlers.view.center_graph(graph_id, true);
+                        }
                         last_click.set(None);
                     }
                     last_click.set(Some(now));
@@ -136,109 +138,153 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
     }
 }
 
-pub fn use_on_resize(on_mounted: Signal<Option<Rc<MountedData>>>) -> impl FnMut(ResizeEvent) {
-    let mut editor_status = use_context::<Signal<EditorState>>();
-
-    move |event| {
-        if let Ok(size) = event.data().get_content_box_size() {
-            editor_status.write().editor_size.set(size);
-        }
-        spawn(async move {
-            if let Ok(rect) = on_mounted().unwrap().get_client_rect().await {
-                editor_status.write().rect.set(rect);
+pub fn use_on_resize(
+    mut workspace: Signal<GraphsWorkspaceState>,
+    element_id: String,
+) -> EventHandler<()> {
+    EventHandler::new(move |()| {
+        spawn({
+            let element_id = element_id.clone();
+            async move {
+                let js = format!(
+                    r"
+                    let el = document.getElementById('{element_id}');
+                    if (!el) {{
+                        dioxus.send(null);
+                    }} else {{
+                        let r = el.getBoundingClientRect();
+                        dioxus.send({{
+                            x: r.x,
+                            y: r.y,
+                            width: r.width,
+                            height: r.height
+                        }});
+                    }}
+                    "
+                );
+                let mut eval = dioxus::document::eval(&js);
+                if let Ok(rect) = eval.recv::<Value>().await {
+                    let x = rect["x"].as_f64().unwrap();
+                    let y = rect["y"].as_f64().unwrap();
+                    let width = rect["width"].as_f64().unwrap();
+                    let height = rect["height"].as_f64().unwrap();
+                    workspace
+                        .write()
+                        .editor_rect
+                        .set(Rect::new(Point2D::new(x, y), Size2D::new(width, height)));
+                }
             }
         });
-    }
+    })
 }
 
-pub fn use_on_key_down(mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(KeyboardEvent) {
-    let graph_store = use_context::<Signal<GraphStore>>();
-    let editor_status = use_context::<Signal<EditorState>>();
-    let graph_processor = use_coroutine_handle::<GraphStoreAction>();
-
+pub fn use_on_key_down(
+    mouse_pos: Signal<Point2D<f64>>,
+    workspace: Signal<GraphsWorkspaceState>,
+) -> impl FnMut(KeyboardEvent) {
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     move |event| {
-        if !event.is_auto_repeating() {
-            let modifiers = event.modifiers();
-            let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
-            if ctrl_or_meta
-                && !modifiers.shift()
-                && event.data().key() == Key::Character("c".to_string())
-                && let Some(node) = graph_store.read().get_active_node()
-            {
-                graph_processor.send(GraphStoreAction::CopyNode((
-                    node.node_type().clone(),
-                    node.id(),
-                )));
-                event.stop_propagation();
-            } else if ctrl_or_meta
-                && !modifiers.shift()
-                && event.data().key() == Key::Character("v".to_string())
-            {
-                let rect = *editor_status().rect.read();
-                let mouse = *mouse_pos.read();
-                if mouse.x > rect.min_x()
-                    && mouse.x < rect.max_x()
-                    && mouse.y > rect.min_y()
-                    && mouse.y < rect.max_y()
+        let active_graph = workspace.read().active_tab;
+        if let Some(active_graph_id) = *active_graph.read()
+            && let Some(graph_state) = workspace.read().tabs.read().get(&active_graph_id)
+        {
+            let editor_status = graph_state.read().editor_state;
+            let graph_store = graph_state.read().graph_store;
+            if !event.is_auto_repeating() {
+                let modifiers = event.modifiers();
+                let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
+                if ctrl_or_meta
+                    && !modifiers.shift()
+                    && event.data().key() == Key::Character("c".to_string())
+                    && let Some(node) = graph_store.read().get_active_node()
                 {
-                    let shift = *editor_status().shift.read();
-                    let zoom = *editor_status().zoom.read();
-                    let pos = Point2D::new(
-                        (mouse.x - shift.x - rect.min_x()) / zoom,
-                        (mouse.y - shift.y - rect.min_y()) / zoom,
-                    );
-                    graph_processor.send(GraphStoreAction::PasteNode(pos));
+                    workspace_processor.send(GraphsWorkspaceAction::CopyNode {
+                        node_type: node.node_type().clone(),
+                        node_id: node.id(),
+                    });
+                    event.stop_propagation();
+                } else if ctrl_or_meta
+                    && !modifiers.shift()
+                    && event.data().key() == Key::Character("v".to_string())
+                {
+                    let rect = *workspace().editor_rect.read();
+                    let mouse = *mouse_pos.read();
+                    if mouse.x > rect.min_x()
+                        && mouse.x < rect.max_x()
+                        && mouse.y > rect.min_y()
+                        && mouse.y < rect.max_y()
+                    {
+                        let shift = *editor_status().shift.read();
+                        let zoom = *editor_status().zoom.read();
+                        let pos = Point2D::new(
+                            (mouse.x - shift.x - rect.min_x()) / zoom,
+                            (mouse.y - shift.y - rect.min_y()) / zoom,
+                        );
+                        workspace_processor.send(GraphsWorkspaceAction::PasteNode {
+                            pos,
+                            graph_id: graph_state.read().id,
+                        });
+                    }
+                    event.stop_propagation();
                 }
-                event.stop_propagation();
             }
         }
     }
 }
 
-pub fn use_drag_end() -> impl FnMut(MouseEvent) {
-    let graph_store = use_context::<Signal<GraphStore>>();
-    let mut editor_status = use_context::<Signal<EditorState>>();
-    let graph_processor = use_coroutine_handle::<GraphStoreAction>();
+pub fn use_drag_end(workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(MouseEvent) {
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     move |_| {
-        let drag_status = editor_status.read().drag_status.read().clone();
-        match drag_status {
-            DragStatus::Node(uuid, old_position) => {
-                if let Some(pos) = graph_store
-                    .read()
-                    .nodes()
-                    .read()
-                    .get(&uuid)
-                    .map(NodeElement::pos)
-                {
-                    // Update node GUI position (only if really changed)
-                    if pos != old_position {
-                        graph_processor.send(GraphStoreAction::SyncNodePosition(uuid, pos));
+        let active_graph = workspace.read().active_tab;
+        if let Some(active_graph_id) = *active_graph.read()
+            && let Some(graph_state) = workspace.read().tabs.read().get(&active_graph_id)
+        {
+            let mut editor_status = graph_state.read().editor_state;
+            let graph_store = graph_state.read().graph_store;
+            let drag_status = editor_status.read().drag_status.read().clone();
+            match drag_status {
+                DragStatus::Node(node_id, old_position) => {
+                    if let Some(pos) = graph_store
+                        .read()
+                        .nodes()
+                        .read()
+                        .get(&node_id)
+                        .map(NodeElement::pos)
+                    {
+                        // Update node GUI position (only if really changed)
+                        if pos != old_position {
+                            workspace_processor
+                                .send(GraphsWorkspaceAction::SyncNodePosition { pos, node_id });
+                        }
                     }
                 }
-            }
-            DragStatus::Edge(_) => {
-                if let Some(edge) = editor_status.write().edge_in_creation.write().take()
-                    && edge.is_valid()
-                    && let (Some(end_port), start_port) = (edge.end_port(), edge.start_port())
-                {
-                    let (start_port, end_port) = if start_port.port_type == PortType::Output {
-                        (start_port, end_port)
-                    } else {
-                        (end_port, start_port)
-                    };
+                DragStatus::Edge(_) => {
+                    if let Some(edge) = editor_status.write().edge_in_creation.write().take()
+                        && edge.is_valid()
+                        && let (Some(end_port), start_port) = (edge.end_port(), edge.start_port())
+                    {
+                        let (start_port, end_port) = if start_port.port_type == PortType::Output {
+                            (start_port, end_port)
+                        } else {
+                            (end_port, start_port)
+                        };
 
-                    let new_edge = ConnectInfo::new(
-                        start_port.node_id,
-                        start_port.port_name.clone(),
-                        end_port.node_id,
-                        end_port.port_name.clone(),
-                        0.0,
-                    );
-                    graph_processor.send(GraphStoreAction::AddEdge(new_edge));
+                        let new_edge = ConnectInfo::new(
+                            start_port.node_id,
+                            start_port.port_name.clone(),
+                            end_port.node_id,
+                            end_port.port_name.clone(),
+                            0.0,
+                        );
+                        workspace_processor.send(GraphsWorkspaceAction::AddEdge {
+                            new_edge,
+                            graph_id: graph_state.read().id,
+                        });
+                    }
                 }
+                _ => {}
             }
-            _ => {}
+            editor_status.write().drag_status.set(DragStatus::None);
         }
-        editor_status.write().drag_status.set(DragStatus::None);
     }
 }

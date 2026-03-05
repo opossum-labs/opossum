@@ -1,7 +1,8 @@
 use crate::components::scenery_editor::{
+    EditorState,
     constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
     edges::edges_component::{EdgePort, NewEdgeCreationStart},
-    graph_editor::graph_editor_component::{DragStatus, EditorState},
+    graph_editor::DragStatus,
     node::NodeElement,
 };
 use dioxus::prelude::*;
