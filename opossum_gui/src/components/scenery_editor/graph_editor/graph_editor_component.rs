@@ -33,14 +33,7 @@ pub enum NodeEditorCommand {
 }
 
 
-#[derive(Clone, Debug, Default)]
-pub enum DragStatus {
-    #[default]
-    None,
-    Graph,
-    Node(Uuid, Point2D<f64>), // stores also old position before drag.
-    Edge(NewEdgeCreationStart),
-}
+
 
 #[component]
 pub fn GraphEditor(

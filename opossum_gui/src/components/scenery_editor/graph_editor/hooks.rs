@@ -7,8 +7,7 @@ use crate::{
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
         edges::edges_component::EdgeCreation,
         graph_editor::{
-            graph_editor_component::DragStatus,
-            graph_workspace::{
+            graph_workspace::{DragStatus,
                 EditorState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers
             },
         },

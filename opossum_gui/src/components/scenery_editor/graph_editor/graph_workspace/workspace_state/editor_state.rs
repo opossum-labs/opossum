@@ -1,5 +1,6 @@
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use crate::components::scenery_editor::{edges::edges_component::EdgeCreation, graph_editor::graph_editor_component::DragStatus};
+use uuid::Uuid;
+use crate::components::scenery_editor::{edges::edges_component::{EdgeCreation, NewEdgeCreationStart}};
 
 #[derive(Clone, Copy)]
 pub struct EditorState {
@@ -18,4 +19,13 @@ impl Default for EditorState {
             shift: Signal::<Point2D<f64>>::default(),
         }
     }
+}
+
+#[derive(Clone, Debug, Default)]
+pub enum DragStatus {
+    #[default]
+    None,
+    Graph,
+    Node(Uuid, Point2D<f64>), // stores also old position before drag.
+    Edge(NewEdgeCreationStart),
 }
