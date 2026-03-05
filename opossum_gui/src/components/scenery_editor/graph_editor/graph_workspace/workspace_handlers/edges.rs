@@ -1,4 +1,4 @@
-use crate::components::scenery_editor::graph_editor::graph_workspace::GraphsWorkspaceState;
+use crate::components::scenery_editor::graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_handlers::helper_functions::with_edges};
 use dioxus::prelude::*;
 use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
@@ -44,24 +44,6 @@ impl EdgeHandlers {
     }
 }
 
-fn with_edges<F>(
-    mut workspace: Signal<GraphsWorkspaceState>,
-    graph_id: Uuid,
-    mark_dirty: bool,
-    f: F,
-) where
-    F: FnOnce(&mut Vec<ConnectInfo>),
-{
-    let mut ws = workspace.write();
-
-    if let Some(mut edges) = ws.get_graph_edges(graph_id) {
-        f(&mut edges.write());
-    }
-
-    if mark_dirty {
-        ws.needs_saving.set(true);
-    }
-}
 
 fn add_edge_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(ConnectInfo, Uuid)> {
     EventHandler::new(move |(edge, graph_id)| {

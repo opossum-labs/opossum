@@ -52,14 +52,6 @@ impl GraphsWorkspaceState {
             .get(&graph_id)
             .map(|g| g.read().editor_state)
     }
-    pub(in super::super) fn _get_active_editor(&self) -> Option<Signal<EditorState>> {
-        self.active_tab.read().map_or(None, |graph_id| {
-            self.tabs
-                .read()
-                .get(&graph_id)
-                .map(|g| g.read().editor_state)
-        })
-    }
     pub(in super::super) fn get_graph_edges(
         &self,
         graph_id: Uuid,
@@ -69,7 +61,7 @@ impl GraphsWorkspaceState {
             .get(&graph_id)
             .map(|g| g.read().graph_store.read().edges())
     }
-    pub(in super::super) fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64>> {
+    pub fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64>> {
         self.tabs
             .read()
             .get(&graph_id)

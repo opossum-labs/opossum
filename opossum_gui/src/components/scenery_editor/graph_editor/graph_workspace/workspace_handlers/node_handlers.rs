@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::components::scenery_editor::{
-    GraphState, GraphStore, graph_editor::graph_workspace::GraphsWorkspaceState,
+    GraphState, GraphStore, graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_handlers::helper_functions::{with_graph_store, with_tab}},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{
@@ -74,39 +74,7 @@ impl NodeHandlers {
         self.add_group_analyzers.call((group_id, analyzers));
     }
 }
-fn with_graph_store<F>(
-    mut workspace: Signal<GraphsWorkspaceState>,
-    graph_id: Uuid,
-    mark_dirty: bool,
-    f: F,
-) where
-    F: FnOnce(&mut GraphStore),
-{
-    let mut ws = workspace.write();
 
-    if let Some(mut graph_store) = ws.get_graph_store(graph_id) {
-        f(&mut graph_store.write());
-    }
-
-    if mark_dirty {
-        ws.needs_saving.set(true);
-    }
-}
-
-fn with_tab<F>(mut workspace: Signal<GraphsWorkspaceState>, tab_id: Uuid, mark_dirty: bool, f: F)
-where
-    F: FnOnce(&mut GraphState),
-{
-    let mut ws = workspace.write();
-
-    if let Some(mut tab) = ws.get_tab(tab_id) {
-        f(&mut tab.write());
-    }
-
-    if mark_dirty {
-        ws.needs_saving.set(true);
-    }
-}
 fn add_optical_node_handler(
     workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<(NodeInfo, Uuid)> {
