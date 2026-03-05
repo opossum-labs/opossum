@@ -7,12 +7,11 @@ use crate::{
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
         edges::edges_component::EdgeCreation,
         graph_editor::{
-            graph_editor_component::{DragStatus, EditorState},
+            graph_editor_component::DragStatus,
             graph_workspace::{
-                GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
+                EditorState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers
             },
         },
-        graph_store::GraphStore,
     },
 };
 use dioxus::{

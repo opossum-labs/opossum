@@ -19,9 +19,8 @@ use crate::{
         },
         graph_editor::graph_workspace::{
             GraphsWorkspaceState, WorkSpaceSignalHandlers,
-            graph_workspace_action::GraphsWorkspaceAction,
+            graph_workspace_action::GraphsWorkspaceAction, workspace_state::optimize_layout_and_sync,
         },
-        graph_store::optimize_layout_and_sync,
         node::MIN_NODE_BODY_HEIGHT,
     },
 };

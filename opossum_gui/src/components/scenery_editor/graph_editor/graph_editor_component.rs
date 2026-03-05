@@ -3,9 +3,7 @@ use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
         ActiveNode,
-        edges::edges_component::{
-            EdgeCreation, NewEdgeCreationStart,
-        },
+        edges::edges_component::NewEdgeCreationStart,
         graph_editor::{
             GraphViewEditor, graph_workspace::{
                 GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
@@ -34,24 +32,6 @@ pub enum NodeEditorCommand {
     ZoomToFit,
 }
 
-#[derive(Clone, Copy)]
-pub struct EditorState {
-    pub drag_status: Signal<DragStatus>,
-    pub edge_in_creation: Signal<Option<EdgeCreation>>,
-    pub zoom: Signal<f64>,
-    pub shift: Signal<Point2D<f64>>,
-}
-
-impl Default for EditorState {
-    fn default() -> Self {
-        Self {
-            drag_status: Signal::<DragStatus>::default(),
-            edge_in_creation: Signal::<Option<EdgeCreation>>::default(),
-            zoom: Signal::new(1.),
-            shift: Signal::<Point2D<f64>>::default(),
-        }
-    }
-}
 
 #[derive(Clone, Debug, Default)]
 pub enum DragStatus {

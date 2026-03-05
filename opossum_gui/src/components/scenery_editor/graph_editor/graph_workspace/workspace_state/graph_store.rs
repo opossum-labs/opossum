@@ -1,12 +1,8 @@
-use super::{
-    node::{NodeElement, NodeType},
-    ports::ports_component::Ports,
-};
+
 use crate::{
     OPOSSUM_UI_LOGS, api,
     components::scenery_editor::{
-        constants::{SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
-        graph_editor::graph_editor_component::EditorState,
+        NodeElement, NodeType, constants::{SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING}, graph_editor::graph_workspace::EditorState, ports::ports_component::Ports
     },
 };
 use dioxus::{
@@ -79,7 +75,7 @@ impl GraphStore {
         self.nodes
             .read()
             .get(&node_id)
-            .map(super::node::NodeElement::node_type)
+            .map(NodeElement::node_type)
             .cloned()
     }
     pub const fn nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {

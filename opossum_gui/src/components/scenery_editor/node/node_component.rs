@@ -1,15 +1,15 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
 use crate::CONTEXT_MENU;
+use crate::components::scenery_editor::graph_editor::{EditorState, GraphStore, GraphState};
 use crate::components::{
     context_menu::cx_menu::{CxMenu, CxtCommand},
     scenery_editor::{
         constants::{BORDER_WIDTH, NODE_WIDTH},
-        graph_editor::graph_editor_component::{DragStatus, EditorState},
-        graph_store::GraphStore,
+        graph_editor::graph_editor_component::DragStatus,
         node::graph_node_components::GraphNodeContent,
         ports::ports_component::NodePorts,
-        {GraphState, GraphsWorkspaceAction, NodeType},
+        {GraphsWorkspaceAction, NodeType},
     },
 };
 use dioxus::prelude::*;

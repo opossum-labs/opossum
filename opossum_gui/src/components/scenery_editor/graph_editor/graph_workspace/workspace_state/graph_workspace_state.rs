@@ -7,10 +7,8 @@ use dioxus::{
 use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
-use crate::components::scenery_editor::{
-    GraphState, GraphStore, NodeType,
-    constants::{MAX_ZOOM, MIN_ZOOM},
-    graph_editor::graph_editor_component::EditorState,
+use crate::components::scenery_editor::{ NodeType,
+    constants::{MAX_ZOOM, MIN_ZOOM}, graph_editor::graph_workspace::{EditorState, GraphState, GraphStore},
 };
 
 #[derive(Clone, PartialEq)]
@@ -31,7 +29,7 @@ pub struct GraphsWorkspaceState {
 }
 
 impl GraphsWorkspaceState {
-    pub(super) fn get_graph_store(&self, graph_id: Uuid) -> Option<Signal<GraphStore>> {
+    pub(in super::super) fn get_graph_store(&self, graph_id: Uuid) -> Option<Signal<GraphStore>> {
         self.tabs
             .read()
             .get(&graph_id)
@@ -43,13 +41,13 @@ impl GraphsWorkspaceState {
             .get(&graph_id)
             .map(|g| g.read().graph_store.into())
     }
-    pub(super) fn get_editor_state(&self, graph_id: Uuid) -> Option<Signal<EditorState>> {
+    pub(in super::super) fn get_editor_state(&self, graph_id: Uuid) -> Option<Signal<EditorState>> {
         self.tabs
             .read()
             .get(&graph_id)
             .map(|g| g.read().editor_state)
     }
-    pub(super) fn _get_active_editor(&self) -> Option<Signal<EditorState>> {
+    pub(in super::super) fn _get_active_editor(&self) -> Option<Signal<EditorState>> {
         self.active_tab.read().map_or(None, |graph_id| {
             self.tabs
                 .read()
@@ -57,20 +55,20 @@ impl GraphsWorkspaceState {
                 .map(|g| g.read().editor_state)
         })
     }
-    pub(super) fn get_graph_edges(&self, graph_id: Uuid) -> Option<Signal<Vec<ConnectInfo>>> {
+    pub(in super::super) fn get_graph_edges(&self, graph_id: Uuid) -> Option<Signal<Vec<ConnectInfo>>> {
         self.tabs
             .read()
             .get(&graph_id)
             .map(|g| g.read().graph_store.read().edges())
     }
-    pub(super) fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64>> {
+    pub(in super::super) fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64>> {
         self.tabs
             .read()
             .get(&graph_id)
             .map(|g| g.read().graph_store.read().get_bounding_box())
     }
 
-    pub(super) fn center_graph(&self, graph_id: Uuid) {
+    pub(in super::super) fn center_graph(&self, graph_id: Uuid) {
         let bounding_box_opt = self.get_graph_bounding_box(graph_id);
         let view_center = self.get_view_port_center();
         if let (Some(mut editor), Some(bounding_box)) =
@@ -85,7 +83,7 @@ impl GraphsWorkspaceState {
         }
     }
 
-    pub(super) fn remove_tabs(&mut self, tab_ids: Vec<Uuid>) {
+    pub(in super::super) fn remove_tabs(&mut self, tab_ids: Vec<Uuid>) {
         for id in tab_ids {
             self.tabs.write().remove(&id);
             self.tab_order.write().retain(|x| *x != id);
@@ -100,7 +98,7 @@ impl GraphsWorkspaceState {
         }
     }
 
-    pub(super) fn zoom_to_fit(&self, graph_id: Uuid) {
+    pub(in super::super) fn zoom_to_fit(&self, graph_id: Uuid) {
         let bounding_box_opt = self.get_graph_bounding_box(graph_id);
         let view_box = self.get_view_port_size();
         let view_center = self.get_view_port_center();

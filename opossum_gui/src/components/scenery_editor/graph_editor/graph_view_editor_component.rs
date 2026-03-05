@@ -2,10 +2,9 @@
 use crate::components::{
     scenery_editor::{
         nodes::Nodes,
-        GraphState,
         edges::edges_component::{EdgeCreationComponent, EdgesComponent},
         graph_editor::{
-            graph_workspace::GraphsWorkspaceAction, 
+            graph_workspace::{GraphsWorkspaceAction, GraphState}, 
             hooks::{use_drag, use_on_mouse_down, use_zoom},
         },
     },

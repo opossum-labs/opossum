@@ -1,8 +1,5 @@
 use crate::components::scenery_editor::{
-    constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
-    edges::edges_component::{EdgePort, NewEdgeCreationStart},
-    graph_editor::graph_editor_component::{DragStatus, EditorState},
-    node::NodeElement,
+    EditorState, constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH}, edges::edges_component::{EdgePort, NewEdgeCreationStart}, graph_editor::graph_editor_component::DragStatus, node::NodeElement
 };
 use dioxus::prelude::*;
 use opossum_core::prelude::*;
