@@ -16,6 +16,7 @@ pub enum GraphsWorkspaceAction {
     OpenGroupTab {
         tab_name: String,
         group_id: Uuid,
+        parent: Option<Uuid>
     },
     AddOpticNode {
         node_type: String,

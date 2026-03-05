@@ -148,7 +148,7 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::DeleteNode { node_id, graph_id } => {
                         process_delete_node(node_id, workspace, workspace_handlers, graph_id).await;
                     }
-                    GraphsWorkspaceAction::OpenGroupTab { tab_name, group_id } => {
+                    GraphsWorkspaceAction::OpenGroupTab { tab_name, group_id, parent } => {
                         let group_tab_already_open =
                             workspace.read().tabs.read().contains_key(&group_id);
                         if group_tab_already_open {
@@ -156,6 +156,7 @@ pub fn use_workspace_processor(
                         } else {
                             process_open_group_tab(
                                 tab_name,
+                                parent,
                                 group_id,
                                 workspace_handlers,
                                 root_graph_id,
@@ -485,11 +486,12 @@ fn find_suitable_element_position(
 #[allow(clippy::large_types_passed_by_value)]
 async fn process_open_group_tab(
     tab_name: String,
+    parent: Option<Uuid>,
     group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
     root_scenery_id: Memo<Uuid>,
 ) {
-    ws_handler.workspace.add_new_group_tab(tab_name, group_id);
+    ws_handler.workspace.add_new_group_tab(tab_name, group_id, parent);
     process_fill_graph_of_group(root_scenery_id, group_id, ws_handler).await;
 }
 
@@ -593,7 +595,7 @@ async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers) {
             ws_handler.workspace.set_root_scenery_id(id);
             ws_handler
                 .workspace
-                .add_new_group_tab("Main Graph".to_string(), id);
+                .add_new_group_tab("Main Graph".to_string(), id, None);
         }),
     );
 }

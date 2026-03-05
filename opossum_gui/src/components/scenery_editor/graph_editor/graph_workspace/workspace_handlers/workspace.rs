@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 #[derive(Clone, PartialEq, Copy)]
 pub struct WorkspaceHandlers {
-    add_new_group_tab: EventHandler<(String, Uuid)>,
+    add_new_group_tab: EventHandler<(String, Uuid, Option<Uuid>)>,
     set_root_scenery_id: EventHandler<Uuid>,
     remove_tabs: EventHandler<Vec<Uuid>>,
     set_needs_saving: EventHandler<bool>,
@@ -25,8 +25,8 @@ impl WorkspaceHandlers {
             set_active_tab: set_active_tab_handler(workspace),
         }
     }
-    pub fn add_new_group_tab(&self, name: String, id: Uuid) {
-        self.add_new_group_tab.call((name, id));
+    pub fn add_new_group_tab(&self, name: String, id: Uuid, parent: Option<Uuid>) {
+        self.add_new_group_tab.call((name, id, parent));
     }
 
     pub fn set_root_scenery_id(&self, id: Uuid) {
@@ -52,13 +52,14 @@ impl WorkspaceHandlers {
 
 fn add_new_group_tab_handler(
     mut workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<(String, Uuid)> {
-    EventHandler::new(move |(name, id)| {
+) -> EventHandler<(String, Uuid, Option<Uuid>)> {
+    EventHandler::new(move |(name, id, parent)| {
         let mut ws = workspace.write();
 
         let graph_state = GraphState {
             name,
             id,
+            parent,
             ..Default::default()
         };
 

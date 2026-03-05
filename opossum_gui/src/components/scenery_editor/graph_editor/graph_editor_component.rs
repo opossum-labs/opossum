@@ -91,6 +91,8 @@ pub fn GraphEditor(
     let graph_editor_content_container_id = "graphEditorContentContainer";
     let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
 
+
+
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
@@ -101,6 +103,7 @@ pub fn GraphEditor(
                 tabindex: 0,
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
+
                 Tabs {
                     class: "editor-tabs",
                     value: active_tab.read().as_simple().to_string(),
@@ -146,8 +149,8 @@ pub fn GraphEditor(
                                 for (i , id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = tabs.get(id) {
                                         TabContent {
-                                            class: "tab-content",
                                             key: "{id.as_simple().to_string()}",
+                                            class: "tab-content",
                                             value: id.as_simple().to_string(),
                                             index: i,
                                             GraphViewEditor {

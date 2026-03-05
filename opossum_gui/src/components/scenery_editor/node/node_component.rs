@@ -105,6 +105,7 @@ pub fn Node(node: NodeElement) -> Element {
                             .send(GraphsWorkspaceAction::OpenGroupTab {
                                 tab_name: node.name(),
                                 group_id: node.id(),
+                                parent: Some(graph_state.read().id),
                             });
                     }
                 }

@@ -21,12 +21,46 @@ body {
     /* Make this row a flex container */    
 }
 
+.graph-view-container {
+    flex-direction: column;
+    background-color: #414141;
+
+}
+
+.graph-breadcrumbs {
+    height: 20px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding-left: 6px !important;
+    border-bottom: spx solid #252525;
+    background-color:#363636;
+
+}
+
+.breadcrumb {
+    color: #c4c4c4;
+    margin: 0px 0px !important;
+    font-size: 12 !important;
+}
+
+.breadcrumb:last-child {
+    font-weight: 600 !important;
+    }
+
+.breadcrumb-sep {
+    margin: 0 4px;
+    color: #666;
+}
+
+
+
 .editor-tab-list {
     display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
-    background-color: #2d2d2d;
+    background-color:  #2d2d2d;
     border-top: 1px solid rgb(71, 71, 71);
     border-left: 1px solid rgb(71, 71, 71);
     scrollbar-width: thin;  
@@ -50,11 +84,10 @@ body {
     border-right: 1px solid rgb(71, 71, 71);
     border-bottom: 1px solid rgb(71, 71, 71);
     flex: 0 0 auto;
-    
 }
 
 .editor-tab.active-tab{
-    background-color: #414141;
+    background-color: #363636;
     border-bottom: none; 
 }
 
@@ -133,6 +166,7 @@ body {
 .graph-editor-container,
 .graph-editor-tab-content,
 .graph-editor,
+.graph-view-container,
 .tab-content {
     display: flex;
     flex-grow: 1; 

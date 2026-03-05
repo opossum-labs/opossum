@@ -29,7 +29,9 @@ pub struct GraphState {
     pub editor_state: Signal<EditorState>,
     pub name: String,
     pub id: Uuid,
+    pub parent: Option<Uuid>,
 }
+
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct GraphStore {
