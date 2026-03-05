@@ -55,7 +55,7 @@ pub fn GraphEditor(
             active_tab,
             workspace_processor,
             command,
-        )
+        );
     });
 
     let current_mouse_pos = use_signal(Point2D::<f64>::default);
