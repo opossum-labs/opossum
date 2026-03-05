@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::components::scenery_editor::{
-    GraphStore, graph_editor::graph_workspace::GraphsWorkspaceState,
+    GraphState, GraphStore, graph_editor::graph_workspace::GraphsWorkspaceState,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{
@@ -92,6 +92,21 @@ fn with_graph_store<F>(
         ws.needs_saving.set(true);
     }
 }
+
+fn with_tab<F>(mut workspace: Signal<GraphsWorkspaceState>, tab_id: Uuid, mark_dirty: bool, f: F)
+where
+    F: FnOnce(&mut GraphState),
+{
+    let mut ws = workspace.write();
+
+    if let Some(mut tab) = ws.get_tab(tab_id) {
+        f(&mut tab.write());
+    }
+
+    if mark_dirty {
+        ws.needs_saving.set(true);
+    }
+}
 fn add_optical_node_handler(
     workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<(NodeInfo, Uuid)> {
@@ -154,9 +169,12 @@ fn update_node_positions_handler(
 fn set_node_name_handler(
     workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<(String, Uuid, Uuid)> {
-    EventHandler::new(move |(name, node_id, graph_id)| {
+    EventHandler::new(move |(name, node_id, graph_id): (String, Uuid, Uuid)| {
         with_graph_store(workspace, graph_id, true, |store| {
-            store.set_name_of_node(node_id, name);
+            store.set_name_of_node(node_id, name.clone());
+        });
+        with_tab(workspace, node_id, false, |tab| {
+            tab.name = name;
         });
     })
 }
