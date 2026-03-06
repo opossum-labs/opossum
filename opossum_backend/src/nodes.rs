@@ -719,49 +719,6 @@ async fn post_node_inversion(
                 e.to_string().as_str(),
             )),
         }
-
-    // if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
-    //     node_ref
-    //         .optical_ref
-    //         .lock_opm()?
-    //         .node_attr_mut()
-    //         .set_inverted(inverted);
-    //     match document
-    //         .scenery_mut()
-    //         .graph_mut()
-    //         .update_connections_of_single_inverted_node(uuid)
-    //     {
-    //         Ok(()) => {
-    //             let connect_infos = document
-    //                 .scenery()
-    //                 .connections()
-    //                 .iter()
-    //                 .map(|c| {
-    //                     ConnectInfo::new(
-    //                         c.src_id,
-    //                         c.src_port.clone(),
-    //                         c.target_id,
-    //                         c.target_port.clone(),
-    //                         c.distance.get::<meter>(),
-    //                     )
-    //                 })
-    //                 .collect::<Vec<ConnectInfo>>();
-    //             drop(document);
-    //             Ok(Json(connect_infos))
-    //         }
-    //         Err(e) => Err(BackEndErrorResponse::new(
-    //             400,
-    //             "Opossum",
-    //             e.to_string().as_str(),
-    //         )),
-    //     }
-    // } else {
-    //     Err(BackEndErrorResponse::new(
-    //         404,
-    //         "Opossum",
-    //         "uuid not found in nodes",
-    //     ))
-    // }
 }
 
 /// Delete a node
@@ -799,7 +756,6 @@ fn get_node_attr_from_state(
         .lock_opm()?
         .node_attr()
         .clone();
-    // The lock is dropped automatically when `document` goes out of scope here
     Ok(node_attr)
 }
 
@@ -814,7 +770,6 @@ fn get_node_analyzer_attr_from_state(
         .get(&uuid)
         .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?
         .clone();
-    // The lock is dropped automatically when `document` goes out of scope here
     Ok(analyzer_info)
 }
 
@@ -946,17 +901,32 @@ async fn patch_properties(
     updated_props: Json<serde_json::Value>,
 ) -> Result<Json<NodeAttr>, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    let document = data.document.lock();
-    let (node, _) = document.scenery().node_recursive(uuid)?;
-    drop(document);
-    let final_attr = {
-        let mut optic_ref = node.optical_ref.lock_opm()?;
-        let node_attr = optic_ref.node_attr_mut();
-        let update_json = updated_props.into_inner();
-        *node_attr = update_node_attr(node_attr, &update_json)?;
-        node_attr.clone()
-    };
-    Ok(web::Json(final_attr))
+    let update_json = updated_props.into_inner();
+    let mut document = data.document.lock();
+    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr|{
+        match update_node_attr(node_attr, &update_json){
+        Ok(attr) =>  {*node_attr = attr; Ok(web::Json(node_attr.clone()))},
+        Err(_) => Err(BackEndErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+))
+        }
+    }).map_err(|_|BackEndErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+        ))?
+    // let (node, _) = document.scenery().node_recursive(uuid)?;
+    // drop(document);
+    // let final_attr = {
+    //     let mut optic_ref = node.optical_ref.lock_opm()?;
+    //     let node_attr = optic_ref.node_attr_mut();
+    //     let update_json = updated_props.into_inner();
+    //     *node_attr = update_node_attr(node_attr, &update_json)?;
+    //     node_attr.clone()
+    // };
+    // Ok(web::Json(final_attr))
 }
 
 /// Connect two nodes
