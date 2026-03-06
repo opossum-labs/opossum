@@ -538,21 +538,14 @@ async fn post_node_lidt(
 ) -> Result<(), BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let lidt = lidt.into_inner();
-    let document = data.document.lock();
-    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
-        node_ref
-            .optical_ref
-            .lock_opm()?
-            .node_attr_mut()
-            .set_lidt(&lidt)
+    let mut document = data.document.lock();
+    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr| node_attr.set_lidt(&lidt)
             .map_err(|e| BackEndErrorResponse::new(404, "Opossum", &e.to_string()))
-    } else {
-        Err(BackEndErrorResponse::new(
+            ).map_err(|_|BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in nodes",
-        ))
-    }
+        ))?
 }
 
 /// Update the alignment isometry of an optical node
