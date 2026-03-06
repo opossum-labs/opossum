@@ -683,13 +683,14 @@ async fn post_node_inversion(
     let uuid: Uuid = path.into_inner();
     let inverted = inverted.into_inner();
     let mut document = data.document.lock();
-    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
-        node_ref
-            .optical_ref
-            .lock_opm()?
-            .node_attr_mut()
-            .set_inverted(inverted);
-        match document
+    let scenery = document.scenery_mut();
+    scenery.with_node_attr_node_mut(uuid, |node_attr| node_attr.set_inverted(inverted))    
+    .map_err(|_|BackEndErrorResponse::new(
+            404,
+            "Opossum",
+            "uuid not found in nodes",
+        ))?;
+    match document
             .scenery_mut()
             .graph_mut()
             .update_connections_of_single_inverted_node(uuid)
@@ -718,13 +719,49 @@ async fn post_node_inversion(
                 e.to_string().as_str(),
             )),
         }
-    } else {
-        Err(BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
-    }
+
+    // if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
+    //     node_ref
+    //         .optical_ref
+    //         .lock_opm()?
+    //         .node_attr_mut()
+    //         .set_inverted(inverted);
+    //     match document
+    //         .scenery_mut()
+    //         .graph_mut()
+    //         .update_connections_of_single_inverted_node(uuid)
+    //     {
+    //         Ok(()) => {
+    //             let connect_infos = document
+    //                 .scenery()
+    //                 .connections()
+    //                 .iter()
+    //                 .map(|c| {
+    //                     ConnectInfo::new(
+    //                         c.src_id,
+    //                         c.src_port.clone(),
+    //                         c.target_id,
+    //                         c.target_port.clone(),
+    //                         c.distance.get::<meter>(),
+    //                     )
+    //                 })
+    //                 .collect::<Vec<ConnectInfo>>();
+    //             drop(document);
+    //             Ok(Json(connect_infos))
+    //         }
+    //         Err(e) => Err(BackEndErrorResponse::new(
+    //             400,
+    //             "Opossum",
+    //             e.to_string().as_str(),
+    //         )),
+    //     }
+    // } else {
+    //     Err(BackEndErrorResponse::new(
+    //         404,
+    //         "Opossum",
+    //         "uuid not found in nodes",
+    //     ))
+    // }
 }
 
 /// Delete a node
