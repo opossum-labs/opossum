@@ -256,18 +256,7 @@ impl NodeGroup {
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<(OpticRef, Uuid)> {
-        let group_id = self.node_attr().uuid();
-        if group_id == node_id {
-            Ok((
-                OpticRef::new(
-                    Arc::new(Mutex::new(self.clone())),
-                    self.global_conf().clone(),
-                ),
-                group_id,
-            ))
-        } else {
-            self.graph.node_recursive(node_id, self.node_attr().uuid())
-        }
+        self.graph.node_recursive(node_id, self.node_attr().uuid())
     }
 
     /// Execute a read-only operation on the `NodeGroup` identified by `node_id`.
@@ -349,6 +338,49 @@ impl NodeGroup {
         let group = guard.as_group_mut()?;
         let out = f(group);
         drop(guard);
+        Ok(out)
+    }
+
+    /// Execute a mutable operation on the `NodeAttr` of the node identified by `node_id`.
+    ///
+    /// If `node_id` equals this group's own UUID, the closure is invoked directly with
+    /// `&mut NodeAttr` from `self` (no lock is taken). Otherwise, the node is looked up
+    /// in the graph, its internal mutex is locked, and an `&mut NodeAttr` is passed to
+    /// the closure. The lock is held only for the duration of the closure call.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the target node.
+    /// - `f`: Closure that receives `&mut NodeAttr` and returns a value of type `R`.
+    ///
+    /// # Returns
+    /// The value produced by `f`, wrapped in `OpmResult<R>`.
+    ///
+    /// # Errors
+    /// Propagates errors from the underlying lookup and locking:
+    /// - The node cannot be found in the graph.
+    /// - The mutex is poisoned (e.g., due to a previous panic while locked).
+    ///
+    /// # Concurrency
+    /// A mutex is only acquired when `node_id != self.uuid()`. Be careful not to call APIs
+    /// within `f` that would attempt to lock the same node again to prevent deadlocks.
+    ///
+    /// # Panic Safety
+    /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
+    /// fail with a poisoned-lock error.
+    pub fn with_node_attr_node_mut<R>(
+        &mut self,
+        node_id: Uuid,
+        f: impl FnOnce(&mut NodeAttr) -> R,
+    ) -> OpmResult<R> {
+        if self.node_attr().uuid() == node_id {
+            return Ok(f(self.node_attr_mut()));
+        }
+        let arc = self.node_recursive(node_id)?.0.optical_ref;
+        let mut guard = arc.lock_opm()?;
+        let node_attr = guard.node_attr_mut();
+        let out = f(node_attr);
+        drop(guard);
+
         Ok(out)
     }
 
