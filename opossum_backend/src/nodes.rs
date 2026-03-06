@@ -610,15 +610,10 @@ async fn post_node_property(
             ));
         }
     };
-    let document = data.document.lock();
-    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
-        let value = node_ref
-            .optical_ref
-            .lock_opm()?
-            .node_attr_mut()
-            .set_property(prop_key.as_str(), prop_value);
-        match value {
-            Ok(()) => Ok(HttpResponse::Ok()
+    let mut document = data.document.lock();
+    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr| {
+        match node_attr.set_property(prop_key.as_str(), prop_value){
+        Ok(()) => Ok(HttpResponse::Ok()
                 .content_type("application/ron")
                 .body(ron::ser::to_string("").unwrap())),
             Err(e) => Err(BackEndErrorResponse::new(
@@ -627,13 +622,12 @@ async fn post_node_property(
                 e.to_string().as_str(),
             )),
         }
-    } else {
-        Err(BackEndErrorResponse::new(
+    }).map_err(|_|BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in nodes",
-        ))
-    }
+        ))?
+
 }
 
 /// Update the isometry of an optical node
