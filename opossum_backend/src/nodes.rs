@@ -18,7 +18,6 @@ use opossum_core::{
     nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
-    prelude::OpticNode,
     properties::Proptype,
     types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     utils::{LockExt, geom_transformation::Isometry},
@@ -467,7 +466,10 @@ async fn post_node_position(
     let position = position.into_inner();
     let position = Point2::new(position.0, position.1);
     let mut document = data.document.lock();
-    match document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr|node_attr.set_gui_position(Some(position))){
+    match document
+        .scenery_mut()
+        .with_node_attr_node_mut(uuid, |node_attr| node_attr.set_gui_position(Some(position)))
+    {
         Ok(()) => Ok(()),
         _ => document.analyzers_mut().get_mut(&uuid).map_or_else(
             || {
@@ -509,11 +511,10 @@ async fn post_node_name(
     let uuid: Uuid = path.into_inner();
     let name = name.into_inner();
     let mut document = data.document.lock();
-    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr| node_attr.set_name(&name)).map_err(|_|BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
+    document
+        .scenery_mut()
+        .with_node_attr_node_mut(uuid, |node_attr| node_attr.set_name(&name))
+        .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))
 }
 /// Update the laser-induced damage threshold (LIDT) of an optical node
 #[utoipa::path(tag = "node",
@@ -539,13 +540,14 @@ async fn post_node_lidt(
     let uuid: Uuid = path.into_inner();
     let lidt = lidt.into_inner();
     let mut document = data.document.lock();
-    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr| node_attr.set_lidt(&lidt)
-            .map_err(|e| BackEndErrorResponse::new(404, "Opossum", &e.to_string()))
-            ).map_err(|_|BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))?
+    document
+        .scenery_mut()
+        .with_node_attr_node_mut(uuid, |node_attr| {
+            node_attr
+                .set_lidt(&lidt)
+                .map_err(|e| BackEndErrorResponse::new(404, "Opossum", &e.to_string()))
+        })
+        .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?
 }
 
 /// Update the alignment isometry of an optical node
@@ -571,11 +573,10 @@ async fn post_node_alignment_isometry(
     let uuid: Uuid = path.into_inner();
     let isometry = isometry_from_gui.into_inner();
     let mut document = data.document.lock();
-    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr| node_attr.set_alignment(isometry)).map_err(|_|BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
+    document
+        .scenery_mut()
+        .with_node_attr_node_mut(uuid, |node_attr| node_attr.set_alignment(isometry))
+        .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))
 }
 
 /// Update a property of an optical node
@@ -611,23 +612,21 @@ async fn post_node_property(
         }
     };
     let mut document = data.document.lock();
-    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr| {
-        match node_attr.set_property(prop_key.as_str(), prop_value){
-        Ok(()) => Ok(HttpResponse::Ok()
-                .content_type("application/ron")
-                .body(ron::ser::to_string("").unwrap())),
-            Err(e) => Err(BackEndErrorResponse::new(
-                400,
-                "Opossum",
-                e.to_string().as_str(),
-            )),
-        }
-    }).map_err(|_|BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))?
-
+    document
+        .scenery_mut()
+        .with_node_attr_node_mut(uuid, |node_attr| {
+            match node_attr.set_property(prop_key.as_str(), prop_value) {
+                Ok(()) => Ok(HttpResponse::Ok()
+                    .content_type("application/ron")
+                    .body(ron::ser::to_string("").unwrap())),
+                Err(e) => Err(BackEndErrorResponse::new(
+                    400,
+                    "Opossum",
+                    e.to_string().as_str(),
+                )),
+            }
+        })
+        .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?
 }
 
 /// Update the isometry of an optical node
@@ -653,11 +652,10 @@ async fn post_node_isometry(
     let uuid: Uuid = path.into_inner();
     let iso_opt = iso.into_inner();
     let mut document = data.document.lock();
-    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr| node_attr.set_isometry_option(iso_opt)).map_err(|_|BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
+    document
+        .scenery_mut()
+        .with_node_attr_node_mut(uuid, |node_attr| node_attr.set_isometry_option(iso_opt))
+        .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))
 }
 
 /// Update the inverted status of an optical node
@@ -684,41 +682,38 @@ async fn post_node_inversion(
     let inverted = inverted.into_inner();
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    scenery.with_node_attr_node_mut(uuid, |node_attr| node_attr.set_inverted(inverted))    
-    .map_err(|_|BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))?;
+    scenery
+        .with_node_attr_node_mut(uuid, |node_attr| node_attr.set_inverted(inverted))
+        .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?;
     match document
-            .scenery_mut()
-            .graph_mut()
-            .update_connections_of_single_inverted_node(uuid)
-        {
-            Ok(()) => {
-                let connect_infos = document
-                    .scenery()
-                    .connections()
-                    .iter()
-                    .map(|c| {
-                        ConnectInfo::new(
-                            c.src_id,
-                            c.src_port.clone(),
-                            c.target_id,
-                            c.target_port.clone(),
-                            c.distance.get::<meter>(),
-                        )
-                    })
-                    .collect::<Vec<ConnectInfo>>();
-                drop(document);
-                Ok(Json(connect_infos))
-            }
-            Err(e) => Err(BackEndErrorResponse::new(
-                400,
-                "Opossum",
-                e.to_string().as_str(),
-            )),
+        .scenery_mut()
+        .graph_mut()
+        .update_connections_of_single_inverted_node(uuid)
+    {
+        Ok(()) => {
+            let connect_infos = document
+                .scenery()
+                .connections()
+                .iter()
+                .map(|c| {
+                    ConnectInfo::new(
+                        c.src_id,
+                        c.src_port.clone(),
+                        c.target_id,
+                        c.target_port.clone(),
+                        c.distance.get::<meter>(),
+                    )
+                })
+                .collect::<Vec<ConnectInfo>>();
+            drop(document);
+            Ok(Json(connect_infos))
         }
+        Err(e) => Err(BackEndErrorResponse::new(
+            400,
+            "Opossum",
+            e.to_string().as_str(),
+        )),
+    }
 }
 
 /// Delete a node
@@ -903,30 +898,24 @@ async fn patch_properties(
     let uuid = path.into_inner();
     let update_json = updated_props.into_inner();
     let mut document = data.document.lock();
-    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr|{
-        match update_node_attr(node_attr, &update_json){
-        Ok(attr) =>  {*node_attr = attr; Ok(web::Json(node_attr.clone()))},
-        Err(_) => Err(BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-))
-        }
-    }).map_err(|_|BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))?
-    // let (node, _) = document.scenery().node_recursive(uuid)?;
-    // drop(document);
-    // let final_attr = {
-    //     let mut optic_ref = node.optical_ref.lock_opm()?;
-    //     let node_attr = optic_ref.node_attr_mut();
-    //     let update_json = updated_props.into_inner();
-    //     *node_attr = update_node_attr(node_attr, &update_json)?;
-    //     node_attr.clone()
-    // };
-    // Ok(web::Json(final_attr))
+    document
+        .scenery_mut()
+        .with_node_attr_node_mut(uuid, |node_attr| {
+            update_node_attr(node_attr, &update_json).map_or_else(
+                |_| {
+                    Err(BackEndErrorResponse::new(
+                        404,
+                        "Opossum",
+                        "uuid not found in nodes",
+                    ))
+                },
+                |attr| {
+                    *node_attr = attr;
+                    Ok(web::Json(node_attr.clone()))
+                },
+            )
+        })
+        .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?
 }
 
 /// Connect two nodes

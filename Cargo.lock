@@ -4919,6 +4919,7 @@ dependencies = [
 name = "opm_macros_lib"
 version = "0.7.0"
 dependencies = [
+ "opossum_core",
  "proc-macro2",
  "quote",
  "syn 2.0.116",

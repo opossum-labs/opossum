@@ -105,12 +105,12 @@ impl OpticGraph {
                 // collect all node ids of nodes that are contained in a group
                 if let Ok(node_ref) = self.node_by_idx(node_idx) {
                     let node = node_ref.optical_ref.lock_opm()?;
-                    if let Ok(group) = node.as_group() {
-                        if let Ok(sub_ids) = group.collect_all_contained_node_ids_recursive() {
-                            for id in sub_ids {
-                                deletion_queue.push(id);
-                                nodes_deleted.push(id);
-                            }
+                    if let Ok(group) = node.as_group()
+                        && let Ok(sub_ids) = group.collect_all_contained_node_ids_recursive()
+                    {
+                        for id in sub_ids {
+                            deletion_queue.push(id);
+                            nodes_deleted.push(id);
                         }
                     }
                 }
