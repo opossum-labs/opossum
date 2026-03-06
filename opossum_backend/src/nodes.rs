@@ -514,21 +514,36 @@ async fn post_node_name(
 ) -> Result<(), BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let name = name.into_inner();
-    let document = data.document.lock();
-    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
-        node_ref
-            .optical_ref
-            .lock_opm()?
-            .node_attr_mut()
-            .set_name(&name);
-        Ok(())
-    } else {
-        Err(BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in nodes",
-        ))
-    }
+    let mut document = data.document.lock();
+    let scenery = document.scenery_mut();
+    scenery.with_node_attr_node_mut(uuid, |node_attr|{
+        node_attr.set_name(&name);
+    }).map_err(|_|{
+        BackEndErrorResponse::new(
+                404,
+                "Opossum",
+                "uuid not found in nodes",
+            )
+            })
+
+    // if let Ok((node_ref, _)) = document.scenery_mut().node_recursive(uuid) {
+    //     node_ref
+    //         .optical_ref
+    //         .lock_opm()?
+    //         .node_attr_mut()
+    //         .set_name(&name);
+    //     let opm_string  =document.to_opm_file_string()?;
+    //     println!("setting scenery name{name}");
+    //     println!("opm_string: {opm_string}");
+        
+    //     Ok(())
+    // } else {
+        // Err(BackEndErrorResponse::new(
+        //     404,
+        //     "Opossum",
+        //     "uuid not found in nodes",
+        // ))
+    // }
 }
 /// Update the laser-induced damage threshold (LIDT) of an optical node
 #[utoipa::path(tag = "node",

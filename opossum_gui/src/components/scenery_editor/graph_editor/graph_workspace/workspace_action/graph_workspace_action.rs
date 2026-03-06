@@ -11,7 +11,7 @@ use crate::components::scenery_editor::NodeType;
 pub enum GraphsWorkspaceAction {
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),
-    AddRootSceneryTab,
+    AddRootSceneryTab{name:String},
     DeleteRootScenery,
     OpenGroupTab {
         group_id: Uuid,
@@ -65,6 +65,7 @@ pub enum GraphsWorkspaceAction {
         name: String,
         graph_id: Uuid,
         node_id: Uuid,
+        needs_saving: bool
     },
     CopyNode {
         node_type: NodeType,

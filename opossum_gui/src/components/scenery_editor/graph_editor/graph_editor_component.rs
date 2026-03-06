@@ -52,11 +52,28 @@ pub fn GraphEditor(
         );
     });
 
-    let current_mouse_pos = use_signal(Point2D::<f64>::default);
+    use_effect(move || {
+        if let Some(path) = &*model_file_path_sig.read() && let Some(os_fname)  =path.file_stem() && let Some(fname) = os_fname.to_str(){
+            let name = fname.to_string();
+            let id = root_graph_id();
+            workspace_processor.send(GraphsWorkspaceAction::SetNodeName { name, graph_id: id, node_id: id, needs_saving: false});
+        }
+    });
 
     use_effect(move || {
-        workspace_processor.send(GraphsWorkspaceAction::AddRootSceneryTab);
+        if *root_graph_id.peek() == Uuid::nil(){
+            let scenery_name = if let Some(path) = &*model_file_path_sig.peek()&& let Some(os_fname)  =path.file_stem() && let Some(fname) = os_fname.to_str(){
+                fname.to_string()
+            }
+            else{
+                "unsaved".to_string()
+            };
+            workspace_processor.send(GraphsWorkspaceAction::AddRootSceneryTab{name: scenery_name});
+        }
     });
+
+    let current_mouse_pos = use_signal(Point2D::<f64>::default);
+
 
     use_effect(move || {
         let is_unsaved = *workspace.read().needs_saving.read();

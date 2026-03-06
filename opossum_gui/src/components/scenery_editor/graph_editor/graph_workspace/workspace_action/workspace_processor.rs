@@ -52,6 +52,7 @@ pub fn use_workspace_processor(
                             path,
                             set_file_path_handler,
                             workspace_handlers,
+                            root_graph_id()
                         )
                         .await;
                     }
@@ -59,8 +60,8 @@ pub fn use_workspace_processor(
                         process_delete_root_scenery(workspace_handlers, set_file_path_handler)
                             .await;
                     }
-                    GraphsWorkspaceAction::AddRootSceneryTab => {
-                        process_add_root_scenery_tab(workspace_handlers).await;
+                    GraphsWorkspaceAction::AddRootSceneryTab{name} => {
+                        process_add_root_scenery_tab(workspace_handlers, name).await;
                     }
                     GraphsWorkspaceAction::AddOpticNode {
                         node_type,
@@ -114,9 +115,10 @@ pub fn use_workspace_processor(
                         name,
                         graph_id,
                         node_id,
+                        needs_saving
                     } => workspace_handlers
                         .nodes
-                        .set_node_name(name, node_id, graph_id),
+                        .set_node_name(name, node_id, graph_id, needs_saving),
                     GraphsWorkspaceAction::UpdateEdge {
                         connection,
                         graph_id,
@@ -551,8 +553,9 @@ async fn process_load_from_file(
         }
     };
     match api::post_opm_file(opm_string).await {
-        Ok(_) => {
-            process_add_root_scenery_tab(ws_handler).await;
+        Ok(name) => {
+            println!("post opm file: name: {name}");
+            process_add_root_scenery_tab(ws_handler, name).await;
             set_file_path_handler.call(Some(path));
             let scenery_id = *scenery_id_sig.read();
             process_fill_graph_of_group(scenery_id_sig, scenery_id, ws_handler).await;
@@ -584,33 +587,53 @@ async fn process_save_root_scenery_to_file(
     path: PathBuf,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
     ws_handler: WorkSpaceSignalHandlers,
+    root_id: Uuid
 ) {
-    eval_action_run(
-        api::get_opm_file().await,
-        Some(move |opm_string| {
-            if let Err(err_str) = fs::write(&path, opm_string) {
-                OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
-            } else {
-                set_file_path_handler.call(Some(path));
-                ws_handler.workspace.set_needs_saving(false);
-            }
-        }),
-    );
+    if let Some(f_stem) = path.file_stem() && let Some(fname) = f_stem.to_str(){
+        process_rename_root_scenery(ws_handler, fname.to_string(), root_id, false).await;
+        eval_action_run(
+            api::get_opm_file().await,
+            Some(move |opm_string| {
+                println!("{opm_string}");
+                if let Err(err_str) = fs::write(&path, opm_string) {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
+                } else {
+                    set_file_path_handler.call(Some(path));
+                    ws_handler.workspace.set_needs_saving(false);
+                }
+            }),
+        );
+    }
 }
 
 #[allow(clippy::future_not_send)]
 #[allow(clippy::large_types_passed_by_value)]
-async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers) {
-    eval_action_run(
-        api::get_scenery_uuid().await,
-        Some(move |id| {
-            let name = "Main Graph".to_string();
+async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers, name: String) {
+    match api::get_scenery_uuid().await{
+        Ok(id) => {
             ws_handler.workspace.set_root_scenery_id(id);
             ws_handler.workspace.add_new_group_tab(GraphInfo {
                 name: name.clone(),
                 id,
-                hierarchy: vec![(id, name)],
+                hierarchy: vec![(id, name.clone())],
             });
+            process_rename_root_scenery(ws_handler, name, id, false).await;
+        }
+        Err(err_str) => {
+            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+        }
+    }
+}
+
+
+#[allow(clippy::future_not_send)]
+#[allow(clippy::large_types_passed_by_value)]
+async fn process_rename_root_scenery(ws_handler: WorkSpaceSignalHandlers, name: String, root_id: Uuid, needs_saving: bool) {
+    eval_action_run(
+        api::update_node_name(root_id, name.clone()).await,
+        Some(move |_| {
+            ws_handler.nodes.set_node_name(name, root_id, root_id, needs_saving);
         }),
     );
 }
+

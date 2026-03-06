@@ -92,6 +92,7 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                                 name,
                                 graph_id,
                                 node_id: uuid,
+                                needs_saving: true
                             });
                         })
                     }

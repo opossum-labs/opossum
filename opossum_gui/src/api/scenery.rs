@@ -75,3 +75,7 @@ pub async fn post_opm_file(opm_string: String) -> Result<String, String> {
 pub async fn get_scenery_uuid() -> Result<Uuid, String> {
     HTTP_API_CLIENT().get("/api/scenery/scenery_uuid").await
 }
+
+pub async fn rename_scenery(name: String) -> Result<String, String>{
+    HTTP_API_CLIENT().post::<String, String>("/api/scenery/scenery_name", name).await
+}

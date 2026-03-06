@@ -298,6 +298,7 @@ impl NodeGroup {
     pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<(OpticRef, Uuid)> {
         let group_id = self.node_attr().uuid();
         if group_id == node_id {
+            println!("setting scenery name");
             Ok((
                 OpticRef::new(
                     Arc::new(Mutex::new(self.clone())),
@@ -341,6 +342,19 @@ impl NodeGroup {
         let guard = arc.lock_opm()?;
         let group = guard.as_group()?;
         let out = f(group);
+        drop(guard);
+
+        Ok(out)
+    }
+
+    pub fn with_node_attr_node_mut<R>(&mut self, node_id: Uuid, f: impl FnOnce(&mut NodeAttr) -> R) -> OpmResult<R> {
+        if self.node_attr().uuid() == node_id {
+            return Ok(f(self.node_attr_mut()));
+        }
+        let arc = self.node_recursive(node_id)?.0.optical_ref;
+        let mut guard = arc.lock_opm()?;
+        let node_attr = guard.node_attr_mut();
+        let out = f(node_attr);
         drop(guard);
 
         Ok(out)

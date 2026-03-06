@@ -195,9 +195,29 @@ async fn get_opmfile(data: web::Data<AppState>) -> Result<impl Responder, BackEn
 async fn post_opmfile(
     data: web::Data<AppState>,
     opm_file_string: String,
-) -> Result<&'static str, BackEndErrorResponse> {
+) -> Result<String, BackEndErrorResponse> {
     let mut document = data.document.lock();
     *document = OpmDocument::from_string(&opm_file_string)?;
+    let name = document.scenery().node_attr().name();
+    drop(document);
+    Ok(name)
+}
+
+#[utoipa::path(tag = "scenery", request_body(content = String,
+    description = "Rename root scenery group",
+    content_type = "text/plain",
+),
+    responses((status = 200, description = "Scenery renamed sucessfully"),
+    (status = 400, description = "Error renaming scenery"))
+)]
+#[post("/scenery_name")]
+async fn post_scenery_name(
+    data: web::Data<AppState>,
+    scenery_name: String,
+) -> Result<&'static str, BackEndErrorResponse> {
+    let mut document = data.document.lock();
+    let node_attr = document.scenery_mut().node_attr_mut();
+    node_attr.set_name(&scenery_name);
     drop(document);
     Ok("")
 }
@@ -277,6 +297,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(nr_of_nodes);
     cfg.service(get_opmfile);
     cfg.service(post_opmfile);
+    cfg.service(post_scenery_name);
     // cfg.service(simulate);
     cfg.configure(nodes::config);
 }

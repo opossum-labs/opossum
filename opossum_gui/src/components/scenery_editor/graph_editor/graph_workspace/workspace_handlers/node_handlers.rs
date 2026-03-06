@@ -19,7 +19,7 @@ pub struct NodeHandlers {
     remove_nodes: EventHandler<(Vec<Uuid>, Uuid)>,
     update_node_positions: EventHandler<(HashMap<Uuid, Point2D<f64>>, Uuid)>,
     invert_node: EventHandler<(Uuid, bool, Uuid)>,
-    set_node_name: EventHandler<(String, Uuid, Uuid)>,
+    set_node_name: EventHandler<(String, Uuid, Uuid, bool)>,
     add_group_nodes: EventHandler<(Uuid, Vec<NodeInfo>)>,
     add_group_analyzers: EventHandler<(Uuid, Vec<AnalyzerInfo>)>,
 }
@@ -63,8 +63,8 @@ impl NodeHandlers {
         self.invert_node.call((node_id, inverted, graph_id));
     }
 
-    pub fn set_node_name(&self, name: String, node_id: Uuid, graph_id: Uuid) {
-        self.set_node_name.call((name, node_id, graph_id));
+    pub fn set_node_name(&self, name: String, node_id: Uuid, graph_id: Uuid, needs_saving: bool) {
+        self.set_node_name.call((name, node_id, graph_id, needs_saving));
     }
 
     pub fn add_group_nodes(&self, group_id: Uuid, nodes: Vec<NodeInfo>) {
@@ -137,15 +137,15 @@ fn update_node_positions_handler(
 }
 fn set_node_name_handler(
     workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<(String, Uuid, Uuid)> {
-    EventHandler::new(move |(name, node_id, graph_id): (String, Uuid, Uuid)| {
-        with_graph_store(workspace, graph_id, true, |store| {
+) -> EventHandler<(String, Uuid, Uuid, bool)> {
+    EventHandler::new(move |(name, node_id, graph_id, needs_saving): (String, Uuid, Uuid, bool)| {
+        with_graph_store(workspace, graph_id, needs_saving, |store| {
             store.set_name_of_node(node_id, name.clone());
         });
-        with_tab(workspace, node_id, false, |tab| {
+        with_tab(workspace, node_id, needs_saving, |tab| {
             tab.graph_info.name = name.clone();
         });
-        for_each_tab(workspace, false, |tab| {
+        for_each_tab(workspace, needs_saving, |tab| {
             tab.graph_info.hierarchy.iter_mut().find(|(h_id, _)| *h_id == node_id).map(|(_,h_name)| *h_name = name.clone());
         });
     })
