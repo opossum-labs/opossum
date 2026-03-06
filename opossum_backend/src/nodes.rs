@@ -571,7 +571,7 @@ async fn post_node_alignment_isometry(
     let uuid: Uuid = path.into_inner();
     let isometry = isometry_from_gui.into_inner();
     let mut document = data.document.lock();
-    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr| node_attr.set_alignmen(isometry)).map_err(|_|BackEndErrorResponse::new(
+    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr| node_attr.set_alignment(isometry)).map_err(|_|BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in nodes",
