@@ -10,7 +10,7 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{LightData, light_data_builder::LightDataBuilder},
-    nodes::NodeRegistration,
+    nodes::{NodeReference, NodeRegistration},
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     optic_ref::OpticRef,
@@ -349,6 +349,19 @@ impl NodeGroup {
         let group = guard.as_group_mut()?;
         let out = f(group);
         drop(guard);
+        Ok(out)
+    }
+
+    pub fn with_node_attr_node_mut<R>(&mut self, node_id: Uuid, f: impl FnOnce(&mut NodeAttr) -> R) -> OpmResult<R> {
+        if self.node_attr().uuid() == node_id {
+            return Ok(f(self.node_attr_mut()));
+        }
+        let arc = self.node_recursive(node_id)?.0.optical_ref;
+        let mut guard = arc.lock_opm()?;
+        let node_attr = guard.node_attr_mut();
+        let out = f(node_attr);
+        drop(guard);
+
         Ok(out)
     }
 

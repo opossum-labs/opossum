@@ -467,15 +467,8 @@ async fn post_node_position(
     let position = position.into_inner();
     let position = Point2::new(position.0, position.1);
     let mut document = data.document.lock();
-    match document.scenery().node_recursive(uuid) {
-        Ok((node_ref, _)) => {
-            node_ref
-                .optical_ref
-                .lock_opm()?
-                .node_attr_mut()
-                .set_gui_position(Some(position));
-            Ok(())
-        }
+    match document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr|node_attr.set_gui_position(Some(position))){
+        Ok(()) => Ok(()),
         _ => document.analyzers_mut().get_mut(&uuid).map_or_else(
             || {
                 Err(BackEndErrorResponse::new(
