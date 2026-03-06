@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::components::scenery_editor::graph_editor::graph_workspace::{
     GraphsWorkspaceState,
-    workspace_handlers::helper_functions::{with_graph_store, with_tab},
+    workspace_handlers::helper_functions::{for_each_tab, with_graph_store, with_tab},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{
@@ -143,7 +143,10 @@ fn set_node_name_handler(
             store.set_name_of_node(node_id, name.clone());
         });
         with_tab(workspace, node_id, false, |tab| {
-            tab.graph_info.name = name;
+            tab.graph_info.name = name.clone();
+        });
+        for_each_tab(workspace, false, |tab| {
+            tab.graph_info.hierarchy.iter_mut().find(|(h_id, _)| *h_id == node_id).map(|(_,h_name)| *h_name = name.clone());
         });
     })
 }

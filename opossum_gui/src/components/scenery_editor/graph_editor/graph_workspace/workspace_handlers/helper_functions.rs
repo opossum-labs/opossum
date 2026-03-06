@@ -43,6 +43,21 @@ pub(super) fn with_tab<F>(
         ws.needs_saving.set(true);
     }
 }
+pub(super) fn for_each_tab<F>(
+    mut workspace: Signal<GraphsWorkspaceState>,
+    mark_dirty: bool,
+    mut f: F,
+) where
+    F: FnMut(&mut GraphState),
+{
+    let mut ws = workspace.write();
+
+    ws.tabs.write().iter_mut().for_each(|(_, tab)| f(&mut tab.write()));
+
+    if mark_dirty {
+        ws.needs_saving.set(true);
+    }
+}
 
 pub(super) fn with_edges<F>(
     mut workspace: Signal<GraphsWorkspaceState>,
