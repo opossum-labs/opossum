@@ -570,21 +570,12 @@ async fn post_node_alignment_isometry(
 ) -> Result<(), BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let isometry = isometry_from_gui.into_inner();
-    let document = data.document.lock();
-    if let Ok((node_ref, _)) = document.scenery().node_recursive(uuid) {
-        node_ref
-            .optical_ref
-            .lock_opm()?
-            .node_attr_mut()
-            .set_alignment(isometry);
-        Ok(())
-    } else {
-        Err(BackEndErrorResponse::new(
+    let mut document = data.document.lock();
+    document.scenery_mut().with_node_attr_node_mut(uuid, |node_attr| node_attr.set_alignmen(isometry)).map_err(|_|BackEndErrorResponse::new(
             404,
             "Opossum",
             "uuid not found in nodes",
         ))
-    }
 }
 
 /// Update a property of an optical node
