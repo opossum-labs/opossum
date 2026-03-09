@@ -1,7 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
 mod grating_alignment;
-
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
@@ -101,7 +100,7 @@ pub fn AlignmentInputs(
     }
 }
 
-fn on_new_translation(
+pub fn on_new_translation(
     on_save: EventHandler<Isometry>,
     alignment: ReadSignal<Isometry>,
 ) -> EventHandler<(Length, TranslationAxis)> {
@@ -123,7 +122,7 @@ fn on_new_translation(
     })
 }
 
-fn on_new_rotation(
+pub fn on_new_rotation(
     on_save: EventHandler<Isometry>,
     alignment: ReadSignal<Isometry>,
 ) -> EventHandler<(Angle, RotationAxis)> {
@@ -242,7 +241,7 @@ pub fn PositioningInputs(
 }
 
 #[component]
-fn TranslationAlignmentInputs(
+pub fn TranslationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
     on_new_translation: EventHandler<(Length, TranslationAxis)>,
     node_id: Memo<Uuid>,
@@ -310,7 +309,7 @@ fn TranslationAlignmentInputs(
 }
 
 #[component]
-fn RotationAlignmentInputs(
+pub fn RotationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
     axes_skip: Option<Vec<RotationAxis>>,
     on_new_rotation: EventHandler<(Angle, RotationAxis)>,
@@ -347,7 +346,15 @@ pub fn RotationInput(
     id: String,
     on_new_rotation: EventHandler<(Angle, RotationAxis)>,
 ) -> Element {
-    let value_memo = use_memo(move || alignment.read().rotation_of_axis(axis).get::<degree>());
+    let value_memo = use_memo(move || {
+        let angle = alignment.read().rotation_of_axis(axis);
+        if angle.value < f64::EPSILON{
+            0.
+        }
+        else{
+            angle.get::<degree>()
+        }
+    });
 
     rsx! {
         NodeConfigUnitInput {
