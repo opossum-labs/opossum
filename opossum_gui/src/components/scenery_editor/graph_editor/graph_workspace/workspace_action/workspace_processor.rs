@@ -554,7 +554,6 @@ async fn process_load_from_file(
     };
     match api::post_opm_file(opm_string).await {
         Ok(name) => {
-            println!("post opm file: name: {name}");
             process_add_root_scenery_tab(ws_handler, name).await;
             set_file_path_handler.call(Some(path));
             let scenery_id = *scenery_id_sig.read();
@@ -594,7 +593,6 @@ async fn process_save_root_scenery_to_file(
         eval_action_run(
             api::get_opm_file().await,
             Some(move |opm_string| {
-                println!("{opm_string}");
                 if let Err(err_str) = fs::write(&path, opm_string) {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
                 } else {
