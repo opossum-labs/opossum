@@ -1,6 +1,5 @@
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    inputs::InputData,
     node_config_editor::NodeChangeEvent,
     optical_node_editor::{
         RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation, on_new_translation,
@@ -8,16 +7,7 @@ use crate::components::node_editor::{
     },
 };
 use dioxus::prelude::*;
-use opossum_core::{
-    degree, meter,
-    prelude::Isometry,
-    utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis},
-};
-use strum::IntoEnumIterator;
-use uom::si::{
-    angle::degree,
-    f64::{Angle, Length},
-};
+use opossum_core::prelude::Isometry;
 use uuid::Uuid;
 
 #[component]

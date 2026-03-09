@@ -10,10 +10,7 @@ pub(super) use alignment_editor::{
 use crate::components::node_editor::{
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::{
-        alignment_editor::{
-            AlignmentEditor, PositioningEditor, RotationAlignmentInputsPropsBuilder_Optional,
-            TranslationAlignmentInputsPropsBuilder_Error_Missing_required_field_alignment,
-        },
+        alignment_editor::{AlignmentEditor, PositioningEditor},
         general_editor::GeneralEditor,
         properties_editor::PropertiesEditor,
     },
