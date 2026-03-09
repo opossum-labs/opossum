@@ -1,20 +1,31 @@
+/* Parent braucht relative Position */
 .dropdown-menu li {
     position: relative;
-    }
-    .dropdown-menu .dropdown-submenu {
-    display: none;
+}
+
+/* Submenu Container */
+.dropdown-submenu > .dropdown-menu {
     position: absolute;
+    top: -1px;
     left: 100%;
-    top: -7px;
-    max-height: 300px;
-    overflow-y: scroll;
-    }
-    .dropdown-menu .dropdown-submenu-left {
-    right: 100%;
-    left: auto;
-    }
-    .dropdown-menu > li:hover > .dropdown-submenu {
+    display: none;
+
+    min-width: 180px;
+
+    max-height: 400px;
+    overflow-y: auto;
+
+    margin-left: -1px;
+}
+
+/* Submenu öffnen */
+.dropdown-submenu:hover > .dropdown-menu {
     display: block;
-    }
-    
-    
+}
+
+/* Scrollbereich */
+.custom-scroll {
+    overflow-y: scroll;
+    scrollbar-color: rgb(39, 39, 39) rgb(204, 204, 204);
+    scrollbar-width: thin;
+}
