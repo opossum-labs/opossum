@@ -6,7 +6,21 @@ use opossum_core::{
 use std::{f64::consts::PI, path::Path};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 fn main() -> OpmResult<()> {
-    let tot_energy = joule!(1.);
+    let mut scenery = NodeGroup::default();
+    let i_src = scenery.add_node(SourcePort::new("Source"))?;
+    let i_pl = scenery.add_node(ParaxialSurface::new("paraxial", millimeter!(500.0))?)?;
+    let mut fl_det = FluenceDetector::default();
+    fl_det.set_property("fluence estimator", FluenceEstimator::HelperRays.into())?;
+    let i_fl1 = scenery.add_node(fl_det)?;
+    let i_fl2 = scenery.add_node(FluenceDetector::default())?;
+
+    scenery.connect_nodes(i_src, "output_1", i_fl1, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(i_fl1, "output_1", i_pl, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(i_pl, "output_1", i_fl2, "input_1", millimeter!(250.))?;
+    let mut doc = OpmDocument::new(scenery);
+
+    let mut config=RayTraceConfig::default();
+     let tot_energy = joule!(1.);
     let pos_dist = Hexapolar::new(millimeter!(15.), 12)?;
     let fluence_dist = General2DGaussian::new(
         tot_energy,
@@ -21,21 +35,10 @@ fn main() -> OpmResult<()> {
         rays.nr_of_rays(true),
         peak.get::<joule_per_square_centimeter>()
     );
-    let light_data_builder = LightDataBuilder::Geometric(rays.into());
-    let source = Source::new("source", light_data_builder);
-    let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(source)?;
-    let i_pl = scenery.add_node(ParaxialSurface::new("paraxial", millimeter!(500.0))?)?;
-    let mut fl_det = FluenceDetector::default();
-    fl_det.set_property("fluence estimator", FluenceEstimator::HelperRays.into())?;
-    let i_fl1 = scenery.add_node(fl_det)?;
-    let i_fl2 = scenery.add_node(FluenceDetector::default())?;
+    let ray_data_source = RayDataSource::Raw(rays);
+    config.map_source(i_src, ray_data_source.into());
 
-    scenery.connect_nodes(i_src, "output_1", i_fl1, "input_1", millimeter!(100.0))?;
-    scenery.connect_nodes(i_fl1, "output_1", i_pl, "input_1", millimeter!(50.0))?;
-    scenery.connect_nodes(i_pl, "output_1", i_fl2, "input_1", millimeter!(250.))?;
-    let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/fluence_test_w_helper.opm",
     ))

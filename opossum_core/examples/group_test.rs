@@ -2,12 +2,8 @@ use opossum_core::prelude::*;
 use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("group test");
-
-    let i_src = scenery.add_node(collimated_line_ray_source(
-        millimeter!(20.0),
-        joule!(1.0),
-        6,
-    )?)?;
+    let i_src=scenery.add_node(SourcePort::new("collimated ray source"))?;
+   
     let mut group1 = NodeGroup::new("group 1");
     group1.set_expand_view(true)?;
     let i_g1_l = group1.add_node(Lens::default())?;
@@ -36,6 +32,8 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(scene_g1, "output2", i_prop2, "input_1", millimeter!(150.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config=RayTraceConfig::default();
+    config.map_source(i_src, collimated_line_ray_builder(millimeter!(20.0), joule!(1.0), 6)?);
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/group_test.opm"))
 }

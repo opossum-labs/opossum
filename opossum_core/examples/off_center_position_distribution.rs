@@ -11,7 +11,6 @@ fn main() -> OpmResult<()> {
     let energy_1w = joule!(100.0);
     let energy_2w = joule!(50.0);
 
-    // let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
     let beam_dist_1w = HexagonalTiling::new(millimeter!(10.), 3, millimeter!(0., 0.))?;
     let beam_dist_2w = HexagonalTiling::new(millimeter!(10.), 3, millimeter!(1., 1.))?;
     let rays_1w = Rays::new_collimated(

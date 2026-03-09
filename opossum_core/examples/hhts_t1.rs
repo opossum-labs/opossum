@@ -6,7 +6,7 @@ use opossum_core::{
 };
 use std::path::Path;
 
-fn  main() -> OpmResult<()> {
+fn main() -> OpmResult<()> {
     let refr_index_hk9l = RefrIndexSellmeier1::new(
         6.14555251E-1,
         6.56775017E-1,
@@ -34,25 +34,22 @@ fn  main() -> OpmResult<()> {
         1.13671100E+002,
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
-
     // coatings
-    let ar_coating=CoatingType::ConstantR { reflectivity: 0.01 };
-
+    let ar_coating = CoatingType::ConstantR { reflectivity: 0.01 };
     // apertures
     let a_2inch = Aperture::new_circle(millimeter!(25.4), millimeter!(0., 0.), ApertureType::Hole)?;
-    let mut scenery = NodeGroup::new("HHT Sensor");
+
+    let mut scenery = NodeGroup::new("HHT Sensor Telescope T1");
     let src = scenery.add_node(SourcePort::new("Collimated Source"))?;
 
-    // T1
-    let mut group_t1 = NodeGroup::new("T1");
-    let t1_l1a = group_t1.add_node(Lens::new(
+    let t1_l1a = scenery.add_node(Lens::new(
         "T1 L1a",
         millimeter!(518.34008),
         millimeter!(-847.40402),
         millimeter!(30.0),
         &refr_index_hk9l,
     )?)?;
-    let t1_l1b = group_t1.add_node(Lens::new(
+    let t1_l1b = scenery.add_node(Lens::new(
         "T1 L1b",
         millimeter!(-788.45031),
         millimeter!(-2551.88619),
@@ -67,10 +64,11 @@ fn  main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     node.set_coating(&PortType::Input, "input_1", &ar_coating)?;
-    node.node_attr_mut().set_lidt(&J_per_cm2!(0.0))?;
+    node.node_attr_mut().set_lidt(&J_per_cm2!(0.1))?;
     node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
-    let t1_l2a = group_t1.add_node(node)?;
-    let mut node=Lens::new(
+    let t1_l2a = scenery.add_node(node)?;
+
+    let mut node = Lens::new(
         "T1 L2b",
         millimeter!(76.76954),
         millimeter!(-118.59590),
@@ -78,9 +76,9 @@ fn  main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     node.set_coating(&PortType::Input, "input_1", &ar_coating)?;
-    node.node_attr_mut().set_lidt(&J_per_cm2!(0.0))?;
+    node.node_attr_mut().set_lidt(&J_per_cm2!(0.1))?;
     node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
-    let t1_l2b = group_t1.add_node(node)?;
+    let t1_l2b = scenery.add_node(node)?;
     let mut node = Lens::new(
         "T1 L2c",
         millimeter!(-63.45837),
@@ -89,41 +87,34 @@ fn  main() -> OpmResult<()> {
         &refr_index_hzf2,
     )?;
     node.set_coating(&PortType::Input, "input_1", &ar_coating)?;
-    node.node_attr_mut().set_lidt(&J_per_cm2!(0.0))?;
+    node.node_attr_mut().set_lidt(&J_per_cm2!(0.1))?;
     node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
-    let t1_l2c = group_t1.add_node(node)?;
+    let t1_l2c = scenery.add_node(node)?;
 
-    group_t1.connect_nodes(t1_l1a, "output_1", t1_l1b, "input_1", millimeter!(10.0))?;
-    group_t1.connect_nodes(
+    scenery.connect_nodes(src, "output_1", t1_l1a, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(t1_l1a, "output_1", t1_l1b, "input_1", millimeter!(10.0))?;
+    scenery.connect_nodes(
         t1_l1b,
         "output_1",
         t1_l2a,
         "input_1",
         millimeter!(937.23608),
     )?;
-    group_t1.connect_nodes(t1_l2a, "output_1", t1_l2b, "input_1", millimeter!(8.85423))?;
-    group_t1.connect_nodes(t1_l2b, "output_1", t1_l2c, "input_1", millimeter!(14.78269))?;
-
-    group_t1.map_input_port(t1_l1a, "input_1", "input_1")?;
-    group_t1.map_output_port(t1_l2c, "output_1", "output_1")?;
-
-    group_t1.set_expand_view(true)?;
-    let t1 = scenery.add_node(group_t1)?;
-
-    // connect source to T1
-    scenery.connect_nodes(src, "output_1", t1, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(t1_l2a, "output_1", t1_l2b, "input_1", millimeter!(8.85423))?;
+    scenery.connect_nodes(t1_l2b, "output_1", t1_l2c, "input_1", millimeter!(14.78269))?;
 
     // Ray propagation visualization
     let mut rpv = RayPropagationVisualizer::default();
     rpv.node_attr_mut().set_lidt(&J_per_cm2!(100.0))?;
     let rpv = scenery.add_node(rpv)?;
-    scenery.connect_nodes(t1, "output_1", rpv, "input_1", millimeter!(100.0))?;
+
+    scenery.connect_nodes(t1_l2c, "output_1", rpv, "input_1", millimeter!(100.0))?;
 
     // collimated source definition
     let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
         HexagonalTiling::new(millimeter!(100.), 9, millimeter!(0., 0.))?.into(),
         General2DGaussian::new(
-            joule!(150.0),
+            joule!(5.0),
             millimeter!(0., 0.),
             millimeter!(60.6389113608, 60.6389113608),
             5.,

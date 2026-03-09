@@ -8,18 +8,8 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Fresnel coating example");
-    let light_data_builder =
-        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
-            Grid::new(
-                Point2::new(millimeter!(9.), millimeter!(9.)),
-                Point2::new(100, 100),
-            )?
-            .into(),
-            UniformDist::new(joule!(1.))?.into(),
-            LaserLines::new(vec![(nanometer!(1000.), 1.0)])?.into(),
-        )));
-    let source = Source::new("src", light_data_builder);
-    let src = scenery.add_node(source)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
+
     let fd1 = scenery.add_node(FluenceDetector::new("before lens"))?;
 
     let mut lens1 = Lens::new(
@@ -35,13 +25,24 @@ fn main() -> OpmResult<()> {
     let ed = scenery.add_node(EnergyMeter::default())?;
     let det = scenery.add_node(RayPropagationVisualizer::default())?;
 
-    scenery.connect_nodes(src, "output_1", fd1, "input_1", millimeter!(10.0))?;
+    scenery.connect_nodes(i_src, "output_1", fd1, "input_1", millimeter!(10.0))?;
     scenery.connect_nodes(fd1, "output_1", l1, "input_1", millimeter!(1.0))?;
     scenery.connect_nodes(l1, "output_1", fd2, "input_1", millimeter!(1.0))?;
     scenery.connect_nodes(fd2, "output_1", ed, "input_1", millimeter!(1.0))?;
     scenery.connect_nodes(ed, "output_1", det, "input_1", millimeter!(10.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config= RayTraceConfig::default();
+    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+        Grid::new(
+            Point2::new(millimeter!(9.), millimeter!(9.)),
+            Point2::new(100, 100),
+        )?
+        .into(),
+        UniformDist::new(joule!(1.))?.into(),
+        LaserLines::new(vec![(nanometer!(1000.), 1.0)])?.into(),
+    ));
+    config.map_source(i_src, ray_data_source.into());
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/fresnel_coating.opm"))
 }

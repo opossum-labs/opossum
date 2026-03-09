@@ -6,6 +6,26 @@ use opossum_core::{
 use std::{f64::consts::PI, path::Path};
 use uom::si::{length::millimeter, radiant_exposure::millijoule_per_square_centimeter};
 fn main() -> OpmResult<()> {
+    let mut scenery = NodeGroup::default();
+    let i_src = scenery.add_node(SourcePort::default())?;
+    let mut fd = FluenceDetector::new("Binning");
+    fd.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
+    let i_fl1 = scenery.add_node(fd)?;
+
+    let mut fd = FluenceDetector::new("Voronoi");
+    fd.set_property("fluence estimator", FluenceEstimator::Voronoi.into())?;
+    let i_fl2 = scenery.add_node(fd)?;
+
+    let mut fd = FluenceDetector::new("KDE");
+    fd.set_property("fluence estimator", FluenceEstimator::KDE.into())?;
+    let i_fl3 = scenery.add_node(fd)?;
+
+    scenery.connect_nodes(i_src, "output_1", i_fl1, "input_1", millimeter!(0.0))?;
+    scenery.connect_nodes(i_fl1, "output_1", i_fl2, "input_1", millimeter!(0.0))?;
+    scenery.connect_nodes(i_fl2, "output_1", i_fl3, "input_1", millimeter!(0.0))?;
+
+    let mut doc = OpmDocument::new(scenery);
+
     let energy_dist = General2DGaussian::new(
         joule!(1.0),
         millimeter!(0.0, 0.0),
@@ -20,7 +40,7 @@ fn main() -> OpmResult<()> {
     let rays = Rays::new_collimated(nanometer!(1000.), &energy_dist, &pos_dist)?;
     println!("# of rays {}", rays.nr_of_rays(true),);
     let focal_length = millimeter!(100.0);
-    for p in vec![millimeter!(0.0), millimeter!(90.0)] {
+    for p in vec![millimeter!(0.0)] {
         let beam_size = millimeter!(10.0) * (p - focal_length) / focal_length;
         let peak = joule!(1.0) / (2. * PI * beam_size * beam_size);
         println!(
@@ -29,24 +49,9 @@ fn main() -> OpmResult<()> {
             peak.get::<millijoule_per_square_centimeter>()
         );
     }
-    let light_data_builder = LightDataBuilder::Geometric(rays.into());
-    let source = Source::new("source", light_data_builder);
-    let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(source)?;
-
-    let mut fd = FluenceDetector::new("0 mm");
-    fd.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
-    let i_fl1 = scenery.add_node(fd)?;
-    // let i_l = scenery.add_node(ParaxialSurface::new("f=100mm", millimeter!(100.0))?)?;
-    // let i_fl2 = scenery.add_node(FluenceDetector::new("50 mm"))?;
-    // let i_fl3 = scenery.add_node(FluenceDetector::new("90 mm"))?;
-
-    scenery.connect_nodes(i_src, "output_1", i_fl1, "input_1", millimeter!(5.0))?;
-    // scenery.connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(10.0))?;
-    // scenery.connect_nodes(i_l, "output_1", i_fl2, "input_1", millimeter!(90.0))?;
-    // scenery.connect_nodes(i_fl2, "output_1", i_fl3, "input_1", millimeter!(40.0))?;
-
-    let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let ray_data_source = RayDataSource::Raw(rays);
+    let mut config=RayTraceConfig::default();
+    config.map_source(i_src, ray_data_source.into());
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/fluence_test.opm"))
 }

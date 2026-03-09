@@ -1,5 +1,6 @@
 use core::f64;
 use nalgebra::Vector3;
+use opossum_core::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::UniformDist, position_distributions::Hexapolar,
@@ -9,33 +10,10 @@ use std::path::Path;
 
 pub fn main() -> OpmResult<()> {
     let alignment_wvl = nanometer!(1054.);
-    let nbk7 = RefrIndexSellmeier1::new(
-        1.039612120,
-        0.231792344,
-        1.010469450,
-        0.00600069867,
-        0.0200179144,
-        103.5606530,
-        nanometer!(300.)..nanometer!(1200.),
-    )?;
+    let nbk7 = RefrIndexSellmeier1::default(); // default is N-BK7
     let mut scenery = NodeGroup::default();
-    let light_data_builder =
-        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
-            Hexapolar::new(millimeter!(10.), 10)?.into(),
-            UniformDist::new(joule!(1.))?.into(),
-            Gaussian::new(
-                (nanometer!(1054.), nanometer!(1068.)),
-                1,
-                nanometer!(1054.),
-                nanometer!(8.),
-                1.,
-            )?
-            .into(),
-        )));
-    let mut src = Source::new("collimated ray source", light_data_builder);
-    src.set_alignment_wavelength(alignment_wvl)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
 
-    let i_src = scenery.add_node(src)?;
     // focal length = 996.7 mm (Thorlabs LA1779-B)
     let lens1 = scenery.add_node(
         Lens::new(
@@ -77,6 +55,23 @@ pub fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+
+    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+        Hexapolar::new(millimeter!(10.), 10)?.into(),
+        UniformDist::new(joule!(1.))?.into(),
+        Gaussian::new(
+            (nanometer!(1054.), nanometer!(1068.)),
+            1,
+            nanometer!(1054.),
+            nanometer!(8.),
+            1.,
+        )?
+        .into(),
+    ));
+    let mut ray_data_builder: RayDataBuilder = ray_data_source.into();
+    ray_data_builder.set_alignment_wavelength(Some(alignment_wvl));
+    config.map_source(i_src, ray_data_builder);
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/folded_telescope.opm"))
 }
