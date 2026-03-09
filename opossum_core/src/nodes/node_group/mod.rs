@@ -171,6 +171,46 @@ impl NodeGroup {
     pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
         self.graph.delete_node(node_id)
     }
+
+    /// Recursively collects the UUIDs of all nodes contained in this graph,
+    /// including nodes inside nested group nodes.
+    ///
+    /// This function traverses the graph hierarchy depth-first and returns
+    /// the UUID of every node that is structurally contained within this graph.
+    /// If a node is a group, all nodes inside its internal graph are collected
+    /// recursively.
+    ///
+    /// The returned list:
+    /// - Includes all directly contained nodes
+    /// - Includes all nodes inside nested groups (at any depth)
+    /// - Does NOT include the UUID of any parent or owning node outside this graph
+    /// - Does NOT perform any deduplication (UUIDs are assumed to be unique by design)
+    ///
+    /// This is primarily intended for operations where structural containment
+    /// matters (e.g., cascading deletions of group nodes).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if acquiring a lock on any contained node fails.
+    pub fn collect_all_contained_node_ids_recursive(&self) -> OpmResult<Vec<Uuid>> {
+        let mut result = Vec::new();
+
+        for node_ref in self.nodes() {
+            let node = node_ref.optical_ref.lock_opm()?;
+            let uuid = node.node_attr().uuid();
+
+            result.push(uuid);
+
+            // If it is a group -> collect recursively
+            if let Ok(group) = node.as_group() {
+                let mut sub_ids = group.collect_all_contained_node_ids_recursive()?;
+                result.append(&mut sub_ids);
+            }
+        }
+
+        Ok(result)
+    }
+
     fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
         let node_ref = self.graph.node(node_id)?;
         let node = node_ref.optical_ref.lock_opm()?;
@@ -198,7 +238,14 @@ impl NodeGroup {
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
-        self.graph.node(node_id)
+        if node_id == self.node_attr.uuid() {
+            Ok(OpticRef::new(
+                Arc::new(Mutex::new(self.clone())),
+                self.global_conf().clone(),
+            ))
+        } else {
+            self.graph.node(node_id)
+        }
     }
     /// Return `true` if a node with the given [`Uuid`] exists in the graph.
     ///
@@ -217,16 +264,6 @@ impl NodeGroup {
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<(OpticRef, Uuid)> {
         self.graph.node_recursive(node_id, self.node_attr().uuid())
-    }
-
-    fn optical_arc(&self, node_id: Uuid) -> OpmResult<Arc<Mutex<dyn Analyzable>>> {
-        let arc = self
-            .graph
-            .node_recursive(node_id, self.node_attr().uuid())?
-            .0
-            .optical_ref
-            .clone();
-        Ok(arc)
     }
 
     /// Execute a read-only operation on the `NodeGroup` identified by `node_id`.
@@ -256,8 +293,7 @@ impl NodeGroup {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self));
         }
-
-        let arc = self.optical_arc(node_id)?;
+        let arc = self.node_recursive(node_id)?.0.optical_ref;
         let guard = arc.lock_opm()?;
         let group = guard.as_group()?;
         let out = f(group);
@@ -303,12 +339,55 @@ impl NodeGroup {
             return Ok(f(self));
         }
 
-        let arc = self.optical_arc(node_id)?;
+        let arc = self.node_recursive(node_id)?.0.optical_ref;
         let mut guard = arc.lock_opm()?;
 
         let group = guard.as_group_mut()?;
         let out = f(group);
         drop(guard);
+        Ok(out)
+    }
+
+    /// Execute a mutable operation on the `NodeAttr` of the node identified by `node_id`.
+    ///
+    /// If `node_id` equals this group's own UUID, the closure is invoked directly with
+    /// `&mut NodeAttr` from `self` (no lock is taken). Otherwise, the node is looked up
+    /// in the graph, its internal mutex is locked, and an `&mut NodeAttr` is passed to
+    /// the closure. The lock is held only for the duration of the closure call.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the target node.
+    /// - `f`: Closure that receives `&mut NodeAttr` and returns a value of type `R`.
+    ///
+    /// # Returns
+    /// The value produced by `f`, wrapped in `OpmResult<R>`.
+    ///
+    /// # Errors
+    /// Propagates errors from the underlying lookup and locking:
+    /// - The node cannot be found in the graph.
+    /// - The mutex is poisoned (e.g., due to a previous panic while locked).
+    ///
+    /// # Concurrency
+    /// A mutex is only acquired when `node_id != self.uuid()`. Be careful not to call APIs
+    /// within `f` that would attempt to lock the same node again to prevent deadlocks.
+    ///
+    /// # Panic Safety
+    /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
+    /// fail with a poisoned-lock error.
+    pub fn with_node_attr_node_mut<R>(
+        &mut self,
+        node_id: Uuid,
+        f: impl FnOnce(&mut NodeAttr) -> R,
+    ) -> OpmResult<R> {
+        if self.node_attr().uuid() == node_id {
+            return Ok(f(self.node_attr_mut()));
+        }
+        let arc = self.node_recursive(node_id)?.0.optical_ref;
+        let mut guard = arc.lock_opm()?;
+        let node_attr = guard.node_attr_mut();
+        let out = f(node_attr);
+        drop(guard);
+
         Ok(out)
     }
 

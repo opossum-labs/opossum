@@ -21,7 +21,7 @@ pub fn CurvatureEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut curvature_sig = use_signal(|| curvature);
-    let mut is_finite_sig = use_signal(|| curvature.is_finite());
+    let is_finite_sig = use_memo(move || curvature_sig.read().is_finite());
     let mut last_finite_curvature = use_signal(|| {
         if curvature.is_finite() {
             curvature
@@ -43,26 +43,13 @@ pub fn CurvatureEditor(
                     ),
                 });
                 curvature_sig.set(new_val);
+                if new_val.value.is_finite() {
+                    last_finite_curvature.set(meter!(new_val.value));
+                }
             }
         }
     });
 
-    // When is_finite_sig changes, update curvature_sig and call on_save
-    use_effect(move || {
-        if *is_finite_sig.read() {
-            on_save.call(*last_finite_curvature.read());
-        } else {
-            on_save.call(meter!(f64::INFINITY));
-        }
-    });
-
-    // When curvature_sig changes to a finite value, update last_finite_curvature
-    use_effect(move || {
-        let current_val = curvature_sig.read().value;
-        if current_val.is_finite() {
-            last_finite_curvature.set(meter!(current_val));
-        }
-    });
 
     rsx! {
         div { class: "row gy-1 gx-2",
@@ -73,9 +60,7 @@ pub fn CurvatureEditor(
                     value: curvature_sig.read().value,
                     base_unit: "m",
                     onchange: move |new_curv: f64| {
-                        if relative_ne!(curvature_sig.read().value, new_curv, epsilon = 0.0) {
-                            on_save.call(meter!(new_curv));
-                        }
+                        on_save.call(meter!(new_curv));
                     },
                     readonly: !*is_finite_sig.read(),
                 }
@@ -85,7 +70,13 @@ pub fn CurvatureEditor(
                     is_finite_sig,
                     property_key,
                     on_is_curved_change: move |is_finite| {
-                        is_finite_sig.set(is_finite);
+                        let new_val =
+                        if is_finite {
+                            *last_finite_curvature.read()
+                        } else {
+                            meter!(f64::INFINITY)
+                        };
+                        on_save.call(new_val);
                     },
                 }
             }
