@@ -3,10 +3,17 @@ pub mod alignment_editor;
 pub mod general_editor;
 pub mod properties_editor;
 
+pub(super) use alignment_editor::{
+    RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation, on_new_translation,
+};
+
 use crate::components::node_editor::{
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::{
-        alignment_editor::{AlignmentEditor, PositioningEditor},
+        alignment_editor::{
+            AlignmentEditor, PositioningEditor, RotationAlignmentInputsPropsBuilder_Optional,
+            TranslationAlignmentInputsPropsBuilder_Error_Missing_required_field_alignment,
+        },
         general_editor::GeneralEditor,
         properties_editor::PropertiesEditor,
     },
