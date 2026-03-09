@@ -1,9 +1,7 @@
-/* Parent braucht relative Position */
 .dropdown-menu li {
     position: relative;
 }
 
-/* Submenu Container */
 .dropdown-submenu > .dropdown-menu {
     position: absolute;
     top: -1px;
@@ -18,12 +16,10 @@
     margin-left: -1px;
 }
 
-/* Submenu öffnen */
 .dropdown-submenu:hover > .dropdown-menu {
     display: block;
 }
 
-/* Scrollbereich */
 .custom-scroll {
     overflow-y: scroll;
     scrollbar-color: rgb(39, 39, 39) rgb(204, 204, 204);
