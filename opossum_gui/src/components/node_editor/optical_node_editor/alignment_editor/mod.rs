@@ -348,10 +348,9 @@ pub fn RotationInput(
 ) -> Element {
     let value_memo = use_memo(move || {
         let angle = alignment.read().rotation_of_axis(axis);
-        if angle.value.abs() < f64::EPSILON{
+        if angle.value.abs() < f64::EPSILON {
             0.
-        }
-        else{
+        } else {
             angle.get::<degree>()
         }
     });

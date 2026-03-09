@@ -1,9 +1,10 @@
-use crate::{
-    components::node_editor::{
-        accordion::AccordionItem,
-        inputs::InputData,
-        node_config_editor::NodeChangeEvent,
-        optical_node_editor::{RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation, on_new_translation, properties_editor::on_save_proptype_handler},
+use crate::components::node_editor::{
+    accordion::AccordionItem,
+    inputs::InputData,
+    node_config_editor::NodeChangeEvent,
+    optical_node_editor::{
+        RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation, on_new_translation,
+        properties_editor::on_save_proptype_handler,
     },
 };
 use dioxus::prelude::*;
@@ -35,7 +36,7 @@ pub fn IsometryOptionEditor(
         on_save.call(new_iso);
     });
 
-    let mut  accordion_content = vec![];
+    let mut accordion_content = vec![];
 
     accordion_content.push(rsx! {
         RotationAlignmentInputs {
