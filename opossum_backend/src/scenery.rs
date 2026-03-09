@@ -195,12 +195,12 @@ async fn get_opmfile(data: web::Data<AppState>) -> Result<impl Responder, BackEn
 async fn post_opmfile(
     data: web::Data<AppState>,
     opm_file_string: String,
-) -> Result<String, BackEndErrorResponse> {
+) -> Result<Json<String>, BackEndErrorResponse> {
     let mut document = data.document.lock();
     *document = OpmDocument::from_string(&opm_file_string)?;
     let name = document.scenery().node_attr().name();
     drop(document);
-    Ok(name)
+    Ok(Json(name))
 }
 
 #[utoipa::path(tag = "scenery", request_body(content = String,
