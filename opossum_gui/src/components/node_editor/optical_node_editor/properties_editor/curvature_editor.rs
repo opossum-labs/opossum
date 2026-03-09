@@ -50,7 +50,6 @@ pub fn CurvatureEditor(
         }
     });
 
-
     rsx! {
         div { class: "row gy-1 gx-2",
             div { class: "col-sm",
