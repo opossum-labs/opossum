@@ -226,7 +226,7 @@ impl OpticGraph {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::nodes::Dummy;
+    use crate::nodes::{Dummy, NodeGroup};
     use num::Zero;
     use uom::si::f64::Length;
     #[test]
@@ -262,4 +262,48 @@ mod test {
             .unwrap();
         assert_eq!(graph.is_single_tree(), true);
     }
+
+    #[test]
+fn has_input_connections_node_not_found() {
+    let graph = OpticGraph::default();
+    let result = graph.has_input_connections(Uuid::nil());
+    assert!(result.is_err());
+}
+
+#[test]
+fn has_input_connections_no_edges() {
+    let mut graph = OpticGraph::default();
+    let n1 = graph.add_node(Dummy::default()).unwrap();
+
+    let result = graph.has_input_connections(n1).unwrap();
+    assert!(!result);
+}
+
+#[test]
+fn has_input_connections_with_edge() {
+    let mut graph = OpticGraph::default();
+    let n1 = graph.add_node(Dummy::default()).unwrap();
+    let n2 = graph.add_node(Dummy::default()).unwrap();
+
+    graph
+        .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+        .unwrap();
+
+    assert!(!graph.has_input_connections(n1).unwrap());
+    assert!(graph.has_input_connections(n2).unwrap());
+}
+
+#[test]
+fn has_input_connections_mapped_input_port() {
+    // This reproduces the NodeGroup port mapping case
+    let mut group = NodeGroup::default();
+
+    let n1 = group.add_node(Dummy::default()).unwrap();
+
+    // No edges, but expose the port via the group
+    group.map_input_port(n1, "input_1", "group_input").unwrap();
+
+    // Internally this means the graph must report an input connection
+    assert!(group.graph.has_input_connections(n1).unwrap());
+}
 }
