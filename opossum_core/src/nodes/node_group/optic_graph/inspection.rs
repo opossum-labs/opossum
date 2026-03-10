@@ -33,7 +33,7 @@ impl OpticGraph {
             .node_idx_by_uuid(node_id)
             .ok_or_else(|| OpossumError::Analysis("uuid does not exist".into()))?;
         let neighbors = self.g.neighbors_directed(idx, Direction::Incoming);
-        Ok(neighbors.count() != 0)
+        Ok(neighbors.count() != 0 || self.input_port_map.contains_node(node_id))
     }
     /// Return `true` if the node with the given [`Uuid`] has no outgoing connections.
     ///
