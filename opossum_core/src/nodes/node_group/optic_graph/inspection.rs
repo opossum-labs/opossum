@@ -47,7 +47,7 @@ impl OpticGraph {
             .node_idx_by_uuid(node_id)
             .ok_or_else(|| OpossumError::Analysis("uuid does not exist".into()))?;
         let neighbors = self.g.neighbors_directed(idx, Direction::Outgoing);
-        Ok(neighbors.count() != 0)
+        Ok(neighbors.count() != 0 || self.output_port_map.contains_node(node_id))
     }
     /// Returns a node with the given [`Uuid`].
     ///
