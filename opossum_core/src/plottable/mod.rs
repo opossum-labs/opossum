@@ -1382,21 +1382,26 @@ pub trait Plottable {
 
     /// This method handles the plot creation for a specific data type or node type
     /// # Attributes
-    /// - `f_path`: path to the file
+    /// - `f_dir`: path to the file directory
+    /// - `f_stem`: name of the file without file extension: f_dir/file_stem.file_extension
     /// - `img_size`: the size of the image in pixels: (width, height)
     /// - `backend`: used backend to create the plot. See [`PltBackEnd`]
     /// # Errors
     /// Whether an error is thrown depends on the individual implementation of the method
-    fn to_plot(&self, f_path: &Path, backend: PltBackEnd) -> OpmResult<Option<RgbImage>> {
+    fn to_plot(&self, f_dir: &Path, f_stem: &str, backend: PltBackEnd) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
-        if backend == PltBackEnd::Bitmap || backend == PltBackEnd::SVG {
-            plt_params
+        if backend != PltBackEnd::Buf{
+            let file_ext = if backend == PltBackEnd::SVG{
+                "svg"
+            }
+            else{
+                "png"
+            };
+            plt_params.set(&PlotArgs::FDir(f_dir.into()))?
                 .set(&PlotArgs::FName(
-                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))?
-                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?;
+                    format!("{f_stem}.{file_ext}"),
+                ))?;
         }
-
         plt_params.set(&PlotArgs::Backend(backend))?;
 
         let _ = self.add_plot_specific_params(&mut plt_params);

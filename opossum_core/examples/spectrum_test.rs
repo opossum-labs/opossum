@@ -17,19 +17,22 @@ fn main() -> OpmResult<()> {
     s3.add_lorentzian_peak(nanometer!(420.0), nanometer!(0.3), 0.02)?;
     s.sub(&s3);
     s.to_plot(
-        Path::new("./opossum_core/playground/spectrum.svg"),
+        Path::new("./opossum_core/playground"),
+        "spectrum",
         PltBackEnd::SVG,
     )?;
 
-    let s4 = Spectrum::from_csv(Path::new("./opossum_core/playground/NE03B.csv"))?;
+    let s4 = Spectrum::from_csv(Path::new("./opossum_core/files_for_testing/spectrum/NE03B.csv"))?;
     s4.to_plot(
-        Path::new("./opossum_core/playground/ne03b_raw.svg"),
+        Path::new("./opossum_core/playground"),
+        "ne03b_raw",
         PltBackEnd::SVG,
     )?;
     let mut s5 = create_visible_spec();
     s5.resample(&s4);
     s5.to_plot(
-        Path::new("./opossum_core/playground/ne03b.svg"),
+        Path::new("./opossum_core/playground"),
+        "ne03b",
         PltBackEnd::SVG,
     )?;
     Ok(())

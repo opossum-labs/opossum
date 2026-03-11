@@ -22,7 +22,8 @@ fn main() -> OpmResult<()> {
     }
     let fluence_data = hit_map.calc_fluence_map((100, 100), &FluenceEstimator::KDE, None, None)?;
     fluence_data.to_plot(
-        Path::new("./opossum_core/playground/kde.png"),
+        Path::new("./opossum_core/playground"),
+        "kde",
         opossum_core::plottable::PltBackEnd::Bitmap,
     )?;
     Ok(())
