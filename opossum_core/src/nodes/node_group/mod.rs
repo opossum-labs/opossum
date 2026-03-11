@@ -843,15 +843,20 @@ impl Dottable for NodeGroup {
         ports: &OpticPorts,
         rankdir: &str,
     ) -> OpmResult<String> {
-        let mut cloned_self = self.clone();
+        let mut graph = self.graph.clone();
         if self.node_attr.inverted() {
-            cloned_self.graph.invert_graph()?;
+            graph.invert_graph()?;
         }
-        if self.expand_view()? {
-            cloned_self.to_dot_expanded_view(node_index, name, inverted, rankdir)
+        let dot_str = if self.expand_view()? {
+            self.to_dot_expanded_view(node_index, name, inverted, rankdir)
         } else {
-            Ok(cloned_self.to_dot_collapsed_view(node_index, name, inverted, ports, rankdir))
+            Ok(self.to_dot_collapsed_view(node_index, name, inverted, ports, rankdir))
+            };
+        // revert the inversion
+        if self.node_attr.inverted() {
+            graph.invert_graph()?;
         }
+        dot_str
     }
     fn node_color(&self) -> &'static str {
         "yellow"
