@@ -83,7 +83,7 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
     }
     let size_after_unit_length = (cone_angle / 2.0).tan().value;
     let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
-        Hexapolar::new(meter!(size_after_unit_length), 1)?.into(),
+        Hexapolar::new(meter!(size_after_unit_length), 3)?.into(),
         UniformDist::new(energy)?.into(),
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         millimeter!(1000.),
@@ -180,6 +180,44 @@ mod test {
             }
         }
     }
+#[test]
+fn test_point_ray_source_cone_angle_correctness() {
+    let cone_angle = degree!(10.0);
+    let src = point_ray_source(cone_angle, joule!(1.0)).unwrap();
+
+    let expected_half_angle = (cone_angle / 2.0).value;
+
+    if let Proptype::LightDataBuilder(light_data_builder) =
+            src.properties().get("light data").unwrap() {
+            let data = light_data_builder.clone().build().unwrap();
+        if let LightData::Geometric(rays) = data {
+            let axis = nalgebra::Vector3::new(0.0, 0.0, 1.0);
+
+            // Collect angles of all rays relative to the axis
+            let angles: Vec<f64> = rays
+                .iter()
+                .map(|ray| {
+                    let dir = ray.direction().normalize();
+                    dir.dot(&axis).acos()
+                })
+                .collect();
+
+            let max_angle = angles.iter().cloned().fold(0., f64::max); // find maximum
+
+            // Assert the maximum ray angle is approximately the expected half-angle
+            assert!(
+                (max_angle - expected_half_angle).abs() <= 1e-12,
+                "maximum ray angle {} does not match expected half-angle {}",
+                max_angle,
+                expected_half_angle
+            );
+        } else {
+            panic!("cannot unpack light data property");
+        }
+    } else {
+        panic!("cannot unpack light data property");
+    }
+}
     #[test]
     fn test_collimated_line_source() {
         assert!(collimated_line_ray_source(millimeter!(1.0), joule!(-0.1), 1).is_err());
