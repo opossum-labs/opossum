@@ -509,7 +509,12 @@ impl NodeGroup {
                     "port {port_name} is not mapped"
                 )));
             };
-            Ok(format!("i{}:{}", port_info.0.as_simple(), port_info.1))
+            if let Some(node_idx) = self.graph.node_idx_by_uuid(port_info.0){
+                self.graph().create_node_edge_str(node_idx, &port_info.1)
+            }
+            else{
+                Ok(format!("i{}:{}", port_info.0.as_simple(), port_info.1))
+            }
         } else {
             Ok(format!("{node_id}:{port_name}"))
         }
@@ -841,7 +846,7 @@ impl Dottable for NodeGroup {
         name: &str,
         inverted: bool,
         ports: &OpticPorts,
-        rankdir: &str,
+        rankdir: &str
     ) -> OpmResult<String> {
         let mut cloned_group = self.clone();
         if self.node_attr.inverted() {
