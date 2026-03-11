@@ -71,7 +71,6 @@ fn main() -> OpmResult<()> {
     let i_cam_box = scenery.add_node(cam_box)?;
     scenery.connect_nodes(i_f, "output_1", i_cam_box, "input_1", Length::zero())?;
 
-
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new("./opossum_core/playground/laser_system.opm"))

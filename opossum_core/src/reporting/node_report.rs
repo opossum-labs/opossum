@@ -2,7 +2,9 @@
 use std::path::Path;
 
 use crate::{
-    error::OpmResult, properties::{Properties, Proptype}, reporting::report_note::ReportNote
+    error::OpmResult,
+    properties::{Properties, Proptype},
+    reporting::report_note::ReportNote,
 };
 use serde::{Deserialize, Serialize};
 
