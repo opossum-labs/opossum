@@ -1,5 +1,8 @@
 //! Module for storing node specific data to be integrated in an [`AnalysisReport`](crate::reporting::analysis_report::AnalysisReport).
+use std::path::Path;
+
 use crate::{
+    error::OpmResult,
     properties::{Properties, Proptype},
     reporting::report_note::ReportNote,
 };
@@ -70,6 +73,17 @@ impl NodeReport {
     #[must_use]
     pub fn notes(&self) -> &[ReportNote] {
         &self.notes
+    }
+    /// Export this [`NodeReport`] to a file at the given `report_path`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if `export_data` of [`Proptype`] returns an error.
+    pub fn export(&self, report_path: &Path) -> OpmResult<()> {
+        for (prop_id, prop) in self.properties().props_with_report_id_iter(&self.uuid) {
+            prop.export_data(report_path, &prop_id)?;
+        }
+        Ok(())
     }
 }
 

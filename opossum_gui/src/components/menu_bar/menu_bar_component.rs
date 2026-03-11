@@ -120,14 +120,14 @@ pub fn MenuBar(
                             "Edit"
                         }
                         ul { class: "dropdown-menu",
-                            li {
+                            li { class: "dropdown-submenu",
                                 a {
                                     class: "dropdown-item d-flex justify-content-between align-items-center",
                                     role: "button",
                                     "Add Node"
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
-                                ul { class: "dropdown-menu dropdown-submenu custom-scroll",
+                                ul { class: "dropdown-menu  custom-scroll",
                                     NodesMenu {
                                         on_node_selected: move |node_name| {
                                             on_menu_action.call(AppCommand::AddNode(node_name));
@@ -136,14 +136,14 @@ pub fn MenuBar(
                                     }
                                 }
                             }
-                            li {
+                            li { class: "dropdown-submenu",
                                 a {
                                     class: "dropdown-item d-flex justify-content-between align-items-center",
                                     role: "button",
                                     "Add Analyzer"
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
-                                ul { class: "dropdown-menu dropdown-submenu custom-scroll",
+                                ul { class: "dropdown-menu custom-scroll",
                                     AnalyzersMenu {
                                         on_analyzer_selected: move |analyzer_type| {
                                             on_menu_action.call(AppCommand::AddAnalyzer(analyzer_type));
