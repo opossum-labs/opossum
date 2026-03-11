@@ -509,7 +509,10 @@ impl NodeGroup {
                     "port {port_name} is not mapped"
                 )));
             };
-            Ok(format!("i{}:{}", port_info.0.as_simple(), port_info.1))
+            self.graph.node_idx_by_uuid(port_info.0).map_or_else(
+                || Ok(format!("i{}:{}", port_info.0.as_simple(), port_info.1)),
+                |node_idx| self.graph().create_node_edge_str(node_idx, &port_info.1),
+            )
         } else {
             Ok(format!("{node_id}:{port_name}"))
         }
@@ -843,15 +846,20 @@ impl Dottable for NodeGroup {
         ports: &OpticPorts,
         rankdir: &str,
     ) -> OpmResult<String> {
-        let mut cloned_self = self.clone();
+        let mut cloned_group = self.clone();
         if self.node_attr.inverted() {
-            cloned_self.graph.invert_graph()?;
+            cloned_group.graph.invert_graph()?;
         }
-        if self.expand_view()? {
-            cloned_self.to_dot_expanded_view(node_index, name, inverted, rankdir)
+        let dot_str = if self.expand_view()? {
+            cloned_group.to_dot_expanded_view(node_index, name, inverted, rankdir)
         } else {
-            Ok(cloned_self.to_dot_collapsed_view(node_index, name, inverted, ports, rankdir))
+            Ok(cloned_group.to_dot_collapsed_view(node_index, name, inverted, ports, rankdir))
+        };
+        // revert the inversion
+        if self.node_attr.inverted() {
+            cloned_group.graph.invert_graph()?;
         }
+        dot_str
     }
     fn node_color(&self) -> &'static str {
         "yellow"
@@ -1015,5 +1023,106 @@ mod test {
         } else {
             assert!(false)
         }
+    }
+}
+
+#[cfg(test)]
+mod group_port_mapping_tests {
+    use super::*;
+    use crate::nodes::Dummy;
+
+    /*
+    ============================================================
+    Helper
+    ============================================================
+    */
+
+    fn simple_group() -> NodeGroup {
+        let mut group = NodeGroup::new("g");
+        let n1 = group.add_node(Dummy::new("n1")).unwrap();
+        group.map_input_port(n1, "input_1", "in").unwrap();
+        group.set_expand_view(true).unwrap();
+        group
+    }
+
+    fn nested_group() -> NodeGroup {
+        let mut outer = NodeGroup::new("outer");
+        let mut inner = NodeGroup::new("inner");
+        let node = inner.add_node(Dummy::new("leaf")).unwrap();
+        inner.map_input_port(node, "input_1", "in").unwrap();
+        inner.set_expand_view(true).unwrap();
+        let inner_id = outer.add_node(inner).unwrap();
+        outer.map_input_port(inner_id, "in", "in").unwrap();
+        outer.set_expand_view(true).unwrap();
+        outer
+    }
+
+    fn deep_nested_group(depth: usize) -> NodeGroup {
+        let mut leaf_group = NodeGroup::new("leaf_group");
+        let leaf_node = leaf_group.add_node(Dummy::new("leaf")).unwrap();
+        leaf_group
+            .map_input_port(leaf_node, "input_1", "in")
+            .unwrap();
+        leaf_group.set_expand_view(true).unwrap();
+
+        let mut current = leaf_group;
+        for i in 0..depth {
+            let mut parent = NodeGroup::new(&format!("g{i}"));
+            let id = parent.add_node(current).unwrap();
+            parent.map_input_port(id, "in", "in").unwrap();
+            parent.set_expand_view(true).unwrap();
+            current = parent;
+        }
+        current
+    }
+
+    /*
+    ============================================================
+    Tests
+    ============================================================
+    */
+
+    #[test]
+    fn mapped_port_simple_group() {
+        let group = simple_group();
+        let node_id = group.node_attr().uuid().as_simple().to_string();
+        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        assert!(result.contains(":input_1"));
+        assert!(result.starts_with('i'));
+    }
+
+    #[test]
+    fn mapped_port_nested_group() {
+        let group = nested_group();
+        let node_id = group.node_attr().uuid().as_simple().to_string();
+        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        assert!(result.contains(":input_1"));
+        assert!(result.starts_with('i'));
+    }
+
+    #[test]
+    fn mapped_port_deep_nested_groups() {
+        let group = deep_nested_group(5);
+        let node_id = group.node_attr().uuid().as_simple().to_string();
+        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        assert!(result.contains(":input_1"));
+        assert!(result.starts_with('i'));
+    }
+
+    #[test]
+    fn collapsed_group_returns_external_port() {
+        let mut group = simple_group();
+        group.set_expand_view(false).unwrap();
+        let node_id = group.node_attr().uuid().as_simple().to_string();
+        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        assert_eq!(result, format!("{node_id}:in"));
+    }
+
+    #[test]
+    fn unmapped_port_returns_error() {
+        let group = simple_group();
+        let node_id = group.node_attr().uuid().as_simple().to_string();
+        let result = group.get_mapped_port_str("does_not_exist", &node_id);
+        assert!(result.is_err());
     }
 }
