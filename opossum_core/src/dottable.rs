@@ -31,7 +31,7 @@ pub trait Dottable {
         name: &str,
         inverted: bool,
         ports: &OpticPorts,
-        rankdir: &str,
+        rankdir: &str
     ) -> OpmResult<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{name}{inv_string}");

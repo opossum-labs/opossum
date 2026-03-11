@@ -1,9 +1,6 @@
 use super::OpticGraph;
 use crate::{
-    error::{OpmResult, OpossumError},
-    light_flow::LightFlow,
-    properties::proptype::format_quantity,
-    utils::LockExt,
+    error::{OpmResult, OpossumError}, light_flow::LightFlow, properties::proptype::format_quantity, utils::LockExt
 };
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use std::fmt::Write;
@@ -17,7 +14,7 @@ impl OpticGraph {
     /// * `light_port`:           port name that should be connected
     ///
     /// Returns the result of the edge strnig for the dot format
-    fn create_node_edge_str(&self, end_node_idx: NodeIndex, light_port: &str) -> OpmResult<String> {
+    pub fn create_node_edge_str(&self, end_node_idx: NodeIndex, light_port: &str) -> OpmResult<String> {
         let node_id = format!("i{}", self.node_by_idx(end_node_idx)?.uuid().as_simple());
         let node_ref = self.node_by_idx(end_node_idx)?;
         let mut node = node_ref.optical_ref.lock_opm()?;
@@ -55,7 +52,6 @@ impl OpticGraph {
                 .ok_or_else(|| OpossumError::Other("could not get edge_endpoints".into()))?;
             let node_id = self.node_by_idx(end_nodes.1)?.uuid();
             let dist = self.distance_from_predecessor(node_id, light.target_port())?;
-
             let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port())?;
             let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port())?;
 
