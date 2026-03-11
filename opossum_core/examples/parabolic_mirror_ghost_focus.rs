@@ -1,15 +1,11 @@
 use nalgebra::Vector2;
-use opossum_core::coatings::CoatingType;
-use opossum_core::prelude::*;
+use opossum_core::{coatings::CoatingType, nodes::round_collimated_ray_builder, prelude::*};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(round_collimated_ray_source(
-        millimeter!(20.0),
-        joule!(1.0),
-        10,
-    )?)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
+
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(45., 0.0, 0.0))?;
     mirror1.set_coating(
         &PortType::Input,
@@ -41,7 +37,12 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_m3, "output_1", i_rpv, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        round_collimated_ray_builder(millimeter!(20.0), joule!(1.0), 10)?,
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/parabolic_mirror_ghost_focus.opm",
     ))
