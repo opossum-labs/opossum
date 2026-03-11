@@ -118,9 +118,7 @@ impl HtmlReport {
             OpossumError::Other(format!("Error creating data dir for html report: {e}"))
         })?;
         for node_report in analysis_report.node_reports() {
-            node_report
-                .properties()
-                .export_data(&data_dir, node_report.uuid())?;
+            node_report.export(&data_dir)?;
         }
 
         // 2. Render and write the main HTML file

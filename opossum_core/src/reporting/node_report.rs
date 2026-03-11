@@ -1,8 +1,8 @@
 //! Module for storing node specific data to be integrated in an [`AnalysisReport`](crate::reporting::analysis_report::AnalysisReport).
-use std::{collections::btree_map::Iter, iter::Map};
+use std::{collections::btree_map::Iter, iter::Map, path::Path};
 
 use crate::{
-    prelude::Property, properties::{Properties, Proptype}, reporting::report_note::ReportNote
+    error::OpmResult, prelude::Property, properties::{Properties, Proptype}, reporting::report_note::ReportNote
 };
 use serde::{Deserialize, Serialize};
 
@@ -72,8 +72,11 @@ impl NodeReport {
     pub fn notes(&self) -> &[ReportNote] {
         &self.notes
     }
-    pub fn get_report_properties_iter(&self) -> impl Iterator<Item=(String, &Property)> {
-        self.properties.iter().map(|(s, p) | (format!("{}_{}", self.uuid(), s), p))
+    pub fn export(&self, report_path: &Path) -> OpmResult<()> {
+        for (prop_id, prop) in self.properties().props_with_report_id_iter(&self.uuid) {
+            prop.export_data(report_path, &prop_id)?;
+        }
+        Ok(())
     }
 }
 
