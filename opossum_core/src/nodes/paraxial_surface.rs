@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 //! A paraxial surface (ideal lens)
+use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
@@ -18,7 +19,6 @@ use crate::{
 use log::warn;
 use opm_macros_lib::OpmNode;
 use uom::si::f64::Length;
-use super::node_attr::NodeAttr;
 
 inventory::submit! {
     NodeRegistration::new::<ParaxialSurface>("paraxial surface", "ideal thin lens")

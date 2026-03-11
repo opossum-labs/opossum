@@ -246,7 +246,7 @@ impl OpticGraph {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::nodes::{Dummy, NodeGroup, SourcePort};
+    use crate::nodes::{Dummy, NodeGroup};
     use num::Zero;
     use uom::si::f64::Length;
     #[test]
