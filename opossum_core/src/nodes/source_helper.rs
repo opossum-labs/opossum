@@ -2,16 +2,10 @@
 //! Helper functions for easier creation of `standard` ray [`Source`]s.
 use super::Source;
 use crate::{
-    degree,
-    energy_distributions::UniformDist,
-    error::{OpmResult, OpossumError},
-    lightdata::{
+    degree, energy_distributions::UniformDist, error::{OpmResult, OpossumError}, lightdata::{
         light_data_builder::LightDataBuilder,
         ray_data_builder::{CollimatedSrc, PointSrc, RayDataBuilder},
-    },
-    millimeter, nanometer,
-    position_distributions::{Grid, Hexapolar},
-    spectral_distribution::LaserLines,
+    }, meter, millimeter, nanometer, position_distributions::{Grid, Hexapolar}, spectral_distribution::LaserLines
 };
 use nalgebra::Point2;
 use num::Zero;
@@ -89,7 +83,7 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
     }
     let size_after_unit_length = (cone_angle / 2.0).tan().value;
     let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
-        Hexapolar::new(millimeter!(size_after_unit_length), 3)?.into(),
+        Hexapolar::new(meter!(size_after_unit_length), 1)?.into(),
         UniformDist::new(energy)?.into(),
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         millimeter!(1000.),
