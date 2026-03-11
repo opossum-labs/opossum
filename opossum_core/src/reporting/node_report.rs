@@ -1,8 +1,8 @@
 //! Module for storing node specific data to be integrated in an [`AnalysisReport`](crate::reporting::analysis_report::AnalysisReport).
-use std::{collections::btree_map::Iter, iter::Map, path::Path};
+use std::path::Path;
 
 use crate::{
-    error::OpmResult, prelude::Property, properties::{Properties, Proptype}, reporting::report_note::ReportNote
+    error::OpmResult, properties::{Properties, Proptype}, reporting::report_note::ReportNote
 };
 use serde::{Deserialize, Serialize};
 

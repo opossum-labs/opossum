@@ -306,4 +306,79 @@ fn has_input_connections_mapped_input_port() {
     // Internally this means the graph must report an input connection
     assert!(group.graph.has_input_connections(n1).unwrap());
 }
+
+#[test]
+fn has_output_connections_none() {
+    let mut graph = OpticGraph::default();
+    let n1 = graph.add_node(Dummy::default()).unwrap();
+
+    assert!(!graph.has_output_connections(n1).unwrap());
+}
+
+#[test]
+fn has_output_connections_with_edge() {
+    let mut graph = OpticGraph::default();
+    let n1 = graph.add_node(Dummy::default()).unwrap();
+    let n2 = graph.add_node(Dummy::default()).unwrap();
+
+    graph
+        .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+        .unwrap();
+
+    assert!(graph.has_output_connections(n1).unwrap());
+}
+
+#[test]
+fn has_output_connections_only_incoming() {
+    let mut graph = OpticGraph::default();
+    let n1 = graph.add_node(Dummy::default()).unwrap();
+    let n2 = graph.add_node(Dummy::default()).unwrap();
+
+    graph
+        .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+        .unwrap();
+
+    assert!(!graph.has_output_connections(n2).unwrap());
+}
+
+#[test]
+fn has_output_connections_uuid_error() {
+    let graph = OpticGraph::default();
+    assert!(graph.has_output_connections(Uuid::nil()).is_err());
+}
+
+#[test]
+fn has_output_connections_when_output_mapped() {
+    let mut group = NodeGroup::default();
+
+    let n1 = group.add_node(Dummy::default()).unwrap();
+
+    group.map_output_port(n1, "output_1", "output_1").unwrap();
+
+    assert!(group.graph.has_output_connections(n1).unwrap());
+}
+
+#[test]
+fn has_output_connections_already_assigned() {
+    let mut group = NodeGroup::default();
+
+    let n1 = group.add_node(Dummy::default()).unwrap();
+    let n2 = group.add_node(Dummy::default()).unwrap();
+
+    group
+        .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+        .unwrap();
+
+    assert!(group.map_output_port(n1, "output_1", "output_1").is_err());
+}
+
+#[test]
+fn has_output_connections_no_edge_no_mapping() {
+    let mut group = NodeGroup::default();
+
+    let n1 = group.add_node(Dummy::default()).unwrap();
+
+    assert!(!group.graph.has_output_connections(n1).unwrap());
+}
+
 }
