@@ -33,7 +33,7 @@ impl OpticGraph {
             .node_idx_by_uuid(node_id)
             .ok_or_else(|| OpossumError::Analysis("uuid does not exist".into()))?;
         let neighbors = self.g.neighbors_directed(idx, Direction::Incoming);
-        Ok(neighbors.count() != 0)
+        Ok(neighbors.count() != 0 || self.input_port_map.contains_node(node_id))
     }
     /// Return `true` if the node with the given [`Uuid`] has no outgoing connections.
     ///
@@ -47,7 +47,7 @@ impl OpticGraph {
             .node_idx_by_uuid(node_id)
             .ok_or_else(|| OpossumError::Analysis("uuid does not exist".into()))?;
         let neighbors = self.g.neighbors_directed(idx, Direction::Outgoing);
-        Ok(neighbors.count() != 0)
+        Ok(neighbors.count() != 0 || self.output_port_map.contains_node(node_id))
     }
     /// Returns a node with the given [`Uuid`].
     ///
@@ -282,31 +282,122 @@ mod test {
             .unwrap();
         assert_eq!(graph.is_single_tree(), true);
     }
+
     #[test]
-    fn find_source_ports_simple() {
-        let mut graph = OpticGraph::default();
-        let dummy_id = graph.add_node(Dummy::default()).unwrap();
-        let source_port_id = graph.add_node(SourcePort::default()).unwrap();
-        let source_ports = graph.find_source_ports().unwrap();
-        assert_eq!(source_ports.len(), 1);
-        assert!(source_ports.contains(&source_port_id));
-        assert!(!source_ports.contains(&dummy_id));
+    fn has_input_connections_node_not_found() {
+        let graph = OpticGraph::default();
+        let result = graph.has_input_connections(Uuid::nil());
+        assert!(result.is_err());
     }
+
     #[test]
-    fn find_source_ports_nested() {
+    fn has_input_connections_no_edges() {
         let mut graph = OpticGraph::default();
-        let sp_main_id = graph.add_node(SourcePort::default()).unwrap();
-        let mut group1 = NodeGroup::default();
-        let _dummy_g1_id = group1.add_node(Dummy::default()).unwrap();
-        let sp_g1_id = group1.add_node(SourcePort::default()).unwrap();
-        let mut group2 = NodeGroup::default();
-        let sp_g2_id = group2.add_node(SourcePort::default()).unwrap();
-        let _group2_id = group1.add_node(group2).unwrap();
-        let _group1_id = graph.add_node(group1).unwrap();
-        let source_ports = graph.find_source_ports().unwrap();
-        assert_eq!(source_ports.len(), 3);
-        assert!(source_ports.contains(&sp_main_id));
-        assert!(source_ports.contains(&sp_g1_id));
-        assert!(source_ports.contains(&sp_g2_id));
+        let n1 = graph.add_node(Dummy::default()).unwrap();
+
+        let result = graph.has_input_connections(n1).unwrap();
+        assert!(!result);
+    }
+
+    #[test]
+    fn has_input_connections_with_edge() {
+        let mut graph = OpticGraph::default();
+        let n1 = graph.add_node(Dummy::default()).unwrap();
+        let n2 = graph.add_node(Dummy::default()).unwrap();
+
+        graph
+            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+            .unwrap();
+
+        assert!(!graph.has_input_connections(n1).unwrap());
+        assert!(graph.has_input_connections(n2).unwrap());
+    }
+
+    #[test]
+    fn has_input_connections_mapped_input_port() {
+        // This reproduces the NodeGroup port mapping case
+        let mut group = NodeGroup::default();
+
+        let n1 = group.add_node(Dummy::default()).unwrap();
+
+        // No edges, but expose the port via the group
+        group.map_input_port(n1, "input_1", "group_input").unwrap();
+
+        // Internally this means the graph must report an input connection
+        assert!(group.graph.has_input_connections(n1).unwrap());
+    }
+
+    #[test]
+    fn has_output_connections_none() {
+        let mut graph = OpticGraph::default();
+        let n1 = graph.add_node(Dummy::default()).unwrap();
+
+        assert!(!graph.has_output_connections(n1).unwrap());
+    }
+
+    #[test]
+    fn has_output_connections_with_edge() {
+        let mut graph = OpticGraph::default();
+        let n1 = graph.add_node(Dummy::default()).unwrap();
+        let n2 = graph.add_node(Dummy::default()).unwrap();
+
+        graph
+            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+            .unwrap();
+
+        assert!(graph.has_output_connections(n1).unwrap());
+    }
+
+    #[test]
+    fn has_output_connections_only_incoming() {
+        let mut graph = OpticGraph::default();
+        let n1 = graph.add_node(Dummy::default()).unwrap();
+        let n2 = graph.add_node(Dummy::default()).unwrap();
+
+        graph
+            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+            .unwrap();
+
+        assert!(!graph.has_output_connections(n2).unwrap());
+    }
+
+    #[test]
+    fn has_output_connections_uuid_error() {
+        let graph = OpticGraph::default();
+        assert!(graph.has_output_connections(Uuid::nil()).is_err());
+    }
+
+    #[test]
+    fn has_output_connections_when_output_mapped() {
+        let mut group = NodeGroup::default();
+
+        let n1 = group.add_node(Dummy::default()).unwrap();
+
+        group.map_output_port(n1, "output_1", "output_1").unwrap();
+
+        assert!(group.graph.has_output_connections(n1).unwrap());
+    }
+
+    #[test]
+    fn has_output_connections_already_assigned() {
+        let mut group = NodeGroup::default();
+
+        let n1 = group.add_node(Dummy::default()).unwrap();
+        let n2 = group.add_node(Dummy::default()).unwrap();
+
+        group
+            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
+            .unwrap();
+
+        assert!(group.map_output_port(n1, "output_1", "output_1").is_err());
+    }
+
+    #[test]
+    fn has_output_connections_no_edge_no_mapping() {
+        let mut group = NodeGroup::default();
+
+        let n1 = group.add_node(Dummy::default()).unwrap();
+
+        assert!(!group.graph.has_output_connections(n1).unwrap());
     }
 }

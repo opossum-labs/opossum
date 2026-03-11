@@ -29,13 +29,9 @@ pub fn derive_opm_node(input: TokenStream) -> TokenStream {
 ///
 /// ## Example
 ///
-/// ```rust,ignore
-/// use my_macros::EnsureValidated;
-///
-/// // Suppose this is your validated wrapper type.
-/// struct Validated<T, V>(T, V);
-/// struct ValidatedVec<T, V>(Vec<T>, V);
-/// struct AllNotEmpty;
+/// ```
+/// use opm_macros_lib::EnsureValidated;
+/// use opossum_core::generic_validators::{ValidateTrait, AllNotEmpty, Validated, ValidatedVec, AllPositive};
 ///
 /// #[derive(EnsureValidated)]
 /// struct Address {
@@ -61,7 +57,7 @@ pub fn derive_opm_node(input: TokenStream) -> TokenStream {
 ///     name: Validated<String, AllNotEmpty>,
 ///     address: Address,               // Nested type with its own EnsureValidated
 ///     contact: Contact,               // Nested type
-///     misc_data: ValidatedVec<i32, AllNotEmpty>, // Custom validated vector
+///     misc_data: ValidatedVec<i32, AllPositive, AllNotEmpty>, // Custom validated vector
 ///
 ///     #[validate(skip)]
 ///     cached_value: Option<String>,   // Skipped from validation
@@ -97,7 +93,7 @@ pub fn derive_ensure_validated(input: TokenStream) -> TokenStream {
 ///
 /// # Attribute Syntax
 ///
-/// ```ignore
+/// ```
 /// #[rule(
 ///     rule_fn_name,                     // name of the validation function (required)
 ///     message = "Custom error message", // optional custom error message
