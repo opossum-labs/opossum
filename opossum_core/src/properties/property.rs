@@ -113,9 +113,7 @@ impl Property {
                 hit_map.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::NodeReport(report) => {
-                for (prop_id, prop) in report.get_report_properties_iter() {
-                    prop.export_data(report_path, &prop_id)?;
-                }
+                report.export(report_path)?;
             }
             _ => {}
         }

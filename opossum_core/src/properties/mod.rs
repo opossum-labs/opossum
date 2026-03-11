@@ -12,7 +12,6 @@ use crate::properties::validator::Validator;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::path::Path;
 
 use crate::reporting::html_report::HtmlProperty;
 
@@ -107,6 +106,10 @@ impl Properties {
             let _ = self.set(&new_prop.0, (*new_prop.1.prop()).clone());
         }
     }
+    /// Returns the iter of this [`Properties`], mapped to return an id_string for the reports and the actual property in a tuple.
+    pub fn props_with_report_id_iter(&self, node_report_id_str: &str) -> impl Iterator<Item=(String, &Property)> {
+        self.props.iter().map(move |(s, p) | (format!("{}_{}", node_report_id_str, s), p))
+    }
     /// Returns the iter of this [`Properties`].
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, Property> {
         self.props.iter()
@@ -177,19 +180,6 @@ impl Properties {
             }
         }
         html_props
-    }
-    /// Export these [`Properties`] to a set of files on disk at the given `report_path`.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the underlying implementation for a concrete property
-    /// returns an error.
-    pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
-        for prop in &self.props {
-            prop.1
-                .export_data(report_path, &format!("{id}_{}", prop.0))?;
-        }
-        Ok(())
     }
 }
 

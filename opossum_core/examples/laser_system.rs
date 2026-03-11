@@ -67,8 +67,10 @@ fn main() -> OpmResult<()> {
     cam_box.connect_nodes(i_cb_sd1, "output_1", i_cb_e, "input_1", Length::zero())?;
 
     cam_box.map_input_port(i_cb_bs, "input_1", "input_1")?;
+    cam_box.map_output_port(i_cb_e, "output_1", "output_1")?;
     let i_cam_box = scenery.add_node(cam_box)?;
     scenery.connect_nodes(i_f, "output_1", i_cam_box, "input_1", Length::zero())?;
+
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
