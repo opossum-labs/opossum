@@ -3,14 +3,10 @@ use crate::{
     error::{OpmResult, OpossumError},
     plottable::Plottable,
     properties::validator::Validator,
-    utils::file_utils::sanitize_filename,
 };
 use nalgebra::vector;
 use serde::{Deserialize, Serialize};
-use std::{
-    mem,
-    path::{Path, PathBuf},
-};
+use std::{mem, path::Path};
 
 /// (optical) Property
 ///
@@ -90,30 +86,28 @@ impl Property {
     pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
         match &self.prop {
             Proptype::FluenceData(fluence) => {
-                let file_path = Self::create_report_fpath(report_path, id, "png");
-                fluence.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
+                fluence.to_plot(report_path, id, crate::plottable::PltBackEnd::Bitmap)?;
             }
             Proptype::Spectrum(spectrum) => {
-                let file_path = Self::create_report_fpath(report_path, id, "svg");
-                spectrum.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+                spectrum.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::RayPositionHistory(ray_hist) => {
-                let file_path = Self::create_report_fpath(report_path, id, "svg");
-                ray_hist.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+                ray_hist.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::GhostFocusHistory(ghost_hist) => {
-                let file_path = Self::create_report_fpath(report_path, id, "svg");
                 let mut ghost_hist = ghost_hist.clone();
                 ghost_hist.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
-                ghost_hist.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+                ghost_hist.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::WaveFrontData(wavefront_error_map) => {
-                let file_path = Self::create_report_fpath(report_path, id, "png");
-                wavefront_error_map.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
+                wavefront_error_map.to_plot(
+                    report_path,
+                    id,
+                    crate::plottable::PltBackEnd::Bitmap,
+                )?;
             }
             Proptype::HitMap(hit_map) => {
-                let file_path = Self::create_report_fpath(report_path, id, "svg");
-                hit_map.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+                hit_map.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::NodeReport(report) => {
                 report.export(report_path)?;
@@ -121,18 +115,6 @@ impl Property {
             _ => {}
         }
         Ok(())
-    }
-
-    fn create_report_fpath(
-        base_directory: &Path,
-        file_name: &str,
-        file_ext: &'static str,
-    ) -> PathBuf {
-        base_directory.join(Path::new(&format!(
-            "{}.{}",
-            sanitize_filename(file_name),
-            file_ext
-        )))
     }
 }
 #[cfg(test)]
