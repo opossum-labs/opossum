@@ -22,7 +22,9 @@ fn main() -> OpmResult<()> {
         PltBackEnd::SVG,
     )?;
 
-    let s4 = Spectrum::from_csv(Path::new("./opossum_core/files_for_testing/spectrum/NE03B.csv"))?;
+    let s4 = Spectrum::from_csv(Path::new(
+        "./opossum_core/files_for_testing/spectrum/NE03B.csv",
+    ))?;
     s4.to_plot(
         Path::new("./opossum_core/playground"),
         "ne03b_raw",

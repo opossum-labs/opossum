@@ -106,14 +106,14 @@ impl Properties {
             let _ = self.set(&new_prop.0, (*new_prop.1.prop()).clone());
         }
     }
-    /// Returns the iter of this [`Properties`], mapped to return an id_string for the reports and the actual property in a tuple.
+    /// Returns the iter of this [`Properties`], mapped to return an `id_string` for the reports and the actual property in a tuple.
     pub fn props_with_report_id_iter(
         &self,
         node_report_id_str: &str,
     ) -> impl Iterator<Item = (String, &Property)> {
         self.props
             .iter()
-            .map(move |(s, p)| (format!("{}_{}", node_report_id_str, s), p))
+            .map(move |(s, p)| (format!("{node_report_id_str}_{s}"), p))
     }
     /// Returns the iter of this [`Properties`].
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, Property> {

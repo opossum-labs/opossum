@@ -6,10 +6,7 @@ use crate::{
 };
 use nalgebra::vector;
 use serde::{Deserialize, Serialize};
-use std::{
-    mem,
-    path::Path,
-};
+use std::{mem, path::Path};
 
 /// (optical) Property
 ///
@@ -95,7 +92,7 @@ impl Property {
                 spectrum.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::RayPositionHistory(ray_hist) => {
-                ray_hist.to_plot(report_path, id,crate::plottable::PltBackEnd::SVG)?;
+                ray_hist.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::GhostFocusHistory(ghost_hist) => {
                 let mut ghost_hist = ghost_hist.clone();
@@ -103,7 +100,11 @@ impl Property {
                 ghost_hist.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::WaveFrontData(wavefront_error_map) => {
-                wavefront_error_map.to_plot(report_path, id, crate::plottable::PltBackEnd::Bitmap)?;
+                wavefront_error_map.to_plot(
+                    report_path,
+                    id,
+                    crate::plottable::PltBackEnd::Bitmap,
+                )?;
             }
             Proptype::HitMap(hit_map) => {
                 hit_map.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
