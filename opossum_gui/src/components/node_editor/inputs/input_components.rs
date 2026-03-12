@@ -515,10 +515,16 @@ pub fn LabeledSelect(
     onchange: EventHandler<Event<FormData>>,
     #[props(default = false)] readonly: bool
 ) -> Element {
+    let select_class = if readonly{
+        "form-select bg-dark text-light disabled-select"
+    }
+    else{
+        "form-select bg-dark text-light"
+    };
     rsx! {
         div { class: "form-floating border-start", "data-mdb-input-init": "",
             select {
-                class: "form-select bg-dark text-light",
+                class: select_class,
                 id: id.as_str(),
                 disabled: readonly,
                 "aria-label": label,

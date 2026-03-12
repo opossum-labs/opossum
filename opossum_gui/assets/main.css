@@ -37,6 +37,9 @@ body {
     outline: none;
 }
 
+.form-floating >.disabled-select{
+    color: rgb(141, 141, 141) !important;
+}
 /* .zoom-shift-container { */
     /* outline-color: red; */
 /* } */

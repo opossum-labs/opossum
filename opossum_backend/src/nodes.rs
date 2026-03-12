@@ -502,7 +502,7 @@ async fn post_node_name(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     name: web::Json<String>,
-) -> Result<(Json<HashMap<Uuid, String>>), BackEndErrorResponse> {
+) -> Result<Json<HashMap<Uuid, String>>, BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let name = name.into_inner();
     let mut document = data.document.lock();
@@ -767,10 +767,15 @@ fn get_node_attr_from_state(
 }
 
 // Helper function to contain the core logic
+/// Retrieve the node attributes of a node, referenced by a reference-node
+/// To signal the GUI, that the node_attributes are readonly when it is a reference, a bool will be sent if it is a reference or not
+/// true: node is a reference
+/// false: node is original
 fn get_referenced_node_attr_from_state(
+    mut is_reference: bool,
     uuid: Uuid,
     document: MutexGuard<OpmDocument>,
-) -> Result<NodeAttr, BackEndErrorResponse> {
+) -> Result<(NodeAttr, bool), BackEndErrorResponse> {
     let node_attr = document
         .scenery()
         .node_recursive(uuid)?
@@ -780,10 +785,11 @@ fn get_referenced_node_attr_from_state(
         .node_attr()
         .clone();
     if node_attr.node_type() == "reference" {
+        is_reference = true;
         let ref_node_props = node_attr.properties();
         if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id")
         {
-            get_referenced_node_attr_from_state(*ref_uuid, document)
+            get_referenced_node_attr_from_state(is_reference, *ref_uuid, document)
         }
         else{
             Err(BackEndErrorResponse::new(
@@ -794,7 +800,7 @@ fn get_referenced_node_attr_from_state(
         }
     }
     else{
-        Ok(node_attr)
+        Ok((node_attr, is_reference))
     }
 }
 
@@ -844,9 +850,9 @@ async fn get_properties_ron(
 ) -> Result<impl Responder, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let document = data.document.lock();
-    let node_attr = get_referenced_node_attr_from_state(uuid, document)?;
+    let (node_attr, is_reference) = get_referenced_node_attr_from_state(false, uuid, document)?;
 
-    let body = ron::ser::to_string_pretty(&node_attr, ron::ser::PrettyConfig::new().new_line("\n"))
+    let body = ron::ser::to_string_pretty(&(node_attr, is_reference), ron::ser::PrettyConfig::new().new_line("\n"))
         .map_err(|e| OpossumError::Other(format!("RON Serialization Error: {e}")))?;
 
     Ok(HttpResponse::Ok()
