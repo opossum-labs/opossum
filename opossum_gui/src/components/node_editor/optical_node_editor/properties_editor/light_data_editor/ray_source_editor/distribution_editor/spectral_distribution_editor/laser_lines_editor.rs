@@ -126,6 +126,8 @@ pub fn LaserLineInput(laser_lines: LaserLines, on_save: EventHandler<SpecDistTyp
                 r#type: "submit",
                 id: "laserlinesubmit",
                 value: "Add laser line",
+                readonly,
+                disabled: readonly,
             }
             LaserLineList { laser_lines: laser_lines.clone(), on_save, readonly }
         }
@@ -148,7 +150,7 @@ fn LaserLineList(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>, r
                             span { {format!("λ: {}", format_si_with_base_unit(line.0.value, "m", false))} }
                             span { {format!("Int: {}", line.1)} }
                             a {
-                                class: "text-danger ms-auto",
+                                class: if readonly { "ms-auto text-muted" } else { "text-danger ms-auto" },
                                 onclick: {
                                     let laser_lines = laser_lines.clone();
                                     move |_| {
@@ -159,7 +161,7 @@ fn LaserLineList(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>, r
                                         }
                                     }
                                 },
-                                role: "button",
+                                role: if readonly { "" } else { "button" },
                                 "🗑︎"
                             }
                         }

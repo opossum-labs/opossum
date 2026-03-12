@@ -182,6 +182,9 @@ pub fn EnergyLaserLineEditor(
                 r#type: "submit",
                 id: "energylaserlinesubmit",
                 value: "Add laser line",
+                readonly,
+                disabled: readonly,
+            
             }
             LaserLineList {
                 laser_lines: energy_laser_lines.clone(),
@@ -213,7 +216,7 @@ fn LaserLineList(
                             span { {format!("λ: {}", format_si_with_base_unit(line.0.value, "m", false))} }
                             span { {format!("E: {}", format_si_with_base_unit(line.1.value, "J", false))} }
                             a {
-                                class: "text-danger ms-auto",
+                                class: if readonly { "ms-auto text-muted" } else { "text-danger ms-auto" },
                                 onclick: {
                                     let laser_lines = laser_lines.clone();
                                     move |_| {
@@ -225,7 +228,7 @@ fn LaserLineList(
                                         }
                                     }
                                 },
-                                role: "button",
+                                role: if readonly { "" } else { "button" },
                                 "🗑︎"
                             }
                         }

@@ -39,6 +39,7 @@ body {
 
 .form-floating >.disabled-select{
     color: rgb(141, 141, 141) !important;
+    cursor:default!important;
 }
 /* .zoom-shift-container { */
     /* outline-color: red; */
