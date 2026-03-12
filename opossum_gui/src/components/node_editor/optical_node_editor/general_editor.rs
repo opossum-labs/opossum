@@ -21,6 +21,7 @@ pub fn GeneralEditor(
     let accordion_content = if node_attr.read().node_id == *node_id.read() {
         let node_id = node_attr.read().node_id;
         let node_type = node_attr.read().node_type.clone();
+        let is_reference = node_type == "reference";
         let name = node_attr.read().name.clone();
         let lidt = node_attr.read().lidt;
         let inverted = node_attr.read().inverted;
@@ -36,6 +37,7 @@ pub fn GeneralEditor(
                     container_class: "form-floating border-start".to_string(),
                     input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
                     label_class: "form-label text-secondary".to_string(),
+                    readonly: is_reference,
                     on_save: move |new_val: String| {
                         on_change.call(NodeChangeEvent {
                             node_id,
@@ -50,9 +52,9 @@ pub fn GeneralEditor(
                         label: "Damage Threshold".to_string(),
                         value: lidt.get::<joule_per_square_centimeter>(),
                         base_unit: "J/cm²",
+                        readonly: is_reference,
                         onchange: move |new_lidt: f64| {
                         if new_lidt >= 0.0 {
-                            // lidt_sig.set(new_lidt);
                                 on_change.call(NodeChangeEvent {
                                     node_id,
                                     action: NodeChangeAction::Lidt(J_per_cm2!(new_lidt)),
