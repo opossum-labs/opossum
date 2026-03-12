@@ -19,6 +19,10 @@ impl AnalysisRayTrace for SourcePort {
         _incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
+        // If the source port is inverted it acts as sink and does not emit any rays (since then it has no outgoing ports).
+        if self.inverted() {
+            return Ok(LightResult::default());
+        }
         let mut rays = config
             .get_source(&self.node_attr().uuid())
             .ok_or_else(|| {

@@ -338,7 +338,7 @@ impl OpticGraph {
 mod test {
     use super::*;
     use crate::{
-        nodes::{BeamSplitter, Dummy, Source, SplittingConfigBuilder},
+        nodes::{BeamSplitter, Dummy, SourcePort, SplittingConfigBuilder},
         optic_node::OpticNode,
         optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
@@ -484,7 +484,7 @@ mod test {
     #[test]
     fn analyze_inverse_with_src() {
         let mut graph = OpticGraph::default();
-        let g1_n1 = graph.add_node(Source::default()).unwrap();
+        let g1_n1 = graph.add_node(SourcePort::default()).unwrap();
         let g1_n2 = graph.add_node(Dummy::default()).unwrap();
         graph
             .map_port(g1_n2, &PortType::Output, "output_1", "output_1")
