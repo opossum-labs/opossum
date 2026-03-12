@@ -15,6 +15,7 @@ pub fn LengthEditor(
     length: Length,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+        readonly: bool
 ) -> Element {
     let length_sig = use_signal(|| length);
     let on_save =
@@ -26,6 +27,7 @@ pub fn LengthEditor(
             label: property_key.to_sentence_case(),
             value: length_sig.read().value,
             base_unit: "m",
+            readonly,
             onchange: move |new_length: f64| {
                 if relative_ne!(length_sig.read().value, new_length, epsilon = 0.0) {
                     on_save.call(meter!(new_length));

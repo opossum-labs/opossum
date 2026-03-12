@@ -15,6 +15,7 @@ pub fn AngleEditor(
     angle: Angle,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+        readonly: bool
 ) -> Element {
     let angle_sig = use_signal(|| angle);
     let on_save =
@@ -26,6 +27,7 @@ pub fn AngleEditor(
             label: property_key.to_sentence_case(),
             value: angle_sig.read().get::<degree>(),
             base_unit: "°",
+            readonly,
             onchange: move |new_angle: f64| {
                 if relative_ne!(angle_sig.read().get::< degree > (), new_angle, epsilon = 0.0) {
                     on_save.call(degree!(new_angle));

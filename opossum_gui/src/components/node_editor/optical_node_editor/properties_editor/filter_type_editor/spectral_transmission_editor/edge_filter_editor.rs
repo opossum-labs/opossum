@@ -14,6 +14,7 @@ use crate::{
 pub fn EdgeFilterEditor(
     edge_filter: EdgeFilter,
     on_spectral_filter_change: EventHandler<SpectralFilterBuilder>,
+        readonly: bool
 ) -> Element {
     let mut edge_filter_sig = use_signal(|| edge_filter.clone());
 
@@ -33,6 +34,7 @@ pub fn EdgeFilterEditor(
                     &EdgeFilterParam::FilterType(*edge_filter_sig.read().edge_filter_type()),
                     edge_filter_sig.read().clone(),
                     on_edge_filter_change,
+                    readonly
                 ),
             );
         } else {
@@ -40,6 +42,7 @@ pub fn EdgeFilterEditor(
                 &param,
                 edge_filter_sig.read().clone(),
                 on_edge_filter_change,
+                readonly
             ));
         }
     }

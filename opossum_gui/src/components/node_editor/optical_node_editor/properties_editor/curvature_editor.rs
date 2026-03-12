@@ -19,6 +19,7 @@ pub fn CurvatureEditor(
     curvature: Length,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+        readonly: bool
 ) -> Element {
     let mut curvature_sig = use_signal(|| curvature);
     let is_finite_sig = use_memo(move || curvature_sig.read().is_finite());
@@ -61,13 +62,14 @@ pub fn CurvatureEditor(
                     onchange: move |new_curv: f64| {
                         on_save.call(meter!(new_curv));
                     },
-                    readonly: !*is_finite_sig.read(),
+                    readonly: readonly || !*is_finite_sig.read(),
                 }
             }
             div { class: "col-sm",
                 CurvatureSelector {
                     is_finite_sig,
                     property_key,
+                    readonly,
                     on_is_curved_change: move |is_finite| {
                         let new_val =
                         if is_finite {
@@ -88,6 +90,7 @@ fn CurvatureSelector(
     is_finite_sig: ReadSignal<bool>,
     property_key: String,
     on_is_curved_change: EventHandler<bool>,
+        readonly: bool
 ) -> Element {
     let legacy_callback = EventHandler::new(move |e: Event<FormData>| {
         if let Ok(is_finite) = e.data.value().parse::<bool>() {
@@ -103,6 +106,7 @@ fn CurvatureSelector(
         legacy_callback,
         dummy_str_callback,
         is_finite_sig.read().to_string(),
+        readonly
     );
     rsx! {
         InputParamLabeledInput { input_data: checkbox_input }

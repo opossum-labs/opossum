@@ -98,6 +98,7 @@ impl IntoInputData<f64, EnergyLaserLines, EnergyLaserLines> for EnergyLaserLines
 pub fn EnergyLaserLineEditor(
     energy_laser_lines: EnergyLaserLines,
     on_save: EventHandler<EnergyDataBuilder>,
+    readonly: bool
 ) -> Element {
     let mut form_inputs = Vec::<InputData>::new();
     for elp in EnergyLaserLinesParam::iter() {
@@ -107,6 +108,7 @@ pub fn EnergyLaserLineEditor(
                     &elp,
                     energy_laser_lines.clone(),
                     on_save,
+                    readonly
                 ),
             );
         }
@@ -115,59 +117,62 @@ pub fn EnergyLaserLineEditor(
         &EnergyLaserLinesParam::SpectralResolution,
         energy_laser_lines.clone(),
         on_save,
+        readonly
     );
     rsx! {
         form {
             onsubmit: {
                 let mut ll = energy_laser_lines;
                 move |e: Event<FormData>| {
-                    let wvl_opt = e.data().get_first(&form_inputs[0].id);
-                    let energy_opt = e.data().get_first(&form_inputs[1].id);
-                    if let (Some(FormValue::Text(wvl_val)), Some(FormValue::Text(energy_val))) = (
-                        wvl_opt.clone(),
-                        energy_opt.clone(),
-                    ) {
+                    if !readonly {
+                        let wvl_opt = e.data().get_first(&form_inputs[0].id);
+                        let energy_opt = e.data().get_first(&form_inputs[1].id);
                         if let (
-                            Ok((num_str_wvl, prefix_str_wvl)),
-                            Ok((num_str_energy, prefix_str_energy)),
-                        ) = (
-                            parse_unit_input_strict(&wvl_val, "m"),
-                            parse_unit_input_strict(&energy_val, "J"),
-                        ) {
-                            if let (Some(wvl), Some(energy)) = (
-                                parse_si_number(&num_str_wvl, &prefix_str_wvl, false),
-                                parse_si_number(&num_str_energy, &prefix_str_energy, false),
+                            Some(FormValue::Text(wvl_val)),
+                            Some(FormValue::Text(energy_val)),
+                        ) = (wvl_opt.clone(), energy_opt.clone()) {
+                            if let (
+                                Ok((num_str_wvl, prefix_str_wvl)),
+                                Ok((num_str_energy, prefix_str_energy)),
+                            ) = (
+                                parse_unit_input_strict(&wvl_val, "m"),
+                                parse_unit_input_strict(&energy_val, "J"),
                             ) {
-                                match ll.add_lines(vec![(meter!(wvl), joule!(energy))]) {
-                                    Ok(()) => {
-                                        on_save.call(EnergyDataBuilder::LaserLines(ll.clone()));
+                                if let (Some(wvl), Some(energy)) = (
+                                    parse_si_number(&num_str_wvl, &prefix_str_wvl, false),
+                                    parse_si_number(&num_str_energy, &prefix_str_energy, false),
+                                ) {
+                                    match ll.add_lines(vec![(meter!(wvl), joule!(energy))]) {
+                                        Ok(()) => {
+                                            on_save.call(EnergyDataBuilder::LaserLines(ll.clone()));
+                                        }
+                                        Err(e) => {
+                                            OPOSSUM_UI_LOGS
+                                                .write()
+                                                .add_log(format!("Error adding laser line: {e}").as_str());
+                                        }
                                     }
-                                    Err(e) => {
-                                        OPOSSUM_UI_LOGS
-                                            .write()
-                                            .add_log(format!("Error adding laser line: {e}").as_str());
-                                    }
+                                } else {
+                                    OPOSSUM_UI_LOGS
+                                        .write()
+                                        .add_log(
+                                            format!(
+                                                "Could not parse laser line inputs! Wavelength: {wvl_opt:?}. Energy: {energy_opt:?}",
+                                            )
+                                                .as_str(),
+                                        );
                                 }
-                            } else {
-                                OPOSSUM_UI_LOGS
-                                    .write()
-                                    .add_log(
-                                        format!(
-                                            "Could not parse laser line inputs! Wavelength: {wvl_opt:?}. Energy: {energy_opt:?}",
-                                        )
-                                            .as_str(),
-                                    );
                             }
+                        } else {
+                            OPOSSUM_UI_LOGS
+                                .write()
+                                .add_log(
+                                    format!(
+                                        "Wrong input inputs for adding laser line! Wavelength: {wvl_opt:?}. Energy: {energy_opt:?}",
+                                    )
+                                        .as_str(),
+                                );
                         }
-                    } else {
-                        OPOSSUM_UI_LOGS
-                            .write()
-                            .add_log(
-                                format!(
-                                    "Wrong input inputs for adding laser line! Wavelength: {wvl_opt:?}. Energy: {energy_opt:?}",
-                                )
-                                    .as_str(),
-                            );
                     }
                 }
             },
@@ -178,7 +183,11 @@ pub fn EnergyLaserLineEditor(
                 id: "energylaserlinesubmit",
                 value: "Add laser line",
             }
-            LaserLineList { laser_lines: energy_laser_lines.clone(), on_save }
+            LaserLineList {
+                laser_lines: energy_laser_lines.clone(),
+                on_save,
+                readonly,
+            }
         }
         InputParamLabeledInput { input_data: spec_res_input }
     }
@@ -188,6 +197,7 @@ pub fn EnergyLaserLineEditor(
 fn LaserLineList(
     laser_lines: EnergyLaserLines,
     on_save: EventHandler<EnergyDataBuilder>,
+    readonly: bool
 ) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "laserLineList",
@@ -207,9 +217,11 @@ fn LaserLineList(
                                 onclick: {
                                     let laser_lines = laser_lines.clone();
                                     move |_| {
-                                        let mut laser_lines = laser_lines.clone();
-                                        if laser_lines.delete_line(i).is_ok() {
-                                            on_save.call(EnergyDataBuilder::LaserLines(laser_lines));
+                                        if !readonly {
+                                            let mut laser_lines = laser_lines.clone();
+                                            if laser_lines.delete_line(i).is_ok() {
+                                                on_save.call(EnergyDataBuilder::LaserLines(laser_lines));
+                                            }
                                         }
                                     }
                                 },

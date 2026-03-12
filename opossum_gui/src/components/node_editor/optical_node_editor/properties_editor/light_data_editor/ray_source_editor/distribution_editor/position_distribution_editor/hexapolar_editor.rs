@@ -63,6 +63,7 @@ impl IntoInputData<f64, Hexapolar, PosDistType> for HexapolarParam {
 pub fn get_hexapolar_input_params(
     hexapolar: &Hexapolar,
     pos_dist_type_handler: EventHandler<PosDistType>,
+    readonly: bool
 ) -> Vec<InputData> {
     let mut input_data = Vec::<InputData>::new();
     for enum_variant in HexapolarParam::iter() {
@@ -70,6 +71,7 @@ pub fn get_hexapolar_input_params(
             &enum_variant,
             *hexapolar,
             pos_dist_type_handler,
+            readonly
         ));
     }
     input_data

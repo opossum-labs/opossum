@@ -23,12 +23,14 @@ use crate::components::node_editor::{
 pub fn SpectralFilterTypeSelector(
     spectral_filter_builder_sig: ReadSignal<SpectralFilterBuilder>,
     on_spectral_filter_change: EventHandler<SpectralFilterBuilder>,
+        readonly: bool
 ) -> Element {
     rsx! {
         LabeledSelect {
             id: "nodeSpectralFilterBuilderSelector",
             label: "Spectral filter type",
             options: select_options_from_enum_iterator(&*spectral_filter_builder_sig.read(), None),
+            readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(sfb) = SpectralFilterBuilder::default_from_name(val.as_str()) {
@@ -43,6 +45,7 @@ pub fn SpectralFilterTypeSelector(
 pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clone + 'static>(
     spectral_filter_builder: SpectralFilterBuilder,
     on_spectral_filter_change: EventHandler<T>,
+        readonly: bool
 ) -> Element {
     let mut spectral_filter_builder_sig = use_signal(|| spectral_filter_builder.clone());
 
@@ -54,19 +57,28 @@ pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clo
     });
 
     let mut element_list = vec![rsx! {
-    SpectralFilterTypeSelector {spectral_filter_builder_sig , on_spectral_filter_change}}];
+    SpectralFilterTypeSelector {spectral_filter_builder_sig , on_spectral_filter_change, readonly}}];
 
     let editor = match spectral_filter_builder_sig() {
         SpectralFilterBuilder::EdgeFilter(edge_filter) => rsx! {
-            EdgeFilterEditor { edge_filter, on_spectral_filter_change }
+            EdgeFilterEditor {
+                edge_filter,
+                on_spectral_filter_change,
+                readonly,
+            }
         },
         SpectralFilterBuilder::BandFilter(band_filter) => rsx! {
-            BandFilterEditor { band_filter, on_spectral_filter_change }
+            BandFilterEditor {
+                band_filter,
+                on_spectral_filter_change,
+                readonly,
+            }
         },
         SpectralFilterBuilder::FromFile(_) => {
             let input_data = FilterFromFileParam::FPath.to_input_data(
                 spectral_filter_builder_sig.read().clone(),
                 on_spectral_filter_change,
+                readonly
             );
             rsx! {
                 InputParamLabeledInput { input_data }

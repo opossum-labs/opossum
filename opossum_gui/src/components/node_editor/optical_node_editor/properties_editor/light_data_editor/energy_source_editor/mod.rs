@@ -12,6 +12,7 @@ use spectrum_from_file_editor::SpectrumFromFileEditor;
 pub fn EnergySourceEditor(
     energy_data_builder: EnergyDataBuilder,
     on_save: EventHandler<LightDataBuilder>,
+        readonly: bool
 ) -> Element {
     let mut energy_data_builder_sig = use_signal(|| energy_data_builder.clone());
 
@@ -23,8 +24,16 @@ pub fn EnergySourceEditor(
     });
 
     rsx! {
-        EnergyDataBuilderSelector { energy_data_builder_sig, on_energy_data_builder_save }
-        EnergyDataEditor { energy_data_builder_sig, on_save: on_energy_data_builder_save }
+        EnergyDataBuilderSelector {
+            energy_data_builder_sig,
+            on_energy_data_builder_save,
+            readonly,
+        }
+        EnergyDataEditor {
+            energy_data_builder_sig,
+            on_save: on_energy_data_builder_save,
+            readonly,
+        }
     }
 }
 
@@ -32,14 +41,15 @@ pub fn EnergySourceEditor(
 pub fn EnergyDataEditor(
     energy_data_builder_sig: ReadSignal<EnergyDataBuilder>,
     on_save: EventHandler<EnergyDataBuilder>,
+        readonly: bool
 ) -> Element {
     match energy_data_builder_sig() {
         EnergyDataBuilder::Raw(_) => rsx! {},
         EnergyDataBuilder::FromFile(spec_file) => rsx! {
-            SpectrumFromFileEditor { spec_file, on_save }
+            SpectrumFromFileEditor { spec_file, on_save, readonly }
         },
         EnergyDataBuilder::LaserLines(energy_laser_lines) => rsx! {
-            EnergyLaserLineEditor { energy_laser_lines, on_save }
+            EnergyLaserLineEditor { energy_laser_lines, on_save, readonly }
         },
     }
 }

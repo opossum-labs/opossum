@@ -8,6 +8,7 @@ use opossum_core::{meter, prelude::PointSrc};
 pub fn ReferenceLengthEditor(
     point_src: PointSrc,
     ray_data_handler: EventHandler<PointSrc>,
+        readonly: bool
 ) -> Element {
     rsx! {
         NodeConfigUnitInput {
@@ -15,6 +16,7 @@ pub fn ReferenceLengthEditor(
             label: "Reference Length",
             value: point_src.reference_length().value,
             base_unit: "m",
+            readonly,
             onchange: move |new_length: f64| {
                 let mut point_src = point_src.clone();
 

@@ -17,6 +17,7 @@ pub fn FluenceEstimatorEditor(
     fluence_estimator: FluenceEstimator,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+        readonly: bool
 ) -> Element {
     let fluence_estimator_sig = use_signal(|| fluence_estimator);
     let on_save = on_save_proptype_handler(
@@ -31,6 +32,7 @@ pub fn FluenceEstimatorEditor(
             id: format!("fluenceEstimatorProperty{property_key}").to_camel_case(),
             label: property_key.to_sentence_case(),
             options: select_options_from_enum_iterator(&*fluence_estimator_sig.read(), None),
+            readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(fluence_estimator_type) = FluenceEstimator::default_from_name(

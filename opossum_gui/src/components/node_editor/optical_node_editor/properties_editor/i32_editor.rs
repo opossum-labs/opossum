@@ -12,6 +12,7 @@ pub fn I32Editor(
     int32: i32,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool
 ) -> Element {
     let int32_sig = use_signal(|| int32);
     let on_save =
@@ -30,6 +31,7 @@ pub fn I32Editor(
             container_class: "form-floating border-start".to_string(),
             input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
             label_class: "form-label text-secondary".to_string(),
+            readonly,
         }
     }
 }
