@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::{
     app_state::{AppState, NodeCacheItem},
@@ -14,16 +14,9 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    analyzers::AnalyzerType,
-    error::OpossumError,
-    meter,
-    nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
-    opm_document::AnalyzerInfo,
-    optic_ports::PortType,
-    properties::Proptype,
-    types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
-    utils::{LockExt, geom_transformation::Isometry},
+    analyzers::AnalyzerType, error::OpossumError, meter, nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence}, opm_document::AnalyzerInfo, optic_ports::PortType, prelude::OpmDocument, properties::Proptype, types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo}, utils::{LockExt, geom_transformation::Isometry}
 };
+use parking_lot::MutexGuard;
 use uom::si::length::meter;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -515,7 +508,7 @@ async fn post_node_name(
     let mut document = data.document.lock();
     let mut processed_names = HashMap::<Uuid, String>::new();
     let scenery = document.scenery_mut();
-    
+
     let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid);
     for node_idx in &nodes_to_rename{
         let node_uuid = scenery.graph().node_by_idx(*node_idx).unwrap().uuid();
@@ -774,6 +767,38 @@ fn get_node_attr_from_state(
 }
 
 // Helper function to contain the core logic
+fn get_referenced_node_attr_from_state(
+    uuid: Uuid,
+    document: MutexGuard<OpmDocument>,
+) -> Result<NodeAttr, BackEndErrorResponse> {
+    let node_attr = document
+        .scenery()
+        .node_recursive(uuid)?
+        .0
+        .optical_ref
+        .lock_opm()?
+        .node_attr()
+        .clone();
+    if node_attr.node_type() == "reference" {
+        let ref_node_props = node_attr.properties();
+        if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id")
+        {
+            get_referenced_node_attr_from_state(*ref_uuid, document)
+        }
+        else{
+            Err(BackEndErrorResponse::new(
+            400,
+            "Opossum",
+            "'reference id' property not found",
+        ))
+        }
+    }
+    else{
+        Ok(node_attr)
+    }
+}
+
+// Helper function to contain the core logic
 fn get_node_analyzer_attr_from_state(
     uuid: Uuid,
     data: &web::Data<AppState>,
@@ -817,7 +842,9 @@ async fn get_properties_ron(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
-    let node_attr = get_node_attr_from_state(path.into_inner(), &data)?;
+    let uuid = path.into_inner();
+    let document = data.document.lock();
+    let node_attr = get_referenced_node_attr_from_state(uuid, document)?;
 
     let body = ron::ser::to_string_pretty(&node_attr, ron::ser::PrettyConfig::new().new_line("\n"))
         .map_err(|e| OpossumError::Other(format!("RON Serialization Error: {e}")))?;

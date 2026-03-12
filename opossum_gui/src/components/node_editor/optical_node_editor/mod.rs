@@ -38,7 +38,7 @@ pub struct UINodeAttr {
 #[component]
 pub fn OpticalNodeEditor(node_id: Memo<Uuid>, on_change: EventHandler<NodeChangeEvent>) -> Element {
     let mut ui_node_attr_sig = use_signal(UINodeAttr::default);
-    let mut readonly = use_memo(move || ui_node_attr_sig.read().node_type == "reference");
+    let readonly = use_memo(move || ui_node_attr_sig.read().node_type == "reference");
     let resource_future = use_resource(move || async move {
         let node_id = *node_id.read();
         match api::get_node_properties(node_id).await {
