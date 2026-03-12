@@ -142,16 +142,12 @@ impl Analyzer for GhostFocusAnalyzer {
         info!("Calculate node positions of scenery{scenery_name}.");
 
         // copy source map to RayTraceConfig to be able to use it in the unified analyze function of AnalysisRayTrace
-        let source_map=&self.config.source_map;
+        let source_map = &self.config.source_map;
         let mut raytrace_config = RayTraceConfig::default();
-        for ( uuid, ray_data_source) in source_map.clone() {
+        for (uuid, ray_data_source) in source_map.clone() {
             raytrace_config.map_source(uuid, ray_data_source.into());
         }
-        AnalysisRayTrace::calc_node_positions(
-            scenery,
-            LightResult::default(),
-            &raytrace_config,
-        )?;
+        AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
         info!(
             "Performing ghost focus analysis of scenery{scenery_name} up to {} ray bounces.",
             self.config.max_bounces

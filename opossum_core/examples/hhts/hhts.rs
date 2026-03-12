@@ -177,7 +177,8 @@ fn main() -> OpmResult<()> {
     let mut node = IdealFilter::new(
         "2w Shortpass filter",
         &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::FromFile(
-            Path::new("../opossum/opossum_core/examples/hhts/FESH0700_Transmission.csv").to_path_buf(),
+            Path::new("../opossum/opossum_core/examples/hhts/FESH0700_Transmission.csv")
+                .to_path_buf(),
         )),
     )?;
     node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;

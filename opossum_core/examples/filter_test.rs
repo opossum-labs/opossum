@@ -35,7 +35,7 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
 
-    let mut config=EnergyConfig::default();
+    let mut config = EnergyConfig::default();
     let energy_data_builder = EnergyDataBuilder::Raw(
         BandFilter::new(
             BandFilterType::BandPass,

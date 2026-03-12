@@ -124,8 +124,9 @@ pub fn collimated_line_ray_builder(
 /// Create a point [`Source`] on the optical axis with a given cone angle.
 ///
 /// This is a convenience function, which generates a [`Ray`](crate::ray::Ray) [`Source`] containing a hexapolar, cone-shaped ray bundle at 1000 nm
-/// and a given energy. The origin of all [`Rays`](crate::rays::Rays) is at the origin of optical axis (0.0, 0.0, 0.0). The direction of the cone is symmetric along the optical axis
-/// in positive direction (z-axis). If the given `cone_angle` is zero, this function generates a [`Source`] a single ray along the optical axis.
+/// and a given energy. The origin of all [`Rays`](crate::rays::Rays) is at the origin of optical axis (0.0, 0.0, 0.0). The direction of the cone
+/// is symmetric along the optical axis in positive direction (z-axis). If the given `cone_angle` is zero, this function generates a
+/// [`Source`] a single ray along the optical axis.
 ///
 /// # Errors
 ///
@@ -147,6 +148,33 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
     )?));
     let src = Source::new("point ray source", light_data_builder);
     Ok(src)
+}
+/// Create a point [`RayDataBuilder`] on the optical axis with a given cone angle.
+///
+/// This is a convenience function, which generates a [`RayDataBuilder`] containing a hexapolar, cone-shaped ray bundle at 1000 nm
+/// and a given energy. The origin of all [`Rays`](crate::rays::Rays) is at the origin of optical axis (0.0, 0.0, 0.0). The direction of the cone
+/// is symmetric along the optical axis in positive direction (z-axis). If the given `cone_angle` is zero, this function generates a
+/// a single ray along the optical axis.
+///
+/// # Errors
+///
+/// This functions returns an error if
+///  - the given energy is < 0.0, Nan, or +inf.
+///  - the given angle is < 0.0 degrees or >= 180.0 degrees.
+pub fn point_ray_builder(cone_angle: Angle, energy: Energy) -> OpmResult<RayDataBuilder> {
+    if cone_angle.is_sign_negative() || cone_angle >= degree!(180.0) {
+        return Err(OpossumError::Other(
+            "cone angle must be within (0.0..180.0) degrees range".into(),
+        ));
+    }
+    let size_after_unit_length = (cone_angle / 2.0).tan().value;
+    Ok(RayDataSource::PointSrc(PointSrc::new(
+        Hexapolar::new(millimeter!(size_after_unit_length), 4)?.into(),
+        UniformDist::new(energy)?.into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        millimeter!(1000.),
+    )?)
+    .into())
 }
 #[cfg(test)]
 mod test {

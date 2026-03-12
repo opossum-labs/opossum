@@ -32,7 +32,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(ed, "output_1", det, "input_1", millimeter!(10.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    let mut config= RayTraceConfig::default();
+    let mut config = RayTraceConfig::default();
     let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
         Grid::new(
             Point2::new(millimeter!(9.), millimeter!(9.)),

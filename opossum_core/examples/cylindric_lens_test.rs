@@ -1,7 +1,6 @@
 use nalgebra::Vector3;
 use opossum_core::{
-    analyzers::energy::EnergyConfig,
-    nodes::round_collimated_ray_builder, prelude::*,
+    analyzers::energy::EnergyConfig, nodes::round_collimated_ray_builder, prelude::*,
 };
 use std::path::Path;
 
@@ -22,7 +21,7 @@ fn main() -> OpmResult<()> {
         Some(Vector3::y()),
     )?)?;
     let det2 = scenery.add_node(SpotDiagram::default())?;
-    let det3=scenery.add_node(EnergyMeter::default())?;
+    let det3 = scenery.add_node(EnergyMeter::default())?;
     scenery.connect_nodes(src, "output_1", l1, "input_1", millimeter!(50.0))?;
     scenery.connect_nodes(l1, "output_1", det, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(det, "output_1", det2, "input_1", millimeter!(0.0))?;

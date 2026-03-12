@@ -50,7 +50,7 @@ fn main() -> OpmResult<()> {
         );
     }
     let ray_data_source = RayDataSource::Raw(rays);
-    let mut config=RayTraceConfig::default();
+    let mut config = RayTraceConfig::default();
     config.map_source(i_src, ray_data_source.into());
     doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/fluence_test.opm"))

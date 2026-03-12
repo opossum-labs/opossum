@@ -145,14 +145,14 @@ impl Spectrometer {
 
     /// Returns the spectrum stored in the lightdata of this [`Spectrometer`].
     ///
-    /// Returns `None` if no lightdata is available, Some(Spectrum) otherwise .
+    /// Returns `None` if no lightdata is available, Some(Spectrum) otherwise.
     #[must_use]
     pub fn get_spectrum(&self) -> Option<Spectrum> {
         self.light_data
             .as_ref()
             .and_then(|light_data| match light_data {
                 LightData::Energy(s) => Some(s.clone()),
-                LightData::Geometric(r) => r.to_auto_spectrum().ok(), // r.to_spectrum(&nanometer!(0.2)).ok(),
+                LightData::Geometric(r) => r.to_auto_spectrum().ok(),
                 LightData::Fourier => None,
                 LightData::GhostFocus(r) => {
                     let mut all_rays = Rays::default();

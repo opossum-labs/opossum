@@ -49,20 +49,19 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(mir4, "output_1", i_l2, "input_1", millimeter!(150.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    let ray_data_source =
-        RayDataSource::Collimated(CollimatedSrc::new(
-            HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
-            General2DGaussian::new(
-                joule!(2.),
-                millimeter!(0., 0.),
-                millimeter!(8., 8.),
-                5.,
-                radian!(0.),
-                false,
-            )?
-            .into(),
-            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-        ));
+    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+        HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
+        General2DGaussian::new(
+            joule!(2.),
+            millimeter!(0., 0.),
+            millimeter!(8., 8.),
+            5.,
+            radian!(0.),
+            false,
+        )?
+        .into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    ));
     let mut config = GhostFocusConfig::default();
     config.map_source(i_src, ray_data_source.into());
     config.set_max_bounces(1);

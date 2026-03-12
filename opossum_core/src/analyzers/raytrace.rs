@@ -134,6 +134,9 @@ impl RayTraceConfig {
     pub fn prune_source_map(&mut self, model: &NodeGroup) {
         self.source_map.retain(|uuid, _builder| model.exists(*uuid));
     }
+    /// Sets the entire source map of this [`RayTraceConfig`].
+    ///
+    /// This will overwrite any existing mappings. Use with care.
     pub fn set_source_map(&mut self, source_map: HashMap<Uuid, RayDataBuilder>) {
         self.source_map = source_map;
     }

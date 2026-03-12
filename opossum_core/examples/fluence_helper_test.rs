@@ -19,8 +19,8 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_pl, "output_1", i_fl2, "input_1", millimeter!(250.))?;
     let mut doc = OpmDocument::new(scenery);
 
-    let mut config=RayTraceConfig::default();
-     let tot_energy = joule!(1.);
+    let mut config = RayTraceConfig::default();
+    let tot_energy = joule!(1.);
     let pos_dist = Hexapolar::new(millimeter!(15.), 12)?;
     let fluence_dist = General2DGaussian::new(
         tot_energy,

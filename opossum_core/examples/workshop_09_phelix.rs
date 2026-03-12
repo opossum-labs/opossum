@@ -12,7 +12,7 @@ use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("PHELIX MainAmp");
     let i_src = scenery.add_node(SourcePort::new("incoming rays DM"))?;
-    
+
     let i_l_pa_4_input = scenery.add_node(ParaxialSurface::new("T4 Input", millimeter!(931.0))?)?;
     let i_l_pa_4_exit = scenery.add_node(ParaxialSurface::new("T4 Exit", millimeter!(931.0))?)?;
     let i_m_pa_45 =
@@ -168,10 +168,10 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_l3, "output_1", i_sd3, "input_1", millimeter!(800.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-   
+
     // Imaging analysis
     let mut config = RayTraceConfig::default();
-     let ray_data_source = RayDataSource::PointSrc(PointSrc::new(
+    let ray_data_source = RayDataSource::PointSrc(PointSrc::new(
         Grid::new(
             Point2::new(millimeter!(60.0), Length::zero()),
             Point2::new(5, 1),
@@ -181,21 +181,15 @@ fn main() -> OpmResult<()> {
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         millimeter!(1000.0),
     )?);
-    config.map_source(
-        i_src,
-       ray_data_source.into(),
-    );
+    config.map_source(i_src, ray_data_source.into());
     doc.add_analyzer(AnalyzerType::RayTrace(config));
 
     // Collimation analysis
     let mut config = RayTraceConfig::default();
-    let ray_data_source=collimated_line_ray_builder(millimeter!(60.0), joule!(1.0), 5)?;
-    config.map_source(
-        i_src,
-       ray_data_source,
-    );
+    let ray_data_source = collimated_line_ray_builder(millimeter!(60.0), joule!(1.0), 5)?;
+    config.map_source(i_src, ray_data_source);
     doc.add_analyzer(AnalyzerType::RayTrace(config));
-    
+
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_09_phelix.opm",
     ))

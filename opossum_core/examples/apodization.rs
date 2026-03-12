@@ -3,7 +3,7 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
 
-    let i_src=scenery.add_node(SourcePort::new("round collimated ray source"))?;
+    let i_src = scenery.add_node(SourcePort::new("round collimated ray source"))?;
 
     let mut dummy = Dummy::default();
     let aperture = Aperture::new_rectangle(
@@ -32,7 +32,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_d, "output_1", i_sd, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    let ray_data_builder=round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 25)?;
+    let ray_data_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 25)?;
     let mut config = RayTraceConfig::default();
     config.map_source(i_src, ray_data_builder);
     doc.add_analyzer(AnalyzerType::RayTrace(config));

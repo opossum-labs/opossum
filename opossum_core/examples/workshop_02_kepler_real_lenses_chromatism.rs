@@ -47,23 +47,19 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    let ray_data_source =
-        RayDataSource::Collimated(CollimatedSrc::new(
-            Grid::new(
-                Point2::new(Length::zero(), millimeter!(45.0)),
-                Point2::new(1, 9),
-            )?
-            .into(),
-            UniformDist::new(joule!(1.0))?.into(),
-            LaserLines::new(vec![(nanometer!(1000.0), 1.0), (nanometer!(350.0), 1.0)])?.into(),
-        ));
+    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+        Grid::new(
+            Point2::new(Length::zero(), millimeter!(45.0)),
+            Point2::new(1, 9),
+        )?
+        .into(),
+        UniformDist::new(joule!(1.0))?.into(),
+        LaserLines::new(vec![(nanometer!(1000.0), 1.0), (nanometer!(350.0), 1.0)])?.into(),
+    ));
 
     let mut config = RayTraceConfig::default();
-    config.map_source(
-        i_src,
-        ray_data_source.into()
-    );
-    doc.add_analyzer(AnalyzerType::RayTrace(config));    
+    config.map_source(i_src, ray_data_source.into());
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_02_kepler_chromatism.opm",
     ))

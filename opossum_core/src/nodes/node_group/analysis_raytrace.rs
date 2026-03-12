@@ -99,8 +99,7 @@ impl AnalysisRayTrace for NodeGroup {
                 .graph
                 .node_by_idx(idx)
                 .map_or_else(|_| Uuid::nil(), |node| node.uuid());
-            // let has_no_input_connections = !self.graph.has_input_connections(node_id)?;
-            let has_no_input_connections = false;
+            let has_no_input_connections = !self.graph.has_input_connections(node_id)?;
             let already_placed = self
                 .graph
                 .node_by_idx(idx)?
