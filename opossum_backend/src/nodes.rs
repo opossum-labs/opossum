@@ -14,7 +14,7 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    analyzers::AnalyzerType, error::OpossumError, meter, nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence}, opm_document::AnalyzerInfo, optic_ports::PortType, prelude::OpmDocument, properties::Proptype, types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo}, utils::{LockExt, geom_transformation::Isometry}
+    OpticRef, analyzers::AnalyzerType, error::OpossumError, meter, nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence}, opm_document::AnalyzerInfo, optic_ports::PortType, prelude::OpmDocument, properties::Proptype, types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo}, utils::{LockExt, geom_transformation::Isometry}
 };
 use parking_lot::MutexGuard;
 use uom::si::length::meter;
@@ -412,8 +412,8 @@ async fn post_subreference(
         ref_node_info.gui_position().1,
     )));
     let mut document = data.document.lock();
+    let referring_node = get_nested_referenced_node_from_state(ref_node_info.referring_node(), &document)?;
     let scenery = document.scenery_mut();
-    let (referring_node, _) = scenery.node_recursive(ref_node_info.referring_node())?;
     let ref_node = node.as_refnode_mut().unwrap();
     ref_node.assign_reference(&referring_node);
     drop(referring_node);
@@ -801,6 +801,36 @@ fn get_referenced_node_attr_from_state(
     }
     else{
         Ok((node_attr, is_reference))
+    }
+}
+
+fn get_nested_referenced_node_from_state(
+    uuid: Uuid,
+    document: &MutexGuard<OpmDocument>,
+) -> Result<OpticRef, BackEndErrorResponse> {
+    let optic_ref = document
+        .scenery()
+        .node_recursive(uuid)?
+        .0;
+    let node_attr = optic_ref
+        .optical_ref
+        .lock_opm()?.node_attr().clone();
+    if node_attr.node_type() == "reference" {
+        let ref_node_props = node_attr.properties();
+        if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id")
+        {
+            get_nested_referenced_node_from_state(*ref_uuid, document)
+        }
+        else{
+            Err(BackEndErrorResponse::new(
+            400,
+            "Opossum",
+            "'reference id' property not found",
+        ))
+        }
+    }
+    else{
+        Ok(optic_ref)
     }
 }
 
