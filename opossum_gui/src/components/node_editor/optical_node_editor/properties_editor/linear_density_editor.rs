@@ -14,7 +14,7 @@ pub fn LinearDensityEditor(
     linear_density: LinearNumberDensity,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let linear_density_sig = use_signal(|| linear_density);
 

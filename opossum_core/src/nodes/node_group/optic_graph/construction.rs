@@ -184,8 +184,8 @@ impl OpticGraph {
             }
             let node = node_ref.optical_ref.lock_opm().unwrap();
             let node_attrs = node.node_attr().clone();
-            if let Ok(group) = node.as_group(){
-                nodes_indices.extend(group.graph().find_all_nodes_referring_to_uuid(node_id));            
+            if let Ok(group) = node.as_group() {
+                nodes_indices.extend(group.graph().find_all_nodes_referring_to_uuid(node_id));
             }
             drop(node);
             if node_attrs.node_type() == "reference" {

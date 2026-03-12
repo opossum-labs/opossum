@@ -513,12 +513,11 @@ pub fn LabeledSelect(
     label: String,
     options: Vec<(bool, String)>,
     onchange: EventHandler<Event<FormData>>,
-    #[props(default = false)] readonly: bool
+    #[props(default = false)] readonly: bool,
 ) -> Element {
-    let select_class = if readonly{
+    let select_class = if readonly {
         "form-select bg-dark text-light disabled-select"
-    }
-    else{
+    } else {
         "form-select bg-dark text-light"
     };
     rsx! {

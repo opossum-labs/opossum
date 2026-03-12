@@ -22,7 +22,7 @@ use opossum_core::{
 pub fn RaySpectralDistributionEditor(
     spect_dist_type_sig: ReadSignal<SpecDistType>,
     on_save: EventHandler<SpecDistType>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     match &*spect_dist_type_sig.read() {
         SpecDistType::Gaussian(g) => {
@@ -47,7 +47,7 @@ pub fn SpectralDistributionEditor(
     spect_dist_type: SpecDistType,
     ray_data_builder_sig: ReadSignal<RayDataBuilder>,
     on_save: EventHandler<RayDataBuilder>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut spect_dist_type_sig = use_signal(|| spect_dist_type.clone());
 
@@ -86,7 +86,7 @@ pub fn SpectralDistributionEditor(
 pub fn RaySpectralDistributionSelector(
     spect_dist_type_sig: ReadSignal<SpecDistType>,
     on_save: EventHandler<SpecDistType>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {

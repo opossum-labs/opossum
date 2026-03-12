@@ -19,7 +19,7 @@ pub fn FilterTypeEditor(
     filter_type_builder: FilterTypeBuilder,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let filter_type_builder_sig = use_signal(|| filter_type_builder.clone());
     let on_save = on_save_proptype_handler(

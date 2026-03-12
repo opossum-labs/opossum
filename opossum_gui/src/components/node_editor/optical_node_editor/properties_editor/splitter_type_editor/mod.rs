@@ -17,7 +17,7 @@ pub fn SplitterTypeEditor(
     splitting_config_builder: SplittingConfigBuilder,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let splitting_config_builder_sig = use_signal(|| splitting_config_builder.clone());
     let on_save = on_save_proptype_handler(
@@ -58,7 +58,7 @@ pub fn SplitterTypeEditor(
 pub fn SplittingConfigSelector(
     splitting_config_builder_handler: EventHandler<SplittingConfigBuilder>,
     splitting_config_builder_sig: ReadSignal<SplittingConfigBuilder>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {

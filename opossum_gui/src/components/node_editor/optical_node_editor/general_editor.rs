@@ -17,7 +17,7 @@ pub fn GeneralEditor(
     node_attr: ReadSignal<UINodeAttr>,
     node_id: Memo<Uuid>,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let accordion_content = if node_attr.read().node_id == *node_id.read() {
         let node_id = node_attr.read().node_id;
@@ -64,7 +64,7 @@ pub fn GeneralEditor(
                     }
             },
             rsx! {
-                // no readonly here even for a reference! 
+                // no readonly here even for a reference!
                 NodeInvertedInput {
                     value: inverted,
                     label: "Invert Node",

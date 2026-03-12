@@ -13,7 +13,7 @@ pub fn F64Editor(
     float64: f64,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let float64_sig = use_signal(|| float64);
     let on_save =

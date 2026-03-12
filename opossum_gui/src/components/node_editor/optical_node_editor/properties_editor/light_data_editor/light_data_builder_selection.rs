@@ -9,7 +9,7 @@ use opossum_core::{prelude::LightDataBuilder, utils::default_from_name::DefaultF
 pub fn SourceLightDataBuilderSelector(
     light_data_builder_sig: ReadSignal<LightDataBuilder>,
     on_save: EventHandler<LightDataBuilder>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {

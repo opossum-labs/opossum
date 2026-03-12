@@ -98,7 +98,7 @@ impl IntoInputData<f64, EnergyLaserLines, EnergyLaserLines> for EnergyLaserLines
 pub fn EnergyLaserLineEditor(
     energy_laser_lines: EnergyLaserLines,
     on_save: EventHandler<EnergyDataBuilder>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut form_inputs = Vec::<InputData>::new();
     for elp in EnergyLaserLinesParam::iter() {
@@ -108,7 +108,7 @@ pub fn EnergyLaserLineEditor(
                     &elp,
                     energy_laser_lines.clone(),
                     on_save,
-                    readonly
+                    readonly,
                 ),
             );
         }
@@ -117,7 +117,7 @@ pub fn EnergyLaserLineEditor(
         &EnergyLaserLinesParam::SpectralResolution,
         energy_laser_lines.clone(),
         on_save,
-        readonly
+        readonly,
     );
     rsx! {
         form {
@@ -184,7 +184,7 @@ pub fn EnergyLaserLineEditor(
                 value: "Add laser line",
                 readonly,
                 disabled: readonly,
-            
+
             }
             LaserLineList {
                 laser_lines: energy_laser_lines.clone(),
@@ -200,7 +200,7 @@ pub fn EnergyLaserLineEditor(
 fn LaserLineList(
     laser_lines: EnergyLaserLines,
     on_save: EventHandler<EnergyDataBuilder>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "laserLineList",

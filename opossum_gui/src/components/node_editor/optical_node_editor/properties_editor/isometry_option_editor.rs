@@ -16,7 +16,7 @@ pub fn IsometryOptionEditor(
     isometry: Isometry,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let isometry_sig = use_signal(|| isometry);
     let on_save = on_save_proptype_handler(isometry_sig, property_key, on_change, node_id.into());

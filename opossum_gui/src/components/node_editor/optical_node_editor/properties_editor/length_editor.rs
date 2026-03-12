@@ -15,7 +15,7 @@ pub fn LengthEditor(
     length: Length,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let length_sig = use_signal(|| length);
     let on_save =

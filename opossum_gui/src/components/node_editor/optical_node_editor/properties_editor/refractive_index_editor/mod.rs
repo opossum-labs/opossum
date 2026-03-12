@@ -34,7 +34,7 @@ pub fn RefractiveIndexEditor(
     ref_ind_type: RefractiveIndexType,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let ref_ind_type_sig = use_signal(|| ref_ind_type.clone());
 
@@ -69,15 +69,23 @@ pub fn RefractiveIndexEditor(
 fn get_refractive_index_input_data(
     ref_ind_type_sig: ReadSignal<RefractiveIndexType>,
     on_save: EventHandler<RefractiveIndexType>,
-        readonly: bool
+    readonly: bool,
 ) -> Vec<InputData> {
     match &*ref_ind_type_sig.read() {
-        RefractiveIndexType::Const(ref_ind) => ConstRefParam::to_input_data_vec(ref_ind, on_save, readonly),
+        RefractiveIndexType::Const(ref_ind) => {
+            ConstRefParam::to_input_data_vec(ref_ind, on_save, readonly)
+        }
         RefractiveIndexType::Sellmeier1(ref_ind) => {
             Sellmeier1Param::to_input_data_vec(ref_ind, on_save, readonly)
         }
-        RefractiveIndexType::Schott(ref_ind) => SchottParam::to_input_data_vec(ref_ind, on_save, readonly),
-        RefractiveIndexType::Conrady(ref_ind) => ConradyParam::to_input_data_vec(ref_ind, on_save, readonly),
-        RefractiveIndexType::Air(ref_ind) => AirParam::to_input_data_vec(ref_ind, on_save, readonly),
+        RefractiveIndexType::Schott(ref_ind) => {
+            SchottParam::to_input_data_vec(ref_ind, on_save, readonly)
+        }
+        RefractiveIndexType::Conrady(ref_ind) => {
+            ConradyParam::to_input_data_vec(ref_ind, on_save, readonly)
+        }
+        RefractiveIndexType::Air(ref_ind) => {
+            AirParam::to_input_data_vec(ref_ind, on_save, readonly)
+        }
     }
 }

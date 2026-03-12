@@ -19,7 +19,7 @@ pub fn CurvatureEditor(
     curvature: Length,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut curvature_sig = use_signal(|| curvature);
     let is_finite_sig = use_memo(move || curvature_sig.read().is_finite());
@@ -90,7 +90,7 @@ fn CurvatureSelector(
     is_finite_sig: ReadSignal<bool>,
     property_key: String,
     on_is_curved_change: EventHandler<bool>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let legacy_callback = EventHandler::new(move |e: Event<FormData>| {
         if let Ok(is_finite) = e.data.value().parse::<bool>() {
@@ -106,7 +106,7 @@ fn CurvatureSelector(
         legacy_callback,
         dummy_str_callback,
         is_finite_sig.read().to_string(),
-        readonly
+        readonly,
     );
     rsx! {
         InputParamLabeledInput { input_data: checkbox_input }

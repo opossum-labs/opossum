@@ -21,7 +21,7 @@ use crate::components::node_editor::{
 pub fn RaySourceEditor(
     ray_data_builder: RayDataBuilder,
     on_save: EventHandler<LightDataBuilder>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut ray_data_builder_sig: Signal<RayDataBuilder> = use_signal(|| ray_data_builder.clone());
 

@@ -17,7 +17,7 @@ pub fn FluenceEstimatorEditor(
     fluence_estimator: FluenceEstimator,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let fluence_estimator_sig = use_signal(|| fluence_estimator);
     let on_save = on_save_proptype_handler(

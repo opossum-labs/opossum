@@ -14,7 +14,7 @@ use crate::{
 pub fn BandFilterEditor(
     band_filter: BandFilter,
     on_spectral_filter_change: EventHandler<SpectralFilterBuilder>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut band_filter_sig = use_signal(|| band_filter.clone());
 
@@ -34,7 +34,7 @@ pub fn BandFilterEditor(
                     &BandFilterParam::FilterType(*band_filter_sig.read().band_filter_type()),
                     band_filter_sig.read().clone(),
                     on_band_filter_change,
-                    readonly
+                    readonly,
                 ),
             );
         } else {
@@ -42,7 +42,7 @@ pub fn BandFilterEditor(
                 &param,
                 band_filter_sig.read().clone(),
                 on_band_filter_change,
-                readonly
+                readonly,
             ));
         }
     }

@@ -15,7 +15,7 @@ pub fn LengthOptionEditor(
     length_opt: Option<Length>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let length_opt_sig = use_signal(|| length_opt);
     let on_save = on_save_proptype_handler(

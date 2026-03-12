@@ -46,7 +46,7 @@ pub fn Vec2Editor(
     vector: Vector2<f64>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let select_label = property_key.to_sentence_case();
     let vec_sig = use_signal(|| vector);
@@ -64,7 +64,7 @@ pub fn Vec2Editor(
         dummy_legacy_callback,
         on_vec_input_change_str(vec_sig.into(), TranslationAxis::X, on_save),
         format!("{}", vec_sig.read().x),
-        readonly
+        readonly,
     );
 
     let dummy_legacy_callback = EventHandler::new(|_| {});
@@ -77,7 +77,7 @@ pub fn Vec2Editor(
         dummy_legacy_callback,
         on_vec_input_change_str(vec_sig.into(), TranslationAxis::Y, on_save),
         format!("{}", vec_sig.read().y),
-        readonly
+        readonly,
     );
 
     let vec2_select = use_memo(move || {

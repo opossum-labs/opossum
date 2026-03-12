@@ -33,7 +33,7 @@ pub fn GratingAlignmentInputs(
     node_properties: ReadSignal<Properties>,
     on_save: EventHandler<Isometry>,
     node_id: Memo<Uuid>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut alignment_select_sig = use_signal(|| true);
     let alignment_memo = use_memo(move || *alignment_sig_outside.read());
@@ -119,7 +119,7 @@ pub fn LittrowConfigEditor(
     diffraction_order_memo: Memo<i32>,
     line_density_memo: Memo<LinearNumberDensity>,
     on_alignment_change: EventHandler<Isometry>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut incident_angle_sig = use_signal(|| true);
     let mut reference_wavelength_sig = use_signal(|| nanometer!(1053.));
@@ -183,7 +183,7 @@ fn AngleToLittrowComponent(
     line_density_memo: Memo<LinearNumberDensity>,
     alignment_memo: ReadSignal<Isometry>,
     on_alignment_change: EventHandler<Isometry>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let angle_from_littrow = use_memo(move || {
         calc_deviation_angle_from_littrow(
@@ -232,7 +232,7 @@ fn AngleToLittrowComponent(
 pub fn GratingAlignmentSelector(
     alignment_select_sig: ReadSignal<bool>,
     on_alignment_change: EventHandler<bool>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let via_littrow = "Define pitch via littrow";
     let direct_pitch = "Define pitch directly";
@@ -261,7 +261,7 @@ pub fn GratingAlignmentSelector(
 pub fn InOrOutgoingFromLittrowSelector(
     incident_angle_sig: ReadSignal<bool>,
     on_incident_change: EventHandler<bool>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let incident_label = "Incident angle to Littrow";
     let diffracted_label = "Diffracted angle to Littrow";

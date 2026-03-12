@@ -12,7 +12,7 @@ pub fn BoolEditor(
     b: bool,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let bool_sig = use_signal(|| b);
     let on_save =

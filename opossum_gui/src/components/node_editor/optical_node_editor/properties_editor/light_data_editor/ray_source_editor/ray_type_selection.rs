@@ -12,7 +12,7 @@ use opossum_core::{
 pub fn RayDataBuilderSelector(
     ray_data_builder_sig: ReadSignal<RayDataBuilder>,
     on_save: EventHandler<RayDataBuilder>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {

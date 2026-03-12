@@ -14,7 +14,17 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    OpticRef, analyzers::AnalyzerType, error::OpossumError, meter, nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence}, opm_document::AnalyzerInfo, optic_ports::PortType, prelude::OpmDocument, properties::Proptype, types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo}, utils::{LockExt, geom_transformation::Isometry}
+    OpticRef,
+    analyzers::AnalyzerType,
+    error::OpossumError,
+    meter,
+    nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
+    opm_document::AnalyzerInfo,
+    optic_ports::PortType,
+    prelude::OpmDocument,
+    properties::Proptype,
+    types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
+    utils::{LockExt, geom_transformation::Isometry},
 };
 use parking_lot::MutexGuard;
 use uom::si::length::meter;
@@ -412,7 +422,8 @@ async fn post_subreference(
         ref_node_info.gui_position().1,
     )));
     let mut document = data.document.lock();
-    let referring_node = get_nested_referenced_node_from_state(ref_node_info.referring_node(), &document)?;
+    let referring_node =
+        get_nested_referenced_node_from_state(ref_node_info.referring_node(), &document)?;
     let scenery = document.scenery_mut();
     let ref_node = node.as_refnode_mut().unwrap();
     ref_node.assign_reference(&referring_node);
@@ -510,21 +521,19 @@ async fn post_node_name(
     let scenery = document.scenery_mut();
 
     let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid);
-    for node_idx in &nodes_to_rename{
+    for node_idx in &nodes_to_rename {
         let node_uuid = scenery.graph().node_by_idx(*node_idx).unwrap().uuid();
         scenery
-                    .with_node_attr_node_mut(node_uuid, |node_attr| {
-                        
-                    let name = if node_attr.node_type() == "reference"{
-                        format!("ref ({name})")
-                        }
-                        else{
-                            name.clone()
-                            };
-                            node_attr.set_name(&name);
-                    processed_names.insert(node_uuid, name);
-    }).map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?;
-
+            .with_node_attr_node_mut(node_uuid, |node_attr| {
+                let name = if node_attr.node_type() == "reference" {
+                    format!("ref ({name})")
+                } else {
+                    name.clone()
+                };
+                node_attr.set_name(&name);
+                processed_names.insert(node_uuid, name);
+            })
+            .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?;
     }
     Ok(Json(processed_names))
 }
@@ -787,19 +796,16 @@ fn get_referenced_node_attr_from_state(
     if node_attr.node_type() == "reference" {
         is_reference = true;
         let ref_node_props = node_attr.properties();
-        if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id")
-        {
+        if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id") {
             get_referenced_node_attr_from_state(is_reference, *ref_uuid, document)
-        }
-        else{
+        } else {
             Err(BackEndErrorResponse::new(
-            400,
-            "Opossum",
-            "'reference id' property not found",
-        ))
+                400,
+                "Opossum",
+                "'reference id' property not found",
+            ))
         }
-    }
-    else{
+    } else {
         Ok((node_attr, is_reference))
     }
 }
@@ -808,28 +814,20 @@ fn get_nested_referenced_node_from_state(
     uuid: Uuid,
     document: &MutexGuard<OpmDocument>,
 ) -> Result<OpticRef, BackEndErrorResponse> {
-    let optic_ref = document
-        .scenery()
-        .node_recursive(uuid)?
-        .0;
-    let node_attr = optic_ref
-        .optical_ref
-        .lock_opm()?.node_attr().clone();
+    let optic_ref = document.scenery().node_recursive(uuid)?.0;
+    let node_attr = optic_ref.optical_ref.lock_opm()?.node_attr().clone();
     if node_attr.node_type() == "reference" {
         let ref_node_props = node_attr.properties();
-        if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id")
-        {
+        if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id") {
             get_nested_referenced_node_from_state(*ref_uuid, document)
-        }
-        else{
+        } else {
             Err(BackEndErrorResponse::new(
-            400,
-            "Opossum",
-            "'reference id' property not found",
-        ))
+                400,
+                "Opossum",
+                "'reference id' property not found",
+            ))
         }
-    }
-    else{
+    } else {
         Ok(optic_ref)
     }
 }
@@ -882,8 +880,11 @@ async fn get_properties_ron(
     let document = data.document.lock();
     let (node_attr, is_reference) = get_referenced_node_attr_from_state(false, uuid, document)?;
 
-    let body = ron::ser::to_string_pretty(&(node_attr, is_reference), ron::ser::PrettyConfig::new().new_line("\n"))
-        .map_err(|e| OpossumError::Other(format!("RON Serialization Error: {e}")))?;
+    let body = ron::ser::to_string_pretty(
+        &(node_attr, is_reference),
+        ron::ser::PrettyConfig::new().new_line("\n"),
+    )
+    .map_err(|e| OpossumError::Other(format!("RON Serialization Error: {e}")))?;
 
     Ok(HttpResponse::Ok()
         .content_type("application/ron")

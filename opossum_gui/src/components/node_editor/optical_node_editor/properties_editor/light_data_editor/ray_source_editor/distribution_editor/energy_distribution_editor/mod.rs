@@ -22,9 +22,10 @@ use uniform_editor::UniformParam;
 pub fn RayEnergyDistributionEditor(
     energy_dist_type_sig: ReadSignal<EnergyDistType>,
     on_save: EventHandler<EnergyDistType>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
-    let inputs: Vec<InputData> = get_energy_dist_input_data(energy_dist_type_sig, on_save, readonly);
+    let inputs: Vec<InputData> =
+        get_energy_dist_input_data(energy_dist_type_sig, on_save, readonly);
     rsx! {
         RowedInputs { inputs }
     }
@@ -35,7 +36,7 @@ pub fn EnergyDistributionEditor(
     energy_dist_type: EnergyDistType,
     ray_data_builder_sig: ReadSignal<RayDataBuilder>,
     on_save: EventHandler<RayDataBuilder>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut energy_dist_type_sig = use_signal(|| energy_dist_type);
 
@@ -74,7 +75,7 @@ pub fn EnergyDistributionEditor(
 pub fn RayEnergyDistributionSelector(
     energy_dist_type_sig: ReadSignal<EnergyDistType>,
     on_save: EventHandler<EnergyDistType>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {
@@ -95,10 +96,12 @@ pub fn RayEnergyDistributionSelector(
 fn get_energy_dist_input_data(
     energy_dist_type_sig: ReadSignal<EnergyDistType>,
     on_save: EventHandler<EnergyDistType>,
-        readonly: bool
+    readonly: bool,
 ) -> Vec<InputData> {
     match &*energy_dist_type_sig.read() {
         EnergyDistType::Uniform(u) => UniformParam::to_input_data_vec(u, on_save, readonly),
-        EnergyDistType::General2DGaussian(g) => get_general_2d_gaussian_input_params(g, on_save, readonly),
+        EnergyDistType::General2DGaussian(g) => {
+            get_general_2d_gaussian_input_params(g, on_save, readonly)
+        }
     }
 }

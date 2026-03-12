@@ -12,7 +12,7 @@ pub fn StringEditor(
     s: String,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let string_sig = use_signal(|| s);
     let on_save =

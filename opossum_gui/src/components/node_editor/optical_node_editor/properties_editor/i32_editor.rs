@@ -12,7 +12,7 @@ pub fn I32Editor(
     int32: i32,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let int32_sig = use_signal(|| int32);
     let on_save =

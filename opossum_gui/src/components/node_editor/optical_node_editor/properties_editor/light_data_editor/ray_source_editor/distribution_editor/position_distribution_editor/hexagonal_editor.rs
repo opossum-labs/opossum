@@ -79,7 +79,7 @@ impl IntoInputData<f64, HexagonalTiling, PosDistType> for HexagonalTilingParam {
 pub fn get_hexagonal_input_params(
     hexagonal: &HexagonalTiling,
     pos_dist_type_handler: EventHandler<PosDistType>,
-    readonly: bool
+    readonly: bool,
 ) -> Vec<InputData> {
     let mut input_data = Vec::<InputData>::new();
     for enum_variant in HexagonalTilingParam::iter() {
@@ -88,7 +88,7 @@ pub fn get_hexagonal_input_params(
                 &enum_variant,
                 *hexagonal,
                 pos_dist_type_handler,
-                readonly
+                readonly,
             ),
         );
     }

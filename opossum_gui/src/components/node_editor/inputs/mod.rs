@@ -56,7 +56,7 @@ where
             self.create_callback(obj.clone(), handler), // Für Legacy/Events
             self.create_callback_str(obj, handler),     // Für Flushable
             value_str,
-            readonly
+            readonly,
         )
     }
 
@@ -172,7 +172,7 @@ impl InputData {
         callback: EventHandler<Event<FormData>>,
         callback_str: EventHandler<String>,
         value: String,
-        readonly: bool
+        readonly: bool,
     ) -> Self {
         Self {
             value,

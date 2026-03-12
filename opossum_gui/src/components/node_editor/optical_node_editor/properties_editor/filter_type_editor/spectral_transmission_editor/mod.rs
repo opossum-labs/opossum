@@ -23,7 +23,7 @@ use crate::components::node_editor::{
 pub fn SpectralFilterTypeSelector(
     spectral_filter_builder_sig: ReadSignal<SpectralFilterBuilder>,
     on_spectral_filter_change: EventHandler<SpectralFilterBuilder>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {
@@ -45,7 +45,7 @@ pub fn SpectralFilterTypeSelector(
 pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clone + 'static>(
     spectral_filter_builder: SpectralFilterBuilder,
     on_spectral_filter_change: EventHandler<T>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut spectral_filter_builder_sig = use_signal(|| spectral_filter_builder.clone());
 
@@ -78,7 +78,7 @@ pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clo
             let input_data = FilterFromFileParam::FPath.to_input_data(
                 spectral_filter_builder_sig.read().clone(),
                 on_spectral_filter_change,
-                readonly
+                readonly,
             );
             rsx! {
                 InputParamLabeledInput { input_data }

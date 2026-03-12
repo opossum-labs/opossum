@@ -30,7 +30,7 @@ pub fn AlignmentEditor(
     node_id: Memo<Uuid>,
     node_attr: ReadSignal<UINodeAttr>,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let node_prop_memo = use_memo(move || node_attr.read().properties.clone());
     let accordion_content = if node_attr.read().node_id == *node_id.read() {
@@ -66,7 +66,7 @@ pub fn AlignmentInputs(
     // node_properties_sig: Signal<Properties>,
     node_type: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut alignment_sig = use_signal(|| alignment);
     let on_save = EventHandler::new(move |new_iso: Isometry| {
@@ -155,7 +155,7 @@ pub fn PositioningEditor(
     node_id: Memo<Uuid>,
     node_attr: ReadSignal<UINodeAttr>,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let accordion_content = if node_attr.read().node_id == *node_id.read() {
         let position_opt = node_attr.read().position;
@@ -186,7 +186,7 @@ pub fn PositioningInputs(
     position_opt: Option<Isometry>,
     on_change: EventHandler<NodeChangeEvent>,
     node_id: Memo<Uuid>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut position_opt_sig = use_signal(|| position_opt);
     let position_memo = use_memo(move || position_opt_sig.read().unwrap_or_default());
@@ -257,7 +257,7 @@ pub fn TranslationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
     on_new_translation: EventHandler<(Length, TranslationAxis)>,
     node_id: Memo<Uuid>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let id_add_on = "inputNodeAlignmentTrans";
 
@@ -330,7 +330,7 @@ pub fn RotationAlignmentInputs(
     axes_skip: Option<Vec<RotationAxis>>,
     on_new_rotation: EventHandler<(Angle, RotationAxis)>,
     node_id: Memo<Uuid>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let id_add_on = "inputNodeAlignmentRot";
 
@@ -363,7 +363,7 @@ pub fn RotationInput(
     axis: RotationAxis,
     id: String,
     on_new_rotation: EventHandler<(Angle, RotationAxis)>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let value_memo = use_memo(move || {
         let angle = alignment.read().rotation_of_axis(axis);

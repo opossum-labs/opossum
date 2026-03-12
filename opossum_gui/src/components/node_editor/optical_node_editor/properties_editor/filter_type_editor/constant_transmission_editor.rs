@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 pub fn ConstantFilterTypeEditor<T: From<f64> + PartialEq + Clone + 'static>(
     transmission: f64,
     on_transmission_change: EventHandler<T>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let transmission_sig = use_signal(|| transmission);
     rsx! {

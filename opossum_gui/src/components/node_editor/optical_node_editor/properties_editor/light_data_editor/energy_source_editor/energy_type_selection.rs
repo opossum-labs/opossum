@@ -12,7 +12,7 @@ use opossum_core::{
 pub fn EnergyDataBuilderSelector(
     energy_data_builder_sig: ReadSignal<EnergyDataBuilder>,
     on_energy_data_builder_save: EventHandler<EnergyDataBuilder>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {

@@ -254,9 +254,12 @@ pub async fn update_gui_position(
 /// # Errors
 ///
 /// This function will return an error if the `node_id` was not found.
-pub async fn update_node_name(node_id: Uuid, node_name: String) -> Result<HashMap<Uuid,String>, String> {
+pub async fn update_node_name(
+    node_id: Uuid,
+    node_name: String,
+) -> Result<HashMap<Uuid, String>, String> {
     HTTP_API_CLIENT()
-        .post::<String, HashMap<Uuid,String>>(
+        .post::<String, HashMap<Uuid, String>>(
             &format!("/api/scenery/name/{}", node_id.as_simple()),
             node_name,
         )

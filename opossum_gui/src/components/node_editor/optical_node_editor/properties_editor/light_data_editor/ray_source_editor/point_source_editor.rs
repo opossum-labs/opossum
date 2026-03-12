@@ -8,7 +8,7 @@ use opossum_core::{meter, prelude::PointSrc};
 pub fn ReferenceLengthEditor(
     point_src: PointSrc,
     ray_data_handler: EventHandler<PointSrc>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     rsx! {
         NodeConfigUnitInput {

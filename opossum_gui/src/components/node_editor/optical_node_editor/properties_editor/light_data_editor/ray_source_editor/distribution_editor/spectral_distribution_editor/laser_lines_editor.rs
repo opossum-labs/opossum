@@ -63,7 +63,11 @@ impl IntoInputData<f64, LaserLines, SpecDistType> for LaserLinesParam {
 }
 
 #[component]
-pub fn LaserLineInput(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>, readonly: bool) -> Element {
+pub fn LaserLineInput(
+    laser_lines: LaserLines,
+    on_save: EventHandler<SpecDistType>,
+    readonly: bool,
+) -> Element {
     let inputs = LaserLinesParam::to_input_data_vec(&laser_lines, on_save, readonly);
     rsx! {
         form {
@@ -135,7 +139,11 @@ pub fn LaserLineInput(laser_lines: LaserLines, on_save: EventHandler<SpecDistTyp
 }
 
 #[component]
-fn LaserLineList(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>, readonly: bool) -> Element {
+fn LaserLineList(
+    laser_lines: LaserLines,
+    on_save: EventHandler<SpecDistType>,
+    readonly: bool,
+) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "laserLineList",
             for (i , line) in laser_lines.clone().lines().iter().enumerate() {

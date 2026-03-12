@@ -44,14 +44,18 @@ pub fn PropertiesEditor(
     node_id: Memo<Uuid>,
     node_attr: ReadSignal<UINodeAttr>,
     on_change_property: EventHandler<NodeChangeEvent>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let editor_inputs = if node_attr.read().node_id == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
         for (property_key, property) in &node_attr.read().properties {
-            if let Some(editor) =
-                get_editor(node_id, property, property_key.clone(), on_change_property, readonly)
-            {
+            if let Some(editor) = get_editor(
+                node_id,
+                property,
+                property_key.clone(),
+                on_change_property,
+                readonly,
+            ) {
                 editor_inputs.push(editor);
             }
         }
@@ -75,13 +79,17 @@ fn get_editor(
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-    readonly: bool
+    readonly: bool,
 ) -> Option<Element> {
-    if let Some(editor) = get_primitive_editor(node_id, property, property_key.clone(), on_change, readonly) {
+    if let Some(editor) =
+        get_primitive_editor(node_id, property, property_key.clone(), on_change, readonly)
+    {
         return Some(editor);
     }
 
-    if let Some(editor) = get_optical_editor(node_id, property, property_key.clone(), on_change, readonly) {
+    if let Some(editor) =
+        get_optical_editor(node_id, property, property_key.clone(), on_change, readonly)
+    {
         return Some(editor);
     }
     get_geometric_editor(node_id, property, property_key, on_change, readonly)
@@ -92,7 +100,7 @@ fn get_primitive_editor(
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-    readonly: bool
+    readonly: bool,
 ) -> Option<Element> {
     match property.prop().clone() {
         Proptype::String(s) => Some(rsx! {
@@ -149,7 +157,7 @@ fn get_optical_editor(
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Option<Element> {
     match property.prop().clone() {
         Proptype::SplittingConfigBuilder(splitting_config_builder) => Some(rsx! {
@@ -215,7 +223,7 @@ fn get_geometric_editor(
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Option<Element> {
     match property.prop().clone() {
         Proptype::Length(length) => Some(rsx! {

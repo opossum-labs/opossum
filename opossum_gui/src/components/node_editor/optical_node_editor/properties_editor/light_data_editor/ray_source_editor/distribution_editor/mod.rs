@@ -14,7 +14,7 @@ use dioxus::prelude::*;
 pub fn DistributionEditor(
     ray_data_builder_sig: ReadSignal<RayDataBuilder>,
     on_save: EventHandler<RayDataBuilder>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     rsx! {
         div {

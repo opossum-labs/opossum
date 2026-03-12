@@ -12,7 +12,7 @@ use spectrum_from_file_editor::SpectrumFromFileEditor;
 pub fn EnergySourceEditor(
     energy_data_builder: EnergyDataBuilder,
     on_save: EventHandler<LightDataBuilder>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let mut energy_data_builder_sig = use_signal(|| energy_data_builder.clone());
 
@@ -41,7 +41,7 @@ pub fn EnergySourceEditor(
 pub fn EnergyDataEditor(
     energy_data_builder_sig: ReadSignal<EnergyDataBuilder>,
     on_save: EventHandler<EnergyDataBuilder>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     match energy_data_builder_sig() {
         EnergyDataBuilder::Raw(_) => rsx! {},

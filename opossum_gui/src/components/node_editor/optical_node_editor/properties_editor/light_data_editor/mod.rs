@@ -24,7 +24,7 @@ pub fn LightDataEditor(
     light_data_builder: LightDataBuilder,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
-        readonly: bool
+    readonly: bool,
 ) -> Element {
     let light_data_builder_sig = use_signal(|| light_data_builder.clone());
 
