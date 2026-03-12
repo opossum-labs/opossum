@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use crate::{
     app_state::{AppState, NodeCacheItem},
     error::BackEndErrorResponse,
@@ -507,14 +509,31 @@ async fn post_node_name(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     name: web::Json<String>,
-) -> Result<(), BackEndErrorResponse> {
+) -> Result<(Json<HashMap<Uuid, String>>), BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let name = name.into_inner();
     let mut document = data.document.lock();
-    document
-        .scenery_mut()
-        .with_node_attr_node_mut(uuid, |node_attr| node_attr.set_name(&name))
-        .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))
+    let mut processed_names = HashMap::<Uuid, String>::new();
+    let scenery = document.scenery_mut();
+    
+    let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid);
+    for node_idx in &nodes_to_rename{
+        let node_uuid = scenery.graph().node_by_idx(*node_idx).unwrap().uuid();
+        scenery
+                    .with_node_attr_node_mut(node_uuid, |node_attr| {
+                        
+                    let name = if node_attr.node_type() == "reference"{
+                        format!("ref ({name})")
+                        }
+                        else{
+                            name.clone()
+                            };
+                            node_attr.set_name(&name);
+                    processed_names.insert(node_uuid, name);
+    }).map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?;
+
+    }
+    Ok(Json(processed_names))
 }
 /// Update the laser-induced damage threshold (LIDT) of an optical node
 #[utoipa::path(tag = "node",

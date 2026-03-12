@@ -84,8 +84,10 @@ fn use_node_config_processor(mut is_modified: Signal<bool>) {
 
                 let result: Result<(), String> = match event.action {
                     NodeChangeAction::Name(name) => {
-                        api::update_node_name(uuid, name.clone()).await.map(|_| {
-                            graph_store.write().set_name_of_node(uuid, name);
+                        api::update_node_name(uuid, name.clone()).await.map(|names| {
+                            for (uuid, name) in names.iter(){
+                                graph_store.write().set_name_of_node(*uuid, name.clone());
+                            }
                         })
                     }
                     NodeChangeAction::Lidt(lidt_new) => {
