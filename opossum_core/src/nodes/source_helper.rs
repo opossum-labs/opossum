@@ -6,7 +6,8 @@ use crate::{
     energy_distributions::UniformDist,
     error::{OpmResult, OpossumError},
     lightdata::{
-        light_data_builder::LightDataBuilder, ray_data_source::{CollimatedSrc, PointSrc, RayDataSource}
+        light_data_builder::LightDataBuilder,
+        ray_data_source::{CollimatedSrc, PointSrc, RayDataSource},
     },
     meter, millimeter, nanometer,
     position_distributions::{Grid, Hexapolar},
