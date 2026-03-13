@@ -17,9 +17,16 @@ impl OpticGraph {
     /// * `light_port`:           port name that should be connected
     ///
     /// Returns the result of the edge strnig for the dot format
-    fn create_node_edge_str(&self, end_node_idx: NodeIndex, light_port: &str) -> OpmResult<String> {
-        let node_id = format!("i{}", self.node_by_idx(end_node_idx)?.uuid().as_simple());
+    ///
+    /// # Errors
+    /// Returns an error if `get_mapped_port_str`, `node_by_idx` or `lock_opm` fail
+    pub fn create_node_edge_str(
+        &self,
+        end_node_idx: NodeIndex,
+        light_port: &str,
+    ) -> OpmResult<String> {
         let node_ref = self.node_by_idx(end_node_idx)?;
+        let node_id = format!("i{}", node_ref.uuid().as_simple());
         let mut node = node_ref.optical_ref.lock_opm()?;
         if let Ok(group_node) = node.as_group_mut() {
             Ok(group_node.get_mapped_port_str(light_port, &node_id)?)
@@ -55,7 +62,6 @@ impl OpticGraph {
                 .ok_or_else(|| OpossumError::Other("could not get edge_endpoints".into()))?;
             let node_id = self.node_by_idx(end_nodes.1)?.uuid();
             let dist = self.distance_from_predecessor(node_id, light.target_port())?;
-
             let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port())?;
             let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port())?;
 

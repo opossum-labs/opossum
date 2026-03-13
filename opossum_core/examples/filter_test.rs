@@ -25,7 +25,7 @@ fn main() -> OpmResult<()> {
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
         &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::FromFile(
-            Path::new("./opossum/files_for_testing/spectrum/NF633-25.csv").to_path_buf(),
+            Path::new("./opossum_core/files_for_testing/spectrum/NF633-25.csv").to_path_buf(),
         )),
     )?)?;
 
