@@ -19,10 +19,11 @@ use uom::si::angle::degree;
 pub fn ImageSourceEditor(
     ray_data_builder_sig: ReadSignal<RayDataBuilder>,
     on_save: EventHandler<RayDataBuilder>,
+    readonly: bool,
 ) -> Element {
     match &*ray_data_builder_sig.read() {
         RayDataBuilder::Image(img_src) => {
-            let inputs = get_image_source_input_params(img_src, on_save);
+            let inputs = get_image_source_input_params(img_src, on_save, readonly);
             rsx! {
                 RowedInputs { inputs }
             }
@@ -36,6 +37,7 @@ pub fn ImageSourceEditor(
 pub fn get_image_source_input_params(
     img_src: &ImageSrc,
     on_save: EventHandler<RayDataBuilder>,
+    readonly: bool,
 ) -> Vec<InputData> {
     let mut input_data = Vec::<InputData>::new();
     for enum_variant in ImageSrcParam::iter() {
@@ -46,6 +48,7 @@ pub fn get_image_source_input_params(
                         &enum_variant,
                         img_src.clone(),
                         on_save,
+                        readonly,
                     ),
                 );
             }
@@ -54,6 +57,7 @@ pub fn get_image_source_input_params(
                     &enum_variant,
                     img_src.clone(),
                     on_save,
+                    readonly,
                 ),
             ),
         }

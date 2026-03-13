@@ -14,6 +14,7 @@ use dioxus::prelude::*;
 pub fn DistributionEditor(
     ray_data_builder_sig: ReadSignal<RayDataBuilder>,
     on_save: EventHandler<RayDataBuilder>,
+    readonly: bool,
 ) -> Element {
     rsx! {
         div {
@@ -23,16 +24,19 @@ pub fn DistributionEditor(
                 pos_dist_type: ray_data_builder_sig.read().get_position_distribution_type().unwrap_or_default(),
                 ray_data_builder_sig,
                 on_save,
+                readonly,
             }
             EnergyDistributionEditor {
                 energy_dist_type: ray_data_builder_sig.read().get_energy_distribution_type().unwrap_or_default(),
                 ray_data_builder_sig,
                 on_save,
+                readonly,
             }
             SpectralDistributionEditor {
                 spect_dist_type: ray_data_builder_sig.read().get_spectral_distribution_type().unwrap_or_default(),
                 ray_data_builder_sig,
                 on_save,
+                readonly,
             }
         }
     }

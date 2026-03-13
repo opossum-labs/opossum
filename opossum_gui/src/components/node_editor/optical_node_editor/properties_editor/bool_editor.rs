@@ -12,6 +12,7 @@ pub fn BoolEditor(
     b: bool,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Element {
     let bool_sig = use_signal(|| b);
     let on_save =
@@ -22,6 +23,7 @@ pub fn BoolEditor(
             id: format!("boolProperty{property_key}").to_camel_case(),
             label: property_key.to_sentence_case(),
             value: format!("{}", *bool_sig.read()),
+            readonly,
             onchange: move |e: Event<FormData>| {
                 if let Ok(val) = e.data.value().parse::<bool>() {
                     on_save.call(val);

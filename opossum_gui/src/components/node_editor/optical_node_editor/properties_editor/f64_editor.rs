@@ -13,6 +13,7 @@ pub fn F64Editor(
     float64: f64,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Element {
     let float64_sig = use_signal(|| float64);
     let on_save =
@@ -23,6 +24,7 @@ pub fn F64Editor(
             id: format!("float64Property{property_key}").to_camel_case(),
             label: property_key.to_sentence_case(),
             value: float64_sig,
+            readonly,
             onchange: move |new_val: f64| {
                 if relative_ne!(* float64_sig.read(), new_val, epsilon = 0.0) {
                     on_save.call(new_val);

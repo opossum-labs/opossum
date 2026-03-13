@@ -16,6 +16,7 @@ pub fn IsometryOptionEditor(
     isometry: Isometry,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Element {
     let isometry_sig = use_signal(|| isometry);
     let on_save = on_save_proptype_handler(isometry_sig, property_key, on_change, node_id.into());
@@ -34,11 +35,13 @@ pub fn IsometryOptionEditor(
             axes_skip: None,
             on_new_rotation: on_new_rotation(on_position_change, position_memo.into()),
             node_id,
+            readonly,
         }
         TranslationAlignmentInputs {
             alignment: position_memo,
             on_new_translation: on_new_translation(on_position_change, position_memo.into()),
             node_id,
+            readonly,
         }
     });
 

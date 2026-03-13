@@ -48,7 +48,7 @@ where
         e_value.parse::<T>().ok()
     }
 
-    fn to_input_data(&self, obj: D, handler: EventHandler<B>) -> InputData {
+    fn to_input_data(&self, obj: D, handler: EventHandler<B>, readonly: bool) -> InputData {
         let value_str = self.create_value_string(&obj);
         InputData::new(
             Into::<InputParam>::into(*self),
@@ -56,13 +56,14 @@ where
             self.create_callback(obj.clone(), handler), // Für Legacy/Events
             self.create_callback_str(obj, handler),     // Für Flushable
             value_str,
+            readonly,
         )
     }
 
-    fn to_input_data_vec(obj: &D, handler: EventHandler<B>) -> Vec<InputData> {
+    fn to_input_data_vec(obj: &D, handler: EventHandler<B>, readonly: bool) -> Vec<InputData> {
         let mut input_data = Vec::<InputData>::new();
         for enum_variant in Self::iter() {
-            input_data.push(enum_variant.to_input_data(obj.clone(), handler));
+            input_data.push(enum_variant.to_input_data(obj.clone(), handler, readonly));
         }
         input_data
     }
@@ -171,6 +172,7 @@ impl InputData {
         callback: EventHandler<Event<FormData>>,
         callback_str: EventHandler<String>,
         value: String,
+        readonly: bool,
     ) -> Self {
         Self {
             value,
@@ -178,7 +180,7 @@ impl InputData {
             input_param,
             callback,
             callback_str,
-            readonly: false,
+            readonly,
         }
     }
 }

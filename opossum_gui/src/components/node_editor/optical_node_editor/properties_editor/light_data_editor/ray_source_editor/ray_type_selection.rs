@@ -12,6 +12,7 @@ use opossum_core::{
 pub fn RayDataBuilderSelector(
     ray_data_builder_sig: ReadSignal<RayDataBuilder>,
     on_save: EventHandler<RayDataBuilder>,
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {
@@ -21,6 +22,7 @@ pub fn RayDataBuilderSelector(
                 &*ray_data_builder_sig.read(),
                 Some(&[&RayDataBuilder::Raw(Rays::default())]),
             ),
+            readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(rdb) = RayDataBuilder::default_from_name(val.as_str()) {
