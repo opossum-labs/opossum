@@ -105,7 +105,10 @@ mod test {
         light_result::LightResult,
         lightdata::LightData,
         millimeter, nanometer,
-        nodes::{BeamSplitter, NodeGroup, SplittingConfigBuilder, round_collimated_ray_source},
+        nodes::{
+            BeamSplitter, NodeGroup, SourcePort, SplittingConfigBuilder,
+            round_collimated_ray_builder,
+        },
         optic_node::OpticNode,
         prelude::{AnalyzerType, OpmDocument},
         ray::Ray,
@@ -218,11 +221,15 @@ mod test {
     #[test]
     fn integration_not_connected_beam_splitter() {
         let mut scenery = NodeGroup::default();
-        let src = round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 1).unwrap();
-        scenery.add_node(src).unwrap();
+        let src = scenery.add_node(SourcePort::default()).unwrap();
         scenery.add_node(BeamSplitter::default()).unwrap(); // add unconnected beamsplitter
         let mut document = OpmDocument::new(scenery);
-        document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            src,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1).unwrap(),
+        );
+        document.add_analyzer(AnalyzerType::RayTrace(config));
         document.analyze().unwrap();
     }
 }

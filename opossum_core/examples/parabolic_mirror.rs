@@ -1,14 +1,10 @@
 use nalgebra::Vector3;
-use opossum_core::prelude::*;
+use opossum_core::{nodes::round_collimated_ray_builder, prelude::*};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(round_collimated_ray_source(
-        millimeter!(240.0),
-        joule!(1.0),
-        8,
-    )?)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
     let i_m1 = scenery.add_node(ParabolicMirror::new_with_off_axis_y(
         "parabola 1",
         millimeter!(400.0),
@@ -35,6 +31,11 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_pm, "output_1", i_prop_vis, "input_1", millimeter!(0.1))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        round_collimated_ray_builder(millimeter!(240.0), joule!(1.0), 8)?,
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/parabolic_mirror.opm"))
 }

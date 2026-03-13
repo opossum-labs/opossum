@@ -1,20 +1,9 @@
-use opossum_core::prelude::*;
-use opossum_core::{
-    energy_distributions::UniformDist, position_distributions::Hexapolar,
-    spectral_distribution::LaserLines,
-};
+use opossum_core::{nodes::round_collimated_ray_builder, prelude::*};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler wavefront aberrations");
-    let light_data_builder =
-        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
-            Hexapolar::new(millimeter!(24.0), 8)?.into(),
-            UniformDist::new(joule!(1.0))?.into(),
-            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-        )));
-    let src = Source::new("collimated ray source", light_data_builder);
-    let i_src = scenery.add_node(src)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     let i_sd5 = scenery.add_node(WaveFront::new("wavefront before telecope"))?;
     let refr_index_hzf52 = RefrIndexSchott::new(
         3.26760058E+000,
@@ -57,7 +46,12 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_sd3, "output_1", i_sd4, "input_1", millimeter!(0.1))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        round_collimated_ray_builder(millimeter!(24.0), joule!(1.0), 9)?,
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_03_kepler_wavefront.opm",
     ))

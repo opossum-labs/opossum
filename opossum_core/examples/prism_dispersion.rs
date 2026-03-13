@@ -23,18 +23,7 @@ fn main() -> OpmResult<()> {
     let wedge_angle_in_degree = 10.0;
 
     let mut scenery = NodeGroup::default();
-    let light_data_builder =
-        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
-            Grid::new(
-                Point2::new(Length::zero(), beam_size_y),
-                Point2::new(1, nr_of_rays),
-            )?
-            .into(),
-            UniformDist::new(joule!(1.0))?.into(),
-            LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 1.0)])?.into(),
-        )));
-    let light_src = Source::new("collimated ray source", light_data_builder);
-    let src = scenery.add_node(light_src)?;
+    let src = scenery.add_node(SourcePort::new("collimated ray source"))?;
 
     let w1 = scenery.add_node(
         Wedge::new(
@@ -71,7 +60,9 @@ fn main() -> OpmResult<()> {
         )?
         .with_tilt(degree!(wedge_angle_in_degree / -2.0, 0.0, 0.0))?,
     )?;
-    let det = scenery.add_node(RayPropagationVisualizer::default())?;
+    let mut rpv = RayPropagationVisualizer::default();
+    rpv.set_property("ray transparency", 1.0.into())?;
+    let det = scenery.add_node(rpv)?;
     let sd = scenery.add_node(SpotDiagram::default())?;
     scenery.connect_nodes(src, "output_1", w1, "input_1", millimeter!(50.0))?;
     scenery.connect_nodes(w1, "output_1", w2, "input_1", millimeter!(100.0))?;
@@ -81,6 +72,17 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(det, "output_1", sd, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+        Grid::new(
+            Point2::new(Length::zero(), beam_size_y),
+            Point2::new(1, nr_of_rays),
+        )?
+        .into(),
+        UniformDist::new(joule!(1.0))?.into(),
+        LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 1.0)])?.into(),
+    ));
+    config.map_source(src, ray_data_source.into());
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/prism_dispersion.opm"))
 }

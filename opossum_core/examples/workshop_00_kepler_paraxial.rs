@@ -3,11 +3,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler paraxial");
-    let i_src = scenery.add_node(collimated_line_ray_source(
-        millimeter!(45.0),
-        joule!(1.0),
-        9,
-    )?)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     let mut lens1 = ParaxialSurface::new("75 mm lens", millimeter!(75.0))?;
     let aperture =
         Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
@@ -22,7 +18,12 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        collimated_line_ray_builder(millimeter!(45.0), joule!(1.0), 9)?,
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_00_kepler_paraxial.opm",
     ))

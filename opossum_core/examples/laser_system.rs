@@ -1,13 +1,12 @@
 use num::Zero;
-use opossum_core::prelude::*;
+use opossum_core::{nodes::round_collimated_ray_builder, prelude::*};
 use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("laser system");
     // Main beam line
-    let source = round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 3)?;
-    let i_src = scenery.add_node(source)?;
+    let i_src = scenery.add_node(SourcePort::new("Collimated source"))?;
     let i_l1 = scenery.add_node(ParaxialSurface::new("f=100", millimeter!(100.0))?)?;
     let i_l2 = scenery.add_node(ParaxialSurface::new("f=200", millimeter!(200.0))?)?;
     let i_bs = scenery.add_node(BeamSplitter::new(
@@ -72,6 +71,9 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_f, "output_1", i_cam_box, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    let ray_data_builder = round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 3)?;
+    config.map_source(i_src, ray_data_builder);
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/laser_system.opm"))
 }

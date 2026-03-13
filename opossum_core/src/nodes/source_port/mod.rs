@@ -1,9 +1,13 @@
-use std::fmt::Display;
+use std::{
+    fmt::Display,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     error::OpmResult,
     nodes::{NodeAttr, NodeRegistration},
-    prelude::{Isometry, OpticNode, Proptype},
+    prelude::{Isometry, OpticNode, PortType, Proptype},
+    surface::{Plane, geo_surface::GeoSurfaceRef},
 };
 use opm_macros_lib::OpmNode;
 
@@ -67,14 +71,30 @@ impl OpticNode for SourcePort {
         &mut self.node_attr
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        // A source port only has an output port, so we only need to update the flat single surface for the output port.
+        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
+        self.update_surface(
+            &"output_1".to_string(),
+            geosurface,
+            Isometry::identity(),
+            &PortType::Output,
+        )?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::prelude::PortType;
+    use crate::{
+        analyzers::{Analyzer, raytrace::RayTracingAnalyzer},
+        joule, millimeter,
+        nodes::{
+            NodeGroup, ParaxialSurface, RayPropagationVisualizer, round_collimated_ray_builder,
+        },
+        prelude::{PortType, RayTraceConfig},
+    };
 
     #[test]
     fn default() {
@@ -86,24 +106,44 @@ mod test {
         assert_eq!(node.node_color(), "slateblue");
         assert!(node.as_group_mut().is_err());
     }
-
     #[test]
     fn new() {
         let source = SourcePort::new("test");
         assert_eq!(source.name(), "test");
     }
-
     #[test]
     fn is_invertable() {
         let mut node = SourcePort::default();
         assert!(node.set_inverted(false).is_ok());
         assert!(node.set_inverted(true).is_ok());
     }
-
     #[test]
     fn ports() {
         let node = SourcePort::default();
-        assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
+    }
+    #[test]
+    fn integration_test() {
+        let mut scenery = NodeGroup::default();
+        let i_src = scenery.add_node(SourcePort::default()).unwrap();
+        let i_l = scenery
+            .add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0)).unwrap())
+            .unwrap();
+        let i_sd = scenery
+            .add_node(RayPropagationVisualizer::default())
+            .unwrap();
+        scenery
+            .connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(50.0))
+            .unwrap();
+        scenery
+            .connect_nodes(i_l, "output_1", i_sd, "input_1", millimeter!(150.0))
+            .unwrap();
+
+        let ray_data_builder =
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 10).unwrap();
+        let mut ray_trace_config = RayTraceConfig::default();
+        ray_trace_config.map_source(i_src, ray_data_builder);
+        let analyzer = RayTracingAnalyzer::new(ray_trace_config);
+        assert!(analyzer.analyze(&mut scenery).is_ok());
     }
 }

@@ -149,7 +149,7 @@ impl AnalysisRayTrace for ParaxialSurface {
         };
         let iso = self.effective_surface_iso(in_port)?;
         let mut rays_bundle = vec![rays];
-        self.pass_through_surface_generic(in_port, None, &mut rays_bundle, config, false, false)?;
+        self.pass_through_surface_generic(in_port, None, &mut rays_bundle, config, false, true)?;
         let rays = &mut rays_bundle[0];
         rays.refract_paraxial(focal_length, &iso)?;
         let mut light_result = LightResult::default();
@@ -252,20 +252,27 @@ mod test {
         )
         .unwrap();
         let mut rays = Rays::default();
-        rays.add_ray(
+        let mut initial_ray =
             Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap(),
-        );
+                .unwrap();
+        initial_ray.add_to_pos_hist(millimeter!(0., 0., -10.));
+        rays.add_ray(initial_ray);
+
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Geometric(rays));
         let output =
             AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
             assert_eq!(ray.position(), millimeter!(0.0, 0.0, 10.0));
             let dir = Vector3::z();
             assert_eq!(ray.direction(), dir);
+            assert!(
+                ray.ray_history_len() > 1,
+                "Ray position history was lost or not updated during propagation!"
+            );
         } else {
             assert!(false, "could not get LightData");
         }

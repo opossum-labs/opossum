@@ -154,14 +154,11 @@ mod test {
 
     use super::EnergyAnalyzer;
     use crate::{
-        analyzers::Analyzer,
+        analyzers::{Analyzer, energy::EnergyConfig},
         joule,
-        lightdata::{
-            energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
-            light_data_builder::LightDataBuilder,
-        },
+        lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
         nanometer,
-        nodes::{EnergyMeter, NodeGroup, Source},
+        nodes::{EnergyMeter, NodeGroup, SourcePort},
     };
     #[test]
     fn analyze_empty_scene() {
@@ -169,30 +166,31 @@ mod test {
         let energy_analyzer = EnergyAnalyzer::default();
         energy_analyzer.analyze(&mut scenery).unwrap();
     }
-    fn create_scene() -> NodeGroup {
+    fn create_scene() -> (NodeGroup, EnergyConfig) {
         let mut scenery = NodeGroup::default();
-        let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+        let energy_data_builder = EnergyDataBuilder::LaserLines(
             EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
-        ));
-        let src = Source::new("source", light_data_builder);
-        let i_src = scenery.add_node(src).unwrap();
+        );
+        let i_src = scenery.add_node(SourcePort::default()).unwrap();
         let i_em = scenery.add_node(EnergyMeter::default()).unwrap();
         scenery
             .connect_nodes(i_src, "output_1", i_em, "input_1", Length::zero())
             .unwrap();
-        scenery
+        let mut config = EnergyConfig::default();
+        config.map_source(i_src, energy_data_builder.into());
+        (scenery, config)
     }
     #[test]
     fn analyze_full_scene() {
-        let mut scenery = create_scene();
-        let energy_analyzer = EnergyAnalyzer::default();
+        let (mut scenery, config) = create_scene();
+        let energy_analyzer = EnergyAnalyzer::new(config);
         energy_analyzer.analyze(&mut scenery).unwrap();
     }
     #[test]
     fn analyze_report_without_analysis() {
-        let mut scenery = create_scene();
-        let energy_analyzer = EnergyAnalyzer::default();
-        energy_analyzer.analyze(&mut scenery).unwrap();
+        let (scenery, config) = create_scene();
+        let energy_analyzer = EnergyAnalyzer::new(config);
+        // energy_analyzer.analyze(&mut scenery).unwrap();
         energy_analyzer.report(&scenery).unwrap();
     }
 
@@ -240,8 +238,7 @@ mod test {
         );
 
         let mut scene = NodeGroup::default();
-        let src = Source::new("source", LightDataBuilder::Energy(builder.clone()));
-        let node_id = scene.add_node(src).unwrap();
+        let node_id = scene.add_node(SourcePort::new("source")).unwrap();
 
         config.map_source(node_id, builder.clone());
         config.map_source(uuid2, builder.clone());

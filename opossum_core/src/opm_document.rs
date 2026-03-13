@@ -338,13 +338,9 @@ mod test {
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
         degree, joule, millimeter, nanometer,
-        nodes::{
-            BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens,
-            ParabolicMirror, ParaxialSurface, RayPropagationVisualizer, ReflectiveGrating,
-            Spectrometer, SpotDiagram, ThinMirror, WaveFront, Wedge, collimated_line_ray_source,
-            round_collimated_ray_source,
-        },
+        nodes::round_collimated_ray_builder,
         optic_node::{Alignable, OpticNode},
+        prelude::*,
         refractive_index::RefrIndexConst,
         utils::test_helper::test_helper::check_logs,
     };
@@ -451,8 +447,7 @@ mod test {
     #[test]
     fn all_nodes_integration_test() {
         let mut scenery = NodeGroup::default();
-        let src = round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 1).unwrap();
-        let i_0 = scenery.add_node(src).unwrap();
+        let i_0 = scenery.add_node(SourcePort::default()).unwrap();
         let i_1 = scenery.add_node(BeamSplitter::default()).unwrap();
         let i_2 = scenery.add_node(CylindricLens::default()).unwrap();
         let i_3 = scenery.add_node(FluenceDetector::default()).unwrap();
@@ -530,24 +525,26 @@ mod test {
             .unwrap();
 
         scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
+        let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1).unwrap();
+        let mut config = RayTraceConfig::default();
+        config.map_source(i_0, ray_builder.clone());
         // Perform ray tracing analysis
         testing_logger::setup();
-        let analyzer = RayTracingAnalyzer::new(RayTraceConfig::default());
+        let analyzer = RayTracingAnalyzer::new(config);
         analyzer.analyze(&mut scenery).unwrap();
         check_logs(log::Level::Warn, vec![]);
         scenery.reset_data();
         // Perform ghost focus analysis
-        let analyzer = GhostFocusAnalyzer::new(GhostFocusConfig::default());
+        let mut config = GhostFocusConfig::default();
+        config.map_source(i_0, ray_builder.source().clone());
+        let analyzer = GhostFocusAnalyzer::new(config);
         analyzer.analyze(&mut scenery).unwrap();
-
         check_logs(log::Level::Warn, vec![]);
     }
     #[test]
     fn full_analysis_with_save_and_load() {
         let mut scenery = NodeGroup::new("Lens Ray-trace test");
-        let src = scenery
-            .add_node(collimated_line_ray_source(millimeter!(20.0), joule!(1.0), 6).unwrap())
-            .unwrap();
+        let src = scenery.add_node(SourcePort::default()).unwrap();
         let lens1 = Wedge::new(
             "Wedge",
             millimeter!(10.0),
@@ -582,7 +579,12 @@ mod test {
             .connect_nodes(l2, "output_1", det, "input_1", millimeter!(50.0))
             .unwrap();
         let mut doc = OpmDocument::new(scenery);
-        doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            src,
+            collimated_line_ray_builder(millimeter!(20.0), joule!(1.0), 6).unwrap(),
+        );
+        doc.add_analyzer(AnalyzerType::RayTrace(config));
         let temp_model_file = NamedTempFile::new().unwrap();
         doc.save_to_file(temp_model_file.path()).unwrap();
 

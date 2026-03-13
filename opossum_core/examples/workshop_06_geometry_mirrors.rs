@@ -4,11 +4,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Geometry, mirror system");
-    let i_src = scenery.add_node(collimated_line_ray_source(
-        millimeter!(20.0),
-        joule!(1.0),
-        9,
-    )?)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(22.5, 0.0, 0.0))?;
     mirror1.set_coating(
         &PortType::Input,
@@ -28,7 +24,12 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(i_m2, "output_1", i_prop_vis, "input_1", millimeter!(80.0))?;
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        collimated_line_ray_builder(millimeter!(20.0), joule!(1.0), 9)?,
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_06_geometry_mirrors.opm",
     ))

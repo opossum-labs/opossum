@@ -1,4 +1,5 @@
 use nalgebra::Vector3;
+use opossum_core::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::UniformDist, position_distributions::Hexapolar,
@@ -18,7 +19,6 @@ use folded_martinez_paraxial_lens::folded_martinez_paraxial_lens;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
-    // let tel_dist = millimeter!(2467.96162);
     let tel_dist = millimeter!(1015.515);
     let alignment_wvl = nanometer!(1054.);
     let nbk7 = RefrIndexSellmeier1::new(
@@ -30,27 +30,29 @@ fn main() -> OpmResult<()> {
         103.5606530,
         nanometer!(300.)..nanometer!(1200.),
     )?;
-    let light_data_builder =
-        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
-            Hexapolar::new(millimeter!(1.), 4)?.into(),
-            UniformDist::new(joule!(1.))?.into(),
-            Gaussian::new(
-                (nanometer!(1040.), nanometer!(1068.)),
-                30,
-                nanometer!(1054.),
-                nanometer!(8.),
-                1.,
-            )?
-            .into(),
-        )));
-    let mut src = Source::new("collimated ray source", light_data_builder);
-    src.set_alignment_wavelength(alignment_wvl)?;
+    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+        Hexapolar::new(millimeter!(1.), 4)?.into(),
+        UniformDist::new(joule!(1.))?.into(),
+        Gaussian::new(
+            (nanometer!(1040.), nanometer!(1068.)),
+            30,
+            nanometer!(1054.),
+            nanometer!(8.),
+            1.,
+        )?
+        .into(),
+    ));
+    let mut ray_data_builder: RayDataBuilder = ray_data_source.into();
+    ray_data_builder.set_alignment_wavelength(Some(alignment_wvl));
+
+    let mut ray_tracing_config = RayTraceConfig::default();
+
     ////////////////////////////////////
     //  4 grating compressor example  //
     ////////////////////////////////////
     let mut scenery = NodeGroup::new("treacy compressor");
 
-    let i_src = scenery.add_node(src.clone())?;
+    let i_src = scenery.add_node(SourcePort::default())?;
     let compressor_node = scenery.add_node(treacy_compressor(alignment_wvl)?)?;
 
     let detectors = scenery.add_node(detector_group()?)?;
@@ -71,7 +73,8 @@ fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    ray_tracing_config.map_source(i_src, ray_data_builder.clone());
+    doc.add_analyzer(AnalyzerType::RayTrace(ray_tracing_config.clone()));
     doc.save_to_file(Path::new("./opossum_core/playground/treacy_compressor.opm"))?;
 
     //////////////////////////////////////////////////////////////////////
@@ -82,7 +85,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(1015.515 * 0.995);
     let mut scenery = NodeGroup::new("non-ideal folded Martinez stretcher");
 
-    let i_src = scenery.add_node(src.clone())?;
+    let i_src = scenery.add_node(SourcePort::default())?;
     let stretcher_node =
         scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
     let detectors = scenery.add_node(detector_group()?)?;
@@ -103,7 +106,8 @@ fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    ray_tracing_config.map_source(i_src, ray_data_builder.clone());
+    doc.add_analyzer(AnalyzerType::RayTrace(ray_tracing_config.clone()));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/nonideal_folded_martinez.opm",
     ))?;
@@ -116,7 +120,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(1017.14885);
     let mut scenery = NodeGroup::new("ideal folded Martinez stretcher");
 
-    let i_src = scenery.add_node(src.clone())?;
+    let i_src = scenery.add_node(SourcePort::default())?;
     let stretcher_node =
         scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
     let detectors = scenery.add_node(detector_group()?)?;
@@ -137,7 +141,8 @@ fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    ray_tracing_config.map_source(i_src, ray_data_builder.clone());
+    doc.add_analyzer(AnalyzerType::RayTrace(ray_tracing_config.clone()));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/ideal_folded_martinez.opm",
     ))?;
@@ -150,7 +155,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(1015.515);
     let mut scenery = NodeGroup::new("ideal folded Martinez stretcher circle of least conf");
 
-    let i_src = scenery.add_node(src.clone())?;
+    let i_src = scenery.add_node(SourcePort::default())?;
     let stretcher_node =
         scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
     let detectors = scenery.add_node(detector_group()?)?;
@@ -171,7 +176,8 @@ fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    ray_tracing_config.map_source(i_src, ray_data_builder.clone());
+    doc.add_analyzer(AnalyzerType::RayTrace(ray_tracing_config.clone()));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/ideal_folded_martinez_circle_of_least_conf.opm",
     ))?;
@@ -184,7 +190,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(2467.1);
     let mut scenery = NodeGroup::new("ideal folded Martinez stretcher longer f");
 
-    let i_src = scenery.add_node(src.clone())?;
+    let i_src = scenery.add_node(SourcePort::default())?;
     let stretcher_node = scenery.add_node(folded_martinez_longer_f(
         telescope_distance,
         &nbk7,
@@ -208,7 +214,8 @@ fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    ray_tracing_config.map_source(i_src, ray_data_builder.clone());
+    doc.add_analyzer(AnalyzerType::RayTrace(ray_tracing_config.clone()));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/ideal_folded_martinez_longer_f.opm",
     ))?;
@@ -221,7 +228,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(1017.14885);
     let mut scenery = NodeGroup::new("achromatic ideal folded Martinez stretcher");
 
-    let i_src = scenery.add_node(src.clone())?;
+    let i_src = scenery.add_node(SourcePort::default())?;
     let stretcher_node = scenery.add_node(folded_martinez(
         telescope_distance,
         &RefrIndexConst::new(nbk7.get_refractive_index(nanometer!(1054.))?)?,
@@ -245,7 +252,8 @@ fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    ray_tracing_config.map_source(i_src, ray_data_builder.clone());
+    doc.add_analyzer(AnalyzerType::RayTrace(ray_tracing_config.clone()));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/achromat_ideal_folded_martinez.opm",
     ))?;
@@ -258,7 +266,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(1017.14885);
     let mut scenery = NodeGroup::new("paraxial folded Martinez stretcher");
 
-    let i_src = scenery.add_node(src.clone())?;
+    let i_src = scenery.add_node(SourcePort::default())?;
     let stretcher_node = scenery.add_node(folded_martinez_paraxial_lens(
         telescope_distance,
         alignment_wvl,
@@ -281,7 +289,8 @@ fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    ray_tracing_config.map_source(i_src, ray_data_builder);
+    doc.add_analyzer(AnalyzerType::RayTrace(ray_tracing_config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/achromat_ideal_folded_martinez.opm",
     ))?;
@@ -300,22 +309,22 @@ fn main() -> OpmResult<()> {
         nanometer!(300.)..nanometer!(1200.),
     )?;
     let mut scenery = NodeGroup::new("telescope");
-    let light_data_builder =
-        LightDataBuilder::Geometric(RayDataSource::Collimated(CollimatedSrc::new(
-            Hexapolar::new(millimeter!(50.), 8)?.into(),
-            UniformDist::new(joule!(1.))?.into(),
-            Gaussian::new(
-                (nanometer!(1054.), nanometer!(1068.)),
-                1,
-                nanometer!(1054.),
-                nanometer!(8.),
-                1.,
-            )?
-            .into(),
-        )));
-    let mut src = Source::new("collimated ray source", light_data_builder);
-    src.set_alignment_wavelength(alignment_wvl)?;
-    let i_src = scenery.add_node(src)?;
+    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+        Hexapolar::new(millimeter!(50.), 8)?.into(),
+        UniformDist::new(joule!(1.))?.into(),
+        Gaussian::new(
+            (nanometer!(1054.), nanometer!(1068.)),
+            1,
+            nanometer!(1054.),
+            nanometer!(8.),
+            1.,
+        )?
+        .into(),
+    ));
+    let mut ray_data_builder: RayDataBuilder = ray_data_source.into();
+    ray_data_builder.set_alignment_wavelength(Some(alignment_wvl));
+
+    let i_src = scenery.add_node(SourcePort::default())?;
     // focal length = 996.7 mm (Thorlabs LA1779-B)
     let lens1 = scenery.add_node(Lens::new(
         "Lens 1",
@@ -368,6 +377,8 @@ fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut ray_tracing_config = RayTraceConfig::default();
+    ray_tracing_config.map_source(i_src, ray_data_builder);
+    doc.add_analyzer(AnalyzerType::RayTrace(ray_tracing_config));
     doc.save_to_file(Path::new("./opossum_core/playground/telescope.opm"))
 }

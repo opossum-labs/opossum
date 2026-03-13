@@ -5,20 +5,8 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("filter system demo");
+    let i_src = scenery.add_node(SourcePort::new("Source"))?;
 
-    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::Raw(
-        BandFilter::new(
-            BandFilterType::BandPass,
-            nanometer!(630.),
-            nanometer!(50.),
-            (0.)..(1.),
-            Some(nanometer!(5.)),
-            nanometer!(560.)..nanometer!(700.),
-            nanometer!(0.01),
-        )?
-        .into(),
-    ));
-    let i_s = scenery.add_node(Source::new("Source", light_data_builder))?;
     let i_bs = scenery
         .add_node(BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap())?;
 
@@ -39,13 +27,28 @@ fn main() -> OpmResult<()> {
         opossum_core::nodes::Metertype::IdealEnergyMeter,
     ))?;
 
-    scenery.connect_nodes(i_s, "output_1", i_bs, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_src, "output_1", i_bs, "input_1", Length::zero())?;
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "input_1", Length::zero())?;
     scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "input_1", Length::zero())?;
     scenery.connect_nodes(i_f, "output_1", i_d2, "input_1", Length::zero())?;
     scenery.connect_nodes(i_d2, "output_1", i_d3, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+
+    let mut config = EnergyConfig::default();
+    let energy_data_builder = EnergyDataBuilder::Raw(
+        BandFilter::new(
+            BandFilterType::BandPass,
+            nanometer!(630.),
+            nanometer!(50.),
+            (0.)..(1.),
+            Some(nanometer!(25.)),
+            nanometer!(560.)..nanometer!(700.),
+            nanometer!(0.01),
+        )?
+        .into(),
+    );
+    config.map_source(i_src, energy_data_builder);
+    doc.add_analyzer(AnalyzerType::Energy(config));
     doc.save_to_file(Path::new("./opossum_core/playground/filter_test.opm"))
 }

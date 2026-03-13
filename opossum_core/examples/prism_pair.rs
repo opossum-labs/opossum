@@ -1,14 +1,11 @@
-use opossum_core::prelude::*;
-use opossum_core::{refractive_index::RefrIndexConst, utils::geom_transformation::Isometry};
+use opossum_core::{
+    prelude::*, refractive_index::RefrIndexConst, utils::geom_transformation::Isometry,
+};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Prism Pair test");
-    let src = scenery.add_node(collimated_line_ray_source(
-        millimeter!(50.0),
-        joule!(1.0),
-        7,
-    )?)?;
+    let src = scenery.add_node(SourcePort::new("collimated ray source"))?;
     let prism1 = Wedge::new(
         "Prism1",
         millimeter!(20.0),
@@ -27,7 +24,9 @@ fn main() -> OpmResult<()> {
     prism2.set_isometry(iso)?;
     let p2 = scenery.add_node(prism2)?;
 
-    let det = scenery.add_node(RayPropagationVisualizer::default())?;
+    let mut rpv = RayPropagationVisualizer::default();
+    rpv.set_property("ray transparency", 1.0.into())?;
+    let det = scenery.add_node(rpv)?;
     let sd = scenery.add_node(SpotDiagram::default())?;
 
     scenery.connect_nodes(src, "output_1", p1, "input_1", millimeter!(10.0))?;
@@ -37,6 +36,11 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(sd, "output_1", det, "input_1", millimeter!(0.1))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        src,
+        collimated_line_ray_builder(millimeter!(50.0), joule!(1.0), 7)?,
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/prism_pair.opm"))
 }

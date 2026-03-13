@@ -65,7 +65,7 @@ pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
 
 pub use source::Source;
 pub use source_helper::{
-    collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
+    collimated_line_ray_builder, point_ray_builder, round_collimated_ray_builder,
 };
 pub use source_port::SourcePort;
 pub use spot_diagram::SpotDiagram;
