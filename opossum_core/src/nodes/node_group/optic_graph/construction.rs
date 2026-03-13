@@ -183,6 +183,7 @@ impl OpticGraph {
     /// # Panics
     ///
     /// Panics if the mutex lock fails.
+    #[must_use]
     pub fn find_all_nodes_referring_to_uuid(&self, node_id: Uuid) -> Vec<NodeIndex> {
         let mut nodes_indices = Vec::<NodeIndex>::new();
         for node_idx in self.g.node_indices() {

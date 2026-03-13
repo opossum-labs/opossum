@@ -519,7 +519,6 @@ async fn post_node_name(
     let mut document = data.document.lock();
     let mut processed_names = HashMap::<Uuid, String>::new();
     let scenery = document.scenery_mut();
-
     let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid);
     for node_idx in &nodes_to_rename {
         let node_uuid = scenery.graph().node_by_idx(*node_idx).unwrap().uuid();
@@ -535,6 +534,7 @@ async fn post_node_name(
             })
             .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?;
     }
+    drop(document);
     Ok(Json(processed_names))
 }
 /// Update the laser-induced damage threshold (LIDT) of an optical node
@@ -777,13 +777,13 @@ fn get_node_attr_from_state(
 
 // Helper function to contain the core logic
 /// Retrieve the node attributes of a node, referenced by a reference-node
-/// To signal the GUI, that the node_attributes are readonly when it is a reference, a bool will be sent if it is a reference or not
+/// To signal the GUI, that the `node_attributes` are readonly when it is a reference, a bool will be sent if it is a reference or not
 /// true: node is a reference
 /// false: node is original
 fn get_referenced_node_attr_from_state(
     mut is_reference: bool,
     uuid: Uuid,
-    document: MutexGuard<OpmDocument>,
+    document: &MutexGuard<'_, OpmDocument>,
 ) -> Result<(NodeAttr, bool), BackEndErrorResponse> {
     let node_attr = document
         .scenery()
@@ -812,7 +812,7 @@ fn get_referenced_node_attr_from_state(
 
 fn get_nested_referenced_node_from_state(
     uuid: Uuid,
-    document: &MutexGuard<OpmDocument>,
+    document: &MutexGuard<'_, OpmDocument>,
 ) -> Result<OpticRef, BackEndErrorResponse> {
     let optic_ref = document.scenery().node_recursive(uuid)?.0;
     let node_attr = optic_ref.optical_ref.lock_opm()?.node_attr().clone();
@@ -878,8 +878,8 @@ async fn get_properties_ron(
 ) -> Result<impl Responder, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let document = data.document.lock();
-    let (node_attr, is_reference) = get_referenced_node_attr_from_state(false, uuid, document)?;
-
+    let (node_attr, is_reference) = get_referenced_node_attr_from_state(false, uuid, &document)?;
+    drop(document);
     let body = ron::ser::to_string_pretty(
         &(node_attr, is_reference),
         ron::ser::PrettyConfig::new().new_line("\n"),
