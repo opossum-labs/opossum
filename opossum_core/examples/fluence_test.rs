@@ -1,6 +1,7 @@
 use opossum_core::prelude::*;
+use opossum_core::spectral_distribution::LaserLines;
 use opossum_core::{
-    energy_distributions::General2DGaussian, position_distributions::SobolDist, rays::Rays,
+    energy_distributions::General2DGaussian, position_distributions::SobolDist,
     surface::hit_map::fluence_estimator::FluenceEstimator,
 };
 use std::{f64::consts::PI, path::Path};
@@ -34,10 +35,11 @@ fn main() -> OpmResult<()> {
         degree!(0.0),
         false,
     )?;
-    // let pos_dist = HexagonalTiling::new(millimeter!(100.), 10)?;
-    // let pos_dist= Random::new(millimeter!(100.0),millimeter!(100.0),64000)?;
+    let spect_dist = LaserLines::new(vec![(nanometer!(1000.), 1.)])?;
     let pos_dist = SobolDist::new(millimeter!(100.0), millimeter!(100.0), 64000)?;
-    let rays = Rays::new_collimated(nanometer!(1000.), &energy_dist, &pos_dist)?;
+    
+    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(pos_dist.into(), energy_dist.into(), spect_dist.into()));
+    let rays = ray_data_source.clone().build()?;
     println!("# of rays {}", rays.nr_of_rays(true),);
     let focal_length = millimeter!(100.0);
     for p in vec![millimeter!(0.0)] {
@@ -49,7 +51,7 @@ fn main() -> OpmResult<()> {
             peak.get::<millijoule_per_square_centimeter>()
         );
     }
-    let ray_data_source = RayDataSource::Raw(rays);
+    
     let mut config = RayTraceConfig::default();
     config.map_source(i_src, ray_data_source.into());
     doc.add_analyzer(AnalyzerType::RayTrace(config));
