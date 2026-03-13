@@ -59,7 +59,6 @@ impl RayDataBuilder {
         if let Some(iso) = &self.isometry {
             rays = rays.transformed_by_iso(iso);
         }
-
         Ok(rays)
     }
 
@@ -71,7 +70,6 @@ impl RayDataBuilder {
     pub fn set_source(&mut self, source: RayDataSource) {
         self.source = source;
     }
-
     /// Returns a reference to the underlying [`RayDataSource`].
     #[must_use]
     pub const fn source(&self) -> &RayDataSource {

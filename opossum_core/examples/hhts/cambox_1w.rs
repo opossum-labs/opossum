@@ -64,7 +64,7 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     )?)?;
     let mut node = SpotDiagram::new("NF cam");
     node.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
-    node.set_property("plot_aperture", true.into())?;
+    node.set_property("plot aperture", true.into())?;
     let nf_cam = cb.add_node(node)?;
 
     let mut nf_fluence = FluenceDetector::new("NF fluence");

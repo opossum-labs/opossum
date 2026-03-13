@@ -888,10 +888,10 @@ mod test {
         },
         joule,
         light_result::LightResult,
-        lightdata::light_data_builder::LightDataBuilder,
         millimeter, nanometer,
-        nodes::{Dummy, EnergyMeter, Source, test_helper::test_helper::*},
+        nodes::{Dummy, EnergyMeter, SourcePort, test_helper::test_helper::*},
         optic_node::OpticNode,
+        prelude::RayDataSource,
         ray::Ray,
         rays::Rays,
         utils::{LockExt, geom_transformation::Isometry},
@@ -1025,11 +1025,10 @@ mod test {
         rays.add_ray(
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.1)).unwrap(),
         );
+        let ray_data_builder = RayDataSource::Raw(rays);
         let mut scenery = NodeGroup::default();
-        let light_data_builder = LightDataBuilder::Geometric(rays.into());
-        let i_s = scenery
-            .add_node(Source::new("src", light_data_builder))
-            .unwrap();
+        let i_s = scenery.add_node(SourcePort::default()).unwrap();
+
         let mut em = EnergyMeter::default();
         em.set_isometry(Isometry::identity()).unwrap();
         let i_e = scenery.add_node(em).unwrap();
@@ -1038,6 +1037,7 @@ mod test {
             .unwrap();
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();
+        raytrace_config.map_source(i_s, ray_data_builder.into());
         AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config).unwrap();
         let uuid = scenery.node(i_e).unwrap().uuid().as_simple().to_string();
         let report = scenery

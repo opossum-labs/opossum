@@ -246,7 +246,7 @@ mod test {
     use super::*;
     use crate::{
         joule, millimeter,
-        nodes::{ParaxialSurface, SourcePort, round_collimated_ray_source},
+        nodes::{ParaxialSurface, SourcePort, round_collimated_ray_builder},
         utils::test_helper::test_helper::check_logs,
     };
     #[test]
@@ -332,32 +332,32 @@ mod test {
     fn integration_test() {
         // simulate simple system for integration test
         let mut group = NodeGroup::default();
-        let i_src = group
-            .add_node(round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 3).unwrap())
-            .unwrap();
+        let i_src = group.add_node(SourcePort::default()).unwrap();
         let i_l1 = group
             .add_node(ParaxialSurface::new("f=100", millimeter!(100.0)).unwrap())
             .unwrap();
         group
             .connect_nodes(i_src, "output_1", i_l1, "input_1", millimeter!(50.0))
             .unwrap();
-        let analyzer = RayTracingAnalyzer::default();
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            i_src,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 3).unwrap(),
+        );
+        let analyzer = RayTracingAnalyzer::new(config);
         analyzer.analyze(&mut group).unwrap();
     }
     #[test]
     fn test_position_history_integration() {
         use crate::{
             analyzers::{Analyzer, raytrace::RayTracingAnalyzer},
-            nodes::{ParaxialSurface, RayPropagationVisualizer, round_collimated_ray_source},
+            nodes::{ParaxialSurface, RayPropagationVisualizer},
             properties::Proptype,
             utils::lock_ext::LockExt,
         };
-
         // Source -> Lens -> Visualizer
         let mut group = NodeGroup::default();
-        let i_src = group
-            .add_node(round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 1).unwrap())
-            .unwrap();
+        let i_src = group.add_node(SourcePort::default()).unwrap();
         let i_lens = group
             .add_node(ParaxialSurface::new("lens", millimeter!(100.0)).unwrap())
             .unwrap();
@@ -368,8 +368,12 @@ mod test {
         group
             .connect_nodes(i_lens, "output_1", i_det, "input_1", millimeter!(50.0))
             .unwrap();
-
-        let analyzer = RayTracingAnalyzer::default();
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            i_src,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 3).unwrap(),
+        );
+        let analyzer = RayTracingAnalyzer::new(config);
         analyzer.analyze(&mut group).unwrap();
         let node_ref = group.graph().node(i_det).unwrap();
         let det_node = node_ref.optical_ref.lock_opm().unwrap();

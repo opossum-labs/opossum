@@ -12,12 +12,11 @@ pub use super::nodes::{
     NodeGroup, NodeReference, ParabolicMirror, ParaxialSurface, RayPropagationVisualizer,
     ReflectiveGrating, Source, SourcePort, Spectrometer, SpectrometerType, SplittingConfigBuilder,
     SpotDiagram, ThinMirror, WaveFront, Wedge, collimated_line_ray_builder,
-    collimated_line_ray_source,
     ideal_filter::{
         BandFilter, BandFilterType, EdgeFilter, EdgeFilterType, FilterTypeBuilder,
         SpectralFilterBuilder,
     },
-    point_ray_source, round_collimated_ray_source,
+    point_ray_builder, round_collimated_ray_builder,
 };
 pub use super::opm_document::OpmDocument;
 pub use super::optic_node::{Alignable, OpticNode};

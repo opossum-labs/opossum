@@ -1,5 +1,5 @@
 use crate::{
-    analyzers::{ghostfocus::AnalysisGhostFocus, propagation_strategy::MissedSurfaceStrategy},
+    analyzers::ghostfocus::AnalysisGhostFocus,
     error::{OpmResult, OpossumError},
     light_result::LightRays,
     nodes::SourcePort,
@@ -15,7 +15,7 @@ impl AnalysisGhostFocus for SourcePort {
         _ray_collection: &mut Vec<Rays>,
         bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let mut rays = if self.inverted() {
+        let rays = if self.inverted() {
             let Some(bouncing_rays) = incoming_data.get("output_1") else {
                 return Err(OpossumError::Analysis("no light at port".into()));
             };
@@ -35,22 +35,6 @@ impl AnalysisGhostFocus for SourcePort {
         } else {
             Vec::<Rays>::new()
         };
-
-        if let Some(surf) = self.get_optic_surface_mut("input_1") {
-            let refraction_intended = true;
-            for r in &mut rays {
-                r.refract_on_surface(
-                    surf,
-                    None,
-                    refraction_intended,
-                    &MissedSurfaceStrategy::Ignore,
-                )?;
-                surf.evaluate_fluence_of_ray_bundle(r, config.fluence_estimator())?;
-            }
-        } else {
-            return Err(OpossumError::Analysis("no surface found. Aborting".into()));
-        }
-
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert("output_1".into(), rays);
         Ok(out_light_rays)

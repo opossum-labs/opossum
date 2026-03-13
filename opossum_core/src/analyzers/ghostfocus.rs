@@ -625,7 +625,7 @@ impl Plottable for GhostFocusHistory {
 #[cfg(test)]
 mod test_ghost_focus_config {
     use super::GhostFocusConfig;
-    use crate::surface::hit_map::fluence_estimator::FluenceEstimator;
+    use crate::{nodes::SourcePort, surface::hit_map::fluence_estimator::FluenceEstimator};
     #[test]
     fn default() {
         let c = GhostFocusConfig::default();
@@ -676,11 +676,9 @@ mod test_ghost_focus_config {
 
     #[test]
     fn test_prune_source_map() {
-        use crate::nodes::NodeGroup;
         use crate::{
             lightdata::ray_data_source::{CollimatedSrc, RayDataSource},
-            nodes::Source,
-            prelude::LightDataBuilder,
+            nodes::NodeGroup,
         };
         use uuid::Uuid;
 
@@ -689,8 +687,7 @@ mod test_ghost_focus_config {
         let builder = RayDataSource::Collimated(CollimatedSrc::default());
 
         let mut scene = NodeGroup::default();
-        let src = Source::new("source", LightDataBuilder::Geometric(builder.clone()));
-        let node_id = scene.add_node(src).unwrap();
+        let node_id = scene.add_node(SourcePort::default()).unwrap();
 
         config.map_source(node_id, builder.clone());
         config.map_source(uuid2, builder.clone());
@@ -711,7 +708,9 @@ mod test_ghost_focus_analyzer {
         degree, joule,
         light_result::LightResult,
         millimeter,
-        nodes::{Lens, NodeGroup, SpotDiagram, ThinMirror, round_collimated_ray_source},
+        nodes::{
+            Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror, round_collimated_ray_builder,
+        },
         optic_node::{Alignable, OpticNode},
         optic_ports::PortType,
     };
@@ -725,9 +724,7 @@ mod test_ghost_focus_analyzer {
     #[ignore]
     fn report() {
         let mut scenery = NodeGroup::default();
-        let i_src = scenery
-            .add_node(round_collimated_ray_source(millimeter!(10.0), joule!(2.), 5).unwrap())
-            .unwrap();
+        let i_src = scenery.add_node(SourcePort::default()).unwrap();
         let mut lens = Lens::default();
         lens.set_coating(
             &PortType::Input,
@@ -758,6 +755,13 @@ mod test_ghost_focus_analyzer {
 
         let mut config = GhostFocusConfig::default();
         config.set_max_bounces(2);
+        config.map_source(
+            i_src,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(2.), 5)
+                .unwrap()
+                .source()
+                .clone(),
+        );
         let analyzer = GhostFocusAnalyzer::new(config);
         analyzer.analyze(&mut scenery).unwrap();
         analyzer.report(&scenery).unwrap();
