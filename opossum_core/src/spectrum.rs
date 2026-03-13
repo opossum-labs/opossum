@@ -772,7 +772,7 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
             .unwrap()
             .average_resolution()
             .min(s2.as_ref().unwrap().average_resolution());
-        let mut s_out = Spectrum::new(minimum..maximum, resolution).unwrap();
+        let mut s_out = Spectrum::new(minimum..maximum + 2.0*resolution, resolution).unwrap();
         s_out.resample(&s1.unwrap());
         s_out.add(&s2.unwrap());
         Some(s_out)
