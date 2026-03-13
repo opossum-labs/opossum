@@ -110,7 +110,7 @@ impl OpticNode for SpotDiagram {
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
-        if let Some(LightData::Geometric(rays)) = data {
+        let mut report = if let Some(LightData::Geometric(rays)) = data {
             let mut transformed_rays = Rays::default();
             let iso = self
                 .effective_surface_iso("input_1")
@@ -158,8 +158,16 @@ impl OpticNode for SpotDiagram {
                     )
                     .unwrap();
             }
-        }
-        let mut report = NodeReport::new(&self.node_type(), &self.name(), uuid, props);
+            NodeReport::new(&self.node_type(), &self.name(), uuid, props)
+        } else {
+            let mut report =
+                NodeReport::new(&self.node_type(), &self.name(), uuid, Properties::default());
+            report.add_note(ReportNote::new(
+                ReportLevel::Warning,
+                "A spot diagram can only be displayed for a ray tracing or ghostfocus analysis.",
+            ));
+            report
+        };
         if self.apodization_warning {
             report.add_note(ReportNote::new(
                 ReportLevel::Warning,
@@ -346,11 +354,14 @@ impl Plottable for SpotDiagram {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::light_result::LightRays;
-    use crate::optic_ports::PortType;
-    use crate::prelude::GhostFocusConfig;
     use crate::{
-        joule, nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
+        joule,
+        light_result::LightRays,
+        nodes::{NodeGroup, SourcePort, test_helper::test_helper::*},
+        optic_ports::PortType,
+        position_distributions::Hexapolar,
+        prelude::{AnalyzerType, EnergyDataBuilder, GhostFocusConfig, OpmDocument},
+        rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
     use uom::num_traits::Zero;
@@ -577,5 +588,33 @@ mod test {
         } else {
             panic!("Property is not a HitMap");
         }
+    }
+    #[test]
+    fn show_warning_if_energy_analysis() {
+        let mut scenery = NodeGroup::default();
+        let i_src = scenery.add_node(SourcePort::default()).unwrap();
+        let i_sd = scenery.add_node(SpotDiagram::default()).unwrap();
+        scenery
+            .connect_nodes(i_src, "output_1", i_sd, "input_1", Length::zero())
+            .unwrap();
+        let mut doc = OpmDocument::new(scenery);
+        let mut config = EnergyConfig::default();
+        config.map_source(i_src, EnergyDataBuilder::default());
+        doc.add_analyzer(AnalyzerType::Energy(config));
+        let reports = doc.analyze().unwrap();
+        let Some(report) = reports.first() else {
+            panic!("No report found");
+        };
+        let Some(node_report) = report.node_reports().first() else {
+            panic!("No node report found.")
+        };
+        let Some(note) = node_report.notes().first() else {
+            panic!("SpotDiagram has no note in its report");
+        };
+        assert_eq!(note.level, ReportLevel::Warning);
+        assert_eq!(
+            note.message,
+            "A spot diagram can only be displayed for a ray tracing or ghostfocus analysis."
+        );
     }
 }
