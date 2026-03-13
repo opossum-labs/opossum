@@ -116,7 +116,9 @@ pub trait Dottable {
     }
 
     /// Helper method to calculate layout parameters for the node table.
-    fn calculate_layout(&self, max_ports: usize, node_name: &str) -> NodeLayout {
+    fn calculate_layout(&self, node_name: &str, input_port_num:usize, output_port_num: usize) -> NodeLayout {
+        let max_ports = input_port_num.max(output_port_num);
+
         let (num_cells, row_col_span) = if max_ports > 1 {
             ((max_ports + 1) * 2 + 1, max_ports * 2 + 1)
         } else {
@@ -140,13 +142,13 @@ pub trait Dottable {
         let node_cell_size = single_cell_size * (num_cells - 2);
 
         let input_port_start = if num_cells > 7 || max_ports > 1 {
-            max_ports - (max_ports.saturating_sub(1)) + 2
+            max_ports - input_port_num + 2
         } else {
             3
         };
 
         let output_port_start = if num_cells > 7 || max_ports > 1 {
-            max_ports - (max_ports.saturating_sub(1)) + 2
+            max_ports - output_port_num + 2
         } else {
             3
         };
@@ -243,8 +245,8 @@ pub trait Dottable {
         let (in_port_count, out_port_count) = ports_count;
         let (row, col) = ax_nums;
 
-        let max_ports = inputs.len().max(outputs.len());
-        let layout = self.calculate_layout(max_ports, node_name);
+
+        let layout = self.calculate_layout(node_name, inputs.len(), outputs.len());
 
         // Try to create an input port cell
         if col == 0
@@ -267,6 +269,7 @@ pub trait Dottable {
             *out_port_count += 1;
             return cell;
         }
+        
         // Try to create the main node body cell
         if row == 1 && col == 1 {
             return self.create_node_body_cell(node_name, rankdir, &layout);
