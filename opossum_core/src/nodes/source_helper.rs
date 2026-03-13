@@ -8,7 +8,7 @@ use crate::{
         ray_data_builder::RayDataBuilder,
         ray_data_source::{CollimatedSrc, PointSrc, RayDataSource},
     },
-    millimeter, nanometer,
+    meter, millimeter, nanometer,
     position_distributions::{Grid, Hexapolar},
     spectral_distribution::LaserLines,
 };
@@ -86,7 +86,7 @@ pub fn point_ray_builder(cone_angle: Angle, energy: Energy) -> OpmResult<RayData
     }
     let size_after_unit_length = (cone_angle / 2.0).tan().value;
     Ok(RayDataSource::PointSrc(PointSrc::new(
-        Hexapolar::new(millimeter!(size_after_unit_length), 4)?.into(),
+        Hexapolar::new(meter!(size_after_unit_length), 4)?.into(),
         UniformDist::new(energy)?.into(),
         LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         millimeter!(1000.),
@@ -153,6 +153,36 @@ mod test {
             epsilon = 10.0 * f64::EPSILON
         );
         assert_eq!(rays.nr_of_rays(true), 61);
+    }
+    #[test]
+    fn test_point_ray_source_cone_angle_correctness() {
+        let cone_angle = degree!(10.0);
+        let rays = point_ray_builder(cone_angle, joule!(1.0))
+            .unwrap()
+            .build()
+            .unwrap();
+
+        let expected_half_angle = (cone_angle / 2.0).value;
+        let axis = nalgebra::Vector3::new(0.0, 0.0, 1.0);
+
+        // Collect angles of all rays relative to the axis
+        let angles: Vec<f64> = rays
+            .iter()
+            .map(|ray| {
+                let dir = ray.direction().normalize();
+                dir.dot(&axis).acos()
+            })
+            .collect();
+
+        let max_angle = angles.iter().cloned().fold(0., f64::max); // find maximum
+
+        // Assert the maximum ray angle is approximately the expected half-angle
+        assert!(
+            (max_angle - expected_half_angle).abs() <= 1e-12,
+            "maximum ray angle {} does not match expected half-angle {}",
+            max_angle,
+            expected_half_angle
+        );
     }
     #[test]
     fn test_collimated_line_source() {
