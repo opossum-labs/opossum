@@ -116,7 +116,12 @@ pub trait Dottable {
     }
 
     /// Helper method to calculate layout parameters for the node table.
-    fn calculate_layout(&self, node_name: &str, input_port_num:usize, output_port_num: usize) -> NodeLayout {
+    fn calculate_layout(
+        &self,
+        node_name: &str,
+        input_port_num: usize,
+        output_port_num: usize,
+    ) -> NodeLayout {
         let max_ports = input_port_num.max(output_port_num);
 
         let (num_cells, row_col_span) = if max_ports > 1 {
@@ -245,7 +250,6 @@ pub trait Dottable {
         let (in_port_count, out_port_count) = ports_count;
         let (row, col) = ax_nums;
 
-
         let layout = self.calculate_layout(node_name, inputs.len(), outputs.len());
 
         // Try to create an input port cell
@@ -269,7 +273,7 @@ pub trait Dottable {
             *out_port_count += 1;
             return cell;
         }
-        
+
         // Try to create the main node body cell
         if row == 1 && col == 1 {
             return self.create_node_body_cell(node_name, rankdir, &layout);
