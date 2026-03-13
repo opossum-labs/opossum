@@ -75,8 +75,14 @@ fn main() -> OpmResult<()> {
     let ray_data_builder = round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 3)?;
     config.map_source(i_src, ray_data_builder);
     doc.add_analyzer(AnalyzerType::RayTrace(config));
-    let mut config=EnergyConfig::default();
-    config.map_source(i_src, EnergyDataBuilder::LaserLines(EnergyLaserLines::new(vec![(nanometer!(1000.0),joule!(1.0))],nanometer!(1.0)).unwrap()));
+    let mut config = EnergyConfig::default();
+    config.map_source(
+        i_src,
+        EnergyDataBuilder::LaserLines(
+            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))
+                .unwrap(),
+        ),
+    );
     doc.add_analyzer(AnalyzerType::Energy(config));
     doc.save_to_file(Path::new("./opossum_core/playground/laser_system.opm"))
 }

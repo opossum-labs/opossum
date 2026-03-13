@@ -275,7 +275,7 @@ mod test {
         AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert_eq!(
             format!("{:?}", node),
-            "Spectrum 380.000 - 749.900 nm (Type: Ideal)"
+            "Spectrum 380.000 - 750.000 nm (Type: Ideal)"
         );
     }
     #[test]

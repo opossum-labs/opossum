@@ -37,8 +37,12 @@ fn main() -> OpmResult<()> {
     )?;
     let spect_dist = LaserLines::new(vec![(nanometer!(1000.), 1.)])?;
     let pos_dist = SobolDist::new(millimeter!(100.0), millimeter!(100.0), 64000)?;
-    
-    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(pos_dist.into(), energy_dist.into(), spect_dist.into()));
+
+    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+        pos_dist.into(),
+        energy_dist.into(),
+        spect_dist.into(),
+    ));
     let rays = ray_data_source.clone().build()?;
     println!("# of rays {}", rays.nr_of_rays(true),);
     let focal_length = millimeter!(100.0);
@@ -51,7 +55,7 @@ fn main() -> OpmResult<()> {
             peak.get::<millijoule_per_square_centimeter>()
         );
     }
-    
+
     let mut config = RayTraceConfig::default();
     config.map_source(i_src, ray_data_source.into());
     doc.add_analyzer(AnalyzerType::RayTrace(config));
