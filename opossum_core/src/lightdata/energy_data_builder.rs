@@ -567,7 +567,7 @@ mod test {
         assert_eq!(format!("{edb}"), "Raw");
         assert_eq!(
             format!("{edb:?}"),
-            "Raw( 500.00 nm -> 0\n 501.00 nm -> 0\n 502.00 nm -> 0\n)"
+            "Raw( 500.00 nm -> 0\n 501.00 nm -> 0\n 502.00 nm -> 0\n 503.00 nm -> 0\n)"
         );
     }
 }

@@ -23,7 +23,7 @@ fn main() -> OpmResult<()> {
         nanometer!(1.0),
     )?);
     let energy_data_builder_2 = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
-        vec![(nanometer!(1053.0), joule!(1.0))],
+        vec![(nanometer!(635.0), joule!(1.0))],
         nanometer!(1.0),
     )?);
     let mut energy_config = EnergyConfig::default();
