@@ -8,6 +8,7 @@ use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
 use num::Zero;
+use opossum_core::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::General2DGaussian, position_distributions::HexagonalTiling,
@@ -436,7 +437,7 @@ fn main() -> OpmResult<()> {
     config.set_max_bounces(0);
 
     // collimated source
-    let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+    let ray_data_builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::new(
         HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0., 0.))?.into(),
         General2DGaussian::new(
             joule!(150.0),
@@ -448,12 +449,13 @@ fn main() -> OpmResult<()> {
         )?
         .into(),
         LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 0.5)])?.into(),
-    ));
-    config.map_source(src, ray_data_source.clone());
+    ))
+    .into();
+    config.map_source(src, ray_data_builder.clone());
     doc.add_analyzer(AnalyzerType::GhostFocus(config));
 
     let mut config = RayTraceConfig::default();
-    config.map_source(src, ray_data_source.into());
+    config.map_source(src, ray_data_builder);
     doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/hhts.opm"))
 }
