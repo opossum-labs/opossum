@@ -131,6 +131,94 @@ impl GhostFocusAnalyzer {
     pub const fn config(&self) -> &GhostFocusConfig {
         &self.config
     }
+
+    fn node_group_report(&self, group: &NodeGroup, analysis_report: &mut AnalysisReport) -> OpmResult<()> {
+        for node_ref in group.graph().nodes() {
+            let node = node_ref.optical_ref.lock_opm()?;
+            if let Ok(g) = node.as_group(){
+                self.node_group_report(g, analysis_report)?;
+            }
+            else{
+                let node_name = &node.name();
+                let hit_maps = node.hit_maps();
+                drop(node);
+                for hit_map in &hit_maps {
+                    let critical_positions = hit_map.1.critical_fluences();
+                    let node = node_ref.optical_ref.lock_opm()?;
+                    let lidt = *node
+                        .get_optic_surface(hit_map.0)
+                        .expect("OpticSurface not found!")
+                        .lidt();
+                    drop(node);
+                    if !critical_positions.is_empty() {
+                        for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
+                            critical_positions.iter().enumerate()
+                        {
+                            let critical_ghost_hist = GhostFocusHistory::from((
+                                group.accumulated_rays(),
+                                *rays_uuid,
+                                *hist_idx,
+                            ));
+                            let origin_str =
+                                critical_ghost_hist.rays_origin_report_str(group.graph());
+                            let mut hit_map_props = Properties::default();
+                            hit_map_props.create(
+                                "Origin",
+                                "Surface bounces that enabled this fluence",
+                                origin_str.clone().into(),
+                            )?;
+                            let fluence_data = hit_map
+                                .1
+                                .get_rays_hit_map(*bounce, *rays_uuid)
+                                .unwrap()
+                                .calc_fluence_map(
+                                    (101, 101),
+                                    &self.config().fluence_estimator,
+                                    None,
+                                    None,
+                                )?;
+    
+                            hit_map_props.create(
+                                &format!("Peak fluence ({})", fluence_data.estimator()),
+                                "Peak fluence on this surface using Voronoi estimator",
+                                format!(
+                                    "{}J/cm², (LIDT of surface: {}J/cm²)",
+                                    format_value_with_prefix(
+                                        fluence.get::<joule_per_square_centimeter>()
+                                    ),
+                                    format_value_with_prefix(lidt.get::<joule_per_square_centimeter>())
+                                )
+                                .into(),
+                            )?;
+                            hit_map_props.create(
+                                "Ray propagation",
+                                "ray propagation",
+                                Proptype::from(critical_ghost_hist),
+                            )?;
+                            hit_map_props.create(
+                                "Fluence",
+                                "2D spatial energy distribution",
+                                fluence_data.into(),
+                            )?;
+                            let hit_map_report = NodeReport::new(
+                                "surface",
+                                &format!(
+                                    "{} critical fluence on surface '{}' of node '{}'",
+                                    count_str(i + 1),
+                                    hit_map.0,
+                                    node_name
+                                ),
+                                &Uuid::new_v4().as_simple().to_string(),
+                                hit_map_props,
+                            );
+                            analysis_report.add_node_report(hit_map_report);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 impl Analyzer for GhostFocusAnalyzer {
     fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()> {
@@ -187,88 +275,92 @@ impl Analyzer for GhostFocusAnalyzer {
         node_report.set_show_item(true);
         analysis_report.add_node_report(node_report);
 
-        for node_ref in scenery.graph().nodes() {
-            let node = node_ref.optical_ref.lock_opm()?;
-            let node_name = &node.name();
-            let hit_maps = node.hit_maps();
-            drop(node);
-            for hit_map in &hit_maps {
-                let critical_positions = hit_map.1.critical_fluences();
-                let node = node_ref.optical_ref.lock_opm()?;
-                let lidt = *node
-                    .get_optic_surface(hit_map.0)
-                    .expect("OpticSurface not found!")
-                    .lidt();
-                drop(node);
-                if !critical_positions.is_empty() {
-                    for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
-                        critical_positions.iter().enumerate()
-                    {
-                        let critical_ghost_hist = GhostFocusHistory::from((
-                            scenery.accumulated_rays(),
-                            *rays_uuid,
-                            *hist_idx,
-                        ));
-                        let origin_str =
-                            critical_ghost_hist.rays_origin_report_str(scenery.graph());
-                        let mut hit_map_props = Properties::default();
-                        hit_map_props.create(
-                            "Origin",
-                            "Surface bounces that enabled this fluence",
-                            origin_str.clone().into(),
-                        )?;
-                        let fluence_data = hit_map
-                            .1
-                            .get_rays_hit_map(*bounce, *rays_uuid)
-                            .unwrap()
-                            .calc_fluence_map(
-                                (101, 101),
-                                &self.config().fluence_estimator,
-                                None,
-                                None,
-                            )?;
+        self.node_group_report(scenery, &mut analysis_report);
 
-                        hit_map_props.create(
-                            &format!("Peak fluence ({})", fluence_data.estimator()),
-                            "Peak fluence on this surface using Voronoi estimator",
-                            format!(
-                                "{}J/cm², (LIDT of surface: {}J/cm²)",
-                                format_value_with_prefix(
-                                    fluence.get::<joule_per_square_centimeter>()
-                                ),
-                                format_value_with_prefix(lidt.get::<joule_per_square_centimeter>())
-                            )
-                            .into(),
-                        )?;
-                        hit_map_props.create(
-                            "Ray propagation",
-                            "ray propagation",
-                            Proptype::from(critical_ghost_hist),
-                        )?;
-                        hit_map_props.create(
-                            "Fluence",
-                            "2D spatial energy distribution",
-                            fluence_data.into(),
-                        )?;
-                        let hit_map_report = NodeReport::new(
-                            "surface",
-                            &format!(
-                                "{} critical fluence on surface '{}' of node '{}'",
-                                count_str(i + 1),
-                                hit_map.0,
-                                node_name
-                            ),
-                            &Uuid::new_v4().as_simple().to_string(),
-                            hit_map_props,
-                        );
-                        analysis_report.add_node_report(hit_map_report);
-                    }
-                }
-            }
-        }
+        // for node_ref in scenery.graph().nodes() {
+        //     let node = node_ref.optical_ref.lock_opm()?;
+        //     let node_name = &node.name();
+        //     let hit_maps = node.hit_maps();
+        //     drop(node);
+        //     for hit_map in &hit_maps {
+        //         let critical_positions = hit_map.1.critical_fluences();
+        //         let node = node_ref.optical_ref.lock_opm()?;
+        //         let lidt = *node
+        //             .get_optic_surface(hit_map.0)
+        //             .expect("OpticSurface not found!")
+        //             .lidt();
+        //         drop(node);
+        //         if !critical_positions.is_empty() {
+        //             for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
+        //                 critical_positions.iter().enumerate()
+        //             {
+        //                 let critical_ghost_hist = GhostFocusHistory::from((
+        //                     scenery.accumulated_rays(),
+        //                     *rays_uuid,
+        //                     *hist_idx,
+        //                 ));
+        //                 let origin_str =
+        //                     critical_ghost_hist.rays_origin_report_str(scenery.graph());
+        //                 let mut hit_map_props = Properties::default();
+        //                 hit_map_props.create(
+        //                     "Origin",
+        //                     "Surface bounces that enabled this fluence",
+        //                     origin_str.clone().into(),
+        //                 )?;
+        //                 let fluence_data = hit_map
+        //                     .1
+        //                     .get_rays_hit_map(*bounce, *rays_uuid)
+        //                     .unwrap()
+        //                     .calc_fluence_map(
+        //                         (101, 101),
+        //                         &self.config().fluence_estimator,
+        //                         None,
+        //                         None,
+        //                     )?;
+
+        //                 hit_map_props.create(
+        //                     &format!("Peak fluence ({})", fluence_data.estimator()),
+        //                     "Peak fluence on this surface using Voronoi estimator",
+        //                     format!(
+        //                         "{}J/cm², (LIDT of surface: {}J/cm²)",
+        //                         format_value_with_prefix(
+        //                             fluence.get::<joule_per_square_centimeter>()
+        //                         ),
+        //                         format_value_with_prefix(lidt.get::<joule_per_square_centimeter>())
+        //                     )
+        //                     .into(),
+        //                 )?;
+        //                 hit_map_props.create(
+        //                     "Ray propagation",
+        //                     "ray propagation",
+        //                     Proptype::from(critical_ghost_hist),
+        //                 )?;
+        //                 hit_map_props.create(
+        //                     "Fluence",
+        //                     "2D spatial energy distribution",
+        //                     fluence_data.into(),
+        //                 )?;
+        //                 let hit_map_report = NodeReport::new(
+        //                     "surface",
+        //                     &format!(
+        //                         "{} critical fluence on surface '{}' of node '{}'",
+        //                         count_str(i + 1),
+        //                         hit_map.0,
+        //                         node_name
+        //                     ),
+        //                     &Uuid::new_v4().as_simple().to_string(),
+        //                     hit_map_props,
+        //                 );
+        //                 analysis_report.add_node_report(hit_map_report);
+        //             }
+        //         }
+        //     }
+        // }
         analysis_report.set_analysis_type("Ghost Focus Analysis");
         Ok(analysis_report)
     }
+
+    
 }
 
 /// Trait for implementing ghost focus analysis.
