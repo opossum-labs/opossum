@@ -536,7 +536,7 @@ mod test {
         scenery.reset_data();
         // Perform ghost focus analysis
         let mut config = GhostFocusConfig::default();
-        config.map_source(i_0, ray_builder.source().clone());
+        config.map_source(i_0, ray_builder);
         let analyzer = GhostFocusAnalyzer::new(config);
         analyzer.analyze(&mut scenery).unwrap();
         check_logs(log::Level::Warn, vec![]);

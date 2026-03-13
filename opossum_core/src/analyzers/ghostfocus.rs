@@ -14,11 +14,11 @@ use crate::{
     light_result::{
         LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
     },
+    lightdata::ray_data_builder::RayDataBuilder,
     millimeter,
     nodes::{NodeGroup, OpticGraph},
     optic_node::OpticNode,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
-    prelude::RayDataSource,
     properties::{
         Properties, Proptype,
         proptype::{count_str, format_value_with_prefix},
@@ -45,7 +45,7 @@ inventory::submit! {
 pub struct GhostFocusConfig {
     max_bounces: usize,
     fluence_estimator: FluenceEstimator,
-    source_map: HashMap<Uuid, RayDataSource>,
+    source_map: HashMap<Uuid, RayDataBuilder>,
 }
 
 impl GhostFocusConfig {
@@ -71,17 +71,17 @@ impl GhostFocusConfig {
     ///
     /// If a builder was already mapped this function returns `true`. A new mapping
     /// reutrns `false`
-    pub fn map_source(&mut self, node_id: Uuid, ray_data_builder: RayDataSource) -> bool {
+    pub fn map_source(&mut self, node_id: Uuid, ray_data_builder: RayDataBuilder) -> bool {
         self.source_map.insert(node_id, ray_data_builder).is_some()
     }
     /// Returns the ray data builder mapped to the given source UUID, if any.
     #[must_use]
-    pub fn get_source(&self, uuid: &Uuid) -> Option<&RayDataSource> {
+    pub fn get_source(&self, uuid: &Uuid) -> Option<&RayDataBuilder> {
         self.source_map.get(uuid)
     }
     /// Removes and returns the ray data builder mapped to the given source UUID, if any.
     #[must_use]
-    pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataSource> {
+    pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
         self.source_map.remove(uuid)
     }
     /// Removes all source mappings whose UUIDs no longer exist in the given model.
@@ -142,11 +142,8 @@ impl Analyzer for GhostFocusAnalyzer {
         info!("Calculate node positions of scenery{scenery_name}.");
 
         // copy source map to RayTraceConfig to be able to use it in the unified analyze function of AnalysisRayTrace
-        let source_map = &self.config.source_map;
         let mut raytrace_config = RayTraceConfig::default();
-        for (uuid, ray_data_source) in source_map.clone() {
-            raytrace_config.map_source(uuid, ray_data_source.into());
-        }
+        raytrace_config.set_source_map(self.config.source_map.clone());
         AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
         info!(
             "Performing ghost focus analysis of scenery{scenery_name} up to {} ray bounces.",
@@ -625,7 +622,10 @@ impl Plottable for GhostFocusHistory {
 #[cfg(test)]
 mod test_ghost_focus_config {
     use super::GhostFocusConfig;
-    use crate::{nodes::SourcePort, surface::hit_map::fluence_estimator::FluenceEstimator};
+    use crate::{
+        lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
+        surface::hit_map::fluence_estimator::FluenceEstimator,
+    };
     #[test]
     fn default() {
         let c = GhostFocusConfig::default();
@@ -650,12 +650,12 @@ mod test_ghost_focus_config {
         use uuid::Uuid;
         let mut config = GhostFocusConfig::default();
         let uuid = Uuid::new_v4();
-        let builder = RayDataSource::Collimated(CollimatedSrc::default());
+        let builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::default()).into();
 
         assert_eq!(config.map_source(uuid, builder.clone()), false);
         assert_eq!(config.get_source(&uuid), Some(&builder));
 
-        let builder2 = RayDataSource::PointSrc(PointSrc::default());
+        let builder2: RayDataBuilder = RayDataSource::PointSrc(PointSrc::default()).into();
         assert_eq!(config.map_source(uuid, builder2.clone()), true);
         assert_eq!(config.get_source(&uuid), Some(&builder2));
     }
@@ -666,7 +666,7 @@ mod test_ghost_focus_config {
         use uuid::Uuid;
         let mut config = GhostFocusConfig::default();
         let uuid = Uuid::new_v4();
-        let builder = RayDataSource::Collimated(CollimatedSrc::default());
+        let builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::default()).into();
 
         config.map_source(uuid, builder.clone());
         assert_eq!(config.remove_source(&uuid), Some(builder));
@@ -684,7 +684,7 @@ mod test_ghost_focus_config {
 
         let mut config = GhostFocusConfig::default();
         let uuid2 = Uuid::new_v4();
-        let builder = RayDataSource::Collimated(CollimatedSrc::default());
+        let builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::default()).into();
 
         let mut scene = NodeGroup::default();
         let node_id = scene.add_node(SourcePort::default()).unwrap();
@@ -757,10 +757,7 @@ mod test_ghost_focus_analyzer {
         config.set_max_bounces(2);
         config.map_source(
             i_src,
-            round_collimated_ray_builder(millimeter!(10.0), joule!(2.), 5)
-                .unwrap()
-                .source()
-                .clone(),
+            round_collimated_ray_builder(millimeter!(10.0), joule!(2.), 5).unwrap(),
         );
         let analyzer = GhostFocusAnalyzer::new(config);
         analyzer.analyze(&mut scenery).unwrap();
