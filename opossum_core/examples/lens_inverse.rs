@@ -2,11 +2,7 @@ use opossum_core::prelude::*;
 use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(collimated_line_ray_source(
-        millimeter!(20.0),
-        joule!(1.0),
-        6,
-    )?)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     let i_l1 = scenery.add_node(Lens::new(
         "lens",
         millimeter!(100.0),
@@ -25,6 +21,11 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_l1_ref, "input_1", i_sd3, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        collimated_line_ray_builder(millimeter!(20.0), joule!(1.0), 6)?,
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/lens_inverse.opm"))
 }

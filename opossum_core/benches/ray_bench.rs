@@ -4,8 +4,9 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use nalgebra::{Point3, vector};
 use num::Zero;
 use opossum_core::{
-    J_per_cm2, analyzers::raytrace::MissedSurfaceStrategy, degree, joule, millimeter, nanometer,
-    ray::Ray, surface::optic_surface::OpticSurface, utils::geom_transformation::Isometry,
+    J_per_cm2, analyzers::propagation_strategy::MissedSurfaceStrategy, degree, joule, millimeter,
+    nanometer, ray::Ray, surface::optic_surface::OpticSurface,
+    utils::geom_transformation::Isometry,
 };
 use uom::si::f64::Length;
 use uuid::Uuid;

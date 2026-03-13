@@ -9,10 +9,8 @@ use uom::si::f64::{Angle, Length};
 use super::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig,
-        energy::AnalysisEnergy,
-        ghostfocus::AnalysisGhostFocus,
-        raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
+        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     coatings::CoatingType,
     degree,
@@ -510,8 +508,10 @@ impl AnalysisRayTrace for ParabolicMirror {
 mod test {
     use crate::{
         analyzers::{
-            GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy,
-            ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+            GhostFocusConfig, RayTraceConfig,
+            energy::{AnalysisEnergy, EnergyConfig},
+            ghostfocus::AnalysisGhostFocus,
+            raytrace::AnalysisRayTrace,
         },
         degree, joule,
         light_result::{LightResult, light_result_to_light_rays},
@@ -987,7 +987,7 @@ mod test {
         let mut node = ParabolicMirror::default();
         let light_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         let input = LightResult::from([("input_1".into(), light_data)]);
-        let output = AnalysisEnergy::analyze(&mut node, input);
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default());
         assert!(output.is_ok());
         assert!(!output.unwrap().is_empty());
     }
@@ -997,7 +997,7 @@ mod test {
         let mut node = ParabolicMirror::default();
         let light_data = LightData::Fourier;
         let input = LightResult::from([("output_1".into(), light_data)]);
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
 
@@ -1006,24 +1006,22 @@ mod test {
         let mut node = ParabolicMirror::default();
         let light_data = LightData::Geometric(Rays::default());
         let input = LightResult::from([("input_1".into(), light_data)]);
-        assert!(AnalysisEnergy::analyze(&mut node, input).is_ok());
+        assert!(AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).is_ok());
     }
     #[test]
     fn analysis_energy_lightdata_ghost_focus() {
         let mut node = ParabolicMirror::default();
         let light_data = LightData::GhostFocus(vec![Rays::default()]);
         let input = LightResult::from([("input_1".into(), light_data)]);
-        assert!(AnalysisEnergy::analyze(&mut node, input).is_ok());
+        assert!(AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).is_ok());
     }
-
     #[test]
     fn analysis_energy_lightdata_fourier() {
         let mut node = ParabolicMirror::default();
         let light_data = LightData::Fourier;
         let input = LightResult::from([("input_1".into(), light_data)]);
-        assert!(AnalysisEnergy::analyze(&mut node, input).is_ok());
+        assert!(AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).is_ok());
     }
-
     #[test]
     fn analysis_ghost_focus_empty_input() {
         let mut node = ParabolicMirror::default();
@@ -1040,7 +1038,6 @@ mod test {
         .unwrap();
         assert!(output.values().last().unwrap().is_empty());
     }
-
     #[test]
     fn analysis_ghost_focus_no_input() {
         let mut node = ParabolicMirror::default();
@@ -1058,7 +1055,6 @@ mod test {
         .unwrap();
         assert!(output.values().last().unwrap().is_empty());
     }
-
     #[test]
     fn analysis_ghost_focus_no_iso() {
         let mut node = ParabolicMirror::default();
@@ -1103,7 +1099,6 @@ mod test {
         );
         assert!(output.is_ok());
     }
-
     #[test]
     fn calc_node_position() {
         let mut node = ParabolicMirror::default();

@@ -5,11 +5,13 @@ use uuid::Uuid;
 
 use crate::{
     J_per_cm2,
+    analyzers::propagation_strategy::PropagationStrategy,
     apertures::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
     nodes::fluence_detector::Fluence,
     rays::Rays,
+    refractive_index::RefractiveIndexType,
     surface::hit_map::HitMap,
     utils::{LockExt, geom_transformation::Isometry},
 };
@@ -44,7 +46,7 @@ pub struct OpticSurface {
 impl Default for OpticSurface {
     /// Returns a default [`OpticSurface`].
     ///
-    /// The default is a flat surface with an ideal antireflective caoting (=no reflection), no limiting aperture
+    /// The default is a flat surface with an ideal antireflective coating (=no reflection), no limiting aperture
     /// and a lidt of 1 J/cm².
     fn default() -> Self {
         Self {
@@ -255,6 +257,52 @@ impl OpticSurface {
     #[must_use]
     pub const fn anchor_point_iso(&self) -> &Isometry {
         &self.anchor_point_iso
+    }
+    /// Propagates a bundle of rays through this specific surface.
+    /// Utilizes the Strategy Pattern to execute analyzer-specific behavior.
+    ///
+    /// # Parameters
+    /// * `rays_bundle`: The bundle of rays to be propagated.
+    /// * `node_uuid`: The UUID of the parent optical node (used for setting the origin of reflected rays).
+    /// * `iso`: The effective isometry of this surface in 3D space.
+    /// * `refri_after_surf`: The refractive index after the surface.
+    /// * `backward`: The direction of propagation (`true` if backwards).
+    /// * `refraction_intended`: Indicates whether refraction should be calculated.
+    /// * `strategy`: The strategy defining the behavior of the current analysis mode.
+    ///
+    /// # Errors
+    /// This function errors if the optical calculations (refraction/reflection) or the
+    /// strategy-specific hooks (e.g., fluence evaluation) fail.
+    #[allow(clippy::too_many_arguments)]
+    pub fn propagate_rays(
+        &mut self,
+        rays_bundle: &mut Vec<Rays>,
+        node_uuid: Uuid,
+        iso: &Isometry,
+        refri_after_surf: Option<&RefractiveIndexType>,
+        backward: bool,
+        refraction_intended: bool,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()> {
+        let missed_strategy = strategy.missed_surface_strategy();
+
+        for rays in &mut *rays_bundle {
+            let mut reflected = rays.refract_on_surface(
+                self,
+                refri_after_surf,
+                refraction_intended,
+                &missed_strategy,
+            )?;
+            reflected.set_node_origin_uuid(node_uuid);
+            strategy.on_surface_interaction(self, rays, reflected, backward)?;
+            rays.apodize(self.aperture(), iso)?;
+            strategy.on_after_apodization(rays)?;
+        }
+        for rays in self.get_rays_cache(backward) {
+            rays_bundle.push(rays.clone());
+        }
+        self.prune_hit_map(iso);
+        Ok(())
     }
 }
 

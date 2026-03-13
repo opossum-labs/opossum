@@ -3,13 +3,13 @@ use std::path::Path;
 
 pub fn hhts_input() -> OpmResult<NodeGroup> {
     let dichroic_mirror = SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::FromFile(
-        Path::new("opossum/examples/hhts/MM15_Transmission.csv").to_path_buf(),
+        Path::new("./opossum_core/examples/hhts/MM15_Transmission.csv").to_path_buf(),
     ));
     let window_filter = FilterTypeBuilder::Spectrum(SpectralFilterBuilder::FromFile(
-        Path::new("opossum/examples/hhts/HHTS_W1_Transmission.csv").to_path_buf(),
+        Path::new("./opossum_core/examples/hhts/HHTS_W1_Transmission.csv").to_path_buf(),
     ));
     let double_mirror = SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::FromFile(
-        Path::new("opossum/examples/hhts/HHTS_T1_PM_Transmission.csv").to_path_buf(),
+        Path::new("./opossum_core/examples/hhts/HHTS_T1_PM_Transmission.csv").to_path_buf(),
     ));
     let mut group = NodeGroup::new("HHTS Input");
     let d1 = group.add_node(Dummy::new("d1"))?;

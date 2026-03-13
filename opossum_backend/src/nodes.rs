@@ -1115,7 +1115,7 @@ async fn post_analyzer_config(
     };
     let mut document = data.document.lock();
     if let Some(analyzer_info) = document.analyzer_mut(uuid) {
-        analyzer_info.set_analyzer_type(analyzer_type);
+        analyzer_info.set_analyzer_type(&analyzer_type);
         drop(document);
     } else {
         return Err(BackEndErrorResponse::new(

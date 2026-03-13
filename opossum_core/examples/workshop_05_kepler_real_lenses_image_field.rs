@@ -4,15 +4,8 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler image field");
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Image(ImageSrc::new(
-        Path::new("./logo/Logo_square_tiny_grey_inverted.png").to_path_buf(),
-        micrometer!(50.0),
-        joule!(1.0),
-        nanometer!(1000.0),
-        degree!(1.0),
-    )?));
-    let src = Source::new("image source", light_data_builder);
-    let i_src = scenery.add_node(src)?;
+
+    let i_src = scenery.add_node(SourcePort::new("image source"))?;
     let mut fluence_det = FluenceDetector::new("Object Plane");
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
     let i_sd5 = scenery.add_node(fluence_det)?;
@@ -65,7 +58,19 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_sd7, "output_1", i_sd8, "input_1", millimeter!(4.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        RayDataSource::Image(ImageSrc::new(
+            Path::new("../opossum_core/logo/Logo_square_tiny_grey_inverted.png").to_path_buf(),
+            micrometer!(50.0),
+            joule!(1.0),
+            nanometer!(1000.0),
+            degree!(1.0),
+        )?)
+        .into(),
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_05_kepler_imaging_field.opm",
     ))

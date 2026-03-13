@@ -1,8 +1,6 @@
 use super::CylindricLens;
 use crate::{
-    analyzers::{
-        AnalyzerType, GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-    },
+    analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace},
     error::OpmResult,
     light_result::LightRays,
     optic_node::OpticNode,
@@ -26,19 +24,22 @@ impl AnalysisGhostFocus for CylindricLens {
             .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
 
         let refraction_intended = true;
-        self.pass_through_surface(
+        // 1. Durch die Eintrittsfläche propagieren
+        self.pass_through_surface_generic(
             in_port,
-            &refri,
+            Some(refri), // Als Option übergeben
             &mut rays_bundle,
-            &AnalyzerType::GhostFocus(*config),
+            config, // config ist die PropagationStrategy
             self.inverted(),
             refraction_intended,
         )?;
-        self.pass_through_surface(
+
+        // 2. Durch die Austrittsfläche propagieren
+        self.pass_through_surface_generic(
             out_port,
-            &self.ambient_idx(),
+            Some(self.ambient_idx()), // Als Option übergeben
             &mut rays_bundle,
-            &AnalyzerType::GhostFocus(*config),
+            config, // config ist die PropagationStrategy
             self.inverted(),
             refraction_intended,
         )?;

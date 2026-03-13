@@ -187,7 +187,11 @@ impl AnalysisEnergy for Wedge {}
 mod test {
     use super::*;
     use crate::{
-        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
+        analyzers::{
+            RayTraceConfig,
+            energy::{AnalysisEnergy, EnergyConfig},
+            raytrace::AnalysisRayTrace,
+        },
         degree, joule,
         light_result::LightResult,
         lightdata::LightData,
@@ -394,7 +398,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");

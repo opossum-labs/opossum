@@ -14,7 +14,7 @@ use grid_editor::GridParam;
 use hexagonal_editor::get_hexagonal_input_params;
 use hexapolar_editor::get_hexapolar_input_params;
 use opossum_core::{
-    position_distributions::PosDistType, prelude::RayDataBuilder,
+    position_distributions::PosDistType, prelude::RayDataSource,
     utils::default_from_name::DefaultFromName,
 };
 use random_editor::RandomParam;
@@ -89,8 +89,8 @@ pub fn NodePosDistInputs(
 #[component]
 pub fn PositionDistributionEditor(
     pos_dist_type: PosDistType,
-    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
-    on_save: EventHandler<RayDataBuilder>,
+    ray_data_builder_sig: ReadSignal<RayDataSource>,
+    on_save: EventHandler<RayDataSource>,
     readonly: bool,
 ) -> Element {
     let mut pos_dist_type_sig = use_signal(|| pos_dist_type);

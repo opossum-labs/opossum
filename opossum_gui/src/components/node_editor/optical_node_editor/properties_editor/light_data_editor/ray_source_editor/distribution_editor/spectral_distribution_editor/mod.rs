@@ -14,7 +14,7 @@ use dioxus::prelude::*;
 use gaussian_editor::GaussianSpectrumParam;
 use laser_lines_editor::LaserLineInput;
 use opossum_core::{
-    prelude::RayDataBuilder, spectral_distribution::SpecDistType,
+    prelude::RayDataSource, spectral_distribution::SpecDistType,
     utils::default_from_name::DefaultFromName,
 };
 
@@ -45,8 +45,8 @@ pub fn RaySpectralDistributionEditor(
 #[component]
 pub fn SpectralDistributionEditor(
     spect_dist_type: SpecDistType,
-    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
-    on_save: EventHandler<RayDataBuilder>,
+    ray_data_builder_sig: ReadSignal<RayDataSource>,
+    on_save: EventHandler<RayDataSource>,
     readonly: bool,
 ) -> Element {
     let mut spect_dist_type_sig = use_signal(|| spect_dist_type.clone());

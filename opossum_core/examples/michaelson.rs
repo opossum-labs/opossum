@@ -1,14 +1,11 @@
 use num::Zero;
-use opossum_core::prelude::*;
+use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
 use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = NodeGroup::new("Michaelson interferomater");
-    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0))?,
-    ));
-    let src = scenery.add_node(Source::new("Source", light_data_builder))?;
+    let mut scenery = NodeGroup::new("Michaelson interferometer");
+    let i_src = scenery.add_node(SourcePort::new("Source"))?;
     let bs = scenery.add_node(BeamSplitter::default())?;
     let sample = scenery.add_node(Dummy::new("Sample"))?;
     let rf = NodeReference::from_node(&scenery.node(sample)?);
@@ -19,7 +16,7 @@ fn main() -> OpmResult<()> {
     let r_bs = scenery.add_node(rf)?;
     let det = scenery.add_node(Dummy::new("Detector"))?;
 
-    scenery.connect_nodes(src, "output_1", bs, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_src, "output_1", bs, "input_1", Length::zero())?;
     scenery.connect_nodes(bs, "out1_trans1_refl2", sample, "input_1", Length::zero())?;
     scenery.connect_nodes(sample, "output_1", m1, "input_1", Length::zero())?;
     scenery.connect_nodes(m1, "output_1", r_sample, "input_1", Length::zero())?;
@@ -29,6 +26,12 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(r_bs, "out1_trans1_refl2", det, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::Energy);
+    let mut config = EnergyConfig::default();
+    let energy_data_builder = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+        vec![(nanometer!(633.0), joule!(1.0))],
+        nanometer!(1.0),
+    )?);
+    config.map_source(i_src, energy_data_builder);
+    doc.add_analyzer(AnalyzerType::Energy(config));
     doc.save_to_file(Path::new("./opossum_core/playground/michaelson.opm"))
 }

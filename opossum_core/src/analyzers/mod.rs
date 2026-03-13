@@ -8,9 +8,13 @@
 pub mod analyzable;
 pub mod energy;
 pub mod ghostfocus;
+pub mod propagation_strategy;
 pub mod raytrace;
 
-use crate::{error::OpmResult, nodes::NodeGroup, reporting::analysis_report::AnalysisReport};
+use crate::{
+    analyzers::energy::EnergyConfig, error::OpmResult, nodes::NodeGroup,
+    reporting::analysis_report::AnalysisReport,
+};
 pub use analyzable::Analyzable;
 pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;
@@ -27,7 +31,8 @@ pub enum AnalyzerType {
     ///
     /// **Note**: This mode does not consider any geometric aspects of an optical setup (so far). In particular,
     /// possible apertures of optical elements are ignored.
-    Energy,
+    #[schema(value_type=())]
+    Energy(EnergyConfig),
     /// Ray tracing analysis.
     ///
     /// This mode simulates a bundle of optical ray propagating through a scenery.
@@ -35,7 +40,7 @@ pub enum AnalyzerType {
     RayTrace(RayTraceConfig),
     /// Ghost focus analysis.
     ///
-    /// This mode also performs ray tracing but considers parasitic back reflections from surfaces wtih a
+    /// This mode also performs ray tracing but considers parasitic back reflections from surfaces with a
     /// given number of bounces.
     #[schema(value_type=())]
     GhostFocus(GhostFocusConfig),
@@ -78,7 +83,7 @@ impl AnalyzerType {
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = match self {
-            Self::Energy => "Energy",
+            Self::Energy(_) => "Energy",
             Self::RayTrace(_) => "RayTracing",
             Self::GhostFocus(_) => "GhostFocus",
         };
@@ -90,7 +95,10 @@ mod test {
     use super::*;
     #[test]
     fn display() {
-        assert_eq!(format!("{}", AnalyzerType::Energy), "Energy");
+        assert_eq!(
+            format!("{}", AnalyzerType::Energy(EnergyConfig::default())),
+            "Energy"
+        );
         assert_eq!(
             format!("{}", AnalyzerType::RayTrace(RayTraceConfig::default())),
             "RayTracing"
@@ -102,7 +110,11 @@ mod test {
     }
     #[test]
     fn debug() {
-        assert_eq!(format!("{:?}", AnalyzerType::Energy), "Energy");
+        let at = AnalyzerType::Energy(EnergyConfig::default());
+        assert_eq!(
+            format!("{:?}", at),
+            "Energy(EnergyConfig { source_map: {} })"
+        );
     }
 }
 
@@ -111,13 +123,12 @@ pub trait Analyzer {
     /// Analyze a [`NodeGroup`].
     ///
     /// # Errors
-    /// This function will return an error if the concrete implementation of the [`Analyzer`] returns an error.
+    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error.
     fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()>;
-
     /// Generate an analysis report for this [`NodeGroup`].
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error..
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport>;
 }

@@ -7,9 +7,10 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig,
-        energy::AnalysisEnergy,
+        energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
-        raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
+        propagation_strategy::MissedSurfaceStrategy,
+        raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
     joule,
@@ -158,9 +159,6 @@ impl Debug for Source {
     }
 }
 impl OpticNode for Source {
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -172,7 +170,11 @@ impl OpticNode for Source {
     }
 }
 impl AnalysisEnergy for Source {
-    fn analyze(&mut self, _incoming_data: LightResult) -> OpmResult<LightResult> {
+    fn analyze(
+        &mut self,
+        _incoming_data: LightResult,
+        _config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
         if let Ok(Proptype::LightDataBuilder(light_data_builder)) =
             self.node_attr.get_property("light data")
         {
@@ -328,7 +330,7 @@ impl AnalysisGhostFocus for Source {
 mod test {
     use super::*;
     use crate::{
-        lightdata::ray_data_builder::RayDataBuilder, nanometer, optic_ports::PortType,
+        lightdata::ray_data_source::RayDataSource, nanometer, optic_ports::PortType,
         position_distributions::Hexapolar, prelude::EnergyDataBuilder,
         spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
@@ -360,7 +362,7 @@ mod test {
     fn new() {
         let source = Source::new(
             "test",
-            LightDataBuilder::Geometric(RayDataBuilder::default()),
+            LightDataBuilder::Geometric(RayDataSource::default()),
         );
         assert_eq!(source.name(), "test");
     }
@@ -432,7 +434,9 @@ mod test {
     fn analyze_energy_ok() {
         let light_builder = LightDataBuilder::Energy(create_he_ne_spec(1.0).unwrap().into());
         let mut node = Source::new("test", light_builder.clone());
-        let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
+        let output =
+            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())
+                .unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
@@ -553,7 +557,7 @@ mod test {
                 "{:?}",
                 Source::new(
                     "hallo",
-                    LightDataBuilder::Geometric(RayDataBuilder::default())
+                    LightDataBuilder::Geometric(RayDataSource::default())
                 )
             ),
             "Source: Rays"

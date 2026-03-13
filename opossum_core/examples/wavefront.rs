@@ -1,12 +1,11 @@
 use num::Zero;
-use opossum_core::prelude::*;
+use opossum_core::{nodes::round_collimated_ray_builder, prelude::*};
 use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Wavefont Demo");
-    let source = round_collimated_ray_source(meter!(5e-3), joule!(1.), 15)?;
-    let i_s = scenery.add_node(source)?;
+    let i_s = scenery.add_node(SourcePort::new("collimated ray source"))?;
     let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"))?;
     let i_l = scenery.add_node(ParaxialSurface::new("lens", meter!(0.1))?)?;
     let i_wf2 = scenery.add_node(WaveFront::new("wf_monitor 2"))?;
@@ -28,6 +27,11 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_s1, "output_1", i_fl1, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_s,
+        round_collimated_ray_builder(meter!(5e-3), joule!(1.), 15)?,
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/wavefront.opm"))
 }

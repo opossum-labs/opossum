@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
 
-use super::{LightData, energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder};
+use super::{LightData, energy_data_builder::EnergyDataBuilder, ray_data_source::RayDataSource};
 use crate::{
     energy_distributions::EnergyDistType,
     error::OpmResult,
-    lightdata::ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc},
+    lightdata::ray_data_source::{CollimatedSrc, ImageSrc, PointSrc},
     position_distributions::PosDistType,
     spectral_distribution::SpecDistType,
     utils::default_from_name::DefaultFromName,
@@ -23,25 +23,16 @@ pub enum LightDataBuilder {
     /// Builder for the generation of [`LightData::Energy`].
     Energy(EnergyDataBuilder),
     /// Builder for the generation of [`LightData::Geometric`].
-    Geometric(RayDataBuilder),
+    Geometric(RayDataSource),
     // /// Dummy Fourier
     // Fourier,
 }
-
-// impl Validate for LightDataBuilder{
-//     fn validate(&self) -> OpmResult<()> {
-//         match self{
-//             LightDataBuilder::Energy(energy_data_builder) => energy_data_builder.validate(),
-//             LightDataBuilder::Geometric(ray_data_builder) => ray_data_builder.validate(),
-//         }
-//     }
-// }
 
 impl DefaultFromName for LightDataBuilder {}
 
 impl Default for LightDataBuilder {
     fn default() -> Self {
-        Self::Geometric(RayDataBuilder::default())
+        Self::Geometric(RayDataSource::default())
     }
 }
 
@@ -53,8 +44,8 @@ impl LightDataBuilder {
     /// This function will return an error if the concrete implementation of the builder fails.
     pub fn build(self) -> OpmResult<LightData> {
         match self {
-            Self::Energy(e) => e.build(),
-            Self::Geometric(r) => r.build(),
+            Self::Energy(e) => Ok(LightData::Energy(e.build()?)),
+            Self::Geometric(r) => Ok(LightData::Geometric(r.build()?)),
             // Self::Fourier => Ok(LightData::Fourier),
         }
     }
@@ -132,19 +123,19 @@ impl From<EnergyDataBuilder> for LightDataBuilder {
 }
 impl From<ImageSrc> for LightDataBuilder {
     fn from(value: ImageSrc) -> Self {
-        Self::Geometric(RayDataBuilder::Image(value))
+        Self::Geometric(RayDataSource::Image(value))
     }
 }
 
 impl From<PointSrc> for LightDataBuilder {
     fn from(value: PointSrc) -> Self {
-        Self::Geometric(RayDataBuilder::PointSrc(value))
+        Self::Geometric(RayDataSource::PointSrc(value))
     }
 }
 
 impl From<CollimatedSrc> for LightDataBuilder {
     fn from(value: CollimatedSrc) -> Self {
-        Self::Geometric(RayDataBuilder::Collimated(value))
+        Self::Geometric(RayDataSource::Collimated(value))
     }
 }
 
@@ -241,7 +232,7 @@ mod tests {
         ));
         let light_data = light_data_builder.build().unwrap();
         assert!(matches!(light_data, LightData::Energy(_)));
-        let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(Rays::default()));
+        let light_data_builder = LightDataBuilder::Geometric(RayDataSource::Raw(Rays::default()));
         let light_data = light_data_builder.build().unwrap();
         assert!(matches!(light_data, LightData::Geometric(_)));
     }

@@ -19,7 +19,7 @@ pub fn cambox_2w() -> OpmResult<NodeGroup> {
     let ff_lens = cb.add_node(ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
     let mut node = SpotDiagram::new("FF cam");
     //node.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
-    node.set_property("plot_aperture", true.into())?;
+    node.set_property("plot aperture", true.into())?;
     let ff_cam = cb.add_node(node)?;
 
     let ff_fluence = FluenceDetector::new("FF fluence");

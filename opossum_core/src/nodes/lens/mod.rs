@@ -295,7 +295,6 @@ impl OpticNode for Lens {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    ///updates the lidt of the optical surfaces after deserialization
     fn update_lidt(&mut self) -> OpmResult<()> {
         let lidt = *self.node_attr().lidt();
         let in_ports = self.ports().names(&PortType::Input);
@@ -327,7 +326,11 @@ impl AnalysisEnergy for Lens {}
 mod test {
     use super::*;
     use crate::{
-        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
+        analyzers::{
+            RayTraceConfig,
+            energy::{AnalysisEnergy, EnergyConfig},
+            raytrace::AnalysisRayTrace,
+        },
         apertures::{Aperture, ApertureType},
         joule,
         light_result::LightResult,
@@ -527,7 +530,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]

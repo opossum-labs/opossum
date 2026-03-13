@@ -1,14 +1,10 @@
 use num::Zero;
-use opossum_core::prelude::*;
+use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
 use std::path::Path;
 use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Nested Group Dot test");
-    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0))?,
-    ));
-    let i_s = scenery.add_node(Source::new("Source", light_data_builder))?;
-
+    let i_s = scenery.add_node(SourcePort::default()).unwrap();
     let mut group = NodeGroup::default();
     let mut group2 = NodeGroup::default();
     group.set_expand_view(true)?;
@@ -28,6 +24,12 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_g, "output_1", i_d, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::Energy);
+    let energy_data_builder = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+        vec![(nanometer!(633.0), joule!(1.0))],
+        nanometer!(1.0),
+    )?);
+    let mut config = EnergyConfig::default();
+    config.map_source(i_s, energy_data_builder.into());
+    doc.add_analyzer(AnalyzerType::Energy(config));
     doc.save_to_file(Path::new("./opossum_core/playground/nested_group_dot.opm"))
 }

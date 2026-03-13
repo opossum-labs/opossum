@@ -9,12 +9,15 @@ use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_squar
 use uuid::Uuid;
 
 use crate::{
+    analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     error::{OpmResult, OpossumError},
-    light_result::{LightRays, LightResult},
+    light_result::{
+        LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
+    },
+    lightdata::ray_data_builder::RayDataBuilder,
     millimeter,
     nodes::{NodeGroup, OpticGraph},
     optic_node::OpticNode,
-    optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{
         Properties, Proptype,
@@ -22,7 +25,7 @@ use crate::{
     },
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
-    surface::hit_map::fluence_estimator::FluenceEstimator,
+    surface::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
     utils::LockExt,
 };
 
@@ -33,15 +36,16 @@ use super::{
 inventory::submit! {
     AnalyzerRegistration::new(
         || AnalyzerType::GhostFocus(GhostFocusConfig::default()),
-        |at| if let AnalyzerType::GhostFocus(config) = at { Some(Box::new(GhostFocusAnalyzer::new(*config))) } else { None }
+        |at| if let AnalyzerType::GhostFocus(config) = at { Some(Box::new(GhostFocusAnalyzer::new(config.clone()))) } else { None }
     )
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Copy)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
     max_bounces: usize,
     fluence_estimator: FluenceEstimator,
+    source_map: HashMap<Uuid, RayDataBuilder>,
 }
 
 impl GhostFocusConfig {
@@ -54,7 +58,6 @@ impl GhostFocusConfig {
     pub const fn set_max_bounces(&mut self, max_bounces: usize) {
         self.max_bounces = max_bounces;
     }
-
     /// Returns the fluence estimator of this [`GhostFocusConfig`].
     #[must_use]
     pub const fn fluence_estimator(&self) -> &FluenceEstimator {
@@ -64,13 +67,52 @@ impl GhostFocusConfig {
     pub const fn set_fluence_estimator(&mut self, fluence_estimator: FluenceEstimator) {
         self.fluence_estimator = fluence_estimator;
     }
+    /// Maps an ray data builder to the given source UUID
+    ///
+    /// If a builder was already mapped this function returns `true`. A new mapping
+    /// reutrns `false`
+    pub fn map_source(&mut self, node_id: Uuid, ray_data_builder: RayDataBuilder) -> bool {
+        self.source_map.insert(node_id, ray_data_builder).is_some()
+    }
+    /// Returns the ray data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn get_source(&self, uuid: &Uuid) -> Option<&RayDataBuilder> {
+        self.source_map.get(uuid)
+    }
+    /// Removes and returns the ray data builder mapped to the given source UUID, if any.
+    #[must_use]
+    pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
+        self.source_map.remove(uuid)
+    }
+    /// Removes all source mappings whose UUIDs no longer exist in the given model.
+    pub fn prune_source_map(&mut self, model: &NodeGroup) {
+        self.source_map.retain(|uuid, _builder| model.exists(*uuid));
+    }
 }
 impl Default for GhostFocusConfig {
     fn default() -> Self {
         Self {
             max_bounces: 1,
             fluence_estimator: FluenceEstimator::Voronoi,
+            source_map: HashMap::new(),
         }
+    }
+}
+impl PropagationStrategy for GhostFocusConfig {
+    fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
+        MissedSurfaceStrategy::Ignore
+    }
+    fn on_surface_interaction(
+        &self,
+        surf: &mut OpticSurface,
+        rays: &mut Rays,
+        reflected_rays: Rays,
+        backward: bool,
+    ) -> OpmResult<()> {
+        // Ghost focus specific fluence evaluation and caching
+        surf.evaluate_fluence_of_ray_bundle(rays, self.fluence_estimator())?;
+        surf.add_to_rays_cache(reflected_rays, backward);
+        Ok(())
     }
 }
 /// Analyzer for ghost focus simulation
@@ -98,11 +140,11 @@ impl Analyzer for GhostFocusAnalyzer {
             format!(" '{}'", scenery.node_attr().name())
         };
         info!("Calculate node positions of scenery{scenery_name}.");
-        AnalysisRayTrace::calc_node_positions(
-            scenery,
-            LightResult::default(),
-            &RayTraceConfig::default(),
-        )?;
+
+        // copy source map to RayTraceConfig to be able to use it in the unified analyze function of AnalysisRayTrace
+        let mut raytrace_config = RayTraceConfig::default();
+        raytrace_config.set_source_map(self.config.source_map.clone());
+        AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
         info!(
             "Performing ghost focus analysis of scenery{scenery_name} up to {} ray bounces.",
             self.config.max_bounces
@@ -229,7 +271,11 @@ impl Analyzer for GhostFocusAnalyzer {
     }
 }
 
-/// Trait for implementing the energy flow analysis.
+/// Trait for implementing ghost focus analysis.
+///
+/// This trait extends the [`AnalysisRayTrace`] trait and provides a default implementation
+/// of the `analyze` function that performs a ghost focus analysis of an [`OpticNode`]. The
+/// `analyze` function takes into account possible reflected [`Rays`] and returns the resulting [`LightRays`].
 pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     /// Perform a ghost focus analysis of an [`OpticNode`].
     ///
@@ -238,46 +284,19 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if the analysis fails for any reason, such as if
+    /// the input data is invalid or if the node cannot be analyzed.
     fn analyze(
-        &mut self,
-        _incoming_data: LightRays,
-        _config: &GhostFocusConfig,
-        _ray_collection: &mut Vec<Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        warn!(
-            "{}: No ghost focus analysis function defined.",
-            self.node_type()
-        );
-        Ok(LightRays::default())
-    }
-
-    /// Effectively the analyze function of detector nodes with a single surface for a ghost-focus analysis
-    /// Helper function to reduce code-doubling
-    /// # Attributes
-    /// - `incoming_data`: the incoming data for this analysis
-    /// - `config`: the [`RayTraceConfig`] of this analysis
-    /// # Errors
-    /// This function errors if `pass_through_detector_surface` fails    
-    fn analyze_single_surface_node(
         &mut self,
         incoming_data: LightRays,
         config: &GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
+        _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let in_port = &self.ports().names(&PortType::Input)[0];
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        let Some(bouncing_rays) = incoming_data.get(in_port) else {
-            let mut out_light_rays = LightRays::default();
-            out_light_rays.insert(out_port.into(), Vec::<Rays>::new());
-            return Ok(out_light_rays);
-        };
-        let mut rays = bouncing_rays.clone();
-        self.pass_through_detector_surface(in_port, &mut rays, &AnalyzerType::GhostFocus(*config))?;
-
-        let mut out_light_rays = LightRays::default();
-        out_light_rays.insert(out_port.clone(), rays);
-        Ok(out_light_rays)
+        let incoming_result = light_rays_to_light_result(incoming_data);
+        let out_result =
+            self.unified_analyze_single_surface_node(incoming_result, config, "input_1", None)?;
+        light_result_to_light_rays(out_result)
     }
 }
 
@@ -311,12 +330,10 @@ impl RaysNodeCorrelation {
         correlation.insert(rays_uuid, rays_origin.clone());
         Self { correlation }
     }
-
     /// inserts a key value pair in the correlation hashmap
     pub fn insert(&mut self, k: Uuid, v: &RaysOrigin) {
         self.correlation.insert(k, v.clone());
     }
-
     /// returns the values of the correlation hashmap
     #[must_use]
     pub fn values(&self) -> Values<'_, Uuid, RaysOrigin> {
@@ -331,11 +348,13 @@ pub struct GhostFocusHistory {
     pub rays_pos_history: Vec<Vec<Vec<MatrixXx3<Length>>>>,
     /// view direction if the ray position history is plotted
     pub plot_view_direction: Option<Vector3<f64>>,
-    ///stores the corrleation between a rays bundle and its parent node as well as parent ray bundle for each bounce in a vector
+    /// stores the corrleation between a rays bundle and its parent node as well as parent
+    /// ray bundle for each bounce in a vector
     pub ray_node_correlation: Vec<RaysNodeCorrelation>,
 }
 impl GhostFocusHistory {
-    /// Projects the positions o fthie [`GhostFocusHistory`] onto a 2D plane
+    /// Projects the positions of the [`GhostFocusHistory`] onto a 2D plane
+    ///
     /// # Attributes
     /// `plane_normal_vec`: normal vector of the plane to project onto
     ///
@@ -354,12 +373,11 @@ impl GhostFocusHistory {
                 "The plane normal vector must have a non-zero length!".into(),
             ));
         }
-
         let normed_normal_vec = plane_normal_vec / vec_norm;
 
-        //define an axis on the plane.
-        //Do this by projection of one of the main coordinate axes onto that plane
-        //Beforehand check, if these axes are not parallel to the normal vec
+        // define an axis on the plane.
+        // Do this by projection of one of the main coordinate axes onto that plane
+        // Beforehand check, if these axes are not parallel to the normal vec
         let (co_ax_1, co_ax_2) = if plane_normal_vec.cross(&Vector3::x()).norm() < f64::EPSILON {
             //parallel to the x-axis
             (Vector3::z(), Vector3::y())
@@ -368,12 +386,13 @@ impl GhostFocusHistory {
         } else if plane_normal_vec.cross(&Vector3::z()).norm() < f64::EPSILON {
             (Vector3::x(), Vector3::y())
         } else {
-            //arbitrarily project x-axis onto that plane
+            // arbitrarily project x-axis onto that plane
             let x_vec = Vector3::x();
             let mut proj_x = x_vec - x_vec.dot(&normed_normal_vec) * plane_normal_vec;
             proj_x /= proj_x.norm();
 
-            //second axis defined by cross product of x-axis projection and plane normal, which yields another vector that is perpendicular to both others
+            // second axis defined by cross product of x-axis projection and plane normal,
+            // which yields another vector that is perpendicular to both others.
             (proj_x, proj_x.cross(&normed_normal_vec))
         };
 
@@ -388,7 +407,6 @@ impl GhostFocusHistory {
                 for ray_pos in ray_bundle {
                     let mut projected_ray_pos = MatrixXx2::<Length>::zeros(ray_pos.column(0).len());
                     for (row, pos) in ray_pos.row_iter().enumerate() {
-                        // let pos_t = Vector3::from_vec(pos.transpose().iter().map(|p| p.get::<millimeter>()).collect::<Vec<f64>>());
                         let pos_t = Vector3::from_vec(
                             pos.iter()
                                 .map(uom::si::f64::Length::get::<millimeter>)
@@ -405,7 +423,6 @@ impl GhostFocusHistory {
             }
             projected_history.push(rays_vec_pos_projection);
         }
-
         Ok(projected_history)
     }
 
@@ -432,7 +449,6 @@ impl GhostFocusHistory {
                         rays.uuid(),
                         &RaysOrigin::new(rays.parent_id(), *rays.node_origin()),
                     );
-
                     self.rays_pos_history[bounce] = rays_per_bounce_history;
                     if let Some(parent_uuid) = rays.parent_id() {
                         self.add_specific_ray_history(
@@ -510,7 +526,7 @@ impl From<Vec<HashMap<Uuid, Rays>>> for GhostFocusHistory {
 }
 
 impl From<(&Vec<HashMap<Uuid, Rays>>, Uuid, usize)> for GhostFocusHistory {
-    ///value contains :
+    /// value contains :
     /// 0: a vector of Hashmaps that contain Rays. Same structure as the `accumulated_rays` in [`NodeGroup`]
     /// 1: the uuid of a ray bundle within field 0
     /// 2: the index of the position in the ray position history up to which it should be displayed
@@ -606,7 +622,10 @@ impl Plottable for GhostFocusHistory {
 #[cfg(test)]
 mod test_ghost_focus_config {
     use super::GhostFocusConfig;
-    use crate::surface::hit_map::fluence_estimator::FluenceEstimator;
+    use crate::{
+        lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
+        surface::hit_map::fluence_estimator::FluenceEstimator,
+    };
     #[test]
     fn default() {
         let c = GhostFocusConfig::default();
@@ -625,18 +644,73 @@ mod test_ghost_focus_config {
         c.set_fluence_estimator(FluenceEstimator::HelperRays);
         assert_eq!(c.fluence_estimator(), &FluenceEstimator::HelperRays);
     }
+    #[test]
+    fn test_map_and_get_source() {
+        use crate::lightdata::ray_data_source::{CollimatedSrc, PointSrc, RayDataSource};
+        use uuid::Uuid;
+        let mut config = GhostFocusConfig::default();
+        let uuid = Uuid::new_v4();
+        let builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::default()).into();
+
+        assert_eq!(config.map_source(uuid, builder.clone()), false);
+        assert_eq!(config.get_source(&uuid), Some(&builder));
+
+        let builder2: RayDataBuilder = RayDataSource::PointSrc(PointSrc::default()).into();
+        assert_eq!(config.map_source(uuid, builder2.clone()), true);
+        assert_eq!(config.get_source(&uuid), Some(&builder2));
+    }
+
+    #[test]
+    fn test_remove_source() {
+        use crate::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
+        use uuid::Uuid;
+        let mut config = GhostFocusConfig::default();
+        let uuid = Uuid::new_v4();
+        let builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::default()).into();
+
+        config.map_source(uuid, builder.clone());
+        assert_eq!(config.remove_source(&uuid), Some(builder));
+        assert!(config.get_source(&uuid).is_none());
+        assert!(config.remove_source(&uuid).is_none());
+    }
+
+    #[test]
+    fn test_prune_source_map() {
+        use crate::{
+            lightdata::ray_data_source::{CollimatedSrc, RayDataSource},
+            nodes::NodeGroup,
+        };
+        use uuid::Uuid;
+
+        let mut config = GhostFocusConfig::default();
+        let uuid2 = Uuid::new_v4();
+        let builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::default()).into();
+
+        let mut scene = NodeGroup::default();
+        let node_id = scene.add_node(SourcePort::default()).unwrap();
+
+        config.map_source(node_id, builder.clone());
+        config.map_source(uuid2, builder.clone());
+
+        config.prune_source_map(&scene);
+
+        assert!(config.get_source(&node_id).is_some());
+        assert!(config.get_source(&uuid2).is_none());
+    }
 }
 
 #[cfg(test)]
 mod test_ghost_focus_analyzer {
-    use super::{AnalysisGhostFocus, GhostFocusAnalyzer, GhostFocusConfig};
+    use super::{GhostFocusAnalyzer, GhostFocusConfig};
     use crate::{
         analyzers::Analyzer,
         coatings::CoatingType,
         degree, joule,
-        light_result::LightRays,
+        light_result::LightResult,
         millimeter,
-        nodes::{Lens, NodeGroup, SpotDiagram, ThinMirror, round_collimated_ray_source},
+        nodes::{
+            Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror, round_collimated_ray_builder,
+        },
         optic_node::{Alignable, OpticNode},
         optic_ports::PortType,
     };
@@ -650,9 +724,7 @@ mod test_ghost_focus_analyzer {
     #[ignore]
     fn report() {
         let mut scenery = NodeGroup::default();
-        let i_src = scenery
-            .add_node(round_collimated_ray_source(millimeter!(10.0), joule!(2.), 5).unwrap())
-            .unwrap();
+        let i_src = scenery.add_node(SourcePort::default()).unwrap();
         let mut lens = Lens::default();
         lens.set_coating(
             &PortType::Input,
@@ -683,6 +755,10 @@ mod test_ghost_focus_analyzer {
 
         let mut config = GhostFocusConfig::default();
         config.set_max_bounces(2);
+        config.map_source(
+            i_src,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(2.), 5).unwrap(),
+        );
         let analyzer = GhostFocusAnalyzer::new(config);
         analyzer.analyze(&mut scenery).unwrap();
         analyzer.report(&scenery).unwrap();
@@ -692,10 +768,19 @@ mod test_ghost_focus_analyzer {
     fn analyze_single_surface_node() {
         let mut sd = SpotDiagram::default();
         let config = GhostFocusConfig::default();
-        let out_rays = sd
-            .analyze_single_surface_node(LightRays::default(), &config)
+        let out_result = sd
+            .unified_analyze_single_surface_node(LightResult::default(), &config, "input_1", None)
             .unwrap();
-        assert_eq!(out_rays.get("output_1").unwrap().len(), 0)
+        let output_data = out_result.get("output_1");
+
+        match output_data {
+            Some(crate::lightdata::LightData::GhostFocus(rays)) => assert_eq!(rays.len(), 0),
+            Some(crate::lightdata::LightData::Geometric(rays)) => {
+                assert_eq!(rays.nr_of_rays(false), 0)
+            }
+            None => assert!(out_result.is_empty()),
+            _ => panic!("Unerwarteter Datentyp auf dem Output Port"),
+        }
     }
 }
 

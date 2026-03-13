@@ -2,7 +2,7 @@
 //! Module for handling bundles of [`Ray`]s
 use crate::{
     J_per_cm2,
-    analyzers::raytrace::MissedSurfaceStrategy,
+    analyzers::propagation_strategy::MissedSurfaceStrategy,
     apertures::Aperture,
     centimeter, degree,
     energy_distributions::EnergyDistribution,
@@ -1337,8 +1337,6 @@ impl Rays {
     /// This functions returns an error if [`Rays`] is empty.
     pub fn to_auto_spectrum(&self) -> OpmResult<Spectrum> {
         let optimal_resolution = self.suggest_spectral_resolution();
-        // Optional: Loggen der gefundenen Auflösung zur Kontrolle
-        // log::info!("Auto-detected spectral resolution: {:.4} nm", optimal_resolution.get::<nanometer>());
         self.to_spectrum(&optimal_resolution)
     }
     /// Create a [`Spectrum`] (with a given resolution) from a ray bundle.

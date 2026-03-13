@@ -222,6 +222,26 @@ impl OpticGraph {
         );
         Ok(nr_of_outgoing_edges < nr_of_output_ports)
     }
+    /// Recursively finds all nodes of type "source port" and returns their UUIDs.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a mutex lock on a node fails.
+    pub fn find_source_ports(&self) -> OpmResult<Vec<Uuid>> {
+        let mut source_ports = Vec::new();
+        for node_ref in self.nodes() {
+            let node_id = node_ref.uuid();
+            let mut node = node_ref.optical_ref.lock_opm()?;
+            if node.node_attr().node_type() == "source port" {
+                source_ports.push(node_id);
+            }
+            if let Ok(group) = node.as_group_mut() {
+                let sub_ports = group.graph.find_source_ports()?;
+                source_ports.extend(sub_ports);
+            }
+        }
+        Ok(source_ports)
+    }
 }
 #[cfg(test)]
 mod test {

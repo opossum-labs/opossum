@@ -26,6 +26,9 @@ use std::{
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+use ron::{extensions::Extensions, ser::PrettyConfig};
+
 /// A structure containing the [`AnalyzerType`] together with its position on a frontend GUI.
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnalyzerInfo {
@@ -59,8 +62,8 @@ impl AnalyzerInfo {
         &self.analyzer_type
     }
     /// Sets the analyzer type of this [`AnalyzerInfo`].
-    pub const fn set_analyzer_type(&mut self, analyzer_type: AnalyzerType) {
-        self.analyzer_type = analyzer_type;
+    pub fn set_analyzer_type(&mut self, analyzer_type: &AnalyzerType) {
+        self.analyzer_type = analyzer_type.clone();
     }
     /// Returns the id of this [`AnalyzerInfo`].
     #[must_use]
@@ -166,15 +169,18 @@ impl OpmDocument {
         })?;
         Ok(())
     }
-    /// Return the content of the `.opm` file from this [`OpmDocument`]
+    /// Returns the content of the `.opm` file from this [`OpmDocument`]
     ///
     /// # Errors
     ///
     /// This function will return an error if the serialization of the internal structures fail.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
-        ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::new().new_line("\n")).map_err(
-            |e| OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}")),
-        )
+        let config = PrettyConfig::new()
+            .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
+            .new_line("\n");
+        ron::ser::to_string_pretty(&self, config).map_err(|e| {
+            OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
+        })
     }
     /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]
@@ -328,17 +334,13 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{
-            Analyzer, GhostFocusConfig, RayTraceConfig, ghostfocus::GhostFocusAnalyzer,
-            raytrace::RayTracingAnalyzer,
+            Analyzer, GhostFocusConfig, RayTraceConfig, energy::EnergyConfig,
+            ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
         degree, joule, millimeter, nanometer,
-        nodes::{
-            BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens,
-            ParabolicMirror, ParaxialSurface, RayPropagationVisualizer, ReflectiveGrating,
-            Spectrometer, SpotDiagram, ThinMirror, WaveFront, Wedge, collimated_line_ray_source,
-            round_collimated_ray_source,
-        },
+        nodes::round_collimated_ray_builder,
         optic_node::{Alignable, OpticNode},
+        prelude::*,
         refractive_index::RefrIndexConst,
         utils::test_helper::test_helper::check_logs,
     };
@@ -393,27 +395,28 @@ mod test {
     fn add_analyzer() {
         let mut document = OpmDocument::default();
         assert!(document.analyzers.is_empty());
-        document.add_analyzer(AnalyzerType::Energy);
+        document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
         assert_eq!(document.analyzers.len(), 1);
     }
     #[test]
     fn add_analyzer_with_position() {
         let mut document = OpmDocument::default();
-        let uuid = document.add_analyzer_with_position(AnalyzerType::Energy, None);
+        let uuid = document
+            .add_analyzer_with_position(AnalyzerType::Energy(EnergyConfig::default()), None);
         assert!(!uuid.is_nil());
     }
     #[test]
     fn analyzers() {
         let mut document = OpmDocument::default();
-        document.add_analyzer(AnalyzerType::Energy);
+        document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
         document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
         assert_eq!(document.analyzers().len(), 2);
     }
     #[test]
     fn analyzer() {
         let mut document = OpmDocument::default();
-        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
-        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
 
         assert!(document.analyzer(uuid1).is_ok());
         assert!(document.analyzer(uuid2).is_ok());
@@ -422,8 +425,8 @@ mod test {
     #[test]
     fn analyzer_mut() {
         let mut document = OpmDocument::default();
-        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
-        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
 
         assert!(document.analyzer_mut(uuid1).is_some());
         assert!(document.analyzer_mut(uuid2).is_some());
@@ -432,8 +435,8 @@ mod test {
     #[test]
     fn remove_analyzer() {
         let mut document = OpmDocument::default();
-        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
-        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
 
         assert!(document.remove_analyzer(uuid1).is_ok());
         assert_eq!(document.analyzers.len(), 1);
@@ -444,8 +447,7 @@ mod test {
     #[test]
     fn all_nodes_integration_test() {
         let mut scenery = NodeGroup::default();
-        let src = round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 1).unwrap();
-        let i_0 = scenery.add_node(src).unwrap();
+        let i_0 = scenery.add_node(SourcePort::default()).unwrap();
         let i_1 = scenery.add_node(BeamSplitter::default()).unwrap();
         let i_2 = scenery.add_node(CylindricLens::default()).unwrap();
         let i_3 = scenery.add_node(FluenceDetector::default()).unwrap();
@@ -523,24 +525,26 @@ mod test {
             .unwrap();
 
         scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
+        let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1).unwrap();
+        let mut config = RayTraceConfig::default();
+        config.map_source(i_0, ray_builder.clone());
         // Perform ray tracing analysis
         testing_logger::setup();
-        let analyzer = RayTracingAnalyzer::new(RayTraceConfig::default());
+        let analyzer = RayTracingAnalyzer::new(config);
         analyzer.analyze(&mut scenery).unwrap();
         check_logs(log::Level::Warn, vec![]);
         scenery.reset_data();
         // Perform ghost focus analysis
-        let analyzer = GhostFocusAnalyzer::new(GhostFocusConfig::default());
+        let mut config = GhostFocusConfig::default();
+        config.map_source(i_0, ray_builder);
+        let analyzer = GhostFocusAnalyzer::new(config);
         analyzer.analyze(&mut scenery).unwrap();
-
         check_logs(log::Level::Warn, vec![]);
     }
     #[test]
     fn full_analysis_with_save_and_load() {
         let mut scenery = NodeGroup::new("Lens Ray-trace test");
-        let src = scenery
-            .add_node(collimated_line_ray_source(millimeter!(20.0), joule!(1.0), 6).unwrap())
-            .unwrap();
+        let src = scenery.add_node(SourcePort::default()).unwrap();
         let lens1 = Wedge::new(
             "Wedge",
             millimeter!(10.0),
@@ -575,7 +579,12 @@ mod test {
             .connect_nodes(l2, "output_1", det, "input_1", millimeter!(50.0))
             .unwrap();
         let mut doc = OpmDocument::new(scenery);
-        doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            src,
+            collimated_line_ray_builder(millimeter!(20.0), joule!(1.0), 6).unwrap(),
+        );
+        doc.add_analyzer(AnalyzerType::RayTrace(config));
         let temp_model_file = NamedTempFile::new().unwrap();
         doc.save_to_file(temp_model_file.path()).unwrap();
 
@@ -603,13 +612,21 @@ mod test {
     }
     #[test]
     fn analyzer_info_set_analyzer_type() {
-        let mut at = AnalyzerInfo::new(AnalyzerType::Energy, Uuid::nil(), Point2::new(1.0, 2.0));
-        at.set_analyzer_type(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
+        let mut at = AnalyzerInfo::new(
+            AnalyzerType::Energy(EnergyConfig::default()),
+            Uuid::nil(),
+            Point2::new(1.0, 2.0),
+        );
+        at.set_analyzer_type(&AnalyzerType::GhostFocus(GhostFocusConfig::default()));
         assert!(matches!(at.analyzer_type, AnalyzerType::GhostFocus(_)));
     }
     #[test]
     fn analyzer_info_set_gui_position() {
-        let mut at = AnalyzerInfo::new(AnalyzerType::Energy, Uuid::nil(), Point2::new(1.0, 2.0));
+        let mut at = AnalyzerInfo::new(
+            AnalyzerType::Energy(EnergyConfig::default()),
+            Uuid::nil(),
+            Point2::new(1.0, 2.0),
+        );
         let new_position = Point2::new(3.0, 4.0);
         at.set_gui_position(Some(new_position));
         assert_eq!(at.gui_position(), Some(new_position))

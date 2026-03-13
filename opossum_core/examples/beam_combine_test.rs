@@ -1,42 +1,35 @@
 #![allow(missing_docs)]
 use num::Zero;
-use opossum_core::prelude::*;
+use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
 use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("beam combiner demo");
-    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0))?,
-    ));
-    let i_s1 = scenery.add_node(Source::new("Source 1", light_data_builder))?;
-    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        EnergyLaserLines::new(vec![(nanometer!(1053.0), joule!(1.0))], nanometer!(1.0))?,
-    ));
-    let i_s2 = scenery.add_node(Source::new("Source 2", light_data_builder))?;
+    let i_s1 = scenery.add_node(SourcePort::new("Source 633nm"))?;
+    let i_s2 = scenery.add_node(SourcePort::new("Source 1053nm"))?;
     let i_bs = scenery
         .add_node(BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5)).unwrap())?;
-
-    let i_f = scenery.add_node(IdealFilter::new(
-        "filter",
-        &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(EdgeFilter::new(
-            EdgeFilterType::LongPass,
-            nanometer!(700.0),
-            (0.)..(1.),
-            None,
-            nanometer!(400.0)..nanometer!(1100.0),
-            nanometer!(1.),
-        )?)),
-    )?)?;
-    let i_d1 = scenery.add_node(Dummy::default())?;
+    let i_spec = scenery.add_node(Spectrometer::default())?;
 
     scenery.connect_nodes(i_s1, "output_1", i_bs, "input_1", Length::zero())?;
     scenery.connect_nodes(i_s2, "output_1", i_bs, "input_2", Length::zero())?;
-    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_f, "input_1", Length::zero())?;
-    scenery.connect_nodes(i_f, "output_1", i_d1, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_spec, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::Energy);
+
+    let energy_data_builder_1 = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+        vec![(nanometer!(633.0), joule!(1.0))],
+        nanometer!(1.0),
+    )?);
+    let energy_data_builder_2 = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+        vec![(nanometer!(1053.0), joule!(1.0))],
+        nanometer!(1.0),
+    )?);
+    let mut energy_config = EnergyConfig::default();
+    energy_config.map_source(i_s1, energy_data_builder_1.into());
+    energy_config.map_source(i_s2, energy_data_builder_2.into());
+    doc.add_analyzer(AnalyzerType::Energy(energy_config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/beam_combiner_test.opm",
     ))

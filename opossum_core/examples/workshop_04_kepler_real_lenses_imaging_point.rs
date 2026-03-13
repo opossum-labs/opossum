@@ -7,14 +7,8 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler imaging point src");
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc(PointSrc::new(
-        Hexapolar::new(millimeter!(15.0), 8)?.into(),
-        UniformDist::new(joule!(1.0))?.into(),
-        LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-        millimeter!(70.0),
-    )?));
-    let src = Source::new("point source", light_data_builder);
-    let i_src = scenery.add_node(src)?;
+
+    let i_src = scenery.add_node(SourcePort::new("point source"))?;
     let refr_index_hzf52 = RefrIndexSchott::new(
         3.26760058E+000,
         -2.05384566E-002,
@@ -54,7 +48,18 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(58.0))?;
     scenery.connect_nodes(i_sd3, "output_1", i_sd4, "input_1", millimeter!(0.1))?;
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        RayDataSource::PointSrc(PointSrc::new(
+            Hexapolar::new(millimeter!(15.0), 8)?.into(),
+            UniformDist::new(joule!(1.0))?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+            millimeter!(70.0),
+        )?)
+        .into(),
+    );
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_04_kepler_imaging_point.opm",
     ))

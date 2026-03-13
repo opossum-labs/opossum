@@ -1,19 +1,9 @@
-use opossum_core::prelude::*;
+use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Multi Path / Multi Source");
-    let light_data_builder =
-        LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
-            vec![
-                (nanometer!(1000.0), joule!(0.5)),
-                (nanometer!(950.0), joule!(0.3)),
-                (nanometer!(1050.0), joule!(0.2)),
-            ],
-            nanometer!(0.5),
-        )?));
-    let src = Source::new("multi line source", light_data_builder);
-    let i_src = scenery.add_node(src)?;
+    let i_src = scenery.add_node(SourcePort::new("multi line source"))?;
     let i_s1 = scenery.add_node(Spectrometer::new("Source 1", SpectrometerType::Ideal))?;
 
     let splitting_config_1 = SplittingConfigBuilder::Spectrum(
@@ -48,12 +38,7 @@ fn main() -> OpmResult<()> {
     let bs2 = BeamSplitter::new("BS2", &splitting_config_2)?;
     let i_bs2 = scenery.add_node(bs2)?;
 
-    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-        EnergyLaserLines::new(vec![(nanometer!(1020.0), joule!(1.0))], nanometer!(0.5))?,
-    ));
-    let src2 = Source::new("source 2", light_data_builder);
-    let i_src2 = scenery.add_node(src2)?;
-
+    let i_src2 = scenery.add_node(SourcePort::new("source 2"))?;
     let i_s4 = scenery.add_node(Spectrometer::new("BS2 Output 1", SpectrometerType::Ideal))?;
 
     let i_s5 = scenery.add_node(Spectrometer::new("BS2 Output 2", SpectrometerType::Ideal))?;
@@ -95,7 +80,22 @@ fn main() -> OpmResult<()> {
     )?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::Energy);
+    let energy_data_builder_1 = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+        vec![
+            (nanometer!(1000.0), joule!(0.5)),
+            (nanometer!(950.0), joule!(0.3)),
+            (nanometer!(1050.0), joule!(0.2)),
+        ],
+        nanometer!(0.5),
+    )?);
+    let energy_data_builder_2 = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+        vec![(nanometer!(1020.0), joule!(1.0))],
+        nanometer!(0.5),
+    )?);
+    let mut config = EnergyConfig::default();
+    config.map_source(i_src, energy_data_builder_1.into());
+    config.map_source(i_src2, energy_data_builder_2.into());
+    doc.add_analyzer(AnalyzerType::Energy(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_10_multi_path.opm",
     ))

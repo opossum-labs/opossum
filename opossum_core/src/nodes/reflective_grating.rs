@@ -5,10 +5,8 @@ use std::f64::consts::PI;
 use super::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig,
-        energy::AnalysisEnergy,
-        ghostfocus::AnalysisGhostFocus,
-        raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
+        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
@@ -281,9 +279,14 @@ impl OpticNode for ReflectiveGrating {
 mod test {
     use super::*;
     use crate::{
-        analyzers::RayTraceConfig, degree, joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*, optic_ports::PortType, ray::Ray, rays::Rays,
-        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
+        analyzers::{RayTraceConfig, energy::EnergyConfig},
+        degree, joule, millimeter, nanometer,
+        nodes::test_helper::test_helper::*,
+        optic_ports::PortType,
+        ray::Ray,
+        rays::Rays,
+        spectrum_helper::create_he_ne_spec,
+        utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
     use core::f64;
@@ -419,7 +422,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -428,7 +431,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
