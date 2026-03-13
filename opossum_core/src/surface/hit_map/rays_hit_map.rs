@@ -222,14 +222,15 @@ impl RaysHitMap {
             y_lims: (ymin, ymax),
         }
     }
-    /// Add intersection point (with energy) to this [`RaysHitMap`].
+    /// Add intersection point (with energy/fluence) to this [`RaysHitMap`].
     ///
     /// # Errors
-    /// This function errors if the hitpoint tha should be added does not match the already stored hit point type
+    /// This function errors if the hitpoint that should be added does not match the already stored hit point type.
     pub fn add_hit_point(&mut self, hit_point: HitPoint) -> OpmResult<()> {
         match hit_point {
             HitPoint::Energy(energy_hit_point) => {
                 if let HitPoints::Energy(v) = &mut self.hit_points {
+                    // Update limits based on the new point
                     if v.is_empty() {
                         self.x_lims.0 = energy_hit_point.position.x;
                         self.x_lims.1 = energy_hit_point.position.x;
@@ -241,15 +242,7 @@ impl RaysHitMap {
                         self.y_lims.0 = energy_hit_point.position.y.min(self.y_lims.0);
                         self.y_lims.1 = energy_hit_point.position.y.max(self.y_lims.1);
                     }
-                    for hp in v.iter_mut() {
-                        if relative_eq!(hp.position.x.value, energy_hit_point.position.x.value)
-                            && relative_eq!(hp.position.y.value, energy_hit_point.position.y.value)
-                            && relative_eq!(hp.position.z.value, energy_hit_point.position.z.value)
-                        {
-                            hp.value += energy_hit_point.value;
-                            return Ok(());
-                        }
-                    }
+                    // Fast insertion: just push the point without searching for duplicates
                     v.push(energy_hit_point);
                 } else {
                     return Err(OpossumError::Analysis(
@@ -259,6 +252,7 @@ impl RaysHitMap {
             }
             HitPoint::Fluence(fluence_hit_point) => {
                 if let HitPoints::Fluence(v) = &mut self.hit_points {
+                    // Update limits based on the new point
                     if v.is_empty() {
                         self.x_lims.0 = fluence_hit_point.position.x;
                         self.x_lims.1 = fluence_hit_point.position.x;
@@ -270,15 +264,7 @@ impl RaysHitMap {
                         self.y_lims.0 = fluence_hit_point.position.y.min(self.y_lims.0);
                         self.y_lims.1 = fluence_hit_point.position.y.max(self.y_lims.1);
                     }
-                    for hp in v.iter_mut() {
-                        if relative_eq!(hp.position.x.value, fluence_hit_point.position.x.value)
-                            && relative_eq!(hp.position.y.value, fluence_hit_point.position.y.value)
-                            && relative_eq!(hp.position.z.value, fluence_hit_point.position.z.value)
-                        {
-                            hp.value += fluence_hit_point.value;
-                            return Ok(());
-                        }
-                    }
+                    // Fast insertion: just push the point without searching for duplicates
                     v.push(fluence_hit_point);
                 } else {
                     return Err(OpossumError::Analysis(
@@ -289,7 +275,6 @@ impl RaysHitMap {
         }
         Ok(())
     }
-
     /// Returns the x limit (min, max) of the [`HitPoints`] that are stored in this [`RaysHitMap`]
     #[must_use]
     pub fn x_lims(&self) -> &(Length, Length) {
@@ -334,7 +319,111 @@ impl RaysHitMap {
         }
         Ok(())
     }
+    /// Consolidates the hitmap by merging hit points that share the same spatial position.
+    ///
+    /// This method sorts the internal vector and merges adjacent points using `relative_eq!`.
+    /// It must be called after all rays have been traced and before any fluence estimation
+    /// (e.g., Voronoi) is performed to ensure valid geometries and optimal performance.
+    pub fn consolidate(&mut self) {
+        match &mut self.hit_points {
+            HitPoints::Energy(vec) => {
+                if vec.len() < 2 {
+                    return;
+                }
 
+                // Sort points primarily by X, then Y, then Z to group close points together
+                vec.sort_by(|a, b| {
+                    a.position
+                        .x
+                        .value
+                        .partial_cmp(&b.position.x.value)
+                        .unwrap_or(core::cmp::Ordering::Equal)
+                        .then(
+                            a.position
+                                .y
+                                .value
+                                .partial_cmp(&b.position.y.value)
+                                .unwrap_or(core::cmp::Ordering::Equal),
+                        )
+                        .then(
+                            a.position
+                                .z
+                                .value
+                                .partial_cmp(&b.position.z.value)
+                                .unwrap_or(core::cmp::Ordering::Equal),
+                        )
+                });
+
+                let mut deduped = Vec::with_capacity(vec.len());
+                let mut current = vec[0].clone();
+
+                for hp in vec.iter().skip(1) {
+                    // Check if the current point is close enough to be merged
+                    if relative_eq!(current.position.x.value, hp.position.x.value)
+                        && relative_eq!(current.position.y.value, hp.position.y.value)
+                        && relative_eq!(current.position.z.value, hp.position.z.value)
+                    {
+                        // Merge energies
+                        current.value += hp.value;
+                    } else {
+                        // Keep point and move to the next
+                        deduped.push(current);
+                        current = hp.clone();
+                    }
+                }
+                deduped.push(current);
+                *vec = deduped;
+            }
+            HitPoints::Fluence(vec) => {
+                if vec.len() < 2 {
+                    return;
+                }
+
+                // Sort points primarily by X, then Y, then Z to group close points together
+                vec.sort_by(|a, b| {
+                    a.position
+                        .x
+                        .value
+                        .partial_cmp(&b.position.x.value)
+                        .unwrap_or(core::cmp::Ordering::Equal)
+                        .then(
+                            a.position
+                                .y
+                                .value
+                                .partial_cmp(&b.position.y.value)
+                                .unwrap_or(core::cmp::Ordering::Equal),
+                        )
+                        .then(
+                            a.position
+                                .z
+                                .value
+                                .partial_cmp(&b.position.z.value)
+                                .unwrap_or(core::cmp::Ordering::Equal),
+                        )
+                });
+
+                let mut deduped = Vec::with_capacity(vec.len());
+                let mut current = vec[0].clone();
+
+                for hp in vec.iter().skip(1) {
+                    // Check if the current point is close enough to be merged
+                    if relative_eq!(current.position.x.value, hp.position.x.value)
+                        && relative_eq!(current.position.y.value, hp.position.y.value)
+                        && relative_eq!(current.position.z.value, hp.position.z.value)
+                    {
+                        // Merge fluences
+                        current.value += hp.value;
+                    } else {
+                        // Keep point and move to the next
+                        deduped.push(current);
+                        current = hp.clone();
+                    }
+                }
+                deduped.push(current);
+                *vec = deduped;
+            }
+        }
+    }
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] using the "Binning" method
     ///
     /// # Attributes

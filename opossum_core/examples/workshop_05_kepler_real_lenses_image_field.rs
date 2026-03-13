@@ -1,4 +1,8 @@
+use opossum_core::energy_distributions::UniformDist;
+use opossum_core::lightdata::ray_data_builder;
+use opossum_core::position_distributions::{Hexapolar, Random};
 use opossum_core::prelude::*;
+use opossum_core::spectral_distribution::LaserLines;
 use opossum_core::surface::hit_map::fluence_estimator::FluenceEstimator;
 use std::path::Path;
 
@@ -46,7 +50,7 @@ fn main() -> OpmResult<()> {
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
     let i_sd7 = scenery.add_node(fluence_det)?;
 
-    let mut fluence_det = FluenceDetector::new("Adter image Plane");
+    let mut fluence_det = FluenceDetector::new("After image Plane");
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
     let i_sd8 = scenery.add_node(fluence_det)?;
 
@@ -57,19 +61,27 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_sd6, "output_1", i_sd7, "input_1", millimeter!(4.0))?;
     scenery.connect_nodes(i_sd7, "output_1", i_sd8, "input_1", millimeter!(4.0))?;
 
+    // let i_em = scenery.add_node(EnergyMeter::default())?;
+    // scenery.connect_nodes(i_src, "output_1", i_pl1, "input_1", millimeter!(70.0))?;
+    // scenery.connect_nodes(i_pl1, "output_1", i_pl2, "input_1", millimeter!(125.0))?;
+    // scenery.connect_nodes(i_pl2, "output_1", i_em, "input_1", millimeter!(10.0))?;
+
     let mut doc = OpmDocument::new(scenery);
     let mut config = RayTraceConfig::default();
-    config.map_source(
-        i_src,
-        RayDataSource::Image(ImageSrc::new(
-            Path::new("../opossum_core/logo/Logo_square_tiny_grey_inverted.png").to_path_buf(),
-            micrometer!(50.0),
-            joule!(1.0),
-            nanometer!(1000.0),
-            degree!(1.0),
-        )?)
-        .into(),
-    );
+    // let ray_data_source= RayDataSource::PointSrc(PointSrc::new(
+    //      Random::new(millimeter!(50.0), millimeter!(50.0), 300000)?.into(),
+    //     UniformDist::new(joule!(1.0))?.into(),
+    //     LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    //     millimeter!(1000.),
+    // )?);
+    let ray_data_source = RayDataSource::Image(ImageSrc::new(
+        Path::new("../opossum_core/logo/Logo_square_tiny_grey_inverted.png").to_path_buf(),
+        micrometer!(50.0),
+        joule!(1.0),
+        nanometer!(1000.0),
+        degree!(1.0),
+    )?);
+    config.map_source(i_src, ray_data_source.into());
     doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_05_kepler_imaging_field.opm",
