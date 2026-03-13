@@ -312,7 +312,9 @@ impl Plottable for WaveFrontErrorMap {
                 .set(&PlotArgs::XLabel("x position in mm".into()))?
                 .set(&PlotArgs::YLabel("y position in mm".into()))?
                 .set(&PlotArgs::CBarLabel("wavefront error in λ".into()))?
-                .set(&PlotArgs::ExpandBounds(false))?;
+                .set(&PlotArgs::ExpandBounds(false))?
+                .set(&PlotArgs::AxisEqual(true))?
+                .set(&&PlotArgs::PlotAutoSize(true))?;
         } else if range_x > eps {
             // 1D Line Cut (X varies)
             plt_params

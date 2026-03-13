@@ -12,6 +12,7 @@ use opossum_core::{
 pub fn EnergyDataBuilderSelector(
     energy_data_builder_sig: ReadSignal<EnergyDataBuilder>,
     on_energy_data_builder_save: EventHandler<EnergyDataBuilder>,
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {
@@ -21,6 +22,7 @@ pub fn EnergyDataBuilderSelector(
                 &*energy_data_builder_sig.read(),
                 Some(&[&EnergyDataBuilder::Raw(Spectrum::default())]),
             ),
+            readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(edb) = EnergyDataBuilder::default_from_name(val.as_str()) {

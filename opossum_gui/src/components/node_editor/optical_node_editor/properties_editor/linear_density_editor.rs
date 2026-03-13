@@ -14,6 +14,7 @@ pub fn LinearDensityEditor(
     linear_density: LinearNumberDensity,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Element {
     let linear_density_sig = use_signal(|| linear_density);
 
@@ -31,6 +32,7 @@ pub fn LinearDensityEditor(
             value: linear_density_sig.read().value,
             base_unit: "m⁻¹",
             reciprocal: true,
+            readonly,
             onchange: move |new_linear_density: f64| {
                 on_save.call(num_per_m!(new_linear_density));
             },

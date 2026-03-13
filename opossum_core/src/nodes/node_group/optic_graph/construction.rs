@@ -174,6 +174,40 @@ impl OpticGraph {
         }
         None
     }
+
+    /// Return the a vector of [`NodeIndex`] of nodes that reference a certain node with the given [`Uuid`] in this [`OpticGraph`].
+    ///
+    /// This also includes the node itself, but also reference nodes referring to the given [`Uuid`]. This function returns
+    /// an empty vector if no node with (or referring to) the given [`Uuid`] was found.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex lock fails.
+    #[must_use]
+    pub fn find_all_nodes_referring_to_uuid(&self, node_id: Uuid) -> Vec<NodeIndex> {
+        let mut nodes_indices = Vec::<NodeIndex>::new();
+        for node_idx in self.g.node_indices() {
+            let node_ref = self.node_by_idx(node_idx).unwrap();
+            if node_ref.uuid() == node_id {
+                nodes_indices.push(node_idx);
+            }
+            let node = node_ref.optical_ref.lock_opm().unwrap();
+            let node_attrs = node.node_attr().clone();
+            if let Ok(group) = node.as_group() {
+                nodes_indices.extend(group.graph().find_all_nodes_referring_to_uuid(node_id));
+            }
+            drop(node);
+            if node_attrs.node_type() == "reference" {
+                let ref_node_props = node_attrs.properties();
+                if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id")
+                    && *ref_uuid == node_id
+                {
+                    nodes_indices.push(node_idx);
+                }
+            }
+        }
+        nodes_indices
+    }
     /// Delete all edges of a node with the [`NodeIndex`] `node_index`
     pub fn delete_edges_of_node(&mut self, node_index: NodeIndex) {
         self.delete_edges_of_node_with_direction(node_index, Direction::Incoming);

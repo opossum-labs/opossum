@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::nodes::NodeAttr;
 use opossum_core::nodes::fluence_detector::Fluence;
@@ -162,9 +164,9 @@ pub async fn delete_node(id: Uuid) -> Result<Vec<Uuid>, String> {
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized or found
 /// - the properties cannot be deserialized into the [`NodeAttr`] struct
-pub async fn get_node_properties(uuid: Uuid) -> Result<NodeAttr, String> {
+pub async fn get_node_properties(uuid: Uuid) -> Result<(NodeAttr, bool), String> {
     HTTP_API_CLIENT()
-        .get_ron::<NodeAttr>(&format!("/api/scenery/{}/properties", uuid.as_simple()))
+        .get_ron::<(NodeAttr, bool)>(&format!("/api/scenery/{}/properties", uuid.as_simple()))
         .await
 }
 
@@ -252,9 +254,12 @@ pub async fn update_gui_position(
 /// # Errors
 ///
 /// This function will return an error if the `node_id` was not found.
-pub async fn update_node_name(node_id: Uuid, node_name: String) -> Result<String, String> {
+pub async fn update_node_name(
+    node_id: Uuid,
+    node_name: String,
+) -> Result<HashMap<Uuid, String>, String> {
     HTTP_API_CLIENT()
-        .post::<String, String>(
+        .post::<String, HashMap<Uuid, String>>(
             &format!("/api/scenery/name/{}", node_id.as_simple()),
             node_name,
         )

@@ -63,57 +63,64 @@ impl IntoInputData<f64, LaserLines, SpecDistType> for LaserLinesParam {
 }
 
 #[component]
-pub fn LaserLineInput(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>) -> Element {
-    let inputs = LaserLinesParam::to_input_data_vec(&laser_lines, on_save);
+pub fn LaserLineInput(
+    laser_lines: LaserLines,
+    on_save: EventHandler<SpecDistType>,
+    readonly: bool,
+) -> Element {
+    let inputs = LaserLinesParam::to_input_data_vec(&laser_lines, on_save, readonly);
     rsx! {
         form {
             onsubmit: {
                 let mut ll = laser_lines;
                 move |e: Event<FormData>| {
-                    let wvl_opt = e.data().get_first(&inputs[0].id);
-                    let rel_int_opt = e.data().get_first(&inputs[1].id);
-                    if let (
-                        Some(FormValue::Text(wvl_val)),
-                        Some(FormValue::Text(rel_int_val)),
-                    ) = (wvl_opt.clone(), rel_int_opt.clone()) {
-                        if let Ok((num_str, prefix_str)) = parse_unit_input_strict(
-                            &wvl_val,
-                            "m",
-                        ) {
-                            if let (Some(wvl), Ok(rel_int)) = (
-                                parse_si_number(&num_str, &prefix_str, false),
-                                rel_int_val.parse(),
+                    if !readonly {
+
+                        let wvl_opt = e.data().get_first(&inputs[0].id);
+                        let rel_int_opt = e.data().get_first(&inputs[1].id);
+                        if let (
+                            Some(FormValue::Text(wvl_val)),
+                            Some(FormValue::Text(rel_int_val)),
+                        ) = (wvl_opt.clone(), rel_int_opt.clone()) {
+                            if let Ok((num_str, prefix_str)) = parse_unit_input_strict(
+                                &wvl_val,
+                                "m",
                             ) {
-                                match ll.add_lines(vec![(meter!(wvl), rel_int)]) {
-                                    Ok(()) => {
-                                        on_save.call(SpecDistType::LaserLines(ll.clone()));
-                                    }
-                                    Err(e) => {
-                                        OPOSSUM_UI_LOGS
-                                            .write()
-                                            .add_log(format!("Error adding laser line: {e}").as_str());
+                                if let (Some(wvl), Ok(rel_int)) = (
+                                    parse_si_number(&num_str, &prefix_str, false),
+                                    rel_int_val.parse(),
+                                ) {
+                                    match ll.add_lines(vec![(meter!(wvl), rel_int)]) {
+                                        Ok(()) => {
+                                            on_save.call(SpecDistType::LaserLines(ll.clone()));
+                                        }
+                                        Err(e) => {
+                                            OPOSSUM_UI_LOGS
+                                                .write()
+                                                .add_log(format!("Error adding laser line: {e}").as_str());
+                                        }
                                     }
                                 }
+                            } else {
+                                OPOSSUM_UI_LOGS
+                                    .write()
+                                    .add_log(
+                                        format!(
+                                            "Could not parse laser line inputs! Wavelength: {wvl_opt:?}. Relative Intensity: {rel_int_opt:?}",
+                                        )
+                                            .as_str(),
+                                    );
                             }
                         } else {
                             OPOSSUM_UI_LOGS
                                 .write()
                                 .add_log(
                                     format!(
-                                        "Could not parse laser line inputs! Wavelength: {wvl_opt:?}. Relative Intensity: {rel_int_opt:?}",
+                                        "Wrong input inputs for adding laser line! Wavelength: {wvl_opt:?}. Relative Intensity: {rel_int_opt:?}",
                                     )
                                         .as_str(),
                                 );
                         }
-                    } else {
-                        OPOSSUM_UI_LOGS
-                            .write()
-                            .add_log(
-                                format!(
-                                    "Wrong input inputs for adding laser line! Wavelength: {wvl_opt:?}. Relative Intensity: {rel_int_opt:?}",
-                                )
-                                    .as_str(),
-                            );
                     }
                 }
             },
@@ -123,14 +130,20 @@ pub fn LaserLineInput(laser_lines: LaserLines, on_save: EventHandler<SpecDistTyp
                 r#type: "submit",
                 id: "laserlinesubmit",
                 value: "Add laser line",
+                readonly,
+                disabled: readonly,
             }
-            LaserLineList { laser_lines: laser_lines.clone(), on_save }
+            LaserLineList { laser_lines: laser_lines.clone(), on_save, readonly }
         }
     }
 }
 
 #[component]
-fn LaserLineList(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>) -> Element {
+fn LaserLineList(
+    laser_lines: LaserLines,
+    on_save: EventHandler<SpecDistType>,
+    readonly: bool,
+) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "laserLineList",
             for (i , line) in laser_lines.clone().lines().iter().enumerate() {
@@ -145,16 +158,18 @@ fn LaserLineList(laser_lines: LaserLines, on_save: EventHandler<SpecDistType>) -
                             span { {format!("λ: {}", format_si_with_base_unit(line.0.value, "m", false))} }
                             span { {format!("Int: {}", line.1)} }
                             a {
-                                class: "text-danger ms-auto",
+                                class: if readonly { "ms-auto text-muted" } else { "text-danger ms-auto" },
                                 onclick: {
                                     let laser_lines = laser_lines.clone();
                                     move |_| {
-                                        let mut laser_lines = laser_lines.clone();
-                                        laser_lines.delete_line(i).log_err_with_context("Deleting line failed");
-                                        on_save.call(SpecDistType::LaserLines(laser_lines));
+                                        if !readonly {
+                                            let mut laser_lines = laser_lines.clone();
+                                            laser_lines.delete_line(i).log_err_with_context("Deleting line failed");
+                                            on_save.call(SpecDistType::LaserLines(laser_lines));
+                                        }
                                     }
                                 },
-                                role: "button",
+                                role: if readonly { "" } else { "button" },
                                 "🗑︎"
                             }
                         }

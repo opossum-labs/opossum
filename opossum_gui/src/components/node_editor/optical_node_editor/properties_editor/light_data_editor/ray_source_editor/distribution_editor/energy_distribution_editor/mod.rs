@@ -22,8 +22,10 @@ use uniform_editor::UniformParam;
 pub fn RayEnergyDistributionEditor(
     energy_dist_type_sig: ReadSignal<EnergyDistType>,
     on_save: EventHandler<EnergyDistType>,
+    readonly: bool,
 ) -> Element {
-    let inputs: Vec<InputData> = get_energy_dist_input_data(energy_dist_type_sig, on_save);
+    let inputs: Vec<InputData> =
+        get_energy_dist_input_data(energy_dist_type_sig, on_save, readonly);
     rsx! {
         RowedInputs { inputs }
     }
@@ -34,6 +36,7 @@ pub fn EnergyDistributionEditor(
     energy_dist_type: EnergyDistType,
     ray_data_builder_sig: ReadSignal<RayDataSource>,
     on_save: EventHandler<RayDataSource>,
+    readonly: bool,
 ) -> Element {
     let mut energy_dist_type_sig = use_signal(|| energy_dist_type);
 
@@ -45,8 +48,16 @@ pub fn EnergyDistributionEditor(
     });
 
     let accordion_item_content = rsx! {
-        RayEnergyDistributionSelector { energy_dist_type_sig, on_save: on_energy_dist_save }
-        RayEnergyDistributionEditor { energy_dist_type_sig, on_save: on_energy_dist_save }
+        RayEnergyDistributionSelector {
+            energy_dist_type_sig,
+            on_save: on_energy_dist_save,
+            readonly,
+        }
+        RayEnergyDistributionEditor {
+            energy_dist_type_sig,
+            on_save: on_energy_dist_save,
+            readonly,
+        }
     };
 
     rsx! {
@@ -64,12 +75,14 @@ pub fn EnergyDistributionEditor(
 pub fn RayEnergyDistributionSelector(
     energy_dist_type_sig: ReadSignal<EnergyDistType>,
     on_save: EventHandler<EnergyDistType>,
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectRaysEnergyDistribution",
             label: "Rays Energy Distribution",
             options: select_options_from_enum_iterator(&*energy_dist_type_sig.read(), None),
+            readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(edt) = EnergyDistType::default_from_name(val.as_str()) {
@@ -83,9 +96,12 @@ pub fn RayEnergyDistributionSelector(
 fn get_energy_dist_input_data(
     energy_dist_type_sig: ReadSignal<EnergyDistType>,
     on_save: EventHandler<EnergyDistType>,
+    readonly: bool,
 ) -> Vec<InputData> {
     match &*energy_dist_type_sig.read() {
-        EnergyDistType::Uniform(u) => UniformParam::to_input_data_vec(u, on_save),
-        EnergyDistType::General2DGaussian(g) => get_general_2d_gaussian_input_params(g, on_save),
+        EnergyDistType::Uniform(u) => UniformParam::to_input_data_vec(u, on_save, readonly),
+        EnergyDistType::General2DGaussian(g) => {
+            get_general_2d_gaussian_input_params(g, on_save, readonly)
+        }
     }
 }

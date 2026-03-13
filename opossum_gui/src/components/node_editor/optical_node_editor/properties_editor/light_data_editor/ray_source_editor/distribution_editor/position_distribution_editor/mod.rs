@@ -32,18 +32,21 @@ use dioxus::prelude::*;
 fn get_pos_dist_input_data(
     pos_dist_type_sig: ReadSignal<PosDistType>,
     on_pos_dist_save: EventHandler<PosDistType>,
+    readonly: bool,
 ) -> Vec<InputData> {
     match &*pos_dist_type_sig.read() {
-        PosDistType::Random(r) => RandomParam::to_input_data_vec(r, on_pos_dist_save),
-        PosDistType::Sobol(s) => SobolParam::to_input_data_vec(s, on_pos_dist_save),
-        PosDistType::Grid(g) => GridParam::to_input_data_vec(g, on_pos_dist_save),
-        PosDistType::HexagonalTiling(h) => get_hexagonal_input_params(h, on_pos_dist_save),
-        PosDistType::Hexapolar(h) => get_hexapolar_input_params(h, on_pos_dist_save),
+        PosDistType::Random(r) => RandomParam::to_input_data_vec(r, on_pos_dist_save, readonly),
+        PosDistType::Sobol(s) => SobolParam::to_input_data_vec(s, on_pos_dist_save, readonly),
+        PosDistType::Grid(g) => GridParam::to_input_data_vec(g, on_pos_dist_save, readonly),
+        PosDistType::HexagonalTiling(h) => {
+            get_hexagonal_input_params(h, on_pos_dist_save, readonly)
+        }
+        PosDistType::Hexapolar(h) => get_hexapolar_input_params(h, on_pos_dist_save, readonly),
         PosDistType::FibonacciRectangle(f) => {
-            FibonacciRectParam::to_input_data_vec(f, on_pos_dist_save)
+            FibonacciRectParam::to_input_data_vec(f, on_pos_dist_save, readonly)
         }
         PosDistType::FibonacciEllipse(f) => {
-            FibonacciEllipseParam::to_input_data_vec(f, on_pos_dist_save)
+            FibonacciEllipseParam::to_input_data_vec(f, on_pos_dist_save, readonly)
         }
     }
 }
@@ -52,12 +55,14 @@ fn get_pos_dist_input_data(
 pub fn RayPositionDistributionSelector(
     pos_dist_type_sig: Signal<PosDistType>,
     on_pos_dist_save: EventHandler<PosDistType>,
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectRaysPosDistribution",
             label: "Rays Position Distribution",
             options: select_options_from_enum_iterator(&*pos_dist_type_sig.read(), None),
+            readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(pdt) = PosDistType::default_from_name(val.as_str()) {
@@ -72,8 +77,10 @@ pub fn RayPositionDistributionSelector(
 pub fn NodePosDistInputs(
     pos_dist_type_sig: ReadSignal<PosDistType>,
     on_pos_dist_save: EventHandler<PosDistType>,
+    readonly: bool,
 ) -> Element {
-    let inputs: Vec<InputData> = get_pos_dist_input_data(pos_dist_type_sig, on_pos_dist_save);
+    let inputs: Vec<InputData> =
+        get_pos_dist_input_data(pos_dist_type_sig, on_pos_dist_save, readonly);
     rsx! {
         RowedInputs { inputs }
     }
@@ -84,6 +91,7 @@ pub fn PositionDistributionEditor(
     pos_dist_type: PosDistType,
     ray_data_builder_sig: ReadSignal<RayDataSource>,
     on_save: EventHandler<RayDataSource>,
+    readonly: bool,
 ) -> Element {
     let mut pos_dist_type_sig = use_signal(|| pos_dist_type);
 
@@ -95,8 +103,8 @@ pub fn PositionDistributionEditor(
     });
 
     let accordion_item_content = rsx! {
-        RayPositionDistributionSelector { pos_dist_type_sig, on_pos_dist_save }
-        NodePosDistInputs { pos_dist_type_sig, on_pos_dist_save }
+        RayPositionDistributionSelector { pos_dist_type_sig, on_pos_dist_save, readonly }
+        NodePosDistInputs { pos_dist_type_sig, on_pos_dist_save, readonly }
     };
 
     rsx! {

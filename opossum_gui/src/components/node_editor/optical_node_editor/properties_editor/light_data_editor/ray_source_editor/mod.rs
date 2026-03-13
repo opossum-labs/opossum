@@ -21,6 +21,7 @@ use crate::components::node_editor::{
 pub fn RaySourceEditor(
     ray_data_builder: RayDataSource,
     on_save: EventHandler<LightDataBuilder>,
+    readonly: bool,
 ) -> Element {
     let mut ray_data_builder_sig: Signal<RayDataSource> = use_signal(|| ray_data_builder.clone());
 
@@ -30,7 +31,7 @@ pub fn RaySourceEditor(
     });
 
     let mut element_list = vec![
-        rsx! {RayDataBuilderSelector { ray_data_builder_sig, on_save: on_ray_data_builder_save }},
+        rsx! {RayDataBuilderSelector { ray_data_builder_sig, on_save: on_ray_data_builder_save, readonly }},
     ];
 
     match &*ray_data_builder_sig.read() {
@@ -40,6 +41,7 @@ pub fn RaySourceEditor(
                 DistributionEditor {
                     ray_data_builder_sig,
                     on_save: on_ray_data_builder_save,
+                    readonly,
                 }
             });
         }
@@ -50,15 +52,17 @@ pub fn RaySourceEditor(
                     ray_data_handler: EventHandler::new(move |new_point_src: PointSrc| {
                         on_ray_data_builder_save.call(RayDataSource::PointSrc(new_point_src));
                     }),
+                    readonly,
                 }
                 DistributionEditor {
                     ray_data_builder_sig,
                     on_save: on_ray_data_builder_save,
+                    readonly,
                 }
             });
         }
         RayDataSource::Image(img_src) => {
-            let inputs = get_image_source_input_params(img_src, on_ray_data_builder_save);
+            let inputs = get_image_source_input_params(img_src, on_ray_data_builder_save, readonly);
             element_list.push(rsx! {
                 RowedInputs { inputs }
             });

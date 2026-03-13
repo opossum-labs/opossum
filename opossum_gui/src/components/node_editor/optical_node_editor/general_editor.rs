@@ -17,6 +17,7 @@ pub fn GeneralEditor(
     node_attr: ReadSignal<UINodeAttr>,
     node_id: Memo<Uuid>,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Element {
     let accordion_content = if node_attr.read().node_id == *node_id.read() {
         let node_id = node_attr.read().node_id;
@@ -36,6 +37,7 @@ pub fn GeneralEditor(
                     container_class: "form-floating border-start".to_string(),
                     input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
                     label_class: "form-label text-secondary".to_string(),
+                    readonly,
                     on_save: move |new_val: String| {
                         on_change.call(NodeChangeEvent {
                             node_id,
@@ -50,9 +52,9 @@ pub fn GeneralEditor(
                         label: "Damage Threshold".to_string(),
                         value: lidt.get::<joule_per_square_centimeter>(),
                         base_unit: "J/cm²",
+                        readonly,
                         onchange: move |new_lidt: f64| {
                         if new_lidt >= 0.0 {
-                            // lidt_sig.set(new_lidt);
                                 on_change.call(NodeChangeEvent {
                                     node_id,
                                     action: NodeChangeAction::Lidt(J_per_cm2!(new_lidt)),
@@ -62,6 +64,7 @@ pub fn GeneralEditor(
                     }
             },
             rsx! {
+                // no readonly here even for a reference!
                 NodeInvertedInput {
                     value: inverted,
                     label: "Invert Node",

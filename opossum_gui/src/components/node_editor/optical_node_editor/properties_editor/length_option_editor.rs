@@ -15,6 +15,7 @@ pub fn LengthOptionEditor(
     length_opt: Option<Length>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Element {
     let length_opt_sig = use_signal(|| length_opt);
     let on_save = on_save_proptype_handler(
@@ -32,6 +33,7 @@ pub fn LengthOptionEditor(
                 (length_opt_sig.read().is_none(), "None".to_owned()),
                 (length_opt_sig.read().is_some(), "Define".to_owned()),
             ],
+            readonly,
             onchange: move |_: Event<FormData>| {
                 if length_opt_sig.read().is_some() {
                     on_save.call(None);
@@ -52,6 +54,7 @@ pub fn LengthOptionEditor(
                                 label: property_key.to_sentence_case(),
                                 value: length.value,
                                 base_unit: "m",
+                                readonly,
                                 onchange: move |new_length: f64| {
                                     on_save.call(Some(meter!(new_length)));
                                 },
