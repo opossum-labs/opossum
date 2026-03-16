@@ -217,23 +217,6 @@ impl OpticNode for CylindricLens {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn update_lidt(&mut self) -> OpmResult<()> {
-        let lidt = *self.node_attr().lidt();
-        let in_ports = self.ports().names(&PortType::Input);
-        let out_ports = self.ports().names(&PortType::Output);
-
-        for port_name in &in_ports {
-            if let Some(opt_surf) = self.get_optic_surface_mut(port_name) {
-                opt_surf.set_lidt(lidt)?;
-            }
-        }
-        for port_name in &out_ports {
-            if let Some(opt_surf) = self.get_optic_surface_mut(port_name) {
-                opt_surf.set_lidt(lidt)?;
-            }
-        }
-        Ok(())
-    }
 }
 impl AnalysisEnergy for CylindricLens {}
 #[cfg(test)]
