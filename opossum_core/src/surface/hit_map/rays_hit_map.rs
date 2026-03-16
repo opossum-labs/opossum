@@ -1376,4 +1376,73 @@ mod test_rays_hit_map {
         let mat = res.interp_distribution();
         assert!(mat[(0, 0)] < mat[(2, 2)]);
     }
+    #[test]
+    fn consolidate_energy() {
+        // Create hitmap with 3 identical points and 1 distinct point
+        let mut rhm = RaysHitMap::new(HitPoints::Energy(vec![
+            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(1.0)).unwrap(),
+            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(2.0)).unwrap(),
+            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(3.0)).unwrap(),
+            EnergyHitPoint::new(meter!(5.0, 5.0, 5.0), joule!(4.0)).unwrap(),
+        ]));
+
+        assert_eq!(rhm.hit_points.len(), 4, "Initial length should be 4");
+
+        rhm.consolidate();
+
+        assert_eq!(rhm.hit_points.len(), 2, "Consolidated length should be 2");
+
+        if let HitPoints::Energy(vec) = &rhm.hit_points {
+            assert_eq!(vec[0].position.x, meter!(1.0));
+            assert_eq!(
+                vec[0].value,
+                joule!(6.0),
+                "Energies 1+2+3 should be summed up to 6 J"
+            );
+
+            assert_eq!(vec[1].position.x, meter!(5.0));
+            assert_eq!(
+                vec[1].value,
+                joule!(4.0),
+                "Distinct point should retain its energy"
+            );
+        } else {
+            panic!("Expected Energy hit points!");
+        }
+    }
+
+    #[test]
+    fn consolidate_fluence_with_float_inaccuracy() {
+        // Create hitmap with 2 nearly identical points (float inaccuracy) and 1 distinct point
+        let mut rhm = RaysHitMap::new(HitPoints::Fluence(vec![
+            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(1.5)).unwrap(),
+            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0 + core::f64::EPSILON), J_per_cm2!(2.5))
+                .unwrap(),
+            FluenceHitPoint::new(meter!(5.0, 5.0, 5.0), J_per_cm2!(4.0)).unwrap(),
+        ]));
+
+        assert_eq!(rhm.hit_points.len(), 3, "Initial length should be 3");
+
+        rhm.consolidate();
+
+        assert_eq!(rhm.hit_points.len(), 2, "Consolidated length should be 2");
+
+        if let HitPoints::Fluence(vec) = &rhm.hit_points {
+            assert_eq!(vec[0].position.x, meter!(1.0));
+            assert_eq!(
+                vec[0].value,
+                J_per_cm2!(4.0),
+                "Fluences 1.5+2.5 should be summed up to 4.0 J/cm²"
+            );
+
+            assert_eq!(vec[1].position.x, meter!(5.0));
+            assert_eq!(
+                vec[1].value,
+                J_per_cm2!(4.0),
+                "Distinct point should retain its fluence"
+            );
+        } else {
+            panic!("Expected Fluence hit points!");
+        }
+    }
 }
