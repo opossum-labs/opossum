@@ -132,13 +132,16 @@ impl GhostFocusAnalyzer {
         &self.config
     }
 
-    fn node_group_report(&self, group: &NodeGroup, analysis_report: &mut AnalysisReport) -> OpmResult<()> {
+    fn node_group_report(
+        &self,
+        group: &NodeGroup,
+        analysis_report: &mut AnalysisReport,
+    ) -> OpmResult<()> {
         for node_ref in group.graph().nodes() {
             let node = node_ref.optical_ref.lock_opm()?;
-            if let Ok(g) = node.as_group(){
+            if let Ok(g) = node.as_group() {
                 self.node_group_report(g, analysis_report)?;
-            }
-            else{
+            } else {
                 let node_name = &node.name();
                 let hit_maps = node.hit_maps();
                 drop(node);
@@ -177,7 +180,7 @@ impl GhostFocusAnalyzer {
                                     None,
                                     None,
                                 )?;
-    
+
                             hit_map_props.create(
                                 &format!("Peak fluence ({})", fluence_data.estimator()),
                                 "Peak fluence on this surface using Voronoi estimator",
@@ -186,7 +189,9 @@ impl GhostFocusAnalyzer {
                                     format_value_with_prefix(
                                         fluence.get::<joule_per_square_centimeter>()
                                     ),
-                                    format_value_with_prefix(lidt.get::<joule_per_square_centimeter>())
+                                    format_value_with_prefix(
+                                        lidt.get::<joule_per_square_centimeter>()
+                                    )
                                 )
                                 .into(),
                             )?;
@@ -280,8 +285,6 @@ impl Analyzer for GhostFocusAnalyzer {
         analysis_report.set_analysis_type("Ghost Focus Analysis");
         Ok(analysis_report)
     }
-
-    
 }
 
 /// Trait for implementing ghost focus analysis.
@@ -713,13 +716,22 @@ mod test_ghost_focus_config {
 }
 
 #[cfg(test)]
-mod test_ghost_analysis_nested_groups_inversion{
+mod test_ghost_analysis_nested_groups_inversion {
     use std::path::Path;
     use uuid::Uuid;
 
-    use crate::{energy_distributions::General2DGaussian, joule, millimeter, nanometer, nodes::NodeGroup, position_distributions::Hexapolar, prelude::{AnalyzerType, CollimatedSrc, GhostFocusConfig, OpmDocument, RayDataSource}, radian, spectral_distribution::LaserLines, utils::LockExt};
+    use crate::{
+        energy_distributions::General2DGaussian,
+        joule, millimeter, nanometer,
+        nodes::NodeGroup,
+        position_distributions::Hexapolar,
+        prelude::{AnalyzerType, CollimatedSrc, GhostFocusConfig, OpmDocument, RayDataSource},
+        radian,
+        spectral_distribution::LaserLines,
+        utils::LockExt,
+    };
 
-    fn get_ghost_focus_config_and_map_to_source(src_id: Uuid, bounces:usize) -> GhostFocusConfig{
+    fn get_ghost_focus_config_and_map_to_source(src_id: Uuid, bounces: usize) -> GhostFocusConfig {
         // collimated source definition
         let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(10.), 0).unwrap().into(),
@@ -730,9 +742,12 @@ mod test_ghost_analysis_nested_groups_inversion{
                 5.,
                 radian!(0.),
                 false,
-            ).unwrap()
+            )
+            .unwrap()
             .into(),
-            LaserLines::new(vec![(nanometer!(1053.0), 1.0)]).unwrap().into(),
+            LaserLines::new(vec![(nanometer!(1053.0), 1.0)])
+                .unwrap()
+                .into(),
         ));
         let mut config = GhostFocusConfig::default();
         config.map_source(src_id, ray_data_source.into());
@@ -740,16 +755,16 @@ mod test_ghost_analysis_nested_groups_inversion{
         config
     }
 
-    fn check_not_inverted(group: &NodeGroup) -> bool{
-        for opt_ref in group.graph().nodes(){
+    fn check_not_inverted(group: &NodeGroup) -> bool {
+        for opt_ref in group.graph().nodes() {
             let node = opt_ref.optical_ref.lock_opm().unwrap();
-            if let Ok(g) = node.as_group(){
-                if !check_not_inverted(g){
-                    return false
+            if let Ok(g) = node.as_group() {
+                if !check_not_inverted(g) {
+                    return false;
                 }
             }
-            if node.inverted(){
-                return false
+            if node.inverted() {
+                return false;
             }
         }
         true
@@ -758,7 +773,7 @@ mod test_ghost_analysis_nested_groups_inversion{
     #[test]
     fn bounce_0() {
         let bounce = 0;
-        let f_path  =Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
+        let f_path = Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
         let mut document = OpmDocument::from_file(f_path).unwrap();
         let srcs = document.scenery().find_source_ports().unwrap();
         let src = srcs.first().unwrap();
@@ -774,7 +789,7 @@ mod test_ghost_analysis_nested_groups_inversion{
     #[test]
     fn bounce_1() {
         let bounce = 1;
-        let f_path  =Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
+        let f_path = Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
         let mut document = OpmDocument::from_file(f_path).unwrap();
         let srcs = document.scenery().find_source_ports().unwrap();
         let src = srcs.first().unwrap();
@@ -790,7 +805,7 @@ mod test_ghost_analysis_nested_groups_inversion{
     #[test]
     fn bounce_2() {
         let bounce = 2;
-        let f_path  =Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
+        let f_path = Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
         let mut document = OpmDocument::from_file(f_path).unwrap();
         let srcs = document.scenery().find_source_ports().unwrap();
         let src = srcs.first().unwrap();
@@ -806,7 +821,7 @@ mod test_ghost_analysis_nested_groups_inversion{
     #[test]
     fn bounce_3() {
         let bounce = 3;
-        let f_path  =Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
+        let f_path = Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
         let mut document = OpmDocument::from_file(f_path).unwrap();
         let srcs = document.scenery().find_source_ports().unwrap();
         let src = srcs.first().unwrap();
@@ -822,7 +837,7 @@ mod test_ghost_analysis_nested_groups_inversion{
     #[test]
     fn bounce_4() {
         let bounce = 4;
-        let f_path  =Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
+        let f_path = Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
         let mut document = OpmDocument::from_file(f_path).unwrap();
         let srcs = document.scenery().find_source_ports().unwrap();
         let src = srcs.first().unwrap();

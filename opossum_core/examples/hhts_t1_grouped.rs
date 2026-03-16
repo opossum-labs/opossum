@@ -103,7 +103,6 @@ fn main() -> OpmResult<()> {
     telescope.connect_nodes(t1_l2a, "output_1", t1_l2b, "input_1", millimeter!(8.85423))?;
     telescope.connect_nodes(t1_l2b, "output_1", t1_l2c, "input_1", millimeter!(14.78269))?;
 
-
     // collimated source definition
     let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
         HexagonalTiling::new(millimeter!(100.), 9, millimeter!(0., 0.))?.into(),
@@ -119,18 +118,16 @@ fn main() -> OpmResult<()> {
         LaserLines::new(vec![(nanometer!(1053.0), 1.0)])?.into(),
     ));
 
-    
     telescope.map_input_port(t1_l1a, "input_1", "input_1")?;
-    telescope.map_output_port(t1_l2c, "output_1", "output_1")?;    
+    telescope.map_output_port(t1_l2c, "output_1", "output_1")?;
     let tel = scenery.add_node(telescope)?;
     scenery.connect_nodes(src, "output_1", tel, "input_1", millimeter!(100.0))?;
 
     // Ray propagation visualization
     let mut rpv = RayPropagationVisualizer::default();
     rpv.node_attr_mut().set_lidt(&J_per_cm2!(100.0))?;
-    let rpv = scenery.add_node(rpv)?;    
+    let rpv = scenery.add_node(rpv)?;
     scenery.connect_nodes(tel, "output_1", rpv, "input_1", millimeter!(100.0))?;
-
 
     let mut doc = OpmDocument::new(scenery);
     let mut config = RayTraceConfig::default();
