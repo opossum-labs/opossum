@@ -1,5 +1,6 @@
 mod band;
 mod edge;
+mod math;
 mod spectral_builder;
 
 pub use band::{BandFilter, BandFilterType};

@@ -9,6 +9,7 @@ use uom::si::f64::Length;
 use crate::{
     error::{OpmResult, OpossumError},
     micrometer, nanometer,
+    nodes::ideal_filter::filter_types::math::interpolate_transition,
     prelude::SpectralFilterBuilder,
     spectrum::Spectrum,
     utils::default_from_name::DefaultFromName,
@@ -378,29 +379,19 @@ impl EdgeFilter {
     /// - Otherwise, it uses a sharp step function (`step_transmission`).
     #[must_use]
     pub fn transmission(&self, wavelength: Length) -> f64 {
-        let (before_edge_wvl, after_edge_wvl, angle_sign) = match self.edge_filter_type() {
-            EdgeFilterType::LongPass => (
-                self.transmission_range.start,
-                self.transmission_range.end,
-                1.,
-            ),
-            EdgeFilterType::ShortPass => (
-                self.transmission_range.end,
-                self.transmission_range.start,
-                -1.,
-            ),
+        let (before_edge_wvl, after_edge_wvl) = match self.edge_filter_type() {
+            EdgeFilterType::LongPass => {
+                (self.transmission_range.start, self.transmission_range.end)
+            }
+            EdgeFilterType::ShortPass => {
+                (self.transmission_range.end, self.transmission_range.start)
+            }
         };
 
         self.smooth_step_width().map_or_else(
             || self.step_transmission(wavelength, before_edge_wvl, after_edge_wvl),
             |width| {
-                self.smooth_step_transmission(
-                    wavelength,
-                    width,
-                    before_edge_wvl,
-                    after_edge_wvl,
-                    angle_sign,
-                )
+                self.smooth_step_transmission(wavelength, width, before_edge_wvl, after_edge_wvl)
             },
         )
     }
@@ -411,21 +402,32 @@ impl EdgeFilter {
         width: Length,
         before_edge_wvl: f64,
         after_edge_wvl: f64,
-        angle_sign: f64,
     ) -> f64 {
-        let transmission_diff = self.transmission_range.end - self.transmission_range.start;
         let wvl_diff = wavelength - self.edge_wavelength();
-        if wvl_diff <= -width / 2.0 {
+        let half_width = width / 2.0;
+
+        if wvl_diff <= -half_width {
             before_edge_wvl
-        } else if wvl_diff > width / 2.0 {
+        } else if wvl_diff > half_width {
             after_edge_wvl
         } else {
-            let angle = (std::f64::consts::PI / width * wvl_diff).value;
-            (0.5 * transmission_diff).mul_add(
-                angle_sign * angle.sin(),
-                0.5f64.mul_add(transmission_diff, self.transmission_range().start),
-            )
+            // Normiere den Bereich [-width/2, width/2] auf [0, 1]
+            let x = (wvl_diff + half_width).value / width.value;
+            interpolate_transition(x, before_edge_wvl, after_edge_wvl)
         }
+        // let transmission_diff = self.transmission_range.end - self.transmission_range.start;
+        // let wvl_diff = wavelength - self.edge_wavelength();
+        // if wvl_diff <= -width / 2.0 {
+        //     before_edge_wvl
+        // } else if wvl_diff > width / 2.0 {
+        //     after_edge_wvl
+        // } else {
+        //     let angle = (std::f64::consts::PI / width * wvl_diff).value;
+        //     (0.5 * transmission_diff).mul_add(
+        //         angle_sign * angle.sin(),
+        //         0.5f64.mul_add(transmission_diff, self.transmission_range().start),
+        //     )
+        // }
     }
 
     fn step_transmission(
@@ -447,16 +449,14 @@ impl From<EdgeFilter> for Spectrum {
         let mut spectrum =
             Self::new(edge_filter.range().clone(), edge_filter.resolution()).unwrap();
         let mut spectrum_data = spectrum.data().clone();
-        let (before_edge_wvl, after_edge_wvl, angle_sign) = match edge_filter.edge_filter_type() {
+        let (before_edge_wvl, after_edge_wvl) = match edge_filter.edge_filter_type() {
             EdgeFilterType::LongPass => (
                 edge_filter.transmission_range().start,
                 edge_filter.transmission_range().end,
-                1.,
             ),
             EdgeFilterType::ShortPass => (
                 edge_filter.transmission_range().end,
                 edge_filter.transmission_range().start,
-                -1.,
             ),
         };
         if let Some(width) = edge_filter.smooth_step_width() {
@@ -472,7 +472,6 @@ impl From<EdgeFilter> for Spectrum {
                                     width,
                                     before_edge_wvl,
                                     after_edge_wvl,
-                                    angle_sign,
                                 ),
                             )
                         })

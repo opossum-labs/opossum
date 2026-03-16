@@ -8,6 +8,7 @@ use uom::si::{f64::Length, length::micrometer};
 use crate::{
     error::{OpmResult, OpossumError},
     nanometer,
+    nodes::ideal_filter::filter_types::math::interpolate_transition,
     spectrum::Spectrum,
     utils::default_from_name::DefaultFromName,
 };
@@ -464,16 +465,14 @@ impl From<BandFilter> for Spectrum {
         let mut spectrum_data = spectrum.data().clone();
         let center_wavelength_in_um = band_filter.center_wavelength().get::<micrometer>();
         let width_in_um = band_filter.width().get::<micrometer>();
-        let (in_band, out_of_band, angle_sign) = match band_filter.band_filter_type() {
+        let (in_band, out_of_band) = match band_filter.band_filter_type() {
             BandFilterType::BandPass => (
                 band_filter.transmission_range().end,
                 band_filter.transmission_range().start,
-                -1.,
             ),
             BandFilterType::Notch => (
                 band_filter.transmission_range().start,
                 band_filter.transmission_range().end,
-                1.,
             ),
         };
         if let Some(smooth_width) = band_filter.smooth_step_width() {
@@ -486,48 +485,34 @@ impl From<BandFilter> for Spectrum {
             }
             let half_band = width_in_um / 2.0;
             let transition = smooth_width_in_um / 2.0;
-            let lower_start = -half_band - transition;
-            let lower_end = -half_band + transition;
-            let upper_start = half_band - transition;
-            let upper_end = half_band + transition;
-            let transmission_diff =
-                band_filter.transmission_range().end - band_filter.transmission_range().start;
+            // let lower_start = -half_band - transition;
+            // let lower_end = -half_band + transition;
+            // let upper_start = half_band - transition;
+            // let upper_end = half_band + transition;
+            // let transmission_diff =
+            //     band_filter.transmission_range().end - band_filter.transmission_range().start;
             spectrum
                 .set_data(
                     spectrum_data
                         .iter_mut()
                         .map(|(lambda, _)| {
-                            let wvl_diff =
-                                *lambda - band_filter.center_wavelength().get::<micrometer>();
+                            let wvl_diff = *lambda - center_wavelength_in_um;
+                            let abs_diff = wvl_diff.abs();
 
-                            let amp = if wvl_diff <= lower_start || wvl_diff >= upper_end {
-                                out_of_band
-                            } else if wvl_diff >= lower_end && wvl_diff <= upper_start {
-                                in_band
-                            } else if wvl_diff > lower_start && wvl_diff < lower_end {
-                                // Lower transition
-                                let x = (wvl_diff - lower_start) / (2.0 * transition);
-                                (angle_sign * 0.5 * transmission_diff).mul_add(
-                                    (std::f64::consts::PI * x).cos(),
-                                    0.5f64.mul_add(
-                                        transmission_diff,
-                                        band_filter.transmission_range().start,
-                                    ),
-                                )
+                            let amp = if abs_diff <= (half_band - transition) {
+                                in_band // Voll im Durchlassbereich
+                            } else if abs_diff >= (half_band + transition) {
+                                out_of_band // Sicher im Sperrbereich
                             } else {
-                                // Upper transition
-                                let x = (upper_end - wvl_diff) / (2.0 * transition);
-                                (angle_sign * 0.5 * transmission_diff).mul_add(
-                                    (std::f64::consts::PI * x).cos(),
-                                    0.5f64.mul_add(
-                                        transmission_diff,
-                                        band_filter.transmission_range().start,
-                                    ),
-                                )
+                                // Wir befinden uns in einer der beiden Übergangszonen
+                                // Normierung des Abstands zur Kante auf [0, 1]
+                                let x = (abs_diff - (half_band - transition)) / (2.0 * transition);
+                                // Je nach Filtertyp (Notch/Pass) von in_band nach out_of_band oder umgekehrt
+                                interpolate_transition(x, in_band, out_of_band)
                             };
                             (*lambda, amp)
                         })
-                        .collect::<Vec<(f64, f64)>>(),
+                        .collect(),
                 )
                 .unwrap();
         } else {
