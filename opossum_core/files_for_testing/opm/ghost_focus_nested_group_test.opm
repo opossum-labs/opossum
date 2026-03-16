@@ -1,0 +1,416 @@
+#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: (
+        node_attr: (
+            node_type: "group",
+            name: "Ghost focus nested group test",
+            ports: (
+                inputs: {},
+                outputs: {},
+            ),
+            uuid: "842c51ab-a63f-4270-adfd-ba07ef7bd9a4",
+            lidt: 10000.0,
+            props: {
+                "expand view": Bool(true),
+            },
+            inverted: false,
+        ),
+        graph: (
+            nodes: [
+                (
+                    attributes: (
+                        node_type: "source port",
+                        name: "Collimated Source",
+                        ports: (
+                            inputs: {},
+                            outputs: {
+                                "output_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: IdealAR,
+                                    lidt: 10000.0,
+                                ),
+                            },
+                        ),
+                        uuid: "c2cd4417-5dc9-41e3-814b-250d21e4638b",
+                        lidt: 10000.0,
+                        props: {},
+                        isometry: Some(
+                            transform: (
+                                rotation: (0.0, 0.0, 0.0, 1.0),
+                                translation: (0.0, 0.0, 0.0),
+                            ),
+                        ),
+                        inverted: false,
+                    ),
+                ),
+                (
+                    attributes: (
+                        node_type: "lens",
+                        name: "Lens 0_1",
+                        ports: (
+                            inputs: {
+                                "input_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: ConstantR(
+                                        reflectivity: 0.01,
+                                    ),
+                                    lidt: 10000.0,
+                                ),
+                            },
+                            outputs: {
+                                "output_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.001),
+                                        ),
+                                    ),
+                                    coating: ConstantR(
+                                        reflectivity: 0.01,
+                                    ),
+                                    lidt: 10000.0,
+                                ),
+                            },
+                        ),
+                        uuid: "a3e745f0-acbb-4086-be73-088b0960f8d7",
+                        lidt: 10000.0,
+                        props: {
+                            "center thickness": Length(0.001),
+                            "front curvature": Curvature(inf),
+                            "rear curvature": Curvature(inf),
+                            "refractive index": RefractiveIndex(Const(
+                                refractive_index: 1.4,
+                            )),
+                        },
+                        inverted: false,
+                    ),
+                ),
+                (
+                    attributes: (
+                        node_type: "lens",
+                        name: "Lens 0_2",
+                        ports: (
+                            inputs: {
+                                "input_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: ConstantR(
+                                        reflectivity: 0.01,
+                                    ),
+                                    lidt: 10000.0,
+                                ),
+                            },
+                            outputs: {
+                                "output_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.001),
+                                        ),
+                                    ),
+                                    coating: ConstantR(
+                                        reflectivity: 0.01,
+                                    ),
+                                    lidt: 10000.0,
+                                ),
+                            },
+                        ),
+                        uuid: "4509304e-8b0e-4b0d-8c9c-8f52ba8a6276",
+                        lidt: 10000.0,
+                        props: {
+                            "center thickness": Length(0.001),
+                            "front curvature": Curvature(inf),
+                            "rear curvature": Curvature(inf),
+                            "refractive index": RefractiveIndex(Const(
+                                refractive_index: 1.4,
+                            )),
+                        },
+                        inverted: false,
+                    ),
+                ),
+                (
+                    attributes: (
+                        node_type: "group",
+                        name: "Group 1",
+                        ports: (
+                            inputs: {},
+                            outputs: {},
+                        ),
+                        uuid: "fba1e869-92df-44a8-a3f8-ed3197af4e11",
+                        lidt: 10000.0,
+                        props: {
+                            "expand view": Bool(true),
+                        },
+                        inverted: false,
+                    ),
+                    graph: (
+                        nodes: [
+                            (
+                                attributes: (
+                                    node_type: "lens",
+                                    name: "Lens 1",
+                                    ports: (
+                                        inputs: {
+                                            "input_1": (
+                                                anchor_point_iso: (
+                                                    transform: (
+                                                        rotation: (0.0, 0.0, 0.0, 1.0),
+                                                        translation: (0.0, 0.0, 0.0),
+                                                    ),
+                                                ),
+                                                coating: ConstantR(
+                                                    reflectivity: 0.01,
+                                                ),
+                                                lidt: 10000.0,
+                                            ),
+                                        },
+                                        outputs: {
+                                            "output_1": (
+                                                anchor_point_iso: (
+                                                    transform: (
+                                                        rotation: (0.0, 0.0, 0.0, 1.0),
+                                                        translation: (0.0, 0.0, 0.001),
+                                                    ),
+                                                ),
+                                                coating: ConstantR(
+                                                    reflectivity: 0.01,
+                                                ),
+                                                lidt: 10000.0,
+                                            ),
+                                        },
+                                    ),
+                                    uuid: "e5ae8624-e73b-442e-835d-035035db998b",
+                                    lidt: 10000.0,
+                                    props: {
+                                        "center thickness": Length(0.001),
+                                        "front curvature": Curvature(inf),
+                                        "rear curvature": Curvature(inf),
+                                        "refractive index": RefractiveIndex(Const(
+                                            refractive_index: 1.4,
+                                        )),
+                                    },
+                                    inverted: false,
+                                ),
+                            ),
+                            (
+                                attributes: (
+                                    node_type: "group",
+                                    name: "Group 2",
+                                    ports: (
+                                        inputs: {},
+                                        outputs: {},
+                                    ),
+                                    uuid: "9cc454e4-362a-41fa-a82e-27126612ebde",
+                                    lidt: 10000.0,
+                                    props: {
+                                        "expand view": Bool(true),
+                                    },
+                                    inverted: false,
+                                ),
+                                graph: (
+                                    nodes: [
+                                        (
+                                            attributes: (
+                                                node_type: "lens",
+                                                name: "Lens 2",
+                                                ports: (
+                                                    inputs: {
+                                                        "input_1": (
+                                                            anchor_point_iso: (
+                                                                transform: (
+                                                                    rotation: (0.0, 0.0, 0.0, 1.0),
+                                                                    translation: (0.0, 0.0, 0.0),
+                                                                ),
+                                                            ),
+                                                            coating: ConstantR(
+                                                                reflectivity: 0.01,
+                                                            ),
+                                                            lidt: 10000.0,
+                                                        ),
+                                                    },
+                                                    outputs: {
+                                                        "output_1": (
+                                                            anchor_point_iso: (
+                                                                transform: (
+                                                                    rotation: (0.0, 0.0, 0.0, 1.0),
+                                                                    translation: (0.0, 0.0, 0.001),
+                                                                ),
+                                                            ),
+                                                            coating: ConstantR(
+                                                                reflectivity: 0.01,
+                                                            ),
+                                                            lidt: 10000.0,
+                                                        ),
+                                                    },
+                                                ),
+                                                uuid: "6ffaac7f-08f4-4e6f-a83e-51a00394d966",
+                                                lidt: 10000.0,
+                                                props: {
+                                                    "center thickness": Length(0.001),
+                                                    "front curvature": Curvature(inf),
+                                                    "rear curvature": Curvature(inf),
+                                                    "refractive index": RefractiveIndex(Const(
+                                                        refractive_index: 1.4,
+                                                    )),
+                                                },
+                                                inverted: false,
+                                            ),
+                                        ),
+                                        (
+                                            attributes: (
+                                                node_type: "group",
+                                                name: "Group 3",
+                                                ports: (
+                                                    inputs: {},
+                                                    outputs: {},
+                                                ),
+                                                uuid: "4c683581-927f-4d0f-b4f2-a2fd4e01c78f",
+                                                lidt: 10000.0,
+                                                props: {
+                                                    "expand view": Bool(true),
+                                                },
+                                                inverted: false,
+                                            ),
+                                            graph: (
+                                                nodes: [
+                                                    (
+                                                        attributes: (
+                                                            node_type: "lens",
+                                                            name: "Lens 3",
+                                                            ports: (
+                                                                inputs: {
+                                                                    "input_1": (
+                                                                        anchor_point_iso: (
+                                                                            transform: (
+                                                                                rotation: (0.0, 0.0, 0.0, 1.0),
+                                                                                translation: (0.0, 0.0, 0.0),
+                                                                            ),
+                                                                        ),
+                                                                        coating: ConstantR(
+                                                                            reflectivity: 0.01,
+                                                                        ),
+                                                                        lidt: 10000.0,
+                                                                    ),
+                                                                },
+                                                                outputs: {
+                                                                    "output_1": (
+                                                                        anchor_point_iso: (
+                                                                            transform: (
+                                                                                rotation: (0.0, 0.0, 0.0, 1.0),
+                                                                                translation: (0.0, 0.0, 0.001),
+                                                                            ),
+                                                                        ),
+                                                                        coating: ConstantR(
+                                                                            reflectivity: 0.01,
+                                                                        ),
+                                                                        lidt: 10000.0,
+                                                                    ),
+                                                                },
+                                                            ),
+                                                            uuid: "13a39e38-dd3c-478d-afc4-a6c807681668",
+                                                            lidt: 10000.0,
+                                                            props: {
+                                                                "center thickness": Length(0.001),
+                                                                "front curvature": Curvature(inf),
+                                                                "rear curvature": Curvature(inf),
+                                                                "refractive index": RefractiveIndex(Const(
+                                                                    refractive_index: 1.4,
+                                                                )),
+                                                            },
+                                                            inverted: false,
+                                                        ),
+                                                    ),
+                                                ],
+                                                edges: [],
+                                                input_map: ({
+                                                    "input_1": ("13a39e38-dd3c-478d-afc4-a6c807681668", "input_1"),
+                                                }),
+                                                output_map: ({
+                                                    "output_1": ("13a39e38-dd3c-478d-afc4-a6c807681668", "output_1"),
+                                                }),
+                                            ),
+                                        ),
+                                    ],
+                                    edges: [
+                                        (
+                                            src_id: "6ffaac7f-08f4-4e6f-a83e-51a00394d966",
+                                            src_port: "output_1",
+                                            target_id: "4c683581-927f-4d0f-b4f2-a2fd4e01c78f",
+                                            target_port: "input_1",
+                                            distance: 0.01,
+                                        ),
+                                    ],
+                                    input_map: ({
+                                        "input_1": ("6ffaac7f-08f4-4e6f-a83e-51a00394d966", "input_1"),
+                                    }),
+                                    output_map: ({
+                                        "output_1": ("4c683581-927f-4d0f-b4f2-a2fd4e01c78f", "output_1"),
+                                    }),
+                                ),
+                            ),
+                        ],
+                        edges: [
+                            (
+                                src_id: "e5ae8624-e73b-442e-835d-035035db998b",
+                                src_port: "output_1",
+                                target_id: "9cc454e4-362a-41fa-a82e-27126612ebde",
+                                target_port: "input_1",
+                                distance: 0.01,
+                            ),
+                        ],
+                        input_map: ({
+                            "input_1": ("e5ae8624-e73b-442e-835d-035035db998b", "input_1"),
+                        }),
+                        output_map: ({
+                            "output_1": ("9cc454e4-362a-41fa-a82e-27126612ebde", "output_1"),
+                        }),
+                    ),
+                ),
+            ],
+            edges: [
+                (
+                    src_id: "c2cd4417-5dc9-41e3-814b-250d21e4638b",
+                    src_port: "output_1",
+                    target_id: "a3e745f0-acbb-4086-be73-088b0960f8d7",
+                    target_port: "input_1",
+                    distance: 0.01,
+                ),
+                (
+                    src_id: "a3e745f0-acbb-4086-be73-088b0960f8d7",
+                    src_port: "output_1",
+                    target_id: "fba1e869-92df-44a8-a3f8-ed3197af4e11",
+                    target_port: "input_1",
+                    distance: 0.01,
+                ),
+                (
+                    src_id: "fba1e869-92df-44a8-a3f8-ed3197af4e11",
+                    src_port: "output_1",
+                    target_id: "4509304e-8b0e-4b0d-8c9c-8f52ba8a6276",
+                    target_port: "input_1",
+                    distance: 0.01,
+                ),
+            ],
+        ),
+    ),
+    global: (
+        ambient_refr_index: Const(
+            refractive_index: 1.0,
+        ),
+    ),
+    analyzers: {},
+)
