@@ -540,7 +540,7 @@ impl Ray {
         os: &OpticSurface,
         n2: Option<f64>,
         missed_surface_strategy: &MissedSurfaceStrategy,
-    ) -> OpmResult<(Option<Self>,Option<HitPoint>)> {
+    ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
         let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
         if n_refri_2 < 1.0 || !n_refri_2.is_finite() {
             return Err(OpossumError::Other(
@@ -611,7 +611,7 @@ impl Ray {
                     self.change_helper_fluence_by_factor(1. - reflectivity)?;
                     reflected_ray.change_helper_fluence_by_factor(reflectivity)?;
                 }
-                
+
                 // Wir geben beides zurück
                 Ok((Some(reflected_ray), generated_hit_point))
             } else {
@@ -1162,38 +1162,22 @@ mod test {
         s.set_isometry(isometry);
         s.set_coating(CoatingType::ConstantR { reflectivity });
         assert!(
-            ray.refract_on_surface(
-                &s,
-                Some(0.9),
-                &MissedSurfaceStrategy::Stop
-            )
-            .is_err()
+            ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
+                .is_err()
         );
         assert!(
-            ray.refract_on_surface(
-                &s,
-                Some(f64::NAN),
-                &MissedSurfaceStrategy::Stop
-            )
-            .is_err()
+            ray.refract_on_surface(&s, Some(f64::NAN), &MissedSurfaceStrategy::Stop)
+                .is_err()
         );
         assert!(
-            ray.refract_on_surface(
-                &s,
-                Some(f64::INFINITY),
-                &MissedSurfaceStrategy::Stop
-            )
-            .is_err()
+            ray.refract_on_surface(&s, Some(f64::INFINITY), &MissedSurfaceStrategy::Stop)
+                .is_err()
         );
         let (reflected_ray, _hitpoint) = ray
-            .refract_on_surface(
-                &s,
-                Some(1.5),
-                &MissedSurfaceStrategy::Stop,
-            )
+            .refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)
             .unwrap();
-        
-        let reflected_ray=reflected_ray.unwrap();
+
+        let reflected_ray = reflected_ray.unwrap();
         // refracted ray
         assert_eq!(ray.pos, millimeter!(0., 0., 10.));
         assert_eq!(ray.refractive_index, 1.5);
@@ -1216,12 +1200,8 @@ mod test {
 
         let position = millimeter!(0., 1., 0.);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
-        ray.refract_on_surface(
-            &s,
-            Some(1.5),
-            &MissedSurfaceStrategy::Stop,
-        )
-        .unwrap();
+        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)
+            .unwrap();
         assert_eq!(ray.pos, millimeter!(0., 1., 10.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.path_length, plane_z_pos);
@@ -1270,12 +1250,8 @@ mod test {
         .unwrap();
         let s = OpticSurface::default();
         s.set_isometry(isometry);
-        ray.refract_on_surface(
-            &s,
-            Some(1.5),
-            &MissedSurfaceStrategy::Stop,
-        )
-        .unwrap();
+        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)
+            .unwrap();
         assert_eq!(ray.pos, millimeter!(0., 0., 0.));
         assert_eq!(ray.dir, direction);
         assert_eq!(ray.refractive_index, 1.0);
@@ -1299,47 +1275,27 @@ mod test {
         let s = OpticSurface::default();
         s.set_isometry(isometry);
         assert!(
-            ray.refract_on_surface(
-                &s,
-                Some(0.9),
-                &MissedSurfaceStrategy::Stop
-            )
-            .is_err()
+            ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
+                .is_err()
         );
         assert!(
-            ray.refract_on_surface(
-                &s,
-                Some(f64::NAN),
-                &MissedSurfaceStrategy::Stop
-            )
-            .is_err()
+            ray.refract_on_surface(&s, Some(f64::NAN), &MissedSurfaceStrategy::Stop)
+                .is_err()
         );
         assert!(
-            ray.refract_on_surface(
-                &s,
-                Some(f64::INFINITY),
-                &MissedSurfaceStrategy::Stop
-            )
-            .is_err()
+            ray.refract_on_surface(&s, Some(f64::INFINITY), &MissedSurfaceStrategy::Stop)
+                .is_err()
         );
-        ray.refract_on_surface(
-            &s,
-            Some(1.0),
-            &MissedSurfaceStrategy::Stop,
-        )
-        .unwrap();
+        ray.refract_on_surface(&s, Some(1.0), &MissedSurfaceStrategy::Stop)
+            .unwrap();
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
         assert_abs_diff_eq!(ray.dir[2], direction.normalize()[2]);
         assert_abs_diff_eq!(ray.path_length.value, 2.0_f64.sqrt() * plane_z_pos.value);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        ray.refract_on_surface(
-            &s,
-            Some(1.5),
-            &MissedSurfaceStrategy::Stop,
-        )
-        .unwrap();
+        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)
+            .unwrap();
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.number_of_refractions(), 1);
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
@@ -1348,12 +1304,8 @@ mod test {
         assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
         let direction = vector![1.0, 0.0, 1.0];
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        ray.refract_on_surface(
-            &s,
-            Some(1.5),
-            &MissedSurfaceStrategy::Stop,
-        )
-        .unwrap();
+        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)
+            .unwrap();
         assert_eq!(ray.pos, millimeter!(10., 0., 10.));
         assert_eq!(ray.dir[0], 0.4714045207910317);
         assert_abs_diff_eq!(ray.dir[1], 0.0);
@@ -1375,11 +1327,7 @@ mod test {
         let s = OpticSurface::default();
         s.set_isometry(isometry);
         let (reflected, _hitpoint) = ray
-            .refract_on_surface(
-                &s,
-                Some(1.0),
-                &MissedSurfaceStrategy::Stop,
-            )
+            .refract_on_surface(&s, Some(1.0), &MissedSurfaceStrategy::Stop)
             .unwrap();
         assert!(reflected.is_none());
         assert_eq!(ray.pos, millimeter!(0., 20., 10.));

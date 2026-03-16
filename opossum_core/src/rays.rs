@@ -1091,11 +1091,9 @@ impl Rays {
                             helper_rays.ray_bundle.iter_mut(),
                             relf_helper.ray_bundle.iter_mut()
                         ) {
-                            if let (Some(h_reflected), _h_hit_point) = h_ray.refract_on_surface(
-                                surface,
-                                n2,
-                                missed_surface_strategy,
-                            )? {
+                            if let (Some(h_reflected), _h_hit_point) =
+                                h_ray.refract_on_surface(surface, n2, missed_surface_strategy)?
+                            {
                                 refl_h_ray.set_direction(h_reflected.direction())?;
                             }
                         }
