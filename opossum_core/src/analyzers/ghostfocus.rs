@@ -254,6 +254,7 @@ impl Analyzer for GhostFocusAnalyzer {
                 &mut ray_collection,
                 bounce,
             )?;
+            scenery.set_inverted(false)?;
             scenery.clear_edges();
             for rays in &ray_collection {
                 scenery.add_to_accumulated_rays(rays, bounce);
@@ -275,87 +276,7 @@ impl Analyzer for GhostFocusAnalyzer {
         node_report.set_show_item(true);
         analysis_report.add_node_report(node_report);
 
-        self.node_group_report(scenery, &mut analysis_report);
-
-        // for node_ref in scenery.graph().nodes() {
-        //     let node = node_ref.optical_ref.lock_opm()?;
-        //     let node_name = &node.name();
-        //     let hit_maps = node.hit_maps();
-        //     drop(node);
-        //     for hit_map in &hit_maps {
-        //         let critical_positions = hit_map.1.critical_fluences();
-        //         let node = node_ref.optical_ref.lock_opm()?;
-        //         let lidt = *node
-        //             .get_optic_surface(hit_map.0)
-        //             .expect("OpticSurface not found!")
-        //             .lidt();
-        //         drop(node);
-        //         if !critical_positions.is_empty() {
-        //             for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
-        //                 critical_positions.iter().enumerate()
-        //             {
-        //                 let critical_ghost_hist = GhostFocusHistory::from((
-        //                     scenery.accumulated_rays(),
-        //                     *rays_uuid,
-        //                     *hist_idx,
-        //                 ));
-        //                 let origin_str =
-        //                     critical_ghost_hist.rays_origin_report_str(scenery.graph());
-        //                 let mut hit_map_props = Properties::default();
-        //                 hit_map_props.create(
-        //                     "Origin",
-        //                     "Surface bounces that enabled this fluence",
-        //                     origin_str.clone().into(),
-        //                 )?;
-        //                 let fluence_data = hit_map
-        //                     .1
-        //                     .get_rays_hit_map(*bounce, *rays_uuid)
-        //                     .unwrap()
-        //                     .calc_fluence_map(
-        //                         (101, 101),
-        //                         &self.config().fluence_estimator,
-        //                         None,
-        //                         None,
-        //                     )?;
-
-        //                 hit_map_props.create(
-        //                     &format!("Peak fluence ({})", fluence_data.estimator()),
-        //                     "Peak fluence on this surface using Voronoi estimator",
-        //                     format!(
-        //                         "{}J/cm², (LIDT of surface: {}J/cm²)",
-        //                         format_value_with_prefix(
-        //                             fluence.get::<joule_per_square_centimeter>()
-        //                         ),
-        //                         format_value_with_prefix(lidt.get::<joule_per_square_centimeter>())
-        //                     )
-        //                     .into(),
-        //                 )?;
-        //                 hit_map_props.create(
-        //                     "Ray propagation",
-        //                     "ray propagation",
-        //                     Proptype::from(critical_ghost_hist),
-        //                 )?;
-        //                 hit_map_props.create(
-        //                     "Fluence",
-        //                     "2D spatial energy distribution",
-        //                     fluence_data.into(),
-        //                 )?;
-        //                 let hit_map_report = NodeReport::new(
-        //                     "surface",
-        //                     &format!(
-        //                         "{} critical fluence on surface '{}' of node '{}'",
-        //                         count_str(i + 1),
-        //                         hit_map.0,
-        //                         node_name
-        //                     ),
-        //                     &Uuid::new_v4().as_simple().to_string(),
-        //                     hit_map_props,
-        //                 );
-        //                 analysis_report.add_node_report(hit_map_report);
-        //             }
-        //         }
-        //     }
-        // }
+        self.node_group_report(scenery, &mut analysis_report)?;
         analysis_report.set_analysis_type("Ghost Focus Analysis");
         Ok(analysis_report)
     }
@@ -788,6 +709,131 @@ mod test_ghost_focus_config {
 
         assert!(config.get_source(&node_id).is_some());
         assert!(config.get_source(&uuid2).is_none());
+    }
+}
+
+#[cfg(test)]
+mod test_ghost_analysis_nested_groups_inversion{
+    use std::path::Path;
+    use uuid::Uuid;
+
+    use crate::{energy_distributions::General2DGaussian, joule, millimeter, nanometer, nodes::NodeGroup, position_distributions::Hexapolar, prelude::{AnalyzerType, CollimatedSrc, GhostFocusConfig, OpmDocument, RayDataSource}, radian, spectral_distribution::LaserLines, utils::LockExt};
+
+    fn get_ghost_focus_config_and_map_to_source(src_id: Uuid, bounces:usize) -> GhostFocusConfig{
+        // collimated source definition
+        let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+            Hexapolar::new(millimeter!(10.), 0).unwrap().into(),
+            General2DGaussian::new(
+                joule!(5.0),
+                millimeter!(0., 0.),
+                millimeter!(2., 2.),
+                5.,
+                radian!(0.),
+                false,
+            ).unwrap()
+            .into(),
+            LaserLines::new(vec![(nanometer!(1053.0), 1.0)]).unwrap().into(),
+        ));
+        let mut config = GhostFocusConfig::default();
+        config.map_source(src_id, ray_data_source.into());
+        config.set_max_bounces(bounces);
+        config
+    }
+
+    fn check_not_inverted(group: &NodeGroup) -> bool{
+        for opt_ref in group.graph().nodes(){
+            let node = opt_ref.optical_ref.lock_opm().unwrap();
+            if let Ok(g) = node.as_group(){
+                if !check_not_inverted(g){
+                    return false
+                }
+            }
+            if node.inverted(){
+                return false
+            }
+        }
+        true
+    }
+
+    #[test]
+    fn bounce_0() {
+        let bounce = 0;
+        let f_path  =Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
+        let mut document = OpmDocument::from_file(f_path).unwrap();
+        let srcs = document.scenery().find_source_ports().unwrap();
+        let src = srcs.first().unwrap();
+
+        let config = get_ghost_focus_config_and_map_to_source(*src, bounce);
+        document.add_analyzer(AnalyzerType::GhostFocus(config));
+
+        let _ = document.analyze().unwrap();
+
+        let scenery = document.scenery();
+        assert!(check_not_inverted(scenery))
+    }
+    #[test]
+    fn bounce_1() {
+        let bounce = 1;
+        let f_path  =Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
+        let mut document = OpmDocument::from_file(f_path).unwrap();
+        let srcs = document.scenery().find_source_ports().unwrap();
+        let src = srcs.first().unwrap();
+
+        let config = get_ghost_focus_config_and_map_to_source(*src, bounce);
+        document.add_analyzer(AnalyzerType::GhostFocus(config));
+
+        let _ = document.analyze().unwrap();
+
+        let scenery = document.scenery();
+        assert!(check_not_inverted(scenery))
+    }
+    #[test]
+    fn bounce_2() {
+        let bounce = 2;
+        let f_path  =Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
+        let mut document = OpmDocument::from_file(f_path).unwrap();
+        let srcs = document.scenery().find_source_ports().unwrap();
+        let src = srcs.first().unwrap();
+
+        let config = get_ghost_focus_config_and_map_to_source(*src, bounce);
+        document.add_analyzer(AnalyzerType::GhostFocus(config));
+
+        let _ = document.analyze().unwrap();
+
+        let scenery = document.scenery();
+        assert!(check_not_inverted(scenery))
+    }
+    #[test]
+    fn bounce_3() {
+        let bounce = 3;
+        let f_path  =Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
+        let mut document = OpmDocument::from_file(f_path).unwrap();
+        let srcs = document.scenery().find_source_ports().unwrap();
+        let src = srcs.first().unwrap();
+
+        let config = get_ghost_focus_config_and_map_to_source(*src, bounce);
+        document.add_analyzer(AnalyzerType::GhostFocus(config));
+
+        let _ = document.analyze().unwrap();
+
+        let scenery = document.scenery();
+        assert!(check_not_inverted(scenery))
+    }
+    #[test]
+    fn bounce_4() {
+        let bounce = 4;
+        let f_path  =Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
+        let mut document = OpmDocument::from_file(f_path).unwrap();
+        let srcs = document.scenery().find_source_ports().unwrap();
+        let src = srcs.first().unwrap();
+
+        let config = get_ghost_focus_config_and_map_to_source(*src, bounce);
+        document.add_analyzer(AnalyzerType::GhostFocus(config));
+
+        let _ = document.analyze().unwrap();
+
+        let scenery = document.scenery();
+        assert!(check_not_inverted(scenery))
     }
 }
 
