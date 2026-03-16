@@ -96,13 +96,17 @@ impl OpticNode for FluenceDetector {
             warn!("could not get surface hitmap using default");
             return None;
         };
+
+        let mut consolidated_hit_map = hit_map.clone();
+        consolidated_hit_map.consolidate();
+
         let Ok(Proptype::FluenceEstimator(estimator)) =
             self.node_attr.get_property("fluence estimator")
         else {
             return None;
         };
 
-        let fl_data = hit_map.calc_fluence_map((95, 83), estimator);
+        let fl_data = consolidated_hit_map.calc_fluence_map((95, 83), estimator);
 
         if let Ok(ref fluence_data) = fl_data {
             props

@@ -1,5 +1,4 @@
-use opossum_core::prelude::*;
-use opossum_core::surface::hit_map::fluence_estimator::FluenceEstimator;
+use opossum_core::{prelude::*, surface::hit_map::fluence_estimator::FluenceEstimator};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
@@ -46,7 +45,7 @@ fn main() -> OpmResult<()> {
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
     let i_sd7 = scenery.add_node(fluence_det)?;
 
-    let mut fluence_det = FluenceDetector::new("Adter image Plane");
+    let mut fluence_det = FluenceDetector::new("After image Plane");
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
     let i_sd8 = scenery.add_node(fluence_det)?;
 
@@ -59,17 +58,15 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     let mut config = RayTraceConfig::default();
-    config.map_source(
-        i_src,
-        RayDataSource::Image(ImageSrc::new(
-            Path::new("../opossum_core/logo/Logo_square_tiny_grey_inverted.png").to_path_buf(),
-            micrometer!(50.0),
-            joule!(1.0),
-            nanometer!(1000.0),
-            degree!(1.0),
-        )?)
-        .into(),
-    );
+
+    let ray_data_source = RayDataSource::Image(ImageSrc::new(
+        Path::new("../opossum_core/logo/Logo_square_tiny_grey_inverted.png").to_path_buf(),
+        micrometer!(50.0),
+        joule!(1.0),
+        nanometer!(1000.0),
+        degree!(1.0),
+    )?);
+    config.map_source(i_src, ray_data_source.into());
     doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/workshop_05_kepler_imaging_field.opm",

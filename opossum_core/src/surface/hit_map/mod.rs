@@ -85,6 +85,12 @@ impl BouncedHitMap {
             rhm.prune_by_aperture(aperture, surface_iso);
         }
     }
+    /// Consolidates all internal `RaysHitMap`s by merging points with identical spatial coordinates.
+    pub fn consolidate(&mut self) {
+        for rays_hit_map in self.hit_map.values_mut() {
+            rays_hit_map.consolidate();
+        }
+    }
 }
 
 /// Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
@@ -233,7 +239,15 @@ impl HitMap {
         }
         None
     }
-
+    /// Consolidates the entire `HitMap` by merging points with identical spatial coordinates.
+    ///
+    /// This should be called exactly once after the simulation finishes and before
+    /// any fluence evaluation (e.g. Voronoi or KDE) is performed.
+    pub fn consolidate(&mut self) {
+        for bounced_hit_map in &mut self.hit_map {
+            bounced_hit_map.consolidate();
+        }
+    }
     /// Calculate a fluence map ([`FluenceData`]) of this [`HitMap`] using the "Voronoi" method
     ///
     /// This method tries to combine the fluence of data of all stored [`RaysHitMap`]s and return a single [`FluenceData`]
@@ -550,13 +564,6 @@ mod test_bounced_hit_map {
         assert_eq!(bhm.hit_map.get(&uuid1).unwrap().hit_map().len(), 1);
         assert!(bhm.hit_map.get(&uuid2).is_none());
         bhm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
-            uuid1,
-        )
-        .unwrap();
-        assert_eq!(bhm.hit_map.get(&uuid1).unwrap().hit_map().len(), 1);
-        assert!(bhm.hit_map.get(&uuid2).is_none());
-        bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(1.0, 0.0, 0.0), joule!(1.0)).unwrap()),
             uuid1,
         )
@@ -591,7 +598,7 @@ mod test_bounced_hit_map {
             uuid2,
         )
         .unwrap();
-        assert_eq!(bhm.get_rays_hit_map(uuid1).unwrap().hit_map().len(), 1);
+        assert_eq!(bhm.get_rays_hit_map(uuid1).unwrap().hit_map().len(), 2);
         assert_eq!(bhm.get_rays_hit_map(uuid2).unwrap().hit_map().len(), 1);
         assert!(bhm.get_rays_hit_map(Uuid::nil()).is_none());
     }
