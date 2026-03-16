@@ -83,6 +83,19 @@ impl Default for Rays {
 }
 
 impl Rays {
+    /// Creates a new, empty ray bundle with pre-allocated memory capacity.
+    ///
+    /// This prevents unnecessary heap allocations and data copying when adding a known number of rays.
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            ray_bundle: Vec::with_capacity(capacity),
+            node_origin: None,
+            uuid: Uuid::new_v4(),
+            parent_id: None,
+            parent_pos_split_idx: 0,
+        }
+    }
     /// Create a light field of rays emitted from a 2D image.
     ///
     /// Each pixel of the image represents a point ray source, whose energy is defined by the pixel intensity.
@@ -1055,7 +1068,7 @@ impl Rays {
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
-        let mut reflected_rays = Self::default();
+        let mut reflected_rays = Self::with_capacity(self.ray_bundle.len());
         for ray in &mut self.ray_bundle {
             if ray.valid() {
                 let n2 = if let Some(refractive_index) = refractive_index {
@@ -1138,7 +1151,7 @@ impl Rays {
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
-        let mut reflected_rays = Self::default();
+        let mut reflected_rays = Self::with_capacity(self.ray_bundle.len());
         for ray in &mut self.ray_bundle {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength())?;
@@ -1417,7 +1430,7 @@ impl Rays {
     ///
     /// This function will return an error if the underlying split function for a single ray returns an error.
     pub fn split(&mut self, config: &SplittingConfig) -> OpmResult<Self> {
-        let mut split_rays = Self::default();
+        let mut split_rays = Self::with_capacity(self.ray_bundle.len());
         for ray in &mut self.ray_bundle {
             if ray.valid() {
                 let split_ray = ray.split(config)?;
