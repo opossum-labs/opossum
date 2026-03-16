@@ -1068,7 +1068,9 @@ impl Rays {
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
+        // Pre-allocate memory to avoid massive reallocation overhead
         let mut reflected_rays = Self::with_capacity(self.ray_bundle.len());
+
         for ray in &mut self.ray_bundle {
             if ray.valid() {
                 let n2 = if let Some(refractive_index) = refractive_index {
@@ -1076,23 +1078,25 @@ impl Rays {
                 } else {
                     None
                 };
-                if let Some(mut reflected) =
-                    ray.refract_on_surface(surface, n2, self.uuid, missed_surface_strategy)?
-                {
+
+                // Wir übergeben 'surface' unveränderlich und empfangen unser neues Tupel
+                let (reflected_opt, hit_point_opt) =
+                    ray.refract_on_surface(surface, n2, missed_surface_strategy)?;
+
+                if let Some(mut reflected) = reflected_opt {
                     if let (Some(helper_rays), Some(relf_helper)) =
                         (ray.helper_rays_mut(), reflected.helper_rays_mut())
                     {
-                        for (ray, refl_ray) in izip!(
+                        for (h_ray, refl_h_ray) in izip!(
                             helper_rays.ray_bundle.iter_mut(),
                             relf_helper.ray_bundle.iter_mut()
                         ) {
-                            if let Some(reflected) = ray.refract_on_surface(
+                            if let (Some(h_reflected), _h_hit_point) = h_ray.refract_on_surface(
                                 surface,
                                 n2,
-                                self.uuid,
                                 missed_surface_strategy,
                             )? {
-                                refl_ray.set_direction(reflected.direction())?;
+                                refl_h_ray.set_direction(h_reflected.direction())?;
                             }
                         }
                     }
@@ -1106,16 +1110,22 @@ impl Rays {
                 } else {
                     rays_missed = true;
                 }
+
+                // Den zurückgegebenen HitPoint sequenziell in die HitMap eintragen
+                if let Some(hit_point) = hit_point_opt {
+                    surface.add_to_hit_map(hit_point, ray.number_of_bounces(), self.uuid)?;
+                }
+
                 valid_rays_found = true;
             }
         }
+
         if rays_missed {
             warn!("rays totally reflected or missed a surface");
         }
         if !valid_rays_found {
             warn!("ray bundle contains no valid rays - not propagating");
         }
-        //surface.set_backwards_rays_cache(reflected_rays.clone());
         if refraction_intended {
             reflected_rays.set_parent_uuid(self.uuid);
             reflected_rays.set_parent_node_split_idx(self.ray_history_len());

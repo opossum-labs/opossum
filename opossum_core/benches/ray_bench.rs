@@ -9,7 +9,6 @@ use opossum_core::{
     utils::geom_transformation::Isometry,
 };
 use uom::si::f64::Length;
-use uuid::Uuid;
 
 /// Configures Criterion for more stable measurements by increasing measurement time and sample size.
 fn configure_criterion() -> Criterion {
@@ -81,14 +80,13 @@ fn bench_refract_on_surface(c: &mut Criterion) {
             let surface = OpticSurface::default();
             surface.set_isometry(isometry);
             let n2 = Some(1.5);
-            let uuid = Uuid::new_v4();
             let strategy = MissedSurfaceStrategy::Stop;
-            (ray, surface, n2, uuid, strategy)
+            (ray, surface, n2, strategy)
         };
 
         // iter_with_setup is used because the function requires mutable access to the ray and surface.
-        b.iter_with_setup(setup, |(mut ray, mut surface, n2, uuid, strategy)| {
-            std::hint::black_box(ray.refract_on_surface(&mut surface, n2, uuid, &strategy))
+        b.iter_with_setup(setup, |(mut ray, mut surface, n2, strategy)| {
+            std::hint::black_box(ray.refract_on_surface(&mut surface, n2, &strategy))
                 .unwrap();
         });
     });
