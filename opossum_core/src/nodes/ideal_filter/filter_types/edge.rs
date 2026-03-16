@@ -408,26 +408,12 @@ impl EdgeFilter {
 
         if wvl_diff <= -half_width {
             before_edge_wvl
-        } else if wvl_diff > half_width {
+        } else if wvl_diff >= half_width {
             after_edge_wvl
         } else {
-            // Normiere den Bereich [-width/2, width/2] auf [0, 1]
             let x = (wvl_diff + half_width).value / width.value;
             interpolate_transition(x, before_edge_wvl, after_edge_wvl)
         }
-        // let transmission_diff = self.transmission_range.end - self.transmission_range.start;
-        // let wvl_diff = wavelength - self.edge_wavelength();
-        // if wvl_diff <= -width / 2.0 {
-        //     before_edge_wvl
-        // } else if wvl_diff > width / 2.0 {
-        //     after_edge_wvl
-        // } else {
-        //     let angle = (std::f64::consts::PI / width * wvl_diff).value;
-        //     (0.5 * transmission_diff).mul_add(
-        //         angle_sign * angle.sin(),
-        //         0.5f64.mul_add(transmission_diff, self.transmission_range().start),
-        //     )
-        // }
     }
 
     fn step_transmission(
