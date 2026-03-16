@@ -9,9 +9,8 @@ pub use analyzer::{AnalysisGhostFocus, GhostFocusAnalyzer};
 pub use config::GhostFocusConfig;
 pub use history::GhostFocusHistory;
 
-use log::warn;
-
 use super::{AnalyzerRegistration, AnalyzerType};
+use log::warn;
 
 inventory::submit! {
     AnalyzerRegistration::new(
