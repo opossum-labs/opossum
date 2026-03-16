@@ -254,6 +254,7 @@ impl Analyzer for GhostFocusAnalyzer {
                 &mut ray_collection,
                 bounce,
             )?;
+            scenery.set_inverted(false)?;
             scenery.clear_edges();
             for rays in &ray_collection {
                 scenery.add_to_accumulated_rays(rays, bounce);
@@ -275,7 +276,7 @@ impl Analyzer for GhostFocusAnalyzer {
         node_report.set_show_item(true);
         analysis_report.add_node_report(node_report);
 
-        self.node_group_report(scenery, &mut analysis_report);
+        self.node_group_report(scenery, &mut analysis_report)?;
 
         // for node_ref in scenery.graph().nodes() {
         //     let node = node_ref.optical_ref.lock_opm()?;
