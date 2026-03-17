@@ -210,7 +210,15 @@ pub trait AnalysisRayTrace: OpticNode {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        self.analyze(incoming_data, config)
+        if incoming_data.is_empty() {
+            warn!(
+                "{} got no valid optical axis data from previous node and can thus not being placed. Skipping.",
+                self.node_info()
+            );
+            Ok(LightResult::default())
+        } else {
+            self.analyze(incoming_data, config)
+        }
     }
     /// Returns the necessary node attributes for ray tracing
     ///
@@ -246,7 +254,7 @@ mod test {
     use super::*;
     use crate::{
         joule, millimeter,
-        nodes::{ParaxialSurface, SourcePort, round_collimated_ray_builder},
+        nodes::{Dummy, ParaxialSurface, SourcePort, round_collimated_ray_builder},
         utils::test_helper::test_helper::check_logs,
     };
     #[test]
@@ -453,5 +461,24 @@ mod test {
 
         assert!(config.get_source(&node_id).is_some());
         assert!(config.get_source(&uuid2).is_none());
+    }
+    #[test]
+    fn test_no_optical_axis_warning() {
+        let mut scenery = NodeGroup::new("OpticScenery demo");
+        let node1 = scenery.add_node(Dummy::new("dummy1")).unwrap();
+        let node2 = scenery.add_node(Dummy::new("dummy2")).unwrap();
+        scenery
+            .connect_nodes(node1, "output_1", node2, "input_1", millimeter!(0.0))
+            .unwrap();
+        let analyzer = RayTracingAnalyzer::default();
+        testing_logger::setup();
+        analyzer.analyze(&mut scenery).unwrap();
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "'dummy1' (dummy) has no incoming connections and can thus not being placed. Skipping.",
+                "'dummy2' (dummy) got no valid optical axis data from previous node and can thus not being placed. Skipping.",
+            ],
+        );
     }
 }
