@@ -391,6 +391,32 @@ impl NodeGroup {
         Ok(out)
     }
 
+    /// Execute a read-only operation with the `NodeAttr` of the node identified by `node_id`.
+    ///
+    /// If `node_id` equals this group's own UUID, the closure is invoked directly with
+    /// `&NodeAttr` from `self` (no lock is taken). Otherwise, the node is looked up
+    /// in the graph, its internal mutex is locked, and an `&NodeAttr` is passed to
+    /// the closure. The lock is held only for the duration of the closure call.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the target node.
+    /// - `f`: Closure that receives `&NodeAttr` and returns a value of type `R`.
+    ///
+    /// # Returns
+    /// The value produced by `f`, wrapped in `OpmResult<R>`.
+    ///
+    /// # Errors
+    /// Propagates errors from the underlying lookup and locking:
+    /// - The node cannot be found in the graph.
+    /// - The mutex is poisoned (e.g., due to a previous panic while locked).
+    ///
+    /// # Concurrency
+    /// A mutex is only acquired when `node_id != self.uuid()`. Be careful not to call APIs
+    /// within `f` that would attempt to lock the same node again to prevent deadlocks.
+    ///
+    /// # Panic Safety
+    /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
+    /// fail with a poisoned-lock error.
     pub fn with_node_attr_node<R>(
         &self,
         node_id: Uuid,

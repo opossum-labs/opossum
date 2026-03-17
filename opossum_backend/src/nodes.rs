@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    app_state::{AppState, NodeCacheItem}, error::BackEndErrorResponse, scenery, utils::update_node_attr
+    app_state::{AppState, NodeCacheItem},
+    error::BackEndErrorResponse,
+    utils::update_node_attr,
 };
 use actix_web::{
     HttpResponse, Responder, delete, get,
@@ -110,13 +112,19 @@ pub async fn get_connections(
         g.connections()
             .iter()
             .map(|c| {
+                let is_reference = scenery
+                    .with_node_attr_node(c.target_id, |node_attr| {
+                        let prop = node_attr.properties();
+                        prop.get("reference id").is_ok()
+                    })
+                    .unwrap_or(false);
                 ConnectInfo::new(
                     c.src_id,
                     c.src_port.clone(),
                     c.target_id,
                     c.target_port.clone(),
                     c.distance.get::<meter>(),
-                    c.target_is_reference
+                    is_reference,
                 )
             })
             .collect::<Vec<ConnectInfo>>()
@@ -711,18 +719,24 @@ async fn post_node_inversion(
         .update_connections_of_single_inverted_node(uuid)
     {
         Ok(()) => {
-            let connect_infos = document
-                .scenery()
+            let scenery = document.scenery();
+            let connect_infos = scenery
                 .connections()
                 .iter()
                 .map(|c| {
+                    let is_reference = scenery
+                        .with_node_attr_node(c.target_id, |node_attr| {
+                            let prop = node_attr.properties();
+                            prop.get("reference id").is_ok()
+                        })
+                        .unwrap_or(false);
                     ConnectInfo::new(
                         c.src_id,
                         c.src_port.clone(),
                         c.target_id,
                         c.target_port.clone(),
                         c.distance.get::<meter>(),
-                        c.target_is_reference
+                        is_reference,
                     )
                 })
                 .collect::<Vec<ConnectInfo>>();
@@ -1029,7 +1043,11 @@ async fn post_connection(
                 meter!(connect_info.distance()),
             )
         })??;
-    let is_ref_node = document.scenery().with_node_attr_node(connect_info.target_uuid(), |n| n.properties().get("reference id").is_ok())?;
+    let is_ref_node = document
+        .scenery()
+        .with_node_attr_node(connect_info.target_uuid(), |n| {
+            n.properties().get("reference id").is_ok()
+        })?;
     let mut connect_info = connect_info.into_inner();
     connect_info.set_is_reference(is_ref_node);
     drop(document);

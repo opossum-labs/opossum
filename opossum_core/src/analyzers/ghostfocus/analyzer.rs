@@ -305,17 +305,192 @@ mod test_ghost_focus_analyzer {
 mod test_ghost_analysis_nested_groups_inversion {
     use crate::{
         analyzers::ghostfocus::config::GhostFocusConfig,
+        coatings::CoatingType,
         energy_distributions::General2DGaussian,
         joule, millimeter, nanometer,
-        nodes::NodeGroup,
+        nodes::{Lens, NodeGroup, SourcePort},
         position_distributions::Hexapolar,
-        prelude::{AnalyzerType, CollimatedSrc, OpmDocument, RayDataSource},
+        prelude::{
+            AnalyzerType, CollimatedSrc, OpmDocument, OpticNode, PortType, RayDataSource,
+            RefrIndexConst,
+        },
         radian,
         spectral_distribution::LaserLines,
         utils::LockExt,
     };
-    use std::path::Path;
     use uuid::Uuid;
+
+    fn create_doc(bounces: usize) -> OpmDocument {
+        let mut scenery = NodeGroup::new("Ghost focus nested group test");
+        scenery.set_expand_view(true).unwrap();
+
+        let inf = millimeter!(f64::INFINITY);
+
+        let mut lens_01 = Lens::new(
+            "Lens 0_1",
+            inf,
+            inf,
+            millimeter!(1.),
+            RefrIndexConst::new(1.4).unwrap(),
+        )
+        .unwrap();
+        lens_01
+            .set_coating(
+                &PortType::Input,
+                "input_1",
+                &CoatingType::ConstantR { reflectivity: 0.01 },
+            )
+            .unwrap();
+        lens_01
+            .set_coating(
+                &PortType::Output,
+                "output_1",
+                &CoatingType::ConstantR { reflectivity: 0.01 },
+            )
+            .unwrap();
+
+        let mut lens_02 = Lens::new(
+            "Lens 0_2",
+            inf,
+            inf,
+            millimeter!(1.),
+            RefrIndexConst::new(1.4).unwrap(),
+        )
+        .unwrap();
+        lens_02
+            .set_coating(
+                &PortType::Input,
+                "input_1",
+                &CoatingType::ConstantR { reflectivity: 0.01 },
+            )
+            .unwrap();
+        lens_02
+            .set_coating(
+                &PortType::Output,
+                "output_1",
+                &CoatingType::ConstantR { reflectivity: 0.01 },
+            )
+            .unwrap();
+
+        let src = scenery
+            .add_node(SourcePort::new("Collimated Source"))
+            .unwrap();
+        let l0_1 = scenery.add_node(lens_01).unwrap();
+        let l0_2 = scenery.add_node(lens_02).unwrap();
+
+        let mut lens_1 = Lens::new(
+            "Lens 1",
+            inf,
+            inf,
+            millimeter!(1.),
+            RefrIndexConst::new(1.4).unwrap(),
+        )
+        .unwrap();
+        lens_1
+            .set_coating(
+                &PortType::Input,
+                "input_1",
+                &CoatingType::ConstantR { reflectivity: 0.01 },
+            )
+            .unwrap();
+        lens_1
+            .set_coating(
+                &PortType::Output,
+                "output_1",
+                &CoatingType::ConstantR { reflectivity: 0.01 },
+            )
+            .unwrap();
+
+        let mut group_1 = NodeGroup::new("Group 1");
+        group_1.set_expand_view(true).unwrap();
+        let l1 = group_1.add_node(lens_1).unwrap();
+
+        let mut lens_2 = Lens::new(
+            "Lens 2",
+            inf,
+            inf,
+            millimeter!(1.),
+            RefrIndexConst::new(1.4).unwrap(),
+        )
+        .unwrap();
+        lens_2
+            .set_coating(
+                &PortType::Input,
+                "input_1",
+                &CoatingType::ConstantR { reflectivity: 0.01 },
+            )
+            .unwrap();
+        lens_2
+            .set_coating(
+                &PortType::Output,
+                "output_1",
+                &CoatingType::ConstantR { reflectivity: 0.01 },
+            )
+            .unwrap();
+        let mut group_2 = NodeGroup::new("Group 2");
+        group_2.set_expand_view(true).unwrap();
+        let l2 = group_2.add_node(lens_2).unwrap();
+
+        let mut lens_3 = Lens::new(
+            "Lens 3",
+            inf,
+            inf,
+            millimeter!(1.),
+            RefrIndexConst::new(1.4).unwrap(),
+        )
+        .unwrap();
+        lens_3
+            .set_coating(
+                &PortType::Input,
+                "input_1",
+                &CoatingType::ConstantR { reflectivity: 0.01 },
+            )
+            .unwrap();
+        lens_3
+            .set_coating(
+                &PortType::Output,
+                "output_1",
+                &CoatingType::ConstantR { reflectivity: 0.01 },
+            )
+            .unwrap();
+        let mut group_3 = NodeGroup::new("Group 3");
+        group_3.set_expand_view(true).unwrap();
+        let l3 = group_3.add_node(lens_3).unwrap();
+        group_3.map_input_port(l3, "input_1", "input_1").unwrap();
+        group_3.map_output_port(l3, "output_1", "output_1").unwrap();
+
+        let g3 = group_2.add_node(group_3).unwrap();
+        group_2
+            .connect_nodes(l2, "output_1", g3, "input_1", millimeter!(10.))
+            .unwrap();
+        group_2.map_input_port(l2, "input_1", "input_1").unwrap();
+        group_2.map_output_port(g3, "output_1", "output_1").unwrap();
+
+        let g2 = group_1.add_node(group_2).unwrap();
+        group_1
+            .connect_nodes(l1, "output_1", g2, "input_1", millimeter!(10.))
+            .unwrap();
+        group_1.map_input_port(l1, "input_1", "input_1").unwrap();
+        group_1.map_output_port(g2, "output_1", "output_1").unwrap();
+
+        let g1 = scenery.add_node(group_1).unwrap();
+
+        scenery
+            .connect_nodes(src, "output_1", l0_1, "input_1", millimeter!(10.))
+            .unwrap();
+        scenery
+            .connect_nodes(l0_1, "output_1", g1, "input_1", millimeter!(10.))
+            .unwrap();
+        scenery
+            .connect_nodes(g1, "output_1", l0_2, "input_1", millimeter!(10.))
+            .unwrap();
+
+        //analyzers are added in the tests
+        let mut doc: OpmDocument = OpmDocument::new(scenery);
+        let config = get_ghost_focus_config_and_map_to_source(src, bounces);
+        doc.add_analyzer(AnalyzerType::GhostFocus(config));
+        doc
+    }
 
     fn get_ghost_focus_config_and_map_to_source(src_id: Uuid, bounces: usize) -> GhostFocusConfig {
         // collimated source definition
@@ -359,13 +534,7 @@ mod test_ghost_analysis_nested_groups_inversion {
     #[test]
     fn bounce_0() {
         let bounce = 0;
-        let f_path = Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
-        let mut document = OpmDocument::from_file(f_path).unwrap();
-        let srcs = document.scenery().find_source_ports().unwrap();
-        let src = srcs.first().unwrap();
-
-        let config = get_ghost_focus_config_and_map_to_source(*src, bounce);
-        document.add_analyzer(AnalyzerType::GhostFocus(config));
+        let mut document = create_doc(bounce);
 
         let _ = document.analyze().unwrap();
 
@@ -375,13 +544,7 @@ mod test_ghost_analysis_nested_groups_inversion {
     #[test]
     fn bounce_1() {
         let bounce = 1;
-        let f_path = Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
-        let mut document = OpmDocument::from_file(f_path).unwrap();
-        let srcs = document.scenery().find_source_ports().unwrap();
-        let src = srcs.first().unwrap();
-
-        let config = get_ghost_focus_config_and_map_to_source(*src, bounce);
-        document.add_analyzer(AnalyzerType::GhostFocus(config));
+        let mut document = create_doc(bounce);
 
         let _ = document.analyze().unwrap();
 
@@ -391,13 +554,7 @@ mod test_ghost_analysis_nested_groups_inversion {
     #[test]
     fn bounce_2() {
         let bounce = 2;
-        let f_path = Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
-        let mut document = OpmDocument::from_file(f_path).unwrap();
-        let srcs = document.scenery().find_source_ports().unwrap();
-        let src = srcs.first().unwrap();
-
-        let config = get_ghost_focus_config_and_map_to_source(*src, bounce);
-        document.add_analyzer(AnalyzerType::GhostFocus(config));
+        let mut document = create_doc(bounce);
 
         let _ = document.analyze().unwrap();
 
@@ -407,13 +564,7 @@ mod test_ghost_analysis_nested_groups_inversion {
     #[test]
     fn bounce_3() {
         let bounce = 3;
-        let f_path = Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
-        let mut document = OpmDocument::from_file(f_path).unwrap();
-        let srcs = document.scenery().find_source_ports().unwrap();
-        let src = srcs.first().unwrap();
-
-        let config = get_ghost_focus_config_and_map_to_source(*src, bounce);
-        document.add_analyzer(AnalyzerType::GhostFocus(config));
+        let mut document = create_doc(bounce);
 
         let _ = document.analyze().unwrap();
 
@@ -423,13 +574,7 @@ mod test_ghost_analysis_nested_groups_inversion {
     #[test]
     fn bounce_4() {
         let bounce = 4;
-        let f_path = Path::new("./files_for_testing/opm/ghost_focus_nested_group_test.opm");
-        let mut document = OpmDocument::from_file(f_path).unwrap();
-        let srcs = document.scenery().find_source_ports().unwrap();
-        let src = srcs.first().unwrap();
-
-        let config = get_ghost_focus_config_and_map_to_source(*src, bounce);
-        document.add_analyzer(AnalyzerType::GhostFocus(config));
+        let mut document = create_doc(bounce);
 
         let _ = document.analyze().unwrap();
 

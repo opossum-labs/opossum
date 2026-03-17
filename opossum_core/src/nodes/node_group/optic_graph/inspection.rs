@@ -151,7 +151,6 @@ impl OpticGraph {
             let src_id = self.g.node_weight(edge_ref.source()).unwrap().uuid();
             let target = self.g.node_weight(edge_ref.target()).unwrap();
             let target_id = target.uuid();
-            let target_is_reference = target.optical_ref.lock_opm().unwrap().node_attr().properties().get("reference id").is_ok();
             let src_port = edge_ref.weight().src_port();
             let target_port = edge_ref.weight().target_port();
             let dist = edge_ref.weight().distance();
@@ -161,7 +160,6 @@ impl OpticGraph {
                 target_id,
                 target_port: target_port.to_string(),
                 distance: *dist,
-                target_is_reference
             };
             connections.push(connection);
         }

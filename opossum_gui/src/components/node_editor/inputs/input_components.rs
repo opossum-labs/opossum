@@ -495,7 +495,7 @@ pub fn UnitInput(
             }
         }
     } else {
-        if readonly{
+        if readonly {
             input_class = format!("{input_class} ref-connection-input");
         }
         rsx! {

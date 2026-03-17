@@ -52,6 +52,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
         f64::midpoint(start_position().y, end_position().y) - EDGE_DISTANCE_FIELD_HEIGHT / 2.0,
     );
     let targets_reference = edge.targets_reference();
+
     rsx! {
         path {
             d: new_path,
@@ -103,7 +104,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                     input_class: "edge_distance_input".to_string(),
                 }
             }
-        
+
         }
     }
 }

@@ -1,3 +1,4 @@
+#![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: "0",
     scenery: (
@@ -8,7 +9,7 @@
                 inputs: {},
                 outputs: {},
             ),
-            uuid: "4c3f419e-92f5-4dc6-8abc-363b2f99d5dc",
+            uuid: "8878ebd3-83e5-4045-884e-bf6bea18e752",
             lidt: 10000.0,
             props: {
                 "expand view": Bool(false),
@@ -47,7 +48,7 @@
                                 ),
                             },
                         ),
-                        uuid: "badd2c2e-4d99-4b4e-b166-506a1476f240",
+                        uuid: "192f75b0-01e6-4c4b-a782-0fde70e339fa",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -83,7 +84,7 @@
                                 ),
                             },
                         ),
-                        uuid: "7444d7ca-ca0d-4b2f-bdb1-889b30a50ceb",
+                        uuid: "d6c00974-9195-4293-938e-06b41676fa08",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -92,9 +93,9 @@
             ],
             edges: [
                 (
-                    src_id: "badd2c2e-4d99-4b4e-b166-506a1476f240",
+                    src_id: "192f75b0-01e6-4c4b-a782-0fde70e339fa",
                     src_port: "output_1",
-                    target_id: "7444d7ca-ca0d-4b2f-bdb1-889b30a50ceb",
+                    target_id: "d6c00974-9195-4293-938e-06b41676fa08",
                     target_port: "input_1",
                     distance: 0.0,
                 ),
@@ -102,20 +103,20 @@
         ),
     ),
     global: (
-        ambient_refr_index: Const((
+        ambient_refr_index: Const(
             refractive_index: 1.0,
-        )),
+        ),
     ),
     analyzers: {
-        "9af33f0c-4b3b-4cdd-b7bf-52689b4d2c89": (
-            analyzer_type: RayTrace((
+        "99f92222-3fcb-48c2-9b2c-d4cd78abc789": (
+            analyzer_type: RayTrace(
                 min_energy_per_ray: 0.000000000001,
                 max_number_of_bounces: 1000,
                 max_number_of_refractions: 1000,
                 missed_surface_strategy: Stop,
                 source_map: {},
-            )),
-            id: "9af33f0c-4b3b-4cdd-b7bf-52689b4d2c89",
+            ),
+            id: "99f92222-3fcb-48c2-9b2c-d4cd78abc789",
             gui_position: None,
         ),
     },
