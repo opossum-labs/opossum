@@ -75,35 +75,6 @@ impl AnalysisRayTrace for SourcePort {
         let mut outgoing_edges = LightResult::new();
         outgoing_edges.insert("output_1".into(), LightData::Geometric(rays));
         Ok(outgoing_edges)
-        // // Retrieve the source builder to read the alignment wavelength
-        // let source_builder = config.get_source(&self.node_attr().uuid()).ok_or_else(|| {
-        //     OpossumError::Analysis(format!("No source data found in analyzer for {self}"))
-        // })?;
-
-        // // generate a single beam (= optical axis) from source
-        // let mut new_outgoing_edges = LightResult::new();
-        // for outgoing_edge in &outgoing_edges {
-        //     if let LightData::Geometric(rays) = outgoing_edge.1 {
-        //         let mut axis_ray = source_builder.alignment_wavelength().map_or_else(|| {
-        //              info!(
-        //                  "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
-        //              );
-        //              rays.get_optical_axis_ray()
-        //          }, |alignment_wvl| Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), alignment_wvl, joule!(1.0)))?;
-
-        //         let iso = self.effective_surface_iso("input_1")?;
-        //         axis_ray = axis_ray.transformed_ray(&iso);
-        //         let mut new_rays = Rays::default();
-        //         new_rays.add_ray(axis_ray);
-        //         new_outgoing_edges.insert(outgoing_edge.0.clone(), LightData::Geometric(new_rays));
-        //     } else {
-        //         return Err(OpossumError::Analysis(
-        //             "did not receive LightData:Geometric for conversion into OpticalAxis data"
-        //                 .into(),
-        //         ));
-        //     }
-        // }
-        // Ok(new_outgoing_edges)
     }
 }
 
