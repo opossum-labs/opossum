@@ -554,6 +554,10 @@ pub trait OpticNode: Dottable {
             .ports()
             .get_optic_surface(&surf_name.to_owned())
     }
+    /// Return a [`String`] in the form `'name' (type)` for display purposes.
+    fn node_info(&self) -> String {
+        format!("'{}' ({})", self.name(), self.node_type())
+    }
 }
 /// Helper trait for optical elements that can be locally aligned
 pub trait Alignable: OpticNode + Sized {

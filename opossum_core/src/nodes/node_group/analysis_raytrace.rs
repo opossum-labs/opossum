@@ -114,7 +114,7 @@ impl AnalysisRayTrace for NodeGroup {
                     "unknown node".into()
                 };
                 warn!(
-                    "{node_info} has no incoming connections and can thus not being placed. Skipping"
+                    "{node_info} has no incoming connections and can thus not being placed. Skipping."
                 );
             } else {
                 calculate_single_node_position(
