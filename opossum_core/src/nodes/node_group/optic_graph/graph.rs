@@ -19,6 +19,7 @@ pub struct ConnectionInfo {
     pub target_id: Uuid,
     pub target_port: String,
     pub distance: Length,
+    pub target_is_reference: bool,
 }
 
 impl ConnectionInfo {

@@ -1,3 +1,5 @@
+use core::f64;
+
 use crate::components::{
     node_editor::inputs::input_components::UnitInput,
     scenery_editor::{
@@ -71,31 +73,42 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
             y: distance_field_position.y,
             width: EDGE_DISTANCE_FIELD_WIDTH,
             height: EDGE_DISTANCE_FIELD_HEIGHT,
-            div {
-                pointer_events: "auto",
-                class: "input-with-unit",
-                style: "display: flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; box-sizing: border-box;",
-                onmousedown: |e: MouseEvent| e.stop_propagation(),
-                UnitInput {
-                    id: format!(
-                        "distance-{}{}",
-                        edge.src_uuid().as_simple(),
-                        edge.target_uuid().as_simple(),
-                    ),
-                    label: String::new(),
-                    value: edge.distance(),
-                    base_unit: "m",
-                    onchange: {
-                        let edge = edge.clone();
-                        move |new_distance: f64| {
-                            let mut edge = edge.clone();
+            {
+                if edge.targets_reference()
+                {
+                    rsx! {}
+                }
+                else{
+                    rsx! {
+                        div {
+                            pointer_events: "auto",
+                            class: "input-with-unit",
+                            style: "display: flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; box-sizing: border-box;",
+                            onmousedown: |e: MouseEvent| e.stop_propagation(),
+                            UnitInput {
+                                id: format!(
+                                    "distance-{}{}",
+                                    edge.src_uuid().as_simple(),
+                                    edge.target_uuid().as_simple(),
+                                ),
+                                label: String::new(),
+                                value: edge.distance(),
+                                readonly: edge.targets_reference(),
+                                base_unit: "m",
+                                onchange: {
+                                    let edge = edge.clone();
+                                    move |new_distance: f64| {
+                                        let mut edge = edge.clone();
 
-                            edge.set_distance(new_distance);
-                            graph_processor.send(GraphStoreAction::UpdateEdge(edge));
+                                        edge.set_distance(new_distance);
+                                        graph_processor.send(GraphStoreAction::UpdateEdge(edge));
+                                    }
+                                },
+                                flushable_input: false,
+                                input_class: "edge_distance_input".to_string(),
+                            }
                         }
-                    },
-                    flushable_input: false,
-                    input_class: "edge_distance_input".to_string(),
+                    }
                 }
             }
         }

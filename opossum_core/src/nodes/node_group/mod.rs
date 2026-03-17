@@ -391,6 +391,23 @@ impl NodeGroup {
         Ok(out)
     }
 
+    pub fn with_node_attr_node<R>(
+        &self,
+        node_id: Uuid,
+        f: impl FnOnce(&NodeAttr) -> R,
+    ) -> OpmResult<R> {
+        if self.node_attr().uuid() == node_id {
+            return Ok(f(self.node_attr()));
+        }
+        let arc = self.node_recursive(node_id)?.0.optical_ref;
+        let guard = arc.lock_opm()?;
+        let node_attr = guard.node_attr();
+        let out = f(node_attr);
+        drop(guard);
+
+        Ok(out)
+    }
+
     /// Returns all nodes of this [`NodeGroup`].
     #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {

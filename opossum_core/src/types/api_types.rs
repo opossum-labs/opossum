@@ -138,6 +138,8 @@ pub struct ConnectInfo {
     target_port: String,
     /// geometric distance between nodes (optical axis) in meters.
     distance: f64,
+    /// Flag for reference-node indication. true if target node is a reference node.
+    target_is_reference: bool
 }
 impl ConnectInfo {
     #[must_use]
@@ -147,6 +149,7 @@ impl ConnectInfo {
         target_uuid: Uuid,
         target_port: String,
         distance: f64,
+        target_is_reference: bool
     ) -> Self {
         Self {
             src_uuid,
@@ -154,6 +157,7 @@ impl ConnectInfo {
             target_uuid,
             target_port,
             distance,
+            target_is_reference
         }
     }
     #[must_use]
@@ -180,6 +184,12 @@ impl ConnectInfo {
     }
     pub const fn set_distance(&mut self, distance: f64) {
         self.distance = distance;
+    }
+    pub const fn set_is_reference(&mut self, target_is_reference: bool) {
+        self.target_is_reference = target_is_reference;
+    }
+    pub const fn targets_reference(&self) -> bool {
+        self.target_is_reference
     }
 }
 #[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
