@@ -438,7 +438,7 @@ pub fn UnitInput(
     onchange: EventHandler<f64>,
     #[props(default = false)] reciprocal: bool,
     #[props(default = String::new())] container_class: String,
-    #[props(default = String::new())] input_class: String,
+    #[props(default = String::new())] mut input_class: String,
     #[props(default = String::new())] label_class: String,
     #[props(default = false)] readonly: bool,
     #[props(default = false)] flushable_input: bool,
@@ -495,6 +495,9 @@ pub fn UnitInput(
             }
         }
     } else {
+        if readonly {
+            input_class = format!("{input_class} ref-connection-input");
+        }
         rsx! {
             input {
                 class: input_class,

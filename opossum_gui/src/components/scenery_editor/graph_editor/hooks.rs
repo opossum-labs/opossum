@@ -233,6 +233,7 @@ pub fn use_drag_end() -> impl FnMut(MouseEvent) {
                         end_port.node_id,
                         end_port.port_name.clone(),
                         0.0,
+                        false,
                     );
                     graph_processor.send(GraphStoreAction::AddEdge(new_edge));
                 }
