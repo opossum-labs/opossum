@@ -3,6 +3,7 @@ use super::NodeElement;
 use crate::CONTEXT_MENU;
 use crate::components::context_menu::cx_menu::CxMenu;
 use crate::components::context_menu::cx_menu::CxtCommand;
+use crate::components::scenery_editor::constants::HEADER_HEIGHT;
 use crate::components::scenery_editor::constants::{BORDER_WIDTH, NODE_WIDTH};
 use crate::components::scenery_editor::graph_store::GraphStoreAction;
 use crate::components::scenery_editor::{
@@ -11,6 +12,9 @@ use crate::components::scenery_editor::{
     node::graph_node_components::GraphNodeContent,
     ports::ports_component::NodePorts,
 };
+use dioxus::html::geometry::Pixels;
+use dioxus::html::geometry::euclid::Rect;
+use dioxus::html::geometry::euclid::Size2D;
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
 
@@ -20,6 +24,7 @@ pub fn Node(node: NodeElement) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
     let position = node.pos();
+    let node_height = node.node_body_height() + HEADER_HEIGHT;
     let active_node_id = graph_store().active_node();
     let is_active = active_node_id.map_or("", |active_node_id| {
         if active_node_id == node.id() {
@@ -28,6 +33,15 @@ pub fn Node(node: NodeElement) -> Element {
             ""
         }
     });
+    let in_selection_box_class = use_memo(move ||{
+        let node_rect = Rect::new(position, Size2D::<f64,Pixels>::new(NODE_WIDTH, node_height));
+        if let Some(select_box) = *editor_status.read().selection_box.read() && select_box.intersects(&node_rect){
+            "node-selection"
+        }
+        else{
+            ""
+        }
+    }.to_string());
     let id = node.id();
     let z_index = node.z_index();
     let node_icon = node.node_type.icon();
@@ -35,7 +49,7 @@ pub fn Node(node: NodeElement) -> Element {
     rsx! {
         div {
             tabindex: 0, // necessary to allow to receive keyboard focus
-            class: "node {is_active}",
+            class: "node {is_active} {in_selection_box_class}",
             draggable: false,
             style: format!(
                 "left: {}px; top: {}px; transform: translate({}px, {}px); z-index: {z_index}; border-width:{}px",
