@@ -108,6 +108,17 @@ body {
     /* Kein Zeilenumbruch */
 }
 
+.node:hover{
+    cursor:grab
+}
+.node:active {
+    cursor: grabbing; /* Wenn man klickt und hält */
+}
+
+.dragging{
+    cursor: all-scroll;
+}
+
 .optical-node {
     background-color: rgb(85, 85, 85);
 }
