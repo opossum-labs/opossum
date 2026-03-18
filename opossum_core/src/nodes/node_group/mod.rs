@@ -425,7 +425,7 @@ impl NodeGroup {
     /// # Panic Safety
     /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
     /// fail with a poisoned-lock error.
-    pub fn with_node_attr_node_mut<R>(
+    pub fn with_node_attr_mut<R>(
         &mut self,
         node_id: Uuid,
         f: impl FnOnce(&mut NodeAttr) -> R,
@@ -468,7 +468,7 @@ impl NodeGroup {
     /// # Panic Safety
     /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
     /// fail with a poisoned-lock error.
-    pub fn with_node_attr_node<R>(
+    pub fn with_node_attr<R>(
         &self,
         node_id: Uuid,
         f: impl FnOnce(&NodeAttr) -> R,
