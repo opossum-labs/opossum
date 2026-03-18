@@ -86,16 +86,18 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                 let uuid = event.node_id;
 
                 let result: Result<(), String> = match event.action {
-                    NodeChangeAction::Name { name, graph_id } => {
-                        api::update_node_name(uuid, name.clone()).await.map(|_| {
-                            workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
+                    NodeChangeAction::Name { name, graph_id } => api::update_node_name(uuid, name.clone())
+                        .await
+                        .map(|names| {
+                            for (uuid, name) in &names {
+                                workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
                                 name,
                                 graph_id,
                                 node_id: uuid,
                                 needs_saving: true
                             });
-                        })
-                    }
+                            }
+                        }),
                     NodeChangeAction::Lidt(lidt_new) => {
                         api::update_node_lidt(uuid, lidt_new).await.map(|_| ())
                     }

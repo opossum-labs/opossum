@@ -12,11 +12,12 @@ use uom::si::{
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        energy::{AnalysisEnergy, EnergyConfig},
+        ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
-    light_result::{LightRays, LightResult},
+    light_result::LightResult,
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
@@ -109,7 +110,7 @@ impl OpticNode for SpotDiagram {
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
-        if let Some(LightData::Geometric(rays)) = data {
+        let mut report = if let Some(LightData::Geometric(rays)) = data {
             let mut transformed_rays = Rays::default();
             let iso = self
                 .effective_surface_iso("input_1")
@@ -157,8 +158,16 @@ impl OpticNode for SpotDiagram {
                     )
                     .unwrap();
             }
-        }
-        let mut report = NodeReport::new(&self.node_type(), &self.name(), uuid, props);
+            NodeReport::new(&self.node_type(), &self.name(), uuid, props)
+        } else {
+            let mut report =
+                NodeReport::new(&self.node_type(), &self.name(), uuid, Properties::default());
+            report.add_note(ReportNote::new(
+                ReportLevel::Warning,
+                "A spot diagram can only be displayed for a ray tracing or ghostfocus analysis.",
+            ));
+            report
+        };
         if self.apodization_warning {
             report.add_note(ReportNote::new(
                 ReportLevel::Warning,
@@ -177,48 +186,30 @@ impl OpticNode for SpotDiagram {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
-
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
-    }
-}
-impl AnalysisEnergy for SpotDiagram {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let result = self.analyze_pass_through(incoming_data)?;
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        if let Some(data @ LightData::Geometric(_)) = result.get(out_port) {
-            self.light_data = Some(data.clone());
-        }
-        Ok(result)
-    }
-}
-impl AnalysisGhostFocus for SpotDiagram {
-    fn analyze(
-        &mut self,
-        incoming_data: LightRays,
-        config: &GhostFocusConfig,
-        _ray_collection: &mut Vec<Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
-    }
-}
-impl AnalysisRayTrace for SpotDiagram {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
-    }
-
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        self.light_data.as_mut()
     }
     fn set_light_data(&mut self, ld: LightData) {
         self.light_data = Some(ld);
     }
 }
+impl AnalysisEnergy for SpotDiagram {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
+        let result =
+            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        if let Some(data) = result.get(out_port) {
+            self.light_data = Some(data.clone());
+        }
+        Ok(result)
+    }
+}
+impl AnalysisGhostFocus for SpotDiagram {}
+impl AnalysisRayTrace for SpotDiagram {}
 
 impl Plottable for SpotDiagram {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
@@ -226,8 +217,7 @@ impl Plottable for SpotDiagram {
             .set(&PlotArgs::XLabel("x position (m)".into()))?
             .set(&PlotArgs::YLabel("y position (m)".into()))?
             .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotAutoSize(true))?
-            .set(&PlotArgs::PlotSize((800, 800)))?;
+            .set(&PlotArgs::PlotAutoSize(true))?;
         Ok(())
     }
 
@@ -364,9 +354,14 @@ impl Plottable for SpotDiagram {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::optic_ports::PortType;
     use crate::{
-        joule, nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
+        joule,
+        light_result::LightRays,
+        nodes::{NodeGroup, SourcePort, test_helper::test_helper::*},
+        optic_ports::PortType,
+        position_distributions::Hexapolar,
+        prelude::{AnalyzerType, EnergyDataBuilder, GhostFocusConfig, OpmDocument},
+        rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
     use uom::num_traits::Zero;
@@ -421,7 +416,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -430,7 +425,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
@@ -450,7 +445,7 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
@@ -593,5 +588,33 @@ mod test {
         } else {
             panic!("Property is not a HitMap");
         }
+    }
+    #[test]
+    fn show_warning_if_energy_analysis() {
+        let mut scenery = NodeGroup::default();
+        let i_src = scenery.add_node(SourcePort::default()).unwrap();
+        let i_sd = scenery.add_node(SpotDiagram::default()).unwrap();
+        scenery
+            .connect_nodes(i_src, "output_1", i_sd, "input_1", Length::zero())
+            .unwrap();
+        let mut doc = OpmDocument::new(scenery);
+        let mut config = EnergyConfig::default();
+        config.map_source(i_src, EnergyDataBuilder::default());
+        doc.add_analyzer(AnalyzerType::Energy(config));
+        let reports = doc.analyze().unwrap();
+        let Some(report) = reports.first() else {
+            panic!("No report found");
+        };
+        let Some(node_report) = report.node_reports().first() else {
+            panic!("No node report found.")
+        };
+        let Some(note) = node_report.notes().first() else {
+            panic!("SpotDiagram has no note in its report");
+        };
+        assert_eq!(note.level, ReportLevel::Warning);
+        assert_eq!(
+            note.message,
+            "A spot diagram can only be displayed for a ray tracing or ghostfocus analysis."
+        );
     }
 }

@@ -3,11 +3,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(collimated_line_ray_source(
-        millimeter!(20.0),
-        joule!(1.0),
-        10,
-    )?)?;
+    let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     let i_m1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(45.0, 0.0, 0.0))?)?;
     let i_m2 = scenery.add_node(ThinMirror::new("mirror 2").with_tilt(degree!(2.0, 0.0, 0.0))?)?;
     let m1_ref = NodeReference::from_node(&scenery.node(i_m1)?);
@@ -24,6 +20,12 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_sd_ref, "output_1", i_sd3, "input_1", millimeter!(20.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        i_src,
+        collimated_line_ray_builder(millimeter!(20.0), joule!(1.0), 10)?,
+    );
+
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/mirror_inverse.opm"))
 }

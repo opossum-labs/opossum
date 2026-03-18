@@ -24,6 +24,7 @@ pub fn LightDataEditor(
     light_data_builder: LightDataBuilder,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Element {
     let light_data_builder_sig = use_signal(|| light_data_builder.clone());
 
@@ -35,15 +36,23 @@ pub fn LightDataEditor(
     );
 
     let mut accordion_item_content = vec![rsx! {
-        SourceLightDataBuilderSelector { light_data_builder_sig, on_save }
+        SourceLightDataBuilderSelector { light_data_builder_sig, on_save, readonly }
     }];
 
     match &*light_data_builder_sig.read() {
         LightDataBuilder::Energy(energy_data_builder) => accordion_item_content.push(rsx! {
-            EnergySourceEditor { energy_data_builder: energy_data_builder.clone(), on_save }
+            EnergySourceEditor {
+                energy_data_builder: energy_data_builder.clone(),
+                on_save,
+                readonly,
+            }
         }),
         LightDataBuilder::Geometric(ray_data_builder) => accordion_item_content.push(rsx! {
-            RaySourceEditor { ray_data_builder: ray_data_builder.clone(), on_save }
+            RaySourceEditor {
+                ray_data_builder: ray_data_builder.clone(),
+                on_save,
+                readonly,
+            }
         }),
     }
     rsx! {

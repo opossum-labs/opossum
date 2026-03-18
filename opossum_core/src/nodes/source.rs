@@ -7,9 +7,9 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig,
-        energy::AnalysisEnergy,
+        energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
-        raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
+        raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
     joule,
@@ -22,18 +22,20 @@ use crate::{
     properties::{Proptype, validator::Validator},
     ray::Ray,
     rays::Rays,
+    surface::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 
 /// A general light source
 ///
-/// Hence it has only one output port (out1) and effectively no input ports. The formal input port `in1` is discarded during analysis.
+/// Hence it has only one output port (`output_1`).
 /// Source nodes usually are the first nodes of a [`NodeGroup`](crate::nodes::NodeGroup).
 ///
 /// ## Optical Ports
-///   - Inputs
-///     - `input_1` (input discarded, used to make the node invertable)
 ///   - Outputs
 ///     - `output_1`
 ///
@@ -43,7 +45,7 @@ use std::fmt::Debug;
 ///   - `alignment wavelength`
 ///
 /// **Note**: If a [`Source`] is configured as `inverted` the initial output port becomes an input port and further data is
-/// discarded. The node thus act as a sink.
+/// discarded. The node thus acts as a sink.
 ///
 /// **Note 2**: In contrast to all other optical nodes, a source is absolutely placed at the coordinate origin by default. This can be
 /// changed using the `set_isometry` function.
@@ -158,9 +160,6 @@ impl Debug for Source {
     }
 }
 impl OpticNode for Source {
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -168,11 +167,24 @@ impl OpticNode for Source {
         &mut self.node_attr
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        // A source only has an output port, so we only need to update the flat single surface for the output port.
+        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
+        self.update_surface(
+            &"output_1".to_string(),
+            geosurface,
+            Isometry::identity(),
+            &PortType::Output,
+        )?;
+        Ok(())
     }
 }
 impl AnalysisEnergy for Source {
-    fn analyze(&mut self, _incoming_data: LightResult) -> OpmResult<LightResult> {
+    fn analyze(
+        &mut self,
+        _incoming_data: LightResult,
+        _config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
         if let Ok(Proptype::LightDataBuilder(light_data_builder)) =
             self.node_attr.get_property("light data")
         {
@@ -228,49 +240,49 @@ impl AnalysisRayTrace for Source {
     }
     fn calc_node_positions(
         &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
+        _incoming_data: LightResult,
+        _config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let outgoing_edges = AnalysisRayTrace::analyze(self, incoming_data, config)?;
-        // generate a single beam (= optical axis) from source
-        let mut new_outgoing_edges = LightResult::new();
-        for outgoing_edge in &outgoing_edges {
-            if let LightData::Geometric(rays) = outgoing_edge.1 {
-                let mut axis_ray = if let Ok(Proptype::LengthOption(Some(alignment_wvl))) =
-                    self.node_attr.get_property("alignment wavelength")
-                {
-                    Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), *alignment_wvl, joule!(1.0))
-                } else {
-                    info!(
-                        "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
-                    );
-                    rays.get_optical_axis_ray()
-                }?;
-                let iso = self.effective_surface_iso("input_1")?;
-                axis_ray = axis_ray.transformed_ray(&iso);
-
-                let mut new_rays = Rays::default();
-                new_rays.add_ray(axis_ray);
-                new_outgoing_edges.insert(outgoing_edge.0.clone(), LightData::Geometric(new_rays));
-            } else {
-                return Err(OpossumError::Analysis(
-                    "did not receive LightData:Geometric for conversion into OpticalAxis data"
-                        .into(),
-                ));
-            }
-        }
-        Ok(new_outgoing_edges)
+        let Proptype::LightDataBuilder(light_data_builder) =
+            self.node_attr.get_property("light data")?
+        else {
+            return Err(OpossumError::Analysis(
+                "did not receive LightData:Geometric for conversion into OpticalAxis data".into(),
+            ));
+        };
+        let LightData::Geometric(rays) = light_data_builder.clone().build()? else {
+            return Err(OpossumError::Analysis(
+                "expected LightData:Geometric for conversion into OpticalAxis data".into(),
+            ));
+        };
+        let mut axis_ray = if let Ok(Proptype::LengthOption(Some(alignment_wvl))) =
+            self.node_attr.get_property("alignment wavelength")
+        {
+            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), *alignment_wvl, joule!(1.0))?
+        } else {
+            info!(
+                "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
+            );
+            rays.get_optical_axis_ray()?
+        };
+        let iso = self.effective_surface_iso("output_1")?;
+        axis_ray = axis_ray.transformed_ray(&iso);
+        let mut rays = Rays::default();
+        rays.add_ray(axis_ray);
+        let mut outgoing_edges = LightResult::new();
+        outgoing_edges.insert("output_1".into(), LightData::Geometric(rays));
+        Ok(outgoing_edges)
     }
 }
 impl AnalysisGhostFocus for Source {
     fn analyze(
         &mut self,
         incoming_data: LightRays,
-        config: &GhostFocusConfig,
+        _config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
         bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let mut rays = if self.inverted() {
+        let rays = if self.inverted() {
             let Some(bouncing_rays) = incoming_data.get("output_1") else {
                 return Err(OpossumError::Analysis("no light at port".into()));
             };
@@ -302,22 +314,6 @@ impl AnalysisGhostFocus for Source {
         } else {
             Vec::<Rays>::new()
         };
-
-        if let Some(surf) = self.get_optic_surface_mut("input_1") {
-            let refraction_intended = true;
-            for r in &mut rays {
-                r.refract_on_surface(
-                    surf,
-                    None,
-                    refraction_intended,
-                    &MissedSurfaceStrategy::Ignore,
-                )?;
-                surf.evaluate_fluence_of_ray_bundle(r, config.fluence_estimator())?;
-            }
-        } else {
-            return Err(OpossumError::Analysis("no surface found. Aborting".into()));
-        }
-
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert("output_1".into(), rays);
         Ok(out_light_rays)
@@ -328,7 +324,7 @@ impl AnalysisGhostFocus for Source {
 mod test {
     use super::*;
     use crate::{
-        lightdata::ray_data_builder::RayDataBuilder, nanometer, optic_ports::PortType,
+        lightdata::ray_data_source::RayDataSource, nanometer, optic_ports::PortType,
         position_distributions::Hexapolar, prelude::EnergyDataBuilder,
         spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
@@ -360,7 +356,7 @@ mod test {
     fn new() {
         let source = Source::new(
             "test",
-            LightDataBuilder::Geometric(RayDataBuilder::default()),
+            LightDataBuilder::Geometric(RayDataSource::default()),
         );
         assert_eq!(source.name(), "test");
     }
@@ -410,7 +406,7 @@ mod test {
     #[test]
     fn ports() {
         let node = Source::default();
-        assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
+        assert!(node.ports().names(&PortType::Input).is_empty());
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
@@ -432,7 +428,9 @@ mod test {
     fn analyze_energy_ok() {
         let light_builder = LightDataBuilder::Energy(create_he_ne_spec(1.0).unwrap().into());
         let mut node = Source::new("test", light_builder.clone());
-        let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
+        let output =
+            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())
+                .unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
@@ -553,7 +551,7 @@ mod test {
                 "{:?}",
                 Source::new(
                     "hallo",
-                    LightDataBuilder::Geometric(RayDataBuilder::default())
+                    LightDataBuilder::Geometric(RayDataSource::default())
                 )
             ),
             "Source: Rays"

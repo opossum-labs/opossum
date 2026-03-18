@@ -14,7 +14,7 @@ use dioxus::prelude::*;
 use gaussian_editor::GaussianSpectrumParam;
 use laser_lines_editor::LaserLineInput;
 use opossum_core::{
-    prelude::RayDataBuilder, spectral_distribution::SpecDistType,
+    prelude::RayDataSource, spectral_distribution::SpecDistType,
     utils::default_from_name::DefaultFromName,
 };
 
@@ -22,16 +22,21 @@ use opossum_core::{
 pub fn RaySpectralDistributionEditor(
     spect_dist_type_sig: ReadSignal<SpecDistType>,
     on_save: EventHandler<SpecDistType>,
+    readonly: bool,
 ) -> Element {
     match &*spect_dist_type_sig.read() {
         SpecDistType::Gaussian(g) => {
             rsx! {
-                RowedInputs { inputs: GaussianSpectrumParam::to_input_data_vec(g, on_save) }
+                RowedInputs { inputs: GaussianSpectrumParam::to_input_data_vec(g, on_save, readonly) }
             }
         }
         SpecDistType::LaserLines(laser_lines) => {
             rsx! {
-                LaserLineInput { laser_lines: laser_lines.clone(), on_save }
+                LaserLineInput {
+                    laser_lines: laser_lines.clone(),
+                    on_save,
+                    readonly,
+                }
             }
         }
     }
@@ -40,8 +45,9 @@ pub fn RaySpectralDistributionEditor(
 #[component]
 pub fn SpectralDistributionEditor(
     spect_dist_type: SpecDistType,
-    ray_data_builder_sig: ReadSignal<RayDataBuilder>,
-    on_save: EventHandler<RayDataBuilder>,
+    ray_data_builder_sig: ReadSignal<RayDataSource>,
+    on_save: EventHandler<RayDataSource>,
+    readonly: bool,
 ) -> Element {
     let mut spect_dist_type_sig = use_signal(|| spect_dist_type.clone());
 
@@ -53,8 +59,16 @@ pub fn SpectralDistributionEditor(
     });
 
     let accordion_item_content = rsx! {
-        RaySpectralDistributionSelector { spect_dist_type_sig, on_save: on_spect_dist_save }
-        RaySpectralDistributionEditor { spect_dist_type_sig, on_save: on_spect_dist_save }
+        RaySpectralDistributionSelector {
+            spect_dist_type_sig,
+            on_save: on_spect_dist_save,
+            readonly,
+        }
+        RaySpectralDistributionEditor {
+            spect_dist_type_sig,
+            on_save: on_spect_dist_save,
+            readonly,
+        }
     };
 
     rsx! {
@@ -72,12 +86,14 @@ pub fn SpectralDistributionEditor(
 pub fn RaySpectralDistributionSelector(
     spect_dist_type_sig: ReadSignal<SpecDistType>,
     on_save: EventHandler<SpecDistType>,
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {
             id: "selectRaysSpectralDistribution",
             label: "Rays Spectral Distribution",
             options: select_options_from_enum_iterator(&*spect_dist_type_sig.read(), None),
+            readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(sdt) = SpecDistType::default_from_name(val.as_str()) {

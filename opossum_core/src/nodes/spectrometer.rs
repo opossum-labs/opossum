@@ -7,16 +7,13 @@ use uom::si::length::nanometer;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
-        raytrace::AnalysisRayTrace,
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
     error::OpmResult,
-    light_result::{LightRays, LightResult},
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
     optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
@@ -148,14 +145,14 @@ impl Spectrometer {
 
     /// Returns the spectrum stored in the lightdata of this [`Spectrometer`].
     ///
-    /// Returns `None` if no lightdata is available, Some(Spectrum) otherwise .
+    /// Returns `None` if no lightdata is available, Some(Spectrum) otherwise.
     #[must_use]
     pub fn get_spectrum(&self) -> Option<Spectrum> {
         self.light_data
             .as_ref()
             .and_then(|light_data| match light_data {
                 LightData::Energy(s) => Some(s.clone()),
-                LightData::Geometric(r) => r.to_auto_spectrum().ok(), // r.to_spectrum(&nanometer!(0.2)).ok(),
+                LightData::Geometric(r) => r.to_auto_spectrum().ok(),
                 LightData::Fourier => None,
                 LightData::GhostFocus(r) => {
                     let mut all_rays = Rays::default();
@@ -220,6 +217,9 @@ impl OpticNode for Spectrometer {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
+    }
 }
 impl Debug for Spectrometer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -241,49 +241,17 @@ impl Debug for Spectrometer {
         }
     }
 }
-impl AnalysisGhostFocus for Spectrometer {
-    fn analyze(
-        &mut self,
-        incoming_data: LightRays,
-        config: &GhostFocusConfig,
-        _ray_collection: &mut Vec<Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
-    }
-}
-impl AnalysisEnergy for Spectrometer {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let result = self.analyze_pass_through(incoming_data)?;
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        if let Some(data) = result.get(out_port) {
-            self.light_data = Some(data.clone());
-        }
-        Ok(result)
-    }
-}
-impl AnalysisRayTrace for Spectrometer {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
-    }
-
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        self.light_data.as_mut()
-    }
-    fn set_light_data(&mut self, ld: LightData) {
-        self.light_data = Some(ld);
-    }
-}
+impl AnalysisGhostFocus for Spectrometer {}
+impl AnalysisEnergy for Spectrometer {}
+impl AnalysisRayTrace for Spectrometer {}
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
+        analyzers::energy::EnergyConfig,
         joule,
+        light_result::LightResult,
         nodes::{EnergyMeter, test_helper::test_helper::*},
         optic_ports::PortType,
         position_distributions::Hexapolar,
@@ -299,15 +267,15 @@ mod test {
         assert_eq!(format!("{:?}", node), "no data");
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Fourier);
-        let _ = AnalysisEnergy::analyze(&mut node, input);
+        let _ = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default());
         assert_eq!(format!("{:?}", node), "no spectrum data to display");
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_visible_spec());
         input.insert("input_1".into(), input_light.clone());
-        AnalysisEnergy::analyze(&mut node, input).unwrap();
+        AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert_eq!(
             format!("{:?}", node),
-            "Spectrum 380.000 - 749.900 nm (Type: Ideal)"
+            "Spectrum 380.000 - 750.000 nm (Type: Ideal)"
         );
     }
     #[test]
@@ -363,7 +331,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -372,7 +340,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
@@ -392,7 +360,7 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");

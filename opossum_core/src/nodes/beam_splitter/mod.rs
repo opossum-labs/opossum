@@ -6,7 +6,7 @@ mod analysis_raytrace;
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::{AnalyzerType, raytrace::MissedSurfaceStrategy},
+    analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
@@ -348,7 +348,7 @@ impl BeamSplitter {
 
         let splitting_config = self.splitting_config()?;
         let missed_surface_strategy = match analyzer_type {
-            AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
+            AnalyzerType::Energy(_) => &MissedSurfaceStrategy::Stop,
             AnalyzerType::RayTrace(ray_trace_config) => ray_trace_config.missed_surface_strategy(),
             AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
         };

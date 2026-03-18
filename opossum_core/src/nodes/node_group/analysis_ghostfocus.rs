@@ -98,7 +98,6 @@ impl AnalysisGhostFocus for NodeGroup {
         }
         if self.inverted() {
             self.graph.invert_graph()?;
-            self.set_inverted(false)?;
         } // revert initial inversion (if necessary)
         Ok(current_bouncing_rays)
     }

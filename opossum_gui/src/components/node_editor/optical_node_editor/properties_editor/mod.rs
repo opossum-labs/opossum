@@ -44,13 +44,18 @@ pub fn PropertiesEditor(
     node_id: Memo<Uuid>,
     node_attr: ReadSignal<UINodeAttr>,
     on_change_property: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Element {
     let editor_inputs = if node_attr.read().node_id == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
         for (property_key, property) in &node_attr.read().properties {
-            if let Some(editor) =
-                get_editor(node_id, property, property_key.clone(), on_change_property)
-            {
+            if let Some(editor) = get_editor(
+                node_id,
+                property,
+                property_key.clone(),
+                on_change_property,
+                readonly,
+            ) {
                 editor_inputs.push(editor);
             }
         }
@@ -74,15 +79,20 @@ fn get_editor(
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Option<Element> {
-    if let Some(editor) = get_primitive_editor(node_id, property, property_key.clone(), on_change) {
+    if let Some(editor) =
+        get_primitive_editor(node_id, property, property_key.clone(), on_change, readonly)
+    {
         return Some(editor);
     }
 
-    if let Some(editor) = get_optical_editor(node_id, property, property_key.clone(), on_change) {
+    if let Some(editor) =
+        get_optical_editor(node_id, property, property_key.clone(), on_change, readonly)
+    {
         return Some(editor);
     }
-    get_geometric_editor(node_id, property, property_key, on_change)
+    get_geometric_editor(node_id, property, property_key, on_change, readonly)
 }
 
 fn get_primitive_editor(
@@ -90,6 +100,7 @@ fn get_primitive_editor(
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Option<Element> {
     match property.prop().clone() {
         Proptype::String(s) => Some(rsx! {
@@ -98,6 +109,7 @@ fn get_primitive_editor(
                 s,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::I32(int32) => Some(rsx! {
@@ -106,6 +118,7 @@ fn get_primitive_editor(
                 int32,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::F64(float64) => Some(rsx! {
@@ -114,6 +127,7 @@ fn get_primitive_editor(
                 float64,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::Bool(b) => Some(rsx! {
@@ -122,6 +136,7 @@ fn get_primitive_editor(
                 b,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::Vec2(vector) => Some(rsx! {
@@ -130,6 +145,7 @@ fn get_primitive_editor(
                 vector,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         _ => None,
@@ -141,6 +157,7 @@ fn get_optical_editor(
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Option<Element> {
     match property.prop().clone() {
         Proptype::SplittingConfigBuilder(splitting_config_builder) => Some(rsx! {
@@ -149,6 +166,7 @@ fn get_optical_editor(
                 splitting_config_builder,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::FilterTypeBuilder(filter_type_builder) => Some(rsx! {
@@ -157,6 +175,7 @@ fn get_optical_editor(
                 filter_type_builder,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::FluenceEstimator(fluence_estimator) => Some(rsx! {
@@ -165,6 +184,7 @@ fn get_optical_editor(
                 fluence_estimator,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::LinearDensity(linear_density) => Some(rsx! {
@@ -173,6 +193,7 @@ fn get_optical_editor(
                 linear_density,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::LightDataBuilder(light_data_builder) => Some(rsx! {
@@ -181,6 +202,7 @@ fn get_optical_editor(
                 light_data_builder,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::RefractiveIndex(ref_ind_type) => Some(rsx! {
@@ -189,6 +211,7 @@ fn get_optical_editor(
                 ref_ind_type,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         _ => None,
@@ -200,6 +223,7 @@ fn get_geometric_editor(
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Option<Element> {
     match property.prop().clone() {
         Proptype::Length(length) => Some(rsx! {
@@ -208,6 +232,7 @@ fn get_geometric_editor(
                 length,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::Curvature(curvature) => Some(rsx! {
@@ -216,6 +241,7 @@ fn get_geometric_editor(
                 curvature,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::LengthOption(length_opt) => Some(rsx! {
@@ -224,6 +250,7 @@ fn get_geometric_editor(
                 length_opt,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::Isometry(isometry) => Some(rsx! {
@@ -232,6 +259,7 @@ fn get_geometric_editor(
                 isometry: isometry.unwrap_or_default(),
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         Proptype::Angle(angle) => Some(rsx! {
@@ -240,6 +268,7 @@ fn get_geometric_editor(
                 angle,
                 property_key,
                 on_change,
+                readonly,
             }
         }),
         _ => None,

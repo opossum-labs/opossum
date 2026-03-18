@@ -33,14 +33,14 @@ pub fn GhostFocusEditor(
 
     let max_bounces_handler = EventHandler::new(move |max_bounces: usize| {
         ghost_focus_config_sig.write().set_max_bounces(max_bounces);
-        ghost_focus_config_handler.call(*ghost_focus_config_sig.read());
+        ghost_focus_config_handler.call((*ghost_focus_config_sig.read()).clone());
     });
     let fluence_estimator_handler =
         EventHandler::new(move |fluence_estimator: FluenceEstimator| {
             ghost_focus_config_sig
                 .write()
                 .set_fluence_estimator(fluence_estimator);
-            ghost_focus_config_handler.call(*ghost_focus_config_sig.read());
+            ghost_focus_config_handler.call((*ghost_focus_config_sig.read()).clone());
         });
 
     rsx! {

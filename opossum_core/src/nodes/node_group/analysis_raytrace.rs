@@ -114,7 +114,7 @@ impl AnalysisRayTrace for NodeGroup {
                     "unknown node".into()
                 };
                 warn!(
-                    "{node_info} has no incoming connections and can thus not being placed. Skipping"
+                    "{node_info} has no incoming connections and can thus not being placed. Skipping."
                 );
             } else {
                 calculate_single_node_position(
@@ -209,7 +209,7 @@ fn calculate_single_node_position(
     }
     for outgoing_edge in outgoing_edges {
         let node = node_ref.lock_opm()?;
-        if node_type == "source" {
+        if node_type == "source" || node_type == "source port" {
             *up_direction = node.define_up_direction(&outgoing_edge.1)?;
         } else {
             node.calc_new_up_direction(&outgoing_edge.1, up_direction)?;

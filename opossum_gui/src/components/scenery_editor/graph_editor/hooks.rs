@@ -65,13 +65,16 @@ pub fn use_on_mouse_down(
                 MouseButton::Primary => {
                     let mut ctx = CONTEXT_MENU.write();
                     *ctx = None;
+                }
+                MouseButton::Auxiliary => {
+                    //for dragging
                     current_mouse_pos.set(Point2D::new(
                         event.client_coordinates().x,
                         event.client_coordinates().y,
                     ));
                     editor_status.write().drag_status.set(DragStatus::Graph);
-                }
-                MouseButton::Auxiliary => {
+
+                    //for double-click zoom
                     event.stop_propagation();
                     let now = Instant::now();
                     let t0_opt = *last_click.read();
@@ -270,6 +273,7 @@ pub fn use_drag_end(workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(Mouse
                             end_port.node_id,
                             end_port.port_name.clone(),
                             0.0,
+                        false,
                         );
                         workspace_processor.send(GraphsWorkspaceAction::AddEdge {
                             new_edge,

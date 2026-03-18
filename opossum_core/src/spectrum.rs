@@ -67,8 +67,7 @@ impl Spectrum {
     pub fn new(range: Range<Length>, resolution: Length) -> OpmResult<Self> {
         let resolution = Self::validated_resolution(resolution)?;
         let range = Self::validated_range(range)?;
-
-        let Some(number_of_elements) = try_f64_to_usize(
+        let Some(number_of_steps) = try_f64_to_usize(
             ((range.get().end - range.get().start) / *resolution.get())
                 .value
                 .round(),
@@ -80,7 +79,7 @@ impl Spectrum {
         let start = range.get().start.get::<micrometer>();
         let step = resolution.get().get::<micrometer>();
         let mut lambdas: Vec<f64> = Vec::new();
-        for i in 0..number_of_elements {
+        for i in 0..=number_of_steps {
             lambdas.push(to_f64(i).mul_add(step, start));
         }
         let data = lambdas.iter().map(|lambda| (*lambda, 0.0)).collect();
@@ -772,7 +771,9 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
             .unwrap()
             .average_resolution()
             .min(s2.as_ref().unwrap().average_resolution());
+
         let mut s_out = Spectrum::new(minimum..maximum, resolution).unwrap();
+
         s_out.resample(&s1.unwrap());
         s_out.add(&s2.unwrap());
         Some(s_out)
@@ -789,10 +790,23 @@ mod test {
         },
         utils::test_helper::test_helper::check_logs,
     };
-    use approx::{AbsDiffEq, assert_abs_diff_eq};
+    use approx::{AbsDiffEq, assert_abs_diff_eq, assert_relative_eq};
     use testing_logger;
     fn prep() -> Spectrum {
         Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5)).unwrap()
+    }
+    #[test]
+    fn test_merge_spectra() {
+        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5)).unwrap();
+        let mut s2 = Spectrum::new(micrometer!(5.0)..micrometer!(8.0), micrometer!(0.5)).unwrap();
+        s1.add_single_peak(micrometer!(1.), 1.).unwrap();
+        s2.add_single_peak(micrometer!(5.), 1.).unwrap();
+
+        let merged = merge_spectra(Some(s1), Some(s2)).unwrap();
+
+        assert_relative_eq!(merged.average_resolution().value, micrometer!(0.5).value);
+        assert_relative_eq!(merged.range().start.value, micrometer!(1.).value);
+        assert_relative_eq!(merged.range().end.value, micrometer!(8.).value);
     }
     #[test]
     fn new() {
@@ -806,7 +820,8 @@ mod test {
                 (2.0, 0.0),
                 (2.5, 0.0),
                 (3.0, 0.0),
-                (3.5, 0.0)
+                (3.5, 0.0),
+                (4.0, 0.0)
             ]
         );
     }
@@ -900,7 +915,7 @@ mod test {
     fn visible_spectrum() {
         let s = create_visible_spec();
         assert_eq!(s.lambda_vec().first().unwrap(), &0.38);
-        assert_abs_diff_eq!(s.lambda_vec().last().unwrap(), &0.7499);
+        assert_abs_diff_eq!(s.lambda_vec().last().unwrap(), &0.750);
     }
     #[test]
     fn nir_spec() {
@@ -932,7 +947,7 @@ mod test {
     #[test]
     fn range() {
         let s = prep();
-        assert_eq!(s.range(), micrometer!(1.0)..micrometer!(3.5))
+        assert_eq!(s.range(), micrometer!(1.0)..micrometer!(4.0))
     }
     #[test]
     fn estimate_resolution() {
@@ -1055,7 +1070,7 @@ mod test {
         let mut s = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0)).unwrap();
         s.add_single_peak(micrometer!(2.5), 1.0).unwrap();
         assert!(s.scale_vertical(&0.5).is_ok());
-        assert_eq!(s.data_vec(), vec![0.0, 0.25, 0.25, 0.0]);
+        assert_eq!(s.data_vec(), vec![0.0, 0.25, 0.25, 0.0, 0.0]);
     }
     #[test]
     fn scale_vertical2() {
@@ -1126,7 +1141,7 @@ mod test {
         let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(6.0), micrometer!(0.5)).unwrap();
         s2.add_single_peak(micrometer!(2.0), 1.0).unwrap();
         s1.resample(&s2);
-        assert_eq!(s1.data_vec(), vec![0.0, 1.0, 0.0, 0.0]);
+        assert_eq!(s1.data_vec(), vec![0.0, 1.0, 0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
     }
     #[test]
@@ -1135,7 +1150,7 @@ mod test {
         let mut s2 = Spectrum::new(micrometer!(4.0)..micrometer!(6.0), micrometer!(1.0)).unwrap();
         s2.add_single_peak(micrometer!(4.0), 1.0).unwrap();
         s1.resample(&s2);
-        assert_eq!(s1.data_vec(), vec![0.0, 0.0, 0.0]);
+        assert_eq!(s1.data_vec(), vec![0.0, 0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
     }
     #[test]
@@ -1144,7 +1159,7 @@ mod test {
         let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(1.0)).unwrap();
         s2.add_single_peak(micrometer!(2.0), 1.0).unwrap();
         s1.resample(&s2);
-        assert_eq!(s1.data_vec(), vec![0.0, 0.0]);
+        assert_eq!(s1.data_vec(), vec![0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
     }
     #[test]
@@ -1154,7 +1169,7 @@ mod test {
         let mut s2 = prep();
         s2.add_single_peak(micrometer!(2.25), 0.5).unwrap();
         s.add(&s2);
-        assert_eq!(s.data_vec(), vec![0.0, 1.0, 1.5, 0.5, 0.0, 0.0]);
+        assert_eq!(s.data_vec(), vec![0.0, 1.0, 1.5, 0.5, 0.0, 0.0, 0.0]);
     }
     #[test]
     fn sub() {
@@ -1163,7 +1178,7 @@ mod test {
         let mut s2 = prep();
         s2.add_single_peak(micrometer!(2.25), 0.5).unwrap();
         s.sub(&s2);
-        assert_eq!(s.data_vec(), vec![0.0, 1.0, 0.5, 0.0, 0.0, 0.0]);
+        assert_eq!(s.data_vec(), vec![0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 0.0]);
     }
     #[test]
     fn serialize() {
@@ -1181,6 +1196,7 @@ mod test {
             (2.5, 0.0),
             (3.0, 0.0),
             (3.5, 0.0),
+            (4.0, 0.0),
         ],
     ),
 )"
@@ -1221,7 +1237,7 @@ mod test {
         let s = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(1.0)).unwrap();
         assert_eq!(
             format!("{:?}", s),
-            "1000.00 nm -> 0\n2000.00 nm -> 0\n3000.00 nm -> 0\n"
+            "1000.00 nm -> 0\n2000.00 nm -> 0\n3000.00 nm -> 0\n4000.00 nm -> 0\n"
         );
     }
     #[test]

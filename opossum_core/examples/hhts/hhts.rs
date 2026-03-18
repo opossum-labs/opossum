@@ -8,6 +8,7 @@ use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
 use num::Zero;
+use opossum_core::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
 use opossum_core::{
     energy_distributions::General2DGaussian, position_distributions::HexagonalTiling,
@@ -47,25 +48,8 @@ fn main() -> OpmResult<()> {
     // apertures
     let a_1inch = Aperture::new_circle(millimeter!(12.7), millimeter!(0., 0.), ApertureType::Hole)?;
 
-    // collimated source
-    let light_data_builder =
-        LightDataBuilder::Geometric(RayDataBuilder::Collimated(CollimatedSrc::new(
-            HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0., 0.))?.into(),
-            General2DGaussian::new(
-                joule!(150.0),
-                millimeter!(0., 0.),
-                millimeter!(60.6389113608, 60.6389113608),
-                5.,
-                radian!(0.),
-                false,
-            )?
-            .into(),
-            LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 0.5)])?.into(),
-        )));
-
     let mut scenery = NodeGroup::new("HHT Sensor");
-    let src = Source::new("Source", light_data_builder);
-    let src = scenery.add_node(src)?;
+    let src = scenery.add_node(SourcePort::new("Source"))?;
     let input_group = scenery.add_node(hhts_input()?)?;
     scenery.connect_nodes(src, "output_1", input_group, "input_1", Length::zero())?;
 
@@ -92,8 +76,6 @@ fn main() -> OpmResult<()> {
         millimeter!(5.77736),
         &refr_index_hzf52,
     )?;
-    // node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
-    // node.set_aperture(&PortType::Output, "output_1", &a_2inch)?;
     let t1_l2a = group_t1.add_node(node)?;
     let t1_l2b = group_t1.add_node(Lens::new(
         "T1 L2b",
@@ -157,7 +139,7 @@ fn main() -> OpmResult<()> {
     let mut node = IdealFilter::new(
         "1w Longpass filter",
         &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::FromFile(
-            Path::new("opossum/examples/hhts/FELH1000_Transmission.csv").to_path_buf(),
+            Path::new("./opossum_core/examples/hhts/FELH1000_Transmission.csv").to_path_buf(),
         )),
     )?;
     node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
@@ -177,7 +159,7 @@ fn main() -> OpmResult<()> {
     let mut node = IdealFilter::new(
         "2w Shortpass filter",
         &FilterTypeBuilder::Spectrum(SpectralFilterBuilder::FromFile(
-            Path::new("opossum/examples/hhts/FESH0700_Transmission.csv").to_path_buf(),
+            Path::new("./opossum_core/examples/hhts/FESH0700_Transmission.csv").to_path_buf(),
         )),
     )?;
     node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
@@ -453,7 +435,27 @@ fn main() -> OpmResult<()> {
     let mut doc = OpmDocument::new(scenery);
     let mut config = GhostFocusConfig::default();
     config.set_max_bounces(0);
+
+    // collimated source
+    let ray_data_builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::new(
+        HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0., 0.))?.into(),
+        General2DGaussian::new(
+            joule!(150.0),
+            millimeter!(0., 0.),
+            millimeter!(60.6389113608, 60.6389113608),
+            5.,
+            radian!(0.),
+            false,
+        )?
+        .into(),
+        LaserLines::new(vec![(nanometer!(1053.0), 1.0), (nanometer!(527.0), 0.5)])?.into(),
+    ))
+    .into();
+    config.map_source(src, ray_data_builder.clone());
     doc.add_analyzer(AnalyzerType::GhostFocus(config));
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+
+    let mut config = RayTraceConfig::default();
+    config.map_source(src, ray_data_builder);
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/hhts.opm"))
 }

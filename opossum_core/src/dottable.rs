@@ -116,7 +116,14 @@ pub trait Dottable {
     }
 
     /// Helper method to calculate layout parameters for the node table.
-    fn calculate_layout(&self, max_ports: usize, node_name: &str) -> NodeLayout {
+    fn calculate_layout(
+        &self,
+        node_name: &str,
+        input_port_num: usize,
+        output_port_num: usize,
+    ) -> NodeLayout {
+        let max_ports = input_port_num.max(output_port_num);
+
         let (num_cells, row_col_span) = if max_ports > 1 {
             ((max_ports + 1) * 2 + 1, max_ports * 2 + 1)
         } else {
@@ -140,13 +147,13 @@ pub trait Dottable {
         let node_cell_size = single_cell_size * (num_cells - 2);
 
         let input_port_start = if num_cells > 7 || max_ports > 1 {
-            max_ports - (max_ports.saturating_sub(1)) + 2
+            max_ports - input_port_num + 2
         } else {
             3
         };
 
         let output_port_start = if num_cells > 7 || max_ports > 1 {
-            max_ports - (max_ports.saturating_sub(1)) + 2
+            max_ports - output_port_num + 2
         } else {
             3
         };
@@ -243,8 +250,7 @@ pub trait Dottable {
         let (in_port_count, out_port_count) = ports_count;
         let (row, col) = ax_nums;
 
-        let max_ports = inputs.len().max(outputs.len());
-        let layout = self.calculate_layout(max_ports, node_name);
+        let layout = self.calculate_layout(node_name, inputs.len(), outputs.len());
 
         // Try to create an input port cell
         if col == 0
@@ -267,6 +273,7 @@ pub trait Dottable {
             *out_port_count += 1;
             return cell;
         }
+
         // Try to create the main node body cell
         if row == 1 && col == 1 {
             return self.create_node_body_cell(node_name, rankdir, &layout);
@@ -368,11 +375,8 @@ pub trait Dottable {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
-        nodes::{
-            BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, Source, SplittingConfigBuilder,
-        },
+    use crate::nodes::{
+        BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, SourcePort, SplittingConfigBuilder,
     };
     use num::Zero;
     use std::{fs::File, io::Read};
@@ -416,16 +420,9 @@ mod test {
     fn to_dot_full() {
         let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_full_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_full_LR.dot");
-
         let mut scenery = NodeGroup::default();
-        let i_s = scenery
-            .add_node(Source::new(
-                "Source",
-                LightDataBuilder::Geometric(RayDataBuilder::default()),
-            ))
-            .unwrap();
+        let i_s = scenery.add_node(SourcePort::default()).unwrap();
         let bs = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
-        // bs.node_attr_mut().set_name("Beam splitter");
         let i_bs = scenery.add_node(bs).unwrap();
         let i_d1 = scenery
             .add_node(EnergyMeter::new(

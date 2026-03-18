@@ -295,9 +295,9 @@ impl Isometry {
     pub fn rotation_of_axis(&self, axis: RotationAxis) -> Angle {
         let r = self.rotation();
         match axis {
-            RotationAxis::Roll => r.x,
-            RotationAxis::Pitch => r.y,
-            RotationAxis::Yaw => r.z,
+            RotationAxis::Roll => r.z,
+            RotationAxis::Pitch => r.x,
+            RotationAxis::Yaw => r.y,
         }
     }
     /// Sets a value on the rotation axis of this [`Isometry`].
@@ -320,9 +320,9 @@ impl Isometry {
         let trans = self.translation();
         let mut new_rot = self.rotation();
         match axis {
-            RotationAxis::Roll => new_rot.x = value,
-            RotationAxis::Pitch => new_rot.y = value,
-            RotationAxis::Yaw => new_rot.z = value,
+            RotationAxis::Roll => new_rot.z = value,
+            RotationAxis::Pitch => new_rot.x = value,
+            RotationAxis::Yaw => new_rot.y = value,
         }
         *self = Self::new(trans, new_rot)?;
         Ok(())

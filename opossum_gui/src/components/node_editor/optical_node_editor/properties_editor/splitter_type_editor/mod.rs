@@ -17,6 +17,7 @@ pub fn SplitterTypeEditor(
     splitting_config_builder: SplittingConfigBuilder,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    readonly: bool,
 ) -> Element {
     let splitting_config_builder_sig = use_signal(|| splitting_config_builder.clone());
     let on_save = on_save_proptype_handler(
@@ -27,7 +28,7 @@ pub fn SplitterTypeEditor(
     );
 
     let mut element_list = vec![rsx! {
-        SplittingConfigSelector { splitting_config_builder_handler: on_save, splitting_config_builder_sig }
+        SplittingConfigSelector { splitting_config_builder_handler: on_save, splitting_config_builder_sig, readonly }
     }];
 
     match &*splitting_config_builder_sig.read() {
@@ -36,6 +37,7 @@ pub fn SplitterTypeEditor(
                 ConstantFilterTypeEditor {
                     transmission: *transmission,
                     on_transmission_change: on_save,
+                    readonly,
                 }
             });
         }
@@ -43,6 +45,7 @@ pub fn SplitterTypeEditor(
             SpectralFilterTypeEditor {
                 spectral_filter_builder: spectral_filter_builder.clone(),
                 on_spectral_filter_change: on_save,
+                readonly,
             }
         }),
     }
@@ -55,12 +58,14 @@ pub fn SplitterTypeEditor(
 pub fn SplittingConfigSelector(
     splitting_config_builder_handler: EventHandler<SplittingConfigBuilder>,
     splitting_config_builder_sig: ReadSignal<SplittingConfigBuilder>,
+    readonly: bool,
 ) -> Element {
     rsx! {
         LabeledSelect {
             id: "splitterConfigBuilderPropertySelection",
             label: "Splitting configuration",
             options: select_options_from_enum_iterator(&*splitting_config_builder_sig.read(), None),
+            readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(splitting_config_builder) = SplittingConfigBuilder::default_from_name(

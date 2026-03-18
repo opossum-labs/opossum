@@ -33,6 +33,7 @@ pub fn GratingAlignmentInputs(
     node_properties: ReadSignal<Properties>,
     on_save: EventHandler<Isometry>,
     node_id: Memo<Uuid>,
+    readonly: bool,
 ) -> Element {
     let mut alignment_select_sig = use_signal(|| true);
     let alignment_memo = use_memo(move || *alignment_sig_outside.read());
@@ -52,7 +53,7 @@ pub fn GratingAlignmentInputs(
     });
 
     let mut element_list = vec![rsx! {
-        GratingAlignmentSelector { alignment_select_sig, on_alignment_change: move |new_state| alignment_select_sig.set(new_state) }
+        GratingAlignmentSelector { alignment_select_sig, on_alignment_change: move |new_state| alignment_select_sig.set(new_state), readonly }
     }];
 
     if let (true, Ok(Proptype::I32(_)), Ok(Proptype::LinearDensity(_))) = (
@@ -65,6 +66,7 @@ pub fn GratingAlignmentInputs(
                 alignment_memo,
                 diffraction_order_memo,
                 line_density_memo,
+                readonly,
                 on_alignment_change: move |iso: Isometry| {
                     on_save.call(iso);
                 },
@@ -77,11 +79,13 @@ pub fn GratingAlignmentInputs(
                 axes_skip: Some(vec![RotationAxis::Pitch]),
                 on_new_rotation: on_new_rotation(on_save, alignment_memo.into()),
                 node_id,
+                readonly,
             }
             TranslationAlignmentInputs {
                 alignment: alignment_memo,
                 on_new_translation: on_new_translation(on_save, alignment_memo.into()),
                 node_id,
+                readonly,
             }
         });
     } else {
@@ -92,11 +96,13 @@ pub fn GratingAlignmentInputs(
                 axes_skip: None,
                 on_new_rotation: on_new_rotation(on_save, alignment_memo.into()),
                 node_id,
+                readonly,
             }
             TranslationAlignmentInputs {
                 alignment: alignment_memo,
                 on_new_translation: on_new_translation(on_save, alignment_memo.into()),
                 node_id,
+                readonly,
             }
         });
     }
@@ -113,12 +119,14 @@ pub fn LittrowConfigEditor(
     diffraction_order_memo: Memo<i32>,
     line_density_memo: Memo<LinearNumberDensity>,
     on_alignment_change: EventHandler<Isometry>,
+    readonly: bool,
 ) -> Element {
     let mut incident_angle_sig = use_signal(|| true);
     let mut reference_wavelength_sig = use_signal(|| nanometer!(1053.));
     rsx! {
         InOrOutgoingFromLittrowSelector {
             incident_angle_sig,
+            readonly,
             on_incident_change: move |new_state: bool| {
                 incident_angle_sig.set(new_state);
             },
@@ -128,6 +136,7 @@ pub fn LittrowConfigEditor(
             label: "Reference wavelength",
             value: reference_wavelength_sig.read().value,
             base_unit: "m",
+            readonly,
             onchange: move |new_length: f64| {
                 if relative_ne!(
                     reference_wavelength_sig.read().value, new_length, epsilon = 0.0
@@ -143,6 +152,7 @@ pub fn LittrowConfigEditor(
             line_density_memo,
             alignment_memo,
             on_alignment_change,
+            readonly,
         }
     }
 }
@@ -173,6 +183,7 @@ fn AngleToLittrowComponent(
     line_density_memo: Memo<LinearNumberDensity>,
     alignment_memo: ReadSignal<Isometry>,
     on_alignment_change: EventHandler<Isometry>,
+    readonly: bool,
 ) -> Element {
     let angle_from_littrow = use_memo(move || {
         calc_deviation_angle_from_littrow(
@@ -190,6 +201,7 @@ fn AngleToLittrowComponent(
             label: "Angle",
             value: angle_from_littrow,
             base_unit: "°",
+            readonly,
             onchange: move |angle: f64| {
                 let m_g_lambda = reference_wavelength_sig.read().get::<meter>()
                     * line_density_memo.read().get::<per_meter>()
@@ -220,6 +232,7 @@ fn AngleToLittrowComponent(
 pub fn GratingAlignmentSelector(
     alignment_select_sig: ReadSignal<bool>,
     on_alignment_change: EventHandler<bool>,
+    readonly: bool,
 ) -> Element {
     let via_littrow = "Define pitch via littrow";
     let direct_pitch = "Define pitch directly";
@@ -231,6 +244,7 @@ pub fn GratingAlignmentSelector(
                 (*alignment_select_sig.read(), via_littrow.to_string()),
                 (!*alignment_select_sig.read(), direct_pitch.to_string()),
             ],
+            readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if val.as_str() == via_littrow {
@@ -247,6 +261,7 @@ pub fn GratingAlignmentSelector(
 pub fn InOrOutgoingFromLittrowSelector(
     incident_angle_sig: ReadSignal<bool>,
     on_incident_change: EventHandler<bool>,
+    readonly: bool,
 ) -> Element {
     let incident_label = "Incident angle to Littrow";
     let diffracted_label = "Diffracted angle to Littrow";
@@ -259,6 +274,7 @@ pub fn InOrOutgoingFromLittrowSelector(
                 (*incident_angle_sig.read(), incident_label.to_string()),
                 (!*incident_angle_sig.read(), diffracted_label.to_string()),
             ],
+            readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if val.as_str() == incident_label {

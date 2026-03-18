@@ -1,3 +1,5 @@
+use core::f64;
+
 use crate::components::{
     node_editor::inputs::input_components::UnitInput,
     scenery_editor::{
@@ -50,6 +52,8 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
         f64::midpoint(start_position().x, end_position().x) - EDGE_DISTANCE_FIELD_WIDTH / 2.0,
         f64::midpoint(start_position().y, end_position().y) - EDGE_DISTANCE_FIELD_HEIGHT / 2.0,
     );
+    let targets_reference = edge.targets_reference();
+
     rsx! {
         path {
             d: new_path,
@@ -77,6 +81,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
             width: EDGE_DISTANCE_FIELD_WIDTH,
             height: EDGE_DISTANCE_FIELD_HEIGHT,
             div {
+                hidden: targets_reference,
                 pointer_events: "auto",
                 class: "input-with-unit",
                 style: "display: flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; box-sizing: border-box;",
@@ -89,6 +94,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                     ),
                     label: String::new(),
                     value: edge.distance(),
+                    readonly: edge.targets_reference(),
                     base_unit: "m",
                     onchange: {
                         let edge = edge.clone();
@@ -107,6 +113,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                     input_class: "edge_distance_input".to_string(),
                 }
             }
+
         }
     }
 }

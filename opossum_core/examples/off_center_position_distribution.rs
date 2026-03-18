@@ -1,6 +1,6 @@
-use opossum_core::prelude::*;
 use opossum_core::{
-    energy_distributions::General2DGaussian, position_distributions::HexagonalTiling, rays::Rays,
+    energy_distributions::General2DGaussian, position_distributions::HexagonalTiling, prelude::*,
+    rays::Rays,
 };
 use std::path::Path;
 
@@ -11,7 +11,6 @@ fn main() -> OpmResult<()> {
     let energy_1w = joule!(100.0);
     let energy_2w = joule!(50.0);
 
-    // let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
     let beam_dist_1w = HexagonalTiling::new(millimeter!(10.), 3, millimeter!(0., 0.))?;
     let beam_dist_2w = HexagonalTiling::new(millimeter!(10.), 3, millimeter!(1., 1.))?;
     let rays_1w = Rays::new_collimated(
@@ -41,19 +40,17 @@ fn main() -> OpmResult<()> {
 
     let mut rays = rays_1w;
     rays.add_rays(&mut rays_2w);
-    let mut scenery = NodeGroup::new("test");
-    let light_data_builder = LightDataBuilder::Geometric(rays.into());
-    let src = Source::new("Source", light_data_builder);
-    let src = scenery.add_node(src)?;
+    let mut scenery = NodeGroup::new("2 wavelength off-center distribution");
+    let i_src = scenery.add_node(SourcePort::default())?;
     let i_sd = scenery.add_node(SpotDiagram::default())?;
 
-    scenery.connect_nodes(src, "output_1", i_sd, "input_1", millimeter!(100.))?;
+    scenery.connect_nodes(i_src, "output_1", i_sd, "input_1", millimeter!(100.))?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-    // let mut config = GhostFocusConfig::default();
-    // config.set_max_bounces(0);
-    // doc.add_analyzer(AnalyzerType::GhostFocus(config));
+    let mut config = RayTraceConfig::default();
+    let ray_data_source = RayDataSource::Raw(rays);
+    config.map_source(i_src, ray_data_source.into());
+    doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/position_dist_test.opm",
     ))?;

@@ -128,6 +128,7 @@ pub fn LabeledCheckboxInput(
                 r#type: "checkbox",
                 checked: value.parse::<bool>().unwrap_or_default(),
                 onchange: move |e: Event<FormData>| onchange.call(e),
+                disabled: readonly,
             }
         }
     }
@@ -203,6 +204,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 label,
                 value: input_data.value,
                 onchange: input_data.callback,
+                readonly: input_data.readonly,
             }
         }
     } else if let InputParam::FilePath(label, accept) = input_data.input_param {
@@ -213,6 +215,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 value: input_data.value,
                 onchange: input_data.callback,
                 accept,
+                readonly: input_data.readonly,
             }
         }
     } else if let InputParam::Selection(label, options) = input_data.input_param {
@@ -221,6 +224,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 id: input_data.id,
                 label,
                 options,
+                readonly: input_data.readonly,
                 onchange: move |e| input_data.callback.call(e),
             }
         }
@@ -434,7 +438,7 @@ pub fn UnitInput(
     onchange: EventHandler<f64>,
     #[props(default = false)] reciprocal: bool,
     #[props(default = String::new())] container_class: String,
-    #[props(default = String::new())] input_class: String,
+    #[props(default = String::new())] mut input_class: String,
     #[props(default = String::new())] label_class: String,
     #[props(default = false)] readonly: bool,
     #[props(default = false)] flushable_input: bool,
@@ -491,6 +495,9 @@ pub fn UnitInput(
             }
         }
     } else {
+        if readonly {
+            input_class = format!("{input_class} ref-connection-input");
+        }
         rsx! {
             input {
                 class: input_class,
@@ -509,12 +516,19 @@ pub fn LabeledSelect(
     label: String,
     options: Vec<(bool, String)>,
     onchange: EventHandler<Event<FormData>>,
+    #[props(default = false)] readonly: bool,
 ) -> Element {
+    let select_class = if readonly {
+        "form-select bg-dark text-light disabled-select"
+    } else {
+        "form-select bg-dark text-light"
+    };
     rsx! {
         div { class: "form-floating border-start", "data-mdb-input-init": "",
             select {
-                class: "form-select bg-dark text-light",
+                class: select_class,
                 id: id.as_str(),
+                disabled: readonly,
                 "aria-label": label,
                 onchange: move |e| onchange.call(e),
                 for (is_selected , option) in options {

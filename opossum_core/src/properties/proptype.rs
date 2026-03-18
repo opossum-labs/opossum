@@ -9,7 +9,7 @@ use crate::{
     lightdata::{
         LightData,
         light_data_builder::LightDataBuilder,
-        ray_data_builder::{CollimatedSrc, ImageSrc, PointSrc, RayDataBuilder},
+        ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
     },
     nodes::{
         Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontErrorMap,
@@ -272,17 +272,17 @@ impl From<Vector2<f64>> for Proptype {
 }
 impl From<CollimatedSrc> for Proptype {
     fn from(val: CollimatedSrc) -> Self {
-        Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataBuilder::Collimated(val)))
+        Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataSource::Collimated(val)))
     }
 }
 impl From<PointSrc> for Proptype {
     fn from(val: PointSrc) -> Self {
-        Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataBuilder::PointSrc(val)))
+        Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataSource::PointSrc(val)))
     }
 }
 impl From<ImageSrc> for Proptype {
     fn from(val: ImageSrc) -> Self {
-        Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataBuilder::Image(val)))
+        Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataSource::Image(val)))
     }
 }
 impl From<LightDataBuilder> for Proptype {

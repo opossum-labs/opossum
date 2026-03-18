@@ -64,17 +64,7 @@ impl Dummy {
         dummy
     }
 }
-impl AnalysisGhostFocus for Dummy {
-    fn analyze(
-        &mut self,
-        incoming_data: crate::light_result::LightRays,
-        config: &crate::analyzers::GhostFocusConfig,
-        _ray_collection: &mut Vec<crate::rays::Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<crate::light_result::LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
-    }
-}
+impl AnalysisGhostFocus for Dummy {}
 impl AnalysisEnergy for Dummy {}
 impl AnalysisRayTrace for Dummy {
     fn analyze(
@@ -139,17 +129,13 @@ impl OpticNode for Dummy {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn reset_data(&mut self) {
-        self.reset_optic_surfaces();
-    }
-    fn set_apodization_warning(&mut self, _apodized: bool) {}
 }
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
-        lightdata::LightData, nodes::test_helper::test_helper::*, optic_ports::PortType,
-        spectrum_helper::create_he_ne_spec,
+        analyzers::energy::EnergyConfig, lightdata::LightData, nodes::test_helper::test_helper::*,
+        optic_ports::PortType, spectrum_helper::create_he_ne_spec,
     };
     #[test]
     fn default() {
@@ -216,7 +202,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut dummy, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -225,7 +211,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut dummy, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
@@ -241,7 +227,7 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut dummy, input, &EnergyConfig::default()).unwrap();
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");

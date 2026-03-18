@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Wavefront measurment node
+//! Wavefront measurement node
 use log::warn;
 use nalgebra::{DVector, DVectorView, MatrixXx2, MatrixXx3};
 use opm_macros_lib::OpmNode;
@@ -9,11 +9,12 @@ use uom::si::f64::Length;
 
 use crate::{
     analyzers::{
-        RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        energy::{AnalysisEnergy, EnergyConfig},
+        ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
     error::{OpmResult, OpossumError},
-    light_result::{LightRays, LightResult},
+    light_result::LightResult,
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
@@ -21,7 +22,6 @@ use crate::{
     optic_ports::PortType,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
-    rays::Rays,
     reporting::node_report::NodeReport,
     utils::{
         geom_transformation::Isometry,
@@ -267,26 +267,24 @@ impl OpticNode for WaveFront {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
+    }
 }
 impl From<WaveFrontErrorMap> for Proptype {
     fn from(value: WaveFrontErrorMap) -> Self {
         Self::WaveFrontData(value)
     }
 }
-impl AnalysisGhostFocus for WaveFront {
+impl AnalysisGhostFocus for WaveFront {}
+impl AnalysisEnergy for WaveFront {
     fn analyze(
         &mut self,
-        incoming_data: LightRays,
-        config: &crate::analyzers::GhostFocusConfig,
-        _ray_collection: &mut Vec<Rays>,
-        _bounce_lvl: usize,
-    ) -> OpmResult<LightRays> {
-        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
-    }
-}
-impl AnalysisEnergy for WaveFront {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let result = self.analyze_pass_through(incoming_data)?;
+        incoming_data: LightResult,
+        config: &EnergyConfig,
+    ) -> OpmResult<LightResult> {
+        let result =
+            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
         if let Some(data) = result.get(out_port) {
             self.light_data = Some(data.clone());
@@ -294,22 +292,7 @@ impl AnalysisEnergy for WaveFront {
         Ok(result)
     }
 }
-impl AnalysisRayTrace for WaveFront {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
-    }
-
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        self.light_data.as_mut()
-    }
-    fn set_light_data(&mut self, ld: LightData) {
-        self.light_data = Some(ld);
-    }
-}
+impl AnalysisRayTrace for WaveFront {}
 
 impl Plottable for WaveFrontErrorMap {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
@@ -329,7 +312,9 @@ impl Plottable for WaveFrontErrorMap {
                 .set(&PlotArgs::XLabel("x position in mm".into()))?
                 .set(&PlotArgs::YLabel("y position in mm".into()))?
                 .set(&PlotArgs::CBarLabel("wavefront error in λ".into()))?
-                .set(&PlotArgs::ExpandBounds(false))?;
+                .set(&PlotArgs::ExpandBounds(false))?
+                .set(&PlotArgs::AxisEqual(true))?
+                .set(&PlotArgs::PlotAutoSize(true))?;
         } else if range_x > eps {
             // 1D Line Cut (X varies)
             plt_params
@@ -560,7 +545,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -577,7 +562,7 @@ mod test {
             .unwrap(),
         );
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input.clone());
+        let output = AnalysisEnergy::analyze(&mut node, input.clone(), &EnergyConfig::default());
         assert!(output.is_ok());
         let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default());
         assert!(output.is_ok());
@@ -599,7 +584,7 @@ mod test {
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input);
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default());
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("input_1"));
@@ -609,24 +594,6 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-    // #[test]
-    // fn export_data() {
-    //     let mut wf = WaveFront::default();
-    //     assert!(wf.export_data(Path::new(""), "").is_ok());
-    //     wf.light_data = Some(LightData::Geometric(Rays::default()));
-    //     let path = NamedTempFile::new().unwrap();
-    //     assert!(wf.export_data(path.path().parent().unwrap(), "").is_ok());
-    //     wf.light_data = Some(LightData::Geometric(
-    //         Rays::new_uniform_collimated(
-    //             nanometer!(1053.0),
-    //             joule!(1.0),
-    //             &Hexapolar::new(Length::zero(), 1).unwrap(),
-    //         )
-    //         .unwrap(),
-    //     ));
-    //     assert!(wf.export_data(path.path().parent().unwrap(), "").is_ok());
-    //     // todo! check for warnings
-    // }
     #[test]
     fn report() {
         let mut wf = WaveFront::default();

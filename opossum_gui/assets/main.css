@@ -191,6 +191,10 @@ body {
     outline: none;
 }
 
+.form-floating >.disabled-select{
+    color: rgb(141, 141, 141) !important;
+    cursor:default!important;
+}
 
 .editor-tabs {
     display: flex;
@@ -284,6 +288,18 @@ body {
     color: white;
     overflow: hidden;
     white-space: nowrap;
+    /* Kein Zeilenumbruch */
+}
+
+.node:hover{
+    cursor:grab
+}
+.node:active {
+    cursor: grabbing; /* Wenn man klickt und hält */
+}
+
+.dragging{
+    cursor: all-scroll;
 }
 
 .optical-node {
@@ -365,6 +381,14 @@ body {
             user-select: none; /* Non-prefixed version, currently
                                   supported by Chrome, Edge, Opera and Firefox */
 }
+
+.edge-to-reference{
+    background-color: #87c5f8;
+    position: relative;
+    height: 100%;
+    width: 100% !important;
+}
+
 .edge_distance_input{
     text-align: right; 
     flex:1; min-width: 0; 
@@ -374,7 +398,6 @@ body {
     outline: none; 
     padding: 0;
 }
-
 .node_attributes {
     position: relative;
     display: flex;
@@ -392,7 +415,6 @@ path {
     stroke-width: 2;
     transition: stroke-width 0.15s, stroke 0.15s;
     outline: none;
-    /* prevents a white frame if node receives keyboard focus */
 }
 
 path:hover {
@@ -506,31 +528,3 @@ canvas {
     cursor: nwse-resize;
 }
 
-/* Style for the scrollable element */
-.custom-scroll {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-/* The scrollbar track (the background) */
-.custom-scroll::-webkit-scrollbar {
-  width: 12px;
-}
-
-/* The background of the track */
-.custom-scroll::-webkit-scrollbar-track {
-  background: #282c34; /* Dark background to match the menu */
-  border-radius: 10px;
-}
-
-/* The draggable scrolling handle (the "thumb") */
-.custom-scroll::-webkit-scrollbar-thumb {
-  background: #14A44D; /* The green from MDB's .btn-success */
-  border-radius: 10px;
-  border: 3px solid #282c34; /* Creates a padding effect using the track color */
-}
-
-/* The thumb on hover */
-.custom-scroll::-webkit-scrollbar-thumb:hover {
-  background: #118a41; /* A slightly darker green for the hover effect */
-}

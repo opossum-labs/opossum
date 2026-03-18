@@ -299,6 +299,13 @@ impl NodeGroup {
             self.graph.node(node_id)
         }
     }
+    /// Return `true` if a node with the given [`Uuid`] exists in the graph.
+    ///
+    /// This function is similar to [`node`](NodeGroup::node()), but it only returns a boolean value.
+    #[must_use]
+    pub fn exists(&self, node_id: Uuid) -> bool {
+        self.node_recursive(node_id).is_ok()
+    }
     /// Return a reference to the optical node specified by its [`Uuid`] and the Uuid of the group in which it is contained.
     ///
     /// This function is similar to [`node`](NodeGroup::node()), but it also recursively searches
@@ -435,7 +442,7 @@ impl NodeGroup {
         Ok(out)
     }
 
-    /// Execute a read-only operation on the `NodeAttr` of the node identified by `node_id`.
+    /// Execute a read-only operation with the `NodeAttr` of the node identified by `node_id`.
     ///
     /// If `node_id` equals this group's own UUID, the closure is invoked directly with
     /// `&NodeAttr` from `self` (no lock is taken). Otherwise, the node is looked up
@@ -461,7 +468,7 @@ impl NodeGroup {
     /// # Panic Safety
     /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
     /// fail with a poisoned-lock error.
-    pub fn with_node_attr<R>(
+    pub fn with_node_attr_node<R>(
         &self,
         node_id: Uuid,
         f: impl FnOnce(&NodeAttr) -> R,
@@ -477,7 +484,6 @@ impl NodeGroup {
 
         Ok(out)
     }
-
 
     /// Returns all nodes of this [`NodeGroup`].
     #[must_use]
@@ -604,7 +610,10 @@ impl NodeGroup {
                     "port {port_name} is not mapped"
                 )));
             };
-            Ok(format!("i{}:{}", port_info.0.as_simple(), port_info.1))
+            self.graph.node_idx_by_uuid(port_info.0).map_or_else(
+                || Ok(format!("i{}:{}", port_info.0.as_simple(), port_info.1)),
+                |node_idx| self.graph().create_node_edge_str(node_idx, &port_info.1),
+            )
         } else {
             Ok(format!("{node_id}:{port_name}"))
         }
@@ -841,6 +850,19 @@ impl NodeGroup {
     pub fn set_graph(&mut self, graph: OpticGraph) {
         self.graph = graph;
     }
+    /// Find all source ports in the graph.
+    ///
+    /// This function returns a vector of UUIDs identifying all nodes of the type "source port"
+    /// in the optical graph.
+    ///
+    /// # Returns
+    /// A vector of [`Uuid`]s representing the source port nodes.
+    ///
+    /// # Errors
+    /// This function will return an error if the resources could not be locked.
+    pub fn find_source_ports(&self) -> OpmResult<Vec<Uuid>> {
+        self.graph.find_source_ports()
+    }
 }
 
 impl OpticNode for NodeGroup {
@@ -923,7 +945,6 @@ impl OpticNode for NodeGroup {
     fn get_optic_surface_mut(&mut self, _surf_name: &str) -> Option<&mut OpticSurface> {
         None
     }
-
     fn update_surfaces(&mut self) -> OpmResult<()> {
         Ok(())
     }
@@ -938,15 +959,20 @@ impl Dottable for NodeGroup {
         ports: &OpticPorts,
         rankdir: &str,
     ) -> OpmResult<String> {
-        let mut cloned_self = self.clone();
+        let mut cloned_group = self.clone();
         if self.node_attr.inverted() {
-            cloned_self.graph.invert_graph()?;
+            cloned_group.graph.invert_graph()?;
         }
-        if self.expand_view()? {
-            cloned_self.to_dot_expanded_view(node_index, name, inverted, rankdir)
+        let dot_str = if self.expand_view()? {
+            cloned_group.to_dot_expanded_view(node_index, name, inverted, rankdir)
         } else {
-            Ok(cloned_self.to_dot_collapsed_view(node_index, name, inverted, ports, rankdir))
+            Ok(cloned_group.to_dot_collapsed_view(node_index, name, inverted, ports, rankdir))
+        };
+        // revert the inversion
+        if self.node_attr.inverted() {
+            cloned_group.graph.invert_graph()?;
         }
+        dot_str
     }
     fn node_color(&self) -> &'static str {
         "yellow"
@@ -957,13 +983,17 @@ impl Analyzable for NodeGroup {}
 mod test {
     use super::*;
     use crate::{
-        analyzers::{RayTraceConfig, energy::AnalysisEnergy, raytrace::AnalysisRayTrace},
+        analyzers::{
+            RayTraceConfig,
+            energy::{AnalysisEnergy, EnergyConfig},
+            raytrace::AnalysisRayTrace,
+        },
         joule,
         light_result::LightResult,
-        lightdata::light_data_builder::LightDataBuilder,
         millimeter, nanometer,
-        nodes::{Dummy, EnergyMeter, Source, test_helper::test_helper::*},
+        nodes::{Dummy, EnergyMeter, SourcePort, test_helper::test_helper::*},
         optic_node::OpticNode,
+        prelude::RayDataSource,
         ray::Ray,
         rays::Rays,
         utils::{LockExt, geom_transformation::Isometry},
@@ -1055,7 +1085,12 @@ mod test {
     #[test]
     fn report_empty() {
         let mut scenery = NodeGroup::default();
-        AnalysisEnergy::analyze(&mut scenery, LightResult::default()).unwrap();
+        AnalysisEnergy::analyze(
+            &mut scenery,
+            LightResult::default(),
+            &EnergyConfig::default(),
+        )
+        .unwrap();
         scenery.toplevel_report().unwrap();
     }
     #[test]
@@ -1066,12 +1101,22 @@ mod test {
         scenery
             .connect_nodes(node1, "output_1", node2, "input_1", Length::zero())
             .unwrap();
-        AnalysisEnergy::analyze(&mut scenery, LightResult::default()).unwrap();
+        AnalysisEnergy::analyze(
+            &mut scenery,
+            LightResult::default(),
+            &EnergyConfig::default(),
+        )
+        .unwrap();
     }
     #[test]
     fn analyze_empty() {
         let mut scenery = NodeGroup::default();
-        AnalysisEnergy::analyze(&mut scenery, LightResult::default()).unwrap();
+        AnalysisEnergy::analyze(
+            &mut scenery,
+            LightResult::default(),
+            &EnergyConfig::default(),
+        )
+        .unwrap();
     }
     #[test]
     fn analyze_energy_threshold() {
@@ -1082,11 +1127,10 @@ mod test {
         rays.add_ray(
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.1)).unwrap(),
         );
+        let ray_data_builder = RayDataSource::Raw(rays);
         let mut scenery = NodeGroup::default();
-        let light_data_builder = LightDataBuilder::Geometric(rays.into());
-        let i_s = scenery
-            .add_node(Source::new("src", light_data_builder))
-            .unwrap();
+        let i_s = scenery.add_node(SourcePort::default()).unwrap();
+
         let mut em = EnergyMeter::default();
         em.set_isometry(Isometry::identity()).unwrap();
         let i_e = scenery.add_node(em).unwrap();
@@ -1095,6 +1139,7 @@ mod test {
             .unwrap();
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();
+        raytrace_config.map_source(i_s, ray_data_builder.into());
         AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config).unwrap();
         let uuid = scenery.node(i_e).unwrap().uuid().as_simple().to_string();
         let report = scenery
@@ -1110,5 +1155,106 @@ mod test {
         } else {
             assert!(false)
         }
+    }
+}
+
+#[cfg(test)]
+mod group_port_mapping_tests {
+    use super::*;
+    use crate::nodes::Dummy;
+
+    /*
+    ============================================================
+    Helper
+    ============================================================
+    */
+
+    fn simple_group() -> NodeGroup {
+        let mut group = NodeGroup::new("g");
+        let n1 = group.add_node(Dummy::new("n1")).unwrap();
+        group.map_input_port(n1, "input_1", "in").unwrap();
+        group.set_expand_view(true).unwrap();
+        group
+    }
+
+    fn nested_group() -> NodeGroup {
+        let mut outer = NodeGroup::new("outer");
+        let mut inner = NodeGroup::new("inner");
+        let node = inner.add_node(Dummy::new("leaf")).unwrap();
+        inner.map_input_port(node, "input_1", "in").unwrap();
+        inner.set_expand_view(true).unwrap();
+        let inner_id = outer.add_node(inner).unwrap();
+        outer.map_input_port(inner_id, "in", "in").unwrap();
+        outer.set_expand_view(true).unwrap();
+        outer
+    }
+
+    fn deep_nested_group(depth: usize) -> NodeGroup {
+        let mut leaf_group = NodeGroup::new("leaf_group");
+        let leaf_node = leaf_group.add_node(Dummy::new("leaf")).unwrap();
+        leaf_group
+            .map_input_port(leaf_node, "input_1", "in")
+            .unwrap();
+        leaf_group.set_expand_view(true).unwrap();
+
+        let mut current = leaf_group;
+        for i in 0..depth {
+            let mut parent = NodeGroup::new(&format!("g{i}"));
+            let id = parent.add_node(current).unwrap();
+            parent.map_input_port(id, "in", "in").unwrap();
+            parent.set_expand_view(true).unwrap();
+            current = parent;
+        }
+        current
+    }
+
+    /*
+    ============================================================
+    Tests
+    ============================================================
+    */
+
+    #[test]
+    fn mapped_port_simple_group() {
+        let group = simple_group();
+        let node_id = group.node_attr().uuid().as_simple().to_string();
+        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        assert!(result.contains(":input_1"));
+        assert!(result.starts_with('i'));
+    }
+
+    #[test]
+    fn mapped_port_nested_group() {
+        let group = nested_group();
+        let node_id = group.node_attr().uuid().as_simple().to_string();
+        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        assert!(result.contains(":input_1"));
+        assert!(result.starts_with('i'));
+    }
+
+    #[test]
+    fn mapped_port_deep_nested_groups() {
+        let group = deep_nested_group(5);
+        let node_id = group.node_attr().uuid().as_simple().to_string();
+        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        assert!(result.contains(":input_1"));
+        assert!(result.starts_with('i'));
+    }
+
+    #[test]
+    fn collapsed_group_returns_external_port() {
+        let mut group = simple_group();
+        group.set_expand_view(false).unwrap();
+        let node_id = group.node_attr().uuid().as_simple().to_string();
+        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        assert_eq!(result, format!("{node_id}:in"));
+    }
+
+    #[test]
+    fn unmapped_port_returns_error() {
+        let group = simple_group();
+        let node_id = group.node_attr().uuid().as_simple().to_string();
+        let result = group.get_mapped_port_str("does_not_exist", &node_id);
+        assert!(result.is_err());
     }
 }

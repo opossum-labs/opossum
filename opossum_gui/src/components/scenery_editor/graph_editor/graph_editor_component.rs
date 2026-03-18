@@ -107,7 +107,7 @@ pub fn GraphEditor(
                 NodeConfigEditor { active_node_opt, model_modified_handler }
             }
             div {
-                class: "col px-0 graph-editor-container",
+                class: graph_editor_container_class(),
                 tabindex: 0,
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,

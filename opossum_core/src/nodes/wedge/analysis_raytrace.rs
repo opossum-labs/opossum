@@ -1,6 +1,6 @@
 use super::Wedge;
 use crate::{
-    analyzers::{AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace},
+    analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
@@ -11,16 +11,16 @@ use crate::{
 impl AnalysisRayTrace for Wedge {
     fn analyze(
         &mut self,
-        incoming_data: LightResult,
+        mut incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
         let in_port = &self.ports().names(&PortType::Input)[0];
         let out_port = &self.ports().names(&PortType::Output)[0];
 
-        let Some(data) = incoming_data.get(in_port) else {
+        let Some(data) = incoming_data.remove(in_port) else {
             return Ok(LightResult::default());
         };
-        let LightData::Geometric(rays) = data.clone() else {
+        let LightData::Geometric(rays) = data else {
             return Err(OpossumError::Analysis(
                 "expected ray data at input port".into(),
             ));
@@ -30,19 +30,23 @@ impl AnalysisRayTrace for Wedge {
 
         let mut rays_bundle = vec![rays];
         let refraction_intended = true;
-        self.pass_through_surface(
+
+        // 1. Eintrittsfläche
+        self.pass_through_surface_generic(
             in_port,
-            &refri,
+            Some(refri),
             &mut rays_bundle,
-            &AnalyzerType::RayTrace(*config),
+            config,
             self.inverted(),
             refraction_intended,
         )?;
-        self.pass_through_surface(
+
+        // 2. Austrittsfläche
+        self.pass_through_surface_generic(
             out_port,
-            &self.ambient_idx(),
+            Some(self.ambient_idx()),
             &mut rays_bundle,
-            &AnalyzerType::RayTrace(*config),
+            config,
             self.inverted(),
             refraction_intended,
         )?;
