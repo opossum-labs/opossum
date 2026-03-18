@@ -122,7 +122,7 @@ pub fn NodePort(
 
 #[component]
 pub fn NodePorts(node: NodeElement, inverted: bool) -> Element {
-    let input_ports =  node.input_ports();
+    let input_ports = node.input_ports();
     rsx! {
         for in_port in input_ports {
             NodePort {

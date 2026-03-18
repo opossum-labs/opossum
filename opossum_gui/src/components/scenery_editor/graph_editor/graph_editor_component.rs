@@ -115,10 +115,12 @@ pub fn GraphEditor(
     let graph_state: Signal<GraphState> = use_signal(GraphState::default);
     let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(graph_state);
 
-    let graph_editor_container_class = use_memo(move || match *graph_state.peek().editor_state.peek().drag_status.read(){
-        DragStatus::Graph => format!("col px-0 graph-editor-container dragging"),
-        _ => format!("col px-0 graph-editor-container")
-    }
+    let graph_editor_container_class =
+        use_memo(
+            move || match *graph_state.peek().editor_state.peek().drag_status.read() {
+                DragStatus::Graph => "col px-0 graph-editor-container dragging".to_string(),
+                _ => "col px-0 graph-editor-container".to_string(),
+            },
         );
 
     let active_node_opt = use_memo(move || {
@@ -199,7 +201,6 @@ pub fn GraphEditor(
         }
     });
 
-    
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",

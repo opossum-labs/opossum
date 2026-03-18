@@ -72,7 +72,7 @@ pub fn use_on_mouse_down(
                         event.client_coordinates().y,
                     ));
                     editor_status.write().drag_status.set(DragStatus::Graph);
-                    
+
                     //for double-click zoom
                     event.stop_propagation();
                     let now = Instant::now();
