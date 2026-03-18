@@ -1,8 +1,8 @@
 #![allow(clippy::volatile_composites)]
 use dioxus::{
-    html::geometry::euclid::{
-        Size2D,
-        default::{Point2D, Rect},
+    html::geometry::{
+        Pixels,
+        euclid::{Point2D, Rect, Size2D},
     },
     prelude::*,
 };
@@ -91,7 +91,7 @@ pub struct NodeElement {
     name: String,
     node_type: NodeType,
     id: Uuid,
-    pos: Point2D<f64>,
+    pos: Point2D<f64, Pixels>,
     z_index: usize,
     ports: Ports,
     inverted: bool,
@@ -103,7 +103,7 @@ impl NodeElement {
         name: String,
         node_type: NodeType,
         id: Uuid,
-        pos: Point2D<f64>,
+        pos: Point2D<f64, Pixels>,
         ports: Ports,
         inverted: bool,
     ) -> Self {
@@ -134,11 +134,11 @@ impl NodeElement {
         self.inverted
     }
     #[must_use]
-    pub const fn pos(&self) -> Point2D<f64> {
+    pub const fn pos(&self) -> Point2D<f64, Pixels> {
         self.pos
     }
     #[must_use]
-    pub fn get_bounding_box(&self) -> Rect<f64> {
+    pub fn get_bounding_box(&self) -> Rect<f64, Pixels> {
         let min_x = self.pos().x;
         let min_y = self.pos().y;
         let max_x = self.pos().x + NODE_WIDTH;
@@ -160,12 +160,12 @@ impl NodeElement {
     pub const fn id(&self) -> Uuid {
         self.id
     }
-    pub fn shift_position(&mut self, shift: Point2D<f64>) {
+    pub fn shift_position(&mut self, shift: Point2D<f64, Pixels>) {
         self.pos.x += shift.x;
         self.pos.y += shift.y;
     }
     #[must_use]
-    pub fn rel_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
+    pub fn rel_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64, Pixels> {
         let (x_pos, port_list) = match port_type {
             PortType::Input => (0.0, self.input_ports()),
             PortType::Output => (NODE_WIDTH + BORDER_WIDTH, self.output_ports()),
@@ -178,7 +178,7 @@ impl NodeElement {
         Point2D::new(x_pos, y_pos)
     }
     #[must_use]
-    pub fn abs_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
+    pub fn abs_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64, Pixels> {
         let rel_pos = self.rel_port_position(port_type, port_name);
         Point2D::new(
             self.pos.x + rel_pos.x + BORDER_WIDTH,
@@ -199,7 +199,7 @@ impl NodeElement {
     pub const fn node_type(&self) -> &NodeType {
         &self.node_type
     }
-    pub const fn set_pos(&mut self, pos: Point2D<f64>) {
+    pub const fn set_pos(&mut self, pos: Point2D<f64, Pixels>) {
         self.pos = pos;
     }
     pub const fn set_z_index(&mut self, z_index: usize) {

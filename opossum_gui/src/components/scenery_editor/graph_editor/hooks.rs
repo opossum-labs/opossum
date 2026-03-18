@@ -14,7 +14,13 @@ use crate::{
     },
 };
 use dioxus::{
-    html::{geometry::euclid::default::Point2D, input_data::MouseButton},
+    html::{
+        geometry::{
+            Pixels,
+            euclid::{Point2D, Rect, Size2D},
+        },
+        input_data::MouseButton,
+    },
     prelude::*,
 };
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
@@ -28,8 +34,10 @@ pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl Fn
         spawn(async move {
             if let Ok(rect) = on_mounted().unwrap().get_client_rect().await {
                 let client_pos = wheel_event.data.client_coordinates();
-                let mouse_pos =
-                    Point2D::new(client_pos.x - rect.min_x(), client_pos.y - rect.min_y());
+                let mouse_pos = Point2D::<f64, Pixels>::new(
+                    client_pos.x - rect.min_x(),
+                    client_pos.y - rect.min_y(),
+                );
                 let current_graph_shift = *shift.read();
                 let current_graph_zoom = *zoom.read();
                 let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
@@ -50,7 +58,7 @@ pub fn use_zoom(on_mounted: Signal<Option<std::rc::Rc<MountedData>>>) -> impl Fn
 }
 
 pub fn use_on_mouse_down(
-    mut current_mouse_pos: Signal<Point2D<f64>>,
+    mut current_mouse_pos: Signal<Point2D<f64, Pixels>>,
     mut last_click: Signal<Option<Instant>>,
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
@@ -64,6 +72,28 @@ pub fn use_on_mouse_down(
                 MouseButton::Primary => {
                     let mut ctx = CONTEXT_MENU.write();
                     *ctx = None;
+
+                    let mouse_pos = Point2D::<f64, Pixels>::new(
+                        event.client_coordinates().x,
+                        event.client_coordinates().y,
+                    );
+
+                    let editor_origin = editor_status().rect.read().origin;
+                    let current_shift = *editor_status().shift.read();
+                    let current_zoom = *editor_status().zoom.read();
+
+                    let graph_origin = Point2D::<f64, Pixels>::new(
+                        (mouse_pos.x - editor_origin.x - current_shift.x) / current_zoom,
+                        (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
+                    );
+
+                    editor_status
+                        .write()
+                        .drag_status
+                        .set(DragStatus::SelectionBox(Rect::new(
+                            graph_origin,
+                            Size2D::new(0., 0.),
+                        )));
                 }
                 MouseButton::Auxiliary => {
                     //for dragging
@@ -92,12 +122,11 @@ pub fn use_on_mouse_down(
         }
     }
 }
-pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
+pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64, Pixels>>) -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
 
     move |event| {
-        // event.stop_propagation();
         let current_shift = *editor_status().shift.read();
         let current_zoom = *editor_status().zoom.read();
         let drag_status = editor_status.read().drag_status.read().clone();
@@ -134,6 +163,42 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
                         edge.shift_end(graph_shift);
                     });
             }
+            DragStatus::SelectionBox(rect) => {
+                let mouse_pos = Point2D::<f64, Pixels>::new(
+                    event.client_coordinates().x,
+                    event.client_coordinates().y,
+                );
+
+                let editor_origin = editor_status().rect.read().origin;
+                let current_shift = *editor_status().shift.read();
+                let current_zoom = *editor_status().zoom.read();
+
+                let graph_pos = Point2D::<f64, Pixels>::new(
+                    (mouse_pos.x - editor_origin.x - current_shift.x) / current_zoom,
+                    (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
+                );
+
+                let width = graph_pos.x - rect.origin.x;
+                let height = graph_pos.y - rect.origin.y;
+
+                let new_rect_orig_x = if width < 0. {
+                    graph_pos.x
+                } else {
+                    rect.origin.x
+                };
+                let new_rect_orig_y = if height < 0. {
+                    graph_pos.y
+                } else {
+                    rect.origin.y
+                };
+
+                let new_rect = Rect::new(
+                    Point2D::<f64, Pixels>::new(new_rect_orig_x, new_rect_orig_y),
+                    Size2D::new(width.abs(), height.abs()),
+                );
+
+                editor_status.write().selection_box.set(Some(new_rect));
+            }
             DragStatus::None => {}
         }
     }
@@ -154,7 +219,7 @@ pub fn use_on_resize(on_mounted: Signal<Option<Rc<MountedData>>>) -> impl FnMut(
     }
 }
 
-pub fn use_on_key_down(mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(KeyboardEvent) {
+pub fn use_on_key_down(mouse_pos: Signal<Point2D<f64, Pixels>>) -> impl FnMut(KeyboardEvent) {
     let graph_store = use_context::<Signal<GraphStore>>();
     let editor_status = use_context::<Signal<EditorState>>();
     let graph_processor = use_coroutine_handle::<GraphStoreAction>();
@@ -218,6 +283,9 @@ pub fn use_drag_end() -> impl FnMut(MouseEvent) {
                         graph_processor.send(GraphStoreAction::SyncNodePosition(uuid, pos));
                     }
                 }
+            }
+            DragStatus::SelectionBox(_) => {
+                editor_status.write().selection_box.set(None);
             }
             DragStatus::Edge(_) => {
                 if let Some(edge) = editor_status.write().edge_in_creation.write().take()

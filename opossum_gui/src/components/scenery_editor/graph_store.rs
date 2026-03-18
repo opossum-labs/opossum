@@ -14,9 +14,9 @@ use crate::{
     },
 };
 use dioxus::{
-    html::geometry::euclid::{
-        Size2D,
-        default::{Point2D, Rect},
+    html::geometry::{
+        Pixels,
+        euclid::{Point2D, Rect, Size2D},
     },
     prelude::*,
 };
@@ -52,14 +52,14 @@ pub enum GraphStoreAction {
     AddOpticNode(String),
     AddOpticReference(NewRefNode),
     AddAnalyzer(AnalyzerType),
-    SyncNodePosition(Uuid, Point2D<f64>),
+    SyncNodePosition(Uuid, Point2D<f64, Pixels>),
     AddEdge(ConnectInfo),
     UpdateEdge(ConnectInfo),
     UpdateEdges(Vec<ConnectInfo>),
     DeleteEdge(ConnectInfo),
     DeleteNode(Uuid),
     CopyNode((NodeType, Uuid)),
-    PasteNode(Point2D<f64>),
+    PasteNode(Point2D<f64, Pixels>),
     GetSceneryId,
     DeleteScenery,
     OptimizeLayout,
@@ -114,7 +114,7 @@ impl GraphStore {
     pub const fn nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
         &mut self.nodes
     }
-    pub fn shift_node_position(&mut self, node_id: Uuid, shift: Point2D<f64>) {
+    pub fn shift_node_position(&mut self, node_id: Uuid, shift: Point2D<f64, Pixels>) {
         if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
             node.shift_position(shift);
         }
@@ -136,7 +136,7 @@ impl GraphStore {
         let mut active_node = self.active_node.write();
         *active_node = None;
     }
-    pub fn update_node_positions(&mut self, new_positions: HashMap<Uuid, Point2D<f64>>) {
+    pub fn update_node_positions(&mut self, new_positions: HashMap<Uuid, Point2D<f64, Pixels>>) {
         let mut nodes = self.nodes.write();
         for (id, pos) in new_positions {
             if let Some(node) = nodes.get_mut(&id) {
@@ -144,7 +144,7 @@ impl GraphStore {
             }
         }
     }
-    pub fn get_bounding_box(&self) -> Rect<f64> {
+    pub fn get_bounding_box(&self) -> Rect<f64, Pixels> {
         let optic_nodes = self.nodes()();
         if optic_nodes.is_empty() {
             return Rect::new(Point2D::zero(), Size2D::zero());
@@ -285,7 +285,7 @@ impl GraphStore {
 
 pub async fn optimize_layout_and_sync(
     edges: Vec<ConnectInfo>,
-) -> Result<HashMap<Uuid, Point2D<f64>>, String> {
+) -> Result<HashMap<Uuid, Point2D<f64, Pixels>>, String> {
     let sugiyama_config = Config {
         vertex_spacing: SUGIYAMA_VERTEX_SPACING,
         ..Default::default()
@@ -705,7 +705,7 @@ async fn process_copy_node(node_type: NodeType, node_id: Uuid) {
     }
 }
 #[allow(clippy::future_not_send)]
-async fn process_paste_node(pos: Point2D<f64>, graph_state: Signal<GraphState>) {
+async fn process_paste_node(pos: Point2D<f64, Pixels>, graph_state: Signal<GraphState>) {
     let mut graph_store = graph_state.read().graph_store;
     let group_id = graph_store.read().scenery_id;
     match api::get_copied_node_type().await {

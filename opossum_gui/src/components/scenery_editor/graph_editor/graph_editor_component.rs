@@ -2,7 +2,7 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStoreAction,
+        GraphState, GraphStoreAction, SelectionBoxComponent,
         constants::{MAX_ZOOM, MIN_ZOOM},
         edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
@@ -17,7 +17,7 @@ use crate::components::{
 use dioxus::{
     html::geometry::{
         Pixels, PixelsSize,
-        euclid::{Rect, Size2D, UnknownUnit, default::Point2D},
+        euclid::{Point2D, Rect, Size2D},
     },
     prelude::*,
 };
@@ -42,8 +42,9 @@ pub struct EditorState {
     pub drag_status: Signal<DragStatus>,
     pub edge_in_creation: Signal<Option<EdgeCreation>>,
     pub zoom: Signal<f64>,
-    pub shift: Signal<Point2D<f64>>,
+    pub shift: Signal<Point2D<f64, Pixels>>,
     pub rect: Signal<Rect<f64, Pixels>>,
+    pub selection_box: Signal<Option<Rect<f64, Pixels>>>,
 }
 
 impl Default for EditorState {
@@ -53,14 +54,15 @@ impl Default for EditorState {
             drag_status: Signal::<DragStatus>::default(),
             edge_in_creation: Signal::<Option<EdgeCreation>>::default(),
             zoom: Signal::new(1.),
-            shift: Signal::<Point2D<f64>>::default(),
+            shift: Signal::<Point2D<f64, Pixels>>::default(),
             rect: Signal::<Rect<f64, Pixels>>::default(),
+            selection_box: Signal::<Option<Rect<f64, Pixels>>>::default(),
         }
     }
 }
 
 impl EditorState {
-    pub fn get_view_port_center(&self) -> Point2D<f64> {
+    pub fn get_view_port_center(&self) -> Point2D<f64, Pixels> {
         let editor_size = *self.editor_size.read();
 
         Point2D::new(editor_size.width / 2., editor_size.height / 2.)
@@ -69,7 +71,7 @@ impl EditorState {
         *self.editor_size.read()
     }
 
-    pub fn center_graph(&mut self, bounding_box: Rect<f64, UnknownUnit>, zoom_to_fit: bool) {
+    pub fn center_graph(&mut self, bounding_box: Rect<f64, Pixels>, zoom_to_fit: bool) {
         if zoom_to_fit {
             self.zoom_to_fit(bounding_box);
         }
@@ -82,7 +84,7 @@ impl EditorState {
         ));
     }
 
-    fn zoom_to_fit(&mut self, bounding_box: Rect<f64, UnknownUnit>) {
+    fn zoom_to_fit(&mut self, bounding_box: Rect<f64, Pixels>) {
         let padding_fac = 0.95;
         let view_box = self.get_view_port_size();
         let zoom = *self.zoom.read();
@@ -98,8 +100,9 @@ pub enum DragStatus {
     #[default]
     None,
     Graph,
-    Node(Uuid, Point2D<f64>), // stores also old position before drag.
+    Node(Uuid, Point2D<f64, Pixels>), // stores also old position before drag.
     Edge(NewEdgeCreationStart),
+    SelectionBox(Rect<f64, Pixels>),
 }
 
 #[component]
@@ -243,6 +246,7 @@ pub fn GraphEditor(
                                 rsx! {
                                     EdgesComponent {}
                                     EdgeCreationComponent {}
+                                    SelectionBoxComponent {}
                                 }
                             }
                         }
