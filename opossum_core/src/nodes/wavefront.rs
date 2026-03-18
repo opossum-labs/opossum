@@ -470,9 +470,7 @@ mod test_wavefront_error_map {
         let wvl = nanometer!(1000.);
         let en = joule!(1.);
 
-        let mut rays = Rays::default();
-        let ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
-        rays.add_ray(ray);
+        let mut rays = Rays::from(Ray::new_collimated(Point3::origin(), wvl, en).unwrap());
         let mut ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
         ray.propagate(wvl).unwrap();
         rays.add_ray(ray);
