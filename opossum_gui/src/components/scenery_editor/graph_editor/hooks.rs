@@ -322,6 +322,16 @@ pub fn use_on_key_down(
                         });
                     }
                     event.stop_propagation();
+                } else if event.data().key() == Key::Delete {
+                    let nodes_to_delete = graph_store.read().selected_nodes();
+                    nodes_to_delete.iter().for_each(|node_id| {
+                        workspace_processor.send(GraphsWorkspaceAction::DeleteNode {
+                            node_id: *node_id,
+                            graph_id: graph_state.read().graph_info.id,
+                        });
+                    });
+
+                    event.stop_propagation();
                 }
             }
         }

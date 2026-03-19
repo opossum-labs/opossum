@@ -85,18 +85,6 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
                     event.stop_propagation();
                 }
             },
-            onkeydown: move |event| {
-                if event.data().key() == Key::Delete {
-                    if !is_active.is_empty() {
-                        workspace_processor
-                            .send(GraphsWorkspaceAction::DeleteNode {
-                                node_id,
-                                graph_id: graph_state.read().graph_info.id,
-                            });
-                    }
-                    event.stop_propagation();
-                }
-            },
             oncontextmenu: {
                 move |event: Event<MouseData>| {
                     event.prevent_default();
