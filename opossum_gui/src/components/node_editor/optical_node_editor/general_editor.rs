@@ -8,7 +8,7 @@ use crate::components::{
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::UINodeAttr,
     },
-    scenery_editor::ActiveNode,
+    scenery_editor::SelectedNode,
 };
 use dioxus::prelude::*;
 use opossum_core::J_per_cm2;
@@ -17,7 +17,7 @@ use uom::si::radiant_exposure::joule_per_square_centimeter;
 #[component]
 pub fn GeneralEditor(
     node_attr: ReadSignal<UINodeAttr>,
-    active_node: Memo<ActiveNode>,
+    active_node: Memo<SelectedNode>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {

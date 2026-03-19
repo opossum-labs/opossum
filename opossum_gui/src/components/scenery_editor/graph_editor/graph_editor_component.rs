@@ -2,7 +2,7 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        ActiveNode, NodeEditorCommand,
+        NodeEditorCommand, SelectedNode,
         graph_editor::{
             DragStatus, GraphViewEditor,
             graph_workspace::{
@@ -98,19 +98,14 @@ pub fn GraphEditor(
         }
     });
 
-    let active_node_opt = use_memo(move || {
+    let selected_nodes_memo = use_memo(move || {
         let read_workspace = workspace.read();
         let active_tab = *read_workspace.active_tab.read();
 
         read_workspace
             .get_graph_store_read(active_tab)
-            .and_then(|g| {
-                g.read().get_active_node().map(|n| ActiveNode {
-                    node_id: n.id(),
-                    graph_id: active_tab,
-                    node_type: n.node_type().clone(),
-                })
-            })
+            .and_then(|g| Some(g.read().get_selected_nodes(active_tab)))
+            .unwrap_or(Vec::<SelectedNode>::new())
     });
     let onmouseleave_handler = use_drag_end(workspace);
     let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);
@@ -120,7 +115,7 @@ pub fn GraphEditor(
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { active_node_opt, model_modified_handler }
+                NodeConfigEditor { selected_nodes_memo, model_modified_handler }
             }
             div {
                 class: graph_editor_container_class(),

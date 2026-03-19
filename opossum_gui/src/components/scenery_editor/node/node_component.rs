@@ -26,28 +26,28 @@ pub fn Node(node: NodeElement) -> Element {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let position = node.pos();
     let node_height = node.node_body_height() + HEADER_HEIGHT;
-    let active_node_id = graph_store().active_node();
-    let is_active = active_node_id.map_or("", |active_node_id| {
-        if active_node_id == node.id() {
-            "active-node"
-        } else {
-            ""
-        }
-    });
+    let active_node_ids = graph_store().selected_nodes();
+    let node_id = node.id();
+    let is_active = if active_node_ids.contains(&node.id()) {
+        "active-node"
+    } else {
+        ""
+    };
     let in_selection_box_class = use_memo(move || {
         {
             let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
             if let Some(select_box) = *workspace.read().selection_box.read()
                 && select_box.intersects(&node_rect)
             {
+                graph_store().to_be_selected.write().insert(node_id);
                 "node-selection"
             } else {
+                graph_store().to_be_selected.write().remove(&node_id);
                 ""
             }
         }
         .to_string()
     });
-    let node_id = node.id();
     let z_index = node.z_index();
     let node_icon = node.node_type.icon();
     let is_optical_node = node.is_optical_node();
@@ -69,10 +69,7 @@ pub fn Node(node: NodeElement) -> Element {
                 let z_index = node.z_index();
                 move |event: MouseEvent| {
                     workspace.write().drag_status.set(DragStatus::Node(node_id, position));
-                    let previously_selected = graph_store().active_node();
-                    if previously_selected != Some(node_id) {
-                        graph_store().set_node_active(node_id, z_index);
-                    }
+                    graph_store().set_node_active(node_id, z_index);
                     event.stop_propagation();
                 }
             },

@@ -17,7 +17,7 @@ use crate::components::scenery_editor::{
 };
 
 #[derive(Clone, PartialEq)]
-pub struct ActiveNode {
+pub struct SelectedNode {
     pub node_id: Uuid,
     pub graph_id: Uuid,
     pub node_type: NodeType,

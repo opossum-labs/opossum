@@ -5,6 +5,6 @@ mod hooks;
 pub use graph_editor_component::GraphEditor;
 pub use graph_view_component::GraphViewEditor;
 pub use graph_workspace::{
-    ActiveNode, DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction,
-    GraphsWorkspaceState, NodeEditorCommand,
+    DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
+    NodeEditorCommand, SelectedNode,
 };

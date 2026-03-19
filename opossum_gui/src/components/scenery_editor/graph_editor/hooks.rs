@@ -55,6 +55,7 @@ pub fn use_on_mouse_down(
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
     let editor_status = use_context::<Signal<EditorState>>();
+    let mut graph_store = use_context::<Signal<GraphStore>>();
     let workspace_handlers = use_context::<WorkSpaceSignalHandlers>();
     let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
 
@@ -77,6 +78,9 @@ pub fn use_on_mouse_down(
                         (mouse_pos.x - editor_origin.x - current_shift.x) / current_zoom,
                         (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
                     );
+
+                    graph_store.write().to_be_selected.write().clear();
+                    graph_store.write().clear_selected_nodes();
 
                     workspace
                         .write()
@@ -199,10 +203,11 @@ pub fn use_on_resize(
     element_id: String,
 ) -> EventHandler<()> {
     EventHandler::new(move |()| {
-        let element_id = if let Some((graph_id)) = workspace.read().tabs.read().keys().next(){
+        let element_id = if let Some(graph_id) = workspace.read().tabs.read().keys().next() {
+            // use correct rectange of inner editor which does not include the breadcrumb list
             format!("editor_{}", graph_id.as_simple())
-        }
-        else{
+        } else {
+            // if no editor is there use the outer one
             element_id.clone()
         };
         spawn({
@@ -255,11 +260,19 @@ pub fn use_on_key_down(
                 if ctrl_or_meta
                     && !modifiers.shift()
                     && event.data().key() == Key::Character("c".to_string())
-                    && let Some(node) = graph_store.read().get_active_node()
+                    && graph_store
+                        .read()
+                        .get_selected_nodes(*active_graph.read())
+                        .len()
+                        == 1
+                    && let Some(node) = graph_store
+                        .read()
+                        .get_selected_nodes(*active_graph.read())
+                        .first()
                 {
                     workspace_processor.send(GraphsWorkspaceAction::CopyNode {
-                        node_type: node.node_type().clone(),
-                        node_id: node.id(),
+                        node_type: node.node_type.clone(),
+                        node_id: node.node_id,
                     });
                     event.stop_propagation();
                 } else if ctrl_or_meta
@@ -299,7 +312,7 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
         let tabs = workspace.read().tabs.read().clone();
         if let Some(graph_state) = tabs.get(&*active_graph.read()) {
             let mut editor_status = graph_state.read().editor_state;
-            let graph_store = graph_state.read().graph_store;
+            let mut graph_store = graph_state.read().graph_store;
             let drag_status = workspace.read().drag_status.read().clone();
             match drag_status {
                 DragStatus::Node(node_id, old_position) => {
@@ -318,6 +331,11 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
                     }
                 }
                 DragStatus::SelectionBox(_) => {
+                    let nodes_to_select = graph_store.read().to_be_selected.read().clone();
+                    nodes_to_select
+                        .iter()
+                        .for_each(|id| graph_store.write().add_to_node_selection(*id));
+                    graph_store.write().to_be_selected.write().clear();
                     workspace.write().selection_box.set(None);
                 }
                 DragStatus::Edge(_) => {

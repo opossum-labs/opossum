@@ -2,7 +2,7 @@ use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
 use crate::components::node_editor::hooks::use_save_manager;
 use crate::components::node_editor::inputs::input_components::FormContext;
 use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
-use crate::components::scenery_editor::{ActiveNode, GraphsWorkspaceAction, NodeType};
+use crate::components::scenery_editor::{GraphsWorkspaceAction, NodeType, SelectedNode};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
@@ -29,7 +29,7 @@ pub enum NodeChangeAction {
 
 #[component]
 pub fn NodeConfigEditor(
-    active_node_opt: Memo<Option<ActiveNode>>,
+    selected_nodes_memo: Memo<Vec<SelectedNode>>,
     model_modified_handler: EventHandler<bool>,
 ) -> Element {
     let save_manager = use_save_manager();
@@ -42,19 +42,22 @@ pub fn NodeConfigEditor(
     });
 
     #[allow(clippy::redundant_closure)]
-    let mut displayed_node = use_signal(|| active_node_opt());
+    let mut displayed_nodes = use_signal(|| selected_nodes_memo());
 
     let memo_active_node_id = use_memo(move || {
-        displayed_node().unwrap_or_else(|| ActiveNode {
-            node_id: Uuid::nil(),
-            graph_id: Uuid::nil(),
-            node_type: NodeType::Optical("dummy".to_string()),
-        })
+        displayed_nodes()
+            .first()
+            .cloned()
+            .unwrap_or_else(|| SelectedNode {
+                node_id: Uuid::nil(),
+                graph_id: Uuid::nil(),
+                node_type: NodeType::Optical("dummy".to_string()),
+            })
     });
 
     use_effect(move || {
         if *dirty_count.read() == 0 {
-            displayed_node.set(active_node_opt());
+            displayed_nodes.set(selected_nodes_memo());
         }
     });
 
@@ -65,16 +68,32 @@ pub fn NodeConfigEditor(
         node_config_processor.send(evt);
     });
 
-    match displayed_node().map(|n| n.node_type) {
-        Some(NodeType::Optical(_)) => rsx! {
-            OpticalNodeEditor { active_node: memo_active_node_id, on_change: on_node_change }
-        },
-        Some(NodeType::Analyzer(_)) => rsx! {
-            AnalyzerNodeEditor { active_node: memo_active_node_id, on_change: on_node_change }
-        },
-        None => rsx! {
+    if displayed_nodes.len() == 1 {
+        match displayed_nodes().first().map(|n| n.node_type.clone()) {
+            Some(NodeType::Optical(_)) => rsx! {
+                OpticalNodeEditor {
+                    active_node: memo_active_node_id,
+                    on_change: on_node_change,
+                }
+            },
+            Some(NodeType::Analyzer(_)) => rsx! {
+                AnalyzerNodeEditor {
+                    active_node: memo_active_node_id,
+                    on_change: on_node_change,
+                }
+            },
+            None => rsx! {
+                div { "No node selected" }
+            },
+        }
+    } else if displayed_nodes.len() == 0 {
+        rsx! {
             div { "No node selected" }
-        },
+        }
+    } else {
+        rsx! {
+            div { "Multiple nodes selected" }
+        }
     }
 }
 
