@@ -3,13 +3,10 @@ use std::time::{Duration, Instant};
 use crate::{
     CONTEXT_MENU,
     components::scenery_editor::{
-        NodeElement,
-        constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
-        edges::edges_component::EdgeCreation,
-        graph_editor::graph_workspace::{
+        NodeElement, NodeType, constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY}, edges::edges_component::EdgeCreation, graph_editor::graph_workspace::{
             DragStatus, EditorState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
             WorkSpaceSignalHandlers,
-        },
+        }
     },
 };
 use dioxus::{
@@ -21,6 +18,7 @@ use dioxus::{
 };
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 use serde_json::Value;
+use uuid::Uuid;
 
 pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let editor_status = use_context::<Signal<EditorState>>();
@@ -286,18 +284,13 @@ pub fn use_on_key_down(
                     && event.data().key() == Key::Character("c".to_string())
                     && graph_store
                         .read()
-                        .get_selected_nodes(*active_graph.read())
+                        .selected_nodes()
                         .len()
-                        == 1
-                    && let Some(node) = graph_store
-                        .read()
-                        .get_selected_nodes(*active_graph.read())
-                        .first()
+                        > 0
                 {
-                    workspace_processor.send(GraphsWorkspaceAction::CopyNode {
-                        node_type: node.node_type.clone(),
-                        node_id: node.node_id,
-                    });
+                    workspace_processor.send(GraphsWorkspaceAction::CopyNodes {nodes: graph_store
+                        .read()
+                        .selected_nodes().clone()});
                     event.stop_propagation();
                 } else if ctrl_or_meta
                     && !modifiers.shift()

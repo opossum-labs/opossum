@@ -3,7 +3,7 @@ use opossum_core::{
     prelude::AnalyzerType,
     types::api_types::{ConnectInfo, NewRefNode},
 };
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
 
 use crate::components::scenery_editor::NodeType;
@@ -69,9 +69,8 @@ pub enum GraphsWorkspaceAction {
         node_id: Uuid,
         needs_saving: bool,
     },
-    CopyNode {
-        node_type: NodeType,
-        node_id: Uuid,
+    CopyNodes {
+        nodes: HashSet<Uuid>,
     },
     PasteNode {
         pos: Point2D<f64>,

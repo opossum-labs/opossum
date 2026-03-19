@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::nodes::NodeAttr;
@@ -81,6 +81,17 @@ pub async fn post_copy_optical_node(node_id: Uuid) -> Result<String, String> {
         .await
 }
 
+pub async fn post_copy_nodes(nodes: HashSet<Uuid>)-> Result<String, String> {
+    HTTP_API_CLIENT()
+        .post::<HashSet<Uuid>, String>("/api/scenery/nodes_copy", nodes)
+        .await
+}
+
+pub async fn post_paste_nodes(group_id: Uuid, pos: Point2D<f64>)-> Result<(Vec<NodeInfo>, Vec<AnalyzerInfo>), String> {
+    HTTP_API_CLIENT()
+        .post::<(Uuid, (f64, f64)), (Vec<NodeInfo>, Vec<AnalyzerInfo>)>("/api/scenery/nodes_paste", (group_id, (pos.x, pos.y)),)
+        .await
+}
 pub async fn post_paste_optical_node(
     group_id: Uuid,
     pos: Point2D<f64>,
