@@ -28,7 +28,7 @@ impl Clone for AppState {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum NodeCacheItem {
     Optical(OpticRef),
     Analyzer(AnalyzerInfo),

@@ -156,6 +156,27 @@ async fn post_paste_nodes(
     //get optic ref of node that should be copied
     let copied_nodes = data.node_copy_cache.lock();
 
+    let mut min_pos = Point2::<f64>::new(f64::INFINITY, f64::INFINITY);
+    for copied_node in copied_nodes.iter() {
+        let old_pos = match copied_node {
+            NodeCacheItem::Optical(optical_node) =>  {
+                let node_to_copy_from = optical_node.optical_ref.lock_opm()?;
+                node_to_copy_from.gui_position().unwrap()
+            }, 
+            NodeCacheItem::Analyzer(analyzer) => {
+                analyzer.gui_position().unwrap()
+            }
+        };
+                println!("old_pos {:?}", old_pos);
+
+        if old_pos.x < min_pos.x{
+            min_pos.x = old_pos.x;
+            min_pos.y = old_pos.y;
+        }
+    }
+                    println!("min_pos {:?}", min_pos);
+
+
     for copied_node in copied_nodes.iter() {
         if let NodeCacheItem::Optical(optical_node) = copied_node {
             let node_to_copy_from = optical_node.optical_ref.lock_opm()?;
@@ -163,10 +184,14 @@ async fn post_paste_nodes(
             let mut node = new_node_ref.optical_ref.lock_opm()?;
             let node_attr = node.node_attr_mut();
             node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
+            let old_node_pos = node_to_copy_from.gui_position().unwrap();
+            let new_x_pos = node_pos.0 +(old_node_pos.x-min_pos.x);
+            let new_y_pos = node_pos.1 +(old_node_pos.y-min_pos.y);
+            let gui_position = Some((new_x_pos, new_y_pos));
+            node_attr.set_gui_position(Some(Point2::new(new_x_pos, new_y_pos)));
+
             drop(node_to_copy_from);
             drop(node);
-
-            let gui_position = Some(node_pos);
             let mut document = data.document.lock();
             let scenery = document.scenery_mut();
             let new_node_uuid = scenery
@@ -187,10 +212,14 @@ async fn post_paste_nodes(
             drop(node);
             pasted_optical_nodes.push(node_info)
         } else if let NodeCacheItem::Analyzer(analyzer) = copied_node {
+            let old_node_pos = analyzer.gui_position().unwrap();
+            let new_x_pos = node_pos.0 + (old_node_pos.x-min_pos.x);
+            let new_y_pos = node_pos.1 + (old_node_pos.y-min_pos.y);
+
             let new_analyzer = AnalyzerInfo::new(
                 analyzer.analyzer_type().clone(),
                 Uuid::new_v4(),
-                Point2::new(node_pos.0, node_pos.1),
+                Point2::new(new_x_pos, new_y_pos),
             );
             let mut document = data.document.lock();
             document.add_analyzer_info(&new_analyzer);
@@ -222,13 +251,16 @@ async fn post_copy_nodes(
 ) -> Result<(), BackEndErrorResponse> {
     let mut all_nodes_found = true;
     let node_ids_to_copy = node_id.into_inner();
-
     //get optic ref of nde that should be copied
     let document = data.document.lock();
     let mut copied_nodes_set = data.node_copy_cache.lock();
     copied_nodes_set.clear();
     for id in node_ids_to_copy.iter() {
         if let Ok((node_ref_to_copy, _)) = document.scenery().node_recursive(*id) {
+            let node_ref = node_ref_to_copy.clone();
+            let node = node_ref.optical_ref.lock_opm()?;
+            println!("node_pos: {}", node.gui_position().unwrap());
+            drop(node);
             copied_nodes_set.push(NodeCacheItem::Optical(node_ref_to_copy));
         } else if let Some(analyzer) = document.analyzers().get(&id).cloned() {
             copied_nodes_set.push(NodeCacheItem::Analyzer(analyzer));
