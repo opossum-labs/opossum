@@ -284,8 +284,7 @@ mod test {
             Isometry::new(millimeter!(10.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
         )
         .unwrap();
-        let mut rays = Rays::default();
-        rays.add_ray(
+        let rays = Rays::from(
             Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
                 .unwrap(),
         );
@@ -310,8 +309,7 @@ mod test {
             Isometry::new(millimeter!(0.0, 10.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
         )
         .unwrap();
-        let mut rays = Rays::default();
-        rays.add_ray(
+        let rays = Rays::from(
             Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
                 .unwrap(),
         );
@@ -337,8 +335,7 @@ mod test {
             Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(45.0, 0.0, 0.0)).unwrap(),
         )
         .unwrap();
-        let mut rays = Rays::default();
-        rays.add_ray(
+        let rays = Rays::from(
             Ray::new_collimated(
                 millimeter!(0.0, 10.0 / f64::sqrt(2.), 0.0),
                 nanometer!(1000.0),
@@ -370,8 +367,7 @@ mod test {
             Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 45.0, 0.0)).unwrap(),
         )
         .unwrap();
-        let mut rays = Rays::default();
-        rays.add_ray(
+        let rays = Rays::from(
             Ray::new_collimated(
                 millimeter!(-10.0 / f64::sqrt(2.), 0.0, 0.0),
                 nanometer!(1000.0),

@@ -533,9 +533,7 @@ mod test {
             .unwrap();
         sd.node_attr_mut().set_isometry(Isometry::identity());
 
-        let mut rays = Rays::default();
-        // ray inside aperture
-        rays.add_ray(
+        let mut rays = Rays::from(
             Ray::new(
                 Point3::new(millimeter!(0.0), millimeter!(0.0), millimeter!(-1.0)),
                 Vector3::new(0.0, 0.0, 1.0),

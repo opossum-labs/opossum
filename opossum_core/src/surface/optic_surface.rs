@@ -416,10 +416,9 @@ mod test {
     #[test]
     fn add_to_rays_cache() {
         let mut os = OpticSurface::default();
-        let ray =
-            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap();
-        let mut rays = Rays::default();
-        rays.add_ray(ray);
+        let rays = Rays::from(
+            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap(),
+        );
         os.add_to_rays_cache(rays.clone(), true);
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 1);
@@ -430,10 +429,9 @@ mod test {
     #[test]
     fn set_backwards_rays_cache() {
         let mut os = OpticSurface::default();
-        let ray =
-            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap();
-        let mut rays = Rays::default();
-        rays.add_ray(ray);
+        let rays = Rays::from(
+            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap(),
+        );
         os.set_backwards_rays_cache(vec![rays]);
         assert_eq!(os.backward_rays_cache.len(), 1);
         assert_eq!(os.forward_rays_cache.len(), 0);
@@ -444,10 +442,9 @@ mod test {
     #[test]
     fn set_forwards_rays_cache() {
         let mut os = OpticSurface::default();
-        let ray =
-            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap();
-        let mut rays = Rays::default();
-        rays.add_ray(ray);
+        let rays = Rays::from(
+            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap(),
+        );
         os.set_forward_rays_cache(vec![rays]);
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 1);
@@ -470,10 +467,9 @@ mod test {
     #[test]
     fn get_rays_cache() {
         let mut os = OpticSurface::default();
-        let ray =
-            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap();
-        let mut rays = Rays::default();
-        rays.add_ray(ray);
+        let rays = Rays::from(
+            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap(),
+        );
         os.add_to_rays_cache(rays.clone(), true);
         assert_eq!(os.get_rays_cache(true).len(), 0);
         assert_eq!(os.get_rays_cache(false).len(), 1);

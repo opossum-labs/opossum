@@ -1659,6 +1659,13 @@ impl Rays {
     }
 }
 
+impl From<Ray> for Rays {
+    fn from(ray: Ray) -> Self {
+        let mut rays = Self::default();
+        rays.add_ray(ray);
+        rays
+    }
+}
 /// Struct to hold a set of helper rays for fluence calculation
 ///
 /// [`FluenceRays`] is used to calculate the fluence evolution using the helper rays [`FluenceEstimator`].
@@ -1849,10 +1856,18 @@ mod test {
         assert_eq!(Rays::default().nr_of_rays(false), 0);
     }
     #[test]
+    fn from() {
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
+            .unwrap();
+        let rays = Rays::from(ray.clone());
+        assert_eq!(rays.nr_of_rays(true), 1);
+        let r = rays.iter().next().unwrap();
+        assert_eq!(*r, ray);
+    }
+    #[test]
     fn is_empty() {
         assert!(Rays::default().is_empty());
-        let mut rays = Rays::default();
-        rays.add_ray(
+        let rays = Rays::from(
             Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
                 .unwrap(),
         );
@@ -1860,8 +1875,7 @@ mod test {
     }
     #[test]
     fn display() {
-        let mut rays = Rays::default();
-        rays.add_ray(
+        let mut rays = Rays::from(
             Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
                 .unwrap(),
         );
@@ -2439,8 +2453,7 @@ mod test {
     }
     #[test]
     fn refract_on_surface_missed() {
-        let mut rays = Rays::default();
-        rays.add_ray(
+        let mut rays = Rays::from(
             Ray::new_collimated(millimeter!(0.0, 0.0, 1.0), nanometer!(1000.0), joule!(1.0))
                 .unwrap(),
         );
@@ -2579,9 +2592,8 @@ mod test {
     #[test]
     fn to_spectrum() {
         let e = joule!(1.0);
-        let mut rays = Rays::default();
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap();
-        rays.add_ray(ray);
+        let mut rays =
+            Rays::from(Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap());
         let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap();
         rays.add_ray(ray);
         let ray = Ray::new_collimated(Point3::origin(), nanometer!(1052.0), e).unwrap();
@@ -2607,9 +2619,8 @@ mod test {
     #[test]
     fn to_spectrum_central_wvl() {
         let e = joule!(1.0);
-        let mut rays = Rays::default();
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap();
-        rays.add_ray(ray);
+        let mut rays =
+            Rays::from(Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap());
         let ray = Ray::new_collimated(Point3::origin(), nanometer!(527.0), e).unwrap();
         rays.add_ray(ray);
         assert_relative_eq!(
@@ -2624,8 +2635,7 @@ mod test {
     fn split() {
         let ray1 = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
         let ray2 = Ray::new_collimated(Point3::origin(), nanometer!(1050.0), joule!(2.0)).unwrap();
-        let mut rays = Rays::default();
-        rays.add_ray(ray1.clone());
+        let mut rays = Rays::from(ray1.clone());
         rays.add_ray(ray2.clone());
         assert!(rays.split(&SplittingConfig::Ratio(1.1)).is_err());
         assert!(rays.split(&SplittingConfig::Ratio(-0.1)).is_err());
@@ -2636,8 +2646,7 @@ mod test {
             2.4,
             epsilon = 10.0 * f64::EPSILON
         );
-        let mut rays = Rays::default();
-        rays.add_ray(ray1.clone());
+        let mut rays = Rays::from(ray1.clone());
         rays.add_ray(ray2.clone());
         let mut ray =
             Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(5.0)).unwrap();
