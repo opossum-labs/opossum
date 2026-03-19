@@ -250,7 +250,11 @@ async fn process_paste_node(
     eval_action_run(
         api::post_paste_nodes(graph_id, pos).await,
         Some(
-            move |(optical_nodes, analyzer_nodes): (Vec<NodeInfo>, Vec<AnalyzerInfo>)| {
+            move |(optical_nodes, analyzer_nodes, edges): (
+                Vec<NodeInfo>,
+                Vec<AnalyzerInfo>,
+                Vec<ConnectInfo>,
+            )| {
                 optical_nodes
                     .iter()
                     .for_each(|n| ws_handler.nodes.add_optical_node(n.clone(), graph_id));
@@ -262,6 +266,9 @@ async fn process_paste_node(
                         graph_id,
                     );
                 });
+                for edge in edges {
+                    ws_handler.edges.add_edge(edge, graph_id);
+                }
             },
         ),
     );

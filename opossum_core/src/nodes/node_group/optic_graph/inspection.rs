@@ -166,11 +166,11 @@ impl OpticGraph {
         connections
     }
 
-    pub fn get_outgoing_connection_info_of_node(self, node_id: Uuid) -> Vec<ConnectionInfo>{
+    pub fn get_outgoing_connection_info_of_node(self, node_id: Uuid) -> Vec<ConnectionInfo> {
         let mut connections = Vec::<ConnectionInfo>::new();
         for edge_ref in self.g.edge_references() {
             let src_id = self.g.node_weight(edge_ref.source()).unwrap().uuid();
-            if node_id == src_id{
+            if node_id == src_id {
                 let target = self.g.node_weight(edge_ref.target()).unwrap();
                 let target_id = target.uuid();
                 let src_port = edge_ref.weight().src_port();

@@ -142,7 +142,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
             }
             DragStatus::Node => {
                 let selected_nodes = graph_store().selected_nodes();
-                for id in selected_nodes{
+                for id in selected_nodes {
                     graph_store().shift_node_position(id, graph_shift);
                 }
             }
@@ -345,7 +345,7 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
             match drag_status {
                 DragStatus::Node => {
                     let selected_nodes = graph_store().selected_nodes();
-                    for node_id in selected_nodes{
+                    for node_id in selected_nodes {
                         if let Some(pos) = graph_store
                             .read()
                             .nodes()
@@ -357,7 +357,6 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
                             workspace_processor
                                 .send(GraphsWorkspaceAction::SyncNodePosition { pos, node_id });
                         }
-
                     }
                 }
                 DragStatus::SelectionBox(_) => {

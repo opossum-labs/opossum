@@ -70,9 +70,9 @@ pub async fn post_copy_nodes(nodes: HashSet<Uuid>) -> Result<String, String> {
 pub async fn post_paste_nodes(
     group_id: Uuid,
     pos: Point2D<f64>,
-) -> Result<(Vec<NodeInfo>, Vec<AnalyzerInfo>), String> {
+) -> Result<(Vec<NodeInfo>, Vec<AnalyzerInfo>, Vec<ConnectInfo>), String> {
     HTTP_API_CLIENT()
-        .post::<(Uuid, (f64, f64)), (Vec<NodeInfo>, Vec<AnalyzerInfo>)>(
+        .post::<(Uuid, (f64, f64)), (Vec<NodeInfo>, Vec<AnalyzerInfo>, Vec<ConnectInfo>)>(
             "/api/scenery/nodes_paste",
             (group_id, (pos.x, pos.y)),
         )
