@@ -79,7 +79,9 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
                     else if shift_pressed(){
                     }
                     else{
-                        graph_store().set_node_active(node_id, z_index);
+                        if !graph_store().selected_nodes().contains(&node_id) {
+                            graph_store().set_node_active(node_id, z_index);
+                        }
                     }
                     event.stop_propagation();
                 }

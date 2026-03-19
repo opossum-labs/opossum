@@ -167,15 +167,11 @@ async fn post_paste_nodes(
                 analyzer.gui_position().unwrap()
             }
         };
-                println!("old_pos {:?}", old_pos);
-
         if old_pos.x < min_pos.x{
             min_pos.x = old_pos.x;
             min_pos.y = old_pos.y;
         }
     }
-                    println!("min_pos {:?}", min_pos);
-
 
     for copied_node in copied_nodes.iter() {
         if let NodeCacheItem::Optical(optical_node) = copied_node {
@@ -259,7 +255,6 @@ async fn post_copy_nodes(
         if let Ok((node_ref_to_copy, _)) = document.scenery().node_recursive(*id) {
             let node_ref = node_ref_to_copy.clone();
             let node = node_ref.optical_ref.lock_opm()?;
-            println!("node_pos: {}", node.gui_position().unwrap());
             drop(node);
             copied_nodes_set.push(NodeCacheItem::Optical(node_ref_to_copy));
         } else if let Some(analyzer) = document.analyzers().get(&id).cloned() {

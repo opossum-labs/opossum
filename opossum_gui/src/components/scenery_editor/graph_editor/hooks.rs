@@ -141,7 +141,10 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
                 ));
             }
             DragStatus::Node(id, _) => {
-                graph_store().shift_node_position(id, graph_shift);
+                let selected_nodes = graph_store().selected_nodes();
+                for id in selected_nodes{
+                    graph_store().shift_node_position(id, graph_shift);
+                }
             }
             DragStatus::Edge(edge_creation_start) => {
                 editor_status
