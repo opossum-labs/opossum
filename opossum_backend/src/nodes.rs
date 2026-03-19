@@ -1,16 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    app_state::{AppState, NodeCacheItem},
-    error::BackEndErrorResponse,
-    utils::update_node_attr,
+    app_state::{AppState, NodeCacheItem}, error::BackEndErrorResponse, utils::update_node_attr
 };
 use actix_web::{
-    HttpResponse, Responder, delete, get,
-    guard::GuardContext,
-    http::header,
-    patch, post, put,
-    web::{self, Json, PathConfig},
+    HttpResponse, Responder, delete, get, guard::GuardContext, http::header, patch, post, put, web::{self, Json, PathConfig}
 };
 use nalgebra::Point2;
 use opossum_core::{
@@ -18,7 +12,7 @@ use opossum_core::{
     analyzers::AnalyzerType,
     error::OpossumError,
     meter,
-    nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
+    nodes::{ConnectionInfo, NodeAttr, create_node_ref, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
     prelude::OpmDocument,
@@ -172,13 +166,16 @@ async fn post_paste_nodes(
             min_pos.y = old_pos.y;
         }
     }
+    let mut connections = Vec::<Vec<ConnectionInfo>>::new();
 
     for copied_node in copied_nodes.iter() {
         if let NodeCacheItem::Optical(optical_node) = copied_node {
+            
             let node_to_copy_from = optical_node.optical_ref.lock_opm()?;
             let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
             let mut node = new_node_ref.optical_ref.lock_opm()?;
             let node_attr = node.node_attr_mut();
+            let node_id = node_attr.uuid();
             node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
             let old_node_pos = node_to_copy_from.gui_position().unwrap();
             let new_x_pos = node_pos.0 +(old_node_pos.x-min_pos.x);
@@ -190,6 +187,13 @@ async fn post_paste_nodes(
             drop(node);
             let mut document = data.document.lock();
             let scenery = document.scenery_mut();
+
+            scenery.with_group_node(group_id, |group| {
+                let connect = group.graph().clone().get_outgoing_connection_info_of_node(node_id);
+                connections.push(connect);
+            }
+            )?;
+
             let new_node_uuid = scenery
                 .with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
             drop(document);

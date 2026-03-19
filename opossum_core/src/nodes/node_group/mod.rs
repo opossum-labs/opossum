@@ -24,8 +24,7 @@ use crate::{
     surface::optic_surface::OpticSurface,
     utils::LockExt,
 };
-use optic_graph::ConnectionInfo;
-pub use optic_graph::OpticGraph;
+pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},

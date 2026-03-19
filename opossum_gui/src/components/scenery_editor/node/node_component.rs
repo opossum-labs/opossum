@@ -67,7 +67,7 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
             onmousedown: {
                 let z_index = node.z_index();
                 move |event: MouseEvent| {
-                    workspace.write().drag_status.set(DragStatus::Node(node_id, position));
+                    workspace.write().drag_status.set(DragStatus::Node);
                     if ctrl_pressed() {
                         if graph_store().selected_nodes().contains(&node_id) {
                             graph_store().remove_from_node_selection(node_id);

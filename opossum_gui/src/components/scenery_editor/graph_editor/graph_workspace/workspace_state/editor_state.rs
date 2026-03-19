@@ -5,7 +5,6 @@ use dioxus::{
     html::geometry::euclid::default::{Point2D, Rect},
     prelude::*,
 };
-use uuid::Uuid;
 
 #[derive(Clone, Copy)]
 pub struct EditorState {
@@ -29,7 +28,7 @@ pub enum DragStatus {
     #[default]
     None,
     Graph,
-    Node(Uuid, Point2D<f64>), // stores also old position before drag.
+    Node,
     Edge(NewEdgeCreationStart),
     SelectionBox(Rect<f64>),
 }

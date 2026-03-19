@@ -8,6 +8,7 @@ pub use super::lightdata::{
     ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
 };
 pub use super::nodes::{
+    ConnectionInfo,
     BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens, Metertype,
     NodeGroup, NodeReference, ParabolicMirror, ParaxialSurface, RayPropagationVisualizer,
     ReflectiveGrating, Source, SourcePort, Spectrometer, SpectrometerType, SplittingConfigBuilder,
