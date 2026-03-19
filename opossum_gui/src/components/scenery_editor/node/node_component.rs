@@ -77,6 +77,8 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
                             graph_store().add_to_node_selection(node_id);
                         }
                     }
+                    else if shift_pressed(){
+                    }
                     else{
                         graph_store().set_node_active(node_id, z_index);
                     }

@@ -16,7 +16,8 @@ use dioxus::{
     html::{
         geometry::euclid::default::{Point2D, Rect, Size2D},
         input_data::MouseButton,
-    }, prelude::*
+    },
+    prelude::*,
 };
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 use serde_json::Value;
@@ -243,27 +244,25 @@ pub fn use_on_resize(
     })
 }
 
-
 pub fn use_on_key_up(
-    mut ctrl_pressed: Signal<bool>, mut shift_pressed: Signal<bool>
+    mut ctrl_pressed: Signal<bool>,
+    mut shift_pressed: Signal<bool>,
 ) -> impl FnMut(KeyboardEvent) {
     move |event| {
-        println!("key up triggeres event {:?}", event);
-                if event.key()== Key::Control{
-                    println!("ctrl false");
-                    ctrl_pressed.set(false);
-                }
-                if event.key()== Key::Shift{
-                    shift_pressed.set(false);
-                }
-            
+        if event.key() == Key::Control {
+            ctrl_pressed.set(false);
+        }
+        if event.key() == Key::Shift {
+            shift_pressed.set(false);
         }
     }
+}
 
 pub fn use_on_key_down(
     mouse_pos: Signal<Point2D<f64>>,
     workspace: Signal<GraphsWorkspaceState>,
-    mut ctrl_pressed: Signal<bool>, mut shift_pressed: Signal<bool>
+    mut ctrl_pressed: Signal<bool>,
+    mut shift_pressed: Signal<bool>,
 ) -> impl FnMut(KeyboardEvent) {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     move |event| {
@@ -275,10 +274,10 @@ pub fn use_on_key_down(
                 let modifiers = event.modifiers();
                 let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
 
-                if modifiers.ctrl(){
+                if modifiers.ctrl() {
                     ctrl_pressed.set(true);
                 }
-                if modifiers.ctrl(){
+                if modifiers.ctrl() {
                     shift_pressed.set(false);
                 }
 

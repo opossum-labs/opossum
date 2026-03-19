@@ -4,7 +4,12 @@ use dioxus::prelude::*;
 use uuid::Uuid;
 
 #[component]
-pub fn Nodes(graph_store: Signal<GraphStore>, graph_id: Uuid, ctrl_pressed: Signal<bool>, shift_pressed: Signal<bool>) -> Element {
+pub fn Nodes(
+    graph_store: Signal<GraphStore>,
+    graph_id: Uuid,
+    ctrl_pressed: Signal<bool>,
+    shift_pressed: Signal<bool>,
+) -> Element {
     rsx! {
         for node in graph_store().nodes().read().iter() {
             {

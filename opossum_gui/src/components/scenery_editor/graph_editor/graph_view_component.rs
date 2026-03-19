@@ -21,7 +21,8 @@ pub fn GraphViewEditor(
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
     graph_state: Signal<GraphState>,
-    ctrl_pressed: Signal<bool>, shift_pressed: Signal<bool>
+    ctrl_pressed: Signal<bool>,
+    shift_pressed: Signal<bool>,
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();

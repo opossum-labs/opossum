@@ -110,7 +110,8 @@ pub fn GraphEditor(
             .unwrap_or(Vec::<SelectedNode>::new())
     });
     let onmouseleave_handler = use_drag_end(workspace);
-    let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace, ctrl_pressed, shift_pressed);
+    let onkeydownhandler =
+        use_on_key_down(current_mouse_pos, workspace, ctrl_pressed, shift_pressed);
     let onkeyuphandler = use_on_key_up(ctrl_pressed, shift_pressed);
     let graph_editor_content_container_id = "graphEditorContentContainer";
     let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
