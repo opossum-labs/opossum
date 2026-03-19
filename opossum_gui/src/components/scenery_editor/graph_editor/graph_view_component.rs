@@ -21,6 +21,7 @@ pub fn GraphViewEditor(
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
     graph_state: Signal<GraphState>,
+    ctrl_pressed: Signal<bool>, shift_pressed: Signal<bool>
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
@@ -77,7 +78,12 @@ pub fn GraphViewEditor(
                         shift().y,
                         zoom(),
                     ),
-                    Nodes { graph_store, graph_id }
+                    Nodes {
+                        graph_store,
+                        graph_id,
+                        ctrl_pressed,
+                        shift_pressed,
+                    }
                     svg {
                         width: "100%",
                         height: "100%",

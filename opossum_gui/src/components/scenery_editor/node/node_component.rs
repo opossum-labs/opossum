@@ -18,7 +18,7 @@ use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
 
 #[component]
-pub fn Node(node: NodeElement) -> Element {
+pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal<bool>) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_state = use_context::<Signal<GraphState>>();
     let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
@@ -69,7 +69,17 @@ pub fn Node(node: NodeElement) -> Element {
                 let z_index = node.z_index();
                 move |event: MouseEvent| {
                     workspace.write().drag_status.set(DragStatus::Node(node_id, position));
-                    graph_store().set_node_active(node_id, z_index);
+                    if ctrl_pressed() {
+                        if graph_store().selected_nodes().contains(&node_id) {
+                            graph_store().remove_from_node_selection(node_id);
+                        }
+                        else{
+                            graph_store().add_to_node_selection(node_id);
+                        }
+                    }
+                    else{
+                        graph_store().set_node_active(node_id, z_index);
+                    }
                     event.stop_propagation();
                 }
             },

@@ -9,7 +9,7 @@ use crate::components::{
                 GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
                 use_workspace_processor, workspace_action::use_node_editor_command,
             },
-            hooks::{use_drag_end, use_on_key_down, use_on_resize},
+            hooks::{use_drag_end, use_on_key_down, use_on_key_up, use_on_resize},
         },
     },
 };
@@ -90,6 +90,8 @@ pub fn GraphEditor(
     });
 
     let current_mouse_pos = use_signal(Point2D::<f64>::default);
+    let ctrl_pressed = use_signal(|| false);
+    let shift_pressed = use_signal(|| false);
 
     use_effect(move || {
         let is_unsaved = *workspace.read().needs_saving.read();
@@ -108,7 +110,8 @@ pub fn GraphEditor(
             .unwrap_or(Vec::<SelectedNode>::new())
     });
     let onmouseleave_handler = use_drag_end(workspace);
-    let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);
+    let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace, ctrl_pressed, shift_pressed);
+    let onkeyuphandler = use_on_key_up(ctrl_pressed, shift_pressed);
     let graph_editor_content_container_id = "graphEditorContentContainer";
     let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
 
@@ -122,6 +125,7 @@ pub fn GraphEditor(
                 tabindex: 0,
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
+                onkeyup: onkeyuphandler,
 
                 Tabs {
                     class: "editor-tabs",
@@ -183,6 +187,8 @@ pub fn GraphEditor(
                                                 model_file_path_handler,
                                                 current_mouse_pos,
                                                 graph_state: *graph_state,
+                                                ctrl_pressed,
+                                                shift_pressed,
                                             }
                                         }
                                     }
