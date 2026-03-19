@@ -70,8 +70,7 @@ impl AnalysisRayTrace for SourcePort {
                  }, |alignment_wvl| Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), alignment_wvl, joule!(1.0)))?;
         let iso = self.effective_surface_iso("output_1")?;
         axis_ray = axis_ray.transformed_ray(&iso);
-        let mut rays = Rays::default();
-        rays.add_ray(axis_ray);
+        let rays = Rays::from(axis_ray);
         let mut outgoing_edges = LightResult::new();
         outgoing_edges.insert("output_1".into(), LightData::Geometric(rays));
         Ok(outgoing_edges)

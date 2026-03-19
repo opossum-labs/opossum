@@ -129,10 +129,9 @@ mod test {
         let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
         node.set_isometry(Isometry::identity()).unwrap();
         let mut input = LightResult::default();
-        let mut rays = Rays::default();
-        let ray =
-            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
-        rays.add_ray(ray);
+        let rays = Rays::from(
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap(),
+        );
         input.insert("input_1".into(), LightData::Geometric(rays));
         let output =
             AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
@@ -156,15 +155,15 @@ mod test {
         let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
         node.set_isometry(Isometry::identity()).unwrap();
         let mut input = LightResult::default();
-        let mut rays = Rays::default();
-        let ray = Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(1.0))
-            .unwrap();
-        rays.add_ray(ray);
+        let rays = Rays::from(
+            Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(1.0))
+                .unwrap(),
+        );
         input.insert("input_1".into(), LightData::Geometric(rays));
-        let mut rays = Rays::default();
-        let ray = Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(0.5))
-            .unwrap();
-        rays.add_ray(ray);
+        let rays = Rays::from(
+            Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(0.5))
+                .unwrap(),
+        );
         input.insert("input_2".into(), LightData::Geometric(rays));
         let output =
             AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
@@ -191,15 +190,15 @@ mod test {
         node.set_isometry(Isometry::identity()).unwrap();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let mut rays = Rays::default();
-        let ray = Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(1.0))
-            .unwrap();
-        rays.add_ray(ray);
+        let rays = Rays::from(
+            Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(1.0))
+                .unwrap(),
+        );
         input.insert("out1_trans1_refl2".into(), LightData::Geometric(rays));
-        let mut rays = Rays::default();
-        let ray = Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(0.5))
-            .unwrap();
-        rays.add_ray(ray);
+        let rays = Rays::from(
+            Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(0.5))
+                .unwrap(),
+        );
         input.insert("out2_trans2_refl1".into(), LightData::Geometric(rays));
         let output =
             AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();

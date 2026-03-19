@@ -1116,8 +1116,7 @@ mod test {
     }
     #[test]
     fn analyze_energy_threshold() {
-        let mut rays = Rays::default();
-        rays.add_ray(
+        let mut rays = Rays::from(
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap(),
         );
         rays.add_ray(

@@ -455,8 +455,7 @@ mod test {
         node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.)).unwrap())
             .unwrap();
         let mut input = LightResult::default();
-        let mut rays = Rays::default();
-        rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
+        let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
         let input_light = LightData::Geometric(rays);
         input.insert("input_1".into(), input_light.clone());
         let output =
@@ -483,8 +482,7 @@ mod test {
         node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.)).unwrap())
             .unwrap();
         let mut input = LightResult::default();
-        let mut rays = Rays::default();
-        rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
+        let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
         let input_light = LightData::Geometric(rays);
         input.insert("input_1".into(), input_light.clone());
         let output =
