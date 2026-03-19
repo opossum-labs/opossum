@@ -134,7 +134,7 @@ pub fn use_workspace_processor(
                     } => {
                         process_delete_edge(connection, workspace_handlers, graph_id).await;
                     }
-                    GraphsWorkspaceAction::CopyNodes {nodes } => {
+                    GraphsWorkspaceAction::CopyNodes { nodes } => {
                         process_copy_nodes(nodes).await;
                     }
                     GraphsWorkspaceAction::PasteNode { pos, graph_id } => {
@@ -247,70 +247,30 @@ async fn process_paste_node(
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
-    eval_action_run(api::post_paste_nodes(graph_id, pos).await, 
-    Some(move |(optical_nodes, analyzer_nodes): (Vec<NodeInfo>, Vec<AnalyzerInfo>)|{
-        optical_nodes.iter().for_each(|n| ws_handler.nodes.add_optical_node(n.clone(), graph_id));
-        analyzer_nodes.iter().for_each(|a| {
-            let analyzer_id = a.id();
-            ws_handler.nodes.add_analyzer_node(
-                NewAnalyzerInfo::from(a.clone()),
-                analyzer_id,
-                graph_id,
-            );
-        }
-        );
-
-    }
-));
-    // api::post_paste_nodes(graph_id, pos)
-    // match api::get_copied_node_type().await {
-    //     Ok(node_type) => {
-    //         if node_type {
-    //             eval_action_run(
-    //                 api::post_paste_optical_node(graph_id, pos).await,
-    //                 Some(move |node_info_opt| {
-    //                     if let Some(node_info) = node_info_opt {
-    //                         ws_handler.nodes.add_optical_node(node_info, graph_id);
-    //                     }
-    //                 }),
-    //             );
-    //         } else {
-    //             eval_action_run(
-    //                 api::post_paste_analyzer_node(pos).await,
-    //                 Some(move |analyzer_info: AnalyzerInfo| {
-    //                     let analyzer_id = analyzer_info.id();
-    //                     ws_handler.nodes.add_analyzer_node(
-    //                         NewAnalyzerInfo::from(analyzer_info),
-    //                         analyzer_id,
-    //                         graph_id,
-    //                     );
-    //                 }),
-    //             );
-    //         }
-    //     }
-    //     Err(err_str) => {
-    //         OPOSSUM_UI_LOGS.write().add_log(&err_str);
-    //     }
-    // }
+    eval_action_run(
+        api::post_paste_nodes(graph_id, pos).await,
+        Some(
+            move |(optical_nodes, analyzer_nodes): (Vec<NodeInfo>, Vec<AnalyzerInfo>)| {
+                optical_nodes
+                    .iter()
+                    .for_each(|n| ws_handler.nodes.add_optical_node(n.clone(), graph_id));
+                analyzer_nodes.iter().for_each(|a| {
+                    let analyzer_id = a.id();
+                    ws_handler.nodes.add_analyzer_node(
+                        NewAnalyzerInfo::from(a.clone()),
+                        analyzer_id,
+                        graph_id,
+                    );
+                });
+            },
+        ),
+    );
 }
 
 #[allow(clippy::future_not_send)]
 #[allow(clippy::large_types_passed_by_value)]
 async fn process_copy_nodes(nodes: HashSet<Uuid>) {
-    eval_action_run(
-            api::post_copy_nodes(nodes).await,
-            None::<fn(String)>,
-    );
-    // match node_type {
-    //     NodeType::Optical(_) => eval_action_run(
-    //         api::post_copy_optical_node(node_id).await,
-    //         None::<fn(String)>,
-    //     ),
-    //     NodeType::Analyzer(_) => eval_action_run(
-    //         api::post_copy_analyzer_node(node_id).await,
-    //         None::<fn(String)>,
-    //     ),
-    // }
+    eval_action_run(api::post_copy_nodes(nodes).await, None::<fn(String)>);
 }
 
 #[allow(clippy::future_not_send)]

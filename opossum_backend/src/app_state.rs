@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use actix_web::dev::ServerHandle;
 use opossum_core::{
     OpticRef,

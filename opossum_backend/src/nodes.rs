@@ -131,70 +131,10 @@ pub async fn get_connections(
     })?;
     Ok(Json(connect_infos))
 }
-// /// Paste a copied node
-// ///
-// /// This function sends an already copied optical node to the frontend
-// #[utoipa::path(tag = "node",
-//     request_body(content = (Uuid, (f64, f64)),
-//         description = "Uuid of the group node to be pasted in and the position at which the node should be pasted",
-//         content_type = "application/json",
-//     ),
-//     responses(
-//         (status = OK, body= NodeInfo, description = "Node successfully pasted", content_type="application/json"),
-//         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-//     )
-// )]
-// #[post("/node_paste")]
-// async fn post_paste_node(
-//     data: web::Data<AppState>,
-//     node_paste_info: web::Json<(Uuid, (f64, f64))>,
-// ) -> Result<Json<Option<NodeInfo>>, BackEndErrorResponse> {
-//     let (group_id, node_pos) = node_paste_info.into_inner();
 
-//     //get optic ref of node that should be copied
-//     let copied_node_opt = data.node_copy_cache.lock();
-
-//     let node_info_opt = if let Some(NodeCacheItem::Optical(copied_node)) = copied_node_opt.as_ref()
-//     {
-//         let node_to_copy_from = copied_node.optical_ref.lock_opm()?;
-//         let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
-//         let mut node = new_node_ref.optical_ref.lock_opm()?;
-//         let node_attr = node.node_attr_mut();
-//         node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
-//         drop(node_to_copy_from);
-//         drop(node);
-
-//         let gui_position = Some(node_pos);
-//         let mut document = data.document.lock();
-//         let scenery = document.scenery_mut();
-//         let new_node_uuid =
-//             scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
-//         drop(document);
-
-//         let node = new_node_ref.optical_ref.lock_opm()?;
-
-//         let node_info = NodeInfo::new(
-//             new_node_uuid,
-//             node.name(),
-//             node.inverted(),
-//             node.node_type(),
-//             node.ports().names(&PortType::Input),
-//             node.ports().names(&PortType::Output),
-//             gui_position,
-//         );
-//         drop(node);
-//         Some(node_info)
-//     } else {
-//         None
-//     };
-
-//     drop(copied_node_opt);
-//     Ok(Json(node_info_opt))
-// }
-
-/// Paste a copied node
+/// Paste copied nodes
 ///
-/// This function sends an already copied optical node to the frontend
+/// This function sends already copied nodes to the frontend
 #[utoipa::path(tag = "node",
     request_body(content = (Uuid, (f64, f64)),
         description = "Uuid of the group node to be pasted in and the position at which the node should be pasted",
@@ -216,8 +156,8 @@ async fn post_paste_nodes(
     //get optic ref of node that should be copied
     let copied_nodes = data.node_copy_cache.lock();
 
-    for copied_node in copied_nodes.iter(){
-        if  let NodeCacheItem::Optical(optical_node) = copied_node{
+    for copied_node in copied_nodes.iter() {
+        if let NodeCacheItem::Optical(optical_node) = copied_node {
             let node_to_copy_from = optical_node.optical_ref.lock_opm()?;
             let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
             let mut node = new_node_ref.optical_ref.lock_opm()?;
@@ -225,16 +165,16 @@ async fn post_paste_nodes(
             node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
             drop(node_to_copy_from);
             drop(node);
-    
+
             let gui_position = Some(node_pos);
             let mut document = data.document.lock();
             let scenery = document.scenery_mut();
-            let new_node_uuid =
-                scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
+            let new_node_uuid = scenery
+                .with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
             drop(document);
-    
+
             let node = new_node_ref.optical_ref.lock_opm()?;
-    
+
             let node_info = NodeInfo::new(
                 new_node_uuid,
                 node.name(),
@@ -246,8 +186,7 @@ async fn post_paste_nodes(
             );
             drop(node);
             pasted_optical_nodes.push(node_info)
-        }
-        else if let NodeCacheItem::Analyzer(analyzer) = copied_node {
+        } else if let NodeCacheItem::Analyzer(analyzer) = copied_node {
             let new_analyzer = AnalyzerInfo::new(
                 analyzer.analyzer_type().clone(),
                 Uuid::new_v4(),
@@ -257,81 +196,11 @@ async fn post_paste_nodes(
             document.add_analyzer_info(&new_analyzer);
             drop(document);
             pasted_analyzer_nodes.push(new_analyzer)
-        } 
+        }
     }
     drop(copied_nodes);
     Ok(Json((pasted_optical_nodes, pasted_analyzer_nodes)))
-    
-
-    // let node_info_opt = if let Some(NodeCacheItem::Optical(copied_node)) = copied_nodes.as_ref()
-    // {
-    //     let node_to_copy_from = copied_node.optical_ref.lock_opm()?;
-    //     let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
-    //     let mut node = new_node_ref.optical_ref.lock_opm()?;
-    //     let node_attr = node.node_attr_mut();
-    //     node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
-    //     drop(node_to_copy_from);
-    //     drop(node);
-
-    //     let gui_position = Some(node_pos);
-    //     let mut document = data.document.lock();
-    //     let scenery = document.scenery_mut();
-    //     let new_node_uuid =
-    //         scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
-    //     drop(document);
-
-    //     let node = new_node_ref.optical_ref.lock_opm()?;
-
-    //     let node_info = NodeInfo::new(
-    //         new_node_uuid,
-    //         node.name(),
-    //         node.inverted(),
-    //         node.node_type(),
-    //         node.ports().names(&PortType::Input),
-    //         node.ports().names(&PortType::Output),
-    //         gui_position,
-    //     );
-    //     drop(node);
-    //     Some(node_info)
-    // } else {
-    //     None
-    // };
-
-    // drop(copied_nodes);
-    // Ok(Json(node_info_opt))
 }
-
-
-// /// Copy an existing node
-// ///
-// /// This function copies an already existing optical node
-// #[utoipa::path(tag = "node",
-//     request_body(content = Uuid,
-//         description = "Uuid of the node to be copied",
-//         content_type = "application/json",
-//     ),
-//     responses(
-//         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-//         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-//     )
-// )]
-// #[post("/node_copy")]
-// async fn post_copy_node(
-//     data: web::Data<AppState>,
-//     node_id: web::Json<Uuid>,
-// ) -> Result<(), BackEndErrorResponse> {
-//     let node_id_to_copy = node_id.into_inner();
-
-//     //get optic ref of nde that should be copied
-//     let document = data.document.lock();
-//     let (node_ref_to_copy, _) = document.scenery().node_recursive(node_id_to_copy)?;
-//     drop(document);
-
-//     let mut copied_node_opt = data.node_copy_cache.lock();
-//     *copied_node_opt = Some(NodeCacheItem::Optical(node_ref_to_copy));
-//     drop(copied_node_opt);
-//     Ok(())
-// }
 
 /// Copy existing nodes
 ///
@@ -358,23 +227,20 @@ async fn post_copy_nodes(
     let document = data.document.lock();
     let mut copied_nodes_set = data.node_copy_cache.lock();
     copied_nodes_set.clear();
-    for id in node_ids_to_copy.iter(){
-        if let Ok((node_ref_to_copy, _)) = document.scenery().node_recursive(*id){
+    for id in node_ids_to_copy.iter() {
+        if let Ok((node_ref_to_copy, _)) = document.scenery().node_recursive(*id) {
             copied_nodes_set.push(NodeCacheItem::Optical(node_ref_to_copy));
-        }
-        else if let Some(analyzer) = document.analyzers().get(&id).cloned() {
+        } else if let Some(analyzer) = document.analyzers().get(&id).cloned() {
             copied_nodes_set.push(NodeCacheItem::Analyzer(analyzer));
-        }
-        else{
+        } else {
             all_nodes_found = false;
         }
     }
     drop(copied_nodes_set);
     drop(document);
-    if all_nodes_found{
+    if all_nodes_found {
         Ok(())
-    }
-    else{
+    } else {
         Err(BackEndErrorResponse::new(
             404,
             "Opossum",
@@ -382,109 +248,6 @@ async fn post_copy_nodes(
         ))
     }
 }
-
-// /// Copy an existing analyzer node
-// ///
-// /// This function copies an already existing analyzer node
-// #[utoipa::path(tag = "node",
-//     request_body(content = Uuid,
-//         description = "Uuid of the analyzer node to be copied",
-//         content_type = "application/json",
-//     ),
-//     responses(
-//         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-//         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-//     )
-// )]
-// #[post("/analyzer_copy")]
-// async fn post_copy_analyzer(
-//     data: web::Data<AppState>,
-//     analyzer_id: web::Json<Uuid>,
-// ) -> Result<(), BackEndErrorResponse> {
-//     let analyzer_id_to_copy = analyzer_id.into_inner();
-//     let document = data.document.lock();
-//     if let Some(analyzer) = document.analyzers().get(&analyzer_id_to_copy).cloned() {
-//         drop(document);
-
-//         let mut node_cache = data.node_copy_cache.lock();
-//         *node_cache = Some(NodeCacheItem::Analyzer(analyzer));
-//         drop(node_cache);
-//         Ok(())
-//     } else {
-//         Err(BackEndErrorResponse::new(
-//             404,
-//             "Opossum",
-//             "Analyzer to be copied was not found in document",
-//         ))
-//     }
-// }
-
-// /// Pastes the analyzer node of the cache
-// ///
-// /// This function sends the copied analyzer node to the frontend
-// #[utoipa::path(tag = "node",
-//     request_body(content = (f64, f64),
-//         description = "Position of the node to be placed in the GUI",
-//         content_type = "application/json",
-//     ),
-//     responses(
-//         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-//         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-//     )
-// )]
-// #[post("/analyzer_paste")]
-// async fn post_paste_analyzer(
-//     data: web::Data<AppState>,
-//     analyzer_pos: web::Json<(f64, f64)>,
-// ) -> Result<Json<AnalyzerInfo>, BackEndErrorResponse> {
-//     let analyzer_pos = analyzer_pos.into_inner();
-//     let analyzer_cache = data.node_copy_cache.lock();
-
-//     if let Some(NodeCacheItem::Analyzer(analyzer)) = analyzer_cache.as_ref() {
-//         let new_analyzer = AnalyzerInfo::new(
-//             analyzer.analyzer_type().clone(),
-//             Uuid::new_v4(),
-//             Point2::new(analyzer_pos.0, analyzer_pos.1),
-//         );
-//         drop(analyzer_cache);
-//         let mut document = data.document.lock();
-//         document.add_analyzer_info(&new_analyzer);
-//         drop(document);
-//         Ok(Json(new_analyzer))
-//     } else {
-//         Err(BackEndErrorResponse::new(
-//             404,
-//             "Opossum",
-//             "No analyzer stored in copy-cache",
-//         ))
-//     }
-// }
-
-// /// Get the type of node that has been copied
-// ///
-// /// This function sends the node-type information of the `copy_node_cache` to the frontend
-// #[utoipa::path(tag = "node",
-//     responses(
-//         (status = OK, body= NodeInfo, description = "Node type successfully sent", content_type="application/json"),
-//         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "No node stored in copy cache", content_type="application/json")
-//     )
-// )]
-// #[get("/copied_node_type")]
-// async fn get_copied_node_type(
-//     data: web::Data<AppState>,
-// ) -> Result<Json<bool>, BackEndErrorResponse> {
-//     let node_cache = data.node_copy_cache.lock();
-
-//     match node_cache.as_ref() {
-//         Some(NodeCacheItem::Analyzer(_)) => Ok(Json(false)),
-//         Some(NodeCacheItem::Optical(_)) => Ok(Json(true)),
-//         None => Err(BackEndErrorResponse::new(
-//             404,
-//             "Opossum",
-//             "No node stored in copy-cache",
-//         )),
-//     }
-// }
 
 /// Add a new node to a group node
 ///
@@ -1344,11 +1107,6 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_name);
     cfg.service(post_copy_nodes);
     cfg.service(post_paste_nodes);
-    // cfg.service(post_copy_node);
-    // cfg.service(post_paste_node);
-    // cfg.service(post_copy_analyzer);
-    // cfg.service(post_paste_analyzer);
-    // cfg.service(get_copied_node_type);
     cfg.service(post_node_lidt);
     cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);

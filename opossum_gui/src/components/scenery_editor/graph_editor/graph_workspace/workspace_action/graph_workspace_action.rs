@@ -6,8 +6,6 @@ use opossum_core::{
 use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
 
-use crate::components::scenery_editor::NodeType;
-
 pub enum GraphsWorkspaceAction {
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),

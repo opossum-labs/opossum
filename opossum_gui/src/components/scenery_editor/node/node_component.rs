@@ -3,7 +3,7 @@ use super::NodeElement;
 use crate::CONTEXT_MENU;
 use crate::components::scenery_editor::GraphsWorkspaceState;
 use crate::components::scenery_editor::constants::HEADER_HEIGHT;
-use crate::components::scenery_editor::graph_editor::{DragStatus, GraphState, GraphStore};
+use crate::components::scenery_editor::graph_editor::{DragStatus, GraphStore};
 use crate::components::{
     context_menu::cx_menu::{CxMenu, CxtCommand},
     scenery_editor::{
@@ -20,7 +20,6 @@ use opossum_core::types::api_types::NewRefNode;
 #[component]
 pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal<bool>) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
-    let graph_state = use_context::<Signal<GraphState>>();
     let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
 
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
