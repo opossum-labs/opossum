@@ -32,7 +32,8 @@ pub enum AppCommand {
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     AutoLayout,
-    CenterGraph { zoom_to_fit: bool },
+    CenterGraph,
+    ZoomToFit,
     Quit,
     Simulate,
 }
@@ -169,18 +170,15 @@ pub fn MenuBar(
                                 short_cut_action: ShortCutAction::Center,
                                 on_click: move |_| {
                                     on_menu_action
-                                        .call(AppCommand::CenterGraph {
-                                            zoom_to_fit: false,
-                                        });
+                                        .call(AppCommand::CenterGraph
+                                        );
                                 },
                             }
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::ZoomToFit,
                                 on_click: move |_| {
                                     on_menu_action
-                                        .call(AppCommand::CenterGraph {
-                                            zoom_to_fit: true,
-                                        });
+                                        .call(AppCommand::ZoomToFit);
                                 },
                             }
                             MenuListItemShortCut {

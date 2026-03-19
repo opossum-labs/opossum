@@ -114,6 +114,7 @@ impl NodeGroup {
         group.node_attr.set_name(name);
         group
     }
+
     /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
     ///
     /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is
@@ -211,6 +212,57 @@ impl NodeGroup {
         Ok(result)
     }
 
+    /// Returns the hierarchy of nodes starting from the given node and walking up
+    /// through its parent groups until the root is reached.
+    ///
+    /// The returned vector contains tuples of `(Uuid, String)` where:
+    /// - `Uuid` is the node ID
+    /// - `String` is the node's name
+    ///
+    /// The hierarchy is ordered **bottom-up**, meaning:
+    /// - The first element is the provided `node_id`
+    /// - Each following element is the parent group
+    /// - The last element is the root node of the hierarchy
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The node cannot be resolved via `node_recursive`
+    /// - The internal optic reference cannot be locked
+    ///
+    /// # Notes
+    ///
+    /// This function performs a recursive traversal using `node_recursive`
+    /// to resolve parent nodes until the root node is reached.
+    pub fn get_node_hierarchy_bottom_up(&self, node_id: Uuid) -> OpmResult<Vec<(Uuid, String)>> {
+        let mut group_hierarchy = Vec::<(Uuid, String)>::new();
+
+        self.with_node_attr(node_id, |node_attr| {
+            group_hierarchy.push((node_id, node_attr.name()));
+        })?;
+
+        if self.node_attr().uuid() != node_id {
+            let parent_id = self.node_recursive(node_id)?.1;
+
+            let group_vec = self.get_node_hierarchy_bottom_up(parent_id).map_err(|e| {
+                OpossumError::OpticGroup(format!("Error getting node hierarchy: {e}"))
+            })?;
+
+            group_hierarchy.extend(group_vec);
+        }
+
+        // self.with_parent_id(node_id, |parent_id_opt| -> OpmResult<()> {
+
+        //     if let Some(parent_id) = parent_id_opt{
+        //         let group_vec = self.get_node_hierarchy_bottom_up(parent_id)
+        //     .map_err(|e| OpossumError::OpticGroup(format!("Error getting node hierarchy: {e}")))?;
+        //         // self.get_node_hierarchy_bottom_up(parent_id).map(|group_vec|group_hierarchy.extend(group_vec))
+        //     }
+        //     Ok(())
+        // })?;
+        Ok(group_hierarchy)
+    }
+
     fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
         let node_ref = self.graph.node(node_id)?;
         let node = node_ref.optical_ref.lock_opm()?;
@@ -301,7 +353,6 @@ impl NodeGroup {
 
         Ok(out)
     }
-
     /// Execute a mutable operation on the `NodeGroup` identified by `node_id`.
     ///
     /// If `node_id` equals this group's own UUID, the closure is invoked directly with
@@ -374,7 +425,7 @@ impl NodeGroup {
     /// # Panic Safety
     /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
     /// fail with a poisoned-lock error.
-    pub fn with_node_attr_node_mut<R>(
+    pub fn with_node_attr_mut<R>(
         &mut self,
         node_id: Uuid,
         f: impl FnOnce(&mut NodeAttr) -> R,
@@ -417,11 +468,7 @@ impl NodeGroup {
     /// # Panic Safety
     /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
     /// fail with a poisoned-lock error.
-    pub fn with_node_attr_node<R>(
-        &self,
-        node_id: Uuid,
-        f: impl FnOnce(&NodeAttr) -> R,
-    ) -> OpmResult<R> {
+    pub fn with_node_attr<R>(&self, node_id: Uuid, f: impl FnOnce(&NodeAttr) -> R) -> OpmResult<R> {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self.node_attr()));
         }

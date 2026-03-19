@@ -113,7 +113,7 @@ pub async fn get_connections(
             .iter()
             .map(|c| {
                 let is_reference = scenery
-                    .with_node_attr_node(c.target_id, |node_attr| {
+                    .with_node_attr(c.target_id, |node_attr| {
                         let prop = node_attr.properties();
                         prop.get("reference id").is_ok()
                     })
@@ -481,7 +481,7 @@ async fn post_node_position(
     let mut document = data.document.lock();
     match document
         .scenery_mut()
-        .with_node_attr_node_mut(uuid, |node_attr| node_attr.set_gui_position(Some(position)))
+        .with_node_attr_mut(uuid, |node_attr| node_attr.set_gui_position(Some(position)))
     {
         Ok(()) => Ok(()),
         _ => document.analyzers_mut().get_mut(&uuid).map_or_else(
@@ -530,7 +530,7 @@ async fn post_node_name(
     for node_idx in &nodes_to_rename {
         let node_uuid = scenery.graph().node_by_idx(*node_idx).unwrap().uuid();
         scenery
-            .with_node_attr_node_mut(node_uuid, |node_attr| {
+            .with_node_attr_mut(node_uuid, |node_attr| {
                 let name = if node_attr.node_type() == "reference" {
                     format!("ref ({name})")
                 } else {
@@ -570,7 +570,7 @@ async fn post_node_lidt(
     let mut document = data.document.lock();
     document
         .scenery_mut()
-        .with_node_attr_node_mut(uuid, |node_attr| {
+        .with_node_attr_mut(uuid, |node_attr| {
             node_attr
                 .set_lidt(&lidt)
                 .map_err(|e| BackEndErrorResponse::new(404, "Opossum", &e.to_string()))
@@ -603,7 +603,7 @@ async fn post_node_alignment_isometry(
     let mut document = data.document.lock();
     document
         .scenery_mut()
-        .with_node_attr_node_mut(uuid, |node_attr| node_attr.set_alignment(isometry))
+        .with_node_attr_mut(uuid, |node_attr| node_attr.set_alignment(isometry))
         .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))
 }
 
@@ -642,7 +642,7 @@ async fn post_node_property(
     let mut document = data.document.lock();
     document
         .scenery_mut()
-        .with_node_attr_node_mut(uuid, |node_attr| {
+        .with_node_attr_mut(uuid, |node_attr| {
             match node_attr.set_property(prop_key.as_str(), prop_value) {
                 Ok(()) => Ok(HttpResponse::Ok()
                     .content_type("application/ron")
@@ -682,7 +682,7 @@ async fn post_node_isometry(
     let mut document = data.document.lock();
     document
         .scenery_mut()
-        .with_node_attr_node_mut(uuid, |node_attr| node_attr.set_isometry_option(iso_opt))
+        .with_node_attr_mut(uuid, |node_attr| node_attr.set_isometry_option(iso_opt))
         .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))
 }
 
@@ -711,7 +711,7 @@ async fn post_node_inversion(
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
     scenery
-        .with_node_attr_node_mut(uuid, |node_attr| node_attr.set_inverted(inverted))
+        .with_node_attr_mut(uuid, |node_attr| node_attr.set_inverted(inverted))
         .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?;
     match document
         .scenery_mut()
@@ -725,7 +725,7 @@ async fn post_node_inversion(
                 .iter()
                 .map(|c| {
                     let is_reference = scenery
-                        .with_node_attr_node(c.target_id, |node_attr| {
+                        .with_node_attr(c.target_id, |node_attr| {
                             let prop = node_attr.properties();
                             prop.get("reference id").is_ok()
                         })
@@ -904,6 +904,31 @@ async fn get_properties_ron(
         .content_type("application/ron")
         .body(body))
 }
+
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the node"),
+    ),
+    responses(
+        (status = OK, description = "get the group hierarchy of a node", content(("application/json"))),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "node with UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/hierarchy")]
+async fn get_node_hierarchy(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<Vec<(Uuid, String)>>, BackEndErrorResponse> {
+    let node_id = path.into_inner();
+    let document = data.document.lock();
+    let scenery = document.scenery();
+    let mut group_hierarchy = scenery.get_node_hierarchy_bottom_up(node_id)?;
+    drop(document);
+    group_hierarchy.reverse();
+
+    Ok(Json(group_hierarchy))
+}
+
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "UUID of the optical node"),
@@ -997,7 +1022,7 @@ async fn patch_properties(
     let mut document = data.document.lock();
     document
         .scenery_mut()
-        .with_node_attr_node_mut(uuid, |node_attr| {
+        .with_node_attr_mut(uuid, |node_attr| {
             update_node_attr(node_attr, &update_json).map_or_else(
                 |_| {
                     Err(BackEndErrorResponse::new(
@@ -1045,7 +1070,7 @@ async fn post_connection(
         })??;
     let is_ref_node = document
         .scenery()
-        .with_node_attr_node(connect_info.target_uuid(), |n| {
+        .with_node_attr(connect_info.target_uuid(), |n| {
             n.properties().get("reference id").is_ok()
         })?;
     let mut connect_info = connect_info.into_inner();
@@ -1173,6 +1198,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_properties_json);
     cfg.service(get_analyzer_info_ron);
     cfg.service(get_analyzer_info_json);
+    cfg.service(get_node_hierarchy);
     cfg.service(patch_properties);
 
     cfg.service(post_connection);

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use dioxus::html::geometry::Pixels;
-use dioxus::html::geometry::euclid::Point2D;
+use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::nodes::NodeAttr;
 use opossum_core::nodes::fluence_detector::Fluence;
 use opossum_core::opm_document::AnalyzerInfo;
@@ -84,7 +83,7 @@ pub async fn post_copy_optical_node(node_id: Uuid) -> Result<String, String> {
 
 pub async fn post_paste_optical_node(
     group_id: Uuid,
-    pos: Point2D<f64, Pixels>,
+    pos: Point2D<f64>,
 ) -> Result<Option<NodeInfo>, String> {
     HTTP_API_CLIENT()
         .post::<(Uuid, (f64, f64)), Option<NodeInfo>>(
@@ -115,7 +114,7 @@ pub async fn post_copy_analyzer_node(analyzer_id: Uuid) -> Result<String, String
 /// - the provided [`Uuid`] cannot be serialized
 /// - the request fails (e.g. the node id does not exist)
 /// - the response cannot be deserialized into the [`AnalyzerInfo`] struct
-pub async fn post_paste_analyzer_node(pos: Point2D<f64, Pixels>) -> Result<AnalyzerInfo, String> {
+pub async fn post_paste_analyzer_node(pos: Point2D<f64>) -> Result<AnalyzerInfo, String> {
     HTTP_API_CLIENT()
         .post::<(f64, f64), AnalyzerInfo>("/api/scenery/analyzer_paste", (pos.x, pos.y))
         .await
@@ -239,7 +238,7 @@ pub async fn update_distance(
 /// This function will return an error if the `node_id` was not found.
 pub async fn update_gui_position(
     node_id: Uuid,
-    gui_position: Point2D<f64, Pixels>,
+    gui_position: Point2D<f64>,
 ) -> Result<String, String> {
     let position = (gui_position.x, gui_position.y);
     HTTP_API_CLIENT()
@@ -291,6 +290,12 @@ pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result
             &format!("/api/scenery/alignmentisometry/{}", node_id.as_simple()),
             alignment,
         )
+        .await
+}
+
+pub async fn get_group_hierarchy(group_id: Uuid) -> Result<Vec<(Uuid, String)>, String> {
+    HTTP_API_CLIENT()
+        .get::<Vec<(Uuid, String)>>(&format!("/api/scenery/{}/hierarchy", group_id.as_simple()))
         .await
 }
 

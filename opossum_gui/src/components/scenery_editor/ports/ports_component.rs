@@ -1,7 +1,8 @@
 use crate::components::scenery_editor::{
+    EditorState, GraphsWorkspaceState,
     constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
     edges::edges_component::{EdgePort, NewEdgeCreationStart},
-    graph_editor::graph_editor_component::{DragStatus, EditorState},
+    graph_editor::DragStatus,
     node::NodeElement,
 };
 use dioxus::prelude::*;
@@ -42,6 +43,8 @@ pub fn NodePort(
     inverted_node: bool,
 ) -> Element {
     let mut editor_status = use_context::<Signal<EditorState>>();
+    let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
+
     let rel_port_position = node.rel_port_position(&port_type, &port_name);
     let abs_port_position = node.abs_port_position(&port_type, &port_name);
     let node_id = node.id();
@@ -75,7 +78,7 @@ pub fn NodePort(
                 let port_name = port_name.clone();
                 let port_type = port_type.clone();
                 move |event: MouseEvent| {
-                    editor_status
+                    workspace
                         .write()
                         .drag_status
                         .set(

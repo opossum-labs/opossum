@@ -2,7 +2,7 @@ use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
 use crate::components::node_editor::hooks::use_save_manager;
 use crate::components::node_editor::inputs::input_components::FormContext;
 use crate::components::node_editor::optical_node_editor::OpticalNodeEditor;
-use crate::components::scenery_editor::{GraphStore, GraphStoreAction, NodeType};
+use crate::components::scenery_editor::{ActiveNode, GraphsWorkspaceAction, NodeType};
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
@@ -18,10 +18,10 @@ pub struct NodeChangeEvent {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChangeAction {
-    Name(String),
+    Name { name: String, graph_id: Uuid },
     Lidt(Fluence),
     Alignment(Isometry),
-    Inverted(bool),
+    Inverted { inverted: bool, graph_id: Uuid },
     Property(String, Proptype),
     Isometry(Option<Isometry>),
     AnalyzerType(AnalyzerType),
@@ -29,8 +29,8 @@ pub enum NodeChangeAction {
 
 #[component]
 pub fn NodeConfigEditor(
-    active_node_opt: Memo<Option<(NodeType, Uuid)>>,
-    is_modified: Signal<bool>,
+    active_node_opt: Memo<Option<ActiveNode>>,
+    model_modified_handler: EventHandler<bool>,
 ) -> Element {
     let save_manager = use_save_manager();
     let flush_trigger = save_manager.flush_trigger;
@@ -44,8 +44,13 @@ pub fn NodeConfigEditor(
     #[allow(clippy::redundant_closure)]
     let mut displayed_node = use_signal(|| active_node_opt());
 
-    let memo_active_node_id =
-        use_memo(move || displayed_node().map_or_else(Uuid::nil, |(_, id)| id));
+    let memo_active_node_id = use_memo(move || {
+        displayed_node().unwrap_or_else(|| ActiveNode {
+            node_id: Uuid::nil(),
+            graph_id: Uuid::nil(),
+            node_type: NodeType::Optical("dummy".to_string()),
+        })
+    });
 
     use_effect(move || {
         if *dirty_count.read() == 0 {
@@ -54,18 +59,18 @@ pub fn NodeConfigEditor(
     });
 
     // Standard Processing
-    use_node_config_processor(is_modified);
+    use_node_config_processor(model_modified_handler);
     let node_config_processor = use_coroutine_handle::<NodeChangeEvent>();
     let on_node_change = EventHandler::new(move |evt: NodeChangeEvent| {
         node_config_processor.send(evt);
     });
 
-    match displayed_node() {
-        Some((NodeType::Optical(_), _)) => rsx! {
-            OpticalNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
+    match displayed_node().map(|n| n.node_type) {
+        Some(NodeType::Optical(_)) => rsx! {
+            OpticalNodeEditor { active_node: memo_active_node_id, on_change: on_node_change }
         },
-        Some((NodeType::Analyzer(_), _)) => rsx! {
-            AnalyzerNodeEditor { node_id: memo_active_node_id, on_change: on_node_change }
+        Some(NodeType::Analyzer(_)) => rsx! {
+            AnalyzerNodeEditor { active_node: memo_active_node_id, on_change: on_node_change }
         },
         None => rsx! {
             div { "No node selected" }
@@ -73,23 +78,28 @@ pub fn NodeConfigEditor(
     }
 }
 
-fn use_node_config_processor(mut is_modified: Signal<bool>) {
-    let graph_processor = use_coroutine_handle::<GraphStoreAction>();
-    let mut graph_store = use_context::<Signal<GraphStore>>();
-
+fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     use_coroutine(
         move |mut rx: UnboundedReceiver<NodeChangeEvent>| async move {
             while let Some(event) = rx.next().await {
                 let uuid = event.node_id;
 
                 let result: Result<(), String> = match event.action {
-                    NodeChangeAction::Name(name) => api::update_node_name(uuid, name.clone())
-                        .await
-                        .map(|names| {
-                            for (uuid, name) in &names {
-                                graph_store.write().set_name_of_node(*uuid, name.clone());
-                            }
-                        }),
+                    NodeChangeAction::Name { name, graph_id } => {
+                        api::update_node_name(uuid, name.clone())
+                            .await
+                            .map(|names| {
+                                for (uuid, name) in &names {
+                                    workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
+                                        name: name.clone(),
+                                        graph_id,
+                                        node_id: *uuid,
+                                        needs_saving: true,
+                                    });
+                                }
+                            })
+                    }
                     NodeChangeAction::Lidt(lidt_new) => {
                         api::update_node_lidt(uuid, lidt_new).await.map(|_| ())
                     }
@@ -104,11 +114,18 @@ fn use_node_config_processor(mut is_modified: Signal<bool>) {
                     NodeChangeAction::Isometry(iso) => {
                         api::update_node_isometry(uuid, iso).await.map(|_| ())
                     }
-                    NodeChangeAction::Inverted(inverted) => {
+                    NodeChangeAction::Inverted { inverted, graph_id } => {
                         match api::update_node_inversion(uuid, inverted).await {
                             Ok(connections) => {
-                                graph_processor.send(GraphStoreAction::UpdateEdges(connections));
-                                graph_store.write().set_node_inverted(uuid, inverted);
+                                workspace_processor.send(GraphsWorkspaceAction::UpdateEdges {
+                                    connections,
+                                    graph_id,
+                                });
+                                workspace_processor.send(GraphsWorkspaceAction::InvertNode {
+                                    inverted,
+                                    graph_id,
+                                    node_id: uuid,
+                                });
                                 Ok(())
                             }
                             Err(e) => Err(e),
@@ -123,7 +140,7 @@ fn use_node_config_processor(mut is_modified: Signal<bool>) {
 
                 match result {
                     Ok(()) => {
-                        is_modified.set(true);
+                        is_modified_handler.call(true);
                     }
                     Err(err_str) => {
                         OPOSSUM_UI_LOGS.write().add_log(&err_str);

@@ -2,13 +2,9 @@
 use crate::components::scenery_editor::{
     constants::EDGE_BEZIER_OFFSET,
     edges::{define_bezier_path, edge_component::EdgeComponent},
-    graph_editor::graph_editor_component::EditorState,
-    graph_store::GraphStore,
+    graph_editor::{EditorState, GraphStore},
 };
-use dioxus::{
-    html::geometry::{Pixels, euclid::Point2D},
-    prelude::*,
-};
+use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::prelude::*;
 use uuid::Uuid;
 
@@ -17,7 +13,7 @@ pub struct NewEdgeCreationStart {
     pub src_node: Uuid,
     pub src_port: String,
     pub src_port_type: PortType,
-    pub start_pos: Point2D<f64, Pixels>,
+    pub start_pos: Point2D<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -31,8 +27,8 @@ pub struct EdgePort {
 pub struct EdgeCreation {
     start_port: EdgePort,
     end_port: Option<EdgePort>,
-    start: Point2D<f64, Pixels>,
-    end: Point2D<f64, Pixels>,
+    start: Point2D<f64>,
+    end: Point2D<f64>,
     bezier_offset: f64,
 }
 
@@ -42,7 +38,7 @@ impl EdgeCreation {
         src_node: Uuid,
         src_port: String,
         src_port_type: PortType,
-        start: Point2D<f64, Pixels>,
+        start: Point2D<f64>,
     ) -> Self {
         let connection_factor = if src_port_type == PortType::Input {
             -1.
@@ -61,7 +57,7 @@ impl EdgeCreation {
             bezier_offset: EDGE_BEZIER_OFFSET * connection_factor,
         }
     }
-    pub fn shift_end(&mut self, shift: Point2D<f64, Pixels>) {
+    pub fn shift_end(&mut self, shift: Point2D<f64>) {
         self.end.x += shift.x;
         self.end.y += shift.y;
     }

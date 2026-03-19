@@ -44,8 +44,8 @@ impl fmt::Display for ShortCutAction {
 impl From<ShortCutAction> for AppCommand {
     fn from(action: ShortCutAction) -> Self {
         match action {
-            ShortCutAction::Center => Self::CenterGraph { zoom_to_fit: false },
-            ShortCutAction::ZoomToFit => Self::CenterGraph { zoom_to_fit: true },
+            ShortCutAction::Center => Self::CenterGraph,
+            ShortCutAction::ZoomToFit => Self::ZoomToFit,
             ShortCutAction::AutoLayout => Self::AutoLayout,
             ShortCutAction::Save => Self::Save,
             ShortCutAction::SaveAs => Self::SaveAs,

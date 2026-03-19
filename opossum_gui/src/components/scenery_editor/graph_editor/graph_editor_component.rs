@@ -2,251 +2,195 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        GraphState, GraphStoreAction, SelectionBoxComponent,
-        constants::{MAX_ZOOM, MIN_ZOOM},
-        edges::edges_component::{
-            EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
+        ActiveNode, NodeEditorCommand,
+        graph_editor::{
+            DragStatus, GraphViewEditor,
+            graph_workspace::{
+                GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
+                use_workspace_processor, workspace_action::use_node_editor_command,
+            },
+            hooks::{use_drag_end, use_on_key_down, use_on_resize},
         },
-        graph_editor::hooks::{
-            use_drag, use_drag_end, use_on_key_down, use_on_mouse_down, use_on_resize, use_zoom,
-        },
-        nodes::Nodes,
-        use_graph_processor,
     },
 };
-use dioxus::{
-    html::geometry::{
-        Pixels, PixelsSize,
-        euclid::{Point2D, Rect, Size2D},
-    },
-    prelude::*,
-};
-use opossum_core::{prelude::*, types::api_types::NewRefNode};
-use std::{path::PathBuf, rc::Rc, time::Instant};
+use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
+use std::path::PathBuf;
 use uuid::Uuid;
-#[derive(Debug)]
-pub enum NodeEditorCommand {
-    DeleteAll,
-    AddNode(String),
-    AddNodeRef(NewRefNode),
-    AddAnalyzer(AnalyzerType),
-    LoadFile(PathBuf),
-    SaveFile(PathBuf),
-    AutoLayout,
-    CenterGraph { zoom_to_fit: bool },
-}
-
-#[derive(Clone, Copy)]
-pub struct EditorState {
-    pub editor_size: Signal<PixelsSize>,
-    pub drag_status: Signal<DragStatus>,
-    pub edge_in_creation: Signal<Option<EdgeCreation>>,
-    pub zoom: Signal<f64>,
-    pub shift: Signal<Point2D<f64, Pixels>>,
-    pub rect: Signal<Rect<f64, Pixels>>,
-    pub selection_box: Signal<Option<Rect<f64, Pixels>>>,
-}
-
-impl Default for EditorState {
-    fn default() -> Self {
-        Self {
-            editor_size: Signal::<PixelsSize>::default(),
-            drag_status: Signal::<DragStatus>::default(),
-            edge_in_creation: Signal::<Option<EdgeCreation>>::default(),
-            zoom: Signal::new(1.),
-            shift: Signal::<Point2D<f64, Pixels>>::default(),
-            rect: Signal::<Rect<f64, Pixels>>::default(),
-            selection_box: Signal::<Option<Rect<f64, Pixels>>>::default(),
-        }
-    }
-}
-
-impl EditorState {
-    pub fn get_view_port_center(&self) -> Point2D<f64, Pixels> {
-        let editor_size = *self.editor_size.read();
-
-        Point2D::new(editor_size.width / 2., editor_size.height / 2.)
-    }
-    pub fn get_view_port_size(&self) -> Size2D<f64, Pixels> {
-        *self.editor_size.read()
-    }
-
-    pub fn center_graph(&mut self, bounding_box: Rect<f64, Pixels>, zoom_to_fit: bool) {
-        if zoom_to_fit {
-            self.zoom_to_fit(bounding_box);
-        }
-        let center = bounding_box.center();
-        let zoom = *self.zoom.read();
-        let view_center = self.get_view_port_center();
-        self.shift.set(Point2D::new(
-            center.x.mul_add(-zoom, view_center.x),
-            center.y.mul_add(-zoom, view_center.y),
-        ));
-    }
-
-    fn zoom_to_fit(&mut self, bounding_box: Rect<f64, Pixels>) {
-        let padding_fac = 0.95;
-        let view_box = self.get_view_port_size();
-        let zoom = *self.zoom.read();
-        let height_fac = view_box.height * padding_fac / zoom / bounding_box.height();
-        let width_fac = view_box.width * padding_fac / zoom / bounding_box.width();
-        self.zoom
-            .set((zoom * width_fac.min(height_fac)).clamp(MIN_ZOOM, MAX_ZOOM));
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub enum DragStatus {
-    #[default]
-    None,
-    Graph,
-    Node(Uuid, Point2D<f64, Pixels>), // stores also old position before drag.
-    Edge(NewEdgeCreationStart),
-    SelectionBox(Rect<f64, Pixels>),
-}
 
 #[component]
 pub fn GraphEditor(
-    command: ReadSignal<Option<NodeEditorCommand>>,
+    command: Memo<Option<NodeEditorCommand>>,
+    node_editor_command_handler: EventHandler<Option<NodeEditorCommand>>,
     model_modified_sig: ReadSignal<bool>,
     model_modified_handler: EventHandler<bool>,
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
 ) -> Element {
-    let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
+    let workspace = use_signal(GraphsWorkspaceState::default);
+    use_context_provider(|| workspace);
+    let root_graph_id = use_memo(move || *workspace.read().root_scenery_id.read());
 
-    let graph_state: Signal<GraphState> = use_signal(GraphState::default);
-    let graph_processor: Coroutine<GraphStoreAction> = use_graph_processor(graph_state);
+    let workspace_handlers = WorkSpaceSignalHandlers::new(workspace);
+    use_context_provider(|| workspace_handlers);
 
     let graph_editor_container_class =
-        use_memo(
-            move || match *graph_state.peek().editor_state.peek().drag_status.read() {
-                DragStatus::Graph => "col px-0 graph-editor-container dragging".to_string(),
-                _ => "col px-0 graph-editor-container".to_string(),
-            },
-        );
+        use_memo(move || match *workspace.peek().drag_status.read() {
+            DragStatus::Graph => "col px-0 graph-editor-container dragging".to_string(),
+            _ => "col px-0 graph-editor-container".to_string(),
+        });
 
-    let active_node_opt = use_memo(move || {
-        graph_state
-            .read()
-            .graph_store
-            .read()
-            .get_active_node()
-            .map(|n| (n.node_type().clone(), n.id()))
-    });
+    let workspace_processor = use_workspace_processor(
+        workspace.into(),
+        root_graph_id,
+        workspace_handlers,
+        model_file_path_handler,
+    );
 
-    use_context_provider(|| graph_state().graph_store);
-    use_context_provider(|| graph_state().editor_state);
-
-    let current_mouse_pos = use_signal(Point2D::default);
-    let mut on_mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
-    let onwheel_handler = use_zoom(on_mounted);
-    let onmousedown_handler = use_on_mouse_down(current_mouse_pos, last_auxiliary_click);
-    let onmousemove_handler = use_drag(current_mouse_pos);
-    let onmouseup_handler = use_drag_end();
-    let onmouseleave_handler = use_drag_end();
-    let onkeydownhandler = use_on_key_down(current_mouse_pos);
-    let onresizehandler = use_on_resize(on_mounted);
-
-    let shift = use_memo(move || *graph_state.read().editor_state.read().shift.read());
-    let zoom = use_memo(move || *graph_state.read().editor_state.read().zoom.read());
+    let active_tab = use_memo(move || *workspace.read().active_tab.read());
 
     use_effect(move || {
-        let graph_store = graph_state.peek().graph_store;
-        let needs_saving_signal = graph_store.peek().needs_saving();
-        let is_unsaved = *needs_saving_signal.read();
+        use_node_editor_command(
+            node_editor_command_handler,
+            active_tab.into(),
+            workspace_processor,
+            command,
+        );
+    });
+
+    use_effect(move || {
+        if let Some(path) = &*model_file_path_sig.read()
+            && let Some(os_fname) = path.file_stem()
+            && let Some(fname) = os_fname.to_str()
+        {
+            let name = fname.to_string();
+            let id = root_graph_id();
+            workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
+                name,
+                graph_id: id,
+                node_id: id,
+                needs_saving: false,
+            });
+        }
+    });
+
+    use_effect(move || {
+        if *root_graph_id.peek() == Uuid::nil() {
+            let scenery_name = if let Some(path) = &*model_file_path_sig.peek()
+                && let Some(os_fname) = path.file_stem()
+                && let Some(fname) = os_fname.to_str()
+            {
+                fname.to_string()
+            } else {
+                "unsaved".to_string()
+            };
+            workspace_processor
+                .send(GraphsWorkspaceAction::AddRootSceneryTab { name: scenery_name });
+        }
+    });
+
+    let current_mouse_pos = use_signal(Point2D::<f64>::default);
+
+    use_effect(move || {
+        let is_unsaved = *workspace.read().needs_saving.read();
         if *model_modified_sig.peek() != is_unsaved {
             model_modified_handler.call(is_unsaved);
         }
-        let file_path_signal = graph_store.peek().file_path();
-        let current_path = (*file_path_signal.read()).clone();
-
-        if *model_file_path_sig.peek() != current_path {
-            model_file_path_handler.call(current_path);
-        }
-    });
-    use_effect(move || {
-        graph_processor.send(GraphStoreAction::GetSceneryId);
     });
 
-    use_effect(move || {
-        if let Some(command) = command.read().as_ref() {
-            match command {
-                NodeEditorCommand::DeleteAll => {
-                    graph_processor.send(GraphStoreAction::DeleteScenery);
-                    graph_processor.send(GraphStoreAction::GetSceneryId);
-                }
-                NodeEditorCommand::AddNode(node_type) => {
-                    graph_processor.send(GraphStoreAction::AddOpticNode(node_type.clone()));
-                }
-                NodeEditorCommand::AddNodeRef(new_ref_node) => {
-                    graph_processor.send(GraphStoreAction::AddOpticReference(*new_ref_node));
-                }
-                NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                    graph_processor.send(GraphStoreAction::AddAnalyzer(analyzer_type.clone()));
-                }
-                NodeEditorCommand::AutoLayout => {
-                    graph_processor.send(GraphStoreAction::OptimizeLayout);
-                    graph_processor.send(GraphStoreAction::CenterGraph { zoom_to_fit: true });
-                }
-                NodeEditorCommand::CenterGraph { zoom_to_fit } => {
-                    graph_processor.send(GraphStoreAction::CenterGraph {
-                        zoom_to_fit: *zoom_to_fit,
-                    });
-                }
-                NodeEditorCommand::LoadFile(path) => {
-                    graph_processor.send(GraphStoreAction::LoadFromFile(path.to_owned()));
-                }
-                NodeEditorCommand::SaveFile(path) => {
-                    graph_processor.send(GraphStoreAction::SaveToFile(path.to_owned()));
-                }
-            }
-        }
+    let active_node_opt = use_memo(move || {
+        let read_workspace = workspace.read();
+        let active_tab = *read_workspace.active_tab.read();
+
+        read_workspace
+            .get_graph_store_read(active_tab)
+            .and_then(|g| {
+                g.read().get_active_node().map(|n| ActiveNode {
+                    node_id: n.id(),
+                    graph_id: active_tab,
+                    node_type: n.node_type().clone(),
+                })
+            })
     });
+    let onmouseleave_handler = use_drag_end(workspace);
+    let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);
+    let graph_editor_content_container_id = "graphEditorContentContainer";
+    let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
 
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor {
-                    active_node_opt,
-                    is_modified: graph_state.peek().graph_store.peek().needs_saving(),
-                }
+                NodeConfigEditor { active_node_opt, model_modified_handler }
             }
             div {
                 class: graph_editor_container_class(),
                 tabindex: 0,
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
-                div {
-                    class: "graph-editor",
-                    id: "editor",
-                    draggable: false,
 
-                    onwheel: onwheel_handler,
-                    onmousedown: onmousedown_handler,
-                    onmouseup: onmouseup_handler,
-                    onmousemove: onmousemove_handler,
-                    onresize: onresizehandler,
-                    onmounted: move |event| { on_mounted.set(Some(event.data)) },
-                    div {
-                        draggable: false,
-                        style: format!(
-                            "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
-                            shift().x,
-                            shift().y,
-                            zoom(),
-                        ),
-                        Nodes {}
-                        svg {
-                            width: "100%",
-                            height: "100%",
-                            overflow: "visible",
-                            tabindex: 0,
-                            {
-                                rsx! {
-                                    EdgesComponent {}
-                                    EdgeCreationComponent {}
-                                    SelectionBoxComponent {}
+                Tabs {
+                    class: "editor-tabs",
+                    value: (*workspace.read().active_tab.read()).as_simple().to_string(),
+                    on_value_change: move |v: String| {
+                        if let Ok(new_id) = Uuid::parse_str(&v) {
+                            workspace_handlers.workspace.set_active_tab(new_id);
+                        }
+                    },
+                    {
+                        let tabs = workspace.read().tabs.read().clone();
+                        let tab_order = workspace.read().tab_order.read().clone();
+                        rsx! {
+                            TabList { class: "editor-tab-list",
+                                for (i , id) in tab_order.iter().enumerate() {
+                                    if let Some(graph_state) = tabs.get(id) {
+                                        TabTrigger {
+                                            key: "{id.as_simple().to_string()}",
+                                            value: id.as_simple().to_string(),
+                                            index: i,
+                                            class: if active_tab() == *id { "editor-tab active-tab" } else { "editor-tab" },
+                                            div { class: "tab-inner",
+                                                span { {graph_state.read().graph_info.name.clone()} }
+                                                if *id != root_graph_id() {
+                                                    button {
+                                                        class: "tab-close",
+                                                        onclick: {
+                                                            let id_copy = *id;
+                                                            move |e: MouseEvent| {
+                                                                e.stop_propagation();
+                                                                workspace_handlers.workspace.remove_tabs(vec![id_copy]);
+                                                            }
+                                                        },
+
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                div { class: "editor-tab-filler" }
+                            }
+                            div {
+                                id: graph_editor_content_container_id,
+                                class: "graph-editor-tab-content",
+                                onresize: move |_| onresizehandler.call(()),
+                                for (i , id) in tab_order.iter().enumerate() {
+                                    if let Some(graph_state) = tabs.get(id) {
+                                        TabContent {
+                                            key: "{id.as_simple().to_string()}",
+                                            class: "tab-content",
+                                            value: id.as_simple().to_string(),
+                                            index: i,
+                                            GraphViewEditor {
+                                                onmouseup_handler: EventHandler::new(use_drag_end(workspace)),
+                                                model_modified_sig,
+                                                model_modified_handler,
+                                                model_file_path_sig,
+                                                model_file_path_handler,
+                                                current_mouse_pos,
+                                                graph_state: *graph_state,
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
