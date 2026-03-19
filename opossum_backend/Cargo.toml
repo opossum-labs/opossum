@@ -37,3 +37,5 @@ tokio-stream = "0.1"
 utoipa-actix-web = "0.1"
 utoipa-swagger-ui = { version = "9", features = ["actix-web", "vendored"] }
 tokio = { version = "1", features = ["process"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+semver = "1.0"

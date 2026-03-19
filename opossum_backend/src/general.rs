@@ -10,6 +10,8 @@ use opossum_core::{
     reporting::analysis_report::AnalysisReport,
     types::api_types::{NodeType, VersionInfo},
 };
+use semver::Version;
+use serde::Deserialize;
 use utoipa_actix_web::service_config::ServiceConfig;
 
 /// Return a welcome message
@@ -21,15 +23,56 @@ async fn get_hello() -> &'static str {
     "OPOSSUM backend"
 }
 
+#[derive(Deserialize)]
+struct GitHubRelease {
+    tag_name: String,
+    html_url: String,
+}
+
 /// Return a version information
 ///
-/// Return the version numbers of the OPOSSUM library and the backend server.
+/// Return the version numbers of the OPOSSUM library and the backend server including a check for updates on GitHub.
 #[utoipa::path(get, responses((status = OK, description = "success", body = VersionInfo)), tag="general")]
 #[get("/version")]
 async fn get_version() -> impl Responder {
+    let backend_version = env!("CARGO_PKG_VERSION").to_string();
+    let opossum_version = opossum_core::get_version();
+
+    let mut latest_github_version = None;
+    let mut release_url = None;
+    let mut update_available = false;
+
+    // Try to call GitHub API
+    let client = reqwest::Client::new();
+    let res = client
+        .get("https://api.github.com/repos/opossum-labs/opossum/releases/latest")
+        .header("User-Agent", "OPOSSUM-Backend")
+        .send()
+        .await;
+
+    // If successful, parse the information
+    if let Ok(response) = res
+        && response.status().is_success()
+        && let Ok(release) = response.json::<GitHubRelease>().await
+    {
+        latest_github_version = Some(release.tag_name.clone());
+        release_url = Some(release.html_url);
+
+        // Compare versions with semver
+        if let (Ok(local_ver), Ok(github_ver)) = (
+            Version::parse(&backend_version),
+            Version::parse(&release.tag_name),
+        ) {
+            update_available = github_ver > local_ver;
+        }
+    }
+
     Json(VersionInfo {
-        backend_version: env!("CARGO_PKG_VERSION").to_string(),
-        opossum_version: opossum_core::get_version(),
+        backend_version,
+        opossum_version,
+        latest_github_version,
+        release_url,
+        update_available,
     })
 }
 

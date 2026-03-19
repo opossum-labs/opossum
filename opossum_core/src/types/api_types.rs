@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{opm_document::AnalyzerInfo, prelude::AnalyzerType};
 
 /// Structure holding the version information
-#[derive(ToSchema, Serialize, Deserialize)]
+#[derive(ToSchema, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct VersionInfo {
     /// version of the OPOSSUM API backend
     #[schema(example = "0.1.0")]
@@ -15,6 +15,12 @@ pub struct VersionInfo {
     /// version of the OPOSSUM library (possibly including the git hash)
     #[schema(example = "0.6.0-18-g80cb67f (2025/02/19 15:29)")]
     pub opossum_version: String,
+    /// Most current software version on GitHub (`None`, if not accessible)
+    pub latest_github_version: Option<String>,
+    /// URL of the release informateion (`None`, if not accessible)
+    pub release_url: Option<String>,
+    /// True, if GitHub Version is newer than the local one
+    pub update_available: bool,
 }
 
 impl VersionInfo {

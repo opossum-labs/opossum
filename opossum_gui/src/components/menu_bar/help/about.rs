@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::api;
+use crate::{api, components::menu_bar::help::update_notifier::UpdateNotifier};
 use dioxus::prelude::*;
 
 #[allow(clippy::volatile_composites)]
@@ -12,6 +12,7 @@ pub fn About(mut show_about: Signal<bool>) -> Element {
         Some(Ok(response)) => rsx! {
             p { {format!("Opossum library: v.{}", response.opossum_version())} }
             p { {format!("Opossum server: v.{}", response.backend_version())} }
+            UpdateNotifier { version_info: response.clone() }
         },
         Some(Err(_)) => rsx! {
             p { "Loading about window failed" }
