@@ -57,6 +57,7 @@ pub fn use_on_mouse_down(
     let dc_time = Duration::from_millis(300);
     let editor_status = use_context::<Signal<EditorState>>();
     let mut graph_store = use_context::<Signal<GraphStore>>();
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let workspace_handlers = use_context::<WorkSpaceSignalHandlers>();
     let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
 
@@ -104,16 +105,15 @@ pub fn use_on_mouse_down(
                     ));
                     workspace.write().drag_status.set(DragStatus::Graph);
 
-                    //for double-click zoom
+                    // for double-click zoom
                     event.stop_propagation();
                     let now = Instant::now();
                     let t0_opt = *last_click.read();
                     if let Some(t0) = t0_opt
                         && now.duration_since(t0) < dc_time
                     {
-                        workspace_handlers
-                            .view
-                            .center_graph(*workspace.read().active_tab.read(), true);
+                        let graph_id = *workspace.read().active_tab.read();
+                        workspace_processor.send(GraphsWorkspaceAction::CenterGraph { graph_id, save_changes: true });
                         last_click.set(None);
                     }
                     last_click.set(Some(now));

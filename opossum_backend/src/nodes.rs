@@ -168,6 +168,12 @@ fn copy_optical_node(
     let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
     let mut node = new_node_ref.optical_ref.lock_opm()?;
 
+    let mut document = data.document.lock();    
+    if let Ok(Proptype::Uuid(ref_uuid)) = node_to_copy_from.node_attr().properties().get("reference id") && let Ok(ref_node) = node.as_refnode_mut() {
+        let (referenced_node, _) = document.scenery().node_recursive(*ref_uuid)?;
+        ref_node.assign_reference(&referenced_node);
+    }
+
     let node_attr = node.node_attr_mut();
     node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
 
@@ -182,7 +188,6 @@ fn copy_optical_node(
     drop(node_to_copy_from);
     drop(node);
 
-    let mut document = data.document.lock();
     let scenery = document.scenery_mut();
 
     let new_node_uuid = scenery
@@ -201,7 +206,6 @@ fn copy_optical_node(
     drop(document);
 
     let node = new_node_ref.optical_ref.lock_opm()?;
-
     Ok(NodeInfo::new(
         new_node_uuid,
         node.name(),
