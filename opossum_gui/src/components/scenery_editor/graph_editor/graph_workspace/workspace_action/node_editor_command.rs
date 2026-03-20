@@ -30,7 +30,9 @@ pub fn use_node_editor_command(
         match command {
             NodeEditorCommand::DeleteAll => {
                 workspace_processor.send(GraphsWorkspaceAction::DeleteRootScenery);
-                workspace_processor.send(GraphsWorkspaceAction::AddRootSceneryTab{name: "unsaved".to_string()});
+                workspace_processor.send(GraphsWorkspaceAction::AddRootSceneryTab {
+                    name: "unsaved".to_string(),
+                });
             }
             NodeEditorCommand::AddNode(node_type) => {
                 workspace_processor.send(GraphsWorkspaceAction::AddOpticNode {

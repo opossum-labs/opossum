@@ -10,7 +10,7 @@ use crate::components::{
         node_config_editor::NodeChangeEvent,
         optical_node_editor::general_editor::NodeTypeInput,
     },
-    scenery_editor::ActiveNode,
+    scenery_editor::SelectedNode,
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
@@ -18,7 +18,7 @@ use opossum_core::prelude::*;
 
 #[component]
 pub fn AnalyzerNodeEditor(
-    active_node: Memo<ActiveNode>,
+    active_node: Memo<SelectedNode>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let node_id = use_memo(move || active_node.read().node_id);

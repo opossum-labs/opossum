@@ -52,7 +52,10 @@ pub(super) fn for_each_tab<F>(
 {
     let mut ws = workspace.write();
 
-    ws.tabs.write().iter_mut().for_each(|(_, tab)| f(&mut tab.write()));
+    ws.tabs
+        .write()
+        .iter_mut()
+        .for_each(|(_, tab)| f(&mut tab.write()));
 
     if mark_dirty {
         ws.needs_saving.set(true);

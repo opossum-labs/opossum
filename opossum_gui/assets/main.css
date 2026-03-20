@@ -302,6 +302,7 @@ body {
     cursor: all-scroll;
 }
 
+
 .optical-node {
     background-color: rgb(85, 85, 85);
 }
@@ -336,6 +337,14 @@ body {
 
 .active-node {
     box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87c5f8;
+}
+
+.node.node-selection{
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87c5f8;
+}
+
+.node-selection-remove.active-node{
+    box-shadow: none;
 }
 
 /* Ports styling */

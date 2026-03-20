@@ -53,7 +53,7 @@ pub use fluence_detector::FluenceDetector;
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::Lens;
 pub use node_attr::NodeAttr;
-pub use node_group::{NodeGroup, OpticGraph};
+pub use node_group::{ConnectionInfo, NodeGroup, OpticGraph};
 pub use parabolic_mirror::ParabolicMirror;
 pub use paraxial_surface::ParaxialSurface;
 pub use ray_propagation_visualizer::RayPropagationVisualizer;

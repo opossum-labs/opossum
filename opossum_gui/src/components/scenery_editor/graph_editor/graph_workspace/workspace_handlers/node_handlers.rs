@@ -64,7 +64,8 @@ impl NodeHandlers {
     }
 
     pub fn set_node_name(&self, name: String, node_id: Uuid, graph_id: Uuid, needs_saving: bool) {
-        self.set_node_name.call((name, node_id, graph_id, needs_saving));
+        self.set_node_name
+            .call((name, node_id, graph_id, needs_saving));
     }
 
     pub fn add_group_nodes(&self, group_id: Uuid, nodes: Vec<NodeInfo>) {
@@ -138,17 +139,26 @@ fn update_node_positions_handler(
 fn set_node_name_handler(
     workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<(String, Uuid, Uuid, bool)> {
-    EventHandler::new(move |(name, node_id, graph_id, needs_saving): (String, Uuid, Uuid, bool)| {
-        with_graph_store(workspace, graph_id, needs_saving, |store| {
-            store.set_name_of_node(node_id, name.clone());
-        });
-        with_tab(workspace, node_id, needs_saving, |tab| {
-            tab.graph_info.name = name.clone();
-        });
-        for_each_tab(workspace, needs_saving, |tab| {
-            tab.graph_info.hierarchy.iter_mut().find(|(h_id, _)| *h_id == node_id).map(|(_,h_name)| *h_name = name.clone());
-        });
-    })
+    EventHandler::new(
+        move |(name, node_id, graph_id, needs_saving): (String, Uuid, Uuid, bool)| {
+            with_graph_store(workspace, graph_id, needs_saving, |store| {
+                store.set_name_of_node(node_id, name.clone());
+            });
+            with_tab(workspace, node_id, needs_saving, |tab| {
+                tab.graph_info.name.clone_from(&name);
+            });
+            for_each_tab(workspace, needs_saving, |tab| {
+                if let Some((_, h_name)) = tab
+                    .graph_info
+                    .hierarchy
+                    .iter_mut()
+                    .find(|(h_id, _)| *h_id == node_id)
+                {
+                    h_name.clone_from(&name);
+                }
+            });
+        },
+    )
 }
 fn add_group_nodes_handler(
     workspace: Signal<GraphsWorkspaceState>,

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 pub struct AppState {
     pub document: Mutex<OpmDocument>,
     pub server_handle: Mutex<Option<ServerHandle>>,
-    pub node_copy_cache: Mutex<Option<NodeCacheItem>>,
+    pub node_copy_cache: Mutex<Vec<NodeCacheItem>>,
 }
 impl AppState {
     /// Sets the server handle to stop.
@@ -23,12 +23,12 @@ impl Clone for AppState {
         Self {
             document: Mutex::new(self.document.lock().clone()),
             server_handle: Mutex::new(self.server_handle.lock().clone()),
-            node_copy_cache: Mutex::new(None::<NodeCacheItem>),
+            node_copy_cache: Mutex::new(Vec::new()),
         }
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum NodeCacheItem {
     Optical(OpticRef),
     Analyzer(AnalyzerInfo),

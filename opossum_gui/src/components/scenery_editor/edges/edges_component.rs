@@ -8,7 +8,7 @@ use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::prelude::*;
 use uuid::Uuid;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct NewEdgeCreationStart {
     pub src_node: Uuid,
     pub src_port: String,

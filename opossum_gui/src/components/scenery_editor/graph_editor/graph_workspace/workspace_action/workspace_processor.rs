@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{collections::HashSet, fs, path::PathBuf};
 
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use futures_util::StreamExt;
@@ -52,7 +52,7 @@ pub fn use_workspace_processor(
                             path,
                             set_file_path_handler,
                             workspace_handlers,
-                            root_graph_id()
+                            root_graph_id(),
                         )
                         .await;
                     }
@@ -60,7 +60,7 @@ pub fn use_workspace_processor(
                         process_delete_root_scenery(workspace_handlers, set_file_path_handler)
                             .await;
                     }
-                    GraphsWorkspaceAction::AddRootSceneryTab{name} => {
+                    GraphsWorkspaceAction::AddRootSceneryTab { name } => {
                         process_add_root_scenery_tab(workspace_handlers, name).await;
                     }
                     GraphsWorkspaceAction::AddOpticNode {
@@ -115,10 +115,13 @@ pub fn use_workspace_processor(
                         name,
                         graph_id,
                         node_id,
-                        needs_saving
-                    } => workspace_handlers
-                        .nodes
-                        .set_node_name(name, node_id, graph_id, needs_saving),
+                        needs_saving,
+                    } => workspace_handlers.nodes.set_node_name(
+                        name,
+                        node_id,
+                        graph_id,
+                        needs_saving,
+                    ),
                     GraphsWorkspaceAction::UpdateEdge {
                         connection,
                         graph_id,
@@ -131,8 +134,8 @@ pub fn use_workspace_processor(
                     } => {
                         process_delete_edge(connection, workspace_handlers, graph_id).await;
                     }
-                    GraphsWorkspaceAction::CopyNode { node_type, node_id } => {
-                        process_copy_node(node_type, node_id).await;
+                    GraphsWorkspaceAction::CopyNodes { nodes } => {
+                        process_copy_nodes(nodes).await;
                     }
                     GraphsWorkspaceAction::PasteNode { pos, graph_id } => {
                         process_paste_node(pos, workspace_handlers, graph_id).await;
@@ -169,6 +172,7 @@ pub fn use_workspace_processor(
                             .await;
                         }
                     }
+                    GraphsWorkspaceAction::ConvertToGroup { _nodes: _ } => todo!(),
                 }
             }
         }
@@ -244,50 +248,37 @@ async fn process_paste_node(
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
-    match api::get_copied_node_type().await {
-        Ok(node_type) => {
-            if node_type {
-                eval_action_run(
-                    api::post_paste_optical_node(graph_id, pos).await,
-                    Some(move |node_info_opt| {
-                        if let Some(node_info) = node_info_opt {
-                            ws_handler.nodes.add_optical_node(node_info, graph_id);
-                        }
-                    }),
-                );
-            } else {
-                eval_action_run(
-                    api::post_paste_analyzer_node(pos).await,
-                    Some(move |analyzer_info: AnalyzerInfo| {
-                        let analyzer_id = analyzer_info.id();
-                        ws_handler.nodes.add_analyzer_node(
-                            NewAnalyzerInfo::from(analyzer_info),
-                            analyzer_id,
-                            graph_id,
-                        );
-                    }),
-                );
-            }
-        }
-        Err(err_str) => {
-            OPOSSUM_UI_LOGS.write().add_log(&err_str);
-        }
-    }
+    eval_action_run(
+        api::post_paste_nodes(graph_id, pos).await,
+        Some(
+            move |(optical_nodes, analyzer_nodes, edges): (
+                Vec<NodeInfo>,
+                Vec<AnalyzerInfo>,
+                Vec<ConnectInfo>,
+            )| {
+                for n in &optical_nodes {
+                    ws_handler.nodes.add_optical_node(n.clone(), graph_id);
+                }
+                for a in &analyzer_nodes {
+                    let analyzer_id = a.id();
+                    ws_handler.nodes.add_analyzer_node(
+                        NewAnalyzerInfo::from(a.clone()),
+                        analyzer_id,
+                        graph_id,
+                    );
+                }
+                for edge in edges {
+                    ws_handler.edges.add_edge(edge, graph_id);
+                }
+            },
+        ),
+    );
 }
 
 #[allow(clippy::future_not_send)]
 #[allow(clippy::large_types_passed_by_value)]
-async fn process_copy_node(node_type: NodeType, node_id: Uuid) {
-    match node_type {
-        NodeType::Optical(_) => eval_action_run(
-            api::post_copy_optical_node(node_id).await,
-            None::<fn(String)>,
-        ),
-        NodeType::Analyzer(_) => eval_action_run(
-            api::post_copy_analyzer_node(node_id).await,
-            None::<fn(String)>,
-        ),
-    }
+async fn process_copy_nodes(nodes: HashSet<Uuid>) {
+    eval_action_run(api::post_copy_nodes(nodes).await, None::<fn(String)>);
 }
 
 #[allow(clippy::future_not_send)]
@@ -586,9 +577,11 @@ async fn process_save_root_scenery_to_file(
     path: PathBuf,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
     ws_handler: WorkSpaceSignalHandlers,
-    root_id: Uuid
+    root_id: Uuid,
 ) {
-    if let Some(f_stem) = path.file_stem() && let Some(fname) = f_stem.to_str(){
+    if let Some(f_stem) = path.file_stem()
+        && let Some(fname) = f_stem.to_str()
+    {
         process_rename_root_scenery(ws_handler, fname.to_string(), root_id, false).await;
         eval_action_run(
             api::get_opm_file().await,
@@ -607,7 +600,7 @@ async fn process_save_root_scenery_to_file(
 #[allow(clippy::future_not_send)]
 #[allow(clippy::large_types_passed_by_value)]
 async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers, name: String) {
-    match api::get_scenery_uuid().await{
+    match api::get_scenery_uuid().await {
         Ok(id) => {
             ws_handler.workspace.set_root_scenery_id(id);
             ws_handler.workspace.add_new_group_tab(GraphInfo {
@@ -623,15 +616,20 @@ async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers, name:
     }
 }
 
-
 #[allow(clippy::future_not_send)]
 #[allow(clippy::large_types_passed_by_value)]
-async fn process_rename_root_scenery(ws_handler: WorkSpaceSignalHandlers, name: String, root_id: Uuid, needs_saving: bool) {
+async fn process_rename_root_scenery(
+    ws_handler: WorkSpaceSignalHandlers,
+    name: String,
+    root_id: Uuid,
+    needs_saving: bool,
+) {
     eval_action_run(
         api::update_node_name(root_id, name.clone()).await,
         Some(move |_| {
-            ws_handler.nodes.set_node_name(name, root_id, root_id, needs_saving);
+            ws_handler
+                .nodes
+                .set_node_name(name, root_id, root_id, needs_saving);
         }),
     );
 }
-

@@ -1,17 +1,14 @@
 use crate::{
     OPOSSUM_UI_LOGS, api,
     components::scenery_editor::{
-        NodeElement, NodeType,
+        NodeElement, NodeType, SelectedNode,
         constants::{SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
         graph_editor::graph_workspace::EditorState,
         ports::ports_component::Ports,
     },
 };
 use dioxus::{
-    html::geometry::euclid::{
-        Size2D,
-        default::{Point2D, Rect},
-    },
+    html::geometry::euclid::default::{Point2D, Rect, Size2D},
     prelude::*,
 };
 use opossum_core::{
@@ -20,7 +17,10 @@ use opossum_core::{
     utils::to_f64,
 };
 use rust_sugiyama::{configure::Config, from_edges};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 use uuid::Uuid;
 
 #[derive(Clone, Eq, PartialEq, Default)]
@@ -41,7 +41,9 @@ pub struct GraphInfo {
 pub struct GraphStore {
     nodes: Signal<HashMap<Uuid, NodeElement>>,
     pub edges: Signal<Vec<ConnectInfo>>,
-    active_node: Signal<Option<Uuid>>,
+    pub to_be_selected: Signal<HashSet<Uuid>>,
+    pub to_be_removed: Signal<HashSet<Uuid>>,
+    selected_nodes: Signal<HashSet<Uuid>>,
     file_path: Signal<Option<PathBuf>>,
     pub needs_saving: Signal<bool>,
     pub scenery_id: Uuid,
@@ -95,21 +97,39 @@ impl GraphStore {
         }
     }
     #[must_use]
-    pub fn active_node(&self) -> Option<Uuid> {
-        *self.active_node.read()
+    pub fn selected_nodes(&self) -> HashSet<Uuid> {
+        self.selected_nodes.read().clone()
     }
-    pub fn get_active_node(&self) -> Option<NodeElement> {
-        self.active_node()
-            .and_then(|active_node_id| self.nodes().read().get(&active_node_id).cloned())
+    pub fn clear_selected_nodes(&mut self) {
+        self.selected_nodes.write().clear();
+    }
+    pub fn get_selected_nodes(&self, graph_id: Uuid) -> Vec<SelectedNode> {
+        let mut selected_nodes = Vec::<SelectedNode>::new();
+        for n_id in &self.selected_nodes() {
+            if let Some(n) = self.nodes().read().get(n_id) {
+                let selected_node = SelectedNode {
+                    node_id: n.id(),
+                    graph_id,
+                    node_type: n.node_type().clone(),
+                };
+                selected_nodes.push(selected_node);
+            }
+        }
+        selected_nodes
     }
     pub fn set_node_active(&mut self, id: Uuid, z_index: usize) {
         self.set_z_level_to_top(id, z_index);
-        let mut active_node = self.active_node.write();
-        *active_node = Some(id);
+        self.selected_nodes.write().clear();
+        self.selected_nodes.write().insert(id);
+    }
+    pub fn add_to_node_selection(&mut self, id: Uuid) {
+        self.selected_nodes.write().insert(id);
+    }
+    pub fn remove_from_node_selection(&mut self, id: Uuid) {
+        self.selected_nodes.write().remove(&id);
     }
     pub fn set_active_node_none(&mut self) {
-        let mut active_node = self.active_node.write();
-        *active_node = None;
+        self.selected_nodes.write().clear();
     }
     pub fn update_node_positions(&mut self, new_positions: HashMap<Uuid, Point2D<f64>>) {
         let mut nodes = self.nodes.write();

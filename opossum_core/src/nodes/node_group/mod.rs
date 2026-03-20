@@ -24,8 +24,7 @@ use crate::{
     surface::optic_surface::OpticSurface,
     utils::LockExt,
 };
-use optic_graph::ConnectionInfo;
-pub use optic_graph::OpticGraph;
+pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -244,9 +243,9 @@ impl NodeGroup {
         if self.node_attr().uuid() != node_id {
             let parent_id = self.node_recursive(node_id)?.1;
 
-            let group_vec = self
-                .get_node_hierarchy_bottom_up(parent_id)
-                .map_err(|e| OpossumError::OpticGroup(format!("Error getting node hierarchy: {e}")))?;
+            let group_vec = self.get_node_hierarchy_bottom_up(parent_id).map_err(|e| {
+                OpossumError::OpticGroup(format!("Error getting node hierarchy: {e}"))
+            })?;
 
             group_hierarchy.extend(group_vec);
         }
@@ -399,6 +398,41 @@ impl NodeGroup {
         Ok(out)
     }
 
+    /// Execute a mutable operation on the optical node identified by `node_id`.
+    ///
+    /// This method locks the node's internal mutex and provides a mutable reference
+    /// to the node (as `&mut dyn Analyzable`) for the duration of the closure `f`.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the target node (can be any node type, not necessarily a group).
+    /// - `f`: Closure that receives `&mut dyn Analyzable` and returns a value of type `R`.
+    ///
+    /// # Returns
+    /// The value produced by `f`, wrapped in `OpmResult<R>`.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The node with `node_id` cannot be found in the graph.
+    /// - The internal mutex is poisoned or cannot be acquired.
+    ///
+    /// # Concurrency
+    /// The lock is only held for the duration of the closure. Avoid calling
+    /// functions inside `f` that would attempt to lock the same node to prevent deadlocks.
+    ///
+    /// # Panic Safety
+    /// If `f` panics while the mutex is held, the mutex may become poisoned;
+    /// subsequent calls to `with_node_mut` may fail with a poisoned-lock error.
+    pub fn with_node_mut<R>(
+        &mut self,
+        node_id: Uuid,
+        f: impl FnOnce(&mut dyn Analyzable) -> R,
+    ) -> OpmResult<R> {
+        let (node_ref, _) = self.node_recursive(node_id)?;
+        let result = f(&mut *node_ref.optical_ref.lock_opm()?);
+
+        Ok(result)
+    }
+
     /// Execute a mutable operation on the `NodeAttr` of the node identified by `node_id`.
     ///
     /// If `node_id` equals this group's own UUID, the closure is invoked directly with
@@ -468,11 +502,7 @@ impl NodeGroup {
     /// # Panic Safety
     /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
     /// fail with a poisoned-lock error.
-    pub fn with_node_attr<R>(
-        &self,
-        node_id: Uuid,
-        f: impl FnOnce(&NodeAttr) -> R,
-    ) -> OpmResult<R> {
+    pub fn with_node_attr<R>(&self, node_id: Uuid, f: impl FnOnce(&NodeAttr) -> R) -> OpmResult<R> {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self.node_attr()));
         }

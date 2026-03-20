@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::nodes::NodeAttr;
@@ -54,71 +54,31 @@ pub async fn post_add_node(new_node_info: NewNode, group_id: Uuid) -> Result<Nod
         .await
 }
 
-/// Request the node type that has been stored in the copy-node cache
-///
-/// # Returns
-/// - Returns true if it is an optical node
-/// - Returns false if it is an analyzer node
-///
-/// # Errors
-/// Returns an error if there is no node in the copy cache
-pub async fn get_copied_node_type() -> Result<bool, String> {
-    HTTP_API_CLIENT()
-        .get::<bool>("/api/scenery/copied_node_type")
-        .await
-}
-/// Send a request to copy a optical node of the scenery.
+/// Send a request to copy nodes of the scenery.
 ///
 /// # Errors
 ///
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized
 /// - the request fails (e.g. the node ide does not exist)
-/// - the response cannot be deserialized into the [`NodeInfo`] struct
-pub async fn post_copy_optical_node(node_id: Uuid) -> Result<String, String> {
+pub async fn post_copy_nodes(nodes: HashSet<Uuid>) -> Result<String, String> {
     HTTP_API_CLIENT()
-        .post::<Uuid, String>("/api/scenery/node_copy", node_id)
+        .post::<HashSet<Uuid>, String>("/api/scenery/nodes_copy", nodes)
         .await
 }
 
-pub async fn post_paste_optical_node(
+pub async fn post_paste_nodes(
     group_id: Uuid,
     pos: Point2D<f64>,
-) -> Result<Option<NodeInfo>, String> {
+) -> Result<(Vec<NodeInfo>, Vec<AnalyzerInfo>, Vec<ConnectInfo>), String> {
     HTTP_API_CLIENT()
-        .post::<(Uuid, (f64, f64)), Option<NodeInfo>>(
-            "/api/scenery/node_paste",
+        .post::<(Uuid, (f64, f64)), (Vec<NodeInfo>, Vec<AnalyzerInfo>, Vec<ConnectInfo>)>(
+            "/api/scenery/nodes_paste",
             (group_id, (pos.x, pos.y)),
         )
         .await
 }
-/// Send a request to copy an analyzer node of the scenery.
-///
-/// # Errors
-///
-/// This function will return an error if
-/// - the provided [`Uuid`] cannot be serialized
-/// - the request fails (e.g. the node id does not exist)
-/// - the response cannot be deserialized into the [`AnalyzerInfo`] struct
-pub async fn post_copy_analyzer_node(analyzer_id: Uuid) -> Result<String, String> {
-    HTTP_API_CLIENT()
-        .post::<Uuid, String>("/api/scenery/analyzer_copy", analyzer_id)
-        .await
-}
 
-/// Send a request to paste an analyzer node of the scenery.
-///
-/// # Errors
-///
-/// This function will return an error if
-/// - the provided [`Uuid`] cannot be serialized
-/// - the request fails (e.g. the node id does not exist)
-/// - the response cannot be deserialized into the [`AnalyzerInfo`] struct
-pub async fn post_paste_analyzer_node(pos: Point2D<f64>) -> Result<AnalyzerInfo, String> {
-    HTTP_API_CLIENT()
-        .post::<(f64, f64), AnalyzerInfo>("/api/scenery/analyzer_paste", (pos.x, pos.y))
-        .await
-}
 /// Send a request to add a reference node to the scenery.
 ///
 /// # Errors

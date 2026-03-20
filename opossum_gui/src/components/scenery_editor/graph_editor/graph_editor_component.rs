@@ -2,14 +2,14 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        ActiveNode, NodeEditorCommand,
+        NodeEditorCommand, SelectedNode,
         graph_editor::{
-            GraphViewEditor,
+            DragStatus, GraphViewEditor,
             graph_workspace::{
                 GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
                 use_workspace_processor, workspace_action::use_node_editor_command,
             },
-            hooks::{use_drag_end, use_on_key_down, use_on_resize},
+            hooks::{use_drag_end, use_on_key_down, use_on_key_up, use_on_resize},
         },
     },
 };
@@ -34,6 +34,12 @@ pub fn GraphEditor(
     let workspace_handlers = WorkSpaceSignalHandlers::new(workspace);
     use_context_provider(|| workspace_handlers);
 
+    let graph_editor_container_class =
+        use_memo(move || match *workspace.peek().drag_status.read() {
+            DragStatus::Graph => "col px-0 graph-editor-container dragging".to_string(),
+            _ => "col px-0 graph-editor-container".to_string(),
+        });
+
     let workspace_processor = use_workspace_processor(
         workspace.into(),
         root_graph_id,
@@ -53,27 +59,39 @@ pub fn GraphEditor(
     });
 
     use_effect(move || {
-        if let Some(path) = &*model_file_path_sig.read() && let Some(os_fname)  =path.file_stem() && let Some(fname) = os_fname.to_str(){
+        if let Some(path) = &*model_file_path_sig.read()
+            && let Some(os_fname) = path.file_stem()
+            && let Some(fname) = os_fname.to_str()
+        {
             let name = fname.to_string();
             let id = root_graph_id();
-            workspace_processor.send(GraphsWorkspaceAction::SetNodeName { name, graph_id: id, node_id: id, needs_saving: false});
+            workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
+                name,
+                graph_id: id,
+                node_id: id,
+                needs_saving: false,
+            });
         }
     });
 
     use_effect(move || {
-        if *root_graph_id.peek() == Uuid::nil(){
-            let scenery_name = if let Some(path) = &*model_file_path_sig.peek()&& let Some(os_fname)  =path.file_stem() && let Some(fname) = os_fname.to_str(){
+        if *root_graph_id.peek() == Uuid::nil() {
+            let scenery_name = if let Some(path) = &*model_file_path_sig.peek()
+                && let Some(os_fname) = path.file_stem()
+                && let Some(fname) = os_fname.to_str()
+            {
                 fname.to_string()
-            }
-            else{
+            } else {
                 "unsaved".to_string()
             };
-            workspace_processor.send(GraphsWorkspaceAction::AddRootSceneryTab{name: scenery_name});
+            workspace_processor
+                .send(GraphsWorkspaceAction::AddRootSceneryTab { name: scenery_name });
         }
     });
 
     let current_mouse_pos = use_signal(Point2D::<f64>::default);
-
+    let ctrl_pressed = use_signal(|| false);
+    let shift_pressed = use_signal(|| false);
 
     use_effect(move || {
         let is_unsaved = *workspace.read().needs_saving.read();
@@ -82,35 +100,38 @@ pub fn GraphEditor(
         }
     });
 
-    let active_node_opt = use_memo(move || {
+    let selected_nodes_memo = use_memo(move || {
         let read_workspace = workspace.read();
         let active_tab = *read_workspace.active_tab.read();
 
         read_workspace
             .get_graph_store_read(active_tab)
-            .and_then(|g| {
-                g.read().get_active_node().map(|n| ActiveNode {
-                    node_id: n.id(),
-                    graph_id: active_tab,
-                    node_type: n.node_type().clone(),
-                })
+            .map_or(Vec::<SelectedNode>::new(), |g| {
+                g.read().get_selected_nodes(active_tab)
             })
     });
     let onmouseleave_handler = use_drag_end(workspace);
-    let onkeydownhandler = use_on_key_down(current_mouse_pos, workspace);
+    let onkeydownhandler =
+        use_on_key_down(current_mouse_pos, workspace, ctrl_pressed, shift_pressed);
+    let onkeyuphandler = use_on_key_up(ctrl_pressed, shift_pressed);
     let graph_editor_content_container_id = "graphEditorContentContainer";
     let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
 
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { active_node_opt, model_modified_handler }
+                NodeConfigEditor {
+                    selected_nodes_memo,
+                    model_modified_handler,
+                    workspace_processor,
+                }
             }
             div {
                 class: graph_editor_container_class(),
                 tabindex: 0,
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
+                onkeyup: onkeyuphandler,
 
                 Tabs {
                     class: "editor-tabs",
@@ -172,6 +193,8 @@ pub fn GraphEditor(
                                                 model_file_path_handler,
                                                 current_mouse_pos,
                                                 graph_state: *graph_state,
+                                                ctrl_pressed,
+                                                shift_pressed,
                                             }
                                         }
                                     }

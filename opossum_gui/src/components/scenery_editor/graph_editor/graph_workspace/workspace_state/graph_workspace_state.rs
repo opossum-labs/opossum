@@ -10,11 +10,14 @@ use uuid::Uuid;
 use crate::components::scenery_editor::{
     NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
-    graph_editor::graph_workspace::{EditorState, GraphState, GraphStore},
+    graph_editor::{
+        DragStatus,
+        graph_workspace::{EditorState, GraphState, GraphStore},
+    },
 };
 
 #[derive(Clone, PartialEq)]
-pub struct ActiveNode {
+pub struct SelectedNode {
     pub node_id: Uuid,
     pub graph_id: Uuid,
     pub node_type: NodeType,
@@ -26,8 +29,10 @@ pub struct GraphsWorkspaceState {
     pub tab_order: Signal<Vec<Uuid>>,
     pub active_tab: Signal<Uuid>,
     pub root_scenery_id: Signal<Uuid>,
-    pub needs_saving: Signal<bool>,
     pub editor_rect: Signal<Rect<f64>>,
+    pub needs_saving: Signal<bool>,
+    pub drag_status: Signal<DragStatus>,
+    pub selection_box: Signal<Option<Rect<f64>>>,
 }
 
 impl GraphsWorkspaceState {

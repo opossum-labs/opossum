@@ -1,5 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
+    SelectionBoxComponent,
     edges::edges_component::{EdgeCreationComponent, EdgesComponent},
     graph_editor::{
         graph_workspace::{GraphState, GraphsWorkspaceAction},
@@ -20,6 +21,8 @@ pub fn GraphViewEditor(
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
     graph_state: Signal<GraphState>,
+    ctrl_pressed: Signal<bool>,
+    shift_pressed: Signal<bool>,
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
@@ -32,7 +35,8 @@ pub fn GraphViewEditor(
     use_context_provider(|| graph_store);
     let onwheel_handler = use_zoom();
     let onmousemove_handler = use_drag(current_mouse_pos);
-    let onmousedown_handler = use_on_mouse_down(current_mouse_pos, last_auxiliary_click);
+    let onmousedown_handler =
+        use_on_mouse_down(current_mouse_pos, last_auxiliary_click, ctrl_pressed);
 
     let shift = use_memo(move || *editor_state.read().shift.read());
     let zoom = use_memo(move || *editor_state.read().zoom.read());
@@ -76,7 +80,12 @@ pub fn GraphViewEditor(
                         shift().y,
                         zoom(),
                     ),
-                    Nodes { graph_store, graph_id }
+                    Nodes {
+                        graph_store,
+                        graph_id,
+                        ctrl_pressed,
+                        shift_pressed,
+                    }
                     svg {
                         width: "100%",
                         height: "100%",
@@ -86,6 +95,7 @@ pub fn GraphViewEditor(
                             rsx! {
                                 EdgesComponent {}
                                 EdgeCreationComponent {}
+                                SelectionBoxComponent {}
                             }
                         }
                     }

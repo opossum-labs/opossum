@@ -16,7 +16,7 @@ use crate::components::{
             properties_editor::PropertiesEditor,
         },
     },
-    scenery_editor::ActiveNode,
+    scenery_editor::SelectedNode,
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
@@ -40,7 +40,7 @@ pub struct UINodeAttr {
 
 #[component]
 pub fn OpticalNodeEditor(
-    active_node: Memo<ActiveNode>,
+    active_node: Memo<SelectedNode>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let node_id = use_memo(move || active_node.read().node_id);
