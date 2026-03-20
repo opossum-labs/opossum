@@ -52,6 +52,7 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
 pub fn use_on_mouse_down(
     mut current_mouse_pos: Signal<Point2D<f64>>,
     mut last_click: Signal<Option<Instant>>,
+    ctrl_pressed: Signal<bool>
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
     let editor_status = use_context::<Signal<EditorState>>();
@@ -67,28 +68,33 @@ pub fn use_on_mouse_down(
                     let mut ctx = CONTEXT_MENU.write();
                     *ctx = None;
 
-                    let mouse_pos =
-                        Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
+                    if !ctrl_pressed(){
+                        graph_store.write().to_be_selected.write().clear();
+                        graph_store.write().clear_selected_nodes();
+                    }
+                    else{
+                        graph_store.write().to_be_removed.write().clear();
+                    }
+                        let mouse_pos =
+                            Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
+    
+                        let editor_origin = workspace().editor_rect.read().origin;
+                        let current_shift = *editor_status().shift.read();
+                        let current_zoom = *editor_status().zoom.read();
+    
+                        let graph_origin = Point2D::new(
+                            (mouse_pos.x - editor_origin.x - current_shift.x) / current_zoom,
+                            (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
+                        );
 
-                    let editor_origin = workspace().editor_rect.read().origin;
-                    let current_shift = *editor_status().shift.read();
-                    let current_zoom = *editor_status().zoom.read();
-
-                    let graph_origin = Point2D::new(
-                        (mouse_pos.x - editor_origin.x - current_shift.x) / current_zoom,
-                        (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
-                    );
-
-                    graph_store.write().to_be_selected.write().clear();
-                    graph_store.write().clear_selected_nodes();
-
-                    workspace
-                        .write()
-                        .drag_status
-                        .set(DragStatus::SelectionBox(Rect::new(
-                            graph_origin,
-                            Size2D::new(0., 0.),
-                        )));
+    
+                        workspace
+                            .write()
+                            .drag_status
+                            .set(DragStatus::SelectionBox(Rect::new(
+                                graph_origin,
+                                Size2D::new(0., 0.),
+                            )));
                 }
                 MouseButton::Auxiliary => {
                     //for dragging
@@ -146,6 +152,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
                     graph_store().shift_node_position(id, graph_shift);
                 }
             }
+            DragStatus::NodeInit => {},
             DragStatus::Edge(edge_creation_start) => {
                 editor_status
                     .write()
@@ -361,10 +368,15 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
                 }
                 DragStatus::SelectionBox(_) => {
                     let nodes_to_select = graph_store.read().to_be_selected.read().clone();
+                    let nodes_to_remove = graph_store.read().to_be_removed.read().clone();
                     nodes_to_select
                         .iter()
                         .for_each(|id| graph_store.write().add_to_node_selection(*id));
+                    nodes_to_remove
+                        .iter()
+                        .for_each(|id| graph_store.write().remove_from_node_selection(*id));
                     graph_store.write().to_be_selected.write().clear();
+                    graph_store.write().to_be_removed.write().clear();
                     workspace.write().selection_box.set(None);
                 }
                 DragStatus::Edge(_) => {

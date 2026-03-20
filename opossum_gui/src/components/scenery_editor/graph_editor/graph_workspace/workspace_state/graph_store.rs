@@ -42,6 +42,7 @@ pub struct GraphStore {
     nodes: Signal<HashMap<Uuid, NodeElement>>,
     pub edges: Signal<Vec<ConnectInfo>>,
     pub to_be_selected: Signal<HashSet<Uuid>>,
+    pub to_be_removed: Signal<HashSet<Uuid>>,
     selected_nodes: Signal<HashSet<Uuid>>,
     file_path: Signal<Option<PathBuf>>,
     pub needs_saving: Signal<bool>,

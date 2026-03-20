@@ -35,11 +35,16 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
     let in_selection_box_class = use_memo(move || {
         {
             let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
-            if let Some(select_box) = *workspace.read().selection_box.read()
-                && select_box.intersects(&node_rect)
+            if let Some(select_box) = *workspace.read().selection_box.read() && select_box.intersects(&node_rect)
             {
-                graph_store().to_be_selected.write().insert(node_id);
-                "node-selection"
+                if ctrl_pressed() && graph_store.read().selected_nodes().contains(&node_id){
+                    graph_store().to_be_removed.write().insert(node_id);
+                    "node-selection-remove"
+                }
+                else{
+                    graph_store().to_be_selected.write().insert(node_id);
+                    "node-selection"
+                }
             } else {
                 graph_store().to_be_selected.write().remove(&node_id);
                 ""
@@ -67,7 +72,7 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
             onmousedown: {
                 let z_index = node.z_index();
                 move |event: MouseEvent| {
-                    workspace.write().drag_status.set(DragStatus::Node);
+                    workspace.write().drag_status.set(DragStatus::NodeInit);
                     if ctrl_pressed() {
                         if graph_store().selected_nodes().contains(&node_id) {
                             graph_store().remove_from_node_selection(node_id);
@@ -77,6 +82,7 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
                         }
                     }
                     else if shift_pressed(){
+                        //preparation for selection along edge
                     }
                     else{
                         if !graph_store().selected_nodes().contains(&node_id) {
@@ -84,6 +90,19 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
                         }
                     }
                     event.stop_propagation();
+                }
+            },
+            onmousemove: move |_| {
+                let drag_status = workspace.read().drag_status.read().clone();
+                if drag_status == DragStatus::NodeInit {
+                    workspace.write().drag_status.set(DragStatus::Node);
+                }
+            },
+            onmouseup: move |_| {
+                let drag_status = workspace.read().drag_status.read().clone();
+
+                if drag_status == DragStatus::NodeInit && !ctrl_pressed() {
+                    graph_store().set_node_active(node_id, z_index);
                 }
             },
             oncontextmenu: {

@@ -18,7 +18,7 @@ use opossum_core::{
     analyzers::AnalyzerType,
     error::OpossumError,
     meter,
-    nodes::{ConnectionInfo, NodeAttr, create_node_ref, fluence_detector::Fluence},
+    nodes::{ConnectionInfo, NodeAttr, NodeGroup, create_node_ref, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
     prelude::OpmDocument,
@@ -132,6 +132,185 @@ pub async fn get_connections(
     Ok(Json(connect_infos))
 }
 
+
+fn upper_left_corner_of_nodes(nodes: &[NodeCacheItem]) -> Result<Point2<f64>, BackEndErrorResponse> {
+    let mut corner = Point2::new(f64::INFINITY, f64::INFINITY);
+
+    for node in nodes {
+        let pos = match node {
+            NodeCacheItem::Optical(optical_node) => {
+                let node = optical_node.optical_ref.lock_opm()?;
+                node.gui_position().unwrap()
+            }
+            NodeCacheItem::Analyzer(analyzer) => analyzer.gui_position().unwrap(),
+        };
+
+        corner.x = corner.x.min(pos.x);
+        corner.y = corner.y.min(pos.y);
+    }
+
+    Ok(corner)
+}
+
+
+fn copy_optical_node(
+    data: &web::Data<AppState>,
+    group_id: Uuid,
+    node_pos: (f64, f64),
+    min_pos: Point2<f64>,
+    optic_ref: &OpticRef,
+    node_id_link: &mut HashMap<Uuid, Uuid>,
+    connections: &mut HashMap<Uuid, Vec<ConnectionInfo>>,
+) -> Result<NodeInfo, BackEndErrorResponse> {
+    let node_to_copy_from = optic_ref.optical_ref.lock_opm()?;
+    let old_node_id = node_to_copy_from.node_attr().uuid();
+
+    let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
+    let mut node = new_node_ref.optical_ref.lock_opm()?;
+
+    let node_attr = node.node_attr_mut();
+    node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
+
+    let old_pos = node_to_copy_from.gui_position().unwrap();
+    let new_pos = (
+        node_pos.0 + (old_pos.x - min_pos.x),
+        node_pos.1 + (old_pos.y - min_pos.y),
+    );
+
+    node_attr.set_gui_position(Some(Point2::new(new_pos.0, new_pos.1)));
+
+    drop(node_to_copy_from);
+    drop(node);
+
+    let mut document = data.document.lock();
+    let scenery = document.scenery_mut();
+
+    let new_node_uuid = scenery
+        .with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
+
+    node_id_link.insert(old_node_id, new_node_uuid);
+
+    scenery.with_group_node(group_id, |group| {
+        let connect = group
+            .graph()
+            .clone()
+            .get_outgoing_connection_info_of_node(old_node_id);
+        connections.insert(old_node_id, connect);
+    })?;
+
+    drop(document);
+
+    let node = new_node_ref.optical_ref.lock_opm()?;
+
+    Ok(NodeInfo::new(
+        new_node_uuid,
+        node.name(),
+        node.inverted(),
+        node.node_type(),
+        node.ports().names(&PortType::Input),
+        node.ports().names(&PortType::Output),
+        Some(new_pos),
+    ))
+}
+
+fn copy_analyzer(
+    data: &web::Data<AppState>,
+    node_pos: (f64, f64),
+    min_pos: Point2<f64>,
+    analyzer: &AnalyzerInfo,
+) -> AnalyzerInfo {
+    let old_pos = analyzer.gui_position().unwrap();
+
+    let new_pos = Point2::new(
+        node_pos.0 + (old_pos.x - min_pos.x),
+        node_pos.1 + (old_pos.y - min_pos.y),
+    );
+
+    let new_analyzer = AnalyzerInfo::new(
+        analyzer.analyzer_type().clone(),
+        Uuid::new_v4(),
+        new_pos,
+    );
+
+    let mut document = data.document.lock();
+    document.add_analyzer_info(&new_analyzer);
+
+    new_analyzer
+}
+
+fn remap_connections(
+    connections: &mut HashMap<Uuid, Vec<ConnectionInfo>>,
+    node_id_link: &HashMap<Uuid, Uuid>,
+) {
+    for connect in connections.values_mut() {
+        connect.retain(|c| {
+            node_id_link.contains_key(&c.src_id)
+                && node_id_link.contains_key(&c.target_id)
+        });
+
+        for c in connect {
+            if let Some(id) = node_id_link.get(&c.src_id) {
+                c.src_id = *id;
+            }
+            if let Some(id) = node_id_link.get(&c.target_id) {
+                c.target_id = *id;
+            }
+        }
+    }
+}
+
+fn set_copied_connections(
+    scenery: &mut NodeGroup,
+    group_id: Uuid,
+    connections: HashMap<Uuid, Vec<ConnectionInfo>>,
+) -> Result<Vec<ConnectInfo>, BackEndErrorResponse> {
+    let mut result = Vec::new();
+
+    for (_, conns) in connections {
+        let enriched: Vec<_> = conns
+            .iter()
+            .map(|c| {
+                let is_reference = scenery
+                    .with_node_attr(c.target_id, |attr| {
+                        attr.properties().get("reference id").is_ok()
+                    })
+                    .unwrap_or(false);
+
+                (c, is_reference)
+            })
+            .collect();
+
+        scenery.with_group_node_mut(group_id, |group|-> Result<(), BackEndErrorResponse> {
+            for (c, is_reference) in enriched {
+                group.connect_nodes(
+                    c.src_id,
+                    &c.src_port,
+                    c.target_id,
+                    &c.target_port,
+                    c.distance,
+                )?;
+
+                result.push(ConnectInfo::new(
+                    c.src_id,
+                    c.src_port.clone(),
+                    c.target_id,
+                    c.target_port.clone(),
+                    c.distance.value,
+                    is_reference,
+                ));
+            }
+            Ok(())
+        }).map_err(|e|
+        BackEndErrorResponse::new(
+            404,
+            "Opossum",
+            &format!("Could not paste nodes: {e}"),
+        ))??;
+    }
+
+    Ok(result)
+}
+
 /// Paste copied nodes
 ///
 /// This function sends already copied nodes to the frontend
@@ -151,152 +330,38 @@ async fn post_paste_nodes(
     node_paste_info: web::Json<(Uuid, (f64, f64))>,
 ) -> Result<Json<(Vec<NodeInfo>, Vec<AnalyzerInfo>, Vec<ConnectInfo>)>, BackEndErrorResponse> {
     let (group_id, node_pos) = node_paste_info.into_inner();
-    let mut pasted_optical_nodes = Vec::<NodeInfo>::new();
-    let mut pasted_analyzer_nodes = Vec::<AnalyzerInfo>::new();
-    //get optic ref of node that should be copied
+
     let copied_nodes = data.node_copy_cache.lock();
 
-    let mut min_pos = Point2::<f64>::new(f64::INFINITY, f64::INFINITY);
-    for copied_node in copied_nodes.iter() {
-        let old_pos = match copied_node {
-            NodeCacheItem::Optical(optical_node) => {
-                let node_to_copy_from = optical_node.optical_ref.lock_opm()?;
-                node_to_copy_from.gui_position().unwrap()
+    let min_pos = upper_left_corner_of_nodes(&copied_nodes)?;
+
+    let mut node_id_link = HashMap::new();
+    let mut connections = HashMap::new();
+    let mut optical_nodes = Vec::new();
+    let mut analyzers = Vec::new();
+
+    for node in copied_nodes.iter() {
+        match node {
+            NodeCacheItem::Optical(optical) => {
+                optical_nodes.push(copy_optical_node(
+                    &data, group_id, node_pos, min_pos,
+                    optical, &mut node_id_link, &mut connections
+                )?);
             }
-            NodeCacheItem::Analyzer(analyzer) => analyzer.gui_position().unwrap(),
-        };
-        if old_pos.x < min_pos.x {
-            min_pos.x = old_pos.x;
-            min_pos.y = old_pos.y;
-        }
-    }
-    let mut connections = HashMap::<Uuid, Vec<ConnectionInfo>>::new();
-    let mut node_id_link = HashMap::<Uuid, Uuid>::new();
-    for copied_node in copied_nodes.iter() {
-        if let NodeCacheItem::Optical(optical_node) = copied_node {
-            let node_to_copy_from = optical_node.optical_ref.lock_opm()?;
-            let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
-            let mut node = new_node_ref.optical_ref.lock_opm()?;
-            let node_attr = node.node_attr_mut();
-            let old_node_id = node_to_copy_from.node_attr().uuid();
-            node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
-            let old_node_pos = node_to_copy_from.gui_position().unwrap();
-            let new_x_pos = node_pos.0 + (old_node_pos.x - min_pos.x);
-            let new_y_pos = node_pos.1 + (old_node_pos.y - min_pos.y);
-            let gui_position = Some((new_x_pos, new_y_pos));
-            node_attr.set_gui_position(Some(Point2::new(new_x_pos, new_y_pos)));
-
-            drop(node_to_copy_from);
-            drop(node);
-            let mut document = data.document.lock();
-            let scenery = document.scenery_mut();
-
-            let new_node_uuid = scenery
-                .with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
-
-            node_id_link.insert(old_node_id, new_node_uuid);
-            scenery.with_group_node(group_id, |group| {
-                let mut connect = group
-                    .graph()
-                    .clone()
-                    .get_outgoing_connection_info_of_node(old_node_id);
-                connections.insert(old_node_id, connect);
-            })?;
-
-            drop(document);
-
-            let node = new_node_ref.optical_ref.lock_opm()?;
-
-            let node_info = NodeInfo::new(
-                new_node_uuid,
-                node.name(),
-                node.inverted(),
-                node.node_type(),
-                node.ports().names(&PortType::Input),
-                node.ports().names(&PortType::Output),
-                gui_position,
-            );
-            drop(node);
-            pasted_optical_nodes.push(node_info)
-        } else if let NodeCacheItem::Analyzer(analyzer) = copied_node {
-            let old_node_pos = analyzer.gui_position().unwrap();
-            let new_x_pos = node_pos.0 + (old_node_pos.x - min_pos.x);
-            let new_y_pos = node_pos.1 + (old_node_pos.y - min_pos.y);
-
-            let new_analyzer = AnalyzerInfo::new(
-                analyzer.analyzer_type().clone(),
-                Uuid::new_v4(),
-                Point2::new(new_x_pos, new_y_pos),
-            );
-            let mut document = data.document.lock();
-            document.add_analyzer_info(&new_analyzer);
-            drop(document);
-            pasted_analyzer_nodes.push(new_analyzer)
-        }
-    }
-
-    // set new ids for connections
-    for connect in connections.values_mut() {
-        connect.retain(|c| {
-            node_id_link.contains_key(&c.target_id) && node_id_link.contains_key(&c.src_id)
-        });
-        for c in connect {
-            if let Some(new_id) = node_id_link.get(&c.target_id) {
-                c.target_id = *new_id;
-            }
-            if let Some(new_id) = node_id_link.get(&c.src_id) {
-                c.src_id = *new_id;
+            NodeCacheItem::Analyzer(analyzer) => {
+                analyzers.push(copy_analyzer(&data, node_pos, min_pos, analyzer));
             }
         }
     }
+
+    remap_connections(&mut connections, &node_id_link);
 
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-    let mut connect_info = Vec::<ConnectInfo>::new();
-    for (_, c) in connections {
-        // 👇 Erst alle Infos sammeln (immutable borrow)
-        let mut enriched_connections = Vec::new();
 
-        for connect in &c {
-            let is_reference = scenery
-                .with_node_attr(connect.target_id, |node_attr| {
-                    let prop = node_attr.properties();
-                    prop.get("reference id").is_ok()
-                })
-                .unwrap_or(false);
+    let connect_info = set_copied_connections(scenery, group_id, connections)?;
 
-            enriched_connections.push((connect, is_reference));
-        }
-
-        // 👇 Dann mutabler Zugriff
-        scenery.with_group_node_mut(group_id, |group| {
-            for (connect, is_reference) in enriched_connections {
-                group.connect_nodes(
-                    connect.src_id,
-                    &connect.src_port,
-                    connect.target_id,
-                    &connect.target_port,
-                    connect.distance,
-                );
-
-                connect_info.push(ConnectInfo::new(
-                    connect.src_id,
-                    connect.src_port.clone(),
-                    connect.target_id,
-                    connect.target_port.clone(),
-                    connect.distance.value,
-                    is_reference,
-                ));
-            }
-        });
-    }
-    println!("{connect_info:?}");
-    drop(copied_nodes);
-    Ok(Json((
-        pasted_optical_nodes,
-        pasted_analyzer_nodes,
-        connect_info,
-    )))
+    Ok(Json((optical_nodes, analyzers, connect_info)))
 }
 
 /// Copy existing nodes

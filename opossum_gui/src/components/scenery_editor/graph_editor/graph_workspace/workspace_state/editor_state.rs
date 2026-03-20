@@ -23,12 +23,13 @@ impl Default for EditorState {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum DragStatus {
     #[default]
     None,
     Graph,
     Node,
+    NodeInit,
     Edge(NewEdgeCreationStart),
     SelectionBox(Rect<f64>),
 }

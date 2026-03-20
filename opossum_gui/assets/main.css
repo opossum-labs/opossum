@@ -343,6 +343,10 @@ body {
     box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87c5f8;
 }
 
+.node-selection-remove.active-node{
+    box-shadow: none;
+}
+
 /* Ports styling */
 .port {
     position: absolute;

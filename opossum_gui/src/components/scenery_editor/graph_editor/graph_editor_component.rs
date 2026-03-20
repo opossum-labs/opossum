@@ -119,7 +119,11 @@ pub fn GraphEditor(
     rsx! {
         div { class: "row main-content-row",
             div { style: "min-width:256px;", class: "col-2 sidebar",
-                NodeConfigEditor { selected_nodes_memo, model_modified_handler }
+                NodeConfigEditor {
+                    selected_nodes_memo,
+                    model_modified_handler,
+                    workspace_processor,
+                }
             }
             div {
                 class: graph_editor_container_class(),

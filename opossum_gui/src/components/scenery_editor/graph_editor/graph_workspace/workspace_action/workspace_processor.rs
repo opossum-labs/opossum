@@ -172,6 +172,7 @@ pub fn use_workspace_processor(
                             .await;
                         }
                     }
+                    GraphsWorkspaceAction::ConvertToGroup { nodes } => todo!(),
                 }
             }
         }

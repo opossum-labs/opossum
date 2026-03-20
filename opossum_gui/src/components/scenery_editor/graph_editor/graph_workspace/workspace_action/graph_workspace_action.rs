@@ -9,6 +9,9 @@ use uuid::Uuid;
 pub enum GraphsWorkspaceAction {
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),
+    ConvertToGroup{
+        nodes: HashSet<Uuid>,
+    },
     AddRootSceneryTab {
         name: String,
     },

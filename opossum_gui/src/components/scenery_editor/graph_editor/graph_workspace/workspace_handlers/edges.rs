@@ -49,7 +49,6 @@ impl EdgeHandlers {
 fn add_edge_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(ConnectInfo, Uuid)> {
     EventHandler::new(move |(edge, graph_id)| {
         with_edges(workspace, graph_id, true, |edges| {
-            println!("edge: {:?}", edge);
             edges.push(edge);
         });
     })
