@@ -18,10 +18,10 @@ use opossum_core::{
     analyzers::AnalyzerType,
     error::OpossumError,
     meter,
-    nodes::{ConnectionInfo, NodeAttr, NodeGroup, create_node_ref, fluence_detector::Fluence},
+    nodes::{ConnectionInfo, NodeAttr, NodeGroup, NodeReference, create_node_ref, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
-    prelude::OpmDocument,
+    prelude::{OpmDocument, OpticNode},
     properties::Proptype,
     types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
     utils::{LockExt, geom_transformation::Isometry},
@@ -507,38 +507,31 @@ async fn post_subreference(
 ) -> Result<Json<NodeInfo>, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
     let ref_node_info = ref_node_info.into_inner();
-
-    let new_node_ref = create_node_ref("reference")?;
-    let mut node = new_node_ref.optical_ref.lock_opm()?;
-    let node_attr = node.node_attr_mut();
-    node_attr.set_gui_position(Some(Point2::new(
-        ref_node_info.gui_position().0,
-        ref_node_info.gui_position().1,
-    )));
+    
     let mut document = data.document.lock();
     let referring_node =
         get_nested_referenced_node_from_state(ref_node_info.referring_node(), &document)?;
+    let mut node_reference = NodeReference::from_node(&referring_node);
+
+    node_reference.node_attr_mut().set_gui_position(Some(Point2::new(
+        ref_node_info.gui_position().0,
+        ref_node_info.gui_position().1,
+    )));
+
     let scenery = document.scenery_mut();
-    let ref_node = node.as_refnode_mut().unwrap();
-    ref_node.assign_reference(&referring_node);
-    drop(referring_node);
-    drop(node);
     let new_node_uuid =
-        scenery.with_group_node_mut(group_uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
+        scenery.with_group_node_mut(group_uuid, |g| g.add_node(node_reference.clone()))??;
 
     drop(document);
-    let node = new_node_ref.optical_ref.lock_opm()?;
-    let gui_position = node.gui_position().map(|position| (position.x, position.y));
     let node_info = NodeInfo::new(
         new_node_uuid,
-        node.name(),
-        node.inverted(),
-        node.node_type(),
-        node.ports().names(&PortType::Input),
-        node.ports().names(&PortType::Output),
-        gui_position,
+        node_reference.name(),
+        node_reference.inverted(),
+        node_reference.node_type(),
+        node_reference.ports().names(&PortType::Input),
+        node_reference.ports().names(&PortType::Output),
+        Some(ref_node_info.gui_position()),
     );
-    drop(node);
     Ok(Json(node_info))
 }
 /// Update the GUI position of an optical or analyzer node
