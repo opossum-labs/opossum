@@ -7,7 +7,7 @@ pub fn SelectionBoxComponent() -> Element {
     let editor_status = use_context::<Signal<EditorState>>();
     let workspace = use_context::<Signal<GraphsWorkspaceState>>();
     let zoom = *editor_status.read().zoom.read();
-    workspace.read().selection_box.read().clone().map_or_else(
+    (*workspace.read().selection_box.read()).map_or_else(
         || rsx! {},
         |select_box| {
             rsx! {

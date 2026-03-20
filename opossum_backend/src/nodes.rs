@@ -18,7 +18,10 @@ use opossum_core::{
     analyzers::AnalyzerType,
     error::OpossumError,
     meter,
-    nodes::{ConnectionInfo, NodeAttr, NodeGroup, NodeReference, create_node_ref, fluence_detector::Fluence},
+    nodes::{
+        ConnectionInfo, NodeAttr, NodeGroup, NodeReference, create_node_ref,
+        fluence_detector::Fluence,
+    },
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
     prelude::{OpmDocument, OpticNode},
@@ -132,8 +135,9 @@ pub async fn get_connections(
     Ok(Json(connect_infos))
 }
 
-
-fn upper_left_corner_of_nodes(nodes: &[NodeCacheItem]) -> Result<Point2<f64>, BackEndErrorResponse> {
+fn upper_left_corner_of_nodes(
+    nodes: &[NodeCacheItem],
+) -> Result<Point2<f64>, BackEndErrorResponse> {
     let mut corner = Point2::new(f64::INFINITY, f64::INFINITY);
 
     for node in nodes {
@@ -152,7 +156,6 @@ fn upper_left_corner_of_nodes(nodes: &[NodeCacheItem]) -> Result<Point2<f64>, Ba
     Ok(corner)
 }
 
-
 fn copy_optical_node(
     data: &web::Data<AppState>,
     group_id: Uuid,
@@ -168,8 +171,13 @@ fn copy_optical_node(
     let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
     let mut node = new_node_ref.optical_ref.lock_opm()?;
 
-    let mut document = data.document.lock();    
-    if let Ok(Proptype::Uuid(ref_uuid)) = node_to_copy_from.node_attr().properties().get("reference id") && let Ok(ref_node) = node.as_refnode_mut() {
+    let mut document = data.document.lock();
+    if let Ok(Proptype::Uuid(ref_uuid)) = node_to_copy_from
+        .node_attr()
+        .properties()
+        .get("reference id")
+        && let Ok(ref_node) = node.as_refnode_mut()
+    {
         let (referenced_node, _) = document.scenery().node_recursive(*ref_uuid)?;
         ref_node.assign_reference(&referenced_node);
     }
@@ -190,8 +198,8 @@ fn copy_optical_node(
 
     let scenery = document.scenery_mut();
 
-    let new_node_uuid = scenery
-        .with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
+    let new_node_uuid =
+        scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     node_id_link.insert(old_node_id, new_node_uuid);
 
@@ -230,11 +238,7 @@ fn copy_analyzer(
         node_pos.1 + (old_pos.y - min_pos.y),
     );
 
-    let new_analyzer = AnalyzerInfo::new(
-        analyzer.analyzer_type().clone(),
-        Uuid::new_v4(),
-        new_pos,
-    );
+    let new_analyzer = AnalyzerInfo::new(analyzer.analyzer_type().clone(), Uuid::new_v4(), new_pos);
 
     let mut document = data.document.lock();
     document.add_analyzer_info(&new_analyzer);
@@ -248,8 +252,7 @@ fn remap_connections(
 ) {
     for connect in connections.values_mut() {
         connect.retain(|c| {
-            node_id_link.contains_key(&c.src_id)
-                && node_id_link.contains_key(&c.target_id)
+            node_id_link.contains_key(&c.src_id) && node_id_link.contains_key(&c.target_id)
         });
 
         for c in connect {
@@ -284,37 +287,37 @@ fn set_copied_connections(
             })
             .collect();
 
-        scenery.with_group_node_mut(group_id, |group|-> Result<(), BackEndErrorResponse> {
-            for (c, is_reference) in enriched {
-                group.connect_nodes(
-                    c.src_id,
-                    &c.src_port,
-                    c.target_id,
-                    &c.target_port,
-                    c.distance,
-                )?;
+        scenery
+            .with_group_node_mut(group_id, |group| -> Result<(), BackEndErrorResponse> {
+                for (c, is_reference) in enriched {
+                    group.connect_nodes(
+                        c.src_id,
+                        &c.src_port,
+                        c.target_id,
+                        &c.target_port,
+                        c.distance,
+                    )?;
 
-                result.push(ConnectInfo::new(
-                    c.src_id,
-                    c.src_port.clone(),
-                    c.target_id,
-                    c.target_port.clone(),
-                    c.distance.value,
-                    is_reference,
-                ));
-            }
-            Ok(())
-        }).map_err(|e|
-        BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            &format!("Could not paste nodes: {e}"),
-        ))??;
+                    result.push(ConnectInfo::new(
+                        c.src_id,
+                        c.src_port.clone(),
+                        c.target_id,
+                        c.target_port.clone(),
+                        c.distance.value,
+                        is_reference,
+                    ));
+                }
+                Ok(())
+            })
+            .map_err(|e| {
+                BackEndErrorResponse::new(404, "Opossum", &format!("Could not paste nodes: {e}"))
+            })??;
     }
 
     Ok(result)
 }
 
+#[allow(clippy::significant_drop_tightening)]
 fn resolve_references(
     data: &web::Data<AppState>,
     node_id_link: &HashMap<Uuid, Uuid>,
@@ -322,7 +325,7 @@ fn resolve_references(
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
 
-    for (_old_id, new_id) in node_id_link {
+    for new_id in node_id_link.values() {
         let old_ref_id_opt: Option<Uuid> = scenery
             .with_node_attr(*new_id, |attr| {
                 match attr.properties().get("reference id") {
@@ -333,15 +336,18 @@ fn resolve_references(
             .ok()
             .flatten();
 
-        let new_ref_id_opt = old_ref_id_opt.map(|old_ref_id| {
-            node_id_link.get(&old_ref_id).copied().unwrap_or(old_ref_id)
-        });
+        let new_ref_id_opt = old_ref_id_opt
+            .map(|old_ref_id| node_id_link.get(&old_ref_id).copied().unwrap_or(old_ref_id));
 
-        let referenced_node_opt = if let Some(new_ref_id) = new_ref_id_opt {
-            scenery.node_recursive(new_ref_id).ok().map(|(node, _)| node)
-        } else {
-            None
-        };
+        let referenced_node_opt = new_ref_id_opt.map_or_else(
+            || None,
+            |new_ref_id| {
+                scenery
+                    .node_recursive(new_ref_id)
+                    .ok()
+                    .map(|(node, _)| node)
+            },
+        );
 
         if let Some(referenced_node) = referenced_node_opt {
             scenery.with_node_mut(*new_id, |node| {
@@ -368,6 +374,7 @@ fn resolve_references(
         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
+#[allow(clippy::significant_drop_tightening)]
 #[post("/nodes_paste")]
 async fn post_paste_nodes(
     data: web::Data<AppState>,
@@ -388,8 +395,13 @@ async fn post_paste_nodes(
         match node {
             NodeCacheItem::Optical(optical) => {
                 optical_nodes.push(copy_optical_node(
-                    &data, group_id, node_pos, min_pos,
-                    optical, &mut node_id_link, &mut connections
+                    &data,
+                    group_id,
+                    node_pos,
+                    min_pos,
+                    optical,
+                    &mut node_id_link,
+                    &mut connections,
                 )?);
             }
             NodeCacheItem::Analyzer(analyzer) => {
@@ -397,7 +409,7 @@ async fn post_paste_nodes(
             }
         }
     }
-
+    drop(copied_nodes);
     resolve_references(&data, &node_id_link)?;
 
     remap_connections(&mut connections, &node_id_link);
@@ -434,13 +446,13 @@ async fn post_copy_nodes(
     let document = data.document.lock();
     let mut copied_nodes_set = data.node_copy_cache.lock();
     copied_nodes_set.clear();
-    for id in node_ids_to_copy.iter() {
+    for id in &node_ids_to_copy {
         if let Ok((node_ref_to_copy, _)) = document.scenery().node_recursive(*id) {
             let node_ref = node_ref_to_copy.clone();
             let node = node_ref.optical_ref.lock_opm()?;
             drop(node);
             copied_nodes_set.push(NodeCacheItem::Optical(node_ref_to_copy));
-        } else if let Some(analyzer) = document.analyzers().get(&id).cloned() {
+        } else if let Some(analyzer) = document.analyzers().get(id).cloned() {
             copied_nodes_set.push(NodeCacheItem::Analyzer(analyzer));
         } else {
             all_nodes_found = false;
@@ -553,16 +565,18 @@ async fn post_subreference(
 ) -> Result<Json<NodeInfo>, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
     let ref_node_info = ref_node_info.into_inner();
-    
+
     let mut document = data.document.lock();
     let referring_node =
         get_nested_referenced_node_from_state(ref_node_info.referring_node(), &document)?;
     let mut node_reference = NodeReference::from_node(&referring_node);
 
-    node_reference.node_attr_mut().set_gui_position(Some(Point2::new(
-        ref_node_info.gui_position().0,
-        ref_node_info.gui_position().1,
-    )));
+    node_reference
+        .node_attr_mut()
+        .set_gui_position(Some(Point2::new(
+            ref_node_info.gui_position().0,
+            ref_node_info.gui_position().1,
+        )));
 
     let scenery = document.scenery_mut();
     let new_node_uuid =

@@ -145,14 +145,17 @@ fn set_node_name_handler(
                 store.set_name_of_node(node_id, name.clone());
             });
             with_tab(workspace, node_id, needs_saving, |tab| {
-                tab.graph_info.name = name.clone();
+                tab.graph_info.name.clone_from(&name);
             });
             for_each_tab(workspace, needs_saving, |tab| {
-                tab.graph_info
+                if let Some((_, h_name)) = tab
+                    .graph_info
                     .hierarchy
                     .iter_mut()
                     .find(|(h_id, _)| *h_id == node_id)
-                    .map(|(_, h_name)| *h_name = name.clone());
+                {
+                    h_name.clone_from(&name);
+                }
             });
         },
     )

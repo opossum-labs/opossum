@@ -106,8 +106,9 @@ pub fn GraphEditor(
 
         read_workspace
             .get_graph_store_read(active_tab)
-            .and_then(|g| Some(g.read().get_selected_nodes(active_tab)))
-            .unwrap_or(Vec::<SelectedNode>::new())
+            .map_or(Vec::<SelectedNode>::new(), |g| {
+                g.read().get_selected_nodes(active_tab)
+            })
     });
     let onmouseleave_handler = use_drag_end(workspace);
     let onkeydownhandler =

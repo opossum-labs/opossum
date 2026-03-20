@@ -105,7 +105,7 @@ impl GraphStore {
     }
     pub fn get_selected_nodes(&self, graph_id: Uuid) -> Vec<SelectedNode> {
         let mut selected_nodes = Vec::<SelectedNode>::new();
-        for n_id in self.selected_nodes().iter() {
+        for n_id in &self.selected_nodes() {
             if let Some(n) = self.nodes().read().get(n_id) {
                 let selected_node = SelectedNode {
                     node_id: n.id(),

@@ -166,6 +166,20 @@ impl OpticGraph {
         connections
     }
 
+    /// Returns all outgoing connections from the node with the given [`Uuid`].
+    ///
+    /// Each outgoing connection is represented as a [`ConnectionInfo`], including
+    /// source and target IDs, port names, and distance.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the source node whose outgoing connections are requested.
+    ///
+    /// # Returns
+    /// A vector of [`ConnectionInfo`] representing all outgoing edges of the node.
+    ///
+    /// # Panics
+    /// This function may panic if the internal graph contains edges referencing non-existent nodes.
+    #[must_use]
     pub fn get_outgoing_connection_info_of_node(self, node_id: Uuid) -> Vec<ConnectionInfo> {
         let mut connections = Vec::<ConnectionInfo>::new();
         for edge_ref in self.g.edge_references() {

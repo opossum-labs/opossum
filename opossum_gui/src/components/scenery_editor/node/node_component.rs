@@ -35,13 +35,13 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
     let in_selection_box_class = use_memo(move || {
         {
             let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
-            if let Some(select_box) = *workspace.read().selection_box.read() && select_box.intersects(&node_rect)
+            if let Some(select_box) = *workspace.read().selection_box.read()
+                && select_box.intersects(&node_rect)
             {
-                if ctrl_pressed() && graph_store.read().selected_nodes().contains(&node_id){
+                if ctrl_pressed() && graph_store.read().selected_nodes().contains(&node_id) {
                     graph_store().to_be_removed.write().insert(node_id);
                     "node-selection-remove"
-                }
-                else{
+                } else {
                     graph_store().to_be_selected.write().insert(node_id);
                     "node-selection"
                 }
@@ -81,13 +81,11 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
                             graph_store().add_to_node_selection(node_id);
                         }
                     }
+                    else if !graph_store().selected_nodes().contains(&node_id) {
+                        graph_store().set_node_active(node_id, z_index);
+                    }
                     else if shift_pressed(){
                         //preparation for selection along edge
-                    }
-                    else{
-                        if !graph_store().selected_nodes().contains(&node_id) {
-                            graph_store().set_node_active(node_id, z_index);
-                        }
                     }
                     event.stop_propagation();
                 }
@@ -129,7 +127,7 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
                 }
             },
             ondoubleclick: {
-                let node = node.clone();
+                let node = node;
                 move |_| {
                     if let NodeType::Optical(node_type) = node.node_type()
                         && node_type == "group"

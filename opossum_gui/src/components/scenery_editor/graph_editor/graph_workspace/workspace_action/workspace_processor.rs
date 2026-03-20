@@ -172,7 +172,7 @@ pub fn use_workspace_processor(
                             .await;
                         }
                     }
-                    GraphsWorkspaceAction::ConvertToGroup { nodes } => todo!(),
+                    GraphsWorkspaceAction::ConvertToGroup { _nodes: _ } => todo!(),
                 }
             }
         }
@@ -256,17 +256,17 @@ async fn process_paste_node(
                 Vec<AnalyzerInfo>,
                 Vec<ConnectInfo>,
             )| {
-                optical_nodes
-                    .iter()
-                    .for_each(|n| ws_handler.nodes.add_optical_node(n.clone(), graph_id));
-                analyzer_nodes.iter().for_each(|a| {
+                for n in &optical_nodes {
+                    ws_handler.nodes.add_optical_node(n.clone(), graph_id);
+                }
+                for a in &analyzer_nodes {
                     let analyzer_id = a.id();
                     ws_handler.nodes.add_analyzer_node(
                         NewAnalyzerInfo::from(a.clone()),
                         analyzer_id,
                         graph_id,
                     );
-                });
+                }
                 for edge in edges {
                     ws_handler.edges.add_edge(edge, graph_id);
                 }
