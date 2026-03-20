@@ -58,7 +58,6 @@ pub fn use_on_mouse_down(
     let editor_status = use_context::<Signal<EditorState>>();
     let mut graph_store = use_context::<Signal<GraphStore>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let workspace_handlers = use_context::<WorkSpaceSignalHandlers>();
     let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
 
     move |event: MouseEvent| {

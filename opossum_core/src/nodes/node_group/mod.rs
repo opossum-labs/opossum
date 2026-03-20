@@ -398,6 +398,21 @@ impl NodeGroup {
         Ok(out)
     }
 
+
+pub fn with_node_mut<R>(
+    &mut self,
+    node_id: Uuid,
+    f: impl FnOnce(&mut dyn Analyzable) -> R,
+) -> OpmResult<R> {
+    let (node_ref, _) = self.node_recursive(node_id)?;
+    let mut guard = node_ref.optical_ref.lock_opm()?;
+
+    let result = f(&mut *guard); 
+
+    Ok(result)
+}
+
+
     /// Execute a mutable operation on the `NodeAttr` of the node identified by `node_id`.
     ///
     /// If `node_id` equals this group's own UUID, the closure is invoked directly with

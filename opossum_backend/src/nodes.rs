@@ -315,6 +315,46 @@ fn set_copied_connections(
     Ok(result)
 }
 
+fn resolve_references(
+    data: &web::Data<AppState>,
+    node_id_link: &HashMap<Uuid, Uuid>,
+) -> Result<(), BackEndErrorResponse> {
+    let mut document = data.document.lock();
+    let scenery = document.scenery_mut();
+
+    for (_old_id, new_id) in node_id_link {
+        let old_ref_id_opt: Option<Uuid> = scenery
+            .with_node_attr(*new_id, |attr| {
+                match attr.properties().get("reference id") {
+                    Ok(Proptype::Uuid(uuid)) => Some(*uuid),
+                    _ => None,
+                }
+            })
+            .ok()
+            .flatten();
+
+        let new_ref_id_opt = old_ref_id_opt.map(|old_ref_id| {
+            node_id_link.get(&old_ref_id).copied().unwrap_or(old_ref_id)
+        });
+
+        let referenced_node_opt = if let Some(new_ref_id) = new_ref_id_opt {
+            scenery.node_recursive(new_ref_id).ok().map(|(node, _)| node)
+        } else {
+            None
+        };
+
+        if let Some(referenced_node) = referenced_node_opt {
+            scenery.with_node_mut(*new_id, |node| {
+                if let Ok(ref_node) = node.as_refnode_mut() {
+                    ref_node.assign_reference(&referenced_node);
+                }
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
 /// Paste copied nodes
 ///
 /// This function sends already copied nodes to the frontend
@@ -357,6 +397,8 @@ async fn post_paste_nodes(
             }
         }
     }
+
+    resolve_references(&data, &node_id_link)?;
 
     remap_connections(&mut connections, &node_id_link);
 
