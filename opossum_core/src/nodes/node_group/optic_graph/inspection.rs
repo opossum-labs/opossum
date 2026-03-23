@@ -217,7 +217,7 @@ impl OpticGraph {
         for edge_ref in self.g.edge_references() {
             let src = self.g.node_weight(edge_ref.source()).unwrap();
             let target = self.g.node_weight(edge_ref.target()).unwrap();
-            if node_id == src.uuid() || node_id == target.uuid()  {
+            if node_id == src.uuid() || node_id == target.uuid() {
                 let connection = ConnectionInfo {
                     src_id: src.uuid(),
                     src_port: edge_ref.weight().src_port().to_string(),

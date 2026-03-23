@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    app_state::{AppState, NodeCacheItem}, error::BackEndErrorResponse, utils::update_node_attr
+    app_state::{AppState, NodeCacheItem},
+    error::BackEndErrorResponse,
+    utils::update_node_attr,
 };
 use actix_web::{
     HttpResponse, Responder, delete, get,
@@ -110,28 +112,26 @@ pub async fn get_connections(
     drop(document);
 
     let uuid = path.into_inner();
-    let connections = scenery.with_group_node(uuid, |g| {
-        g.connections().clone() 
-    })?;
+    let connections = scenery.with_group_node(uuid, |g| g.connections().clone())?;
     let connect_infos = connections
-            .iter()
-            .map(|c| {
-                let is_reference = scenery
-                    .with_node_attr(c.target_id, |node_attr| {
-                        let prop = node_attr.properties();
-                        prop.get("reference id").is_ok()
-                    })
-                    .unwrap_or(false);
-                ConnectInfo::new(
-                    c.src_id,
-                    c.src_port.clone(),
-                    c.target_id,
-                    c.target_port.clone(),
-                    c.distance.get::<meter>(),
-                    is_reference,
-                )
-            })
-            .collect::<Vec<ConnectInfo>>();
+        .iter()
+        .map(|c| {
+            let is_reference = scenery
+                .with_node_attr(c.target_id, |node_attr| {
+                    let prop = node_attr.properties();
+                    prop.get("reference id").is_ok()
+                })
+                .unwrap_or(false);
+            ConnectInfo::new(
+                c.src_id,
+                c.src_port.clone(),
+                c.target_id,
+                c.target_port.clone(),
+                c.distance.get::<meter>(),
+                is_reference,
+            )
+        })
+        .collect::<Vec<ConnectInfo>>();
     Ok(Json(connect_infos))
 }
 
@@ -484,14 +484,16 @@ fn collect_node_refs_and_pos(
     let mut corner = Point2::new(f64::INFINITY, f64::INFINITY);
     let optic_ref_vec = nodes_to_convert
         .iter()
-        .filter_map(|node| scenery.node_recursive(*node).ok().map(|(r, _)| {
-            if let Ok(opt_ref) = r.optical_ref.lock_opm(){
-                let pos = opt_ref.gui_position().unwrap();
-                corner.x = corner.x.min(pos.x);
-                corner.y = corner.y.min(pos.y);
-            }
-            r
-        }))
+        .filter_map(|node| {
+            scenery.node_recursive(*node).ok().map(|(r, _)| {
+                if let Ok(opt_ref) = r.optical_ref.lock_opm() {
+                    let pos = opt_ref.gui_position().unwrap();
+                    corner.x = corner.x.min(pos.x);
+                    corner.y = corner.y.min(pos.y);
+                }
+                r
+            })
+        })
         .collect();
     (optic_ref_vec, corner)
 }
@@ -530,11 +532,7 @@ fn split_connections(
     connections: &[ConnectionInfo],
     reference_map: &std::collections::HashMap<Uuid, bool>,
     nodes_to_convert: &[Uuid],
-) -> (
-    Vec<ConnectInfo>,
-    Vec<ConnectInfo>,
-    Vec<ConnectInfo>,
-) {
+) -> (Vec<ConnectInfo>, Vec<ConnectInfo>, Vec<ConnectInfo>) {
     let mut inside = Vec::new();
     let mut input = Vec::new();
     let mut output = Vec::new();
@@ -584,7 +582,11 @@ fn build_new_group(
     }
 
     for map_in in map_input_connections {
-        new_group.map_input_port(map_in.target_uuid(), map_in.target_port(), map_in.target_port())?;
+        new_group.map_input_port(
+            map_in.target_uuid(),
+            map_in.target_port(),
+            map_in.target_port(),
+        )?;
     }
 
     Ok(new_group)
@@ -605,34 +607,50 @@ fn add_converted_group_to_scenery(
         scenery.delete_node(*node)?;
     }
 
-    scenery.with_group_node_mut(group_id, |g| {match g.add_node(new_group){
-Ok(new_group_id) => {
-    //connect the output ports and connect within scenery
-    for  map_out in map_output_connections{
-        g.connect_nodes(map_out.src_uuid(), map_out.src_port(), map_out.target_uuid(), map_out.target_port(), meter!(map_out.distance()))?;
-    }
-    //connect the input ports
-    for  map_in in map_input_connections{
-        g.connect_nodes(map_in.src_uuid(), map_in.src_port(), map_in.target_uuid(), map_in.target_port(), meter!(map_in.distance()))?;
-    }
-    Ok(new_group_id)
-}
-Err(e) =>             Err(BackEndErrorResponse::new(404, "Opossum", &format!("Could not add group node{e}")))}})?
-
+    scenery.with_group_node_mut(group_id, |g| {
+        match g.add_node(new_group) {
+            Ok(new_group_id) => {
+                //connect the output ports and connect within scenery
+                for map_out in map_output_connections {
+                    g.connect_nodes(
+                        map_out.src_uuid(),
+                        map_out.src_port(),
+                        map_out.target_uuid(),
+                        map_out.target_port(),
+                        meter!(map_out.distance()),
+                    )?;
+                }
+                //connect the input ports
+                for map_in in map_input_connections {
+                    g.connect_nodes(
+                        map_in.src_uuid(),
+                        map_in.src_port(),
+                        map_in.target_uuid(),
+                        map_in.target_port(),
+                        meter!(map_in.distance()),
+                    )?;
+                }
+                Ok(new_group_id)
+            }
+            Err(e) => Err(BackEndErrorResponse::new(
+                404,
+                "Opossum",
+                &format!("Could not add group node{e}"),
+            )),
+        }
+    })?
 }
 
 fn create_new_group_node_info(
     data: &web::Data<AppState>,
     new_group_id: Uuid,
-    pos: Point2<f64>
+    pos: Point2<f64>,
 ) -> OpmResult<NodeInfo> {
     let document = data.document.lock();
     let scenery = document.scenery();
 
     let (new_group_ref, _) = scenery.node_recursive(new_group_id)?;
     let new_group_node = new_group_ref.optical_ref.lock_opm()?;
-
-
 
     Ok(NodeInfo::new(
         new_group_id,
@@ -644,7 +662,6 @@ fn create_new_group_node_info(
         Some((pos.x, pos.y)),
     ))
 }
-
 
 /// Copy existing nodes
 ///

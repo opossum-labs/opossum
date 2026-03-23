@@ -259,9 +259,15 @@ pub async fn get_group_hierarchy(group_id: Uuid) -> Result<Vec<(Uuid, String)>, 
         .await
 }
 
-pub async fn convert_nodes_to_group(nodes: Vec<Uuid>, group_id: Uuid)-> Result<(NodeInfo, Vec<ConnectInfo>), String> {
+pub async fn convert_nodes_to_group(
+    nodes: Vec<Uuid>,
+    group_id: Uuid,
+) -> Result<(NodeInfo, Vec<ConnectInfo>), String> {
     HTTP_API_CLIENT()
-        .post::<Vec<Uuid>, (NodeInfo, Vec<ConnectInfo>)>(&format!("/api/scenery/{}/convertToGroup", group_id.as_simple()), nodes)
+        .post::<Vec<Uuid>, (NodeInfo, Vec<ConnectInfo>)>(
+            &format!("/api/scenery/{}/convertToGroup", group_id.as_simple()),
+            nodes,
+        )
         .await
 }
 

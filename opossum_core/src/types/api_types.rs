@@ -167,8 +167,15 @@ impl ConnectInfo {
             target_is_reference,
         }
     }
-    pub fn from_connection_info(c: &ConnectionInfo, is_reference: bool) -> Self{
-        Self { src_uuid: c.src_id, src_port: c.src_port.clone(), target_uuid: c.target_id, target_port: c.target_port.clone(), distance: c.distance.value, target_is_reference: is_reference }
+    pub fn from_connection_info(c: &ConnectionInfo, is_reference: bool) -> Self {
+        Self {
+            src_uuid: c.src_id,
+            src_port: c.src_port.clone(),
+            target_uuid: c.target_id,
+            target_port: c.target_port.clone(),
+            distance: c.distance.value,
+            target_is_reference: is_reference,
+        }
     }
     #[must_use]
     pub const fn src_uuid(&self) -> Uuid {

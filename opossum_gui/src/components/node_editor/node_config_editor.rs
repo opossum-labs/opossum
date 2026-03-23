@@ -32,7 +32,7 @@ pub fn NodeConfigEditor(
     selected_nodes_memo: Memo<Vec<SelectedNode>>,
     model_modified_handler: EventHandler<bool>,
     workspace_processor: Coroutine<GraphsWorkspaceAction>,
-    active_graph_id: ReadSignal<Uuid>
+    active_graph_id: ReadSignal<Uuid>,
 ) -> Element {
     let save_manager = use_save_manager();
     let flush_trigger = save_manager.flush_trigger;

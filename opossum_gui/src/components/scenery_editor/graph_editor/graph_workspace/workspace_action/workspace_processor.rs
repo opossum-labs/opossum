@@ -175,12 +175,12 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::ConvertToGroup { nodes, graph_id } => {
                         process_convert_nodes_to_group(
                             nodes,
-                                graph_id,
-                                workspace_handlers,
-                                root_graph_id
-                            )
-                            .await;
-                    },
+                            graph_id,
+                            workspace_handlers,
+                            root_graph_id,
+                        )
+                        .await;
+                    }
                 }
             }
         }
@@ -486,14 +486,12 @@ fn find_suitable_element_position(
     final_position // fallback: return last position after reaching max iterations
 }
 
-
 async fn process_convert_nodes_to_group(
     nodes: Vec<Uuid>,
     current_group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
-    root_graph_id: Memo<Uuid>
+    root_graph_id: Memo<Uuid>,
 ) {
-
     match api::convert_nodes_to_group(nodes.clone(), current_group_id).await {
         Ok((new_group_info, port_mapping)) => {
             //remove nodes that have been converted to a group from graph
@@ -502,21 +500,16 @@ async fn process_convert_nodes_to_group(
             //add new group node
             let new_group_id = new_group_info.uuid();
             let new_group_name = new_group_info.name().to_string();
-            ws_handler.nodes.add_optical_node(new_group_info, current_group_id);
+            ws_handler
+                .nodes
+                .add_optical_node(new_group_info, current_group_id);
 
             //connect group node
-            for edge in port_mapping{
+            for edge in port_mapping {
                 ws_handler.edges.add_edge(edge, current_group_id);
             }
 
-            process_open_group_tab(
-                                new_group_id,
-                                new_group_name,
-                                ws_handler,
-                                root_graph_id,
-                            )
-                            .await;
-
+            process_open_group_tab(new_group_id, new_group_name, ws_handler, root_graph_id).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
