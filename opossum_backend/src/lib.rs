@@ -8,3 +8,4 @@ mod scenery;
 pub mod server;
 mod sse_logger;
 mod utils;
+mod groups;

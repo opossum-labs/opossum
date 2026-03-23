@@ -265,7 +265,7 @@ pub async fn convert_nodes_to_group(
 ) -> Result<(NodeInfo, Vec<ConnectInfo>), String> {
     HTTP_API_CLIENT()
         .post::<Vec<Uuid>, (NodeInfo, Vec<ConnectInfo>)>(
-            &format!("/api/scenery/{}/convertToGroup", group_id.as_simple()),
+            &format!("/api/groups/{}/convert_to_group", group_id.as_simple()),
             nodes,
         )
         .await
