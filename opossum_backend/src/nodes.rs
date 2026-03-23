@@ -445,7 +445,7 @@ pub async fn post_convert_nodes_to_group(
     let group_id = path.into_inner();
     let nodes_to_convert = nodes_to_convert.into_inner();
 
-    let node_refs = collect_node_refs(&data, &nodes_to_convert);
+    let (node_refs, pos) = collect_node_refs_and_pos(&data, &nodes_to_convert);
 
     let all_connections = collect_group_connections(&data, group_id)?;
     let reference_map = build_reference_map(&data, &all_connections);
@@ -468,25 +468,32 @@ pub async fn post_convert_nodes_to_group(
         &map_output_connections,
     )?;
 
-    let new_group_node_info = create_new_group_node_info(&data, new_group_id)?;
+    let new_group_node_info = create_new_group_node_info(&data, new_group_id, pos)?;
 
-    // Alle externen connections zurückgeben
     let mut all_external_connections = map_input_connections;
     all_external_connections.extend(map_output_connections);
 
     Ok(Json((new_group_node_info, all_external_connections)))
 }
-fn collect_node_refs(
+fn collect_node_refs_and_pos(
     data: &web::Data<AppState>,
     nodes_to_convert: &[Uuid],
-) -> Vec<OpticRef> {
+) -> (Vec<OpticRef>, Point2<f64>) {
     let document = data.document.lock();
     let scenery = document.scenery();
-
-    nodes_to_convert
+    let mut corner = Point2::new(f64::INFINITY, f64::INFINITY);
+    let optic_ref_vec = nodes_to_convert
         .iter()
-        .filter_map(|node| scenery.node_recursive(*node).ok().map(|(r, _)| r))
-        .collect()
+        .filter_map(|node| scenery.node_recursive(*node).ok().map(|(r, _)| {
+            if let Ok(opt_ref) = r.optical_ref.lock_opm(){
+                let pos = opt_ref.gui_position().unwrap();
+                corner.x = corner.x.min(pos.x);
+                corner.y = corner.y.min(pos.y);
+            }
+            r
+        }))
+        .collect();
+    (optic_ref_vec, corner)
 }
 
 fn collect_group_connections(
@@ -617,12 +624,15 @@ Err(e) =>             Err(BackEndErrorResponse::new(404, "Opossum", &format!("Co
 fn create_new_group_node_info(
     data: &web::Data<AppState>,
     new_group_id: Uuid,
+    pos: Point2<f64>
 ) -> OpmResult<NodeInfo> {
     let document = data.document.lock();
     let scenery = document.scenery();
 
     let (new_group_ref, _) = scenery.node_recursive(new_group_id)?;
     let new_group_node = new_group_ref.optical_ref.lock_opm()?;
+
+
 
     Ok(NodeInfo::new(
         new_group_id,
@@ -631,7 +641,7 @@ fn create_new_group_node_info(
         new_group_node.node_type(),
         new_group_node.ports().names(&PortType::Input),
         new_group_node.ports().names(&PortType::Output),
-        Some((0., 0.)),
+        Some((pos.x, pos.y)),
     ))
 }
 
