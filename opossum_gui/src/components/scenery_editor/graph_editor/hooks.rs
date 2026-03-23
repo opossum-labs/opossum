@@ -211,10 +211,12 @@ pub fn use_on_resize(
     element_id: String,
 ) -> EventHandler<()> {
     EventHandler::new(move |()| {
-        let element_id = workspace.read().tabs.read().keys().next().map_or_else(
-            || element_id.clone(),
-            |graph_id| format!("editor_{}", graph_id.as_simple()),
-        );
+        let element_id =if workspace.read().active_tab.read().is_nil(){
+            element_id.clone()
+        }
+        else{
+format!("editor_{}", *workspace.read().active_tab.read().as_simple())
+        }         ;
         spawn({
             async move {
                 let js = format!(
