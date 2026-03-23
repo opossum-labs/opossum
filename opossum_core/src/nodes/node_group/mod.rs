@@ -249,16 +249,6 @@ impl NodeGroup {
 
             group_hierarchy.extend(group_vec);
         }
-
-        // self.with_parent_id(node_id, |parent_id_opt| -> OpmResult<()> {
-
-        //     if let Some(parent_id) = parent_id_opt{
-        //         let group_vec = self.get_node_hierarchy_bottom_up(parent_id)
-        //     .map_err(|e| OpossumError::OpticGroup(format!("Error getting node hierarchy: {e}")))?;
-        //         // self.get_node_hierarchy_bottom_up(parent_id).map(|group_vec|group_hierarchy.extend(group_vec))
-        //     }
-        //     Ok(())
-        // })?;
         Ok(group_hierarchy)
     }
 
