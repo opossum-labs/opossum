@@ -199,10 +199,8 @@ pub fn App() -> Element {
         let cxt_command_val = cxt_command.read();
         if let Some(cmd) = &*(cxt_command_val) {
             match cmd {
-                CxtCommand::AddRefNode(new_ref_node) => {
-                    node_editor_command_handler
-                        .call(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
-                }
+                CxtCommand::AddRefNode(new_ref_node)=>{node_editor_command_handler.call(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));}
+                CxtCommand::ConvertToGroup{nodes, graph_id} => {node_editor_command_handler.call(Some(NodeEditorCommand::ConvertToGroup { nodes:nodes.clone(), graph_id:*graph_id }));}
             }
         }
     });

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use actix_web::web;
 use nalgebra::Point2;
 use opossum_core::{OpticRef, error::OpmResult, meter, nodes::{ConnectionInfo, NodeGroup}, prelude::PortType, types::api_types::{ConnectInfo, NodeInfo}, utils::LockExt};
@@ -126,7 +128,7 @@ pub(super) fn build_new_group(
 pub(super) fn add_converted_group_to_scenery(
     data: &web::Data<AppState>,
     group_id: Uuid,
-    nodes_to_convert: &[Uuid],
+    mut nodes_to_convert: Vec<Uuid>,
     new_group: NodeGroup,
     map_input_connections: &[ConnectInfo],
     map_output_connections: &[ConnectInfo],
@@ -134,10 +136,13 @@ pub(super) fn add_converted_group_to_scenery(
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
 
-    for node in nodes_to_convert {
-        scenery.delete_node(*node)?;
+    while let Some(node) = nodes_to_convert.pop() {
+        let deleted = scenery.delete_node(node)?;
+        for del_id in &deleted {
+            nodes_to_convert.retain(|id| id != del_id);
+        }
     }
-
+    
     scenery.with_group_node_mut(group_id, |g| {
         match g.add_node(new_group) {
             Ok(new_group_id) => {

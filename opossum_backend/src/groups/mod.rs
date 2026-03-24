@@ -33,9 +33,10 @@ pub async fn post_convert_nodes_to_group(
     let nodes_to_convert = nodes_to_convert.into_inner();
 
     let (node_refs, pos) = collect_node_refs_and_pos(&data, &nodes_to_convert);
-
     let all_connections = collect_group_connections(&data, group_id)?;
+
     let reference_map = build_reference_map(&data, &all_connections);
+
     let (inside_connections, map_input_connections, map_output_connections) =
         split_connections(&all_connections, &reference_map, &nodes_to_convert);
 
@@ -49,7 +50,7 @@ pub async fn post_convert_nodes_to_group(
     let new_group_id = add_converted_group_to_scenery(
         &data,
         group_id,
-        &nodes_to_convert,
+        nodes_to_convert,
         new_group,
         &map_input_connections,
         &map_output_connections,

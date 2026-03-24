@@ -664,18 +664,18 @@ async fn post_node_name(
     let mut document = data.document.lock();
     let mut processed_names = HashMap::<Uuid, String>::new();
     let scenery = document.scenery_mut();
-    let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid);
-    for node_idx in &nodes_to_rename {
-        let node_uuid = scenery.graph().node_by_idx(*node_idx).unwrap().uuid();
+    let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid)?;
+    println!("nodes: {:?}", nodes_to_rename);
+    for node_uuid in &nodes_to_rename {
         scenery
-            .with_node_attr_mut(node_uuid, |node_attr| {
+            .with_node_attr_mut(*node_uuid, |node_attr| {
                 let name = if node_attr.node_type() == "reference" {
                     format!("ref ({name})")
                 } else {
                     name.clone()
                 };
                 node_attr.set_name(&name);
-                processed_names.insert(node_uuid, name);
+                processed_names.insert(*node_uuid, name);
             })
             .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?;
     }

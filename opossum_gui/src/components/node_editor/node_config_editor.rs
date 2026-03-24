@@ -97,6 +97,7 @@ pub fn NodeConfigEditor(
             div {
                 "Multiple nodes selected"
                 button {
+                    class: "btn btn-success",
                     onclick: move |_| {
                         workspace_processor
                             .send(GraphsWorkspaceAction::ConvertToGroup {
@@ -107,7 +108,7 @@ pub fn NodeConfigEditor(
                                 graph_id: *active_graph_id.read(),
                             });
                     },
-                    "Convert to group"
+                    "Convert nodes to group"
                 }
             }
         }

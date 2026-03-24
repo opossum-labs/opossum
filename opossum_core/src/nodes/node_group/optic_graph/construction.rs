@@ -184,17 +184,17 @@ impl OpticGraph {
     ///
     /// Panics if the mutex lock fails.
     #[must_use]
-    pub fn find_all_nodes_referring_to_uuid(&self, node_id: Uuid) -> Vec<NodeIndex> {
-        let mut nodes_indices = Vec::<NodeIndex>::new();
+    pub fn find_all_nodes_referring_to_uuid(&self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
+        let mut nodes_indices = Vec::<Uuid>::new();
         for node_idx in self.g.node_indices() {
-            let node_ref = self.node_by_idx(node_idx).unwrap();
+            let node_ref = self.node_by_idx(node_idx)?;
             if node_ref.uuid() == node_id {
-                nodes_indices.push(node_idx);
+                nodes_indices.push(node_id);
             }
-            let node = node_ref.optical_ref.lock_opm().unwrap();
+            let node = node_ref.optical_ref.lock_opm()?;
             let node_attrs = node.node_attr().clone();
             if let Ok(group) = node.as_group() {
-                nodes_indices.extend(group.graph().find_all_nodes_referring_to_uuid(node_id));
+                nodes_indices.extend(group.graph().find_all_nodes_referring_to_uuid(node_id)?);
             }
             drop(node);
             if node_attrs.node_type() == "reference" {
@@ -202,11 +202,11 @@ impl OpticGraph {
                 if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id")
                     && *ref_uuid == node_id
                 {
-                    nodes_indices.push(node_idx);
+                    nodes_indices.push(node_attrs.uuid());
                 }
             }
         }
-        nodes_indices
+        Ok(nodes_indices)
     }
     /// Delete all edges of a node with the [`NodeIndex`] `node_index`
     pub fn delete_edges_of_node(&mut self, node_index: NodeIndex) {
