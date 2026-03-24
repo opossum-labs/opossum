@@ -1,13 +1,22 @@
-use actix_web::{post, web::{self, Json, PathConfig}};
+use actix_web::{
+    post,
+    web::{self, Json, PathConfig},
+};
 use opossum_core::types::api_types::{ConnectInfo, NodeInfo};
-use uuid::Uuid;
 use utoipa_actix_web::service_config::ServiceConfig;
+use uuid::Uuid;
 
-use crate::{app_state::AppState, error::BackEndErrorResponse, groups::helper_functions::{add_converted_group_to_scenery, build_new_group, build_reference_map, collect_group_connections, collect_node_refs_and_pos, create_new_group_node_info, split_connections}};
+use crate::{
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    groups::helper_functions::{
+        add_converted_group_to_scenery, build_new_group, build_reference_map,
+        collect_group_connections, collect_node_refs_and_pos, create_new_group_node_info,
+        split_connections,
+    },
+};
 
 mod helper_functions;
-
-
 
 /// Convert a set of nodes to a group node by creating a new group node and instering the nodes
 #[utoipa::path(tag = "group",

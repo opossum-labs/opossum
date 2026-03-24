@@ -1,6 +1,7 @@
 mod app_state;
 mod error;
 mod general;
+mod groups;
 mod nodes;
 mod pages;
 mod routes;
@@ -8,4 +9,3 @@ mod scenery;
 pub mod server;
 mod sse_logger;
 mod utils;
-mod groups;

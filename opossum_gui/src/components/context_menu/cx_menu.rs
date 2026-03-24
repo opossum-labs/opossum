@@ -7,10 +7,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq)]
 pub enum CxtCommand {
     AddRefNode(NewRefNode),
-    ConvertToGroup {
-        nodes: Vec<Uuid>,
-        graph_id: Uuid,
-    },
+    ConvertToGroup { nodes: Vec<Uuid>, graph_id: Uuid },
 }
 
 #[derive(Clone, PartialEq, Debug)]

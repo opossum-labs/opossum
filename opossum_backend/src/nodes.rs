@@ -422,7 +422,6 @@ async fn post_paste_nodes(
     Ok(Json((optical_nodes, analyzers, connect_info)))
 }
 
-
 /// Copy existing nodes
 ///
 /// This function copies a single or multiple already existing nodes

@@ -1,12 +1,17 @@
-use std::collections::HashSet;
-
 use actix_web::web;
 use nalgebra::Point2;
-use opossum_core::{OpticRef, error::OpmResult, meter, nodes::{ConnectionInfo, NodeGroup}, prelude::PortType, types::api_types::{ConnectInfo, NodeInfo}, utils::LockExt};
+use opossum_core::{
+    OpticRef,
+    error::OpmResult,
+    meter,
+    nodes::{ConnectionInfo, NodeGroup},
+    prelude::PortType,
+    types::api_types::{ConnectInfo, NodeInfo},
+    utils::LockExt,
+};
 use uuid::Uuid;
 
 use crate::{app_state::AppState, error::BackEndErrorResponse};
-
 
 pub(super) fn collect_node_refs_and_pos(
     data: &web::Data<AppState>,
@@ -142,7 +147,7 @@ pub(super) fn add_converted_group_to_scenery(
             nodes_to_convert.retain(|id| id != del_id);
         }
     }
-    
+
     scenery.with_group_node_mut(group_id, |g| {
         match g.add_node(new_group) {
             Ok(new_group_id) => {
