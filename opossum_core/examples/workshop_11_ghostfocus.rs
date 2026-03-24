@@ -58,7 +58,7 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
-        HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
+        HexagonalTiling::new(millimeter!(15.0), 25)?.into(),
         General2DGaussian::new(
             joule!(2.),
             millimeter!(0., 0.),
