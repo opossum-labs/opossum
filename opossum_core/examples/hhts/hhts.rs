@@ -438,7 +438,7 @@ fn main() -> OpmResult<()> {
 
     // collimated source
     let ray_data_builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::new(
-        HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0., 0.))?.into(),
+        HexagonalTiling::new(millimeter!(100.), 10)?.into(),
         General2DGaussian::new(
             joule!(150.0),
             millimeter!(0., 0.),

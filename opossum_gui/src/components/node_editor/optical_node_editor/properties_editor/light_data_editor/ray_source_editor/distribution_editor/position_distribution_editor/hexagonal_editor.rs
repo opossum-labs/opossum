@@ -11,8 +11,6 @@ use strum::{EnumIter, IntoEnumIterator};
 pub enum HexagonalTilingParam {
     NrOfHex,
     Radius,
-    CenterX,
-    CenterY,
 }
 
 impl From<HexagonalTilingParam> for InputParam {
@@ -20,8 +18,6 @@ impl From<HexagonalTilingParam> for InputParam {
         match value {
             HexagonalTilingParam::NrOfHex => Self::U8("#Hexagons".into()),
             HexagonalTilingParam::Radius => Self::SIUnit("Radius".into(), "m".into()),
-            HexagonalTilingParam::CenterX => Self::SIUnit("Center X".into(), "m".into()),
-            HexagonalTilingParam::CenterY => Self::SIUnit("Center Y".into(), "m".into()),
         }
     }
 }
@@ -31,8 +27,6 @@ impl IntoInputDataStrings<HexagonalTiling> for HexagonalTilingParam {
         let id_str = match self {
             Self::NrOfHex => "NrOfHex",
             Self::Radius => "Radius",
-            Self::CenterX => "CenterX",
-            Self::CenterY => "CenterY",
         };
         format!("hexagonalTiling{id_str}Input")
     }
@@ -41,8 +35,6 @@ impl IntoInputDataStrings<HexagonalTiling> for HexagonalTilingParam {
         match self {
             Self::NrOfHex => format!("{}", obj.nr_of_hex_along_radius()),
             Self::Radius => format!("{}", obj.radius().value),
-            Self::CenterX => format!("{}", obj.center().x.value),
-            Self::CenterY => format!("{}", obj.center().y.value),
         }
     }
 }
@@ -63,14 +55,6 @@ impl IntoInputData<f64, HexagonalTiling, PosDistType> for HexagonalTilingParam {
             Self::Radius => move |obj: &mut HexagonalTiling, val: f64| {
                 obj.set_radius(meter!(val))
                     .log_err_with_context("`set_radius` of hexagonal_tiling");
-            },
-            Self::CenterX => move |obj: &mut HexagonalTiling, val: f64| {
-                obj.set_center_x(meter!(val))
-                    .log_err_with_context("`set_center_x` of hexagonal_tiling");
-            },
-            Self::CenterY => move |obj: &mut HexagonalTiling, val: f64| {
-                obj.set_center_y(meter!(val))
-                    .log_err_with_context("`set_center_y` of hexagonal_tiling");
             },
         }
     }
