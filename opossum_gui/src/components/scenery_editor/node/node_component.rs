@@ -1,9 +1,9 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
 use crate::CONTEXT_MENU;
-use crate::components::scenery_editor::GraphsWorkspaceState;
 use crate::components::scenery_editor::constants::HEADER_HEIGHT;
 use crate::components::scenery_editor::graph_editor::{DragStatus, GraphStore};
+use crate::components::scenery_editor::{GraphState, GraphsWorkspaceState};
 use crate::components::{
     context_menu::cx_menu::{CxMenu, CxtCommand},
     scenery_editor::{
@@ -20,6 +20,7 @@ use opossum_core::types::api_types::NewRefNode;
 #[component]
 pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal<bool>) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
+    let graph_state = use_context::<Signal<GraphState>>();
     let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
 
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
@@ -72,20 +73,27 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
             onmousedown: {
                 let z_index = node.z_index();
                 move |event: MouseEvent| {
-                    workspace.write().drag_status.set(DragStatus::NodeInit);
-                    if ctrl_pressed() {
-                        if graph_store().selected_nodes().contains(&node_id) {
-                            graph_store().remove_from_node_selection(node_id);
+                    if let Some(trigger_button) = event.trigger_button() {
+                        match trigger_button {
+                            dioxus_elements::input_data::MouseButton::Primary => {
+                                workspace.write().drag_status.set(DragStatus::NodeInit);
+                                if ctrl_pressed() {
+                                    if graph_store().selected_nodes().contains(&node_id) {
+                                        graph_store().remove_from_node_selection(node_id);
+                                    }
+                                    else{
+                                        graph_store().add_to_node_selection(node_id);
+                                    }
+                                }
+                                else if !graph_store().selected_nodes().contains(&node_id) {
+                                    graph_store().set_node_active(node_id, z_index);
+                                }
+                                else if shift_pressed(){
+                                    //preparation for selection along edge
+                                }
+                            }
+                            _ => {}
                         }
-                        else{
-                            graph_store().add_to_node_selection(node_id);
-                        }
-                    }
-                    else if !graph_store().selected_nodes().contains(&node_id) {
-                        graph_store().set_node_active(node_id, z_index);
-                    }
-                    else if shift_pressed(){
-                        //preparation for selection along edge
                     }
                     event.stop_propagation();
                 }
@@ -111,7 +119,7 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
                             node_id,
                             (position.x + NODE_WIDTH, position.y + 100.0),
                         );
-                        let cx_menu = CxMenu::new(
+                        let mut cx_menu = CxMenu::new(
                             event.page_coordinates().x,
                             event.page_coordinates().y,
                             vec![
@@ -121,6 +129,18 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
                                 ),
                             ],
                         );
+
+                        if active_node_ids.len() > 1 {
+                            cx_menu
+                                .entries
+                                .push((
+                                    "Convert to group node".to_owned(),
+                                    CxtCommand::ConvertToGroup {
+                                        nodes: active_node_ids.iter().cloned().collect(),
+                                        graph_id: graph_state.read().graph_info.id,
+                                    },
+                                ));
+                        }
                         let mut ctx = CONTEXT_MENU.write();
                         *ctx = Some(cx_menu);
                     }

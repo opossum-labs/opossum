@@ -17,6 +17,7 @@ pub enum NodeEditorCommand {
     AutoLayout,
     CenterGraph,
     ZoomToFit,
+    ConvertToGroup { nodes: Vec<Uuid>, graph_id: Uuid },
 }
 
 pub fn use_node_editor_command(
@@ -78,6 +79,9 @@ pub fn use_node_editor_command(
             }
             NodeEditorCommand::SaveFile(path) => {
                 workspace_processor.send(GraphsWorkspaceAction::SaveToFile(path));
+            }
+            NodeEditorCommand::ConvertToGroup { nodes, graph_id } => {
+                workspace_processor.send(GraphsWorkspaceAction::ConvertToGroup { nodes, graph_id });
             }
         }
         node_editor_command_handler.call(None);

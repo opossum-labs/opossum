@@ -1,6 +1,7 @@
 mod app_state;
 mod error;
 mod general;
+mod groups;
 mod nodes;
 mod pages;
 mod routes;

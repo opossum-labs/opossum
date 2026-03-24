@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::components::node_editor::analyzer_node_editor::AnalyzerNodeEditor;
 use crate::components::node_editor::hooks::use_save_manager;
 use crate::components::node_editor::inputs::input_components::FormContext;
@@ -34,6 +32,7 @@ pub fn NodeConfigEditor(
     selected_nodes_memo: Memo<Vec<SelectedNode>>,
     model_modified_handler: EventHandler<bool>,
     workspace_processor: Coroutine<GraphsWorkspaceAction>,
+    active_graph_id: ReadSignal<Uuid>,
 ) -> Element {
     let save_manager = use_save_manager();
     let flush_trigger = save_manager.flush_trigger;
@@ -98,16 +97,18 @@ pub fn NodeConfigEditor(
             div {
                 "Multiple nodes selected"
                 button {
+                    class: "btn btn-success",
                     onclick: move |_| {
                         workspace_processor
                             .send(GraphsWorkspaceAction::ConvertToGroup {
-                                _nodes: selected_nodes_memo()
+                                nodes: selected_nodes_memo()
                                     .iter()
                                     .map(|n| n.node_id)
-                                    .collect::<HashSet<Uuid>>(),
+                                    .collect::<Vec<Uuid>>(),
+                                graph_id: *active_graph_id.read(),
                             });
                     },
-                    "Convert to group"
+                    "Convert nodes to group"
                 }
             }
         }

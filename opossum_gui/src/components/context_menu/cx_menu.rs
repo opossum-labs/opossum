@@ -2,10 +2,12 @@
 use crate::{CONTEXT_MENU, components::context_menu::sub_menu_item::MenuItem};
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CxtCommand {
     AddRefNode(NewRefNode),
+    ConvertToGroup { nodes: Vec<Uuid>, graph_id: Uuid },
 }
 
 #[derive(Clone, PartialEq, Debug)]

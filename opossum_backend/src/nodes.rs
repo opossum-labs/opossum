@@ -110,28 +110,28 @@ pub async fn get_connections(
     let document = data.document.lock();
     let scenery = document.scenery().clone();
     drop(document);
+
     let uuid = path.into_inner();
-    let connect_infos = scenery.with_group_node(uuid, |g| {
-        g.connections()
-            .iter()
-            .map(|c| {
-                let is_reference = scenery
-                    .with_node_attr(c.target_id, |node_attr| {
-                        let prop = node_attr.properties();
-                        prop.get("reference id").is_ok()
-                    })
-                    .unwrap_or(false);
-                ConnectInfo::new(
-                    c.src_id,
-                    c.src_port.clone(),
-                    c.target_id,
-                    c.target_port.clone(),
-                    c.distance.get::<meter>(),
-                    is_reference,
-                )
-            })
-            .collect::<Vec<ConnectInfo>>()
-    })?;
+    let connections = scenery.with_group_node(uuid, |g| g.connections().clone())?;
+    let connect_infos = connections
+        .iter()
+        .map(|c| {
+            let is_reference = scenery
+                .with_node_attr(c.target_id, |node_attr| {
+                    let prop = node_attr.properties();
+                    prop.get("reference id").is_ok()
+                })
+                .unwrap_or(false);
+            ConnectInfo::new(
+                c.src_id,
+                c.src_port.clone(),
+                c.target_id,
+                c.target_port.clone(),
+                c.distance.get::<meter>(),
+                is_reference,
+            )
+        })
+        .collect::<Vec<ConnectInfo>>();
     Ok(Json(connect_infos))
 }
 
@@ -448,9 +448,6 @@ async fn post_copy_nodes(
     copied_nodes_set.clear();
     for id in &node_ids_to_copy {
         if let Ok((node_ref_to_copy, _)) = document.scenery().node_recursive(*id) {
-            let node_ref = node_ref_to_copy.clone();
-            let node = node_ref.optical_ref.lock_opm()?;
-            drop(node);
             copied_nodes_set.push(NodeCacheItem::Optical(node_ref_to_copy));
         } else if let Some(analyzer) = document.analyzers().get(id).cloned() {
             copied_nodes_set.push(NodeCacheItem::Analyzer(analyzer));
@@ -666,18 +663,18 @@ async fn post_node_name(
     let mut document = data.document.lock();
     let mut processed_names = HashMap::<Uuid, String>::new();
     let scenery = document.scenery_mut();
-    let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid);
-    for node_idx in &nodes_to_rename {
-        let node_uuid = scenery.graph().node_by_idx(*node_idx).unwrap().uuid();
+    let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid)?;
+    println!("nodes: {:?}", nodes_to_rename);
+    for node_uuid in &nodes_to_rename {
         scenery
-            .with_node_attr_mut(node_uuid, |node_attr| {
+            .with_node_attr_mut(*node_uuid, |node_attr| {
                 let name = if node_attr.node_type() == "reference" {
                     format!("ref ({name})")
                 } else {
                     name.clone()
                 };
                 node_attr.set_name(&name);
-                processed_names.insert(node_uuid, name);
+                processed_names.insert(*node_uuid, name);
             })
             .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?;
     }

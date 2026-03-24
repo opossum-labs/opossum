@@ -124,6 +124,7 @@ pub fn GraphEditor(
                     selected_nodes_memo,
                     model_modified_handler,
                     workspace_processor,
+                    active_graph_id: active_tab,
                 }
             }
             div {

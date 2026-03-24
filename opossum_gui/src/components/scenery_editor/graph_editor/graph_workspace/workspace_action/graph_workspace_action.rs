@@ -10,7 +10,8 @@ pub enum GraphsWorkspaceAction {
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),
     ConvertToGroup {
-        _nodes: HashSet<Uuid>,
+        nodes: Vec<Uuid>,
+        graph_id: Uuid,
     },
     AddRootSceneryTab {
         name: String,

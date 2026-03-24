@@ -203,6 +203,12 @@ pub fn App() -> Element {
                     node_editor_command_handler
                         .call(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
                 }
+                CxtCommand::ConvertToGroup { nodes, graph_id } => {
+                    node_editor_command_handler.call(Some(NodeEditorCommand::ConvertToGroup {
+                        nodes: nodes.clone(),
+                        graph_id: *graph_id,
+                    }));
+                }
             }
         }
     });

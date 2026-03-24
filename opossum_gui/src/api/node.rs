@@ -259,6 +259,18 @@ pub async fn get_group_hierarchy(group_id: Uuid) -> Result<Vec<(Uuid, String)>, 
         .await
 }
 
+pub async fn convert_nodes_to_group(
+    nodes: Vec<Uuid>,
+    group_id: Uuid,
+) -> Result<(NodeInfo, Vec<ConnectInfo>), String> {
+    HTTP_API_CLIENT()
+        .post::<Vec<Uuid>, (NodeInfo, Vec<ConnectInfo>)>(
+            &format!("/api/groups/{}/convert_to_group", group_id.as_simple()),
+            nodes,
+        )
+        .await
+}
+
 /// Update the property of the node with the given `node_id`.
 /// The property value is already passes as a `serde_json::Value` to avoid implementing `PartialEq` for every property type.
 ///
