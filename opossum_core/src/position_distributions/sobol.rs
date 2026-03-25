@@ -71,15 +71,8 @@ impl SobolDist {
         self.side_length.get().y
     }
 
-    /// Sets the number of points in the Sobol distribution.
+    /// Sets the total number of points in the Sobol distribution.
     ///
-    /// # Parameters
-    ///
-    /// * `nr_of_points` - The new number of points as a `usize`.
-    ///
-    /// # Side Effects
-    ///
-    /// Overwrites the current number of points.
     ///
     /// # Errors
     /// Returns an error if validation fails
@@ -90,14 +83,6 @@ impl SobolDist {
 
     /// Sets the side length along the X axis.
     ///
-    /// # Parameters
-    ///
-    /// * `side_length_x` - The new side length in the X direction.
-    ///
-    /// # Side Effects
-    ///
-    /// Overwrites the current side length in the X direction.
-    ///
     /// # Errors
     /// Returns an error if validation fails
     pub fn set_side_length_x(&mut self, side_length_x: Length) -> OpmResult<()> {
@@ -105,16 +90,7 @@ impl SobolDist {
             .set(Point2::new(side_length_x, self.side_length_y()))?;
         Ok(())
     }
-
     /// Sets the side length along the Y axis.
-    ///
-    /// # Parameters
-    ///
-    /// * `side_length_y` - The new side length in the Y direction.
-    ///
-    /// # Side Effects
-    ///
-    /// Overwrites the current side length in the Y direction.
     ///
     /// # Errors
     /// Returns an error if validation fails

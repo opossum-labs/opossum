@@ -58,7 +58,7 @@ fn main() -> OpmResult<()> {
         ),
         (
             src_hexagonal,
-            HexagonalTiling::new(millimeter!(5.0), 3, millimeter!(0.0, 0.0))?.into(),
+            HexagonalTiling::new(millimeter!(5.0), 3)?.into(),
             Isometry::new_translation(millimeter!(-20.0, 0.0, 0.0))?,
         ),
         (
