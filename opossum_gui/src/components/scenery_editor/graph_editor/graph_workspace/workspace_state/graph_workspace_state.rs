@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use dioxus::{
     html::geometry::euclid::default::{Point2D, Rect, Size2D},

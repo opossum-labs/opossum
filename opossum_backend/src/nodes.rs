@@ -102,17 +102,17 @@ async fn get_subnodes(
         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
     )
 )]
+#[allow(clippy::significant_drop_tightening)]
 #[get("/{uuid}/connections")]
 pub async fn get_connections(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
 ) -> Result<Json<Vec<ConnectInfo>>, BackEndErrorResponse> {
     let document = data.document.lock();
-    let scenery = document.scenery().clone();
-    drop(document);
+    let scenery = document.scenery();
 
     let uuid = path.into_inner();
-    let connections = scenery.with_group_node(uuid, |g| g.connections().clone())?;
+    let connections = scenery.with_group_node(uuid, opossum_core::nodes::NodeGroup::connections)?;
     let connect_infos = connections
         .iter()
         .map(|c| {
@@ -156,7 +156,7 @@ fn upper_left_corner_of_nodes(
     Ok(corner)
 }
 
-pub(super) fn copy_from_optic_ref(
+pub fn copy_from_optic_ref(
     data: &web::Data<AppState>,
     optic_ref: &OpticRef,
 ) -> Result<(OpticRef, Uuid), BackEndErrorResponse> {
@@ -166,14 +166,13 @@ pub(super) fn copy_from_optic_ref(
     let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
     let mut node = new_node_ref.optical_ref.lock_opm()?;
 
-    let mut document = data.document.lock();
     if let Ok(Proptype::Uuid(ref_uuid)) = node_to_copy_from
         .node_attr()
         .properties()
         .get("reference id")
         && let Ok(ref_node) = node.as_refnode_mut()
     {
-        let (referenced_node, _) = document.scenery().node_recursive(*ref_uuid)?;
+        let (referenced_node, _) = data.document.lock().scenery().node_recursive(*ref_uuid)?;
         ref_node.assign_reference(&referenced_node);
     }
 
@@ -186,7 +185,7 @@ pub(super) fn copy_from_optic_ref(
     Ok((new_node_ref, old_node_id))
 }
 
-pub(super) fn get_shifted_pos_of_ref(
+pub fn get_shifted_pos_of_ref(
     optic_ref: &OpticRef,
     shift: Point2<f64>,
 ) -> Result<(f64, f64), BackEndErrorResponse> {
@@ -197,7 +196,7 @@ pub(super) fn get_shifted_pos_of_ref(
     Ok(new_pos)
 }
 
-pub(super) fn copy_optical_node(
+pub fn copy_optical_node(
     data: &web::Data<AppState>,
     group_id: Uuid,
     node_pos: (f64, f64),

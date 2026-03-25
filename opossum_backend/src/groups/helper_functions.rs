@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use actix_web::web;
 use nalgebra::Point2;
 use opossum_core::{
@@ -13,6 +15,26 @@ use uuid::Uuid;
 
 use crate::{app_state::AppState, error::BackEndErrorResponse};
 
+/// Collect the optical references and top-left position of the given nodes.
+///
+/// Iterates over all provided node UUIDs, resolves their corresponding
+/// `OpticRef`s, and determines the minimum `(x, y)` GUI position among them.
+/// The returned position can be used as an anchor point for placing a new group.
+///
+/// # Arguments
+///
+/// * `nodes_to_convert` - Slice of node UUIDs to collect.
+///
+/// # Returns
+///
+/// Returns a tuple containing:
+/// - `Vec<OpticRef>`: The resolved optical references of the nodes.
+/// - `Point2<f64>`: The minimum `(x, y)` position among all nodes.
+///
+/// # Notes
+///
+/// Nodes that cannot be resolved are silently ignored.
+#[allow(clippy::significant_drop_tightening)]
 pub(super) fn collect_node_refs_and_pos(
     data: &web::Data<AppState>,
     nodes_to_convert: &[Uuid],
@@ -36,6 +58,20 @@ pub(super) fn collect_node_refs_and_pos(
     (optic_ref_vec, corner)
 }
 
+/// Collect all connections of the given group.
+///
+/// # Arguments
+///
+/// * `group_id` - The UUID of the group whose connections should be retrieved.
+///
+/// # Returns
+///
+/// Returns a vector of `ConnectionInfo` representing all connections within the group.
+///
+/// # Errors
+///
+/// This function will return an error if the `group_id` was not found.
+#[allow(clippy::significant_drop_tightening)]
 pub(super) fn collect_group_connections(
     data: &web::Data<AppState>,
     group_id: Uuid,
@@ -43,61 +79,112 @@ pub(super) fn collect_group_connections(
     let document = data.document.lock();
     let scenery = document.scenery();
 
-    scenery.with_group_node(group_id, |group| group.connections())
+    scenery.with_group_node(group_id, opossum_core::nodes::NodeGroup::connections)
 }
 
-pub(super) fn build_reference_map(
+/// Split and classify connections relative to a set of nodes.
+///
+/// Connections are categorized into three groups:
+/// - `inside`: connections where both source and target nodes are inside the set
+/// - `input`: connections entering the set (target inside, source outside)
+/// - `output`: connections leaving the set (source inside, target outside)
+///
+/// Additionally, each connection is annotated with whether its target node
+/// represents a reference node.
+///
+/// # Arguments
+///
+/// * `connections` - Slice of all connections to evaluate.
+/// * `nodes` - Slice of node UUIDs defining the subset of interest.
+///
+/// # Returns
+///
+/// Returns a [`ConnectionSplit`] struct containing the categorized connections.
+///
+/// # Errors
+///
+/// Missing node attributes are treated as non-reference nodes.
+#[allow(clippy::significant_drop_tightening)]
+pub(super) fn split_sort_connections(
     data: &web::Data<AppState>,
     connections: &[ConnectionInfo],
-) -> std::collections::HashMap<Uuid, bool> {
+    nodes: &[Uuid],
+) -> ConnectionSplit {
+    let node_set: HashSet<Uuid> = nodes.iter().copied().collect();
+
+    let mut split = ConnectionSplit {
+        inside: Vec::new(),
+        input: Vec::new(),
+        output: Vec::new(),
+    };
+
     let document = data.document.lock();
     let scenery = document.scenery();
-
-    connections
-        .iter()
-        .map(|c| {
-            let is_ref = scenery
-                .with_node_attr(c.target_id, |attr| {
-                    attr.properties().get("reference id").is_ok()
-                })
-                .unwrap_or(false);
-            (c.target_id, is_ref)
-        })
-        .collect()
-}
-
-pub(super) fn split_connections(
-    connections: &[ConnectionInfo],
-    reference_map: &std::collections::HashMap<Uuid, bool>,
-    nodes_to_convert: &[Uuid],
-) -> (Vec<ConnectInfo>, Vec<ConnectInfo>, Vec<ConnectInfo>) {
-    let mut inside = Vec::new();
-    let mut input = Vec::new();
-    let mut output = Vec::new();
-
     for c in connections {
-        let is_reference = *reference_map.get(&c.target_id).unwrap_or(&false);
+        let is_reference = scenery
+            .with_node_attr(c.target_id, |attr| {
+                attr.properties().get("reference id").is_ok()
+            })
+            .unwrap_or(false);
+
         let c_info = ConnectInfo::from_connection_info(c, is_reference);
 
-        let src_inside = nodes_to_convert.contains(&c_info.src_uuid());
-        let tgt_inside = nodes_to_convert.contains(&c_info.target_uuid());
+        let src_inside = node_set.contains(&c_info.src_uuid());
+        let tgt_inside = node_set.contains(&c_info.target_uuid());
 
         match (src_inside, tgt_inside) {
-            (true, true) => inside.push(c_info),
-            (true, false) => output.push(c_info),
-            (false, true) => input.push(c_info),
+            (true, true) => split.inside.push(c_info),
+            (true, false) => split.output.push(c_info),
+            (false, true) => split.input.push(c_info),
             _ => {}
         }
     }
 
-    (inside, input, output)
+    split
 }
 
-pub(super) fn build_new_group(
+/// Represents a categorized split of connections.
+///
+/// # Fields
+///
+/// * `inside` - Connections fully contained within the node set.
+/// * `input` - Connections entering the node set.
+/// * `output` - Connections leaving the node set.
+pub struct ConnectionSplit {
+    pub inside: Vec<ConnectInfo>,
+    pub input: Vec<ConnectInfo>,
+    pub output: Vec<ConnectInfo>,
+}
+
+/// Build a new group node from the given node references and classified connections.
+///
+/// The new group will:
+/// - Contain all provided node references
+/// - Preserve internal connections between nodes (`connections.inside`)
+/// - Map input ports based on incoming connections (`connections.input`)
+/// - Map output ports based on outgoing connections (`connections.output`)
+///
+/// # Arguments
+///
+/// * `node_refs` - Optical references of nodes to include in the group.
+/// * `connections` - A [`ConnectionSplit`] containing categorized connections:
+///     - `inside`: connections fully within the group
+///     - `input`: connections entering the group
+///     - `output`: connections leaving the group
+///
+/// # Returns
+///
+/// Returns the constructed `NodeGroup`.
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - Adding a node reference fails
+/// - Creating internal connections fails
+/// - Mapping input or output ports fails
+pub(super) fn build_new_group_from_refs_and_conns(
     node_refs: Vec<OpticRef>,
-    inside_connections: &[ConnectInfo],
-    map_input_connections: &[ConnectInfo],
-    map_output_connections: &[ConnectInfo],
+    connections: &ConnectionSplit,
 ) -> OpmResult<NodeGroup> {
     let mut new_group = NodeGroup::new("new group");
 
@@ -105,21 +192,15 @@ pub(super) fn build_new_group(
         new_group.add_node_ref(node_ref)?;
     }
 
-    for conn in inside_connections {
-        new_group.connect_nodes(
-            conn.src_uuid(),
-            conn.src_port(),
-            conn.target_uuid(),
-            conn.target_port(),
-            meter!(conn.distance()),
-        )?;
+    for conn in &connections.inside {
+        connect_from_info(&mut new_group, conn)?;
     }
 
-    for map_out in map_output_connections {
+    for map_out in &connections.output {
         new_group.map_output_port(map_out.src_uuid(), map_out.src_port(), map_out.src_port())?;
     }
 
-    for map_in in map_input_connections {
+    for map_in in &connections.input {
         new_group.map_input_port(
             map_in.target_uuid(),
             map_in.target_port(),
@@ -130,6 +211,56 @@ pub(super) fn build_new_group(
     Ok(new_group)
 }
 
+/// Connect two nodes within a group based on `ConnectInfo`.
+///
+/// This is a convenience helper that forwards connection data to
+/// `NodeGroup::connect_nodes`.
+///
+/// # Arguments
+///
+/// * `group` - The group in which the connection should be created.
+/// * `conn` - The connection description.
+///
+/// # Errors
+///
+/// This function will return an error if the connection cannot be created.
+pub(super) fn connect_from_info(group: &mut NodeGroup, conn: &ConnectInfo) -> OpmResult<()> {
+    group.connect_nodes(
+        conn.src_uuid(),
+        conn.src_port(),
+        conn.target_uuid(),
+        conn.target_port(),
+        meter!(conn.distance()),
+    )
+}
+
+/// Replace a set of nodes with a newly created group node in the scenery.
+///
+/// The function:
+/// - Removes all specified nodes from the source group
+/// - Inserts the new group node
+/// - Reconnects external input and output connections
+///
+/// # Arguments
+///
+/// * `group_id` - The UUID of the group containing the original nodes.
+/// * `nodes_to_convert` - List of node UUIDs to remove and replace.
+/// * `new_group` - The constructed group node to insert.
+/// * `map_input_connections` - Connections entering the new group.
+/// * `map_output_connections` - Connections leaving the new group.
+///
+/// # Returns
+///
+/// Returns the UUID of the newly inserted group node.
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The group was not found
+/// - Any node deletion fails
+/// - The new group cannot be inserted
+/// - Reconnecting external connections fails
+#[allow(clippy::significant_drop_tightening)]
 pub(super) fn add_converted_group_to_scenery(
     data: &web::Data<AppState>,
     group_id: Uuid,
@@ -140,7 +271,6 @@ pub(super) fn add_converted_group_to_scenery(
 ) -> Result<Uuid, BackEndErrorResponse> {
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-
     while let Some(node) = nodes_to_convert.pop() {
         let deleted = scenery.delete_node(node)?;
         for del_id in &deleted {
@@ -153,23 +283,11 @@ pub(super) fn add_converted_group_to_scenery(
             Ok(new_group_id) => {
                 //connect the output ports and connect within scenery
                 for map_out in map_output_connections {
-                    g.connect_nodes(
-                        map_out.src_uuid(),
-                        map_out.src_port(),
-                        map_out.target_uuid(),
-                        map_out.target_port(),
-                        meter!(map_out.distance()),
-                    )?;
+                    connect_from_info(g, map_out)?;
                 }
                 //connect the input ports
                 for map_in in map_input_connections {
-                    g.connect_nodes(
-                        map_in.src_uuid(),
-                        map_in.src_port(),
-                        map_in.target_uuid(),
-                        map_in.target_port(),
-                        meter!(map_in.distance()),
-                    )?;
+                    connect_from_info(g, map_in)?;
                 }
                 Ok(new_group_id)
             }
@@ -182,6 +300,22 @@ pub(super) fn add_converted_group_to_scenery(
     })?
 }
 
+/// Create a [`NodeInfo`] representation for a newly created group node.
+///
+/// # Arguments
+///
+/// * `new_group_id` - The UUID of the new group node.
+/// * `pos` - The position where the node should be placed.
+///
+/// # Returns
+///
+/// Returns a `NodeInfo` describing the group node, including its ports and position.
+///
+/// # Errors
+///
+/// This function will return an error if the node cannot be resolved
+/// or if its data cannot be accessed.
+#[allow(clippy::significant_drop_tightening)]
 pub(super) fn create_new_group_node_info(
     data: &web::Data<AppState>,
     new_group_id: Uuid,

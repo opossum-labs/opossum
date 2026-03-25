@@ -500,6 +500,8 @@ fn find_suitable_element_position(
     final_position // fallback: return last position after reaching max iterations
 }
 
+#[allow(clippy::large_types_passed_by_value)]
+#[allow(clippy::future_not_send)]
 async fn process_drop_nodes_into_group(
     nodes: Vec<Uuid>,
     from_group_id: Uuid,
@@ -522,6 +524,8 @@ async fn process_drop_nodes_into_group(
     ws_handler.nodes.remove_droppable_group();
 }
 
+#[allow(clippy::large_types_passed_by_value)]
+#[allow(clippy::future_not_send)]
 async fn process_convert_nodes_to_group(
     nodes: Vec<Uuid>,
     current_group_id: Uuid,

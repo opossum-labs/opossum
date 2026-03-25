@@ -1,8 +1,9 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
+use crate::CONTEXT_MENU;
 use crate::components::scenery_editor::constants::HEADER_HEIGHT;
 use crate::components::scenery_editor::graph_editor::{DragStatus, GraphStore};
-use crate::components::scenery_editor::{EditorState, GraphState, GraphsWorkspaceState};
+use crate::components::scenery_editor::{GraphState, GraphsWorkspaceState};
 use crate::components::{
     context_menu::cx_menu::{CxMenu, CxtCommand},
     scenery_editor::{
@@ -12,8 +13,8 @@ use crate::components::{
         {GraphsWorkspaceAction, NodeType},
     },
 };
-use crate::{CONTEXT_MENU, OPOSSUM_UI_LOGS};
 use dioxus::html::geometry::euclid::default::{Point2D, Rect, Size2D};
+use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
 
@@ -108,26 +109,21 @@ pub fn Node(
             onmousedown: {
                 let z_index = node.z_index();
                 move |event: MouseEvent| {
-                    if let Some(trigger_button) = event.trigger_button() {
-                        match trigger_button {
-                            dioxus_elements::input_data::MouseButton::Primary => {
-                                workspace.write().drag_status.set(DragStatus::NodeInit);
-                                if ctrl_pressed() {
-                                    if graph_store().selected_nodes().contains(&node_id) {
-                                        graph_store().remove_from_node_selection(node_id);
-                                    }
-                                    else{
-                                        graph_store().add_to_node_selection(node_id);
-                                    }
-                                }
-                                else if !graph_store().selected_nodes().contains(&node_id) {
-                                    graph_store().set_node_active(node_id, z_index);
-                                }
-                                else if shift_pressed(){
-                                    //preparation for selection along edge
-                                }
+                    if Some(MouseButton::Primary) == event.trigger_button() {
+                        workspace.write().drag_status.set(DragStatus::NodeInit);
+                        if ctrl_pressed() {
+                            if graph_store().selected_nodes().contains(&node_id) {
+                                graph_store().remove_from_node_selection(node_id);
                             }
-                            _ => {}
+                            else{
+                                graph_store().add_to_node_selection(node_id);
+                            }
+                        }
+                        else if !graph_store().selected_nodes().contains(&node_id) {
+                            graph_store().set_node_active(node_id, z_index);
+                        }
+                        else if shift_pressed(){
+                            //preparation for selection along edge
                         }
                     }
                     event.stop_propagation();
@@ -172,7 +168,7 @@ pub fn Node(
                                 .push((
                                     "Convert to group node".to_owned(),
                                     CxtCommand::ConvertToGroup {
-                                        nodes: active_node_ids.iter().cloned().collect(),
+                                        nodes: active_node_ids.iter().copied().collect(),
                                         graph_id: graph_state.read().graph_info.id,
                                     },
                                 ));

@@ -253,12 +253,25 @@ pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result
         .await
 }
 
+/// Get the hierarchy of the group with the given `group_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `group_id` was not found.
 pub async fn get_group_hierarchy(group_id: Uuid) -> Result<Vec<(Uuid, String)>, String> {
     HTTP_API_CLIENT()
         .get::<Vec<(Uuid, String)>>(&format!("/api/scenery/{}/hierarchy", group_id.as_simple()))
         .await
 }
 
+/// Convert the given `nodes` into a subgroup of the specified `group_id`.
+///
+/// Returns information about the created group node and its connections.
+///
+/// # Errors
+///
+/// This function will return an error if the `group_id` was not found
+/// or if any of the provided `nodes` are invalid.
 pub async fn convert_nodes_to_group(
     nodes: Vec<Uuid>,
     group_id: Uuid,
@@ -271,12 +284,17 @@ pub async fn convert_nodes_to_group(
         .await
 }
 
+/// Move the given `nodes` from `from_group_id` into `drop_group_id`.
+///
+/// # Errors
+///
+/// This function will return an error if either group was not found
+/// or if any of the provided `nodes` are invalid.
 pub async fn drop_nodes_into_group(
     nodes: Vec<Uuid>,
     from_group_id: Uuid,
     drop_group_id: Uuid,
 ) -> Result<String, String> {
-    println!("call drop_into_group");
     HTTP_API_CLIENT()
         .post::<(Vec<Uuid>, Uuid), String>(
             &format!("/api/groups/{}/drop_into_group", from_group_id.as_simple()),

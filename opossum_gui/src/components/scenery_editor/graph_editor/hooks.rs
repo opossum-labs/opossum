@@ -345,7 +345,7 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
             let mut editor_status = graph_state.read().editor_state;
             let mut graph_store = graph_state.read().graph_store;
             let drag_status = workspace.read().drag_status.read().clone();
-            let droppable_groups = workspace.read().drop_in_group.read().clone();
+            let droppable_groups = *workspace.read().drop_in_group.read();
             match drag_status {
                 DragStatus::Nodes => {
                     let selected_nodes = graph_store().selected_nodes();

@@ -175,15 +175,29 @@ impl OpticGraph {
         None
     }
 
-    /// Return the a vector of [`NodeIndex`] of nodes that reference a certain node with the given [`Uuid`] in this [`OpticGraph`].
+    /// Return a vector of [`Uuid`] of nodes that reference a certain node with the given [`Uuid`] in this [`OpticGraph`].
     ///
-    /// This also includes the node itself, but also reference nodes referring to the given [`Uuid`]. This function returns
-    /// an empty vector if no node with (or referring to) the given [`Uuid`] was found.
+    /// This includes:
+    /// - The node itself if it matches `node_id`
+    /// - Any reference nodes that refer to the given `node_id`
+    /// - Recursively any nodes inside groups that reference the `node_id`
     ///
-    /// # Panics
+    /// Returns an empty vector if no node with (or referring to) the given `node_id` was found.
     ///
-    /// Panics if the mutex lock fails.
-    #[must_use]
+    /// # Arguments
+    ///
+    /// * `node_id` - The UUID of the node to find references to.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Vec<Uuid>` containing the UUIDs of all nodes referring to the specified `node_id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`OpmResult::Err`] if:
+    /// - Accessing a node by index fails
+    /// - Locking a node’s `OpticRef` fails
+    /// - Any recursive group traversal fails
     pub fn find_all_nodes_referring_to_uuid(&self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
         let mut nodes_indices = Vec::<Uuid>::new();
         for node_idx in self.g.node_indices() {

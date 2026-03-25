@@ -167,6 +167,7 @@ impl ConnectInfo {
             target_is_reference,
         }
     }
+    #[must_use]
     pub fn from_connection_info(c: &ConnectionInfo, is_reference: bool) -> Self {
         Self {
             src_uuid: c.src_id,
