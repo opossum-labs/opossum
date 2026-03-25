@@ -28,12 +28,14 @@ pub fn Node(
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_state = use_context::<Signal<GraphState>>();
     let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
-
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let position = node.pos();
     let node_height = node.node_body_height() + HEADER_HEIGHT;
-    let active_node_ids = graph_store().selected_nodes();
+    let active_node_ids = graph_store().selected_node_ids();
+    let active_optical_node_ids = graph_store().selected_optical_nodes();
     let node_id = node.id();
+        let is_optical_node = node.is_optical_node();
+
     let is_active = if active_node_ids.contains(&node.id()) {
         "active-node"
     } else {
@@ -45,11 +47,11 @@ pub fn Node(
             if let Some(select_box) = *workspace.read().selection_box.read()
                 && select_box.intersects(&node_rect)
             {
-                if ctrl_pressed() && graph_store.read().selected_nodes().contains(&node_id) {
-                    graph_store().to_be_removed.write().insert(node_id);
+                if ctrl_pressed() && graph_store.read().selected_nodes().contains_key(&node_id) {
+                    graph_store().to_be_removed.write().insert(node_id, is_optical_node);
                     "node-selection-remove"
                 } else {
-                    graph_store().to_be_selected.write().insert(node_id);
+                    graph_store().to_be_selected.write().insert(node_id, is_optical_node);
                     "node-selection"
                 }
             } else {
@@ -63,12 +65,14 @@ pub fn Node(
 
     let node_type = node.node_type().clone();
     let z_index = node.z_index();
-    use_effect(move || {
+    use_effect({
+        let node_type = node_type.clone();
+        move || {
         let mut workspace_write = workspace.write();
         let mut droppable_groups = workspace_write.drop_in_group.write();
         let selected_nodes = graph_store.peek().selected_nodes();
 
-        if !selected_nodes.contains(&node_id)
+        if !selected_nodes.contains_key(&node_id)
             && let NodeType::Optical(node_type) = &node_type
             && node_type == "group"
             && *drag_status.read() == DragStatus::Nodes
@@ -89,9 +93,8 @@ pub fn Node(
                 *droppable_groups = None;
             }
         }
-    });
+    }});
     let node_icon = node.node_type.icon();
-    let is_optical_node = node.is_optical_node();
     rsx! {
         div {
             id: format!("node_container_{}", node_id.as_simple()),
@@ -112,18 +115,19 @@ pub fn Node(
                     if Some(MouseButton::Primary) == event.trigger_button() {
                         workspace.write().drag_status.set(DragStatus::NodeInit);
                         if ctrl_pressed() {
-                            if graph_store().selected_nodes().contains(&node_id) {
+                            if graph_store().selected_nodes().contains_key(&node_id)
+                            {
                                 graph_store().remove_from_node_selection(node_id);
                             }
-                            else{
-                                graph_store().add_to_node_selection(node_id);
+                            else {
+                                graph_store().add_to_node_selection(node_id, is_optical_node);
                             }
-                        }
-                        else if !graph_store().selected_nodes().contains(&node_id) {
-                            graph_store().set_node_active(node_id, z_index);
-                        }
-                        else if shift_pressed(){
-                            //preparation for selection along edge
+                        } else if !graph_store()
+                            .selected_nodes()
+                            .contains_key(&node_id)
+                        {
+                            graph_store()
+                                .set_node_active(node_id, z_index, is_optical_node);
                         }
                     }
                     event.stop_propagation();
@@ -135,11 +139,13 @@ pub fn Node(
                     workspace.write().drag_status.set(DragStatus::Nodes);
                 }
             },
-            onmouseup: move |_| {
-                let drag_status = workspace.read().drag_status.read().clone();
+            onmouseup: {
+                move |_| {
+                    let drag_status = workspace.read().drag_status.read().clone();
 
-                if drag_status == DragStatus::NodeInit && !ctrl_pressed() {
-                    graph_store().set_node_active(node_id, z_index);
+                    if drag_status == DragStatus::NodeInit && !ctrl_pressed() {
+                        graph_store().set_node_active(node_id, z_index, is_optical_node);
+                    }
                 }
             },
 
@@ -162,13 +168,13 @@ pub fn Node(
                             ],
                         );
 
-                        if active_node_ids.len() > 1 {
+                        if active_optical_node_ids.len() > 1 {
                             cx_menu
                                 .entries
                                 .push((
-                                    "Convert to group node".to_owned(),
+                                    "Group optical nodes".to_owned(),
                                     CxtCommand::ConvertToGroup {
-                                        nodes: active_node_ids.iter().copied().collect(),
+                                        nodes: active_optical_node_ids.iter().copied().collect(),
                                         graph_id: graph_state.read().graph_info.id,
                                     },
                                 ));
