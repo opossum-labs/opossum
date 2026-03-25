@@ -34,7 +34,7 @@ pub fn Node(
     let active_node_ids = graph_store().selected_node_ids();
     let active_optical_node_ids = graph_store().selected_optical_nodes();
     let node_id = node.id();
-        let is_optical_node = node.is_optical_node();
+    let is_optical_node = node.is_optical_node();
 
     let is_active = if active_node_ids.contains(&node.id()) {
         "active-node"
@@ -48,10 +48,16 @@ pub fn Node(
                 && select_box.intersects(&node_rect)
             {
                 if ctrl_pressed() && graph_store.read().selected_nodes().contains_key(&node_id) {
-                    graph_store().to_be_removed.write().insert(node_id, is_optical_node);
+                    graph_store()
+                        .to_be_removed
+                        .write()
+                        .insert(node_id, is_optical_node);
                     "node-selection-remove"
                 } else {
-                    graph_store().to_be_selected.write().insert(node_id, is_optical_node);
+                    graph_store()
+                        .to_be_selected
+                        .write()
+                        .insert(node_id, is_optical_node);
                     "node-selection"
                 }
             } else {
@@ -66,34 +72,34 @@ pub fn Node(
     let node_type = node.node_type().clone();
     let z_index = node.z_index();
     use_effect({
-        let node_type = node_type.clone();
         move || {
-        let mut workspace_write = workspace.write();
-        let mut droppable_groups = workspace_write.drop_in_group.write();
-        let selected_nodes = graph_store.peek().selected_nodes();
+            let mut workspace_write = workspace.write();
+            let mut droppable_groups = workspace_write.drop_in_group.write();
+            let selected_nodes = graph_store.peek().selected_nodes();
 
-        if !selected_nodes.contains_key(&node_id)
-            && let NodeType::Optical(node_type) = &node_type
-            && node_type == "group"
-            && *drag_status.read() == DragStatus::Nodes
-        {
-            let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
-            let contains = node_rect.contains(*mouse_pos_in_editor.read());
-            if contains {
-                if let Some((_, g_z_index)) = *droppable_groups
-                    && z_index > g_z_index
-                {
-                    *droppable_groups = Some((node_id, z_index));
-                } else if droppable_groups.is_none() {
-                    *droppable_groups = Some((node_id, z_index));
-                }
-            } else if let Some((g_id, _)) = *droppable_groups
-                && g_id == node_id
+            if !selected_nodes.contains_key(&node_id)
+                && let NodeType::Optical(node_type) = &node_type
+                && node_type == "group"
+                && *drag_status.read() == DragStatus::Nodes
             {
-                *droppable_groups = None;
+                let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
+                let contains = node_rect.contains(*mouse_pos_in_editor.read());
+                if contains {
+                    if let Some((_, g_z_index)) = *droppable_groups
+                        && z_index > g_z_index
+                    {
+                        *droppable_groups = Some((node_id, z_index));
+                    } else if droppable_groups.is_none() {
+                        *droppable_groups = Some((node_id, z_index));
+                    }
+                } else if let Some((g_id, _)) = *droppable_groups
+                    && g_id == node_id
+                {
+                    *droppable_groups = None;
+                }
             }
         }
-    }});
+    });
     let node_icon = node.node_type.icon();
     rsx! {
         div {

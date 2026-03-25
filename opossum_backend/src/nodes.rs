@@ -401,7 +401,7 @@ async fn post_paste_nodes(
 ) -> Result<Json<(Vec<NodeInfo>, Vec<AnalyzerInfo>, Vec<ConnectInfo>)>, BackEndErrorResponse> {
     let (group_id, node_pos) = node_paste_info.into_inner();
 
-    let paste_in_scenery =data.document.lock().scenery().node_attr().uuid() == group_id;
+    let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == group_id;
 
     let copied_nodes = data.node_copy_cache.lock();
     let min_pos = upper_left_corner_of_nodes(&copied_nodes)?;
@@ -425,7 +425,7 @@ async fn post_paste_nodes(
                 )?);
             }
             NodeCacheItem::Analyzer(analyzer) => {
-                if paste_in_scenery{
+                if paste_in_scenery {
                     analyzers.push(copy_analyzer(&data, node_pos, min_pos, analyzer));
                 }
             }

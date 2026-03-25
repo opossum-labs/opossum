@@ -1,4 +1,4 @@
-use std::{time::{Duration, Instant}};
+use std::time::{Duration, Instant};
 
 use crate::{
     CONTEXT_MENU,
@@ -321,7 +321,7 @@ pub fn use_on_key_down(
                     event.stop_propagation();
                 } else if event.data().key() == Key::Delete {
                     let nodes_to_delete = graph_store.read().selected_nodes();
-                    for (node_id,_) in &nodes_to_delete {
+                    for node_id in nodes_to_delete.keys() {
                         workspace_processor.send(GraphsWorkspaceAction::DeleteNode {
                             node_id: *node_id,
                             graph_id: graph_state.read().graph_info.id,
@@ -377,7 +377,7 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
                     for (id, is_optical) in &nodes_to_select {
                         graph_store.write().add_to_node_selection(*id, *is_optical);
                     }
-                    for (id, _) in &nodes_to_remove {
+                    for id in nodes_to_remove.keys() {
                         graph_store.write().remove_from_node_selection(*id);
                     }
                     graph_store.write().to_be_selected.write().clear();

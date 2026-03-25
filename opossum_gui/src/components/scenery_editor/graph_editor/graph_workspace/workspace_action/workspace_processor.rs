@@ -173,12 +173,7 @@ pub fn use_workspace_processor(
                         }
                     }
                     GraphsWorkspaceAction::ConvertToGroup { nodes, graph_id } => {
-                        process_convert_nodes_to_group(
-                            nodes,
-                            graph_id,
-                            workspace_handlers,
-                        )
-                        .await;
+                        process_convert_nodes_to_group(nodes, graph_id, workspace_handlers).await;
                     }
                     GraphsWorkspaceAction::DropNodesIntoGroup {
                         nodes,

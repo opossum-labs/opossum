@@ -101,9 +101,15 @@ impl GraphStore {
     pub fn selected_nodes(&self) -> HashMap<Uuid, bool> {
         self.selected_nodes.read().clone()
     }
-     #[must_use]
+    #[must_use]
     pub fn selected_optical_nodes(&self) -> HashSet<Uuid> {
-        self.selected_nodes.read().iter().filter(|(_, optical)| **optical).map(|(id, _)| id).copied().collect()
+        self.selected_nodes
+            .read()
+            .iter()
+            .filter(|(_, optical)| **optical)
+            .map(|(id, _)| id)
+            .copied()
+            .collect()
     }
     #[must_use]
     pub fn selected_node_ids(&self) -> HashSet<Uuid> {
@@ -114,7 +120,7 @@ impl GraphStore {
     }
     pub fn get_selected_nodes(&self, graph_id: Uuid) -> Vec<SelectedNode> {
         let mut selected_nodes = Vec::<SelectedNode>::new();
-        for (n_id,_) in &self.selected_nodes() {
+        for n_id in &self.selected_node_ids() {
             if let Some(n) = self.nodes().read().get(n_id) {
                 let selected_node = SelectedNode {
                     node_id: n.id(),
@@ -137,7 +143,7 @@ impl GraphStore {
     pub fn remove_from_node_selection(&mut self, id: Uuid) {
         self.selected_nodes.write().remove(&id);
     }
-    
+
     pub fn set_active_node_none(&mut self) {
         self.clear_selected_nodes();
     }

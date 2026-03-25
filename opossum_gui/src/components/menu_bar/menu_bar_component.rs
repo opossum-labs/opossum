@@ -43,7 +43,7 @@ pub fn MenuBar(
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
     model_modified_sig: ReadSignal<bool>,
     on_menu_action: EventHandler<AppCommand>,
-    root_tab_open: ReadSignal<bool>
+    root_tab_open: ReadSignal<bool>,
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
 
