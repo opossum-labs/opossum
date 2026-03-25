@@ -315,12 +315,12 @@ mod test {
             raytrace::AnalysisRayTrace,
         },
         apertures::{Aperture, ApertureType},
+        distributions::position::Hexapolar,
         joule,
         light_result::LightResult,
         lightdata::LightData,
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
-        position_distributions::Hexapolar,
         properties::Proptype,
         rays::Rays,
     };

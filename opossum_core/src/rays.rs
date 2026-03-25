@@ -1,13 +1,18 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
+use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
 use crate::{
     J_per_cm2,
     analyzers::propagation_strategy::MissedSurfaceStrategy,
     apertures::Aperture,
     centimeter, degree,
-    energy_distributions::EnergyDistribution,
+    distributions::{
+        energy::EnergyDistribution,
+        fluence::FluenceDistribution,
+        position::{Hexapolar, PositionDistribution},
+        spectral::SpectralDistribution,
+    },
     error::{OpmResult, OpossumError},
-    fluence_distributions::FluenceDistribution,
     joule, meter, millimeter, nanometer,
     nodes::{
         FilterType, SplittingConfig, WaveFrontData, WaveFrontErrorMap,
@@ -15,12 +20,10 @@ use crate::{
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
     },
     plottable::AxLims,
-    position_distributions::{Hexapolar, PositionDistribution},
     prelude::EnergyLaserLines,
     properties::Proptype,
     ray::Ray,
     refractive_index::RefractiveIndexType,
-    spectral_distribution::SpectralDistribution,
     spectrum::Spectrum,
     surface::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
     utils::{
@@ -33,7 +36,6 @@ use crate::{
         to_f64,
     },
 };
-
 use approx::relative_eq;
 use image::{GrayImage, ImageReader};
 use itertools::{Itertools, izip};
@@ -1390,11 +1392,7 @@ impl Rays {
         let mut unique_lines: Vec<(Length, Energy)> = Vec::new();
         for (wvl, energy) in lines {
             if let Some(last) = unique_lines.last_mut() {
-                if (last.0 - wvl).abs()
-                    < Length::new::<nanometer>(
-                        crate::spectral_distribution::laser_lines::MIN_WAVELENGTH_DIFF_NM,
-                    )
-                {
+                if (last.0 - wvl).abs() < Length::new::<nanometer>(MIN_WAVELENGTH_DIFF_NM) {
                     last.1 += energy;
                 } else {
                     unique_lines.push((wvl, energy));
@@ -1824,14 +1822,16 @@ mod test {
     use std::f64::consts::PI;
 
     use super::*;
+    use crate::distributions::energy::General2DGaussian;
+    use crate::distributions::position::FibonacciEllipse;
+    use crate::distributions::position::FibonacciRectangle;
+    use crate::distributions::position::Random;
     use crate::{
         apertures::{ApertureType, CircleShape},
         centimeter,
         coatings::CoatingType,
-        energy_distributions::General2DGaussian,
-        fluence_distributions, joule, meter, millimeter, nanometer,
+        joule, meter, millimeter, nanometer,
         nodes::SplittingConfig,
-        position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         radian,
         refractive_index::{RefrIndexConst, refr_index_vaccuum},
         surface::optic_surface::OpticSurface,
@@ -2374,13 +2374,14 @@ mod test {
     fn refract_on_surface_helper_rays() {
         let tot_energy = joule!(1.);
         let pos_strategy = Hexapolar::new(millimeter!(15.), 5).unwrap();
-        let fluence_strategy = fluence_distributions::general_gaussian::General2DGaussian::new(
-            tot_energy,
-            millimeter!(0., 0.),
-            millimeter!(2.5, 2.5),
-            radian!(0.),
-        )
-        .unwrap();
+        let fluence_strategy =
+            crate::distributions::fluence::general_gaussian::General2DGaussian::new(
+                tot_energy,
+                millimeter!(0., 0.),
+                millimeter!(2.5, 2.5),
+                radian!(0.),
+            )
+            .unwrap();
         let mut rays = Rays::new_collimated_w_fluence_helper(
             nanometer!(1000.),
             &fluence_strategy,
@@ -3065,13 +3066,14 @@ mod test {
     fn new_collimated_w_fluence_helper() {
         let tot_energy = joule!(1.);
         let pos_strategy = Hexapolar::new(millimeter!(15.), 5).unwrap();
-        let fluence_strategy = fluence_distributions::general_gaussian::General2DGaussian::new(
-            tot_energy,
-            millimeter!(0., 0.),
-            millimeter!(2.5, 2.5),
-            radian!(0.),
-        )
-        .unwrap();
+        let fluence_strategy =
+            crate::distributions::fluence::general_gaussian::General2DGaussian::new(
+                tot_energy,
+                millimeter!(0., 0.),
+                millimeter!(2.5, 2.5),
+                radian!(0.),
+            )
+            .unwrap();
         let rays = Rays::new_collimated_w_fluence_helper(
             nanometer!(1000.),
             &fluence_strategy,

@@ -3,13 +3,11 @@
 //! This module provides a builder for the generation of [`LightData`].
 use crate::{
     degree,
-    energy_distributions::EnergyDistType,
+    distributions::{energy::EnergyDistType, position::PosDistType, spectral::SpecDistType},
     error::OpmResult,
     generic_validators::{AllFinite, AllInRange, AllNormal, AllPositive, PathValid, ValidateTrait},
     joule, meter, nanometer,
-    position_distributions::PosDistType,
     rays::Rays,
-    spectral_distribution::SpecDistType,
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
 };

@@ -14,7 +14,7 @@ use grid_editor::GridParam;
 use hexagonal_editor::get_hexagonal_input_params;
 use hexapolar_editor::get_hexapolar_input_params;
 use opossum_core::{
-    position_distributions::PosDistType, prelude::RayDataSource,
+    distributions::position::PosDistType, prelude::RayDataSource,
     utils::default_from_name::DefaultFromName,
 };
 use random_editor::RandomParam;

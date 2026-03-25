@@ -250,11 +250,11 @@ mod test {
     use super::*;
     use crate::{
         analyzers::energy::EnergyConfig,
+        distributions::position::Hexapolar,
         joule,
         light_result::LightResult,
         nodes::{EnergyMeter, test_helper::test_helper::*},
         optic_ports::PortType,
-        position_distributions::Hexapolar,
         rays::Rays,
         spectrum_helper::{create_he_ne_spec, create_visible_spec},
     };

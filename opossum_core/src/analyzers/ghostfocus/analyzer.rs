@@ -306,16 +306,14 @@ mod test_ghost_analysis_nested_groups_inversion {
     use crate::{
         analyzers::ghostfocus::config::GhostFocusConfig,
         coatings::CoatingType,
-        energy_distributions::General2DGaussian,
+        distributions::{position::Hexapolar, spectral::LaserLines},
         joule, millimeter, nanometer,
         nodes::{Lens, NodeGroup, SourcePort},
-        position_distributions::Hexapolar,
         prelude::{
             AnalyzerType, CollimatedSrc, OpmDocument, OpticNode, PortType, RayDataSource,
             RefrIndexConst,
         },
         radian,
-        spectral_distribution::LaserLines,
         utils::LockExt,
     };
     use uuid::Uuid;
@@ -496,7 +494,7 @@ mod test_ghost_analysis_nested_groups_inversion {
         // collimated source definition
         let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(10.), 0).unwrap().into(),
-            General2DGaussian::new(
+            crate::distributions::energy::General2DGaussian::new(
                 joule!(5.0),
                 millimeter!(0., 0.),
                 millimeter!(2., 2.),

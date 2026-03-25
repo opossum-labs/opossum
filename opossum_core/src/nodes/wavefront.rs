@@ -495,10 +495,9 @@ mod test_wavefront_error_map {
 mod test {
     use super::*;
     use crate::{
-        analyzers::RayTraceConfig, joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*, optic_ports::PortType,
-        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
-        utils::geom_transformation::Isometry,
+        analyzers::RayTraceConfig, distributions::position::Hexapolar, joule, millimeter,
+        nanometer, nodes::test_helper::test_helper::*, optic_ports::PortType, rays::Rays,
+        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
     #[test]
     fn default() {

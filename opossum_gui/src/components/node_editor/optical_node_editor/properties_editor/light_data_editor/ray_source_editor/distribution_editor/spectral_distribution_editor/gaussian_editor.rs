@@ -4,8 +4,8 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
+    distributions::spectral::{Gaussian, SpecDistType},
     meter,
-    spectral_distribution::{Gaussian, SpecDistType},
     utils::try_f64_to_usize,
 };
 use strum::EnumIter;

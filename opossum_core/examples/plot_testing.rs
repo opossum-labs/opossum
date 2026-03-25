@@ -1,7 +1,7 @@
 use nalgebra::{DMatrix, DVector, MatrixXx2};
 use opossum_core::{
+    distributions::position::Hexapolar,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
-    position_distributions::Hexapolar,
     prelude::*,
     rays::Rays,
     utils::geom_transformation::Isometry,

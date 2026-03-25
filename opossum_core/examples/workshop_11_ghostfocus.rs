@@ -1,7 +1,7 @@
 use opossum_core::prelude::*;
 use opossum_core::{
-    J_per_cm2, coatings::CoatingType, energy_distributions::General2DGaussian,
-    position_distributions::HexagonalTiling, spectral_distribution::LaserLines,
+    J_per_cm2, coatings::CoatingType, distributions::energy::General2DGaussian,
+    distributions::position::HexagonalTiling, distributions::spectral::LaserLines,
 };
 use std::path::Path;
 

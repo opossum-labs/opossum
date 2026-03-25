@@ -3,7 +3,7 @@ use crate::components::{
     node_editor::inputs::{InputData, InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
-use opossum_core::energy_distributions::{EnergyDistType, EnergyDistribution, General2DGaussian};
+use opossum_core::distributions::energy::{EnergyDistType, EnergyDistribution, General2DGaussian};
 use opossum_core::{degree, joule, meter};
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::angle::degree;

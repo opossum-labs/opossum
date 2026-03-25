@@ -1,9 +1,9 @@
 use nalgebra::{DMatrix, DVector};
 use opossum_core::prelude::*;
 use opossum_core::{
-    energy_distributions::general_gaussian::General2DGaussian,
+    distributions::energy::general_gaussian::General2DGaussian,
+    distributions::position::FibonacciRectangle,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
-    position_distributions::FibonacciRectangle,
     rays::Rays,
     utils::geom_transformation::Isometry,
 };

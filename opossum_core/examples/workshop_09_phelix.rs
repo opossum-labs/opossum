@@ -3,8 +3,8 @@ use nalgebra::Vector3;
 use num::Zero;
 use opossum_core::prelude::*;
 use opossum_core::{
-    energy_distributions::UniformDist, position_distributions::Grid, properties::Proptype,
-    spectral_distribution::LaserLines,
+    distributions::{energy::UniformDist, position::Grid, spectral::LaserLines},
+    properties::Proptype,
 };
 use std::path::Path;
 use uom::si::f64::Length;

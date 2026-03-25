@@ -3,13 +3,13 @@
 //! This module provides a builder for the generation of energy spectra to be used in `LightData::Energy`.
 //! Using this builder allows easier serialization / deserialization in OPM files.
 use crate::{
+    distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM,
     error::{OpmResult, OpossumError},
     generic_validators::{
         AllNormal, AllNotEmpty, AllPositive, PathValid, ValidateTrait, XNormal, YFinite,
         YNotAllZero,
     },
     joule, nanometer,
-    spectral_distribution::laser_lines::MIN_WAVELENGTH_DIFF_NM,
     spectrum::Spectrum,
     utils::default_from_name::DefaultFromName,
     validated, validated_type, validated_vec, validated_vec_type,

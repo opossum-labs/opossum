@@ -323,9 +323,9 @@ impl AnalysisGhostFocus for Source {
 mod test {
     use super::*;
     use crate::{
-        lightdata::ray_data_source::RayDataSource, nanometer, optic_ports::PortType,
-        position_distributions::Hexapolar, prelude::EnergyDataBuilder,
-        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
+        distributions::position::Hexapolar, lightdata::ray_data_source::RayDataSource, nanometer,
+        optic_ports::PortType, prelude::EnergyDataBuilder, spectrum_helper::create_he_ne_spec,
+        utils::geom_transformation::Isometry,
     };
     use assert_matches::assert_matches;
     use core::f64;

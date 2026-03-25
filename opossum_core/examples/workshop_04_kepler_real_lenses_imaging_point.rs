@@ -1,8 +1,5 @@
+use opossum_core::distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines};
 use opossum_core::prelude::*;
-use opossum_core::{
-    energy_distributions::UniformDist, position_distributions::Hexapolar,
-    spectral_distribution::LaserLines,
-};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

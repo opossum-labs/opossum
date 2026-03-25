@@ -2,15 +2,17 @@
 //! Helper functions for easier creation of `standard` [`RayDataBuilder`].
 use crate::{
     degree,
-    energy_distributions::UniformDist,
+    distributions::{
+        energy::UniformDist,
+        position::{Grid, Hexapolar},
+        spectral::LaserLines,
+    },
     error::{OpmResult, OpossumError},
     lightdata::{
         ray_data_builder::RayDataBuilder,
         ray_data_source::{CollimatedSrc, PointSrc, RayDataSource},
     },
     meter, millimeter, nanometer,
-    position_distributions::{Grid, Hexapolar},
-    spectral_distribution::LaserLines,
 };
 use nalgebra::Point2;
 use num::Zero;

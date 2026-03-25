@@ -355,11 +355,11 @@ impl Plottable for SpotDiagram {
 mod test {
     use super::*;
     use crate::{
+        distributions::position::Hexapolar,
         joule,
         light_result::LightRays,
         nodes::{NodeGroup, SourcePort, test_helper::test_helper::*},
         optic_ports::PortType,
-        position_distributions::Hexapolar,
         prelude::{AnalyzerType, EnergyDataBuilder, GhostFocusConfig, OpmDocument},
         rays::Rays,
         spectrum_helper::create_he_ne_spec,

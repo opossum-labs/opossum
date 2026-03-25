@@ -9,11 +9,9 @@ use strum::EnumIter;
 
 use super::{LightData, energy_data_builder::EnergyDataBuilder, ray_data_source::RayDataSource};
 use crate::{
-    energy_distributions::EnergyDistType,
+    distributions::{energy::EnergyDistType, position::PosDistType, spectral::SpecDistType},
     error::OpmResult,
     lightdata::ray_data_source::{CollimatedSrc, ImageSrc, PointSrc},
-    position_distributions::PosDistType,
-    spectral_distribution::SpecDistType,
     utils::default_from_name::DefaultFromName,
 };
 
@@ -143,9 +141,12 @@ impl From<CollimatedSrc> for LightDataBuilder {
 mod tests {
     use super::*;
     use crate::{
-        energy_distributions::UniformDist, joule, lightdata::energy_data_builder::EnergyLaserLines,
-        nanometer, position_distributions::Hexapolar, properties::Proptype, rays::Rays,
-        spectral_distribution::LaserLines,
+        distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
+        joule,
+        lightdata::energy_data_builder::EnergyLaserLines,
+        nanometer,
+        properties::Proptype,
+        rays::Rays,
     };
     #[test]
     fn default() {

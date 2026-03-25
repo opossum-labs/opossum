@@ -1,10 +1,7 @@
 use nalgebra::Point2;
 use num::Zero;
+use opossum_core::distributions::{energy::UniformDist, position::Grid, spectral::LaserLines};
 use opossum_core::prelude::*;
-use opossum_core::{
-    energy_distributions::UniformDist, position_distributions::Grid,
-    spectral_distribution::LaserLines,
-};
 use std::path::Path;
 use uom::si::f64::Length;
 

@@ -79,16 +79,13 @@ impl AnalysisRayTrace for SourcePort {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::{
-        energy_distributions::UniformDist,
+        distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         lightdata::ray_data_builder::RayDataBuilder,
         nanometer,
-        position_distributions::Hexapolar,
         prelude::{CollimatedSrc, RayDataSource},
-        spectral_distribution::LaserLines,
     };
-
-    use super::*;
 
     #[test]
     fn analyze_raytrace_no_source_definition() {

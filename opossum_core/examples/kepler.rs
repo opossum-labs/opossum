@@ -1,8 +1,9 @@
 use nalgebra::Point2;
 use num::Zero;
 use opossum_core::{
-    energy_distributions::UniformDist, nodes::SourcePort, position_distributions::Grid, prelude::*,
-    spectral_distribution::LaserLines,
+    distributions::{energy::UniformDist, position::Grid, spectral::LaserLines},
+    nodes::SourcePort,
+    prelude::*,
 };
 use std::path::Path;
 use uom::si::f64::Length;

@@ -1,8 +1,8 @@
 use opossum_core::coatings::CoatingType;
 use opossum_core::{J_per_cm2, prelude::*};
 use opossum_core::{
-    energy_distributions::General2DGaussian, position_distributions::HexagonalTiling,
-    refractive_index::refr_index_schott::RefrIndexSchott, spectral_distribution::LaserLines,
+    distributions::energy::General2DGaussian, distributions::position::HexagonalTiling,
+    distributions::spectral::LaserLines, refractive_index::refr_index_schott::RefrIndexSchott,
 };
 use std::path::Path;
 

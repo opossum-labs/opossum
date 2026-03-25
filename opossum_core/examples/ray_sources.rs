@@ -1,13 +1,13 @@
 use nalgebra::Point2;
 use num::Zero;
 use opossum_core::{
-    energy_distributions::{EnergyDistType, UniformDist},
-    lightdata::ray_data_builder::RayDataBuilder,
-    position_distributions::{
+    distributions::energy::{EnergyDistType, UniformDist},
+    distributions::position::{
         FibonacciRectangle, Grid, HexagonalTiling, Hexapolar, PosDistType, Random, SobolDist,
     },
+    distributions::spectral::{LaserLines, SpecDistType},
+    lightdata::ray_data_builder::RayDataBuilder,
     prelude::*,
-    spectral_distribution::{LaserLines, SpecDistType},
 };
 use std::path::Path;
 use uom::si::f64::Length;
