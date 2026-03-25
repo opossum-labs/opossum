@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 #[component]
 pub fn GraphEditor(
-    command: Memo<Option<NodeEditorCommand>>,
+    command: ReadSignal<Option<NodeEditorCommand>>,
     node_editor_command_handler: EventHandler<Option<NodeEditorCommand>>,
     model_modified_sig: ReadSignal<bool>,
     model_modified_handler: EventHandler<bool>,

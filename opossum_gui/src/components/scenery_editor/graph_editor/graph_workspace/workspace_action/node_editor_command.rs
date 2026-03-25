@@ -24,7 +24,7 @@ pub fn use_node_editor_command(
     node_editor_command_handler: EventHandler<Option<NodeEditorCommand>>,
     active_tab: ReadSignal<Uuid>,
     workspace_processor: Coroutine<GraphsWorkspaceAction>,
-    command: Memo<Option<NodeEditorCommand>>,
+    command: ReadSignal<Option<NodeEditorCommand>>,
 ) {
     let cmd = command.read().clone();
     if let Some(command) = cmd {
