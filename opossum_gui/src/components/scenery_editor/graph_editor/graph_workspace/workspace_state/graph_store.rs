@@ -41,9 +41,10 @@ pub struct GraphInfo {
 pub struct GraphStore {
     nodes: Signal<HashMap<Uuid, NodeElement>>,
     pub edges: Signal<Vec<ConnectInfo>>,
-    pub to_be_selected: Signal<HashSet<Uuid>>,
-    pub to_be_removed: Signal<HashSet<Uuid>>,
-    selected_nodes: Signal<HashSet<Uuid>>,
+    pub to_be_selected: Signal<HashMap<Uuid, bool>>,
+    pub to_be_removed: Signal<HashMap<Uuid, bool>>,
+    selected_nodes: Signal<HashMap<Uuid, bool>>,
+    selected_analyzer_nodes: Signal<HashSet<Uuid>>,
     file_path: Signal<Option<PathBuf>>,
     pub needs_saving: Signal<bool>,
     pub scenery_id: Uuid,
@@ -97,15 +98,29 @@ impl GraphStore {
         }
     }
     #[must_use]
-    pub fn selected_nodes(&self) -> HashSet<Uuid> {
+    pub fn selected_nodes(&self) -> HashMap<Uuid, bool> {
         self.selected_nodes.read().clone()
+    }
+    #[must_use]
+    pub fn selected_optical_nodes(&self) -> HashSet<Uuid> {
+        self.selected_nodes
+            .read()
+            .iter()
+            .filter(|(_, optical)| **optical)
+            .map(|(id, _)| id)
+            .copied()
+            .collect()
+    }
+    #[must_use]
+    pub fn selected_node_ids(&self) -> HashSet<Uuid> {
+        self.selected_nodes.read().keys().copied().collect()
     }
     pub fn clear_selected_nodes(&mut self) {
         self.selected_nodes.write().clear();
     }
     pub fn get_selected_nodes(&self, graph_id: Uuid) -> Vec<SelectedNode> {
         let mut selected_nodes = Vec::<SelectedNode>::new();
-        for n_id in &self.selected_nodes() {
+        for n_id in &self.selected_node_ids() {
             if let Some(n) = self.nodes().read().get(n_id) {
                 let selected_node = SelectedNode {
                     node_id: n.id(),
@@ -117,19 +132,20 @@ impl GraphStore {
         }
         selected_nodes
     }
-    pub fn set_node_active(&mut self, id: Uuid, z_index: usize) {
+    pub fn set_node_active(&mut self, id: Uuid, z_index: usize, is_optical: bool) {
         self.set_z_level_to_top(id, z_index);
-        self.selected_nodes.write().clear();
-        self.selected_nodes.write().insert(id);
+        self.clear_selected_nodes();
+        self.selected_nodes.write().insert(id, is_optical);
     }
-    pub fn add_to_node_selection(&mut self, id: Uuid) {
-        self.selected_nodes.write().insert(id);
+    pub fn add_to_node_selection(&mut self, id: Uuid, is_optical: bool) {
+        self.selected_nodes.write().insert(id, is_optical);
     }
     pub fn remove_from_node_selection(&mut self, id: Uuid) {
         self.selected_nodes.write().remove(&id);
     }
+
     pub fn set_active_node_none(&mut self) {
-        self.selected_nodes.write().clear();
+        self.clear_selected_nodes();
     }
     pub fn update_node_positions(&mut self, new_positions: HashMap<Uuid, Point2D<f64>>) {
         let mut nodes = self.nodes.write();
@@ -202,7 +218,7 @@ impl GraphStore {
         let nr_of_nodes = self.nodes().read().len();
         node_element.set_z_index(nr_of_nodes + 1);
         self.nodes.write().insert(id, node_element.clone());
-        self.set_node_active(id, node_element.z_index());
+        self.set_node_active(id, node_element.z_index(), true);
         node_element
     }
     /// Removes nodes by their IDs from the graph store.
@@ -238,7 +254,7 @@ impl GraphStore {
         self.nodes
             .write()
             .insert(node_info.uuid(), node_element.clone());
-        self.set_node_active(node_info.uuid(), node_element.z_index());
+        self.set_node_active(node_info.uuid(), node_element.z_index(), true);
     }
     /// Adds a new analyzer to the graph store.
     /// This function creates a new `NodeElement` for the analyzer and inserts it into the store.
@@ -259,7 +275,7 @@ impl GraphStore {
         let nr_of_nodes = self.nodes().read().len();
         node_element.set_z_index(nr_of_nodes + 1);
         self.nodes.write().insert(analyzer_id, node_element.clone());
-        self.set_node_active(analyzer_id, node_element.z_index());
+        self.set_node_active(analyzer_id, node_element.z_index(), false);
     }
 }
 

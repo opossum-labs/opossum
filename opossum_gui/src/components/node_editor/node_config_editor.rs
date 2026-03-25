@@ -103,6 +103,7 @@ pub fn NodeConfigEditor(
                             .send(GraphsWorkspaceAction::ConvertToGroup {
                                 nodes: selected_nodes_memo()
                                     .iter()
+                                    .filter(|n| matches!(n.node_type, NodeType::Optical(_)))
                                     .map(|n| n.node_id)
                                     .collect::<Vec<Uuid>>(),
                                 graph_id: *active_graph_id.read(),

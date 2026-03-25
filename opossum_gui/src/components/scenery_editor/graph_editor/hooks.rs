@@ -147,7 +147,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
             }
             DragStatus::Nodes => {
                 let selected_nodes = graph_store().selected_nodes();
-                for id in selected_nodes {
+                for (id, _) in selected_nodes {
                     graph_store().shift_node_position(id, graph_shift);
                 }
             }
@@ -293,7 +293,7 @@ pub fn use_on_key_down(
                     && !graph_store.read().selected_nodes().is_empty()
                 {
                     workspace_processor.send(GraphsWorkspaceAction::CopyNodes {
-                        nodes: graph_store.read().selected_nodes(),
+                        nodes: graph_store.read().selected_node_ids(),
                     });
                     event.stop_propagation();
                 } else if ctrl_or_meta
@@ -321,7 +321,7 @@ pub fn use_on_key_down(
                     event.stop_propagation();
                 } else if event.data().key() == Key::Delete {
                     let nodes_to_delete = graph_store.read().selected_nodes();
-                    for node_id in &nodes_to_delete {
+                    for node_id in nodes_to_delete.keys() {
                         workspace_processor.send(GraphsWorkspaceAction::DeleteNode {
                             node_id: *node_id,
                             graph_id: graph_state.read().graph_info.id,
@@ -348,7 +348,7 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
             let droppable_groups = *workspace.read().drop_in_group.read();
             match drag_status {
                 DragStatus::Nodes => {
-                    let selected_nodes = graph_store().selected_nodes();
+                    let selected_nodes = graph_store().selected_optical_nodes();
                     if droppable_groups.is_none() {
                         for node_id in selected_nodes {
                             if let Some(pos) = graph_store
@@ -374,10 +374,10 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
                 DragStatus::SelectionBox(_) => {
                     let nodes_to_select = graph_store.read().to_be_selected.read().clone();
                     let nodes_to_remove = graph_store.read().to_be_removed.read().clone();
-                    for id in &nodes_to_select {
-                        graph_store.write().add_to_node_selection(*id);
+                    for (id, is_optical) in &nodes_to_select {
+                        graph_store.write().add_to_node_selection(*id, *is_optical);
                     }
-                    for id in &nodes_to_remove {
+                    for id in nodes_to_remove.keys() {
                         graph_store.write().remove_from_node_selection(*id);
                     }
                     graph_store.write().to_be_selected.write().clear();
