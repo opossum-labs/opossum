@@ -68,18 +68,13 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
             if contains{
                 if let Some((_, g_z_index)) = *droppable_groups && z_index> g_z_index{
                     *droppable_groups = Some((node_id, z_index));
-                                        println!("adding to droppable_groups");
-
                 }
                 else if droppable_groups.is_none(){
                     *droppable_groups = Some((node_id, z_index));
-                    println!("adding to droppable_groups");
                 }
             }
             else if let Some((g_id, _))= *droppable_groups && g_id == node_id{
                 *droppable_groups = None;
-                                println!("removing from droppable_groups");
-
             }
         }
     });

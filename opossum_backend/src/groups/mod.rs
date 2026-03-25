@@ -93,42 +93,37 @@ pub async fn post_drop_nodes_into_group(
     path: web::Path<Uuid>,
     nodes_to_drop_in_group: web::Json<(Vec<Uuid>, Uuid)>,
 ) -> Result<(), BackEndErrorResponse> {
-        println!("starting drop_into_group");
 
     let from_group_id = path.into_inner();
     let (mut nodes_to_drop, drop_group_id) = nodes_to_drop_in_group.into_inner();
 
     let (node_refs, _) = collect_node_refs_and_pos(&data, &nodes_to_drop);
 
-            println!("collected node_refs");
+    let all_connections = collect_group_connections(&data, from_group_id)?;
+
+    let reference_map = build_reference_map(&data, &all_connections);
+
+    let (inside_connections, _, _) =
+        split_connections(&all_connections, &reference_map, &nodes_to_drop);
 
     let mut document = data.document.lock();
     let scenery: &mut opossum_core::prelude::NodeGroup = document.scenery_mut();
 
-    //add ndoes to group
+
+    while let Some(node) = nodes_to_drop.pop() {
+        let deleted = scenery.delete_node(node)?;
+        for del_id in &deleted {
+            nodes_to_drop.retain(|id| id != del_id);
+        }
+    }
+
+    //add nodes to group
     for node_ref in &node_refs {
          scenery.with_group_node_mut(drop_group_id, |g| 
              g.add_node_ref(node_ref.clone())
          )??;
      }
 
-     drop(document);
-
-                 println!("added nodes to group node_refs");
-
-    let all_connections = collect_group_connections(&data, from_group_id)?;
-                                 println!("collect_group_connections");
-
-    let reference_map = build_reference_map(&data, &all_connections);
-                             println!("build_reference_map");
-
-    let (inside_connections, _, _) =
-        split_connections(&all_connections, &reference_map, &nodes_to_drop);
-
-                         println!("split connections");
-
-                         let mut document = data.document.lock();
-    let scenery: &mut opossum_core::prelude::NodeGroup = document.scenery_mut();
     for conn in inside_connections {
         scenery.with_group_node_mut(drop_group_id, |g| 
             g.connect_nodes(
@@ -140,15 +135,8 @@ pub async fn post_drop_nodes_into_group(
             )
         )??;
     }
-                             println!("padded connections");
 
-
-    while let Some(node) = nodes_to_drop.pop() {
-        let deleted = scenery.delete_node(node)?;
-        for del_id in &deleted {
-            nodes_to_drop.retain(|id| id != del_id);
-        }
-    }
+    
     drop(document);
     Ok(())
 }

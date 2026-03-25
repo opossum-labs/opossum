@@ -182,13 +182,12 @@ pub fn use_workspace_processor(
                         .await;
                     }
                     GraphsWorkspaceAction::DropNodesIntoGroup { nodes, from_graph_id, to_graph_id } => {
-                            println!("GraphsWorkspaceAction DropNodesIntoGroup");
-
                         process_drop_nodes_into_group(
                             nodes,
                             from_graph_id,
                             to_graph_id,
                             workspace_handlers,
+                            root_graph_id
                         )
                         .await;}
                 }
@@ -501,14 +500,14 @@ async fn process_drop_nodes_into_group(
     from_group_id: Uuid,
     drop_group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
+    root_scenery_id: Memo<Uuid>
 ) {
-    println!("process dropping into droup");
     match api::drop_nodes_into_group(nodes.clone(), from_group_id, drop_group_id).await {
         Ok(_) => {
-                println!("success dropping into droup");
-
             //remove nodes that have been dropped into a group from graph
             ws_handler.nodes.remove_nodes(nodes, from_group_id);
+
+            process_fill_graph_of_group(root_scenery_id, drop_group_id, ws_handler).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
