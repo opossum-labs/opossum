@@ -181,6 +181,16 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
+                    GraphsWorkspaceAction::DropNodesIntoGroup { nodes, from_graph_id, to_graph_id } => {
+                            println!("GraphsWorkspaceAction DropNodesIntoGroup");
+
+                        process_drop_nodes_into_group(
+                            nodes,
+                            from_graph_id,
+                            to_graph_id,
+                            workspace_handlers,
+                        )
+                        .await;}
                 }
             }
         }
@@ -484,6 +494,28 @@ fn find_suitable_element_position(
         }
     }
     final_position // fallback: return last position after reaching max iterations
+}
+
+async fn process_drop_nodes_into_group( 
+    nodes: Vec<Uuid>,
+    from_group_id: Uuid,
+    drop_group_id: Uuid,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    println!("process dropping into droup");
+    match api::drop_nodes_into_group(nodes.clone(), from_group_id, drop_group_id).await {
+        Ok(_) => {
+                println!("success dropping into droup");
+
+            //remove nodes that have been dropped into a group from graph
+            ws_handler.nodes.remove_nodes(nodes, from_group_id);
+        }
+        Err(err_str) => {
+            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+        }
+    }
+
+    ws_handler.nodes.remove_droppable_group();
 }
 
 async fn process_convert_nodes_to_group(

@@ -271,6 +271,20 @@ pub async fn convert_nodes_to_group(
         .await
 }
 
+pub async fn drop_nodes_into_group(
+    nodes: Vec<Uuid>,
+    from_group_id: Uuid,
+    drop_group_id: Uuid,
+) -> Result<String, String> {
+    println!("call drop_into_group");
+    HTTP_API_CLIENT()
+        .post::<(Vec<Uuid>, Uuid), String>(
+            &format!("/api/groups/{}/drop_into_group", from_group_id.as_simple()),
+            (nodes, drop_group_id),
+        )
+        .await
+}
+
 /// Update the property of the node with the given `node_id`.
 /// The property value is already passes as a `serde_json::Value` to avoid implementing `PartialEq` for every property type.
 ///

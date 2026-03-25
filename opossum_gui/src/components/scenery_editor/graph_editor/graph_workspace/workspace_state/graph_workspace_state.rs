@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use dioxus::{
     html::geometry::euclid::default::{Point2D, Rect, Size2D},
@@ -33,6 +33,7 @@ pub struct GraphsWorkspaceState {
     pub needs_saving: Signal<bool>,
     pub drag_status: Signal<DragStatus>,
     pub selection_box: Signal<Option<Rect<f64>>>,
+    pub drop_in_group: Signal<Option<(Uuid, usize)>>
 }
 
 impl GraphsWorkspaceState {

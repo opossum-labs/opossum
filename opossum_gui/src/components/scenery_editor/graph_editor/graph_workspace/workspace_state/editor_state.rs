@@ -28,7 +28,7 @@ pub enum DragStatus {
     #[default]
     None,
     Graph,
-    Node,
+    Nodes,
     NodeInit,
     Edge(NewEdgeCreationStart),
     SelectionBox(Rect<f64>),

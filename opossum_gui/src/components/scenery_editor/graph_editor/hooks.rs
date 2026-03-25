@@ -80,7 +80,7 @@ pub fn use_on_mouse_down(
                     let current_shift = *editor_status().shift.read();
                     let current_zoom = *editor_status().zoom.read();
 
-                    let graph_origin = Point2D::new(
+                    let rect_origin = Point2D::new(
                         (mouse_pos.x - editor_origin.x - current_shift.x) / current_zoom,
                         (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
                     );
@@ -89,7 +89,7 @@ pub fn use_on_mouse_down(
                         .write()
                         .drag_status
                         .set(DragStatus::SelectionBox(Rect::new(
-                            graph_origin,
+                            rect_origin,
                             Size2D::new(0., 0.),
                         )));
                 }
@@ -145,7 +145,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
                     current_shift.y + rel_shift_y,
                 ));
             }
-            DragStatus::Node => {
+            DragStatus::Nodes => {
                 let selected_nodes = graph_store().selected_nodes();
                 for id in selected_nodes {
                     graph_store().shift_node_position(id, graph_shift);
@@ -345,21 +345,28 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
             let mut editor_status = graph_state.read().editor_state;
             let mut graph_store = graph_state.read().graph_store;
             let drag_status = workspace.read().drag_status.read().clone();
+            let droppable_groups = workspace.read().drop_in_group.read().clone();
             match drag_status {
-                DragStatus::Node => {
+                DragStatus::Nodes => {
                     let selected_nodes = graph_store().selected_nodes();
-                    for node_id in selected_nodes {
-                        if let Some(pos) = graph_store
-                            .read()
-                            .nodes()
-                            .read()
-                            .get(&node_id)
-                            .map(NodeElement::pos)
-                        {
-                            // Update node GUI position (only if really changed)
-                            workspace_processor
-                                .send(GraphsWorkspaceAction::SyncNodePosition { pos, node_id });
+                    if droppable_groups.is_none(){
+                        for node_id in selected_nodes {
+                            if let Some(pos) = graph_store
+                                .read()
+                                .nodes()
+                                .read()
+                                .get(&node_id)
+                                .map(NodeElement::pos)
+                            {
+                                // Update node GUI position (only if really changed)
+                                workspace_processor
+                                    .send(GraphsWorkspaceAction::SyncNodePosition { pos, node_id });
+                            }
                         }
+                    }
+                    else if let Some((to_graph_id,_)) = droppable_groups{
+                        workspace_processor
+                                    .send(GraphsWorkspaceAction::DropNodesIntoGroup { nodes: selected_nodes.iter().copied().collect(), from_graph_id: *active_graph.read(), to_graph_id });
                     }
                 }
                 DragStatus::SelectionBox(_) => {

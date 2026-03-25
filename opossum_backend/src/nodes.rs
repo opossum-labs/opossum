@@ -156,15 +156,10 @@ fn upper_left_corner_of_nodes(
     Ok(corner)
 }
 
-fn copy_optical_node(
+pub(super) fn copy_from_optic_ref(
     data: &web::Data<AppState>,
-    group_id: Uuid,
-    node_pos: (f64, f64),
-    min_pos: Point2<f64>,
     optic_ref: &OpticRef,
-    node_id_link: &mut HashMap<Uuid, Uuid>,
-    connections: &mut HashMap<Uuid, Vec<ConnectionInfo>>,
-) -> Result<NodeInfo, BackEndErrorResponse> {
+) -> Result<(OpticRef, Uuid), BackEndErrorResponse> {
     let node_to_copy_from = optic_ref.optical_ref.lock_opm()?;
     let old_node_id = node_to_copy_from.node_attr().uuid();
 
@@ -185,23 +180,54 @@ fn copy_optical_node(
     let node_attr = node.node_attr_mut();
     node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
 
-    let old_pos = node_to_copy_from.gui_position().unwrap();
-    let new_pos = (
-        node_pos.0 + (old_pos.x - min_pos.x),
-        node_pos.1 + (old_pos.y - min_pos.y),
-    );
-
-    node_attr.set_gui_position(Some(Point2::new(new_pos.0, new_pos.1)));
-
     drop(node_to_copy_from);
     drop(node);
+    
+    Ok((new_node_ref, old_node_id))
 
+}
+
+pub(super) fn get_shifted_pos_of_ref(
+    optic_ref: &OpticRef,
+    shift: Point2<f64>,
+) -> Result<(f64, f64),  BackEndErrorResponse>{
+    let node_to_copy_from = optic_ref.optical_ref.lock_opm()?;
+    let old_pos = node_to_copy_from.gui_position().unwrap();
+    let new_pos = (
+        old_pos.x + shift.x,
+        old_pos.y + shift.y,
+    );
+    drop(node_to_copy_from);
+    Ok(new_pos)
+}
+
+pub(super) fn copy_optical_node(
+    data: &web::Data<AppState>,
+    group_id: Uuid,
+    node_pos: (f64, f64),
+    min_pos: Point2<f64>,
+    optic_ref: &OpticRef,
+    node_id_link: &mut HashMap<Uuid, Uuid>,
+    connections: &mut HashMap<Uuid, Vec<ConnectionInfo>>,
+) -> Result<NodeInfo, BackEndErrorResponse> {
+    let (new_node_ref, old_node_id) = copy_from_optic_ref(data, optic_ref)?;
+
+    let shift= Point2::new(node_pos.0 - min_pos.x, node_pos.1 - min_pos.y);
+    let new_pos = get_shifted_pos_of_ref(optic_ref, shift)?;
+
+    let mut node = new_node_ref.optical_ref.lock_opm()?;
+    let node_attr = node.node_attr_mut();
+    node_attr.set_gui_position(Some(Point2::new(new_pos.0, new_pos.1)));
+    drop(node);
+
+    let mut document = data.document.lock();
     let scenery = document.scenery_mut();
-
     let new_node_uuid =
         scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     node_id_link.insert(old_node_id, new_node_uuid);
+
+
 
     scenery.with_group_node(group_id, |group| {
         let connect = group
@@ -664,7 +690,6 @@ async fn post_node_name(
     let mut processed_names = HashMap::<Uuid, String>::new();
     let scenery = document.scenery_mut();
     let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid)?;
-    println!("nodes: {:?}", nodes_to_rename);
     for node_uuid in &nodes_to_rename {
         scenery
             .with_node_attr_mut(*node_uuid, |node_attr| {

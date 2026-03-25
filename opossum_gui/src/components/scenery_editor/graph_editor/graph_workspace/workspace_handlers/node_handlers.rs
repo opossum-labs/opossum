@@ -22,6 +22,7 @@ pub struct NodeHandlers {
     set_node_name: EventHandler<(String, Uuid, Uuid, bool)>,
     add_group_nodes: EventHandler<(Uuid, Vec<NodeInfo>)>,
     add_group_analyzers: EventHandler<(Uuid, Vec<AnalyzerInfo>)>,
+    remove_droppable_group: EventHandler<()>,
 }
 
 impl NodeHandlers {
@@ -36,6 +37,7 @@ impl NodeHandlers {
             set_node_name: set_node_name_handler(workspace),
             add_group_nodes: add_group_nodes_handler(workspace),
             add_group_analyzers: add_group_analyzers_handler(workspace),
+            remove_droppable_group: remove_droppable_group_handler(workspace),
         }
     }
     pub fn add_optical_node(&self, node: NodeInfo, graph_id: Uuid) {
@@ -74,6 +76,10 @@ impl NodeHandlers {
 
     pub fn add_group_analyzers(&self, group_id: Uuid, analyzers: Vec<AnalyzerInfo>) {
         self.add_group_analyzers.call((group_id, analyzers));
+    }
+
+    pub fn remove_droppable_group(&self) {
+        self.remove_droppable_group.call(());
     }
 }
 
@@ -176,5 +182,13 @@ fn add_group_analyzers_handler(
         with_graph_store(workspace, group_id, false, |store| {
             store.add_analyzers(&analyzers);
         });
+    })
+}
+
+fn remove_droppable_group_handler(
+    mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<()> {
+    EventHandler::new(move |_| {
+        workspace.write().drop_in_group.set(None);    
     })
 }

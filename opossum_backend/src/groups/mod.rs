@@ -2,7 +2,7 @@ use actix_web::{
     post,
     web::{self, Json, PathConfig},
 };
-use opossum_core::types::api_types::{ConnectInfo, NodeInfo};
+use opossum_core::{meter, types::api_types::{ConnectInfo, NodeInfo}};
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
@@ -13,7 +13,7 @@ use crate::{
         add_converted_group_to_scenery, build_new_group, build_reference_map,
         collect_group_connections, collect_node_refs_and_pos, create_new_group_node_info,
         split_connections,
-    },
+    }, scenery,
 };
 
 mod helper_functions;
@@ -73,8 +73,90 @@ pub async fn post_convert_nodes_to_group(
     Ok(Json((new_group_node_info, all_external_connections)))
 }
 
+/// Drop a set of nodes into a group
+#[utoipa::path(tag = "group",
+    params(
+        ("uuid" = Uuid, Path, description = "Uuid of the group in which the nodes should be transferred"),
+    ),
+    request_body(content = String,
+        description = "Set of node uuids that correspond to the nodes that should be transferred to a group",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, description = "Nodes successfully transferred to group"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/{uuid}/drop_into_group")]
+pub async fn post_drop_nodes_into_group(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    nodes_to_drop_in_group: web::Json<(Vec<Uuid>, Uuid)>,
+) -> Result<(), BackEndErrorResponse> {
+        println!("starting drop_into_group");
+
+    let from_group_id = path.into_inner();
+    let (mut nodes_to_drop, drop_group_id) = nodes_to_drop_in_group.into_inner();
+
+    let (node_refs, _) = collect_node_refs_and_pos(&data, &nodes_to_drop);
+
+            println!("collected node_refs");
+
+    let mut document = data.document.lock();
+    let scenery: &mut opossum_core::prelude::NodeGroup = document.scenery_mut();
+
+    //add ndoes to group
+    for node_ref in &node_refs {
+         scenery.with_group_node_mut(drop_group_id, |g| 
+             g.add_node_ref(node_ref.clone())
+         )??;
+     }
+
+     drop(document);
+
+                 println!("added nodes to group node_refs");
+
+    let all_connections = collect_group_connections(&data, from_group_id)?;
+                                 println!("collect_group_connections");
+
+    let reference_map = build_reference_map(&data, &all_connections);
+                             println!("build_reference_map");
+
+    let (inside_connections, _, _) =
+        split_connections(&all_connections, &reference_map, &nodes_to_drop);
+
+                         println!("split connections");
+
+                         let mut document = data.document.lock();
+    let scenery: &mut opossum_core::prelude::NodeGroup = document.scenery_mut();
+    for conn in inside_connections {
+        scenery.with_group_node_mut(drop_group_id, |g| 
+            g.connect_nodes(
+                conn.src_uuid(),
+                conn.src_port(),
+                conn.target_uuid(),
+                conn.target_port(),
+                meter!(conn.distance()),
+            )
+        )??;
+    }
+                             println!("padded connections");
+
+
+    while let Some(node) = nodes_to_drop.pop() {
+        let deleted = scenery.delete_node(node)?;
+        for del_id in &deleted {
+            nodes_to_drop.retain(|id| id != del_id);
+        }
+    }
+    drop(document);
+    Ok(())
+}
+
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_convert_nodes_to_group);
+    cfg.service(post_drop_nodes_into_group);
     cfg.app_data(PathConfig::default().error_handler(|err, _req| {
         BackEndErrorResponse::new(400, "parse error", &err.to_string()).into()
     }));

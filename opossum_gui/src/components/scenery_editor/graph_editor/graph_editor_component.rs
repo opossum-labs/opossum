@@ -89,7 +89,7 @@ pub fn GraphEditor(
         }
     });
 
-    let current_mouse_pos = use_signal(Point2D::<f64>::default);
+    let current_mouse_in_editor_pos = use_signal(Point2D::<f64>::default);
     let ctrl_pressed = use_signal(|| false);
     let shift_pressed = use_signal(|| false);
 
@@ -112,7 +112,7 @@ pub fn GraphEditor(
     });
     let onmouseleave_handler = use_drag_end(workspace);
     let onkeydownhandler =
-        use_on_key_down(current_mouse_pos, workspace, ctrl_pressed, shift_pressed);
+        use_on_key_down(current_mouse_in_editor_pos, workspace, ctrl_pressed, shift_pressed);
     let onkeyuphandler = use_on_key_up(ctrl_pressed, shift_pressed);
     let graph_editor_content_container_id = "graphEditorContentContainer";
     let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
@@ -192,7 +192,7 @@ pub fn GraphEditor(
                                                 model_modified_handler,
                                                 model_file_path_sig,
                                                 model_file_path_handler,
-                                                current_mouse_pos,
+                                                current_mouse_pos: current_mouse_in_editor_pos,
                                                 graph_state: *graph_state,
                                                 ctrl_pressed,
                                                 shift_pressed,
