@@ -1,9 +1,12 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
-    GraphsWorkspaceState, SelectionBoxComponent, edges::edges_component::{EdgeCreationComponent, EdgesComponent}, graph_editor::{
+    GraphsWorkspaceState, SelectionBoxComponent,
+    edges::edges_component::{EdgeCreationComponent, EdgesComponent},
+    graph_editor::{
         graph_workspace::{GraphState, GraphsWorkspaceAction},
         hooks::{use_drag, use_on_mouse_down, use_zoom},
-    }, nodes::Nodes
+    },
+    nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use std::{path::PathBuf, time::Instant};
@@ -28,27 +31,25 @@ pub fn GraphViewEditor(
     let graph_id = graph_state.read().graph_info.id;
     let workspace = use_context::<Signal<GraphsWorkspaceState>>();
 
-    
     use_context_provider(|| graph_state);
     use_context_provider(|| editor_state);
     use_context_provider(|| graph_store);
     let onwheel_handler = use_zoom();
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmousedown_handler =
-    use_on_mouse_down(current_mouse_pos, last_auxiliary_click, ctrl_pressed);
-    
+        use_on_mouse_down(current_mouse_pos, last_auxiliary_click, ctrl_pressed);
+
     let shift = use_memo(move || *editor_state.read().shift.read());
     let zoom = use_memo(move || *editor_state.read().zoom.read());
 
     let mouse_pos_in_editor = use_memo(move || {
-        
         let editor_origin = workspace.peek().editor_rect.peek().origin;
         Point2D::new(
             (current_mouse_pos.read().x - editor_origin.x - shift.peek().x) / *zoom.peek(),
             (current_mouse_pos.read().y - editor_origin.y - shift.peek().y) / *zoom.peek(),
         )
     });
-    
+
     use_effect(move || {
         workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
             graph_id,

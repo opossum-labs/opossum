@@ -349,7 +349,7 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
             match drag_status {
                 DragStatus::Nodes => {
                     let selected_nodes = graph_store().selected_nodes();
-                    if droppable_groups.is_none(){
+                    if droppable_groups.is_none() {
                         for node_id in selected_nodes {
                             if let Some(pos) = graph_store
                                 .read()
@@ -363,10 +363,12 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
                                     .send(GraphsWorkspaceAction::SyncNodePosition { pos, node_id });
                             }
                         }
-                    }
-                    else if let Some((to_graph_id,_)) = droppable_groups{
-                        workspace_processor
-                                    .send(GraphsWorkspaceAction::DropNodesIntoGroup { nodes: selected_nodes.iter().copied().collect(), from_graph_id: *active_graph.read(), to_graph_id });
+                    } else if let Some((to_graph_id, _)) = droppable_groups {
+                        workspace_processor.send(GraphsWorkspaceAction::DropNodesIntoGroup {
+                            nodes: selected_nodes.iter().copied().collect(),
+                            from_graph_id: *active_graph.read(),
+                            to_graph_id,
+                        });
                     }
                 }
                 DragStatus::SelectionBox(_) => {

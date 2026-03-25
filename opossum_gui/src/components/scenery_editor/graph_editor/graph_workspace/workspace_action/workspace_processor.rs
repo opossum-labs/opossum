@@ -181,15 +181,20 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
-                    GraphsWorkspaceAction::DropNodesIntoGroup { nodes, from_graph_id, to_graph_id } => {
+                    GraphsWorkspaceAction::DropNodesIntoGroup {
+                        nodes,
+                        from_graph_id,
+                        to_graph_id,
+                    } => {
                         process_drop_nodes_into_group(
                             nodes,
                             from_graph_id,
                             to_graph_id,
                             workspace_handlers,
-                            root_graph_id
+                            root_graph_id,
                         )
-                        .await;}
+                        .await;
+                    }
                 }
             }
         }
@@ -495,12 +500,12 @@ fn find_suitable_element_position(
     final_position // fallback: return last position after reaching max iterations
 }
 
-async fn process_drop_nodes_into_group( 
+async fn process_drop_nodes_into_group(
     nodes: Vec<Uuid>,
     from_group_id: Uuid,
     drop_group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
-    root_scenery_id: Memo<Uuid>
+    root_scenery_id: Memo<Uuid>,
 ) {
     match api::drop_nodes_into_group(nodes.clone(), from_group_id, drop_group_id).await {
         Ok(_) => {

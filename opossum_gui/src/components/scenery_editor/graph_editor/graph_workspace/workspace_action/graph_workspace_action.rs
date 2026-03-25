@@ -86,5 +86,9 @@ pub enum GraphsWorkspaceAction {
         node_id: Uuid,
         graph_id: Uuid,
     },
-    DropNodesIntoGroup { nodes: Vec<Uuid>, from_graph_id: Uuid, to_graph_id: Uuid }
+    DropNodesIntoGroup {
+        nodes: Vec<Uuid>,
+        from_graph_id: Uuid,
+        to_graph_id: Uuid,
+    },
 }

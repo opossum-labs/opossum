@@ -1,6 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
-use crate::{CONTEXT_MENU, OPOSSUM_UI_LOGS};
 use crate::components::scenery_editor::constants::HEADER_HEIGHT;
 use crate::components::scenery_editor::graph_editor::{DragStatus, GraphStore};
 use crate::components::scenery_editor::{EditorState, GraphState, GraphsWorkspaceState};
@@ -13,12 +12,18 @@ use crate::components::{
         {GraphsWorkspaceAction, NodeType},
     },
 };
+use crate::{CONTEXT_MENU, OPOSSUM_UI_LOGS};
 use dioxus::html::geometry::euclid::default::{Point2D, Rect, Size2D};
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
 
 #[component]
-pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal<bool>, mouse_pos_in_editor: Memo<Point2D<f64>>,) -> Element {
+pub fn Node(
+    node: NodeElement,
+    ctrl_pressed: Signal<bool>,
+    shift_pressed: Signal<bool>,
+    mouse_pos_in_editor: Memo<Point2D<f64>>,
+) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_state = use_context::<Signal<GraphState>>();
     let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
@@ -57,23 +62,29 @@ pub fn Node(node: NodeElement, ctrl_pressed: Signal<bool>, shift_pressed: Signal
 
     let node_type = node.node_type().clone();
     let z_index = node.z_index();
-    use_effect(move ||{ 
-        let mut workspace_write =  workspace.write();
-        let mut droppable_groups =  workspace_write.drop_in_group.write();
+    use_effect(move || {
+        let mut workspace_write = workspace.write();
+        let mut droppable_groups = workspace_write.drop_in_group.write();
         let selected_nodes = graph_store.peek().selected_nodes();
 
-        if !selected_nodes.contains(&node_id) && let NodeType::Optical(node_type) = &node_type && node_type == "group" && *drag_status.read() == DragStatus::Nodes{
+        if !selected_nodes.contains(&node_id)
+            && let NodeType::Optical(node_type) = &node_type
+            && node_type == "group"
+            && *drag_status.read() == DragStatus::Nodes
+        {
             let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
             let contains = node_rect.contains(*mouse_pos_in_editor.read());
-            if contains{
-                if let Some((_, g_z_index)) = *droppable_groups && z_index> g_z_index{
+            if contains {
+                if let Some((_, g_z_index)) = *droppable_groups
+                    && z_index > g_z_index
+                {
+                    *droppable_groups = Some((node_id, z_index));
+                } else if droppable_groups.is_none() {
                     *droppable_groups = Some((node_id, z_index));
                 }
-                else if droppable_groups.is_none(){
-                    *droppable_groups = Some((node_id, z_index));
-                }
-            }
-            else if let Some((g_id, _))= *droppable_groups && g_id == node_id{
+            } else if let Some((g_id, _)) = *droppable_groups
+                && g_id == node_id
+            {
                 *droppable_groups = None;
             }
         }

@@ -2,7 +2,10 @@ use actix_web::{
     post,
     web::{self, Json, PathConfig},
 };
-use opossum_core::{meter, types::api_types::{ConnectInfo, NodeInfo}};
+use opossum_core::{
+    meter,
+    types::api_types::{ConnectInfo, NodeInfo},
+};
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
@@ -13,7 +16,8 @@ use crate::{
         add_converted_group_to_scenery, build_new_group, build_reference_map,
         collect_group_connections, collect_node_refs_and_pos, create_new_group_node_info,
         split_connections,
-    }, scenery,
+    },
+    scenery,
 };
 
 mod helper_functions;
@@ -93,7 +97,6 @@ pub async fn post_drop_nodes_into_group(
     path: web::Path<Uuid>,
     nodes_to_drop_in_group: web::Json<(Vec<Uuid>, Uuid)>,
 ) -> Result<(), BackEndErrorResponse> {
-
     let from_group_id = path.into_inner();
     let (mut nodes_to_drop, drop_group_id) = nodes_to_drop_in_group.into_inner();
 
@@ -109,7 +112,6 @@ pub async fn post_drop_nodes_into_group(
     let mut document = data.document.lock();
     let scenery: &mut opossum_core::prelude::NodeGroup = document.scenery_mut();
 
-
     while let Some(node) = nodes_to_drop.pop() {
         let deleted = scenery.delete_node(node)?;
         for del_id in &deleted {
@@ -119,13 +121,11 @@ pub async fn post_drop_nodes_into_group(
 
     //add nodes to group
     for node_ref in &node_refs {
-         scenery.with_group_node_mut(drop_group_id, |g| 
-             g.add_node_ref(node_ref.clone())
-         )??;
-     }
+        scenery.with_group_node_mut(drop_group_id, |g| g.add_node_ref(node_ref.clone()))??;
+    }
 
     for conn in inside_connections {
-        scenery.with_group_node_mut(drop_group_id, |g| 
+        scenery.with_group_node_mut(drop_group_id, |g| {
             g.connect_nodes(
                 conn.src_uuid(),
                 conn.src_port(),
@@ -133,14 +133,12 @@ pub async fn post_drop_nodes_into_group(
                 conn.target_port(),
                 meter!(conn.distance()),
             )
-        )??;
+        })??;
     }
 
-    
     drop(document);
     Ok(())
 }
-
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_convert_nodes_to_group);

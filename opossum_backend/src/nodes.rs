@@ -182,21 +182,17 @@ pub(super) fn copy_from_optic_ref(
 
     drop(node_to_copy_from);
     drop(node);
-    
-    Ok((new_node_ref, old_node_id))
 
+    Ok((new_node_ref, old_node_id))
 }
 
 pub(super) fn get_shifted_pos_of_ref(
     optic_ref: &OpticRef,
     shift: Point2<f64>,
-) -> Result<(f64, f64),  BackEndErrorResponse>{
+) -> Result<(f64, f64), BackEndErrorResponse> {
     let node_to_copy_from = optic_ref.optical_ref.lock_opm()?;
     let old_pos = node_to_copy_from.gui_position().unwrap();
-    let new_pos = (
-        old_pos.x + shift.x,
-        old_pos.y + shift.y,
-    );
+    let new_pos = (old_pos.x + shift.x, old_pos.y + shift.y);
     drop(node_to_copy_from);
     Ok(new_pos)
 }
@@ -212,7 +208,7 @@ pub(super) fn copy_optical_node(
 ) -> Result<NodeInfo, BackEndErrorResponse> {
     let (new_node_ref, old_node_id) = copy_from_optic_ref(data, optic_ref)?;
 
-    let shift= Point2::new(node_pos.0 - min_pos.x, node_pos.1 - min_pos.y);
+    let shift = Point2::new(node_pos.0 - min_pos.x, node_pos.1 - min_pos.y);
     let new_pos = get_shifted_pos_of_ref(optic_ref, shift)?;
 
     let mut node = new_node_ref.optical_ref.lock_opm()?;
@@ -226,8 +222,6 @@ pub(super) fn copy_optical_node(
         scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     node_id_link.insert(old_node_id, new_node_uuid);
-
-
 
     scenery.with_group_node(group_id, |group| {
         let connect = group

@@ -185,10 +185,8 @@ fn add_group_analyzers_handler(
     })
 }
 
-fn remove_droppable_group_handler(
-    mut workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<()> {
+fn remove_droppable_group_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<()> {
     EventHandler::new(move |_| {
-        workspace.write().drop_in_group.set(None);    
+        workspace.write().drop_in_group.set(None);
     })
 }

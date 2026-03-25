@@ -33,7 +33,7 @@ pub struct GraphsWorkspaceState {
     pub needs_saving: Signal<bool>,
     pub drag_status: Signal<DragStatus>,
     pub selection_box: Signal<Option<Rect<f64>>>,
-    pub drop_in_group: Signal<Option<(Uuid, usize)>>
+    pub drop_in_group: Signal<Option<(Uuid, usize)>>,
 }
 
 impl GraphsWorkspaceState {
