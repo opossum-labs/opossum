@@ -355,6 +355,8 @@ fn CommonAppLayout(
     on_alert_confirm: EventHandler<MouseEvent>,
     on_alert_cancel: EventHandler<MouseEvent>,
 ) -> Element {
+    let mut root_tab_open=  use_signal(|| true);
+    let root_tab_open_handler = EventHandler::<bool>::new(move |b| root_tab_open.set(b));
     let mut height = use_signal(|| 100.0);
     let mut dragging = use_signal(|| false);
     let mut last_y = use_signal(|| 0.0);
@@ -389,6 +391,7 @@ fn CommonAppLayout(
                         model_file_path_sig,
                         model_modified_sig,
                         on_menu_action,
+                        root_tab_open,
                     }
                 }
             }
@@ -399,6 +402,7 @@ fn CommonAppLayout(
                 model_modified_sig,
                 model_file_path_sig,
                 model_file_path_handler,
+                root_tab_open_handler,
             }
             Logger { drag_handler: on_mousedown, height }
         }

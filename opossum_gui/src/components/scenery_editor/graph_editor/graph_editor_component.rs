@@ -26,6 +26,7 @@ pub fn GraphEditor(
     model_modified_handler: EventHandler<bool>,
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
+    root_tab_open_handler: EventHandler<bool>,
 ) -> Element {
     let workspace = use_signal(GraphsWorkspaceState::default);
     use_context_provider(|| workspace);
@@ -72,6 +73,10 @@ pub fn GraphEditor(
                 needs_saving: false,
             });
         }
+    });
+
+    use_effect(move || {
+        root_tab_open_handler.call(*root_graph_id.peek() == *workspace.peek().active_tab.read());
     });
 
     use_effect(move || {
