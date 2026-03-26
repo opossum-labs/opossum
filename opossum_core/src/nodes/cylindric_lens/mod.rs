@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
 //! Cylindric lens with spherical or flat surfaces.
 
-use super::node_attr::NodeAttr;
 #[cfg(test)]
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
     meter, millimeter,
     nodes::NodeRegistration,

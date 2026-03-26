@@ -15,6 +15,7 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
 pub mod analyzers;
 pub mod apertures;
 pub mod coatings;
+pub mod core_optics;
 pub mod distributions;
 mod dottable;
 pub mod error;

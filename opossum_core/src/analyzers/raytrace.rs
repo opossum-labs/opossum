@@ -5,11 +5,12 @@ use std::collections::HashMap;
 use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
+    core_optics::NodeAttr,
     degree,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::ray_data_builder::RayDataBuilder,
-    nodes::{NodeAttr, NodeGroup},
+    nodes::NodeGroup,
     optic_node::OpticNode,
     picojoule,
     properties::Proptype,

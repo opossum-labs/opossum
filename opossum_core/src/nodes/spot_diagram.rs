@@ -1,21 +1,11 @@
 #![warn(missing_docs)]
-use log::warn;
-use nalgebra::{DVector, MatrixXx2};
-use opm_macros_lib::OpmNode;
-use plotters::style::RGBAColor;
-use serde::{Deserialize, Serialize};
-use uom::si::{
-    f64::Length,
-    length::{meter, nanometer},
-};
-
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::OpmResult,
     light_result::LightResult,
     lightdata::LightData,
@@ -39,6 +29,15 @@ use crate::{
     },
 };
 use core::f64;
+use log::warn;
+use nalgebra::{DVector, MatrixXx2};
+use opm_macros_lib::OpmNode;
+use plotters::style::RGBAColor;
+use serde::{Deserialize, Serialize};
+use uom::si::{
+    f64::Length,
+    length::{meter, nanometer},
+};
 
 inventory::submit! {
     NodeRegistration::new::<SpotDiagram>("spot diagram", "spot diagram detector")

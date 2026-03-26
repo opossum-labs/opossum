@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
 //! A paraxial surface (ideal lens)
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,

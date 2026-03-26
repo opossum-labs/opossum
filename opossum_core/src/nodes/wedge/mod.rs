@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use super::NodeAttr;
 #[cfg(test)]
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
+    core_optics::NodeAttr,
     degree,
     error::{OpmResult, OpossumError},
     millimeter,

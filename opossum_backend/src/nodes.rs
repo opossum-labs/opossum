@@ -16,9 +16,10 @@ use nalgebra::Point2;
 use opossum_core::{
     OpticRef,
     analyzers::AnalyzerType,
+    core_optics::NodeAttr,
     error::OpossumError,
     meter,
-    nodes::{NodeAttr, create_node_ref, fluence_detector::Fluence},
+    nodes::{create_node_ref, fluence_detector::Fluence},
     opm_document::AnalyzerInfo,
     optic_ports::PortType,
     prelude::OpmDocument,

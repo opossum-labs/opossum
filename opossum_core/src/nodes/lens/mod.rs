@@ -1,11 +1,9 @@
 #![warn(missing_docs)]
 //! Lens with spherical or flat surfaces
 
-use super::node_attr::NodeAttr;
-#[cfg(test)]
-use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
     meter, millimeter,
     nodes::NodeRegistration,
@@ -323,6 +321,7 @@ mod test {
         nodes::test_helper::test_helper::*,
         properties::Proptype,
         rays::Rays,
+        refractive_index::RefractiveIndex,
     };
     use approx::assert_relative_eq;
     use core::f64;

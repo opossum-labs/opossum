@@ -1,4 +1,3 @@
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         RayTraceConfig,
@@ -6,6 +5,7 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     nodes::NodeRegistration,

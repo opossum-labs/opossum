@@ -142,7 +142,7 @@ impl From<HexagonalTiling> for super::PosDistType {
 mod tests {
     use approx::assert_relative_eq;
 
-    use crate::{millimeter, position_distributions::HexagonalTiling};
+    use crate::{distributions::position::HexagonalTiling, millimeter};
 
     #[test]
     fn valid_hexagonal_tiling_creation() {

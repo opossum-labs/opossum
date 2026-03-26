@@ -1,4 +1,4 @@
-use opossum_core::nodes::NodeAttr;
+use opossum_core::core_optics::NodeAttr;
 use serde_json::Value;
 
 use crate::error::BackEndErrorResponse;

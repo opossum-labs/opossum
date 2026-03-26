@@ -10,13 +10,13 @@ use uom::si::{
     length::{millimeter, nanometer},
 };
 
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,

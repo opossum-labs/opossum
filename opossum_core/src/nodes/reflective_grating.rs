@@ -1,13 +1,11 @@
 #![warn(missing_docs)]
 //! Infinitely thin mirror with spherical or flat surface
-use std::f64::consts::PI;
-
-use super::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
@@ -23,6 +21,7 @@ use crate::{
 };
 use nalgebra::Vector3;
 use opm_macros_lib::OpmNode;
+use std::f64::consts::PI;
 use uom::si::{
     angle::radian,
     f64::{Angle, Length},

@@ -2,11 +2,11 @@
 //! fluence measurement node
 pub mod fluence_data;
 
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::OpmResult,
     lightdata::LightData,
     nodes::NodeRegistration,

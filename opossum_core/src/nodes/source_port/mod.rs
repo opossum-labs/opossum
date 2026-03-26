@@ -4,8 +4,9 @@ use std::{
 };
 
 use crate::{
+    core_optics::NodeAttr,
     error::OpmResult,
-    nodes::{NodeAttr, NodeRegistration},
+    nodes::NodeRegistration,
     prelude::{Isometry, OpticNode, PortType, Proptype},
     surface::{Plane, geo_surface::GeoSurfaceRef},
 };

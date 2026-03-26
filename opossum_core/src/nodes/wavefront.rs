@@ -13,6 +13,7 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
@@ -29,8 +30,6 @@ use crate::{
         to_f64,
     },
 };
-
-use super::node_attr::NodeAttr;
 
 inventory::submit! {
     NodeRegistration::new::<WaveFront>("wavefront monitor", "wavefront detector")

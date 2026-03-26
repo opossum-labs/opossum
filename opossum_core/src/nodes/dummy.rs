@@ -1,12 +1,12 @@
 #![warn(missing_docs)]
 use opm_macros_lib::OpmNode;
 
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,

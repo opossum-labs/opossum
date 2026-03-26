@@ -4,11 +4,11 @@ use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
 use uom::si::length::nanometer;
 
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::OpmResult,
     lightdata::LightData,
     nanometer,

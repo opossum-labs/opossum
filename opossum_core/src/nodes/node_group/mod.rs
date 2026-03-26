@@ -3,10 +3,10 @@ mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 mod optic_graph;
-use super::node_attr::NodeAttr;
 use crate::{
     SceneryResources,
     analyzers::Analyzable,
+    core_optics::NodeAttr,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{LightData, light_data_builder::LightDataBuilder},

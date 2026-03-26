@@ -1,9 +1,4 @@
 #![warn(missing_docs)]
-use log::{info, warn};
-use opm_macros_lib::OpmNode;
-use uom::si::f64::Length;
-
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig,
@@ -11,6 +6,7 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
     joule,
     light_result::{LightRays, LightResult},
@@ -25,10 +21,13 @@ use crate::{
     surface::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
+use log::{info, warn};
+use opm_macros_lib::OpmNode;
 use std::{
     fmt::Debug,
     sync::{Arc, Mutex},
 };
+use uom::si::f64::Length;
 
 /// A general light source
 ///

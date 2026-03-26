@@ -1,14 +1,12 @@
 #![warn(missing_docs)]
 //! Infinitely thin mirror with spherical or flat surface
-use std::sync::{Arc, Mutex};
-
-use super::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     coatings::CoatingType,
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
@@ -23,6 +21,7 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
+use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
 
 inventory::submit! {
