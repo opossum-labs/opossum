@@ -8,7 +8,7 @@ use crate::{
     error::OpmResult,
     nodes::NodeRegistration,
     prelude::{Isometry, OpticNode, PortType, Proptype},
-    surface::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
 };
 use opm_macros_lib::OpmNode;
 

@@ -15,14 +15,12 @@ use uom::si::{
 
 use crate::{
     analyzers::propagation_strategy::MissedSurfaceStrategy,
+    core_optics::optic_surface::OpticSurface,
     error::{OpmResult, OpossumError},
     joule, meter,
     nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
     rays::{FluenceRays, Rays},
-    surface::{
-        hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
-        optic_surface::OpticSurface,
-    },
+    geometry::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
     utils::{LockExt, geom_transformation::Isometry},
 };
 

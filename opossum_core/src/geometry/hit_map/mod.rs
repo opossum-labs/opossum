@@ -547,7 +547,7 @@ impl Plottable for HitMap {
 mod test_bounced_hit_map {
     use crate::{
         joule, meter,
-        surface::hit_map::{BouncedHitMap, HitPoint, rays_hit_map::EnergyHitPoint},
+        geometry::hit_map::{BouncedHitMap, HitPoint, rays_hit_map::EnergyHitPoint},
     };
     use uuid::Uuid;
 
@@ -612,7 +612,7 @@ mod test_hit_map {
         J_per_cm2, joule, meter,
         plottable::{PlotParameters, Plottable},
         properties::Proptype,
-        surface::hit_map::{
+        geometry::hit_map::{
             HitMap, HitPoint,
             fluence_estimator::FluenceEstimator,
             rays_hit_map::{EnergyHitPoint, FluenceHitPoint},

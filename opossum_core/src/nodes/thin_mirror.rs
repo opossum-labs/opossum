@@ -17,7 +17,7 @@ use crate::{
     properties::{Proptype, validator::Validator},
     radian,
     rays::Rays,
-    surface::{Plane, Sphere, geo_surface::GeoSurfaceRef},
+    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;

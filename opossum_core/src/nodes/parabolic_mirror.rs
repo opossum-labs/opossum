@@ -12,9 +12,7 @@ use crate::{
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     coatings::CoatingType,
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
-    core_optics::PortType,
+    core_optics::{NodeAttr, OpticNode, PortType, optic_surface::OpticSurface},
     degree,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
@@ -24,7 +22,7 @@ use crate::{
     properties::{Proptype, validator::Validator},
     radian,
     rays::Rays,
-    surface::{Parabola, geo_surface::GeoSurfaceRef, optic_surface::OpticSurface},
+    geometry::{Parabola, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 

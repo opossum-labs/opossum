@@ -9,8 +9,7 @@ use crate::{
     analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
     apertures::Aperture,
     coatings::CoatingType,
-    core_optics::NodeAttr,
-    core_optics::{OpticPorts, PortType},
+    core_optics::{NodeAttr, OpticPorts, PortType, optic_surface::OpticSurface},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -21,7 +20,7 @@ use crate::{
     rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
-    surface::{Plane, geo_surface::GeoSurfaceRef, hit_map::HitMap, optic_surface::OpticSurface},
+    geometry::{Plane, geo_surface::GeoSurfaceRef, hit_map::HitMap},
     utils::{LockExt, geom_transformation::Isometry},
 };
 use std::collections::HashMap;

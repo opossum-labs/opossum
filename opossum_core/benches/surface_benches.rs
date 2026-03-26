@@ -5,7 +5,7 @@ use nalgebra::Vector3;
 use opossum_core::{
     joule, millimeter, nanometer,
     ray::Ray,
-    surface::{Cylinder, Parabola, Plane, Sphere, geo_surface::GeoSurface},
+    geometry::{Cylinder, Parabola, Plane, Sphere, geo_surface::GeoSurface},
     utils::geom_transformation::Isometry,
 };
 use std::time::Duration;

@@ -15,7 +15,7 @@ use crate::{
     properties::{Proptype, validator::Validator},
     rays::Rays,
     spectrum::{Spectrum, merge_spectra},
-    surface::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
     utils::{default_from_name::DefaultFromName, geom_transformation::Isometry},
 };
 use opm_macros_lib::OpmNode;

@@ -40,7 +40,7 @@ pub mod types;
 pub mod reporting;
 pub mod spectrum;
 pub mod spectrum_helper;
-pub mod surface;
+pub mod geometry;
 pub mod utils;
 pub use optic_ref::OpticRef;
 pub use optic_scenery_rsc::SceneryResources;

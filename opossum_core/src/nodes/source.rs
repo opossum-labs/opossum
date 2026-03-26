@@ -18,7 +18,7 @@ use crate::{
     properties::{Proptype, validator::Validator},
     ray::Ray,
     rays::Rays,
-    surface::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use log::{info, warn};

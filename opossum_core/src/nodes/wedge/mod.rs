@@ -13,7 +13,7 @@ use crate::{
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     refractive_index::{RefrIndexConst, RefractiveIndexType},
-    surface::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;

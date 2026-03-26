@@ -33,7 +33,7 @@ impl DefaultFromName for FluenceEstimator {}
 
 #[cfg(test)]
 mod test {
-    use crate::{properties::Proptype, surface::hit_map::fluence_estimator::FluenceEstimator};
+    use crate::{properties::Proptype, geometry::hit_map::fluence_estimator::FluenceEstimator};
 
     #[test]
     fn fmt() {

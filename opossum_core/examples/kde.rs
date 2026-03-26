@@ -2,7 +2,7 @@ use opossum_core::prelude::*;
 use opossum_core::{
     distributions::position::{Hexapolar, PositionDistribution},
     plottable::Plottable,
-    surface::hit_map::{
+    geometry::hit_map::{
         fluence_estimator::FluenceEstimator,
         rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
     },

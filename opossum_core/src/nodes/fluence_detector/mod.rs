@@ -13,7 +13,7 @@ use crate::{
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
-    surface::hit_map::fluence_estimator::FluenceEstimator,
+    geometry::hit_map::fluence_estimator::FluenceEstimator,
 };
 use log::warn;
 use opm_macros_lib::OpmNode;

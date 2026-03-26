@@ -14,7 +14,6 @@ mod sphere;
 
 pub mod geo_surface;
 pub mod hit_map;
-pub mod optic_surface;
 
 pub use cylinder::Cylinder;
 pub use parabola::Parabola;

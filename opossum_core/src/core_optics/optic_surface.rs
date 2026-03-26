@@ -12,16 +12,15 @@ use crate::{
     nodes::fluence_detector::Fluence,
     rays::Rays,
     refractive_index::RefractiveIndexType,
-    surface::hit_map::HitMap,
-    utils::{LockExt, geom_transformation::Isometry},
-};
-
-use super::{
-    geo_surface::GeoSurfaceRef,
-    hit_map::{
-        fluence_estimator::FluenceEstimator,
-        rays_hit_map::{HitPoint, RaysHitMap},
+    geometry::{
+        geo_surface::GeoSurfaceRef,
+        hit_map::{
+            HitMap,
+            fluence_estimator::FluenceEstimator,
+            rays_hit_map::{HitPoint, RaysHitMap},
+        },
     },
+    utils::{LockExt, geom_transformation::Isometry},
 };
 use core::fmt::Debug;
 
@@ -327,7 +326,7 @@ mod test {
         joule, meter, nanometer,
         ray::Ray,
         rays::Rays,
-        surface::{Sphere, geo_surface::GeoSurfaceRef},
+        geometry::{Sphere, geo_surface::GeoSurfaceRef},
         utils::geom_transformation::Isometry,
     };
     use core::f64;

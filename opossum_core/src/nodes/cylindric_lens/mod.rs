@@ -12,7 +12,7 @@ use crate::{
     properties::{Proptype, validator::Validator},
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndexType},
-    surface::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
+    geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use log::warn;

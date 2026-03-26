@@ -2,7 +2,7 @@ use opossum_core::prelude::*;
 use opossum_core::{
     distributions::fluence::general_gaussian::General2DGaussian,
     distributions::position::Hexapolar, radian, rays::Rays,
-    surface::hit_map::fluence_estimator::FluenceEstimator,
+    geometry::hit_map::fluence_estimator::FluenceEstimator,
 };
 use std::{f64::consts::PI, path::Path};
 use uom::si::radiant_exposure::joule_per_square_centimeter;

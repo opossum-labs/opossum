@@ -21,7 +21,7 @@ use crate::{
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
     spectrum::Spectrum,
-    surface::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
+    geometry::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},

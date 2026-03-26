@@ -141,7 +141,7 @@ impl GeoSurface for Parabola {
 mod test {
     use super::Parabola;
     use crate::{
-        joule, meter, nanometer, ray::Ray, surface::geo_surface::GeoSurface,
+        joule, meter, nanometer, ray::Ray, geometry::geo_surface::GeoSurface,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;

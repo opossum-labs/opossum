@@ -17,8 +17,8 @@
 use crate::{
     apertures::Aperture,
     coatings::CoatingType,
+    core_optics::optic_surface::OpticSurface,
     error::{OpmResult, OpossumError},
-    surface::optic_surface::OpticSurface,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};

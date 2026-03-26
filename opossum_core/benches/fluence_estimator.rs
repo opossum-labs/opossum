@@ -2,7 +2,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use opossum_core::prelude::*;
 use opossum_core::{
     distributions::position::{Hexapolar, PositionDistribution, SobolDist},
-    surface::hit_map::{
+    geometry::hit_map::{
         fluence_estimator::FluenceEstimator,
         rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
     },

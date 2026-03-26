@@ -6,7 +6,7 @@ mod optic_graph;
 use crate::{
     SceneryResources,
     analyzers::Analyzable,
-    core_optics::{NodeAttr, OpticNode, OpticPorts, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticPorts, PortType, optic_surface::OpticSurface},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{LightData, light_data_builder::LightDataBuilder},
@@ -19,7 +19,6 @@ use crate::{
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
     },
-    surface::optic_surface::OpticSurface,
     utils::LockExt,
 };
 use optic_graph::ConnectionInfo;

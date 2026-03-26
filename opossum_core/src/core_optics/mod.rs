@@ -1,6 +1,7 @@
 pub mod node_attr;
 pub mod optic_node;
 pub mod optic_ports;
+pub mod optic_surface;
 pub use node_attr::NodeAttr;
 pub use optic_node::Alignable;
 pub use optic_node::OpticNode;

@@ -5,7 +5,9 @@ use crate::{
     J_per_cm2,
     analyzers::propagation_strategy::MissedSurfaceStrategy,
     apertures::Aperture,
-    centimeter, degree,
+    centimeter,
+    core_optics::optic_surface::OpticSurface,
+    degree,
     distributions::{
         energy::EnergyDistribution,
         fluence::FluenceDistribution,
@@ -25,7 +27,7 @@ use crate::{
     ray::Ray,
     refractive_index::RefractiveIndexType,
     spectrum::Spectrum,
-    surface::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
+    geometry::hit_map::fluence_estimator::FluenceEstimator,
     utils::{
         filter_data::get_unique_finite_values_sorted,
         geom_transformation::Isometry,
@@ -1830,11 +1832,11 @@ mod test {
         apertures::{ApertureType, CircleShape},
         centimeter,
         coatings::CoatingType,
+        core_optics::optic_surface::OpticSurface,
         joule, meter, millimeter, nanometer,
         nodes::SplittingConfig,
         radian,
         refractive_index::{RefrIndexConst, refr_index_vaccuum},
-        surface::optic_surface::OpticSurface,
         utils::test_helper::test_helper::check_logs,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};

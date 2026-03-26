@@ -1001,7 +1001,7 @@ impl RaysHitMap {
 mod test_hitpoint {
     use crate::{
         J_per_cm2, joule, meter,
-        surface::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
+        geometry::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
     };
     use core::f64;
     #[test]
@@ -1074,7 +1074,7 @@ mod test_hitpoints {
     use super::HitPoints;
     use crate::{
         J_per_cm2, joule, meter,
-        surface::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
+        geometry::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
     };
 
     #[test]
@@ -1119,7 +1119,7 @@ mod test_rays_hit_map {
     use super::RaysHitMap;
     use crate::{
         J_per_cm2, centimeter, joule, meter,
-        surface::hit_map::{
+        geometry::hit_map::{
             HitMap,
             rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint, HitPoints},
         },
