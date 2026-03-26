@@ -1,6 +1,7 @@
 // Re-export the most common items
 pub use super::analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig};
 pub use super::apertures::{Aperture, ApertureType};
+pub use super::core_optics::PortType;
 pub use super::core_optics::{Alignable, OpticNode};
 pub use super::error::{OpmResult, OpossumError};
 pub use super::lightdata::{
@@ -20,7 +21,6 @@ pub use super::nodes::{
     point_ray_builder, round_collimated_ray_builder,
 };
 pub use super::opm_document::OpmDocument;
-pub use super::optic_ports::PortType;
 pub use super::properties::{Properties, Property, Proptype};
 pub use super::refractive_index::{
     RefrIndexConst, RefrIndexSchott, RefrIndexSellmeier1, RefractiveIndex,

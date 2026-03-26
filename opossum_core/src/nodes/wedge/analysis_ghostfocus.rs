@@ -2,9 +2,9 @@ use super::Wedge;
 use crate::{
     analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace},
     core_optics::OpticNode,
+    core_optics::PortType,
     error::OpmResult,
     light_result::LightRays,
-    optic_ports::PortType,
     rays::Rays,
 };
 

@@ -4,8 +4,8 @@
 //! Provides traits and implementations for exporting the optical system as a graph
 //! in (graphviz) DOT format. Enables visualization and analysis of node connectivity and structure.
 //! Types implementing [`Dottable`] can be rendered as graph nodes and edges.
+use crate::core_optics::{OpticPorts, PortType};
 use crate::error::OpmResult;
-use crate::optic_ports::{OpticPorts, PortType};
 use num::ToPrimitive;
 use std::fmt::Write as _;
 

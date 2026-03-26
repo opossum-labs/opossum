@@ -409,9 +409,8 @@ impl Plottable for RayPositionHistories {
 mod test {
     use super::*;
     use crate::{
-        distributions::position::Hexapolar, joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*, optic_ports::PortType, rays::Rays,
-        spectrum_helper::create_he_ne_spec,
+        core_optics::PortType, distributions::position::Hexapolar, joule, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, rays::Rays, spectrum_helper::create_he_ne_spec,
     };
     use approx::assert_relative_eq;
     use uom::si::length::{millimeter, nanometer};

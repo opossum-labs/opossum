@@ -10,10 +10,10 @@ use super::{NodeGroup, OpticGraph};
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
     core_optics::OpticNode,
+    core_optics::PortType,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
-    optic_ports::PortType,
     radian,
     utils::{LockExt, geom_transformation::Isometry},
 };

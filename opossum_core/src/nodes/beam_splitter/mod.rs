@@ -8,10 +8,10 @@ use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     core_optics::NodeAttr,
     core_optics::OpticNode,
+    core_optics::PortType,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
-    optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     rays::Rays,
     spectrum::{Spectrum, merge_spectra},
@@ -417,7 +417,7 @@ impl OpticNode for BeamSplitter {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{nodes::test_helper::test_helper::*, optic_ports::PortType};
+    use crate::{core_optics::PortType, nodes::test_helper::test_helper::*};
     #[test]
     fn default() {
         let mut node = BeamSplitter::default();

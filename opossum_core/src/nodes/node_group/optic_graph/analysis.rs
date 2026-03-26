@@ -339,8 +339,8 @@ mod test {
     use super::*;
     use crate::{
         core_optics::OpticNode,
+        core_optics::PortType,
         nodes::{BeamSplitter, Dummy, SourcePort, SplittingConfigBuilder},
-        optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };

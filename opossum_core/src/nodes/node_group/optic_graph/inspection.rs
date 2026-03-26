@@ -1,7 +1,7 @@
 use super::{ConnectionInfo, OpticGraph};
 use crate::{
+    core_optics::PortType,
     error::{OpmResult, OpossumError},
-    optic_ports::PortType,
     optic_ref::OpticRef,
     utils::LockExt,
 };

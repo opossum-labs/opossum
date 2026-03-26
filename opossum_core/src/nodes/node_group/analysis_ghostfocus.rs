@@ -3,10 +3,10 @@ use super::NodeGroup;
 use crate::{
     analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
     core_optics::OpticNode,
+    core_optics::PortType,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, light_rays_to_light_result, light_result_to_light_rays},
     lightdata::LightData,
-    optic_ports::PortType,
     rays::Rays,
     utils::LockExt,
 };

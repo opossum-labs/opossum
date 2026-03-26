@@ -1,8 +1,7 @@
 use opossum_core::prelude::*;
 use opossum_core::{
-    coatings::CoatingType, distributions::energy::General2DGaussian,
+    coatings::CoatingType, core_optics::PortType, distributions::energy::General2DGaussian,
     distributions::position::HexagonalTiling, distributions::spectral::LaserLines,
-    optic_ports::PortType,
 };
 use std::path::Path;
 

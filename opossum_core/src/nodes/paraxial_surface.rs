@@ -7,12 +7,12 @@ use crate::{
     },
     core_optics::NodeAttr,
     core_optics::OpticNode,
+    core_optics::PortType,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     millimeter,
     nodes::NodeRegistration,
-    optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     rays::Rays,
 };
@@ -162,8 +162,8 @@ impl AnalysisRayTrace for ParaxialSurface {
 mod test {
     use super::*;
     use crate::{
-        analyzers::RayTraceConfig, degree, joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*, optic_ports::PortType, ray::Ray, rays::Rays,
+        analyzers::RayTraceConfig, core_optics::PortType, degree, joule, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;

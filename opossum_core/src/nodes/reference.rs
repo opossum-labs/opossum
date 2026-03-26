@@ -7,10 +7,10 @@ use crate::{
     },
     core_optics::NodeAttr,
     core_optics::OpticNode,
+    core_optics::OpticPorts,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     nodes::NodeRegistration,
-    optic_ports::OpticPorts,
     optic_ref::OpticRef,
     properties::Proptype,
     utils::{LockExt, geom_transformation::Isometry},
@@ -196,9 +196,9 @@ impl AnalysisRayTrace for NodeReference {
 mod test {
     use super::*;
     use crate::{
+        core_optics::PortType,
         lightdata::LightData,
         nodes::{Dummy, NodeGroup, test_helper::test_helper::*},
-        optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
         utils::LockExt,
     };

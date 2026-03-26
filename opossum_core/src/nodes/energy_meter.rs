@@ -214,9 +214,8 @@ impl AnalysisRayTrace for EnergyMeter {}
 mod test {
     use super::*;
     use crate::{
-        analyzers::energy::EnergyConfig, light_result::LightResult,
-        nodes::test_helper::test_helper::*, optic_ports::PortType,
-        spectrum_helper::create_he_ne_spec,
+        analyzers::energy::EnergyConfig, core_optics::PortType, light_result::LightResult,
+        nodes::test_helper::test_helper::*, spectrum_helper::create_he_ne_spec,
     };
     #[test]
     fn default() {

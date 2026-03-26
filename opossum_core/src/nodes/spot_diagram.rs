@@ -7,12 +7,12 @@ use crate::{
     },
     core_optics::NodeAttr,
     core_optics::OpticNode,
+    core_optics::PortType,
     error::OpmResult,
     light_result::LightResult,
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
-    optic_ports::PortType,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
@@ -354,11 +354,11 @@ impl Plottable for SpotDiagram {
 mod test {
     use super::*;
     use crate::{
+        core_optics::PortType,
         distributions::position::Hexapolar,
         joule,
         light_result::LightRays,
         nodes::{NodeGroup, SourcePort, test_helper::test_helper::*},
-        optic_ports::PortType,
         prelude::{AnalyzerType, EnergyDataBuilder, GhostFocusConfig, OpmDocument},
         rays::Rays,
         spectrum_helper::create_he_ne_spec,

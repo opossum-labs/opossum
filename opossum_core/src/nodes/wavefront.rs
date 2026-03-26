@@ -15,12 +15,12 @@ use crate::{
     },
     core_optics::NodeAttr,
     core_optics::OpticNode,
+    core_optics::PortType,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
-    optic_ports::PortType,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
@@ -494,8 +494,8 @@ mod test_wavefront_error_map {
 mod test {
     use super::*;
     use crate::{
-        analyzers::RayTraceConfig, distributions::position::Hexapolar, joule, millimeter,
-        nanometer, nodes::test_helper::test_helper::*, optic_ports::PortType, rays::Rays,
+        analyzers::RayTraceConfig, core_optics::PortType, distributions::position::Hexapolar,
+        joule, millimeter, nanometer, nodes::test_helper::test_helper::*, rays::Rays,
         spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
     #[test]

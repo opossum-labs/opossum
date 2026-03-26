@@ -7,7 +7,7 @@
 //! inverted (see inverted optic nodes). In this case input and output ports are swapped.
 //! ```rust
 //! use opossum_core::prelude::*;
-//! use opossum_core::optic_ports::OpticPorts;
+//! use opossum_core::core_optics::OpticPorts;
 //!
 //! let mut ports = OpticPorts::new();
 //! ports.add(&PortType::Input, "my input").unwrap();
@@ -282,10 +282,8 @@ impl Display for OpticPorts {
 }
 #[cfg(test)]
 mod test {
-    use crate::{
-        coatings::CoatingType,
-        optic_ports::{OpticPorts, PortType},
-    };
+    use super::*;
+    use crate::coatings::CoatingType;
     #[test]
     fn new() {
         let ports = OpticPorts::new();

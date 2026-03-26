@@ -8,13 +8,13 @@ use crate::{
     },
     core_optics::NodeAttr,
     core_optics::OpticNode,
+    core_optics::PortType,
     error::{OpmResult, OpossumError},
     joule,
     light_result::{LightRays, LightResult},
     lightdata::{LightData, light_data_builder::LightDataBuilder},
     millimeter,
     nodes::NodeRegistration,
-    optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     ray::Ray,
     rays::Rays,
@@ -322,9 +322,9 @@ impl AnalysisGhostFocus for Source {
 mod test {
     use super::*;
     use crate::{
-        distributions::position::Hexapolar, lightdata::ray_data_source::RayDataSource, nanometer,
-        optic_ports::PortType, prelude::EnergyDataBuilder, spectrum_helper::create_he_ne_spec,
-        utils::geom_transformation::Isometry,
+        core_optics::PortType, distributions::position::Hexapolar,
+        lightdata::ray_data_source::RayDataSource, nanometer, prelude::EnergyDataBuilder,
+        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
     use assert_matches::assert_matches;
     use core::f64;

@@ -99,8 +99,8 @@ pub trait AnalysisEnergy: OpticNode {
         mut incoming_data: LightResult,
         _config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
-        let in_ports = self.ports().names(&crate::optic_ports::PortType::Input);
-        let out_ports = self.ports().names(&crate::optic_ports::PortType::Output);
+        let in_ports = self.ports().names(&crate::core_optics::PortType::Input);
+        let out_ports = self.ports().names(&crate::core_optics::PortType::Output);
 
         // If the node doesn't have at least one input and output, we can't pass energy through
         // which would be a programming error in the implementation of the node. We use debug asserts here to catch this.

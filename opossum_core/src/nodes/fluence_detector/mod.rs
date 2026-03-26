@@ -182,9 +182,9 @@ impl AnalysisRayTrace for FluenceDetector {}
 mod test {
     use super::*;
     use crate::analyzers::energy::EnergyConfig;
+    use crate::core_optics::PortType;
     use crate::light_result::LightResult;
     use crate::lightdata::LightData;
-    use crate::optic_ports::PortType;
     use crate::{nodes::test_helper::test_helper::*, spectrum_helper::create_he_ne_spec};
     #[test]
     fn default() {

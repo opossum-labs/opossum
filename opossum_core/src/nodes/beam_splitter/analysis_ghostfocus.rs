@@ -2,10 +2,10 @@ use super::BeamSplitter;
 use crate::{
     analyzers::{AnalyzerType, GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
     core_optics::OpticNode,
+    core_optics::PortType,
     error::{OpmResult, OpossumError},
     light_result::LightRays,
     lightdata::LightData,
-    optic_ports::PortType,
     rays::Rays,
 };
 
