@@ -10,7 +10,6 @@ use crate::{
         NodeAttr, OpticNode, OpticPorts, OpticRef, PortType, SceneryResources,
         optic_surface::OpticSurface,
     },
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     light::{
         Rays,
@@ -18,6 +17,7 @@ use crate::{
     },
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
+    reporting::Dottable,
     reporting::{
         analysis_report::AnalysisReport,
         node_report::NodeReport,

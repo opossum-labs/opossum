@@ -17,7 +17,6 @@ pub mod apertures;
 pub mod coatings;
 pub mod core_optics;
 pub mod distributions;
-mod dottable;
 pub mod error;
 pub mod generic_validators;
 mod kde;
