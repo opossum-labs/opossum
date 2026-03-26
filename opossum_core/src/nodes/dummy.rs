@@ -7,11 +7,11 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::NodeAttr,
+    core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
     optic_ports::PortType,
 };
 

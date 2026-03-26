@@ -5,11 +5,11 @@ use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::NodeAttr,
+    core_optics::OpticNode,
     degree,
     error::{OpmResult, OpossumError},
     millimeter,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     refractive_index::{RefrIndexConst, RefractiveIndexType},

@@ -7,10 +7,10 @@ mod analysis_raytrace;
 use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     core_optics::NodeAttr,
+    core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
-    optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     rays::Rays,

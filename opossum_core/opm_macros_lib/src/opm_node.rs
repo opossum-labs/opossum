@@ -8,7 +8,7 @@ pub fn impl_derive_opm_node(input: TokenStream) -> TokenStream {
 
     let mut code = quote! {
         use crate::{analyzers::Analyzable,
-            optic_node::{Alignable, LIDT}};
+            core_optics::optic_node::{Alignable, LIDT}};
         impl Analyzable for #struct_name {}
         impl Alignable for #struct_name {}
         impl LIDT for #struct_name {}

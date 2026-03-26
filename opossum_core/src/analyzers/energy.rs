@@ -7,7 +7,7 @@ use super::{AnalyzerRegistration, AnalyzerType};
 use crate::analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy};
 use crate::prelude::EnergyDataBuilder;
 use crate::{
-    error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode,
+    core_optics::OpticNode, error::OpmResult, light_result::LightResult, nodes::NodeGroup,
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;

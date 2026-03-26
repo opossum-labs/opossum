@@ -18,8 +18,8 @@ use nalgebra::Point2;
 use opossum_core::{
     SceneryResources,
     analyzers::AnalyzerType,
+    core_optics::OpticNode,
     opm_document::{AnalyzerInfo, OpmDocument},
-    optic_node::OpticNode,
     types::api_types::NewAnalyzerInfo,
 };
 use serde::{Deserialize, Serialize};

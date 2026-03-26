@@ -8,9 +8,9 @@
 use crate::{
     SceneryResources,
     analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
+    core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
-    optic_node::OpticNode,
     reporting::analysis_report::AnalysisReport,
     utils::file_utils::{create_f_path, create_file_instance},
 };
@@ -337,9 +337,9 @@ mod test {
             Analyzer, GhostFocusConfig, RayTraceConfig, energy::EnergyConfig,
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
+        core_optics::{Alignable, OpticNode},
         degree, joule, millimeter, nanometer,
         nodes::round_collimated_ray_builder,
-        optic_node::{Alignable, OpticNode},
         prelude::*,
         refractive_index::RefrIndexConst,
         utils::test_helper::test_helper::check_logs,

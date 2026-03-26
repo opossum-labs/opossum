@@ -647,9 +647,9 @@ impl OpticGraph {
 mod test {
     use super::*;
     use crate::{
+        core_optics::OpticNode,
         millimeter,
         nodes::{BeamSplitter, Dummy, NodeGroup, NodeReference, SplittingConfigBuilder},
-        optic_node::OpticNode,
     };
     use num::Zero;
     #[test]

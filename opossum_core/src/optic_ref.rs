@@ -12,8 +12,8 @@ use uuid::Uuid;
 use crate::{
     analyzers::Analyzable,
     core_optics::NodeAttr,
+    core_optics::OpticNode,
     nodes::{OpticGraph, create_node_ref},
-    optic_node::OpticNode,
     optic_scenery_rsc::SceneryResources,
     utils::LockExt,
 };
@@ -134,11 +134,8 @@ impl<'de> Deserialize<'de> for OpticRef {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::nodes::Dummy;
-    use crate::optic_node::OpticNode;
-    use crate::utils::LockExt;
-    use std::io::Read;
-    use std::{fs::File, path::PathBuf};
+    use crate::{core_optics::OpticNode, nodes::Dummy, utils::LockExt};
+    use std::{fs::File, io::Read, path::PathBuf};
     use uuid::uuid;
     #[test]
     fn new() {

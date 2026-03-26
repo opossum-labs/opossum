@@ -4,11 +4,11 @@ use crate::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
     core_optics::NodeAttr,
+    core_optics::OpticNode,
     error::OpmResult,
     joule,
     lightdata::LightData,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
 };

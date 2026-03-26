@@ -5,8 +5,8 @@ use std::{fs, path::Path};
 use tinytemplate::TinyTemplate;
 
 use crate::{
+    core_optics::OpticNode,
     error::{OpmResult, OpossumError},
-    optic_node::OpticNode,
     reporting::{
         analysis_report::AnalysisReport,
         node_report::NodeReport,

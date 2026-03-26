@@ -6,12 +6,12 @@ use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::NodeAttr,
+    core_optics::OpticNode,
     degree,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::ray_data_builder::RayDataBuilder,
     nodes::NodeGroup,
-    optic_node::OpticNode,
     picojoule,
     properties::Proptype,
     rays::Rays,

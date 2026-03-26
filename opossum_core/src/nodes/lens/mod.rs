@@ -4,10 +4,10 @@
 use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::NodeAttr,
+    core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     meter, millimeter,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     radian,

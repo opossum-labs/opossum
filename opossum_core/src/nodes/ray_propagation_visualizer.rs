@@ -17,12 +17,12 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::NodeAttr,
+    core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
     millimeter,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype, validator::Validator},
     reporting::{

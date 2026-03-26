@@ -26,7 +26,6 @@ mod light_result;
 pub mod lightdata;
 pub mod nodes;
 pub mod opm_document;
-pub mod optic_node;
 pub mod optic_ports;
 mod optic_ref;
 mod optic_scenery_rsc;

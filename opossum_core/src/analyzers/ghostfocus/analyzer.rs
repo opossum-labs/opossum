@@ -223,13 +223,13 @@ mod test_ghost_focus_analyzer {
     use crate::{
         analyzers::Analyzer,
         coatings::CoatingType,
+        core_optics::optic_node::{Alignable, OpticNode},
         degree, joule,
         light_result::LightResult,
         millimeter,
         nodes::{
             Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror, round_collimated_ray_builder,
         },
-        optic_node::{Alignable, OpticNode},
         optic_ports::PortType,
     };
     #[test]
