@@ -1,4 +1,8 @@
-use std::{collections::HashSet, fs, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::PathBuf,
+};
 
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use futures_util::StreamExt;
@@ -257,6 +261,7 @@ async fn process_delete_node(
     }
 }
 
+#[allow(clippy::type_complexity)]
 #[allow(clippy::future_not_send)]
 #[allow(clippy::large_types_passed_by_value)]
 async fn process_paste_node(
@@ -268,12 +273,14 @@ async fn process_paste_node(
         api::post_paste_nodes(graph_id, pos).await,
         Some(
             move |(optical_nodes, analyzer_nodes, edges): (
-                Vec<NodeInfo>,
+                HashMap<Uuid, Vec<NodeInfo>>,
                 Vec<AnalyzerInfo>,
-                Vec<ConnectInfo>,
+                HashMap<Uuid, Vec<ConnectInfo>>,
             )| {
-                for n in &optical_nodes {
-                    ws_handler.nodes.add_optical_node(n.clone(), graph_id);
+                for (graph_id, n) in &optical_nodes {
+                    for node in n {
+                        ws_handler.nodes.add_optical_node(node.clone(), *graph_id);
+                    }
                 }
                 for a in &analyzer_nodes {
                     let analyzer_id = a.id();
@@ -283,8 +290,10 @@ async fn process_paste_node(
                         graph_id,
                     );
                 }
-                for edge in edges {
-                    ws_handler.edges.add_edge(edge, graph_id);
+                for (graph_id, edges) in &edges {
+                    for edge in edges {
+                        ws_handler.edges.add_edge(edge.clone(), *graph_id);
+                    }
                 }
             },
         ),

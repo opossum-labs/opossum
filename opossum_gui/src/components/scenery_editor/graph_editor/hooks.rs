@@ -348,24 +348,28 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
             let droppable_groups = *workspace.read().drop_in_group.read();
             match drag_status {
                 DragStatus::Nodes => {
-                    let selected_nodes = graph_store().selected_optical_nodes();
                     if droppable_groups.is_none() {
-                        for node_id in selected_nodes {
+                        let selected_nodes = graph_store().selected_nodes();
+                        for node_id in selected_nodes.keys() {
                             if let Some(pos) = graph_store
                                 .read()
                                 .nodes()
                                 .read()
-                                .get(&node_id)
+                                .get(node_id)
                                 .map(NodeElement::pos)
                             {
                                 // Update node GUI position (only if really changed)
-                                workspace_processor
-                                    .send(GraphsWorkspaceAction::SyncNodePosition { pos, node_id });
+                                workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition {
+                                    pos,
+                                    node_id: *node_id,
+                                });
                             }
                         }
                     } else if let Some((to_graph_id, _)) = droppable_groups {
+                        let selected_optical_nodes = graph_store().selected_optical_nodes();
+
                         workspace_processor.send(GraphsWorkspaceAction::DropNodesIntoGroup {
-                            nodes: selected_nodes.iter().copied().collect(),
+                            nodes: selected_optical_nodes.iter().copied().collect(),
                             from_graph_id: *active_graph.read(),
                             to_graph_id,
                         });
