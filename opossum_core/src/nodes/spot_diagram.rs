@@ -9,13 +9,13 @@ use crate::{
     core_optics::OpticNode,
     core_optics::PortType,
     error::OpmResult,
+    light::Rays,
     light_result::LightResult,
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
-    rays::Rays,
     reporting::{
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
@@ -357,11 +357,10 @@ mod test {
         core_optics::PortType,
         distributions::position::Hexapolar,
         joule,
+        light::{Rays, spectrum_helper::create_he_ne_spec},
         light_result::LightRays,
         nodes::{NodeGroup, SourcePort, test_helper::test_helper::*},
         prelude::{AnalyzerType, EnergyDataBuilder, GhostFocusConfig, OpmDocument},
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
     };
     use uom::num_traits::Zero;
 
@@ -511,11 +510,10 @@ mod test {
         use crate::{
             analyzers::raytrace::{AnalysisRayTrace, RayTraceConfig},
             apertures::{Aperture, ApertureType},
+            light::{Ray, Rays},
             light_result::LightResult,
             lightdata::LightData,
             prelude::*,
-            ray::Ray,
-            rays::Rays,
         };
         use nalgebra::{Point3, Vector3};
 

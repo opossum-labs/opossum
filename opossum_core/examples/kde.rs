@@ -1,11 +1,11 @@
 use opossum_core::prelude::*;
 use opossum_core::{
     distributions::position::{Hexapolar, PositionDistribution},
-    plottable::Plottable,
     geometry::hit_map::{
         fluence_estimator::FluenceEstimator,
         rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
     },
+    plottable::Plottable,
 };
 use std::path::Path;
 use uom::si::f64::Ratio;

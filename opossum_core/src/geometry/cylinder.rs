@@ -4,8 +4,8 @@
 use super::geo_surface::GeoSurface;
 use crate::{
     error::{OpmResult, OpossumError},
+    light::Ray,
     meter, radian,
-    ray::Ray,
     utils::geom_transformation::Isometry,
 };
 use nalgebra::{Point3, Vector3};

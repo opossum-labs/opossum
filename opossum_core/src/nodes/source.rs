@@ -6,19 +6,16 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
-    core_optics::PortType,
+    core_optics::{NodeAttr, OpticNode, PortType},
     error::{OpmResult, OpossumError},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
     joule,
+    light::{Ray, Rays},
     light_result::{LightRays, LightResult},
     lightdata::{LightData, light_data_builder::LightDataBuilder},
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
-    ray::Ray,
-    rays::Rays,
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use log::{info, warn};
@@ -102,7 +99,7 @@ impl Source {
     ///
     /// ```rust
     /// use opossum_core::prelude::*;
-    /// use opossum_core::{spectrum_helper::create_he_ne_spec};
+    /// use opossum_core::{light::spectrum_helper::create_he_ne_spec};
     ///
     /// let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0).unwrap()));
     /// let source=Source::new("My Source", light_data_builder);
@@ -323,8 +320,8 @@ mod test {
     use super::*;
     use crate::{
         core_optics::PortType, distributions::position::Hexapolar,
-        lightdata::ray_data_source::RayDataSource, nanometer, prelude::EnergyDataBuilder,
-        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
+        light::spectrum_helper::create_he_ne_spec, lightdata::ray_data_source::RayDataSource,
+        nanometer, prelude::EnergyDataBuilder, utils::geom_transformation::Isometry,
     };
     use assert_matches::assert_matches;
     use core::f64;

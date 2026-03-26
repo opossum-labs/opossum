@@ -5,9 +5,9 @@ use crate::{
     core_optics::OpticNode,
     core_optics::PortType,
     error::{OpmResult, OpossumError},
+    light::Rays,
     light_result::{LightRays, light_rays_to_light_result, light_result_to_light_rays},
     lightdata::LightData,
-    rays::Rays,
     utils::LockExt,
 };
 use log::warn;

@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling optical surface coatings
 
-use crate::{error::OpmResult, ray::Ray};
+use crate::{error::OpmResult, light::Ray};
 use nalgebra::Vector3;
 
 mod constant_r;

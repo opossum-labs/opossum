@@ -29,7 +29,7 @@ impl AnalysisEnergy for SourcePort {
 
 #[cfg(test)]
 mod test {
-    use crate::{prelude::EnergyDataBuilder, spectrum_helper::create_he_ne_spec};
+    use crate::{light::spectrum_helper::create_he_ne_spec, prelude::EnergyDataBuilder};
 
     use super::*;
     #[test]

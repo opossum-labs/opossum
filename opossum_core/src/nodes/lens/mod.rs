@@ -7,12 +7,12 @@ use crate::{
     core_optics::OpticNode,
     core_optics::PortType,
     error::{OpmResult, OpossumError},
+    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     meter, millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndexType},
-    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -315,12 +315,12 @@ mod test {
         apertures::{Aperture, ApertureType},
         distributions::position::Hexapolar,
         joule,
+        light::Rays,
         light_result::LightResult,
         lightdata::LightData,
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
         properties::Proptype,
-        rays::Rays,
         refractive_index::RefractiveIndex,
     };
     use approx::assert_relative_eq;

@@ -9,9 +9,6 @@ use crate::{
     apertures::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
-    nodes::fluence_detector::Fluence,
-    rays::Rays,
-    refractive_index::RefractiveIndexType,
     geometry::{
         geo_surface::GeoSurfaceRef,
         hit_map::{
@@ -20,6 +17,9 @@ use crate::{
             rays_hit_map::{HitPoint, RaysHitMap},
         },
     },
+    light::Rays,
+    nodes::fluence_detector::Fluence,
+    refractive_index::RefractiveIndexType,
     utils::{LockExt, geom_transformation::Isometry},
 };
 use core::fmt::Debug;
@@ -323,10 +323,10 @@ mod test {
         J_per_cm2,
         apertures::{Aperture, ApertureType, CircleShape},
         coatings::CoatingType,
-        joule, meter, nanometer,
-        ray::Ray,
-        rays::Rays,
         geometry::{Sphere, geo_surface::GeoSurfaceRef},
+        joule,
+        light::{Ray, Rays},
+        meter, nanometer,
         utils::geom_transformation::Isometry,
     };
     use core::f64;

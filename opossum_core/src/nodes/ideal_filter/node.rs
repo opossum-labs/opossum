@@ -8,6 +8,7 @@ use crate::{
     },
     core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
+    light::Rays,
     light_result::{
         LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
     },
@@ -15,7 +16,6 @@ use crate::{
     nodes::{FilterType, NodeRegistration},
     prelude::{FilterTypeBuilder, GhostFocusConfig, OpticNode, PortType, Proptype, RayTraceConfig},
     properties::validator::Validator,
-    rays::Rays,
 };
 
 inventory::submit! {
@@ -251,12 +251,13 @@ mod test {
     use super::*;
     use crate::{
         distributions::position::Hexapolar,
-        joule, millimeter, nanometer,
+        joule,
+        light::spectrum_helper::create_he_ne_spec,
+        millimeter, nanometer,
         nodes::test_helper::test_helper::{
             test_analyze_empty, test_analyze_wrong_data_type, test_inverted,
         },
         prelude::{BandFilter, Isometry},
-        spectrum_helper::create_he_ne_spec,
     };
     use approx::assert_abs_diff_eq;
     use uom::si::energy::joule;

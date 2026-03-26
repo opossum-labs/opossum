@@ -340,8 +340,8 @@ mod test {
     use crate::{
         core_optics::OpticNode,
         core_optics::PortType,
+        light::spectrum_helper::create_he_ne_spec,
         nodes::{BeamSplitter, Dummy, SourcePort, SplittingConfigBuilder},
-        spectrum_helper::create_he_ne_spec,
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     use approx::assert_abs_diff_eq;

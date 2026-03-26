@@ -10,14 +10,14 @@ use crate::{
     core_optics::OpticNode,
     core_optics::PortType,
     error::{OpmResult, OpossumError},
+    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
+    light::Rays,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     meter, millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     radian,
-    rays::Rays,
-    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
@@ -255,11 +255,11 @@ mod test {
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
         core_optics::PortType,
-        degree, joule, nanometer,
+        degree, joule,
+        light::spectrum_helper::create_he_ne_spec,
+        light::{Ray, Rays},
+        nanometer,
         nodes::test_helper::test_helper::*,
-        ray::Ray,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
         utils::geom_transformation::Isometry,
     };
     use nalgebra::vector;

@@ -15,7 +15,10 @@ use crate::{
         spectral::SpectralDistribution,
     },
     error::{OpmResult, OpossumError},
-    joule, meter, millimeter, nanometer,
+    geometry::hit_map::fluence_estimator::FluenceEstimator,
+    joule,
+    light::{Ray, Spectrum},
+    meter, millimeter, nanometer,
     nodes::{
         FilterType, SplittingConfig, WaveFrontData, WaveFrontErrorMap,
         fluence_detector::{Fluence, fluence_data::FluenceData},
@@ -24,10 +27,7 @@ use crate::{
     plottable::AxLims,
     prelude::EnergyLaserLines,
     properties::Proptype,
-    ray::Ray,
     refractive_index::RefractiveIndexType,
-    spectrum::Spectrum,
-    geometry::hit_map::fluence_estimator::FluenceEstimator,
     utils::{
         filter_data::get_unique_finite_values_sorted,
         geom_transformation::Isometry,
@@ -1811,8 +1811,8 @@ impl TryFrom<Rays> for Proptype {
 }
 
 impl<'a> IntoIterator for &'a Rays {
-    type IntoIter = std::slice::Iter<'a, crate::ray::Ray>;
-    type Item = &'a crate::ray::Ray;
+    type IntoIter = std::slice::Iter<'a, crate::light::Ray>;
+    type Item = &'a crate::light::Ray;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
@@ -3102,7 +3102,11 @@ mod fluence_rays_test {
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
 
-    use crate::{J_per_cm2, joule, meter, nanometer, ray::Ray, rays::Rays};
+    use crate::{
+        J_per_cm2, joule,
+        light::{Ray, Rays},
+        meter, nanometer,
+    };
 
     use super::FluenceRays;
 

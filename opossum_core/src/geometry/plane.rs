@@ -2,7 +2,7 @@
 //!
 //! An infinitely large and perfectly flat 2D surface
 use super::geo_surface::GeoSurface;
-use crate::{meter, ray::Ray, utils::geom_transformation::Isometry};
+use crate::{light::Ray, meter, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use num::Zero;
 use uom::si::f64::Length;

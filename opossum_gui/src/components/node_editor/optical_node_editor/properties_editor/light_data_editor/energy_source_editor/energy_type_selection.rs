@@ -5,7 +5,7 @@ use crate::components::node_editor::inputs::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    prelude::EnergyDataBuilder, spectrum::Spectrum, utils::default_from_name::DefaultFromName,
+    light::Spectrum, prelude::EnergyDataBuilder, utils::default_from_name::DefaultFromName,
 };
 
 #[component]

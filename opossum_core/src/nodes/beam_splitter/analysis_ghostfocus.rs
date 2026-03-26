@@ -4,9 +4,9 @@ use crate::{
     core_optics::OpticNode,
     core_optics::PortType,
     error::{OpmResult, OpossumError},
+    light::Rays,
     light_result::LightRays,
     lightdata::LightData,
-    rays::Rays,
 };
 
 impl AnalysisGhostFocus for BeamSplitter {

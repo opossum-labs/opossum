@@ -9,13 +9,13 @@ use crate::{
     core_optics::OpticNode,
     core_optics::PortType,
     error::{OpmResult, OpossumError},
+    light::Rays,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     nodes::NodeRegistration,
     num_per_mm,
     properties::{Proptype, validator::Validator},
     radian,
-    rays::Rays,
     refractive_index::refr_index_vaccuum,
     utils::to_f64,
 };
@@ -280,11 +280,10 @@ mod test {
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
         core_optics::PortType,
-        degree, joule, millimeter, nanometer,
+        degree, joule,
+        light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
+        millimeter, nanometer,
         nodes::test_helper::test_helper::*,
-        ray::Ray,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;

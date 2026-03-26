@@ -98,7 +98,7 @@ pub fn point_ray_builder(cone_angle: Angle, energy: Energy) -> OpmResult<RayData
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{degree, joule, millimeter, ray::Ray};
+    use crate::{degree, joule, light::Ray, millimeter};
     use approx::assert_abs_diff_eq;
     use uom::si::energy::joule;
     #[test]

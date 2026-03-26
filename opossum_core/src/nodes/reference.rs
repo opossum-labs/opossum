@@ -197,9 +197,9 @@ mod test {
     use super::*;
     use crate::{
         core_optics::PortType,
+        light::spectrum_helper::create_he_ne_spec,
         lightdata::LightData,
         nodes::{Dummy, NodeGroup, test_helper::test_helper::*},
-        spectrum_helper::create_he_ne_spec,
         utils::LockExt,
     };
     #[test]

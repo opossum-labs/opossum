@@ -17,10 +17,11 @@ use crate::{
     analyzers::propagation_strategy::MissedSurfaceStrategy,
     core_optics::optic_surface::OpticSurface,
     error::{OpmResult, OpossumError},
-    joule, meter,
-    nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
-    rays::{FluenceRays, Rays},
     geometry::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
+    joule,
+    light::{FluenceRays, Rays},
+    meter,
+    nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
     utils::{LockExt, geom_transformation::Isometry},
 };
 
@@ -824,12 +825,13 @@ mod test {
     use crate::{
         J_per_cm2,
         coatings::CoatingType,
-        degree, joule, millimeter, nanometer,
+        degree, joule,
+        light::Spectrum,
+        millimeter, nanometer,
         nodes::{
             SplittingConfig,
             ideal_filter::{EdgeFilter, EdgeFilterType},
         },
-        spectrum::Spectrum,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use core::f64;

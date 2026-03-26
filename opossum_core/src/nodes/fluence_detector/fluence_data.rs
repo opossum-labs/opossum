@@ -5,10 +5,10 @@ use super::Fluence;
 use crate::{
     J_per_cm2,
     error::OpmResult,
+    geometry::hit_map::fluence_estimator::FluenceEstimator,
     joule,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
-    geometry::hit_map::fluence_estimator::FluenceEstimator,
     utils::{griddata::linspace, to_f64},
 };
 use nalgebra::{DMatrix, DVector};
@@ -197,10 +197,11 @@ impl Plottable for FluenceData {
 mod test {
     use super::FluenceData;
     use crate::{
-        J_per_cm2, J_per_m2, joule, meter,
+        J_per_cm2, J_per_m2,
+        geometry::hit_map::fluence_estimator::FluenceEstimator,
+        joule, meter,
         plottable::{PlotType, Plottable},
         properties::Proptype,
-        geometry::hit_map::fluence_estimator::FluenceEstimator,
     };
     use assert_matches::assert_matches;
     use nalgebra::{dmatrix, vector};

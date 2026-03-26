@@ -9,11 +9,11 @@ use uuid::Uuid;
 
 use crate::{
     error::{OpmResult, OpossumError},
+    light::Rays,
     millimeter,
     nodes::OpticGraph,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     prelude::Proptype,
-    rays::Rays,
     utils::LockExt,
 };
 
@@ -426,7 +426,7 @@ mod test_rays_node_correlation {
 #[cfg(test)]
 mod test_rays_ghost_focus_history {
     use super::*;
-    use crate::{distributions::position::Grid, joule, millimeter, nanometer, rays::Rays};
+    use crate::{distributions::position::Grid, joule, light::Rays, millimeter, nanometer};
     use approx::assert_relative_eq;
     use nalgebra::{MatrixXx3, Vector3, point};
     use std::collections::HashMap;

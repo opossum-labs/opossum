@@ -46,6 +46,7 @@ mod test {
         analyzers::energy::{AnalysisEnergy, EnergyConfig},
         core_optics::OpticNode,
         joule,
+        light::spectrum_helper::create_he_ne_spec,
         light_result::LightResult,
         lightdata::LightData,
         nanometer,
@@ -54,7 +55,6 @@ mod test {
             EdgeFilter, EdgeFilterType, EnergyDataBuilder, EnergyLaserLines, LightDataBuilder,
             SpectralFilterBuilder,
         },
-        spectrum_helper::create_he_ne_spec,
     };
 
     #[test]

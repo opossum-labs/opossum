@@ -7,12 +7,12 @@ use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::{NodeAttr, OpticNode, PortType},
     error::{OpmResult, OpossumError},
+    geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     meter, millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndexType},
-    geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -228,12 +228,12 @@ mod test {
         },
         distributions::position::Hexapolar,
         joule,
+        light::Rays,
         light_result::LightResult,
         lightdata::LightData,
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
         properties::Proptype,
-        rays::Rays,
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;

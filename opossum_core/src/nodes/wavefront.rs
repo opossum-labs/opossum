@@ -461,7 +461,11 @@ impl Plottable for WaveFrontErrorMap {
 #[cfg(test)]
 mod test_wavefront_error_map {
     use super::*;
-    use crate::{joule, nanometer, ray::Ray, rays::Rays};
+    use crate::{
+        joule,
+        light::{Ray, Rays},
+        nanometer,
+    };
     use approx::assert_abs_diff_eq;
     use nalgebra::Point3;
     #[test]
@@ -495,8 +499,8 @@ mod test {
     use super::*;
     use crate::{
         analyzers::RayTraceConfig, core_optics::PortType, distributions::position::Hexapolar,
-        joule, millimeter, nanometer, nodes::test_helper::test_helper::*, rays::Rays,
-        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
+        joule, light::Rays, light::spectrum_helper::create_he_ne_spec, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, utils::geom_transformation::Isometry,
     };
     #[test]
     fn default() {

@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 use super::{Coating, CoatingType};
-use crate::ray::Ray;
+use crate::light::Ray;
 use nalgebra::Vector3;
 
 /// Ideal coating with zero reflectivity
@@ -28,7 +28,7 @@ impl From<IdealAR> for CoatingType {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{joule, nanometer, ray::Ray};
+    use crate::{joule, light::Ray, nanometer};
     use nalgebra::vector;
 
     #[test]

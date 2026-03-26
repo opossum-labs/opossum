@@ -5,7 +5,7 @@ pub mod energy_data_builder;
 pub mod light_data_builder;
 pub mod ray_data_builder;
 pub mod ray_data_source;
-use crate::{joule, rays::Rays, spectrum::Spectrum};
+use crate::{joule, light::Rays, light::Spectrum};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use uom::{fmt::DisplayStyle::Abbreviation, si::energy::joule};
@@ -44,9 +44,9 @@ impl Display for LightData {
 #[cfg(test)]
 mod test {
     use crate::{
+        light::spectrum_helper::create_visible_spec,
         lightdata::{light_data_builder::LightDataBuilder, ray_data_source::RayDataSource},
         properties::Proptype,
-        spectrum_helper::create_visible_spec,
     };
 
     use super::*;

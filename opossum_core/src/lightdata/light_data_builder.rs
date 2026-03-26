@@ -143,10 +143,10 @@ mod tests {
     use crate::{
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         joule,
+        light::Rays,
         lightdata::energy_data_builder::EnergyLaserLines,
         nanometer,
         properties::Proptype,
-        rays::Rays,
     };
     #[test]
     fn default() {

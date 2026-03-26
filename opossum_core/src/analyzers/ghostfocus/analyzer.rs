@@ -6,13 +6,13 @@ use super::{GhostFocusConfig, GhostFocusHistory};
 use crate::{
     analyzers::{Analyzer, raytrace::AnalysisRayTrace},
     error::OpmResult,
+    light::Rays,
     light_result::{
         LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
     },
     nodes::NodeGroup,
     prelude::{OpticNode, Properties, Proptype, RayTraceConfig},
     properties::proptype::{count_str, format_value_with_prefix},
-    rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
     utils::LockExt,
 };

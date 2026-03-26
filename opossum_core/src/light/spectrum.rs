@@ -785,7 +785,7 @@ mod test {
     use crate::prelude::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder};
     use crate::{joule, nanometer};
     use crate::{
-        spectrum_helper::{
+        light::spectrum_helper::{
             create_he_ne_spec, create_nd_glass_spec, create_nir_spec, create_visible_spec,
         },
         utils::test_helper::test_helper::check_logs,

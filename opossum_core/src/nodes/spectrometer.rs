@@ -8,16 +8,14 @@ use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
+    core_optics::{NodeAttr, OpticNode},
     error::OpmResult,
+    light::{Rays, Spectrum},
     lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
-    rays::Rays,
     reporting::node_report::NodeReport,
-    spectrum::Spectrum,
 };
 use std::fmt::{Debug, Display};
 
@@ -253,10 +251,12 @@ mod test {
         core_optics::PortType,
         distributions::position::Hexapolar,
         joule,
+        light::{
+            Rays,
+            spectrum_helper::{create_he_ne_spec, create_visible_spec},
+        },
         light_result::LightResult,
         nodes::{EnergyMeter, test_helper::test_helper::*},
-        rays::Rays,
-        spectrum_helper::{create_he_ne_spec, create_visible_spec},
     };
     use num::Zero;
     use uom::si::f64::Length;

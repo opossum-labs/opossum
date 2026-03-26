@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! helper functions for easier generation of spectra
 
-use crate::{error::OpmResult, nanometer, spectrum::Spectrum};
+use crate::{error::OpmResult, light::Spectrum, nanometer};
 use log::warn;
 
 /// Helper function for generating a visible spectrum.

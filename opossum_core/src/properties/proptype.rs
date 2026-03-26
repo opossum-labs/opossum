@@ -6,6 +6,8 @@ use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     apertures::Aperture,
     error::{OpmResult, OpossumError},
+    geometry::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
+    light::Spectrum,
     lightdata::{
         LightData,
         light_data_builder::LightDataBuilder,
@@ -20,8 +22,6 @@ use crate::{
     },
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
-    spectrum::Spectrum,
-    geometry::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},

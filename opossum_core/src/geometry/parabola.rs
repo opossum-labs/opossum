@@ -45,7 +45,7 @@ impl GeoSurface for Parabola {
     #[allow(clippy::suboptimal_flops)] // don't use mul_add here for a,b,c because the current implementation is faster!
     fn calc_intersect_and_normal_do(
         &self,
-        ray: &crate::ray::Ray,
+        ray: &crate::light::Ray,
     ) -> Option<(Point3<Length>, Vector3<f64>)> {
         let dir = ray.direction();
         let pos_vec = ray.position().coords.map(|v| v.value);
@@ -141,7 +141,7 @@ impl GeoSurface for Parabola {
 mod test {
     use super::Parabola;
     use crate::{
-        joule, meter, nanometer, ray::Ray, geometry::geo_surface::GeoSurface,
+        geometry::geo_surface::GeoSurface, joule, light::Ray, meter, nanometer,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;

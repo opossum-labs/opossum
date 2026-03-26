@@ -9,8 +9,9 @@ use crate::{
         AllNormal, AllNotEmpty, AllPositive, PathValid, ValidateTrait, XNormal, YFinite,
         YNotAllZero,
     },
-    joule, nanometer,
-    spectrum::Spectrum,
+    joule,
+    light::Spectrum,
+    nanometer,
     utils::default_from_name::DefaultFromName,
     validated, validated_type, validated_vec, validated_vec_type,
 };

@@ -9,11 +9,11 @@ use crate::{
     core_optics::PortType,
     degree,
     error::{OpmResult, OpossumError},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     refractive_index::{RefrIndexConst, RefractiveIndexType},
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;
@@ -194,14 +194,13 @@ mod test {
         },
         core_optics::PortType,
         degree, joule,
+        light::spectrum_helper::create_he_ne_spec,
+        light::{Ray, Rays},
         light_result::LightResult,
         lightdata::LightData,
         nanometer,
         nodes::test_helper::test_helper::*,
         properties::Proptype,
-        ray::Ray,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
     };
     use nalgebra::Vector3;
 

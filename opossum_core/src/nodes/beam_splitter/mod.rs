@@ -10,12 +10,12 @@ use crate::{
     core_optics::OpticNode,
     core_optics::PortType,
     error::{OpmResult, OpossumError},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    light::Rays,
+    light::spectrum::{Spectrum, merge_spectra},
     lightdata::LightData,
     nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
     properties::{Proptype, validator::Validator},
-    rays::Rays,
-    spectrum::{Spectrum, merge_spectra},
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
     utils::{default_from_name::DefaultFromName, geom_transformation::Isometry},
 };
 use opm_macros_lib::OpmNode;

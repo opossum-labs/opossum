@@ -4,8 +4,8 @@ use crate::{
     core_optics::OpticNode,
     core_optics::PortType,
     error::OpmResult,
+    light::Rays,
     light_result::LightRays,
-    rays::Rays,
 };
 
 impl AnalysisGhostFocus for Wedge {

@@ -9,12 +9,12 @@ use crate::{
     core_optics::OpticNode,
     degree,
     error::{OpmResult, OpossumError},
+    light::Rays,
     light_result::LightResult,
     lightdata::ray_data_builder::RayDataBuilder,
     nodes::NodeGroup,
     picojoule,
     properties::Proptype,
-    rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::analysis_report::AnalysisReport,
 };

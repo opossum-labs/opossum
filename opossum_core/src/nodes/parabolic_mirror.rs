@@ -15,14 +15,14 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, PortType, optic_surface::OpticSurface},
     degree,
     error::{OpmResult, OpossumError},
+    geometry::{Parabola, geo_surface::GeoSurfaceRef},
+    light::Rays,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     meter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     radian,
-    rays::Rays,
-    geometry::{Parabola, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 
@@ -515,13 +515,12 @@ mod test {
         degree,
         distributions::position::Hexapolar,
         joule,
+        light::{Rays, spectrum_helper::create_he_ne_spec},
         light_result::{LightResult, light_result_to_light_rays},
         lightdata::LightData,
         meter, millimeter, nanometer,
         nodes::ParabolicMirror,
         properties::Proptype,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;

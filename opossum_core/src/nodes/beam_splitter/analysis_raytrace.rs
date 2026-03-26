@@ -103,6 +103,8 @@ mod test {
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
         core_optics::OpticNode,
         joule,
+        light::Ray,
+        light::Rays,
         light_result::LightResult,
         lightdata::LightData,
         millimeter, nanometer,
@@ -111,8 +113,6 @@ mod test {
             round_collimated_ray_builder,
         },
         prelude::{AnalyzerType, OpmDocument},
-        ray::Ray,
-        rays::Rays,
         utils::geom_transformation::Isometry,
     };
 

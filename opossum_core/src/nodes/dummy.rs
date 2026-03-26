@@ -134,8 +134,9 @@ impl OpticNode for Dummy {
 mod test {
     use super::*;
     use crate::{
-        analyzers::energy::EnergyConfig, core_optics::PortType, lightdata::LightData,
-        nodes::test_helper::test_helper::*, spectrum_helper::create_he_ne_spec,
+        analyzers::energy::EnergyConfig, core_optics::PortType,
+        light::spectrum_helper::create_he_ne_spec, lightdata::LightData,
+        nodes::test_helper::test_helper::*,
     };
     #[test]
     fn default() {

@@ -7,8 +7,8 @@
 
 use crate::{
     error::OpmResult,
+    light::Rays,
     prelude::{Isometry, RayDataSource},
-    rays::Rays,
 };
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;

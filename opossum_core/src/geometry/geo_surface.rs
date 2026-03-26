@@ -4,7 +4,7 @@
 //! points etc. and an enum containing the concrete surface types.
 
 use super::Plane;
-use crate::{ray::Ray, utils::geom_transformation::Isometry};
+use crate::{light::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use std::{
     fmt::Debug,

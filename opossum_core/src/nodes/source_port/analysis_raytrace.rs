@@ -4,13 +4,12 @@ use crate::{
     analyzers::raytrace::AnalysisRayTrace,
     error::{OpmResult, OpossumError},
     joule,
+    light::{Ray, Rays},
     light_result::LightResult,
     lightdata::LightData,
     millimeter,
     nodes::SourcePort,
     prelude::{OpticNode, PortType, RayTraceConfig},
-    ray::Ray,
-    rays::Rays,
 };
 
 impl AnalysisRayTrace for SourcePort {

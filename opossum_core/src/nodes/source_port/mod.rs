@@ -6,9 +6,9 @@ use std::{
 use crate::{
     core_optics::NodeAttr,
     error::OpmResult,
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
     nodes::NodeRegistration,
     prelude::{Isometry, OpticNode, PortType, Proptype},
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
 };
 use opm_macros_lib::OpmNode;
 

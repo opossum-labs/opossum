@@ -11,11 +11,11 @@ pub mod test_helper {
         core_optics::PortType,
         distributions::position::Hexapolar,
         joule,
+        light::Rays,
+        light::spectrum_helper::create_he_ne_spec,
         light_result::LightResult,
         lightdata::LightData,
         millimeter, nanometer,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     pub fn test_inverted<T: Default + OpticNode>() {

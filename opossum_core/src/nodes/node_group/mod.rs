@@ -9,11 +9,11 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticPorts, PortType, optic_surface::OpticSurface},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light::Rays,
     lightdata::{LightData, light_data_builder::LightDataBuilder},
     nodes::NodeRegistration,
     optic_ref::OpticRef,
     properties::{Properties, Proptype},
-    rays::Rays,
     reporting::{
         analysis_report::AnalysisReport,
         node_report::NodeReport,
@@ -936,12 +936,11 @@ mod test {
         },
         core_optics::OpticNode,
         joule,
+        light::{Ray, Rays},
         light_result::LightResult,
         millimeter, nanometer,
         nodes::{Dummy, EnergyMeter, SourcePort, test_helper::test_helper::*},
         prelude::RayDataSource,
-        ray::Ray,
-        rays::Rays,
         utils::{LockExt, geom_transformation::Isometry},
     };
     use num::Zero;

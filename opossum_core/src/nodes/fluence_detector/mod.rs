@@ -9,11 +9,11 @@ use crate::{
     core_optics::NodeAttr,
     core_optics::OpticNode,
     error::OpmResult,
+    geometry::hit_map::fluence_estimator::FluenceEstimator,
     lightdata::LightData,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
-    geometry::hit_map::fluence_estimator::FluenceEstimator,
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
@@ -185,7 +185,7 @@ mod test {
     use crate::core_optics::PortType;
     use crate::light_result::LightResult;
     use crate::lightdata::LightData;
-    use crate::{nodes::test_helper::test_helper::*, spectrum_helper::create_he_ne_spec};
+    use crate::{light::spectrum_helper::create_he_ne_spec, nodes::test_helper::test_helper::*};
     #[test]
     fn default() {
         let mut node = FluenceDetector::default();

@@ -5,7 +5,7 @@ use nalgebra::{Point3, vector};
 use num::Zero;
 use opossum_core::{
     J_per_cm2, analyzers::propagation_strategy::MissedSurfaceStrategy,
-    core_optics::optic_surface::OpticSurface, degree, joule, millimeter, nanometer, ray::Ray,
+    core_optics::optic_surface::OpticSurface, degree, joule, light::Ray, millimeter, nanometer,
     utils::geom_transformation::Isometry,
 };
 use uom::si::f64::Length;

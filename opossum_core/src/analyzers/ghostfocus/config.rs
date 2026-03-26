@@ -2,10 +2,10 @@ use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::optic_surface::OpticSurface,
     error::OpmResult,
+    geometry::hit_map::fluence_estimator::FluenceEstimator,
+    light::Rays,
     lightdata::ray_data_builder::RayDataBuilder,
     nodes::NodeGroup,
-    rays::Rays,
-    geometry::hit_map::fluence_estimator::FluenceEstimator,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -95,8 +95,8 @@ impl PropagationStrategy for GhostFocusConfig {
 mod test_ghost_focus_config {
     use super::GhostFocusConfig;
     use crate::{
-        lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
         geometry::hit_map::fluence_estimator::FluenceEstimator,
+        lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
     };
     #[test]
     fn default() {

@@ -3,8 +3,8 @@
 
 use crate::{
     error::{OpmResult, OpossumError},
+    light::Rays,
     lightdata::LightData,
-    rays::Rays,
 };
 use std::collections::HashMap;
 
