@@ -10,11 +10,12 @@
 //! [`LightData`]).
 use crate::{
     error::{OpmResult, OpossumError},
-    lightdata::LightData,
+    light::LightData,
 };
 use serde::Serialize;
 use uom::si::f64::Length;
 
+/// A structure for handling the propagation of ray bundles between optical nodes.
 #[derive(Debug, Clone, Serialize)]
 pub struct LightFlow {
     /// name of the optic port of the source node
@@ -29,6 +30,11 @@ pub struct LightFlow {
     distance: Length,
 }
 impl LightFlow {
+    /// Create a new [`LightFlow`] instance.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
     pub fn new(src_port: &str, target_port: &str, distance: Length) -> OpmResult<Self> {
         if !distance.is_finite() {
             return Err(OpossumError::Other("distance must be finite".into()));
@@ -40,27 +46,43 @@ impl LightFlow {
             distance,
         })
     }
+    /// Returns a reference to the src port of this [`LightFlow`].
+    #[must_use]
     pub fn src_port(&self) -> &str {
         self.src_port.as_ref()
     }
+    /// Returns a reference to the target port of this [`LightFlow`].
+    #[must_use]
     pub fn target_port(&self) -> &str {
         self.target_port.as_ref()
     }
+    /// Returns the data of this [`LightFlow`].
+    #[must_use]
     pub const fn data(&self) -> Option<&LightData> {
         self.data.as_ref()
     }
+    /// Returns a mutable reference to the data of this [`LightFlow`].
     pub const fn data_mut(&mut self) -> &mut Option<LightData> {
         &mut self.data
     }
+    /// Sets the data of this [`LightFlow`].
     pub fn set_data(&mut self, data: Option<LightData>) {
         self.data = data;
     }
+    /// Swaps source and target port [`LightFlow`].
     pub const fn inverse(&mut self) {
         std::mem::swap(&mut self.src_port, &mut self.target_port);
     }
+    /// Returns a reference to the distance of this [`LightFlow`].
+    #[must_use]
     pub const fn distance(&self) -> &Length {
         &self.distance
     }
+    /// Sets the distance of this [`LightFlow`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
     pub fn set_distance(&mut self, distance: Length) -> OpmResult<()> {
         if !distance.is_finite() {
             return Err(OpossumError::Other(

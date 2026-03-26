@@ -8,7 +8,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     light::Spectrum,
-    lightdata::{
+    light::lightdata::{
         LightData,
         light_data_builder::LightDataBuilder,
         ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},

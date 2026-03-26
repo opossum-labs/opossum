@@ -44,8 +44,10 @@ impl Display for LightData {
 #[cfg(test)]
 mod test {
     use crate::{
-        light::spectrum_helper::create_visible_spec,
-        lightdata::{light_data_builder::LightDataBuilder, ray_data_source::RayDataSource},
+        light::{
+            lightdata::{light_data_builder::LightDataBuilder, ray_data_source::RayDataSource},
+            spectrum_helper::create_visible_spec,
+        },
         properties::Proptype,
     };
 

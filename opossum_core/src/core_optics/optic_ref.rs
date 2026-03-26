@@ -11,10 +11,8 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
+    core_optics::{NodeAttr, OpticNode, SceneryResources},
     nodes::{OpticGraph, create_node_ref},
-    optic_scenery_rsc::SceneryResources,
     utils::LockExt,
 };
 

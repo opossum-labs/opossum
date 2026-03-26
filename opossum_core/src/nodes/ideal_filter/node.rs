@@ -8,11 +8,10 @@ use crate::{
     },
     core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
-    light::Rays,
-    light_result::{
-        LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
+    light::{
+        LightData, LightRays, LightResult, Rays,
+        light_result::{light_rays_to_light_result, light_result_to_light_rays},
     },
-    lightdata::LightData,
     nodes::{FilterType, NodeRegistration},
     prelude::{FilterTypeBuilder, GhostFocusConfig, OpticNode, PortType, Proptype, RayTraceConfig},
     properties::validator::Validator,

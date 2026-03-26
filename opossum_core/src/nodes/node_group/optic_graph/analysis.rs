@@ -7,8 +7,7 @@ use uuid::Uuid;
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult},
     utils::LockExt,
 };
 

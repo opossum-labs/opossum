@@ -1,11 +1,9 @@
 use super::Lens;
 use crate::{
     analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace},
-    core_optics::OpticNode,
-    core_optics::PortType,
+    core_optics::{OpticNode, PortType},
     error::OpmResult,
-    light::Rays,
-    light_result::LightRays,
+    light::{LightRays, Rays},
 };
 
 impl AnalysisGhostFocus for Lens {

@@ -24,10 +24,10 @@ use crate::{
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
     },
-    plottable::AxLims,
     prelude::EnergyLaserLines,
     properties::Proptype,
     refractive_index::RefractiveIndexType,
+    results::plottable::AxLims,
     utils::{
         filter_data::get_unique_finite_values_sorted,
         geom_transformation::Isometry,

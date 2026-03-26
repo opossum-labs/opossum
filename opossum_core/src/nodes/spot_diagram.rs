@@ -5,20 +5,18 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
-    core_optics::PortType,
+    core_optics::{NodeAttr, OpticNode, PortType},
     error::OpmResult,
-    light::Rays,
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult, Rays},
     nanometer,
     nodes::NodeRegistration,
-    plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     reporting::{
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
+    },
+    results::plottable::{
+        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
     },
     utils::{
         geom_transformation::Isometry,
@@ -357,8 +355,7 @@ mod test {
         core_optics::PortType,
         distributions::position::Hexapolar,
         joule,
-        light::{Rays, spectrum_helper::create_he_ne_spec},
-        light_result::LightRays,
+        light::{Rays, light_result::LightRays, spectrum_helper::create_he_ne_spec},
         nodes::{NodeGroup, SourcePort, test_helper::test_helper::*},
         prelude::{AnalyzerType, EnergyDataBuilder, GhostFocusConfig, OpmDocument},
     };
@@ -510,9 +507,7 @@ mod test {
         use crate::{
             analyzers::raytrace::{AnalysisRayTrace, RayTraceConfig},
             apertures::{Aperture, ApertureType},
-            light::{Ray, Rays},
-            light_result::LightResult,
-            lightdata::LightData,
+            light::{LightData, LightResult, Ray, Rays},
             prelude::*,
         };
         use nalgebra::{Point3, Vector3};

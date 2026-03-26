@@ -5,11 +5,11 @@ use crate::{
     generic_validators::{
         AllNormal, AllNotEmpty, AllPositive, SecondLarger, ValidateTrait, XNormal, YFinite,
     },
-    lightdata::energy_data_builder::EnergyDataBuilder,
+    light::lightdata::energy_data_builder::EnergyDataBuilder,
     micrometer,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     prelude::EnergyLaserLines,
     properties::Proptype,
+    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{to_f64, try_f64_to_usize},
     validated, validated_type, validated_vec, validated_vec_type,
 };

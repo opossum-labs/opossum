@@ -6,9 +6,11 @@ use super::{GhostFocusConfig, GhostFocusHistory};
 use crate::{
     analyzers::{Analyzer, raytrace::AnalysisRayTrace},
     error::OpmResult,
-    light::Rays,
-    light_result::{
-        LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
+    light::{
+        Rays,
+        light_result::{
+            LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
+        },
     },
     nodes::NodeGroup,
     prelude::{OpticNode, Properties, Proptype, RayTraceConfig},
@@ -223,10 +225,12 @@ mod test_ghost_focus_analyzer {
     use crate::{
         analyzers::Analyzer,
         coatings::CoatingType,
-        core_optics::PortType,
-        core_optics::optic_node::{Alignable, OpticNode},
+        core_optics::{
+            PortType,
+            optic_node::{Alignable, OpticNode},
+        },
         degree, joule,
-        light_result::LightResult,
+        light::LightResult,
         millimeter,
         nodes::{
             Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror, round_collimated_ray_builder,
@@ -292,8 +296,8 @@ mod test_ghost_focus_analyzer {
         let output_data = out_result.get("output_1");
 
         match output_data {
-            Some(crate::lightdata::LightData::GhostFocus(rays)) => assert_eq!(rays.len(), 0),
-            Some(crate::lightdata::LightData::Geometric(rays)) => {
+            Some(crate::light::lightdata::LightData::GhostFocus(rays)) => assert_eq!(rays.len(), 0),
+            Some(crate::light::lightdata::LightData::Geometric(rays)) => {
                 assert_eq!(rays.nr_of_rays(false), 0)
             }
             None => assert!(out_result.is_empty()),

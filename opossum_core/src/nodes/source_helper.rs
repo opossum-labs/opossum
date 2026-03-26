@@ -8,7 +8,7 @@ use crate::{
         spectral::LaserLines,
     },
     error::{OpmResult, OpossumError},
-    lightdata::{
+    light::lightdata::{
         ray_data_builder::RayDataBuilder,
         ray_data_source::{CollimatedSrc, PointSrc, RayDataSource},
     },

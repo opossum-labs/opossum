@@ -4,9 +4,7 @@ use crate::{
     analyzers::raytrace::AnalysisRayTrace,
     error::{OpmResult, OpossumError},
     joule,
-    light::{Ray, Rays},
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult, Ray, Rays},
     millimeter,
     nodes::SourcePort,
     prelude::{OpticNode, PortType, RayTraceConfig},
@@ -81,7 +79,7 @@ mod test {
     use super::*;
     use crate::{
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
-        lightdata::ray_data_builder::RayDataBuilder,
+        light::lightdata::ray_data_builder::RayDataBuilder,
         nanometer,
         prelude::{CollimatedSrc, RayDataSource},
     };

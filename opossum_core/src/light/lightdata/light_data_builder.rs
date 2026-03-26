@@ -11,7 +11,7 @@ use super::{LightData, energy_data_builder::EnergyDataBuilder, ray_data_source::
 use crate::{
     distributions::{energy::EnergyDistType, position::PosDistType, spectral::SpecDistType},
     error::OpmResult,
-    lightdata::ray_data_source::{CollimatedSrc, ImageSrc, PointSrc},
+    light::lightdata::ray_data_source::{CollimatedSrc, ImageSrc, PointSrc},
     utils::default_from_name::DefaultFromName,
 };
 
@@ -143,8 +143,7 @@ mod tests {
     use crate::{
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         joule,
-        light::Rays,
-        lightdata::energy_data_builder::EnergyLaserLines,
+        light::{Rays, lightdata::energy_data_builder::EnergyLaserLines},
         nanometer,
         properties::Proptype,
     };

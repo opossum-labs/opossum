@@ -1,7 +1,7 @@
 use opossum_core::prelude::*;
 use opossum_core::{
-    light::Spectrum, light::spectrum_helper::create_visible_spec, plottable::Plottable,
-    plottable::PltBackEnd,
+    light::Spectrum, light::spectrum_helper::create_visible_spec, results::plottable::Plottable,
+    results::plottable::PltBackEnd,
 };
 use std::path::Path;
 

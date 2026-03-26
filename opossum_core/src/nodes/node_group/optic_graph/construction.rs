@@ -6,9 +6,9 @@ use std::{
 use super::graph::OpticGraph;
 use crate::{
     analyzers::Analyzable,
+    core_optics::OpticRef,
     error::{OpmResult, OpossumError},
-    light_flow::LightFlow,
-    optic_ref::OpticRef,
+    light::LightFlow,
     prelude::PortType,
     properties::Proptype,
     utils::LockExt,

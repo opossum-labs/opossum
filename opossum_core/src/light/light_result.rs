@@ -4,7 +4,7 @@
 use crate::{
     error::{OpmResult, OpossumError},
     light::Rays,
-    lightdata::LightData,
+    light::lightdata::LightData,
 };
 use std::collections::HashMap;
 

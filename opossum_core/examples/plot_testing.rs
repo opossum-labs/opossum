@@ -2,8 +2,8 @@ use nalgebra::{DMatrix, DVector, MatrixXx2};
 use opossum_core::{
     distributions::position::Hexapolar,
     light::Rays,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     prelude::*,
+    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     utils::geom_transformation::Isometry,
 };
 use plotters::style::RGBAColor;

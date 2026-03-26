@@ -3,7 +3,7 @@ use super::NodeGroup;
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
     error::OpmResult,
-    light_result::LightResult,
+    light::LightResult,
 };
 
 impl AnalysisEnergy for NodeGroup {

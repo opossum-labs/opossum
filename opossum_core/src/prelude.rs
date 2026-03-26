@@ -4,7 +4,7 @@ pub use super::apertures::{Aperture, ApertureType};
 pub use super::core_optics::PortType;
 pub use super::core_optics::{Alignable, OpticNode};
 pub use super::error::{OpmResult, OpossumError};
-pub use super::lightdata::{
+pub use super::light::lightdata::{
     energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
     light_data_builder::LightDataBuilder,
     ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},

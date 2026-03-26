@@ -7,7 +7,7 @@ use crate::{
     core_optics::OpticNode,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    light::LightData,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
@@ -214,8 +214,9 @@ impl AnalysisRayTrace for EnergyMeter {}
 mod test {
     use super::*;
     use crate::{
-        analyzers::energy::EnergyConfig, core_optics::PortType,
-        light::spectrum_helper::create_he_ne_spec, light_result::LightResult,
+        analyzers::energy::EnergyConfig,
+        core_optics::PortType,
+        light::{LightResult, spectrum_helper::create_he_ne_spec},
         nodes::test_helper::test_helper::*,
     };
     #[test]

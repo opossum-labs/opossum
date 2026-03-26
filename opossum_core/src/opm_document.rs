@@ -6,9 +6,8 @@
 //!
 //! This module also handles reading and writing of `.opm` files.
 use crate::{
-    SceneryResources,
     analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
-    core_optics::OpticNode,
+    core_optics::{OpticNode, SceneryResources},
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     reporting::analysis_report::AnalysisReport,

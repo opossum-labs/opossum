@@ -6,7 +6,7 @@ use opossum_core::{
         FibonacciRectangle, Grid, HexagonalTiling, Hexapolar, PosDistType, Random, SobolDist,
     },
     distributions::spectral::{LaserLines, SpecDistType},
-    lightdata::ray_data_builder::RayDataBuilder,
+    light::lightdata::ray_data_builder::RayDataBuilder,
     prelude::*,
 };
 use std::path::Path;

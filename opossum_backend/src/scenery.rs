@@ -16,9 +16,8 @@ use actix_web::{
 use log::{error, info, warn};
 use nalgebra::Point2;
 use opossum_core::{
-    SceneryResources,
     analyzers::AnalyzerType,
-    core_optics::OpticNode,
+    core_optics::{OpticNode, SceneryResources},
     opm_document::{AnalyzerInfo, OpmDocument},
     types::api_types::NewAnalyzerInfo,
 };
@@ -283,7 +282,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 #[cfg(test)]
 mod test {
     use actix_web::{App, dev::Service, test, web::Data};
-    use opossum_core::{SceneryResources, nodes::Dummy};
+    use opossum_core::{core_optics::SceneryResources, nodes::Dummy};
 
     use crate::{app_state::AppState, scenery::NrOfNodes};
 

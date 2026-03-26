@@ -4,7 +4,7 @@
 use super::filter_data::filter_nan_infinite;
 use crate::{
     error::{OpmResult, OpossumError},
-    plottable::AxLims,
+    results::plottable::AxLims,
 };
 use approx::abs_diff_ne;
 use itertools::Itertools;

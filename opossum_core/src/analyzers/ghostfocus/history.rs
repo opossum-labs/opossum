@@ -12,8 +12,8 @@ use crate::{
     light::Rays,
     millimeter,
     nodes::OpticGraph,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     prelude::Proptype,
+    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::LockExt,
 };
 

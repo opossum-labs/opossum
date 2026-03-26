@@ -1,6 +1,7 @@
-use super::serialization::SerializableGraph;
+use super::{super::port_map::PortMap, serialization::SerializableGraph};
 use crate::{
-    SceneryResources, light_flow::LightFlow, optic_ref::OpticRef, port_map::PortMap,
+    core_optics::{OpticRef, SceneryResources},
+    light::LightFlow,
     prelude::PortType,
 };
 use petgraph::graph::DiGraph;

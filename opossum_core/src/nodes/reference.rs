@@ -5,13 +5,10 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
-    core_optics::OpticPorts,
+    core_optics::{NodeAttr, OpticNode, OpticPorts, OpticRef},
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
+    light::LightResult,
     nodes::NodeRegistration,
-    optic_ref::OpticRef,
     properties::Proptype,
     utils::{LockExt, geom_transformation::Isometry},
 };
@@ -197,8 +194,8 @@ mod test {
     use super::*;
     use crate::{
         core_optics::PortType,
+        light::LightData,
         light::spectrum_helper::create_he_ne_spec,
-        lightdata::LightData,
         nodes::{Dummy, NodeGroup, test_helper::test_helper::*},
         utils::LockExt,
     };

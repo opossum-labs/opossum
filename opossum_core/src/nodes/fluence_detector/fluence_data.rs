@@ -7,8 +7,8 @@ use crate::{
     error::OpmResult,
     geometry::hit_map::fluence_estimator::FluenceEstimator,
     joule,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
+    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{griddata::linspace, to_f64},
 };
 use nalgebra::{DMatrix, DVector};
@@ -200,8 +200,8 @@ mod test {
         J_per_cm2, J_per_m2,
         geometry::hit_map::fluence_estimator::FluenceEstimator,
         joule, meter,
-        plottable::{PlotType, Plottable},
         properties::Proptype,
+        results::plottable::{PlotType, Plottable},
     };
     use assert_matches::assert_matches;
     use nalgebra::{dmatrix, vector};

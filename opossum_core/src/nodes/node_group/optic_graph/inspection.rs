@@ -1,8 +1,7 @@
 use super::{ConnectionInfo, OpticGraph};
 use crate::{
-    core_optics::PortType,
+    core_optics::{OpticRef, PortType},
     error::{OpmResult, OpossumError},
-    optic_ref::OpticRef,
     utils::LockExt,
 };
 use petgraph::{Direction, algo::connected_components, graph::NodeIndex, visit::EdgeRef};

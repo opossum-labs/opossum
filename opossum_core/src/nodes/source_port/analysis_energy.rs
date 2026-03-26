@@ -1,8 +1,7 @@
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
     error::OpossumError,
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult},
     nodes::SourcePort,
     prelude::OpticNode,
 };

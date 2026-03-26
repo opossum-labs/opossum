@@ -3,8 +3,7 @@ use crate::{
     core_optics::optic_surface::OpticSurface,
     error::OpmResult,
     geometry::hit_map::fluence_estimator::FluenceEstimator,
-    light::Rays,
-    lightdata::ray_data_builder::RayDataBuilder,
+    light::{Rays, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
 };
 use serde::{Deserialize, Serialize};
@@ -96,7 +95,7 @@ mod test_ghost_focus_config {
     use super::GhostFocusConfig;
     use crate::{
         geometry::hit_map::fluence_estimator::FluenceEstimator,
-        lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
+        light::lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
     };
     #[test]
     fn default() {
@@ -118,7 +117,7 @@ mod test_ghost_focus_config {
     }
     #[test]
     fn test_map_and_get_source() {
-        use crate::lightdata::ray_data_source::{CollimatedSrc, PointSrc, RayDataSource};
+        use crate::light::lightdata::ray_data_source::{CollimatedSrc, PointSrc, RayDataSource};
         use uuid::Uuid;
         let mut config = GhostFocusConfig::default();
         let uuid = Uuid::new_v4();
@@ -134,7 +133,7 @@ mod test_ghost_focus_config {
 
     #[test]
     fn test_remove_source() {
-        use crate::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
+        use crate::light::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
         use uuid::Uuid;
         let mut config = GhostFocusConfig::default();
         let uuid = Uuid::new_v4();
@@ -149,7 +148,7 @@ mod test_ghost_focus_config {
     #[test]
     fn test_prune_source_map() {
         use crate::{
-            lightdata::ray_data_source::{CollimatedSrc, RayDataSource},
+            light::lightdata::ray_data_source::{CollimatedSrc, RayDataSource},
             nodes::NodeGroup,
         };
         use uuid::Uuid;

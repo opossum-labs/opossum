@@ -1,11 +1,9 @@
 use super::CylindricLens;
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::OpticNode,
-    core_optics::PortType,
+    core_optics::{OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult},
 };
 
 impl AnalysisRayTrace for CylindricLens {

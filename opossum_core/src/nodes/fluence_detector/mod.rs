@@ -10,7 +10,7 @@ use crate::{
     core_optics::OpticNode,
     error::OpmResult,
     geometry::hit_map::fluence_estimator::FluenceEstimator,
-    lightdata::LightData,
+    light::LightData,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
@@ -181,11 +181,12 @@ impl AnalysisRayTrace for FluenceDetector {}
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::analyzers::energy::EnergyConfig;
-    use crate::core_optics::PortType;
-    use crate::light_result::LightResult;
-    use crate::lightdata::LightData;
-    use crate::{light::spectrum_helper::create_he_ne_spec, nodes::test_helper::test_helper::*};
+    use crate::{
+        analyzers::energy::EnergyConfig,
+        core_optics::PortType,
+        light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
+        nodes::test_helper::test_helper::*,
+    };
     #[test]
     fn default() {
         let mut node = FluenceDetector::default();

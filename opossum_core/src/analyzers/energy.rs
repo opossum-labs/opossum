@@ -2,12 +2,14 @@
 #![warn(missing_docs)]
 use std::collections::HashMap;
 
-use super::Analyzer;
-use super::{AnalyzerRegistration, AnalyzerType};
-use crate::analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy};
-use crate::prelude::EnergyDataBuilder;
+use super::{Analyzer, AnalyzerRegistration, AnalyzerType};
 use crate::{
-    core_optics::OpticNode, error::OpmResult, light_result::LightResult, nodes::NodeGroup,
+    analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
+    core_optics::OpticNode,
+    error::OpmResult,
+    light::LightResult,
+    nodes::NodeGroup,
+    prelude::EnergyDataBuilder,
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
@@ -156,7 +158,7 @@ mod test {
     use crate::{
         analyzers::{Analyzer, energy::EnergyConfig},
         joule,
-        lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+        light::lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
         nanometer,
         nodes::{EnergyMeter, NodeGroup, SourcePort},
     };

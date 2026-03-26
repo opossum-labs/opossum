@@ -10,9 +10,11 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
     joule,
-    light::{Ray, Rays},
-    light_result::{LightRays, LightResult},
-    lightdata::{LightData, light_data_builder::LightDataBuilder},
+    light::{
+        LightResult, Ray, Rays,
+        light_result::LightRays,
+        lightdata::{LightData, light_data_builder::LightDataBuilder},
+    },
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
@@ -320,8 +322,9 @@ mod test {
     use super::*;
     use crate::{
         core_optics::PortType, distributions::position::Hexapolar,
-        light::spectrum_helper::create_he_ne_spec, lightdata::ray_data_source::RayDataSource,
-        nanometer, prelude::EnergyDataBuilder, utils::geom_transformation::Isometry,
+        light::lightdata::ray_data_source::RayDataSource,
+        light::spectrum_helper::create_he_ne_spec, nanometer, prelude::EnergyDataBuilder,
+        utils::geom_transformation::Isometry,
     };
     use assert_matches::assert_matches;
     use core::f64;

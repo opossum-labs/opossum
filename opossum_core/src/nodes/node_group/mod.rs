@@ -3,16 +3,20 @@ mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 mod optic_graph;
+mod port_map;
 use crate::{
-    SceneryResources,
     analyzers::Analyzable,
-    core_optics::{NodeAttr, OpticNode, OpticPorts, PortType, optic_surface::OpticSurface},
+    core_optics::{
+        NodeAttr, OpticNode, OpticPorts, OpticRef, PortType, SceneryResources,
+        optic_surface::OpticSurface,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light::Rays,
-    lightdata::{LightData, light_data_builder::LightDataBuilder},
+    light::{
+        Rays,
+        lightdata::{LightData, light_data_builder::LightDataBuilder},
+    },
     nodes::NodeRegistration,
-    optic_ref::OpticRef,
     properties::{Properties, Proptype},
     reporting::{
         analysis_report::AnalysisReport,
@@ -936,8 +940,7 @@ mod test {
         },
         core_optics::OpticNode,
         joule,
-        light::{Ray, Rays},
-        light_result::LightResult,
+        light::{LightResult, Ray, Rays},
         millimeter, nanometer,
         nodes::{Dummy, EnergyMeter, SourcePort, test_helper::test_helper::*},
         prelude::RayDataSource,

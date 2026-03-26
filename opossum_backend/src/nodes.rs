@@ -14,10 +14,8 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    OpticRef,
     analyzers::AnalyzerType,
-    core_optics::NodeAttr,
-    core_optics::PortType,
+    core_optics::{NodeAttr, OpticRef, PortType},
     error::OpossumError,
     meter,
     nodes::{create_node_ref, fluence_detector::Fluence},

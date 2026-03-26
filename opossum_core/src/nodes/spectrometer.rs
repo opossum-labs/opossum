@@ -10,8 +10,8 @@ use crate::{
     },
     core_optics::{NodeAttr, OpticNode},
     error::OpmResult,
+    light::LightData,
     light::{Rays, Spectrum},
-    lightdata::LightData,
     nanometer,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
@@ -252,10 +252,9 @@ mod test {
         distributions::position::Hexapolar,
         joule,
         light::{
-            Rays,
+            LightResult, Rays,
             spectrum_helper::{create_he_ne_spec, create_visible_spec},
         },
-        light_result::LightResult,
         nodes::{EnergyMeter, test_helper::test_helper::*},
     };
     use num::Zero;

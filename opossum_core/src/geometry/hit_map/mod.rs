@@ -24,8 +24,10 @@ use crate::{
     error::{OpmResult, OpossumError},
     meter,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
-    plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
+    results::plottable::{
+        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
+    },
     utils::{
         geom_transformation::Isometry,
         unit_format::{
@@ -616,8 +618,8 @@ mod test_hit_map {
             rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
         },
         joule, meter,
-        plottable::{PlotParameters, Plottable},
         properties::Proptype,
+        results::plottable::{PlotParameters, Plottable},
         utils::test_helper::test_helper::check_logs,
     };
 

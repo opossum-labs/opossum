@@ -22,25 +22,17 @@ pub mod error;
 pub mod generic_validators;
 mod kde;
 pub mod light;
-mod light_flow;
-mod light_result;
-pub mod lightdata;
 pub mod nodes;
 pub mod opm_document;
-mod optic_ref;
-mod optic_scenery_rsc;
-pub mod plottable;
-mod port_map;
 pub mod prelude;
 pub mod properties;
 pub mod refractive_index;
+pub mod results;
 pub mod types;
 // pub mod render;
 pub mod geometry;
 pub mod reporting;
 pub mod utils;
-pub use optic_ref::OpticRef;
-pub use optic_scenery_rsc::SceneryResources;
 
 use chrono::DateTime;
 /// Return the version information of the currently built OPOSSUM executable.

@@ -3,7 +3,7 @@ use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
     core_optics::OpticNode,
     error::OpmResult,
-    light_result::LightResult,
+    light::LightResult,
 };
 
 impl AnalysisEnergy for BeamSplitter {
@@ -46,9 +46,7 @@ mod test {
         analyzers::energy::{AnalysisEnergy, EnergyConfig},
         core_optics::OpticNode,
         joule,
-        light::spectrum_helper::create_he_ne_spec,
-        light_result::LightResult,
-        lightdata::LightData,
+        light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::{BeamSplitter, SplittingConfigBuilder},
         prelude::{

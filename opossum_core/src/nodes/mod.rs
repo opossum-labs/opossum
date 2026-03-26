@@ -72,8 +72,8 @@ pub use wedge::Wedge;
 
 use crate::{
     analyzers::Analyzable,
+    core_optics::OpticRef,
     error::{OpmResult, OpossumError},
-    optic_ref::OpticRef,
 };
 
 /// Struct to hold all info about a node type

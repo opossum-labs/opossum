@@ -18,17 +18,15 @@ use crate::{
     },
     core_optics::{NodeAttr, OpticNode},
     error::{OpmResult, OpossumError},
-    light::Spectrum,
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult, Spectrum},
     millimeter,
     nodes::NodeRegistration,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype, validator::Validator},
     reporting::{
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
     },
+    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
 };
 
 inventory::submit! {

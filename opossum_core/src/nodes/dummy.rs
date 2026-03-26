@@ -6,12 +6,9 @@ use crate::{
         RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
-    core_optics::PortType,
+    core_optics::{NodeAttr, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult},
     nodes::NodeRegistration,
 };
 
@@ -134,9 +131,8 @@ impl OpticNode for Dummy {
 mod test {
     use super::*;
     use crate::{
-        analyzers::energy::EnergyConfig, core_optics::PortType,
-        light::spectrum_helper::create_he_ne_spec, lightdata::LightData,
-        nodes::test_helper::test_helper::*,
+        analyzers::energy::EnergyConfig, core_optics::PortType, light::LightData,
+        light::spectrum_helper::create_he_ne_spec, nodes::test_helper::test_helper::*,
     };
     #[test]
     fn default() {

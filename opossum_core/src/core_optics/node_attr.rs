@@ -10,11 +10,10 @@ use uuid::Uuid;
 
 use crate::{
     J_per_cm2,
-    core_optics::OpticPorts,
+    core_optics::{OpticPorts, SceneryResources},
     error::{OpmResult, OpossumError},
     generic_validators::{AllFinite, AllPositive},
     nodes::fluence_detector::Fluence,
-    optic_scenery_rsc::SceneryResources,
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
     validated, validated_type,
