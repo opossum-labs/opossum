@@ -359,8 +359,10 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
                                 .map(NodeElement::pos)
                             {
                                 // Update node GUI position (only if really changed)
-                                workspace_processor
-                                    .send(GraphsWorkspaceAction::SyncNodePosition { pos, node_id:*node_id });
+                                workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition {
+                                    pos,
+                                    node_id: *node_id,
+                                });
                             }
                         }
                     } else if let Some((to_graph_id, _)) = droppable_groups {

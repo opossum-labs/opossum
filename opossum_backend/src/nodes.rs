@@ -144,9 +144,11 @@ fn upper_left_corner_of_nodes(
         let pos = match node {
             NodeCacheItem::Optical(optical_node) => {
                 let node = optical_node.optical_ref.lock_opm()?;
-                node.gui_position().unwrap_or(Point2::origin())
+                node.gui_position().unwrap_or_else(Point2::origin)
             }
-            NodeCacheItem::Analyzer(analyzer) => analyzer.gui_position().unwrap_or(Point2::origin()),
+            NodeCacheItem::Analyzer(analyzer) => {
+                analyzer.gui_position().unwrap_or_else(Point2::origin)
+            }
         };
 
         corner.x = corner.x.min(pos.x);
@@ -157,7 +159,7 @@ fn upper_left_corner_of_nodes(
 }
 
 pub fn copy_from_optic_ref(
-    scenery: &mut NodeGroup,
+    scenery: &NodeGroup,
     optic_ref: &OpticRef,
 ) -> Result<(OpticRef, Uuid), BackEndErrorResponse> {
     let node_to_copy_from = optic_ref.optical_ref.lock_opm()?;
@@ -190,7 +192,9 @@ pub fn get_shifted_pos_of_ref(
     shift: Point2<f64>,
 ) -> Result<(f64, f64), BackEndErrorResponse> {
     let node_to_copy_from = optic_ref.optical_ref.lock_opm()?;
-    let old_pos = node_to_copy_from.gui_position().unwrap_or(Point2::origin());
+    let old_pos = node_to_copy_from
+        .gui_position()
+        .unwrap_or_else(Point2::origin);
     let new_pos = (old_pos.x + shift.x, old_pos.y + shift.y);
     drop(node_to_copy_from);
     Ok(new_pos)
@@ -199,11 +203,11 @@ pub fn get_shifted_pos_of_ref(
 pub fn copy_optical_node(
     scenery: &mut NodeGroup,
     group_id: Uuid,
-    group_id_to_copy: Uuid, 
+    group_id_to_copy: Uuid,
     shift: Point2<f64>,
     optic_ref: &OpticRef,
     node_id_link: &mut HashMap<Uuid, Uuid>,
-    grouped_connect_info: &mut HashMap<Uuid, HashMap<Uuid,Vec<ConnectionInfo>>>,
+    grouped_connect_info: &mut HashMap<Uuid, HashMap<Uuid, Vec<ConnectionInfo>>>,
 ) -> Result<NodeInfo, BackEndErrorResponse> {
     let (new_node_ref, old_node_id) = copy_from_optic_ref(scenery, optic_ref)?;
 
@@ -225,7 +229,7 @@ pub fn copy_optical_node(
             .clone()
             .get_outgoing_connection_info_of_node(old_node_id);
 
-        if let Some(c_info_map) = grouped_connect_info.get_mut(&group_id){
+        if let Some(c_info_map) = grouped_connect_info.get_mut(&group_id) {
             c_info_map.insert(old_node_id, connect);
         }
     })?;
@@ -242,50 +246,59 @@ pub fn copy_optical_node(
     ))
 }
 
-
+#[allow(clippy::too_many_arguments)]
 pub fn copy_optical_nodes_recursive(
     scenery: &mut NodeGroup,
     group_id_to_insert: Uuid,
     group_id_to_copy: Uuid,
     shift: Point2<f64>,
-    copied_optical_nodes: Vec<OpticRef>,
-    node_id_link: &mut HashMap<Uuid, Uuid>,            
-    grouped_connect_info: &mut HashMap<Uuid, HashMap<Uuid,Vec<ConnectionInfo>>>, 
+    copied_optical_nodes: &[OpticRef],
+    node_id_link: &mut HashMap<Uuid, Uuid>,
+    grouped_connect_info: &mut HashMap<Uuid, HashMap<Uuid, Vec<ConnectionInfo>>>,
     grouped_node_infos: &mut HashMap<Uuid, Vec<NodeInfo>>,
 ) -> Result<(), BackEndErrorResponse> {
     let mut optical_nodes = Vec::new();
-    grouped_connect_info.insert(group_id_to_insert, HashMap::<Uuid,Vec<ConnectionInfo>>::new());
-    for node in copied_optical_nodes.iter() {
-        let group_nodes_opt = if let Ok(group) = node.optical_ref.lock_opm()?.as_group(){
-            Some(group.nodes().iter().cloned().map(|o| o.clone()).collect::<Vec<OpticRef>>())
-        }
-        else{
-            optical_nodes.push(copy_optical_node(
-                scenery,
-                group_id_to_insert,
-                group_id_to_copy, 
-                shift,
-                node,
-                node_id_link,
-                grouped_connect_info,
-            )?);
-            None
-        };
+    grouped_connect_info.insert(
+        group_id_to_insert,
+        HashMap::<Uuid, Vec<ConnectionInfo>>::new(),
+    );
+    for node in copied_optical_nodes {
+        let group_nodes_opt = node.optical_ref.lock_opm()?.as_group().map_or_else(
+            |_| None,
+            |group| {
+                Some(
+                    group
+                        .nodes()
+                        .iter()
+                        .copied()
+                        .cloned()
+                        .collect::<Vec<OpticRef>>(),
+                )
+            },
+        );
+        let copied_node = copy_optical_node(
+            scenery,
+            group_id_to_insert,
+            group_id_to_copy,
+            shift,
+            node,
+            node_id_link,
+            grouped_connect_info,
+        )?;
+        let copied_node_id = copied_node.uuid();
+        optical_nodes.push(copied_node);
 
-        if let Some(nodes_in_group) =group_nodes_opt{
-            let copied_node = copy_optical_node(
+        if let Some(nodes_in_group) = group_nodes_opt {
+            copy_optical_nodes_recursive(
                 scenery,
-                group_id_to_insert,
-                group_id_to_copy,
-                shift,
-                node,
+                copied_node_id,
+                node.uuid(),
+                Point2::origin(),
+                &nodes_in_group,
                 node_id_link,
                 grouped_connect_info,
+                grouped_node_infos,
             )?;
-            let copied_node_id = copied_node.uuid();
-            optical_nodes.push(copied_node);
-
-            copy_optical_nodes_recursive(scenery, copied_node_id, node.uuid(), Point2::origin(), nodes_in_group, node_id_link, grouped_connect_info, grouped_node_infos)?;
         }
     }
     grouped_node_infos.insert(group_id_to_insert, optical_nodes);
@@ -299,10 +312,7 @@ fn copy_analyzer(
 ) -> AnalyzerInfo {
     let old_pos = analyzer.gui_position().unwrap();
 
-    let new_pos = Point2::new(
-        old_pos.x + shift.x,
-        old_pos.y + shift.y,
-    );
+    let new_pos = Point2::new(old_pos.x + shift.x, old_pos.y + shift.y);
 
     let new_analyzer = AnalyzerInfo::new(analyzer.analyzer_type().clone(), Uuid::new_v4(), new_pos);
 
@@ -339,7 +349,7 @@ fn set_copied_connections(
 ) -> Result<Vec<ConnectInfo>, BackEndErrorResponse> {
     let mut result = Vec::new();
 
-    for (_, conns) in connections {
+    for conns in connections.values() {
         let enriched: Vec<_> = conns
             .iter()
             .map(|c| {
@@ -388,7 +398,6 @@ fn resolve_references(
     scenery: &mut NodeGroup,
     node_id_link: &HashMap<Uuid, Uuid>,
 ) -> Result<(), BackEndErrorResponse> {
-
     for new_id in node_id_link.values() {
         let old_ref_id_opt: Option<Uuid> = scenery
             .with_node_attr(*new_id, |attr| {
@@ -443,7 +452,14 @@ fn resolve_references(
 async fn post_paste_nodes(
     data: web::Data<AppState>,
     node_paste_info: web::Json<(Uuid, (f64, f64))>,
-) -> Result<Json<(HashMap<Uuid, Vec<NodeInfo>>, Vec<AnalyzerInfo>, HashMap<Uuid, Vec<ConnectInfo>>)>, BackEndErrorResponse> {
+) -> Result<
+    Json<(
+        HashMap<Uuid, Vec<NodeInfo>>,
+        Vec<AnalyzerInfo>,
+        HashMap<Uuid, Vec<ConnectInfo>>,
+    )>,
+    BackEndErrorResponse,
+> {
     let (group_id, node_pos) = node_paste_info.into_inner();
     let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == group_id;
 
@@ -452,39 +468,48 @@ async fn post_paste_nodes(
     drop(copied_nodes);
     let shift = Point2::new(node_pos.0 - min_pos.x, node_pos.1 - min_pos.y);
 
-
     let mut copied_optical_nodes = Vec::<OpticRef>::new();
     let mut copied_analyzer_nodes = Vec::<AnalyzerInfo>::new();
 
-    for cache in data.node_copy_cache.lock().iter(){
-        match  cache{
+    for cache in data.node_copy_cache.lock().iter() {
+        match cache {
             NodeCacheItem::Optical(optic_ref) => copied_optical_nodes.push(optic_ref.clone()),
-            NodeCacheItem::Analyzer(analyzer_info) => copied_analyzer_nodes.push(analyzer_info.clone()),
+            NodeCacheItem::Analyzer(analyzer_info) => {
+                copied_analyzer_nodes.push(analyzer_info.clone());
+            }
         }
     }
 
     let mut analyzers = Vec::new();
     if paste_in_scenery {
-        for analyzer in copied_analyzer_nodes.iter() {
+        for analyzer in &copied_analyzer_nodes {
             analyzers.push(copy_analyzer(&data, shift, analyzer));
-        }        
+        }
     }
 
-    let mut document =  data.document.lock();
-    let mut scenery = document.scenery_mut();
-    let mut grouped_node_infos =  HashMap::<Uuid, Vec<NodeInfo>>::new();
-    let mut grouped_connect_info =  HashMap::<Uuid, Vec<ConnectInfo>>::new();
-    let mut grouped_connections=  HashMap::<Uuid, HashMap::<Uuid, Vec<ConnectionInfo>>>::new();
-    let mut node_id_link    = HashMap::<Uuid, Uuid>::new();
-    copy_optical_nodes_recursive(&mut scenery, group_id, group_id, shift, copied_optical_nodes, &mut node_id_link, &mut grouped_connections, &mut grouped_node_infos)?;
+    let mut document = data.document.lock();
+    let scenery = document.scenery_mut();
+    let mut grouped_node_infos = HashMap::<Uuid, Vec<NodeInfo>>::new();
+    let mut grouped_connect_info = HashMap::<Uuid, Vec<ConnectInfo>>::new();
+    let mut grouped_connections = HashMap::<Uuid, HashMap<Uuid, Vec<ConnectionInfo>>>::new();
+    let mut node_id_link = HashMap::<Uuid, Uuid>::new();
+    copy_optical_nodes_recursive(
+        scenery,
+        group_id,
+        group_id,
+        shift,
+        &copied_optical_nodes,
+        &mut node_id_link,
+        &mut grouped_connections,
+        &mut grouped_node_infos,
+    )?;
 
     resolve_references(scenery, &node_id_link)?;
-    for (group_id, connections) in grouped_connections.iter_mut(){
+    for (g_id, connections) in &mut grouped_connections {
         remap_connections(connections, &node_id_link);
-        let connect_info = set_copied_connections(scenery, *group_id, connections)?;
-        grouped_connect_info.insert(*group_id, connect_info);
+        let connect_info = set_copied_connections(scenery, *g_id, connections)?;
+        grouped_connect_info.insert(*g_id, connect_info);
     }
-    
 
     Ok(Json((grouped_node_infos, analyzers, grouped_connect_info)))
 }
