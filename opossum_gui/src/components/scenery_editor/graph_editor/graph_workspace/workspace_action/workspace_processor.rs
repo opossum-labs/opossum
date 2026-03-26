@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs, path::PathBuf};
+use std::{collections::{HashMap, HashSet}, fs, path::PathBuf};
 
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use futures_util::StreamExt;
@@ -267,13 +267,16 @@ async fn process_paste_node(
     eval_action_run(
         api::post_paste_nodes(graph_id, pos).await,
         Some(
-            move |(optical_nodes, analyzer_nodes, edges): (
-                Vec<NodeInfo>,
-                Vec<AnalyzerInfo>,
-                Vec<ConnectInfo>,
+            move |(optical_nodes, analyzer_nodes, edges):
+            (
+                HashMap<Uuid, Vec<NodeInfo>>, 
+                Vec<AnalyzerInfo>, 
+                HashMap<Uuid, Vec<ConnectInfo>>
             )| {
-                for n in &optical_nodes {
-                    ws_handler.nodes.add_optical_node(n.clone(), graph_id);
+                for (graph_id, n) in optical_nodes.iter() {
+                    for node in n{
+                        ws_handler.nodes.add_optical_node(node.clone(), *graph_id);
+                    }
                 }
                 for a in &analyzer_nodes {
                     let analyzer_id = a.id();
@@ -283,8 +286,10 @@ async fn process_paste_node(
                         graph_id,
                     );
                 }
-                for edge in edges {
-                    ws_handler.edges.add_edge(edge, graph_id);
+                for (graph_id, edges) in edges.iter() {
+                    for edge in edges{
+                        ws_handler.edges.add_edge(edge.clone(), *graph_id);
+                    }
                 }
             },
         ),
