@@ -6,7 +6,7 @@ use crate::{
     analyzers::propagation_strategy::MissedSurfaceStrategy,
     apertures::Aperture,
     centimeter,
-    core_optics::optic_surface::OpticSurface,
+    core_optics::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
     degree,
     distributions::{
         energy::EnergyDistribution,
@@ -15,7 +15,6 @@ use crate::{
         spectral::SpectralDistribution,
     },
     error::{OpmResult, OpossumError},
-    geometry::hit_map::fluence_estimator::FluenceEstimator,
     joule,
     light::{Ray, Spectrum},
     meter, millimeter, nanometer,

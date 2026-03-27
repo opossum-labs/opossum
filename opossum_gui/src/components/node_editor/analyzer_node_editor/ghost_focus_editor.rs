@@ -7,7 +7,7 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    geometry::hit_map::fluence_estimator::FluenceEstimator,
+    core_optics::hit_map::fluence_estimator::FluenceEstimator,
     prelude::{AnalyzerType, GhostFocusConfig},
     utils::default_from_name::DefaultFromName,
 };

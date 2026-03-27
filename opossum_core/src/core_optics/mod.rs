@@ -1,3 +1,4 @@
+pub mod hit_map;
 pub mod node_attr;
 pub mod optic_node;
 pub mod optic_ports;

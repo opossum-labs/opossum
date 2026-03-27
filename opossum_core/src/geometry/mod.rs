@@ -13,7 +13,6 @@ mod plane;
 mod sphere;
 
 pub mod geo_surface;
-pub mod hit_map;
 
 pub use cylinder::Cylinder;
 pub use parabola::Parabola;

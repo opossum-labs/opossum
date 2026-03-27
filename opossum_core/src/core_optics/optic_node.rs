@@ -9,15 +9,17 @@ use crate::{
     analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
     apertures::Aperture,
     coatings::CoatingType,
-    core_optics::{NodeAttr, OpticPorts, PortType, SceneryResources, optic_surface::OpticSurface},
+    core_optics::{
+        NodeAttr, OpticPorts, PortType, SceneryResources, hit_map::HitMap,
+        optic_surface::OpticSurface,
+    },
     error::{OpmResult, OpossumError},
-    geometry::{Plane, geo_surface::GeoSurfaceRef, hit_map::HitMap},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
     light::{LightData, LightResult, Rays},
     nodes::{NodeGroup, NodeReference, fluence_detector::Fluence},
     properties::{Properties, Proptype},
     refractive_index::RefractiveIndexType,
-    reporting::Dottable,
-    reporting::node_report::NodeReport,
+    reporting::{Dottable, node_report::NodeReport},
     utils::{LockExt, geom_transformation::Isometry},
 };
 use std::collections::HashMap;

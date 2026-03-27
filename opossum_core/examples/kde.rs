@@ -1,9 +1,9 @@
 use opossum_core::{
-    distributions::position::{Hexapolar, PositionDistribution},
-    geometry::hit_map::{
+    core_optics::hit_map::{
         fluence_estimator::FluenceEstimator,
         rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
     },
+    distributions::position::{Hexapolar, PositionDistribution},
     prelude::*,
     reporting::plottable::{Plottable, PltBackEnd},
 };

@@ -1,11 +1,11 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use opossum_core::prelude::*;
 use opossum_core::{
-    distributions::position::{Hexapolar, PositionDistribution, SobolDist},
-    geometry::hit_map::{
+    core_optics::hit_map::{
         fluence_estimator::FluenceEstimator,
         rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
     },
+    distributions::position::{Hexapolar, PositionDistribution, SobolDist},
+    prelude::*,
 };
 use uom::si::f64::Ratio;
 

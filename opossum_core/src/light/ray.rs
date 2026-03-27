@@ -15,9 +15,11 @@ use uom::si::{
 
 use crate::{
     analyzers::propagation_strategy::MissedSurfaceStrategy,
-    core_optics::optic_surface::OpticSurface,
+    core_optics::{
+        hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
+        optic_surface::OpticSurface,
+    },
     error::{OpmResult, OpossumError},
-    geometry::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
     joule,
     light::{FluenceRays, Rays},
     meter,

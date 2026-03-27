@@ -8,15 +8,13 @@ use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
     apertures::Aperture,
     coatings::CoatingType,
-    error::{OpmResult, OpossumError},
-    geometry::{
-        geo_surface::GeoSurfaceRef,
-        hit_map::{
-            HitMap,
-            fluence_estimator::FluenceEstimator,
-            rays_hit_map::{HitPoint, RaysHitMap},
-        },
+    core_optics::hit_map::{
+        HitMap,
+        fluence_estimator::FluenceEstimator,
+        rays_hit_map::{HitPoint, RaysHitMap},
     },
+    error::{OpmResult, OpossumError},
+    geometry::geo_surface::GeoSurfaceRef,
     light::Rays,
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,

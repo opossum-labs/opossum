@@ -6,10 +6,8 @@ use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
+    core_optics::{NodeAttr, OpticNode, hit_map::fluence_estimator::FluenceEstimator},
     error::OpmResult,
-    geometry::hit_map::fluence_estimator::FluenceEstimator,
     light::LightData,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},

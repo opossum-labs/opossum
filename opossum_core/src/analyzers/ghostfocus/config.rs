@@ -1,8 +1,8 @@
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
+    core_optics::hit_map::fluence_estimator::FluenceEstimator,
     core_optics::optic_surface::OpticSurface,
     error::OpmResult,
-    geometry::hit_map::fluence_estimator::FluenceEstimator,
     light::{Rays, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
 };
@@ -94,7 +94,7 @@ impl PropagationStrategy for GhostFocusConfig {
 mod test_ghost_focus_config {
     use super::GhostFocusConfig;
     use crate::{
-        geometry::hit_map::fluence_estimator::FluenceEstimator,
+        core_optics::hit_map::fluence_estimator::FluenceEstimator,
         light::lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
     };
     #[test]

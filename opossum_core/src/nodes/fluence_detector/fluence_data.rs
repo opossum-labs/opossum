@@ -4,8 +4,8 @@ use std::ops::Range;
 use super::Fluence;
 use crate::{
     J_per_cm2,
+    core_optics::hit_map::fluence_estimator::FluenceEstimator,
     error::OpmResult,
-    geometry::hit_map::fluence_estimator::FluenceEstimator,
     joule,
     properties::Proptype,
     reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
@@ -198,7 +198,7 @@ mod test {
     use super::FluenceData;
     use crate::{
         J_per_cm2, J_per_m2,
-        geometry::hit_map::fluence_estimator::FluenceEstimator,
+        core_optics::hit_map::fluence_estimator::FluenceEstimator,
         joule, meter,
         properties::Proptype,
         reporting::plottable::{PlotType, Plottable},

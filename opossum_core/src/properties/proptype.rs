@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     apertures::Aperture,
+    core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     error::{OpmResult, OpossumError},
-    geometry::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     light::Spectrum,
     light::lightdata::{
         LightData,
