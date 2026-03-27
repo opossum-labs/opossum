@@ -25,7 +25,7 @@ use crate::{
     meter,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     properties::Proptype,
-    results::plottable::{
+    reporting::plottable::{
         AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
     },
     utils::{
@@ -619,7 +619,7 @@ mod test_hit_map {
         },
         joule, meter,
         properties::Proptype,
-        results::plottable::{PlotParameters, Plottable},
+        reporting::plottable::{PlotParameters, Plottable},
         utils::test_helper::test_helper::check_logs,
     };
 

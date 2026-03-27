@@ -22,11 +22,11 @@ use crate::{
     millimeter,
     nodes::NodeRegistration,
     properties::{Properties, Proptype, validator::Validator},
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     reporting::{
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
     },
-    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
 };
 
 inventory::submit! {

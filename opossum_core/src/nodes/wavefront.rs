@@ -20,7 +20,7 @@ use crate::{
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
-    results::plottable::{
+    reporting::plottable::{
         AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
     },
     utils::{

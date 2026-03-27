@@ -1,7 +1,7 @@
 use super::{Aperture, Shape};
 use crate::{
     apertures::CircleShape,
-    results::plottable::{PlotData, PlotSeries},
+    reporting::plottable::{PlotData, PlotSeries},
     utils::math_distribution_functions::ellipse,
 };
 use nalgebra::{Matrix2xX, Point2};

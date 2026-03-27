@@ -9,7 +9,7 @@ use crate::{
     kde::Kde,
     meter, micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
-    results::plottable::AxLims,
+    reporting::plottable::AxLims,
     utils::{
         geom_transformation::Isometry,
         griddata::{

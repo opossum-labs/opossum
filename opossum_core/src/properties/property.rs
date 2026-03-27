@@ -2,7 +2,7 @@ use super::Proptype;
 use crate::{
     error::{OpmResult, OpossumError},
     properties::validator::Validator,
-    results::plottable::{Plottable, PltBackEnd},
+    reporting::plottable::{Plottable, PltBackEnd},
 };
 use nalgebra::vector;
 use serde::{Deserialize, Serialize};

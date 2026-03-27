@@ -5,7 +5,7 @@ use opossum_core::{
         rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
     },
     prelude::*,
-    results::plottable::{Plottable, PltBackEnd},
+    reporting::plottable::{Plottable, PltBackEnd},
 };
 use std::path::Path;
 use uom::si::f64::Ratio;

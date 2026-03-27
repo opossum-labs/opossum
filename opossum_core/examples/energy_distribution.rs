@@ -4,7 +4,7 @@ use opossum_core::{
     distributions::energy::general_gaussian::General2DGaussian,
     distributions::position::FibonacciRectangle,
     light::Rays,
-    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     utils::geom_transformation::Isometry,
 };
 use plotters::style::RGBAColor;

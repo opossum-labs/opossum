@@ -8,7 +8,7 @@ use crate::{
     geometry::hit_map::fluence_estimator::FluenceEstimator,
     joule,
     properties::Proptype,
-    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{griddata::linspace, to_f64},
 };
 use nalgebra::{DMatrix, DVector};
@@ -201,7 +201,7 @@ mod test {
         geometry::hit_map::fluence_estimator::FluenceEstimator,
         joule, meter,
         properties::Proptype,
-        results::plottable::{PlotType, Plottable},
+        reporting::plottable::{PlotType, Plottable},
     };
     use assert_matches::assert_matches;
     use nalgebra::{dmatrix, vector};

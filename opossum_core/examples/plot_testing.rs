@@ -3,7 +3,7 @@ use opossum_core::{
     distributions::position::Hexapolar,
     light::Rays,
     prelude::*,
-    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     utils::geom_transformation::Isometry,
 };
 use plotters::style::RGBAColor;

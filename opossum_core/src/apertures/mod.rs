@@ -32,7 +32,7 @@ mod stack;
 use crate::{
     error::OpmResult,
     properties::Proptype,
-    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::math_distribution_functions::ellipse,
 };
 use core::f64;

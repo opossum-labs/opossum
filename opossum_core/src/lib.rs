@@ -26,7 +26,6 @@ pub mod opm_document;
 pub mod prelude;
 pub mod properties;
 pub mod refractive_index;
-pub mod results;
 pub mod types;
 // pub mod render;
 pub mod geometry;

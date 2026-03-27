@@ -11,12 +11,12 @@ use crate::{
     nanometer,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
+    reporting::plottable::{
+        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
+    },
     reporting::{
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
-    },
-    results::plottable::{
-        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
     },
     utils::{
         geom_transformation::Isometry,

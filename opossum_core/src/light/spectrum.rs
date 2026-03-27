@@ -9,7 +9,7 @@ use crate::{
     micrometer,
     prelude::EnergyLaserLines,
     properties::Proptype,
-    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{to_f64, try_f64_to_usize},
     validated, validated_type, validated_vec, validated_vec_type,
 };

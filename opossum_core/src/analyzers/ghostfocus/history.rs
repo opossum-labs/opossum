@@ -13,7 +13,7 @@ use crate::{
     millimeter,
     nodes::OpticGraph,
     prelude::Proptype,
-    results::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::LockExt,
 };
 
