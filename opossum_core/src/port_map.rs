@@ -89,6 +89,10 @@ impl PortMap {
     pub fn contains_node(&self, node_id: Uuid) -> bool {
         self.0.iter().any(|p| p.1.0 == node_id)
     }
+
+    pub fn contains_port_of_node(&self, node_id: Uuid, port_name: &str) -> bool {
+        self.0.iter().any(|(_, (id, name))| *id == node_id && name ==port_name )
+    }
     /// Return a vector of port (external -> internal) port assignments for the given node.
     pub fn assigned_ports_for_node(&self, node_id: Uuid) -> Vec<(String, String)> {
         self.0

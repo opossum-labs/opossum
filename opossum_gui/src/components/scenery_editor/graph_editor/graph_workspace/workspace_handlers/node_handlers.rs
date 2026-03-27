@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use crate::components::scenery_editor::graph_editor::graph_workspace::{
-    GraphsWorkspaceState,
-    workspace_handlers::helper_functions::{for_each_tab, with_graph_store, with_tab},
+use crate::components::scenery_editor::graph_editor::{
+    graph_workspace::{
+        GraphsWorkspaceState,
+        workspace_handlers::helper_functions::{for_each_tab, with_graph_store, with_tab},
+    },
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{
@@ -23,6 +25,7 @@ pub struct NodeHandlers {
     add_group_nodes: EventHandler<(Uuid, Vec<NodeInfo>)>,
     add_group_analyzers: EventHandler<(Uuid, Vec<AnalyzerInfo>)>,
     remove_droppable_group: EventHandler<()>,
+    update_group_ports: EventHandler<(Vec<String>, Vec<String>, Uuid)>
 }
 
 impl NodeHandlers {
@@ -38,7 +41,12 @@ impl NodeHandlers {
             add_group_nodes: add_group_nodes_handler(workspace),
             add_group_analyzers: add_group_analyzers_handler(workspace),
             remove_droppable_group: remove_droppable_group_handler(workspace),
+            update_group_ports: update_group_ports_handler(workspace)
+
         }
+    }
+    pub fn update_group_ports(&self, input_ports: Vec<String>, output_ports: Vec<String>, group_id: Uuid){
+        self.update_group_ports.call((input_ports, output_ports, group_id));
     }
     pub fn add_optical_node(&self, node: NodeInfo, graph_id: Uuid) {
         self.add_optical_node.call((node, graph_id));
@@ -81,6 +89,22 @@ impl NodeHandlers {
     pub fn remove_droppable_group(&self) {
         self.remove_droppable_group.call(());
     }
+}
+
+fn update_group_ports_handler(mut workspace: Signal<GraphsWorkspaceState>) 
+    -> EventHandler<(Vec<String>, Vec<String>, Uuid)>{
+        EventHandler::new(move |(input_ports, output_ports, group_id):(Vec<String>, Vec<String>, Uuid)|{
+            let ws = workspace.write();
+
+            if let Some(graph_state)= ws.get_graph_state(group_id){
+                let parent_hierarchy_pos = graph_state.read().graph_info.hierarchy.len()-2;
+                let (parent_id,_) = graph_state.read().graph_info.hierarchy[parent_hierarchy_pos];
+                
+                if let Some(mut graph_store) = ws.get_graph_store(parent_id){
+                    graph_store.write().update_ports_of_node(group_id, input_ports, output_ports);
+                }
+            }
+        })
 }
 
 fn add_optical_node_handler(

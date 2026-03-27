@@ -3,12 +3,9 @@ use std::time::{Duration, Instant};
 use crate::{
     CONTEXT_MENU,
     components::scenery_editor::{
-        NodeElement,
-        constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
-        edges::edges_component::EdgeCreation,
-        graph_editor::graph_workspace::{
+        NodeElement, constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY}, edges::edges_component::EdgeCreation, graph_editor::graph_workspace::{
             DragStatus, EditorState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
-        },
+        }
     },
 };
 use dioxus::{

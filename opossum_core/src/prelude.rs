@@ -22,6 +22,7 @@ pub use super::nodes::{
 pub use super::opm_document::OpmDocument;
 pub use super::optic_node::{Alignable, OpticNode};
 pub use super::optic_ports::PortType;
+pub use super::port_map::PortMap;
 pub use super::properties::{Properties, Property, Proptype};
 pub use super::refractive_index::{
     RefrIndexConst, RefrIndexSchott, RefrIndexSellmeier1, RefractiveIndex,

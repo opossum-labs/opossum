@@ -141,7 +141,7 @@ pub fn MenuBar(
                             {
                                 if *root_tab_open.read() {
                                     rsx! {
-                                        li { class: "dropdown-submenu", hidden: !*root_tab_open.read(),
+                                        li { class: "dropdown-submenu",
                                             a {
                                                 class: "dropdown-item d-flex justify-content-between align-items-center",
                                                 role: "button",

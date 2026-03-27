@@ -2,7 +2,7 @@ use actix_web::{
     post,
     web::{self, Json, PathConfig},
 };
-use opossum_core::types::api_types::{ConnectInfo, NodeInfo};
+use opossum_core::{ prelude::{OpticNode, PortType}, types::api_types::{ConnectInfo, NodeInfo}};
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
@@ -171,9 +171,50 @@ pub async fn post_drop_nodes_into_group(
     Ok(())
 }
 
+#[utoipa::path(tag = "group",
+    params(
+        ("uuid" = Uuid, Path, description = "Uuid of a group whose port shouldbe mapped to a port of an internal node"),
+    ),
+    request_body(content = String,
+        description = "Node uuid of internal node, tuple of internal port name of node and external port name pof group and the port type",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, description = "Node port successfully mapped to group port"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[post("/{uuid}/port_map")]
+pub async fn add_port_map(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    port_map_info: web::Json<(Uuid, (String, String), PortType)>)
+    -> Result<Json<(Vec<String>, Vec<String>)>, BackEndErrorResponse>{
+    let group_id = path.into_inner();
+    let (node_id_to_map, (internal_port_name, external_port_name), port_type) = port_map_info.into_inner();
+
+    let mut document = data.document.lock();
+    let scenery = document.scenery_mut();
+    
+    let ports = scenery.with_group_node_mut(group_id, |g| {
+        match port_type{
+        PortType::Input => g.map_input_port(node_id_to_map, &internal_port_name, &external_port_name),
+        PortType::Output => g.map_output_port(node_id_to_map, &internal_port_name, &external_port_name),
+    }?;
+    let ports = g.ports();
+    let inputs = ports.ports(&PortType::Input).keys().cloned().collect::<Vec<String>>();
+    let outputs = ports.ports(&PortType::Output).keys().cloned().collect::<Vec<String>>();
+    Ok::<(Vec<String>, Vec<String>), BackEndErrorResponse>((inputs, outputs))
+}
+)??;
+
+
+    Ok(Json(ports))
+}
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_convert_nodes_to_group);
     cfg.service(post_drop_nodes_into_group);
+    cfg.service(add_port_map);
     cfg.app_data(PathConfig::default().error_handler(|err, _req| {
         BackEndErrorResponse::new(400, "parse error", &err.to_string()).into()
     }));

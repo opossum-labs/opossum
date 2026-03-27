@@ -18,6 +18,13 @@ pub enum NodeEditorCommand {
     CenterGraph,
     ZoomToFit,
     ConvertToGroup { nodes: Vec<Uuid>, graph_id: Uuid },
+    MapNodePort {
+        port_type: PortType,
+        group_port_name: String,
+        mapped_node_port_name: String,
+        mapped_node_id: Uuid,
+        group_id: Uuid
+    },
 }
 
 pub fn use_node_editor_command(
@@ -82,6 +89,9 @@ pub fn use_node_editor_command(
             }
             NodeEditorCommand::ConvertToGroup { nodes, graph_id } => {
                 workspace_processor.send(GraphsWorkspaceAction::ConvertToGroup { nodes, graph_id });
+            }
+            NodeEditorCommand::MapNodePort { port_type, group_port_name, mapped_node_port_name, mapped_node_id, group_id } => {
+                workspace_processor.send(GraphsWorkspaceAction::MapNodePort { port_type, group_port_name, mapped_node_port_name, mapped_node_id, group_id });
             }
         }
         node_editor_command_handler.call(None);
