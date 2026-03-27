@@ -1,6 +1,16 @@
-use crate::{CONTEXT_MENU, components::{context_menu::cx_menu::{CxMenu, CxtCommand}, scenery_editor::{
-    EditorState, GraphStore, GraphsWorkspaceState, constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH}, edges::edges_component::{EdgePort, NewEdgeCreationStart}, graph_editor::DragStatus, node::NodeElement
-}}};
+use crate::{
+    CONTEXT_MENU,
+    components::{
+        context_menu::cx_menu::{CxMenu, CxtCommand},
+        scenery_editor::{
+            EditorState, GraphStore, GraphsWorkspaceState,
+            constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
+            edges::edges_component::{EdgePort, NewEdgeCreationStart},
+            graph_editor::DragStatus,
+            node::NodeElement,
+        },
+    },
+};
 use dioxus::prelude::*;
 use opossum_core::prelude::*;
 use uuid::Uuid;
@@ -17,10 +27,10 @@ impl Ports {
             output_ports,
         }
     }
-    pub fn set_input_ports(&mut self, ports: Vec<String>){
+    pub fn set_input_ports(&mut self, ports: Vec<String>) {
         self.input_ports = ports;
     }
-    pub fn set_output_ports(&mut self, ports: Vec<String>){
+    pub fn set_output_ports(&mut self, ports: Vec<String>) {
         self.output_ports = ports;
     }
     #[must_use]
@@ -63,9 +73,15 @@ pub fn NodePort(
         "input-port"
     } else {
         "output-port"
-    }.to_string();
+    }
+    .to_string();
 
-    if graph_store.read().mapped_ports.read().contains_port_of_node(node.id(), &port_name){
+    if graph_store
+        .read()
+        .mapped_ports
+        .read()
+        .contains_port_of_node(node.id(), &port_name)
+    {
         port_class += " mapped-port";
     }
 

@@ -7,13 +7,16 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq)]
 pub enum CxtCommand {
     AddRefNode(NewRefNode),
-    ConvertToGroup { nodes: Vec<Uuid>, graph_id: Uuid },
+    ConvertToGroup {
+        nodes: Vec<Uuid>,
+        graph_id: Uuid,
+    },
     MapNodePort {
         port_type: PortType,
         group_port_name: String,
         mapped_node_port_name: String,
         mapped_node_id: Uuid,
-        group_id: Uuid
+        group_id: Uuid,
     },
 }
 

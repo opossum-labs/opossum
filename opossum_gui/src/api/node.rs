@@ -426,11 +426,16 @@ pub async fn add_port_map(
     group_port_name: String,
     mapped_node_port_name: String,
     mapped_node_id: Uuid,
-    group_id: Uuid) -> Result<(Vec<String>, Vec<String>), String> {
+    group_id: Uuid,
+) -> Result<(Vec<String>, Vec<String>), String> {
     HTTP_API_CLIENT()
         .post::<(Uuid, (String, String), PortType), (Vec<String>, Vec<String>)>(
             &format!("/api/groups/{}/port_map", group_id.as_simple()),
-            (mapped_node_id, (mapped_node_port_name, group_port_name), port_type),
+            (
+                mapped_node_id,
+                (mapped_node_port_name, group_port_name),
+                port_type,
+            ),
         )
         .await
 }

@@ -21,7 +21,7 @@ pub enum GraphsWorkspaceAction {
         group_port_name: String,
         mapped_node_port_name: String,
         mapped_node_id: Uuid,
-        group_id: Uuid
+        group_id: Uuid,
     },
     DeleteRootScenery,
     OpenGroupTab {

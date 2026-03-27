@@ -7,7 +7,9 @@ use std::{
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use futures_util::StreamExt;
 use opossum_core::{
-    opm_document::AnalyzerInfo, prelude::{AnalyzerType, PortType}, types::api_types::{ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo}
+    opm_document::AnalyzerInfo,
+    prelude::{AnalyzerType, PortType},
+    types::api_types::{ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo},
 };
 use uuid::Uuid;
 
@@ -19,12 +21,10 @@ use crate::{
         constants::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
         },
-        graph_editor::{
-            graph_workspace::{
-                GraphsWorkspaceState, WorkSpaceSignalHandlers,
-                workspace_action::GraphsWorkspaceAction,
-                workspace_state::{GraphInfo, optimize_layout_and_sync},
-            },
+        graph_editor::graph_workspace::{
+            GraphsWorkspaceState, WorkSpaceSignalHandlers,
+            workspace_action::GraphsWorkspaceAction,
+            workspace_state::{GraphInfo, optimize_layout_and_sync},
         },
         node::MIN_NODE_BODY_HEIGHT,
     },
@@ -193,7 +193,13 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
-                    GraphsWorkspaceAction::MapNodePort { port_type, group_port_name, mapped_node_port_name, mapped_node_id, group_id } => {
+                    GraphsWorkspaceAction::MapNodePort {
+                        port_type,
+                        group_port_name,
+                        mapped_node_port_name,
+                        mapped_node_id,
+                        group_id,
+                    } => {
                         process_add_port_map(
                             port_type,
                             group_port_name,
@@ -203,7 +209,7 @@ pub fn use_workspace_processor(
                             workspace_handlers,
                         )
                         .await;
-                    },
+                    }
                 }
             }
         }
@@ -521,11 +527,26 @@ async fn process_add_port_map(
     mapped_node_id: Uuid,
     group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
-){
-    match api::add_port_map(port_type, group_port_name.clone(), mapped_node_port_name.clone(), mapped_node_id, group_id).await {
+) {
+    match api::add_port_map(
+        port_type,
+        group_port_name.clone(),
+        mapped_node_port_name.clone(),
+        mapped_node_id,
+        group_id,
+    )
+    .await
+    {
         Ok((input_ports, output_ports)) => {
-            ws_handler.workspace.add_port_map(group_id, group_port_name, mapped_node_port_name, mapped_node_id);
-            ws_handler.nodes.update_group_ports(input_ports, output_ports, group_id);
+            ws_handler.workspace.add_port_map(
+                group_id,
+                group_port_name,
+                mapped_node_port_name,
+                mapped_node_id,
+            );
+            ws_handler
+                .nodes
+                .update_group_ports(input_ports, output_ports, group_id);
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);

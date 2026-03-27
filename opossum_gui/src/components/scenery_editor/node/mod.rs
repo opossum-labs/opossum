@@ -4,13 +4,14 @@ use dioxus::{
     prelude::*,
 };
 use opossum_core::{
-    opm_document::AnalyzerInfo, prelude::*, types::api_types::NodeInfo, utils::to_f64
+    opm_document::AnalyzerInfo, prelude::*, types::api_types::NodeInfo, utils::to_f64,
 };
 use uuid::Uuid;
 mod graph_node_components;
 pub mod node_component;
-use crate::components::scenery_editor::{
-    constants::{BORDER_WIDTH, HEADER_HEIGHT, NODE_WIDTH, PORT_VER_SPACING}};
+use crate::components::scenery_editor::constants::{
+    BORDER_WIDTH, HEADER_HEIGHT, NODE_WIDTH, PORT_VER_SPACING,
+};
 
 use super::ports::ports_component::Ports;
 pub use node_component::Node;
@@ -121,7 +122,7 @@ impl NodeElement {
     pub const fn output_ports(&self) -> &Vec<String> {
         self.ports.output_ports()
     }
-    pub fn set_ports(&mut self, input_ports: Vec<String>, output_ports: Vec<String>){
+    pub fn set_ports(&mut self, input_ports: Vec<String>, output_ports: Vec<String>) {
         self.ports.set_input_ports(input_ports);
         self.ports.set_output_ports(output_ports);
     }
@@ -176,7 +177,6 @@ impl NodeElement {
             .unwrap_or(0);
         let y_pos = PORT_VER_SPACING.mul_add(to_f64(port_index), PORT_VER_PADDING);
         Point2D::new(x_pos, y_pos)
-        
     }
     #[must_use]
     pub fn abs_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
@@ -184,7 +184,7 @@ impl NodeElement {
         Point2D::new(
             self.pos.x + rel_pos.x + BORDER_WIDTH,
             self.pos.y + rel_pos.y + HEADER_HEIGHT + BORDER_WIDTH / 2.,
-        )        
+        )
     }
     #[must_use]
     pub fn node_body_height(&self) -> f64 {

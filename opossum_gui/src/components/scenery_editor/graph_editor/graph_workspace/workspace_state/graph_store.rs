@@ -49,7 +49,7 @@ pub struct GraphStore {
     file_path: Signal<Option<PathBuf>>,
     pub needs_saving: Signal<bool>,
     pub scenery_id: Uuid,
-    pub mapped_ports: Signal<PortMap>
+    pub mapped_ports: Signal<PortMap>,
 }
 
 impl GraphStore {
@@ -69,7 +69,12 @@ impl GraphStore {
             self.needs_saving.set(true);
         }
     }
-    pub fn update_ports_of_node(&mut self, node_id: Uuid, input_ports: Vec<String>, output_ports: Vec<String>) {
+    pub fn update_ports_of_node(
+        &mut self,
+        node_id: Uuid,
+        input_ports: Vec<String>,
+        output_ports: Vec<String>,
+    ) {
         if let Some(node) = self.nodes().write().get_mut(&node_id) {
             node.set_ports(input_ports, output_ports);
         }
