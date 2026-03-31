@@ -541,26 +541,30 @@ impl NodeGroup {
         target_port: &str,
         distance: Length,
     ) -> OpmResult<()> {
-        if self
+        if !self
             .graph()
             .port_map(&PortType::Input)
             .assigned_ports_for_node(target_id)
             .is_empty()
-            && self
-                .graph()
-                .port_map(&PortType::Output)
-                .assigned_ports_for_node(src_id)
-                .is_empty()
         {
+            Err(OpossumError::OpticPort(format!(
+                "Cannot connect node, as port '{target_port}' of node {} is already mapped!",
+                target_id.as_simple()
+            )))
+        } else if !self
+            .graph()
+            .port_map(&PortType::Output)
+            .assigned_ports_for_node(src_id)
+            .is_empty()
+        {
+            Err(OpossumError::OpticPort(format!(
+                "Cannot connect node, as port '{src_port}' of node {} is already mapped!",
+                src_id.as_simple()
+            )))
+        } else {
             self.graph
                 .connect_nodes(src_id, src_port, target_id, target_port, distance)
-        } else {
-            Err(OpossumError::OpticPort(
-                "Cannot connect node, as Port is already mapped!".into(),
-            ))
         }
-        // self.graph
-        //     .connect_nodes(src_id, src_port, target_id, target_port, distance)
     }
     /// Disconnect two optical nodes within this [`NodeGroup`].
     ///
@@ -1206,7 +1210,7 @@ mod test {
 #[cfg(test)]
 mod group_port_mapping_tests {
     use super::*;
-    use crate::nodes::Dummy;
+    use crate::{meter, nodes::Dummy};
 
     /*
     ============================================================
@@ -1266,6 +1270,16 @@ mod group_port_mapping_tests {
         let result = group.get_mapped_port_str("in", &node_id).unwrap();
         assert!(result.contains(":input_1"));
         assert!(result.starts_with('i'));
+    }
+
+    #[test]
+    fn connecting_already_mapped_port() {
+        let mut group = NodeGroup::new("g");
+        let n1 = group.add_node(Dummy::new("n1")).unwrap();
+        group.map_input_port(n1, "input_1", "in").unwrap();
+        let n2 = group.add_node(Dummy::default()).unwrap();
+        let result = group.connect_nodes(n2, "output_1", n1, "input_1", meter!(0.));
+        assert!(result.is_err());
     }
 
     #[test]

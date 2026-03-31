@@ -22,7 +22,6 @@ fn main() -> OpmResult<()> {
     group1.map_output_port(i_g1_m, "output_1", "output2")?;
 
     let scene_g1 = scenery.add_node(group1)?;
-
     scenery.connect_nodes(i_src, "output_1", scene_g1, "input_1", millimeter!(50.0))?;
 
     let i_prop1 = scenery.add_node(RayPropagationVisualizer::new("direct", None)?)?;
