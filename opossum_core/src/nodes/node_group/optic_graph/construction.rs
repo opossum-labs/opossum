@@ -554,6 +554,12 @@ impl OpticGraph {
         nodes
     }
 
+    pub fn remove_mapped_port(&mut self, external_name: &str, port_type: PortType)-> bool{
+        match port_type {
+            PortType::Input => self.input_port_map.remove_key(external_name),
+            PortType::Output => self.output_port_map.remove_key(external_name),
+        }
+    }
     /// Map a port of an internal node to an external port of the group.
     ///
     /// In oder to use an [`OpticGraph`] from the outside, internal nodes / ports must be mapped to be visible. The

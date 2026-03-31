@@ -6,8 +6,7 @@ use crate::components::scenery_editor::graph_editor::graph_workspace::{
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{
-    opm_document::AnalyzerInfo,
-    types::api_types::{NewAnalyzerInfo, NodeInfo},
+    opm_document::AnalyzerInfo, prelude::PortType, types::api_types::{NewAnalyzerInfo, NodeInfo}
 };
 use uuid::Uuid;
 
@@ -24,6 +23,7 @@ pub struct NodeHandlers {
     add_group_analyzers: EventHandler<(Uuid, Vec<AnalyzerInfo>)>,
     remove_droppable_group: EventHandler<()>,
     update_group_ports: EventHandler<(Vec<String>, Vec<String>, Uuid)>,
+    remove_group_port: EventHandler<(String, Uuid, PortType)>,
 }
 
 impl NodeHandlers {
@@ -40,8 +40,15 @@ impl NodeHandlers {
             add_group_analyzers: add_group_analyzers_handler(workspace),
             remove_droppable_group: remove_droppable_group_handler(workspace),
             update_group_ports: update_group_ports_handler(workspace),
+            remove_group_port: remove_group_port_handler(workspace),
         }
     }
+    pub fn remove_group_port(&self,
+        removed_port: String,
+        group_id: Uuid, port_type: PortType){
+            self.remove_group_port
+            .call((removed_port, group_id, port_type));
+        }
     pub fn update_group_ports(
         &self,
         input_ports: Vec<String>,
@@ -92,6 +99,34 @@ impl NodeHandlers {
     pub fn remove_droppable_group(&self) {
         self.remove_droppable_group.call(());
     }
+}
+
+fn remove_group_port_handler(
+    mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<(String, Uuid, PortType)> {
+    EventHandler::new(
+        move |(removed_port, group_id, port_type): (String, Uuid, PortType)| {
+            let root_id = *workspace.read().root_scenery_id.read();
+            let ws = workspace.write();
+
+            if let Some(graph_state) = ws.get_graph_state(group_id) {
+                let parent_hierarchy_pos = graph_state.read().graph_info.hierarchy.len() - 2;
+                let parent_id = if parent_hierarchy_pos != 0{
+                    graph_state.read().graph_info.hierarchy[parent_hierarchy_pos].0
+                }
+                else{
+                    root_id
+                };
+                // let (parent_id, _) = graph_state.read().graph_info.hierarchy[parent_hierarchy_pos];
+
+                if let Some(mut graph_store) = ws.get_graph_store(parent_id) {
+                    graph_store
+                        .write()
+                        .remove_port_of_node(group_id, &removed_port, port_type);
+                }
+            }
+        },
+    )
 }
 
 fn update_group_ports_handler(

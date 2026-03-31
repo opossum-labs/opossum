@@ -166,6 +166,8 @@ impl OpticGraph {
         connections
     }
 
+    
+
     /// Returns all outgoing connections from the node with the given [`Uuid`].
     ///
     /// Each outgoing connection is represented as a [`ConnectionInfo`], including

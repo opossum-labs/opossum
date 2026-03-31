@@ -33,6 +33,12 @@ impl Ports {
     pub fn set_output_ports(&mut self, ports: Vec<String>) {
         self.output_ports = ports;
     }
+    pub fn remove_input_port(&mut self, remove: &String) {
+        self.input_ports.retain(|p| p != remove);
+    }
+    pub fn remove_output_port(&mut self, remove: &String) {
+        self.output_ports.retain(|p| p != remove);
+    }
     #[must_use]
     pub const fn input_ports(&self) -> &Vec<String> {
         &self.input_ports
@@ -109,7 +115,7 @@ pub fn NodePort(
                             DragStatus::Edge(NewEdgeCreationStart {
                                 src_node: node_id,
                                 src_port: port_name.clone(),
-                                src_port_type: port_type.clone(),
+                                src_port_type: port_type,
                                 start_pos: abs_port_position,
                             }),
                         );
@@ -126,7 +132,7 @@ pub fn NodePort(
                                 Some(EdgePort {
                                     node_id,
                                     port_name: port_name.clone(),
-                                    port_type: port_type.clone(),
+                                    port_type,
                                 }),
                             );
                         editor_status.write().edge_in_creation.set(Some(edge_in_creation));
@@ -151,23 +157,46 @@ pub fn NodePort(
                     event.stop_propagation();
                     let active_tab = *workspace.read().active_tab.read();
                     let root_tab = *workspace.read().root_scenery_id.read();
+                    let mapped_external_port_opt = graph_store
+                        .read()
+                        .mapped_ports
+                        .read()
+                        .external_port_of_mapped_port(node.id(), &port_name);
+
                     if active_tab != root_tab {
-                        let cx_menu = CxMenu::new(
-                            event.page_coordinates().x,
-                            event.page_coordinates().y,
-                            vec![
-                                (
-                                    "Map port to group".to_owned(),
-                                    CxtCommand::MapNodePort {
-                                        port_type,
-                                        group_port_name: Uuid::new_v4().as_simple().to_string(),
-                                        mapped_node_port_name: port_name.clone(),
-                                        mapped_node_id: node.id(),
-                                        group_id: active_tab,
-                                    },
-                                ),
-                            ],
-                        );
+                        let cx_menu = if let Some(group_port_name) = mapped_external_port_opt {
+                            CxMenu::new(
+                                event.page_coordinates().x,
+                                event.page_coordinates().y,
+                                vec![
+                                    (
+                                        "Remove port map from group".to_owned(),
+                                        CxtCommand::RemovePortMap {
+                                            group_id: active_tab,
+                                            group_port_name,
+                                            port_type,
+                                        },
+                                    ),
+                                ],
+                            )
+                        } else {
+                            CxMenu::new(
+                                event.page_coordinates().x,
+                                event.page_coordinates().y,
+                                vec![
+                                    (
+                                        "Map port to group".to_owned(),
+                                        CxtCommand::MapNodePort {
+                                            port_type,
+                                            group_port_name: Uuid::new_v4().as_simple().to_string(),
+                                            mapped_node_port_name: port_name.clone(),
+                                            mapped_node_id: node.id(),
+                                            group_id: active_tab,
+                                        },
+                                    ),
+                                ],
+                            )
+                        };
                         let mut ctx = CONTEXT_MENU.write();
                         *ctx = Some(cx_menu);
                     }

@@ -18,6 +18,11 @@ pub enum CxtCommand {
         mapped_node_id: Uuid,
         group_id: Uuid,
     },
+    RemovePortMap {
+        group_id: Uuid,
+        group_port_name: String,
+        port_type: PortType
+    },
 }
 
 #[derive(Clone, PartialEq, Debug)]

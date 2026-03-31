@@ -122,6 +122,13 @@ impl NodeElement {
     pub const fn output_ports(&self) -> &Vec<String> {
         self.ports.output_ports()
     }
+    pub fn remove_port(&mut self, remove_port: &String, port_type: &PortType){
+        
+        match port_type{
+            PortType::Input => self.ports.remove_input_port(remove_port),
+            PortType::Output => self.ports.remove_output_port(remove_port),
+        }
+    }
     pub fn set_ports(&mut self, input_ports: Vec<String>, output_ports: Vec<String>) {
         self.ports.set_input_ports(input_ports);
         self.ports.set_output_ports(output_ports);

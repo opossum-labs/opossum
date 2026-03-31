@@ -1,8 +1,7 @@
 use actix_web::{
-    post,
-    web::{self, Json, PathConfig},
+    delete, post, get, web::{self, Json, PathConfig}
 };
-use opossum_core::{ prelude::{OpticNode, PortType}, types::api_types::{ConnectInfo, NodeInfo}};
+use opossum_core::{ prelude::{OpticNode, PortMap, PortType}, types::api_types::{ConnectInfo, NodeInfo}};
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
@@ -211,10 +210,126 @@ pub async fn add_port_map(
 
     Ok(Json(ports))
 }
+
+#[utoipa::path(tag = "group",
+    params(
+        ("uuid" = Uuid, Path, description = "Uuid of a group whose portmaps should be sent"),
+    ),
+    responses(
+        (status = OK, description = "Node portmaps successfully sent!"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/portmaps")]
+pub async fn get_group_portmaps(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>
+)
+    -> Result<Json<(PortMap, PortMap)>, BackEndErrorResponse>{
+    let group_id = path.into_inner();
+
+    let mut document = data.document.lock();
+    let scenery = document.scenery_mut();
+    
+    let port_maps = scenery.with_group_node_mut(group_id, |g| {
+        (g.graph().port_map(&PortType::Input).clone(),
+        g.graph().port_map(&PortType::Output).clone())
+}
+)?;
+    Ok(Json(port_maps))
+}
+
+#[utoipa::path(tag = "group",
+    params(
+        ("uuid" = Uuid, Path, description = "Uuid of a group whose ports should be sent"),
+    ),
+    responses(
+        (status = OK, description = "Node ports successfully sent!"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/ports")]
+pub async fn get_group_ports(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>
+)
+    -> Result<Json<(Vec<String>, Vec<String>)>, BackEndErrorResponse>{
+    let group_id = path.into_inner();
+
+    let mut document = data.document.lock();
+    let scenery = document.scenery_mut();
+    
+let ports = scenery.with_group_node_mut(group_id, |g| {
+    let ports = g.ports();
+    let inputs = ports.ports(&PortType::Input).keys().cloned().collect::<Vec<String>>();
+    let outputs = ports.ports(&PortType::Output).keys().cloned().collect::<Vec<String>>();
+    Ok::<(Vec<String>, Vec<String>), BackEndErrorResponse>((inputs, outputs))
+}
+)??;
+    Ok(Json(ports))
+}
+
+
+
+#[utoipa::path(tag = "group",
+    params(
+        ("uuid" = Uuid, Path, description = "Uuid of a group whose port-map should be removed "),
+    ),
+    request_body(content = String,
+        description = "External port name of the group port mapping",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, description = "Node port successfully removed from group"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[delete("/{uuid}/port_map")]
+pub async fn remove_port_map(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    external_port_name: web::Json<(String, PortType)>)
+    -> Result<Json<(bool, Vec<ConnectInfo>, Uuid)>, BackEndErrorResponse>{
+    let group_id = path.into_inner();
+    let (external_port_name, port_type  ) = external_port_name.into_inner();
+
+    let mut document = data.document.lock();
+    let scenery = document.scenery_mut();
+
+    //get parent of node
+    let (_, parent_group) = scenery.node_recursive(group_id)?;
+
+    //get connections
+    let connections = scenery.with_group_node_mut(parent_group, |g| {
+        let c = g.graph().get_connection_info_of_node(group_id);
+
+        //does not matter if it is a references, as the connections i just removed
+        c.iter().map(|c| ConnectInfo::from_connection_info(c, false))    .collect::<Vec<ConnectInfo>>()
+    })?;
+
+
+    //remove connections first before removing the mapping
+    scenery
+        .with_group_node_mut(parent_group, |g| {
+            for c in &connections{
+                g.disconnect_nodes(c.src_uuid(), c.src_port())?
+            }
+            Ok::<(), BackEndErrorResponse>(())
+        })??;
+    
+    let port_removed = scenery.with_group_node_mut(group_id, |g| {
+        g.remove_mapped_port(&external_port_name, port_type)
+    })?;
+    Ok(Json((port_removed, connections, parent_group)))
+}
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_convert_nodes_to_group);
     cfg.service(post_drop_nodes_into_group);
     cfg.service(add_port_map);
+    cfg.service(remove_port_map);
+    cfg.service(get_group_ports);
+    cfg.service(get_group_portmaps);
     cfg.app_data(PathConfig::default().error_handler(|err, _req| {
         BackEndErrorResponse::new(400, "parse error", &err.to_string()).into()
     }));

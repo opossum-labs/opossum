@@ -50,6 +50,13 @@ impl PortMap {
             false
         }
     }
+
+    /// Remove a port mapping for the given combination of internal [`NodeIndex`] and internal port name.
+    /// Returns `true`, if successful. If the combination is not found, the [`PortMap`] is unmodified and `false` is returned.
+    pub fn remove_key(&mut self, key: &str) -> bool {
+        self.0.remove(key).is_some()
+    }
+
     /// Remove all port mappings for the node with the given [`Uuid`].
     ///
     /// Returns `true` if elements have been removed and `false` otherwise.
@@ -90,6 +97,9 @@ impl PortMap {
         self.0.iter().any(|p| p.1.0 == node_id)
     }
 
+    pub fn external_port_of_mapped_port(&self, node_id: Uuid, port_name: &str) -> Option<String> {
+        self.0.iter().find(|(_, (id, name))| *id == node_id && name ==port_name ).map(|(name, _)| name.clone())
+    }
     pub fn contains_port_of_node(&self, node_id: Uuid, port_name: &str) -> bool {
         self.0.iter().any(|(_, (id, name))| *id == node_id && name ==port_name )
     }
@@ -109,7 +119,11 @@ impl PortMap {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, (Uuid, String)> {
+        self.0.iter()
+    }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
