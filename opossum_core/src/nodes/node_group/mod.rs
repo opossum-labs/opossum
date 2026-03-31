@@ -541,14 +541,23 @@ impl NodeGroup {
         target_port: &str,
         distance: Length,
     ) -> OpmResult<()> {
-        if self.graph().port_map(&PortType::Input).assigned_ports_for_node(target_id).is_empty() 
-        && self.graph().port_map(&PortType::Output).assigned_ports_for_node(src_id).is_empty()
+        if self
+            .graph()
+            .port_map(&PortType::Input)
+            .assigned_ports_for_node(target_id)
+            .is_empty()
+            && self
+                .graph()
+                .port_map(&PortType::Output)
+                .assigned_ports_for_node(src_id)
+                .is_empty()
         {
             self.graph
                 .connect_nodes(src_id, src_port, target_id, target_port, distance)
-        }
-        else{
-            Err(OpossumError::OpticPort("Cannot connect node, as Port is already mapped!".into()))
+        } else {
+            Err(OpossumError::OpticPort(
+                "Cannot connect node, as Port is already mapped!".into(),
+            ))
         }
         // self.graph
         //     .connect_nodes(src_id, src_port, target_id, target_port, distance)
