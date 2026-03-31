@@ -11,7 +11,7 @@ use crate::{
         },
     },
 };
-use dioxus::prelude::*;
+use dioxus::{html::input_data::MouseButton, prelude::*};
 use opossum_core::prelude::*;
 use uuid::Uuid;
 #[derive(Clone, Eq, PartialEq, Default, Debug)]
@@ -108,18 +108,20 @@ pub fn NodePort(
             onmousedown: {
                 let port_name = port_name.clone();
                 move |event: MouseEvent| {
-                    workspace
-                        .write()
-                        .drag_status
-                        .set(
-                            DragStatus::Edge(NewEdgeCreationStart {
-                                src_node: node_id,
-                                src_port: port_name.clone(),
-                                src_port_type: port_type,
-                                start_pos: abs_port_position,
-                            }),
-                        );
-                    event.stop_propagation();
+                    if Some(MouseButton::Primary) == event.trigger_button() {
+                        workspace
+                            .write()
+                            .drag_status
+                            .set(
+                                DragStatus::Edge(NewEdgeCreationStart {
+                                    src_node: node_id,
+                                    src_port: port_name.clone(),
+                                    src_port_type: port_type,
+                                    start_pos: abs_port_position,
+                                }),
+                            );
+                        event.stop_propagation();
+                    }
                 }
             },
             onmouseenter: {
