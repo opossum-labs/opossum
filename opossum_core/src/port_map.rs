@@ -97,12 +97,14 @@ impl PortMap {
         self.0.iter().any(|p| p.1.0 == node_id)
     }
 
+    /// Retrieve the external port name of a mapped port from the id of the internal node and the name of the internal port
     pub fn external_port_of_mapped_port(&self, node_id: Uuid, port_name: &str) -> Option<String> {
         self.0
             .iter()
             .find(|(_, (id, name))| *id == node_id && name == port_name)
             .map(|(name, _)| name.clone())
     }
+    /// Check if a port of an internal node wit specific id and port name is mapped
     pub fn contains_port_of_node(&self, node_id: Uuid, port_name: &str) -> bool {
         self.0
             .iter()
@@ -124,6 +126,7 @@ impl PortMap {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    /// Returns an iterator of this [`PortMap`]
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, (Uuid, String)> {
         self.0.iter()
     }

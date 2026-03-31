@@ -16,7 +16,7 @@ use nalgebra::Point2;
 use opossum_core::{
     OpticRef,
     analyzers::AnalyzerType,
-    error::{OpmResult, OpossumError},
+    error::OpossumError,
     meter,
     nodes::{
         ConnectionInfo, NodeAttr, NodeGroup, NodeReference, create_node_ref,

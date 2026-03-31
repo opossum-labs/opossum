@@ -75,7 +75,7 @@ impl WorkspaceHandlers {
 
 fn remove_port_map_handler(
     mut workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<((Uuid, String))> {
+) -> EventHandler<(Uuid, String)> {
     EventHandler::new(move |(group_id, group_port_name): (Uuid, String)| {
         let ws = workspace.write();
 

@@ -611,6 +611,9 @@ impl NodeGroup {
             .map_port(output_node, &PortType::Output, internal_name, external_name)
     }
 
+    /// Remove a port mapping
+    /// 
+    /// Returns true if successful
     pub fn remove_mapped_port(&mut self, external_name: &str, port_type: PortType) -> bool {
         self.graph.remove_mapped_port(external_name, port_type)
     }
