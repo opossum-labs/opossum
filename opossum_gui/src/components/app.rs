@@ -198,10 +198,40 @@ pub fn App() -> Element {
         let cxt_command_val = cxt_command.read();
         if let Some(cmd) = &*(cxt_command_val) {
             match cmd {
-                CxtCommand::AddRefNode(new_ref_node)=>{node_editor_command_handler.call(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));}
-                CxtCommand::ConvertToGroup{nodes,graph_id}=>{node_editor_command_handler.call(Some(NodeEditorCommand::ConvertToGroup{nodes:nodes.clone(),graph_id: *graph_id,}));}
-                CxtCommand::MapNodePort{port_type,group_port_name,mapped_node_port_name,mapped_node_id,group_id,}=>{node_editor_command_handler.call(Some(NodeEditorCommand::MapNodePort{port_type: *port_type,group_port_name:group_port_name.clone(),mapped_node_port_name:mapped_node_port_name.clone(),mapped_node_id: *mapped_node_id,group_id: *group_id,}))}
-                CxtCommand::RemovePortMap { group_id, group_port_name, port_type } => {node_editor_command_handler.call(Some(NodeEditorCommand::RemovePortMap { group_id: *group_id, group_port_name:group_port_name.clone(), port_type: *port_type }));}
+                CxtCommand::AddRefNode(new_ref_node) => {
+                    node_editor_command_handler
+                        .call(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
+                }
+                CxtCommand::ConvertToGroup { nodes, graph_id } => {
+                    node_editor_command_handler.call(Some(NodeEditorCommand::ConvertToGroup {
+                        nodes: nodes.clone(),
+                        graph_id: *graph_id,
+                    }));
+                }
+                CxtCommand::MapNodePort {
+                    port_type,
+                    group_port_name,
+                    mapped_node_port_name,
+                    mapped_node_id,
+                    group_id,
+                } => node_editor_command_handler.call(Some(NodeEditorCommand::MapNodePort {
+                    port_type: *port_type,
+                    group_port_name: group_port_name.clone(),
+                    mapped_node_port_name: mapped_node_port_name.clone(),
+                    mapped_node_id: *mapped_node_id,
+                    group_id: *group_id,
+                })),
+                CxtCommand::RemovePortMap {
+                    group_id,
+                    group_port_name,
+                    port_type,
+                } => {
+                    node_editor_command_handler.call(Some(NodeEditorCommand::RemovePortMap {
+                        group_id: *group_id,
+                        group_port_name: group_port_name.clone(),
+                        port_type: *port_type,
+                    }));
+                }
             }
         }
     });

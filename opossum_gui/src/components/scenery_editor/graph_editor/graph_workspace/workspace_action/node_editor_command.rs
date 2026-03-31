@@ -31,7 +31,7 @@ pub enum NodeEditorCommand {
     RemovePortMap {
         group_id: Uuid,
         group_port_name: String,
-        port_type: PortType
+        port_type: PortType,
     },
 }
 
@@ -113,11 +113,15 @@ pub fn use_node_editor_command(
                     group_id,
                 });
             }
-            NodeEditorCommand::RemovePortMap { group_id, group_port_name, port_type } => {
+            NodeEditorCommand::RemovePortMap {
+                group_id,
+                group_port_name,
+                port_type,
+            } => {
                 workspace_processor.send(GraphsWorkspaceAction::RemovePortMap {
                     group_id,
                     group_port_name,
-        port_type
+                    port_type,
                 });
             }
         }

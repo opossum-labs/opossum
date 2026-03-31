@@ -6,7 +6,9 @@ use crate::components::scenery_editor::graph_editor::graph_workspace::{
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{
-    opm_document::AnalyzerInfo, prelude::PortType, types::api_types::{NewAnalyzerInfo, NodeInfo}
+    opm_document::AnalyzerInfo,
+    prelude::PortType,
+    types::api_types::{NewAnalyzerInfo, NodeInfo},
 };
 use uuid::Uuid;
 
@@ -43,12 +45,10 @@ impl NodeHandlers {
             remove_group_port: remove_group_port_handler(workspace),
         }
     }
-    pub fn remove_group_port(&self,
-        removed_port: String,
-        group_id: Uuid, port_type: PortType){
-            self.remove_group_port
+    pub fn remove_group_port(&self, removed_port: String, group_id: Uuid, port_type: PortType) {
+        self.remove_group_port
             .call((removed_port, group_id, port_type));
-        }
+    }
     pub fn update_group_ports(
         &self,
         input_ports: Vec<String>,
@@ -111,10 +111,9 @@ fn remove_group_port_handler(
 
             if let Some(graph_state) = ws.get_graph_state(group_id) {
                 let parent_hierarchy_pos = graph_state.read().graph_info.hierarchy.len() - 2;
-                let parent_id = if parent_hierarchy_pos != 0{
+                let parent_id = if parent_hierarchy_pos != 0 {
                     graph_state.read().graph_info.hierarchy[parent_hierarchy_pos].0
-                }
-                else{
+                } else {
                     root_id
                 };
                 // let (parent_id, _) = graph_state.read().graph_info.hierarchy[parent_hierarchy_pos];

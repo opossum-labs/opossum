@@ -210,13 +210,18 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
-                    GraphsWorkspaceAction::RemovePortMap { group_id, group_port_name, port_type } => {
-                    process_remove_port_map(
+                    GraphsWorkspaceAction::RemovePortMap {
+                        group_id,
+                        group_port_name,
+                        port_type,
+                    } => {
+                        process_remove_port_map(
                             group_id,
                             group_port_name,
                             port_type,
                             workspace_handlers,
-                        ).await;
+                        )
+                        .await;
                     }
                 }
             }
@@ -294,107 +299,106 @@ async fn process_paste_node(
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
-    
-        match api::post_paste_nodes(graph_id, pos).await{
-            Ok((optical_nodes, analyzer_nodes, edges)) => {
-                let mut pasted_groups = Vec::<Uuid>::new();
-                for (graph_id, n) in &optical_nodes {
-                    for node in n {
-                        ws_handler.nodes.add_optical_node(node.clone(), *graph_id);
-                        if node.node_type() == "group"{
-                            pasted_groups.push(node.uuid());
-                        }
+    match api::post_paste_nodes(graph_id, pos).await {
+        Ok((optical_nodes, analyzer_nodes, edges)) => {
+            let mut pasted_groups = Vec::<Uuid>::new();
+            for (graph_id, n) in &optical_nodes {
+                for node in n {
+                    ws_handler.nodes.add_optical_node(node.clone(), *graph_id);
+                    if node.node_type() == "group" {
+                        pasted_groups.push(node.uuid());
                     }
                 }
-                for a in &analyzer_nodes {
-                    let analyzer_id = a.id();
-                    ws_handler.nodes.add_analyzer_node(
-                        NewAnalyzerInfo::from(a.clone()),
-                        analyzer_id,
-                        graph_id,
-                    );
-                }
-
-                for group_id in pasted_groups{
-                    
-                    
-
-                    eval_action_run(
-                        api::get_port_maps_of_group(group_id).await,
-                        Some(move |(input_port_maps, output_port_maps): (PortMap, PortMap)| {
-                            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in input_port_maps.iter(){
-                ws_handler.workspace.add_port_map(
-                group_id,
-                group_port_name.clone(),
-                mapped_node_port_name.clone(),
-                *mapped_node_id,
-            );
             }
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in output_port_maps.iter(){
-                ws_handler.workspace.add_port_map(
-                group_id,
-                group_port_name.clone(),
-                mapped_node_port_name.clone(),
-                *mapped_node_id,
-            );
+            for a in &analyzer_nodes {
+                let analyzer_id = a.id();
+                ws_handler.nodes.add_analyzer_node(
+                    NewAnalyzerInfo::from(a.clone()),
+                    analyzer_id,
+                    graph_id,
+                );
             }
+
+            for group_id in pasted_groups {
+                eval_action_run(
+                    api::get_port_maps_of_group(group_id).await,
+                    Some(
+                        move |(input_port_maps, output_port_maps): (PortMap, PortMap)| {
+                            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
+                                input_port_maps.iter()
+                            {
+                                ws_handler.workspace.add_port_map(
+                                    group_id,
+                                    group_port_name.clone(),
+                                    mapped_node_port_name.clone(),
+                                    *mapped_node_id,
+                                );
+                            }
+                            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
+                                output_port_maps.iter()
+                            {
+                                ws_handler.workspace.add_port_map(
+                                    group_id,
+                                    group_port_name.clone(),
+                                    mapped_node_port_name.clone(),
+                                    *mapped_node_id,
+                                );
+                            }
                             // println!("input_ports{:?}", input_ports);
                             // ws_handler
                             //     .nodes
                             //     .update_group_ports(input_ports, output_ports, group);
-                        }),
-                    );
-                    eval_action_run(
-                        api::get_ports_of_group(group_id).await,
-                        Some(move |(input_ports, output_ports)| {
-                            ws_handler
-                                .nodes
-                                .update_group_ports(input_ports, output_ports, group_id);
-                        }),
-                    );
-                }
+                        },
+                    ),
+                );
+                eval_action_run(
+                    api::get_ports_of_group(group_id).await,
+                    Some(move |(input_ports, output_ports)| {
+                        ws_handler
+                            .nodes
+                            .update_group_ports(input_ports, output_ports, group_id);
+                    }),
+                );
+            }
 
-                for (graph_id, edges) in &edges {
-                    for edge in edges {
-                        ws_handler.edges.add_edge(edge.clone(), *graph_id);
-                    }
+            for (graph_id, edges) in &edges {
+                for edge in edges {
+                    ws_handler.edges.add_edge(edge.clone(), *graph_id);
                 }
-
-            },
-            Err(e) => {
-                OPOSSUM_UI_LOGS.write().add_log(&format!(
-            "Error while pasting node/s: {}",
-            e
-        ));
             }
         }
-        // Some(
-        //     move |(optical_nodes, analyzer_nodes, edges): (
-        //         HashMap<Uuid, Vec<NodeInfo>>,
-        //         Vec<AnalyzerInfo>,
-        //         HashMap<Uuid, Vec<ConnectInfo>>,
-        //     )| {
-        //         for (graph_id, n) in &optical_nodes {
-        //             for node in n {
-        //                 ws_handler.nodes.add_optical_node(node.clone(), *graph_id);
-        //             }
-        //         }
-        //         for a in &analyzer_nodes {
-        //             let analyzer_id = a.id();
-        //             ws_handler.nodes.add_analyzer_node(
-        //                 NewAnalyzerInfo::from(a.clone()),
-        //                 analyzer_id,
-        //                 graph_id,
-        //             );
-        //         }
-        //         for (graph_id, edges) in &edges {
-        //             for edge in edges {
-        //                 ws_handler.edges.add_edge(edge.clone(), *graph_id);
-        //             }
-        //         }
-        //     },
-        // ),
-    
+        Err(e) => {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("Error while pasting node/s: {}", e));
+        }
+    }
+    // Some(
+    //     move |(optical_nodes, analyzer_nodes, edges): (
+    //         HashMap<Uuid, Vec<NodeInfo>>,
+    //         Vec<AnalyzerInfo>,
+    //         HashMap<Uuid, Vec<ConnectInfo>>,
+    //     )| {
+    //         for (graph_id, n) in &optical_nodes {
+    //             for node in n {
+    //                 ws_handler.nodes.add_optical_node(node.clone(), *graph_id);
+    //             }
+    //         }
+    //         for a in &analyzer_nodes {
+    //             let analyzer_id = a.id();
+    //             ws_handler.nodes.add_analyzer_node(
+    //                 NewAnalyzerInfo::from(a.clone()),
+    //                 analyzer_id,
+    //                 graph_id,
+    //             );
+    //         }
+    //         for (graph_id, edges) in &edges {
+    //             for edge in edges {
+    //                 ws_handler.edges.add_edge(edge.clone(), *graph_id);
+    //             }
+    //         }
+    //     },
+    // ),
 }
 
 #[allow(clippy::future_not_send)]
@@ -606,29 +610,23 @@ async fn process_remove_port_map(
     port_type: PortType,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
-    match api::remove_port_map(
-        group_port_name.clone(),
-        group_id,
-        port_type
-    )
-    .await{
+    match api::remove_port_map(group_port_name.clone(), group_id, port_type).await {
         Ok((removed_port, removed_connections, parent_group_id)) => {
-            for edge in &removed_connections{
+            for edge in &removed_connections {
                 ws_handler.edges.delete_edge(edge.clone(), parent_group_id);
             }
-            if removed_port{
-                ws_handler.workspace.remove_port_map(
-                    group_id,
-                    group_port_name.clone(),
-                );
+            if removed_port {
+                ws_handler
+                    .workspace
+                    .remove_port_map(group_id, group_port_name.clone());
                 ws_handler
                     .nodes
                     .remove_group_port(group_port_name, group_id, port_type);
+            } else {
+                OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log("Could not remove port mapping!");
             }
-            else{
-                OPOSSUM_UI_LOGS.write().add_log("Could not remove port mapping!");
-            }
-
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -755,42 +753,35 @@ async fn process_fill_graph_of_group(
         api::get_nodes(group_id).await,
         Some(move |nodes: Vec<NodeInfo>| ws_handler.nodes.add_group_nodes(group_id, nodes)),
     );
-   
-   
 
     eval_action_run(
         api::get_port_maps_of_group(group_id).await,
         Some(move |(input_ports, output_ports): (PortMap, PortMap)| {
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in input_ports.iter(){
+            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in input_ports.iter() {
                 ws_handler.workspace.add_port_map(
-                group_id,
-                group_port_name.clone(),
-                mapped_node_port_name.clone(),
-                *mapped_node_id,
-            );
+                    group_id,
+                    group_port_name.clone(),
+                    mapped_node_port_name.clone(),
+                    *mapped_node_id,
+                );
             }
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in output_ports.iter(){
+            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in output_ports.iter() {
                 ws_handler.workspace.add_port_map(
-                group_id,
-                group_port_name.clone(),
-                mapped_node_port_name.clone(),
-                *mapped_node_id,
-            );
+                    group_id,
+                    group_port_name.clone(),
+                    mapped_node_port_name.clone(),
+                    *mapped_node_id,
+                );
             }
         }),
     );
 
-
-
-     
     eval_action_run(
         api::get_connections(group_id).await,
         Some(move |connect_infos: Vec<ConnectInfo>| {
             ws_handler.edges.add_group_edges(group_id, connect_infos);
         }),
     );
-
-    
 
     if *root_scenery_id.read() == group_id {
         eval_action_run(

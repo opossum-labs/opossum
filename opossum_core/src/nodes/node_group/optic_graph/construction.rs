@@ -554,7 +554,7 @@ impl OpticGraph {
         nodes
     }
 
-    pub fn remove_mapped_port(&mut self, external_name: &str, port_type: PortType)-> bool{
+    pub fn remove_mapped_port(&mut self, external_name: &str, port_type: PortType) -> bool {
         match port_type {
             PortType::Input => self.input_port_map.remove_key(external_name),
             PortType::Output => self.output_port_map.remove_key(external_name),

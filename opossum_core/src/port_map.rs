@@ -98,10 +98,15 @@ impl PortMap {
     }
 
     pub fn external_port_of_mapped_port(&self, node_id: Uuid, port_name: &str) -> Option<String> {
-        self.0.iter().find(|(_, (id, name))| *id == node_id && name ==port_name ).map(|(name, _)| name.clone())
+        self.0
+            .iter()
+            .find(|(_, (id, name))| *id == node_id && name == port_name)
+            .map(|(name, _)| name.clone())
     }
     pub fn contains_port_of_node(&self, node_id: Uuid, port_name: &str) -> bool {
-        self.0.iter().any(|(_, (id, name))| *id == node_id && name ==port_name )
+        self.0
+            .iter()
+            .any(|(_, (id, name))| *id == node_id && name == port_name)
     }
     /// Return a vector of port (external -> internal) port assignments for the given node.
     pub fn assigned_ports_for_node(&self, node_id: Uuid) -> Vec<(String, String)> {
