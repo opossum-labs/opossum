@@ -14,9 +14,10 @@ pub const HEADER_HEIGHT: f64 = 30.0;
 pub const BORDER_WIDTH: f64 = 1.;
 
 // constants for port layout
-pub const PORT_VER_SPACING: f64 = 16.0;
+pub const PORT_VER_SPACING: f64 = 18.0;
 pub const PORT_HEIGHT: f64 = 13.0;
 pub const PORT_WIDTH: f64 = 13.0;
+pub const PORT_MAP_DIST: f64 =20.0;
 
 // constants for GraphStore
 pub const SUGIYAMA_VERTEX_SPACING: f64 = 250.0;

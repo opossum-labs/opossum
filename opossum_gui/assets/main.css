@@ -315,90 +315,6 @@ body {
 .analyzer-node {
     background-color: #4d1818;
 }
-.node:has(.graph-port-node-input) {
-    background: none;
-    border: none;
-    box-shadow: none!important;
-}
-.graph-port-node-input {
-    position: relative;
-    filter: drop-shadow(10px 5px 5px rgba(0, 0, 0, 0.3));
-}
-.graph-port-node-input::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-
-    background: rgb(120, 120, 120); 
-
-    clip-path: polygon(
-        0% 0%,
-        75% 0%,
-        96.5% 40%,
-        96.5% 60%,
-        75% 100%,
-        0% 100%
-    );
-}
-
-.graph-port-node-input::after {
-    content: "";
-    position: absolute;
-    inset: 1px; 
-
-    background: rgba(39, 39, 39,1);
-
-    clip-path: polygon(
-        0% 0%,
-        75% 0%,
-        96.5% 40%,
-        96.5% 60%,
-        75% 100%,
-        0% 100%
-    );
-}
-.node:has(.graph-port-node-output) {
-    background: none;
-    border: none;
-    box-shadow: none!important;
-}
-.graph-port-node-output {
-    position: relative;
-    filter: drop-shadow(10px 5px 5px rgba(0, 0, 0, 0.3));
-}
-.graph-port-node-output::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-
-    background: rgb(120, 120, 120); 
-
-    clip-path: polygon(
-        100% 0%,
-        25% 0%,
-        3.5% 40%,
-        3.5% 60%,
-        25% 100%,
-        100% 100%
-    );
-}
-
-.graph-port-node-output::after {
-    content: "";
-    position: absolute;
-    inset: 1px; 
-
-    background: rgba(39, 39, 39,1);
-
-    clip-path: polygon(
-        100% 0%,
-        25% 0%,
-        3.5% 40%,
-        3.5% 60%,
-        25% 100%,
-        100% 100%
-    );
-}
 
 .node-header:active {
     cursor: grabbing;
@@ -453,8 +369,99 @@ body {
     background-color: rgba(206, 255, 208,1);
 }
 
-.mapped-port {
-    background-color: rgb(255, 0, 157)!important;
+.port-map-line {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 2px;
+    background: black;
+}
+
+.graph-port-node-input {
+    width: 40px;
+    height: 16px;
+    background-color: none;
+    position: relative;
+    filter: drop-shadow(10px 5px 5px rgba(0, 0, 0, 0.3));
+}
+.graph-port-node-input::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+
+    background: rgb(0, 0, 0); 
+
+    clip-path: polygon(
+        0% 0%,
+        75% 0%,
+        100% 40%,
+        100% 60%,
+        75% 100%,
+        0% 100%
+    );
+}
+
+.graph-port-node-input::after {
+    content: "";
+    position: absolute;
+    inset: 1px; 
+
+    background-color: rgba(197, 216, 255,1);
+
+    clip-path: polygon(
+        0% 0%,
+        75% 0%,
+        100% 40%,
+        100% 60%,
+        75% 100%,
+        0% 100%
+    );
+}
+
+.port-map-wrapper {
+    position: absolute;
+    cursor: context-menu;
+}
+
+.graph-port-node-output {
+    width: 40px;
+    height: 16px;
+    background-color: none;
+    position: relative;
+    filter: drop-shadow(10px 5px 5px rgba(0, 0, 0, 0.3));
+}
+.graph-port-node-output::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+
+    background: rgb(0, 0, 0); 
+
+    clip-path: polygon(
+        100% 0%,
+        25% 0%,
+        3.5% 40%,
+        3.5% 60%,
+        25% 100%,
+        100% 100%
+    );
+}
+
+.graph-port-node-output::after {
+    content: "";
+    position: absolute;
+    inset: 1px; 
+
+    background: rgba(206, 255, 208,1);
+
+    clip-path: polygon(
+        100% 0%,
+        25% 0%,
+        3.5% 40%,
+        3.5% 60%,
+        25% 100%,
+        100% 100%
+    );
 }
 
 .input-port {

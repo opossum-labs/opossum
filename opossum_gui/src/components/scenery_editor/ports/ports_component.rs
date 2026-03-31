@@ -4,7 +4,7 @@ use crate::{
         context_menu::cx_menu::{CxMenu, CxtCommand},
         scenery_editor::{
             EditorState, GraphStore, GraphsWorkspaceState,
-            constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
+            constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_MAP_DIST, PORT_WIDTH},
             edges::edges_component::{EdgePort, NewEdgeCreationStart},
             graph_editor::DragStatus,
             node::NodeElement,
@@ -82,14 +82,16 @@ pub fn NodePort(
     }
     .to_string();
 
-    if graph_store
+    let is_mapped_input = port_type == PortType::Input && graph_store
         .read()
         .mapped_ports
         .read()
-        .contains_port_of_node(node.id(), &port_name)
-    {
-        port_class += " mapped-port";
-    }
+        .contains_port_of_node(node.id(), &port_name);
+    let is_mapped_output = port_type == PortType::Output && graph_store
+        .read()
+        .mapped_ports
+        .read()
+        .contains_port_of_node(node.id(), &port_name);
 
     rsx! {
         div {
@@ -105,6 +107,7 @@ pub fn NodePort(
                 -BORDER_WIDTH / 2.,
             ),
             draggable: false,
+
             onmousedown: {
                 let port_name = port_name.clone();
                 move |event: MouseEvent| {
@@ -128,7 +131,10 @@ pub fn NodePort(
                 let port_name = port_name.clone();
                 move |event: MouseEvent| {
                     let edge_increation = editor_status.read().edge_in_creation.read().clone();
-                    if let Some(mut edge_in_creation) = edge_increation {
+                    if let Some(mut edge_in_creation) = edge_increation
+                    // && !is_mapped_input
+                    //     && !is_mapped_output
+                    {
                         edge_in_creation
                             .set_end_port(
                                 Some(EdgePort {
@@ -163,7 +169,7 @@ pub fn NodePort(
                         .read()
                         .mapped_ports
                         .read()
-                        .external_port_of_mapped_port(node.id(), &port_name);
+                        .external_port_of_mapped_port(node_id, &port_name);
 
                     if active_tab != root_tab {
                         let cx_menu = if let Some(group_port_name) = mapped_external_port_opt {
@@ -205,6 +211,112 @@ pub fn NodePort(
                 }
             },
         }
+
+        if is_mapped_input {
+            div {
+                class: "port-map-wrapper",
+                style: format!(
+                    "left: {}px; top: {}px; transform: translate(-50%, -50%)",
+                    rel_port_position.x - 2. * PORT_WIDTH - PORT_MAP_DIST - BORDER_WIDTH,
+                    rel_port_position.y,
+                ),
+                oncontextmenu: {
+                    let port_name = port_name.clone();
+                    move |event: Event<MouseData>| {
+                        event.prevent_default();
+                        event.stop_propagation();
+
+                        let active_tab = *workspace.read().active_tab.read();
+                        let root_tab = *workspace.read().root_scenery_id.read();
+                        if active_tab != root_tab {
+                            let mapped_external_port_opt = graph_store
+                                .read()
+                                .mapped_ports
+                                .read()
+                                .external_port_of_mapped_port(node_id, &port_name);
+                            if let Some(group_port_name) = mapped_external_port_opt {
+                                let cx_menu = CxMenu::new(
+                                    event.page_coordinates().x,
+                                    event.page_coordinates().y,
+                                    vec![
+                                        (
+                                            "Remove port map from group".to_owned(),
+                                            CxtCommand::RemovePortMap {
+                                                group_id: active_tab,
+                                                group_port_name,
+                                                port_type,
+                                            },
+                                        ),
+                                    ],
+                                );
+                                let mut ctx = CONTEXT_MENU.write();
+                                *ctx = Some(cx_menu);
+                            }
+                        }
+                    }
+                },
+
+                div { class: "graph-port-node-input" }
+
+                div {
+                    class: "port-map-line",
+                    style: format!("right: {}px; width: {}px;", -1.5 * PORT_WIDTH, PORT_MAP_DIST),
+                }
+            }
+        }
+        if is_mapped_output {
+            div {
+                class: "port-map-wrapper",
+                style: format!(
+                    "right: -{}px; top: {}px; transform: translate(-50%, -50%)",
+                    rel_port_position.x - 2. * (PORT_WIDTH - BORDER_WIDTH) - PORT_MAP_DIST,
+                    rel_port_position.y,
+                ),
+                oncontextmenu: {
+                    let port_name = port_name.clone();
+                    move |event: Event<MouseData>| {
+                        event.prevent_default();
+                        event.stop_propagation();
+
+                        let active_tab = *workspace.read().active_tab.read();
+                        let root_tab = *workspace.read().root_scenery_id.read();
+                        if active_tab != root_tab {
+                            let mapped_external_port_opt = graph_store
+                                .read()
+                                .mapped_ports
+                                .read()
+                                .external_port_of_mapped_port(node_id, &port_name);
+                            if let Some(group_port_name) = mapped_external_port_opt {
+                                let cx_menu = CxMenu::new(
+                                    event.page_coordinates().x,
+                                    event.page_coordinates().y,
+                                    vec![
+                                        (
+                                            "Remove port map from group".to_owned(),
+                                            CxtCommand::RemovePortMap {
+                                                group_id: active_tab,
+                                                group_port_name,
+                                                port_type,
+                                            },
+                                        ),
+                                    ],
+                                );
+                                let mut ctx = CONTEXT_MENU.write();
+                                *ctx = Some(cx_menu);
+                            }
+                        }
+                    }
+                },
+
+                div { class: "graph-port-node-output" }
+
+                div {
+                    class: "port-map-line",
+                    style: format!("left: {}px; width: {}px;", -1.5 * PORT_WIDTH, PORT_MAP_DIST),
+                }
+            }
+        }
+
     }
 }
 
