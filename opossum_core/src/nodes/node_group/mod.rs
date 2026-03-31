@@ -1118,7 +1118,7 @@ mod test {
 #[cfg(test)]
 mod group_port_mapping_tests {
     use super::*;
-    use crate::nodes::Dummy;
+    use crate::{meter, nodes::Dummy};
 
     /*
     ============================================================
@@ -1165,6 +1165,7 @@ mod group_port_mapping_tests {
         current
     }
 
+
     /*
     ============================================================
     Tests
@@ -1178,6 +1179,16 @@ mod group_port_mapping_tests {
         let result = group.get_mapped_port_str("in", &node_id).unwrap();
         assert!(result.contains(":input_1"));
         assert!(result.starts_with('i'));
+    }
+
+    #[test]
+    fn connecting_already_mapped_port() {
+        let mut group = NodeGroup::new("g");
+        let n1 = group.add_node(Dummy::new("n1")).unwrap();
+        group.map_input_port(n1, "input_1", "in").unwrap();
+        let n2 = group.add_node(Dummy::default()).unwrap();
+        let result = group.connect_nodes(n2, "output_1", n1, "input_1", meter!(0.));
+        assert!(result.is_err());
     }
 
     #[test]
