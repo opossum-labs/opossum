@@ -1,8 +1,4 @@
-use std::{
-    collections::HashSet,
-    fs,
-    path::PathBuf,
-};
+use std::{collections::HashSet, fs, path::PathBuf};
 
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use futures_util::StreamExt;

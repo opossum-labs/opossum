@@ -82,16 +82,18 @@ pub fn NodePort(
     }
     .to_string();
 
-    let is_mapped_input = port_type == PortType::Input && graph_store
-        .read()
-        .mapped_ports
-        .read()
-        .contains_port_of_node(node.id(), &port_name);
-    let is_mapped_output = port_type == PortType::Output && graph_store
-        .read()
-        .mapped_ports
-        .read()
-        .contains_port_of_node(node.id(), &port_name);
+    let is_mapped_input = port_type == PortType::Input
+        && graph_store
+            .read()
+            .mapped_ports
+            .read()
+            .contains_port_of_node(node.id(), &port_name);
+    let is_mapped_output = port_type == PortType::Output
+        && graph_store
+            .read()
+            .mapped_ports
+            .read()
+            .contains_port_of_node(node.id(), &port_name);
 
     rsx! {
         div {

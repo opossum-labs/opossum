@@ -555,7 +555,7 @@ impl OpticGraph {
     }
 
     /// Remove a port mapping
-    /// 
+    ///
     /// Returns true if successful
     pub fn remove_mapped_port(&mut self, external_name: &str, port_type: PortType) -> bool {
         match port_type {
