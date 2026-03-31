@@ -470,14 +470,27 @@ impl NodeGroup {
         target_port: &str,
         distance: Length,
     ) -> OpmResult<()> {
-        if !self.graph().port_map(&PortType::Input).assigned_ports_for_node(target_id).is_empty(){
-            Err(OpossumError::OpticPort(format!("Cannot connect node, as port '{target_port}' of node {} is already mapped!", target_id.as_simple())))
-        }
-        else if !self.graph().port_map(&PortType::Output).assigned_ports_for_node(src_id).is_empty()
+        if !self
+            .graph()
+            .port_map(&PortType::Input)
+            .assigned_ports_for_node(target_id)
+            .is_empty()
         {
-            Err(OpossumError::OpticPort(format!("Cannot connect node, as port '{src_port}' of node {} is already mapped!", src_id.as_simple())))
-        }
-        else{
+            Err(OpossumError::OpticPort(format!(
+                "Cannot connect node, as port '{target_port}' of node {} is already mapped!",
+                target_id.as_simple()
+            )))
+        } else if !self
+            .graph()
+            .port_map(&PortType::Output)
+            .assigned_ports_for_node(src_id)
+            .is_empty()
+        {
+            Err(OpossumError::OpticPort(format!(
+                "Cannot connect node, as port '{src_port}' of node {} is already mapped!",
+                src_id.as_simple()
+            )))
+        } else {
             self.graph
                 .connect_nodes(src_id, src_port, target_id, target_port, distance)
         }
@@ -1164,7 +1177,6 @@ mod group_port_mapping_tests {
         }
         current
     }
-
 
     /*
     ============================================================
