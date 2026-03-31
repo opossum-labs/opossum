@@ -1,4 +1,4 @@
-use opossum_core::prelude::*;
+use opossum_core::{prelude::*, utils::LockExt};
 use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("group test");
@@ -22,6 +22,18 @@ fn main() -> OpmResult<()> {
     group1.map_output_port(i_g1_m, "output_1", "output2")?;
 
     let scene_g1 = scenery.add_node(group1)?;
+
+    scenery.with_group_node_mut(scene_g1, |group|{
+        let i_g10_l = group.add_node(Lens::default()).unwrap();
+        group.connect_nodes(
+        i_g10_l,
+        "output_1",
+        i_g1_m,
+        "input_1",
+        millimeter!(50.0),
+    );
+    })?;
+
 
     scenery.connect_nodes(i_src, "output_1", scene_g1, "input_1", millimeter!(50.0))?;
 
