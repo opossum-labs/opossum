@@ -20,6 +20,7 @@ use dioxus::{
 };
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 use serde_json::Value;
+use uuid::Uuid;
 
 pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let editor_status = use_context::<Signal<EditorState>>();
@@ -52,6 +53,7 @@ pub fn use_on_mouse_down(
     mut current_mouse_pos: Signal<Point2D<f64>>,
     mut last_click: Signal<Option<Instant>>,
     ctrl_pressed: Signal<bool>,
+    graph_id: Uuid,
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
     let editor_status = use_context::<Signal<EditorState>>();
@@ -68,10 +70,13 @@ pub fn use_on_mouse_down(
                     *ctx = None;
 
                     if ctrl_pressed() {
-                        workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeRemoved{graph_id: graph_store.read().scenery_id});
+                        workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeRemoved{graph_id});
+                        // graph_store.write().nodes_to_be_removed.write().clear();
                     } else {
-                        workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeSelected{graph_id: graph_store.read().scenery_id});
-                        workspace_processor.send(GraphsWorkspaceAction::ClearSelectedNodes{graph_id: graph_store.read().scenery_id});
+                        workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeSelected{graph_id});
+                        workspace_processor.send(GraphsWorkspaceAction::ClearSelectedNodes{graph_id});
+                        // graph_store.write().nodes_to_be_selected.write().clear();
+                        // graph_store.write().clear_selected_nodes();
                     }
                     let mouse_pos =
                         Point2D::new(event.client_coordinates().x, event.client_coordinates().y);

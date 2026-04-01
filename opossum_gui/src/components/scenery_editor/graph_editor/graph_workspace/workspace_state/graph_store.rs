@@ -48,7 +48,6 @@ pub struct GraphStore {
     selected_analyzer_nodes: Signal<HashSet<Uuid>>,
     file_path: Signal<Option<PathBuf>>,
     pub needs_saving: Signal<bool>,
-    pub scenery_id: Uuid,
     pub mapped_ports: Signal<PortMap>,
 }
 
