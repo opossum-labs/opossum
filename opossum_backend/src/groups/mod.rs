@@ -197,31 +197,32 @@ pub async fn add_port_map(
     let (node_id_to_map, (internal_port_name, external_port_name), port_type) =
         port_map_info.into_inner();
 
-    let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
-
-    let ports = scenery.with_group_node_mut(group_id, |g| {
-        match port_type {
-            PortType::Input => {
-                g.map_input_port(node_id_to_map, &internal_port_name, &external_port_name)
-            }
-            PortType::Output => {
-                g.map_output_port(node_id_to_map, &internal_port_name, &external_port_name)
-            }
-        }?;
-        let ports = g.ports();
-        let inputs = ports
-            .ports(&PortType::Input)
-            .keys()
-            .cloned()
-            .collect::<Vec<String>>();
-        let outputs = ports
-            .ports(&PortType::Output)
-            .keys()
-            .cloned()
-            .collect::<Vec<String>>();
-        Ok::<(Vec<String>, Vec<String>), BackEndErrorResponse>((inputs, outputs))
-    })??;
+    let ports = data
+        .document
+        .lock()
+        .scenery_mut()
+        .with_group_node_mut(group_id, |g| {
+            match port_type {
+                PortType::Input => {
+                    g.map_input_port(node_id_to_map, &internal_port_name, &external_port_name)
+                }
+                PortType::Output => {
+                    g.map_output_port(node_id_to_map, &internal_port_name, &external_port_name)
+                }
+            }?;
+            let ports = g.ports();
+            let inputs = ports
+                .ports(&PortType::Input)
+                .keys()
+                .cloned()
+                .collect::<Vec<String>>();
+            let outputs = ports
+                .ports(&PortType::Output)
+                .keys()
+                .cloned()
+                .collect::<Vec<String>>();
+            Ok::<(Vec<String>, Vec<String>), BackEndErrorResponse>((inputs, outputs))
+        })??;
 
     Ok(Json(ports))
 }
@@ -241,16 +242,16 @@ pub async fn get_group_portmaps(
     path: web::Path<Uuid>,
 ) -> Result<Json<(PortMap, PortMap)>, BackEndErrorResponse> {
     let group_id = path.into_inner();
-
-    let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
-
-    let port_maps = scenery.with_group_node_mut(group_id, |g| {
-        (
-            g.graph().port_map(&PortType::Input).clone(),
-            g.graph().port_map(&PortType::Output).clone(),
-        )
-    })?;
+    let port_maps = data
+        .document
+        .lock()
+        .scenery_mut()
+        .with_group_node_mut(group_id, |g| {
+            (
+                g.graph().port_map(&PortType::Input).clone(),
+                g.graph().port_map(&PortType::Output).clone(),
+            )
+        })?;
     Ok(Json(port_maps))
 }
 
@@ -270,23 +271,24 @@ pub async fn get_group_ports(
 ) -> Result<Json<(Vec<String>, Vec<String>)>, BackEndErrorResponse> {
     let group_id = path.into_inner();
 
-    let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
-
-    let ports = scenery.with_group_node_mut(group_id, |g| {
-        let ports = g.ports();
-        let inputs = ports
-            .ports(&PortType::Input)
-            .keys()
-            .cloned()
-            .collect::<Vec<String>>();
-        let outputs = ports
-            .ports(&PortType::Output)
-            .keys()
-            .cloned()
-            .collect::<Vec<String>>();
-        Ok::<(Vec<String>, Vec<String>), BackEndErrorResponse>((inputs, outputs))
-    })??;
+    let ports = data
+        .document
+        .lock()
+        .scenery_mut()
+        .with_group_node_mut(group_id, |g| {
+            let ports = g.ports();
+            let inputs = ports
+                .ports(&PortType::Input)
+                .keys()
+                .cloned()
+                .collect::<Vec<String>>();
+            let outputs = ports
+                .ports(&PortType::Output)
+                .keys()
+                .cloned()
+                .collect::<Vec<String>>();
+            Ok::<(Vec<String>, Vec<String>), BackEndErrorResponse>((inputs, outputs))
+        })??;
     Ok(Json(ports))
 }
 
@@ -303,6 +305,7 @@ pub async fn get_group_ports(
         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
+#[allow(clippy::significant_drop_tightening)]
 #[delete("/{uuid}/port_map")]
 pub async fn remove_port_map(
     data: web::Data<AppState>,
@@ -331,7 +334,7 @@ pub async fn remove_port_map(
     //remove connections first before removing the mapping
     scenery.with_group_node_mut(parent_group, |g| {
         for c in &connections {
-            g.disconnect_nodes(c.src_uuid(), c.src_port())?
+            g.disconnect_nodes(c.src_uuid(), c.src_port())?;
         }
         Ok::<(), BackEndErrorResponse>(())
     })??;

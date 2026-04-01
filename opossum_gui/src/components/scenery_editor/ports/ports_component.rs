@@ -1,19 +1,14 @@
-use crate::{
-    CONTEXT_MENU,
-    components::{
-        context_menu::cx_menu::{CxMenu, CxtCommand},
-        scenery_editor::{
-            EditorState, GraphStore, GraphsWorkspaceState,
-            constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_MAP_DIST, PORT_WIDTH},
-            edges::edges_component::{EdgePort, NewEdgeCreationStart},
-            graph_editor::DragStatus,
-            node::NodeElement, ports::{hooks::{use_on_mouse_leave, use_on_context_menu, use_on_mouse_down, use_on_mouse_enter}, port_map_component::PortMapComponent},
-        },
+use crate::components::scenery_editor::{
+    EditorState, GraphStore, GraphsWorkspaceState,
+    constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
+    node::NodeElement,
+    ports::{
+        hooks::{use_on_context_menu, use_on_mouse_down, use_on_mouse_enter, use_on_mouse_leave},
+        port_map_component::PortMapComponent,
     },
 };
-use dioxus::{html::input_data::MouseButton, prelude::*};
+use dioxus::prelude::*;
 use opossum_core::prelude::*;
-use uuid::Uuid;
 #[derive(Clone, Eq, PartialEq, Default, Debug)]
 pub struct Ports {
     input_ports: Vec<String>,
@@ -71,15 +66,33 @@ pub fn NodePort(
     let port_class = get_port_class(inverted_node, port_type);
 
     let is_mapped_port = graph_store
-            .read()
-            .mapped_ports
-            .read()
-            .contains_port_of_node(node.id(), &port_name);
-    
-    let on_mouse_down_handler = use_on_mouse_down(workspace, node_id, port_name.clone(), port_type, abs_port_position);
+        .read()
+        .mapped_ports
+        .read()
+        .contains_port_of_node(node.id(), &port_name);
+
+    let on_mouse_down_handler = use_on_mouse_down(
+        workspace,
+        node_id,
+        port_name.clone(),
+        port_type,
+        abs_port_position,
+    );
     let on_mouse_leave_handler = use_on_mouse_leave(editor_status);
-    let on_mouse_enter_handler = use_on_mouse_enter(editor_status, &port_name, node_id, port_type, is_mapped_port);
-    let on_context_menu_handler = use_on_context_menu(workspace.into(), graph_store.into(), node_id, port_name.clone(), port_type);
+    let on_mouse_enter_handler = use_on_mouse_enter(
+        editor_status,
+        &port_name,
+        node_id,
+        port_type,
+        is_mapped_port,
+    );
+    let on_context_menu_handler = use_on_context_menu(
+        workspace.into(),
+        graph_store.into(),
+        node_id,
+        port_name.clone(),
+        port_type,
+    );
 
     rsx! {
         div {
@@ -103,7 +116,7 @@ pub fn NodePort(
 
         if is_mapped_port {
             PortMapComponent {
-                on_context_menu_handler: on_context_menu_handler.clone(),
+                on_context_menu_handler,
                 rel_port_position,
                 port_type,
             }
@@ -111,7 +124,7 @@ pub fn NodePort(
     }
 }
 
-fn get_port_class(is_inverted: bool, port_type: PortType) -> &'static str{
+fn get_port_class(is_inverted: bool, port_type: PortType) -> &'static str {
     if is_inverted {
         if port_type == PortType::Input {
             "output-port"

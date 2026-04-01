@@ -521,8 +521,8 @@ async fn post_paste_nodes(
 
     reconfigure_ports(
         scenery,
-        input_port_maps,
-        output_port_maps,
+        &input_port_maps,
+        &output_port_maps,
         &node_id_link,
         &mut grouped_node_infos,
     )?;
@@ -538,13 +538,13 @@ async fn post_paste_nodes(
 
 fn reconfigure_ports(
     scenery: &mut NodeGroup,
-    input_port_maps: HashMap<Uuid, PortMap>,
-    output_port_maps: HashMap<Uuid, PortMap>,
+    input_port_maps: &HashMap<Uuid, PortMap>,
+    output_port_maps: &HashMap<Uuid, PortMap>,
     node_id_link: &HashMap<Uuid, Uuid>,
     grouped_node_infos: &mut HashMap<Uuid, Vec<NodeInfo>>,
 ) -> Result<(), BackEndErrorResponse> {
     //output port maps
-    for (old_group_id, output_port_map) in output_port_maps.iter() {
+    for (old_group_id, output_port_map) in output_port_maps {
         for (external_port_name, (input_node, internal_port_name)) in output_port_map {
             if let (Some(new_group_id), Some(new_mapped_node_id)) =
                 (node_id_link.get(old_group_id), node_id_link.get(input_node))
@@ -562,7 +562,7 @@ fn reconfigure_ports(
     }
 
     //input port maps
-    for (old_group_id, input_port_map) in input_port_maps.iter() {
+    for (old_group_id, input_port_map) in input_port_maps {
         for (external_port_name, (input_node, internal_port_name)) in input_port_map {
             if let (Some(new_group_id), Some(new_mapped_node_id)) =
                 (node_id_link.get(old_group_id), node_id_link.get(input_node))

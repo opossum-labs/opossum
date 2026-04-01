@@ -1,26 +1,30 @@
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::prelude::PortType;
 
-use crate::components::scenery_editor::{constants::{BORDER_WIDTH, PORT_MAP_DIST, PORT_WIDTH}};
+use crate::components::scenery_editor::constants::{BORDER_WIDTH, PORT_MAP_DIST, PORT_WIDTH};
 
 #[component]
-pub fn PortMapComponent(on_context_menu_handler: Callback<Event<MouseData>>, rel_port_position: Point2D<f64>, port_type: PortType) -> Element{
-    
-    match port_type{
-        PortType::Input => rsx!{
+pub fn PortMapComponent(
+    on_context_menu_handler: Callback<Event<MouseData>>,
+    rel_port_position: Point2D<f64>,
+    port_type: PortType,
+) -> Element {
+    match port_type {
+        PortType::Input => rsx! {
             InputPortMapComponent { on_context_menu_handler, rel_port_position }
         },
-        PortType::Output => rsx!{
+        PortType::Output => rsx! {
             OutputPortMapComponent { on_context_menu_handler, rel_port_position }
         },
     }
-        
-        
 }
 
 #[component]
-pub fn InputPortMapComponent(on_context_menu_handler: EventHandler<Event<MouseData>>, rel_port_position: Point2D<f64>, ) -> Element{
-    rsx!{
+pub fn InputPortMapComponent(
+    on_context_menu_handler: EventHandler<Event<MouseData>>,
+    rel_port_position: Point2D<f64>,
+) -> Element {
+    rsx! {
         div {
             class: "port-map-wrapper",
             style: format!(
@@ -40,8 +44,11 @@ pub fn InputPortMapComponent(on_context_menu_handler: EventHandler<Event<MouseDa
 }
 
 #[component]
-pub fn OutputPortMapComponent(on_context_menu_handler: EventHandler<Event<MouseData>>, rel_port_position: Point2D<f64>, ) -> Element{
-    rsx!{
+pub fn OutputPortMapComponent(
+    on_context_menu_handler: EventHandler<Event<MouseData>>,
+    rel_port_position: Point2D<f64>,
+) -> Element {
+    rsx! {
         div {
             class: "port-map-wrapper",
             style: format!(

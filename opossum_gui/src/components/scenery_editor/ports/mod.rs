@@ -1,3 +1,3 @@
-pub mod ports_component;
-mod port_map_component;
 mod hooks;
+mod port_map_component;
+pub mod ports_component;
