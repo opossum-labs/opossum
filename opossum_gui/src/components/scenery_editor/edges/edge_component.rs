@@ -29,7 +29,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 .nodes()
                 .read()
                 .get(&edge.src_uuid())
-                .map(|n| n.abs_port_position(&PortType::Output, edge.src_port()))
+                .map(|n| n.abs_port_position(PortType::Output, edge.src_port()))
                 .unwrap_or_default()
         }
     });
@@ -42,7 +42,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 .nodes()
                 .read()
                 .get(&edge.target_uuid())
-                .map(|n| n.abs_port_position(&PortType::Input, edge.target_port()))
+                .map(|n| n.abs_port_position(PortType::Input, edge.target_port()))
                 .unwrap_or_default()
         }
     });

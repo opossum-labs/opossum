@@ -79,17 +79,16 @@ fn remove_port_map_handler(
     EventHandler::new(move |(group_id, group_port_name): (Uuid, String)| {
         let ws = workspace.write();
 
-        if let Some(mut graph_store) = ws.get_graph_store(group_id) {
-            if !graph_store
+        if let Some(mut graph_store) = ws.get_graph_store(group_id)
+            && !graph_store
                 .write()
                 .mapped_ports
                 .write()
                 .remove_key(&group_port_name)
-            {
-                OPOSSUM_UI_LOGS
-                    .write()
-                    .add_log("Could not remove port mapping of port: {group_port_name}");
-            }
+        {
+            OPOSSUM_UI_LOGS.write().add_log(&format!(
+                "Could not remove port mapping of port: {group_port_name}"
+            ));
         }
     })
 }
@@ -104,14 +103,14 @@ fn add_port_map_handler(
         )| {
             let ws = workspace.write();
 
-            if let Some(mut graph_store) = ws.get_graph_store(group_id) {
-                if let Err(e) = graph_store.write().mapped_ports.write().add(
+            if let Some(mut graph_store) = ws.get_graph_store(group_id)
+                && let Err(e) = graph_store.write().mapped_ports.write().add(
                     &group_port_name,
                     mapped_node_id,
                     &mapped_node_port_name,
-                ) {
-                    OPOSSUM_UI_LOGS.write().add_log(&e.to_string());
-                }
+                )
+            {
+                OPOSSUM_UI_LOGS.write().add_log(&e.to_string());
             }
         },
     )

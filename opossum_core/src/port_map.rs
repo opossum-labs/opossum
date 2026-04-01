@@ -16,6 +16,9 @@ impl PortMap {
     ///
     /// This function adds a new port mapping to this [`PortMap`] by assigning an external port name to an
     /// internal node index and its respective internal port name
+    ///
+    /// # Errors
+    /// Returns an error if either the internal or the extrnal name is empty
     pub fn add(
         &mut self,
         external_name: &str,
@@ -89,15 +92,18 @@ impl PortMap {
         p.map(|p| p.0.clone())
     }
     /// Check if this [`PortMap`] contains the given external port name.
+    #[must_use]
     pub fn contains_external_name(&self, name: &str) -> bool {
         self.0.contains_key(name)
     }
     /// Check if this [`PortMap`] contains the given node.
+    #[must_use]
     pub fn contains_node(&self, node_id: Uuid) -> bool {
         self.0.iter().any(|p| p.1.0 == node_id)
     }
 
     /// Retrieve the external port name of a mapped port from the id of the internal node and the name of the internal port
+    #[must_use]
     pub fn external_port_of_mapped_port(&self, node_id: Uuid, port_name: &str) -> Option<String> {
         self.0
             .iter()
@@ -105,12 +111,14 @@ impl PortMap {
             .map(|(name, _)| name.clone())
     }
     /// Check if a port of an internal node wit specific id and port name is mapped
+    #[must_use]
     pub fn contains_port_of_node(&self, node_id: Uuid, port_name: &str) -> bool {
         self.0
             .iter()
             .any(|(_, (id, name))| *id == node_id && name == port_name)
     }
     /// Return a vector of port (external -> internal) port assignments for the given node.
+    #[must_use]
     pub fn assigned_ports_for_node(&self, node_id: Uuid) -> Vec<(String, String)> {
         self.0
             .iter()
@@ -119,16 +127,26 @@ impl PortMap {
             .collect()
     }
     /// Returns the total number of external port mappings in this [`PortMap`].
+    #[must_use]
     pub fn len(&self) -> usize {
         self.0.len()
     }
     /// Returns `true` if the [`PortMap`] is empty.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
     /// Returns an iterator of this [`PortMap`]
+    #[must_use]
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, (Uuid, String)> {
         self.0.iter()
+    }
+}
+impl<'a> IntoIterator for &'a PortMap {
+    type Item = (&'a String, &'a (Uuid, String));
+    type IntoIter = std::collections::hash_map::Iter<'a, String, (Uuid, String)>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 

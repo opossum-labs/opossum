@@ -69,18 +69,13 @@ impl GraphStore {
             self.needs_saving.set(true);
         }
     }
-    pub fn remove_port_of_node(
-        &mut self,
-        node_id: Uuid,
-        remove_port: &String,
-        port_type: PortType,
-    ) {
+    pub fn remove_port_of_node(&self, node_id: Uuid, remove_port: &String, port_type: PortType) {
         if let Some(node) = self.nodes().write().get_mut(&node_id) {
-            node.remove_port(remove_port, &port_type);
+            node.remove_port(remove_port, port_type);
         }
     }
     pub fn update_ports_of_node(
-        &mut self,
+        &self,
         node_id: Uuid,
         input_ports: Vec<String>,
         output_ports: Vec<String>,

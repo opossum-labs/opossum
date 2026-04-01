@@ -44,6 +44,10 @@ impl CxMenu {
     pub const fn new(x: f64, y: f64, entries: Vec<(String, CxtCommand)>) -> Self {
         Self { x, y, entries }
     }
+
+    pub fn add_entry(&mut self, entry: (String, CxtCommand)){
+        self.entries.push(entry);
+    }
 }
 
 #[component]

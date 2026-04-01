@@ -160,7 +160,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
                             EdgeCreation::new(
                                 edge_creation_start.src_node,
                                 edge_creation_start.src_port.clone(),
-                                edge_creation_start.src_port_type.clone(),
+                                edge_creation_start.src_port_type,
                                 edge_creation_start.start_pos,
                             )
                         });

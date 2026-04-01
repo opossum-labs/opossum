@@ -34,8 +34,8 @@ pub enum PortType {
 impl Display for PortType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PortType::Input => write!(f, "input"),
-            PortType::Output => write!(f, "output"),
+            Self::Input => write!(f, "input"),
+            Self::Output => write!(f, "output"),
         }
     }
 }

@@ -321,7 +321,7 @@ async fn process_paste_node(
                     Some(
                         move |(input_port_maps, output_port_maps): (PortMap, PortMap)| {
                             for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
-                                input_port_maps.iter()
+                                &input_port_maps
                             {
                                 ws_handler.workspace.add_port_map(
                                     group_id,
@@ -331,7 +331,7 @@ async fn process_paste_node(
                                 );
                             }
                             for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
-                                output_port_maps.iter()
+                                &output_port_maps
                             {
                                 ws_handler.workspace.add_port_map(
                                     group_id,
@@ -366,7 +366,7 @@ async fn process_paste_node(
         Err(e) => {
             OPOSSUM_UI_LOGS
                 .write()
-                .add_log(&format!("Error while pasting node/s: {}", e));
+                .add_log(&format!("Error while pasting node/s: {e}"));
         }
     }
     // Some(
@@ -599,7 +599,8 @@ fn find_suitable_element_position(
     }
     final_position // fallback: return last position after reaching max iterations
 }
-
+#[allow(clippy::future_not_send)]
+#[allow(clippy::large_types_passed_by_value)]
 async fn process_remove_port_map(
     group_id: Uuid,
     group_port_name: String,
@@ -629,7 +630,8 @@ async fn process_remove_port_map(
         }
     }
 }
-
+#[allow(clippy::future_not_send)]
+#[allow(clippy::large_types_passed_by_value)]
 async fn process_add_port_map(
     port_type: PortType,
     group_port_name: String,
@@ -753,7 +755,7 @@ async fn process_fill_graph_of_group(
     eval_action_run(
         api::get_port_maps_of_group(group_id).await,
         Some(move |(input_ports, output_ports): (PortMap, PortMap)| {
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in input_ports.iter() {
+            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in &input_ports {
                 ws_handler.workspace.add_port_map(
                     group_id,
                     group_port_name.clone(),
@@ -761,7 +763,7 @@ async fn process_fill_graph_of_group(
                     *mapped_node_id,
                 );
             }
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in output_ports.iter() {
+            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in &output_ports {
                 ws_handler.workspace.add_port_map(
                     group_id,
                     group_port_name.clone(),

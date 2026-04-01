@@ -545,7 +545,7 @@ fn reconfigure_ports(
 ) -> Result<(), BackEndErrorResponse> {
     //output port maps
     for (old_group_id, output_port_map) in output_port_maps.iter() {
-        for (external_port_name, (input_node, internal_port_name)) in output_port_map.iter() {
+        for (external_port_name, (input_node, internal_port_name)) in output_port_map {
             if let (Some(new_group_id), Some(new_mapped_node_id)) =
                 (node_id_link.get(old_group_id), node_id_link.get(input_node))
             {
@@ -563,7 +563,7 @@ fn reconfigure_ports(
 
     //input port maps
     for (old_group_id, input_port_map) in input_port_maps.iter() {
-        for (external_port_name, (input_node, internal_port_name)) in input_port_map.iter() {
+        for (external_port_name, (input_node, internal_port_name)) in input_port_map {
             if let (Some(new_group_id), Some(new_mapped_node_id)) =
                 (node_id_link.get(old_group_id), node_id_link.get(input_node))
             {
