@@ -20,7 +20,6 @@ use opossum_core::{
 use rust_sugiyama::{configure::Config, from_edges};
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
 };
 use uuid::Uuid;
 
@@ -46,7 +45,6 @@ pub struct GraphStore {
     pub nodes_to_be_removed: Signal<HashMap<Uuid, bool>>,
     selected_nodes: Signal<HashMap<Uuid, bool>>,
     selected_analyzer_nodes: Signal<HashSet<Uuid>>,
-    file_path: Signal<Option<PathBuf>>,
     pub needs_saving: Signal<bool>,
     pub mapped_ports: Signal<PortMap>,
 }
