@@ -45,7 +45,6 @@ pub struct GraphStore {
     pub nodes_to_be_removed: Signal<HashMap<Uuid, bool>>,
     selected_nodes: Signal<HashMap<Uuid, bool>>,
     selected_analyzer_nodes: Signal<HashSet<Uuid>>,
-    pub needs_saving: Signal<bool>,
     pub mapped_ports: Signal<PortMap>,
 }
 
@@ -63,7 +62,6 @@ impl GraphStore {
     pub fn set_name_of_node(&mut self, node_id: Uuid, name: String) {
         if let Some(node) = self.nodes().write().get_mut(&node_id) {
             node.set_name(name);
-            self.needs_saving.set(true);
         }
     }
     pub fn remove_port_of_node(&self, node_id: Uuid, remove_port: &String, port_type: PortType) {
@@ -84,7 +82,6 @@ impl GraphStore {
     pub fn set_node_inverted(&mut self, node_id: Uuid, inverted: bool) {
         if let Some(node) = self.nodes().write().get_mut(&node_id) {
             node.set_inverted(inverted);
-            self.needs_saving.set(true);
         }
     }
     #[must_use]
