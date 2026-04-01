@@ -1,4 +1,4 @@
-use dioxus::html::geometry::euclid::default::Point2D;
+use dioxus::html::geometry::euclid::default::{Point2D, Rect};
 use opossum_core::{
     prelude::{AnalyzerType, PortType},
     types::api_types::{ConnectInfo, NewRefNode},
@@ -6,7 +6,38 @@ use opossum_core::{
 use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
 
+use crate::components::scenery_editor::{
+    edges::edges_component::EdgeCreation, graph_editor::DragStatus,
+};
+
 pub enum GraphsWorkspaceAction {
+    // Group into which other nodes could be dropped
+    // UUid of that group
+    // z-index of that group to select group directly underneath
+    ClearNodesToBeSelected {
+        graph_id: Uuid,
+    },
+    ClearNodesToBeRemoved {
+        graph_id: Uuid,
+    },
+    ClearSelectedNodes {
+        graph_id: Uuid,
+    },
+    SetDropInGroup(Option<(Uuid, usize)>),
+    SetSelectionBox(Option<Rect<f64>>),
+    SetDragStatus(DragStatus),
+    ApplyDrag {
+        graph_id: Uuid,
+        drag_status: DragStatus,
+        relative_shift: Point2D<f64>,
+        current_zoom: f64,
+        mouse_to_graph_shift: Point2D<f64>,
+    },
+    SetEdgeInCreation {
+        graph_id: Uuid,
+        edge_in_creation: Option<EdgeCreation>,
+    },
+    SetEditorArea(Rect<f64>),
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),
     ConvertToGroup {

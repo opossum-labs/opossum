@@ -13,7 +13,7 @@ use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 
 #[component]
 pub fn EdgeComponent(edge: ConnectInfo) -> Element {
-    let graph_state = use_context::<Signal<GraphState>>();
+    let graph_state = use_context::<ReadSignal<GraphState>>();
     let graph_store = graph_state.read().graph_store;
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 

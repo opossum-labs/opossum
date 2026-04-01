@@ -12,7 +12,7 @@ use crate::{
     components::{
         context_menu::cx_menu::{CxMenu, CxtCommand},
         scenery_editor::{
-            EditorState, GraphStore, GraphsWorkspaceState,
+            EditorState, GraphState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
             edges::edges_component::{EdgePort, NewEdgeCreationStart},
             graph_editor::DragStatus,
         },
@@ -20,49 +20,52 @@ use crate::{
 };
 
 pub fn use_on_mouse_down(
-    mut workspace: Signal<GraphsWorkspaceState>,
     node_id: Uuid,
     port_name: String,
     port_type: PortType,
     abs_port_position: Point2D<f64>,
 ) -> EventHandler<MouseEvent> {
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     EventHandler::new(move |event: MouseEvent| {
         if Some(MouseButton::Primary) == event.trigger_button() {
-            workspace
-                .write()
-                .drag_status
-                .set(DragStatus::Edge(NewEdgeCreationStart {
-                    src_node: node_id,
-                    src_port: port_name.clone(),
-                    src_port_type: port_type,
-                    start_pos: abs_port_position,
-                }));
             event.stop_propagation();
+            let drag_status = DragStatus::Edge(NewEdgeCreationStart {
+                src_node: node_id,
+                src_port: port_name.clone(),
+                src_port_type: port_type,
+                start_pos: abs_port_position,
+            });
+            workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(drag_status));
         }
     })
 }
 
-pub fn use_on_mouse_leave(mut editor_status: Signal<EditorState>) -> EventHandler<MouseEvent> {
+pub fn use_on_mouse_leave(editor_status: ReadSignal<EditorState>) -> EventHandler<MouseEvent> {
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
+    let graph_id = use_context::<ReadSignal<GraphState>>().read().graph_info.id;
+
     EventHandler::new(move |event: MouseEvent| {
         let edge_increation = editor_status.read().edge_in_creation.read().clone();
         event.stop_propagation();
         if let Some(mut edge_in_creation) = edge_increation {
             edge_in_creation.set_end_port(None);
-            editor_status
-                .write()
-                .edge_in_creation
-                .set(Some(edge_in_creation));
+            workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
+                graph_id,
+                edge_in_creation: Some(edge_in_creation),
+            });
         }
     })
 }
 
 pub fn use_on_mouse_enter(
-    mut editor_status: Signal<EditorState>,
+    editor_status: ReadSignal<EditorState>,
     port_name: &str,
     node_id: Uuid,
     port_type: PortType,
     is_mapped_port: bool,
 ) -> EventHandler<MouseEvent> {
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
+    let graph_id = use_context::<ReadSignal<GraphState>>().read().graph_info.id;
     EventHandler::new({
         let port_name = port_name.to_owned();
         move |event: MouseEvent| {
@@ -70,16 +73,18 @@ pub fn use_on_mouse_enter(
             if let Some(mut edge_in_creation) = edge_increation
                 && !is_mapped_port
             {
+                event.stop_propagation();
+
                 edge_in_creation.set_end_port(Some(EdgePort {
                     node_id,
                     port_name: port_name.clone(),
                     port_type,
                 }));
-                editor_status
-                    .write()
-                    .edge_in_creation
-                    .set(Some(edge_in_creation));
-                event.stop_propagation();
+
+                workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
+                    graph_id,
+                    edge_in_creation: Some(edge_in_creation),
+                });
             }
         }
     })

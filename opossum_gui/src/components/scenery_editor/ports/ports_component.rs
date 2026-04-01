@@ -56,9 +56,9 @@ pub fn NodePort(
     port_type: PortType,
     inverted_node: bool,
 ) -> Element {
-    let editor_status = use_context::<Signal<EditorState>>();
-    let graph_store = use_context::<Signal<GraphStore>>();
-    let workspace = use_context::<Signal<GraphsWorkspaceState>>();
+    let editor_status = use_context::<ReadSignal<EditorState>>();
+    let graph_store = use_context::<ReadSignal<GraphStore>>();
+    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
     let rel_port_position = node.rel_port_position(port_type, &port_name);
     let abs_port_position = node.abs_port_position(port_type, &port_name);
@@ -71,13 +71,8 @@ pub fn NodePort(
         .read()
         .contains_port_of_node(node.id(), &port_name);
 
-    let on_mouse_down_handler = use_on_mouse_down(
-        workspace,
-        node_id,
-        port_name.clone(),
-        port_type,
-        abs_port_position,
-    );
+    let on_mouse_down_handler =
+        use_on_mouse_down(node_id, port_name.clone(), port_type, abs_port_position);
     let on_mouse_leave_handler = use_on_mouse_leave(editor_status);
     let on_mouse_enter_handler = use_on_mouse_enter(
         editor_status,
@@ -87,8 +82,8 @@ pub fn NodePort(
         is_mapped_port,
     );
     let on_context_menu_handler = use_on_context_menu(
-        workspace.into(),
-        graph_store.into(),
+        workspace,
+        graph_store,
         node_id,
         port_name.clone(),
         port_type,

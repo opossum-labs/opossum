@@ -7,7 +7,7 @@ use crate::components::{
             DragStatus, GraphViewEditor,
             graph_workspace::{
                 GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
-                use_workspace_processor, workspace_action::use_node_editor_command,
+                use_workspace_processor, workspace_action::node_editor_command,
             },
             hooks::{use_drag_end, use_on_key_down, use_on_key_up, use_on_resize},
         },
@@ -29,11 +29,10 @@ pub fn GraphEditor(
     root_tab_open_handler: EventHandler<bool>,
 ) -> Element {
     let workspace = use_signal(GraphsWorkspaceState::default);
-    use_context_provider(|| workspace);
+    use_context_provider(|| ReadSignal::from(workspace));
     let root_graph_id = use_memo(move || *workspace.read().root_scenery_id.read());
 
     let workspace_handlers = WorkSpaceSignalHandlers::new(workspace);
-    use_context_provider(|| workspace_handlers);
 
     let graph_editor_container_class =
         use_memo(move || match *workspace.peek().drag_status.read() {
@@ -51,7 +50,7 @@ pub fn GraphEditor(
     let active_tab = use_memo(move || *workspace.read().active_tab.read());
 
     use_effect(move || {
-        use_node_editor_command(
+        node_editor_command(
             node_editor_command_handler,
             active_tab.into(),
             workspace_processor,
@@ -115,16 +114,19 @@ pub fn GraphEditor(
                 g.read().get_selected_nodes(active_tab)
             })
     });
-    let onmouseleave_handler = use_drag_end(workspace);
+    let onmouseleave_handler = use_drag_end(workspace.into());
     let onkeydownhandler = use_on_key_down(
         current_mouse_in_editor_pos,
-        workspace,
+        workspace.into(),
         ctrl_pressed,
         shift_pressed,
     );
     let onkeyuphandler = use_on_key_up(ctrl_pressed, shift_pressed);
     let graph_editor_content_container_id = "graphEditorContentContainer";
-    let onresizehandler = use_on_resize(workspace, graph_editor_content_container_id.to_string());
+    let onresizehandler = use_on_resize(
+        workspace.into(),
+        graph_editor_content_container_id.to_string(),
+    );
 
     rsx! {
         div { class: "row main-content-row",
@@ -196,7 +198,7 @@ pub fn GraphEditor(
                                             value: id.as_simple().to_string(),
                                             index: i,
                                             GraphViewEditor {
-                                                onmouseup_handler: EventHandler::new(use_drag_end(workspace)),
+                                                onmouseup_handler: EventHandler::new(use_drag_end(workspace.into())),
                                                 model_modified_sig,
                                                 model_modified_handler,
                                                 model_file_path_sig,

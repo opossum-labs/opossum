@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 #[component]
 pub fn Nodes(
-    graph_store: Signal<GraphStore>,
+    graph_store: ReadSignal<GraphStore>,
     graph_id: Uuid,
     ctrl_pressed: Signal<bool>,
     shift_pressed: Signal<bool>,

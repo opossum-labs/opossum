@@ -1,5 +1,9 @@
-use crate::components::scenery_editor::graph_editor::graph_workspace::{
-    GraphsWorkspaceState, workspace_handlers::helper_functions::with_edges,
+use crate::components::scenery_editor::{
+    edges::edges_component::EdgeCreation,
+    graph_editor::graph_workspace::{
+        GraphsWorkspaceState,
+        workspace_handlers::helper_functions::{with_edges, with_editor_state},
+    },
 };
 use dioxus::prelude::*;
 use opossum_core::types::api_types::ConnectInfo;
@@ -12,6 +16,7 @@ pub struct EdgeHandlers {
     update_edge: EventHandler<(ConnectInfo, Uuid)>,
     update_edges: EventHandler<(Vec<ConnectInfo>, Uuid)>,
     add_group_edges: EventHandler<(Uuid, Vec<ConnectInfo>)>,
+    set_edge_in_creation: EventHandler<(Option<EdgeCreation>, Uuid)>,
 }
 
 impl EdgeHandlers {
@@ -22,7 +27,12 @@ impl EdgeHandlers {
             update_edge: update_edge_handler(workspace),
             update_edges: update_edges_handler(workspace),
             add_group_edges: add_group_edges_handler(workspace),
+            set_edge_in_creation: set_edge_in_creation_handler(workspace),
         }
+    }
+
+    pub fn set_edge_in_creation(&self, edge_creation: Option<EdgeCreation>, graph_id: Uuid) {
+        self.set_edge_in_creation.call((edge_creation, graph_id));
     }
 
     pub fn add_edge(&self, edge: ConnectInfo, graph_id: Uuid) {
@@ -44,6 +54,16 @@ impl EdgeHandlers {
     pub fn add_group_edges(&self, group_id: Uuid, edges: Vec<ConnectInfo>) {
         self.add_group_edges.call((group_id, edges));
     }
+}
+
+fn set_edge_in_creation_handler(
+    workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<(Option<EdgeCreation>, Uuid)> {
+    EventHandler::new(move |(edge_in_creation, graph_id)| {
+        with_editor_state(workspace, graph_id, false, |e| {
+            e.edge_in_creation.set(edge_in_creation);
+        });
+    })
 }
 
 fn add_edge_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(ConnectInfo, Uuid)> {

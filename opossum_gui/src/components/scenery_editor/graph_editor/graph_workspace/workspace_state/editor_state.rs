@@ -13,6 +13,16 @@ pub struct EditorState {
     pub shift: Signal<Point2D<f64>>,
 }
 
+impl EditorState {
+    pub fn apply_shift(&mut self, relative_shift: Point2D<f64>) {
+        let current_shift = *self.shift.read();
+        self.shift.set(Point2D::new(
+            current_shift.x + relative_shift.x,
+            current_shift.y + relative_shift.y,
+        ));
+    }
+}
+
 impl Default for EditorState {
     fn default() -> Self {
         Self {
