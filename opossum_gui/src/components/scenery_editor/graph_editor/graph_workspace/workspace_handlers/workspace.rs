@@ -36,6 +36,7 @@ pub struct WorkspaceHandlers {
     clear_nodes_to_be_selected: EventHandler<Uuid>,
     clear_nodes_to_be_removed: EventHandler<Uuid>,
     clear_selected_nodes: EventHandler<Uuid>,
+    #[allow(clippy::type_complexity)]
     apply_drag: EventHandler<(Uuid, DragStatus, Point2D<f64>, f64, Point2D<f64>)>,
 }
 
@@ -74,7 +75,7 @@ impl WorkspaceHandlers {
             relative_shift,
             current_zoom,
             mouse_to_graph_shift,
-        ))
+        ));
     }
 
     pub fn clear_nodes_to_be_selected(&self, graph_id: Uuid) {
@@ -138,6 +139,7 @@ impl WorkspaceHandlers {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn apply_drag_handler(
     mut workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, DragStatus, Point2D<f64>, f64, Point2D<f64>)> {
@@ -181,7 +183,7 @@ fn apply_drag_handler(
                             });
                             edge.shift_end(node_edge_shift);
                         });
-                    })
+                    });
                 }
                 DragStatus::SelectionBox(rect) => {
                     let editor_origin = workspace.read().editor_area.read().origin;
@@ -239,7 +241,7 @@ fn clear_nodes_to_be_removed_handler(
     })
 }
 
-fn clear_selected_nodes_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<Uuid> {
+fn clear_selected_nodes_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<Uuid> {
     EventHandler::new(move |graph_id| {
         with_graph_store(workspace, graph_id, false, |g| {
             g.clear_selected_nodes();

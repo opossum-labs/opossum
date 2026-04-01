@@ -73,7 +73,7 @@ pub fn Node(
     let z_index = node.z_index();
     use_effect({
         move || {
-            let mut droppable_group = workspace.read().drop_in_group.read().clone();
+            let mut droppable_group = *workspace.read().drop_in_group.read();
             let selected_nodes = graph_store.peek().selected_nodes();
 
             if !selected_nodes.contains_key(&node_id)

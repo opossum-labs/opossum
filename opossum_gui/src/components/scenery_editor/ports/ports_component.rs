@@ -82,8 +82,8 @@ pub fn NodePort(
         is_mapped_port,
     );
     let on_context_menu_handler = use_on_context_menu(
-        workspace.into(),
-        graph_store.into(),
+        workspace,
+        graph_store,
         node_id,
         port_name.clone(),
         port_type,

@@ -32,7 +32,7 @@ impl EdgeHandlers {
     }
 
     pub fn set_edge_in_creation(&self, edge_creation: Option<EdgeCreation>, graph_id: Uuid) {
-        self.set_edge_in_creation.call((edge_creation, graph_id))
+        self.set_edge_in_creation.call((edge_creation, graph_id));
     }
 
     pub fn add_edge(&self, edge: ConnectInfo, graph_id: Uuid) {
@@ -61,7 +61,7 @@ fn set_edge_in_creation_handler(
 ) -> EventHandler<(Option<EdgeCreation>, Uuid)> {
     EventHandler::new(move |(edge_in_creation, graph_id)| {
         with_editor_state(workspace, graph_id, false, |e| {
-            e.edge_in_creation.set(edge_in_creation)
+            e.edge_in_creation.set(edge_in_creation);
         });
     })
 }

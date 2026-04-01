@@ -31,7 +31,7 @@ pub fn GraphViewEditor(
     let graph_id = graph_state.read().graph_info.id;
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
-    use_context_provider(|| ReadSignal::from(graph_state));
+    use_context_provider(|| graph_state);
     use_context_provider(|| ReadSignal::from(editor_state));
     use_context_provider(|| ReadSignal::from(graph_store));
     let onwheel_handler = use_zoom();

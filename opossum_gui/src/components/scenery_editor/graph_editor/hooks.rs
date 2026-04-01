@@ -6,7 +6,7 @@ use crate::{
         GraphState, NodeElement,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
         graph_editor::graph_workspace::{
-            DragStatus, EditorState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
+            DragStatus, EditorState, GraphsWorkspaceAction, GraphsWorkspaceState,
         },
     },
 };
@@ -123,16 +123,13 @@ pub fn use_on_mouse_down(
     }
 }
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
-    let mut editor_status = use_context::<ReadSignal<EditorState>>();
-    let graph_store = use_context::<ReadSignal<GraphStore>>();
+    let editor_status = use_context::<ReadSignal<EditorState>>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let graph_id = use_context::<ReadSignal<GraphState>>().read().graph_info.id;
 
     move |event| {
         let current_shift = *editor_status().shift.read();
-        let current_zoom = *editor_status().zoom.read();
-        let drag_status = workspace.read().drag_status.read().clone();
         let relative_shift = Point2D::new(
             event.client_coordinates().x - current_mouse_pos().x,
             event.client_coordinates().y - current_mouse_pos().y,
@@ -143,11 +140,12 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
 
         let mouse_to_graph_shift =
             Point2D::new(mouse_pos.x - current_shift.x, mouse_pos.y - current_shift.y);
+
         workspace_processor.send(GraphsWorkspaceAction::ApplyDrag {
             graph_id,
-            drag_status,
+            drag_status: workspace.read().drag_status.read().clone(),
             relative_shift,
-            current_zoom,
+            current_zoom: *editor_status().zoom.read(),
             mouse_to_graph_shift,
         });
     }
