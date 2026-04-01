@@ -108,6 +108,12 @@ impl NodeInfo {
     pub fn output_ports(&self) -> Vec<String> {
         self.output_ports.clone()
     }
+    pub fn set_input_ports(&mut self, inputs: Vec<String>) {
+        self.input_ports = inputs;
+    }
+    pub fn set_output_ports(&mut self, outputs: Vec<String>) {
+        self.output_ports = outputs;
+    }
 }
 #[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
 pub struct NewRefNode {

@@ -530,7 +530,7 @@ impl OpticGraph {
         self.g.reverse();
         Ok(())
     }
-    fn external_nodes(&self, port_type: &PortType) -> Vec<NodeIndex> {
+    fn external_nodes(&self, port_type: PortType) -> Vec<NodeIndex> {
         let edge_direction = match port_type {
             PortType::Input => Direction::Incoming,
             PortType::Output => Direction::Outgoing,
@@ -545,7 +545,7 @@ impl OpticGraph {
                 .lock_opm()
                 .unwrap()
                 .ports()
-                .names(port_type)
+                .names(&port_type)
                 .len();
             if ports != edges {
                 nodes.push(node_idx);
@@ -554,6 +554,15 @@ impl OpticGraph {
         nodes
     }
 
+    /// Remove a port mapping
+    ///
+    /// Returns true if successful
+    pub fn remove_mapped_port(&mut self, external_name: &str, port_type: PortType) -> bool {
+        match port_type {
+            PortType::Input => self.input_port_map.remove_key(external_name),
+            PortType::Output => self.output_port_map.remove_key(external_name),
+        }
+    }
     /// Map a port of an internal node to an external port of the group.
     ///
     /// In oder to use an [`OpticGraph`] from the outside, internal nodes / ports must be mapped to be visible. The
@@ -590,7 +599,7 @@ impl OpticGraph {
                 "node with id {node_id} not found"
             )));
         };
-        if !self.external_nodes(port_type).contains(&node_idx) {
+        if !self.external_nodes(*port_type).contains(&node_idx) {
             return Err(OpossumError::OpticGroup(format!(
                 "node to be mapped is not an {name_type} node of the group"
             )));
@@ -978,10 +987,7 @@ mod test {
             .unwrap();
         og.connect_nodes(sn2_i, "output_1", sn3_i, "input_1", Length::zero())
             .unwrap();
-        assert_eq!(
-            og.external_nodes(&PortType::Input),
-            vec![0.into(), 2.into()]
-        )
+        assert_eq!(og.external_nodes(PortType::Input), vec![0.into(), 2.into()])
     }
     #[test]
     fn output_nodes() {
@@ -995,10 +1001,7 @@ mod test {
             .unwrap();
         og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "input_1", Length::zero())
             .unwrap();
-        assert_eq!(
-            og.external_nodes(&PortType::Input),
-            vec![0.into(), 1.into()]
-        )
+        assert_eq!(og.external_nodes(PortType::Input), vec![0.into(), 1.into()])
     }
     #[test]
     fn next_node_with_uuid_single() {

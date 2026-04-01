@@ -1,6 +1,9 @@
-use crate::components::scenery_editor::{
-    GraphState,
-    graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_state::GraphInfo},
+use crate::{
+    OPOSSUM_UI_LOGS,
+    components::scenery_editor::{
+        GraphState,
+        graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_state::GraphInfo},
+    },
 };
 use dioxus::prelude::*;
 use uuid::Uuid;
@@ -13,6 +16,8 @@ pub struct WorkspaceHandlers {
     set_needs_saving: EventHandler<bool>,
     clear_workspace: EventHandler<()>,
     set_active_tab: EventHandler<Uuid>,
+    add_port_map: EventHandler<((Uuid, Uuid), (String, String))>,
+    remove_port_map: EventHandler<(Uuid, String)>,
 }
 
 impl WorkspaceHandlers {
@@ -24,6 +29,8 @@ impl WorkspaceHandlers {
             set_needs_saving: set_needs_saving_handler(workspace),
             clear_workspace: clear_workspace_handler(workspace),
             set_active_tab: set_active_tab_handler(workspace),
+            add_port_map: add_port_map_handler(workspace),
+            remove_port_map: remove_port_map_handler(workspace),
         }
     }
     pub fn add_new_group_tab(&self, graph_info: GraphInfo) {
@@ -49,6 +56,64 @@ impl WorkspaceHandlers {
     pub fn set_active_tab(&self, id: Uuid) {
         self.set_active_tab.call(id);
     }
+    pub fn add_port_map(
+        &self,
+        group_id: Uuid,
+        group_port_name: String,
+        mapped_node_port_name: String,
+        mapped_node_id: Uuid,
+    ) {
+        self.add_port_map.call((
+            (group_id, mapped_node_id),
+            (group_port_name, mapped_node_port_name),
+        ));
+    }
+    pub fn remove_port_map(&self, group_id: Uuid, group_port_name: String) {
+        self.remove_port_map.call((group_id, group_port_name));
+    }
+}
+
+fn remove_port_map_handler(
+    mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, String)> {
+    EventHandler::new(move |(group_id, group_port_name): (Uuid, String)| {
+        let ws = workspace.write();
+
+        if let Some(mut graph_store) = ws.get_graph_store(group_id)
+            && !graph_store
+                .write()
+                .mapped_ports
+                .write()
+                .remove_key(&group_port_name)
+        {
+            OPOSSUM_UI_LOGS.write().add_log(&format!(
+                "Could not remove port mapping of port: {group_port_name}"
+            ));
+        }
+    })
+}
+
+fn add_port_map_handler(
+    mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<((Uuid, Uuid), (String, String))> {
+    EventHandler::new(
+        move |((group_id, mapped_node_id), (group_port_name, mapped_node_port_name)): (
+            (Uuid, Uuid),
+            (String, String),
+        )| {
+            let ws = workspace.write();
+
+            if let Some(mut graph_store) = ws.get_graph_store(group_id)
+                && let Err(e) = graph_store.write().mapped_ports.write().add(
+                    &group_port_name,
+                    mapped_node_id,
+                    &mapped_node_port_name,
+                )
+            {
+                OPOSSUM_UI_LOGS.write().add_log(&e.to_string());
+            }
+        },
+    )
 }
 
 fn add_new_group_tab_handler(

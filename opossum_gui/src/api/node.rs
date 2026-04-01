@@ -36,6 +36,18 @@ pub async fn get_connections(group_id: Uuid) -> Result<Vec<ConnectInfo>, String>
         ))
         .await
 }
+
+pub async fn get_port_maps_of_group(group_id: Uuid) -> Result<(PortMap, PortMap), String> {
+    HTTP_API_CLIENT()
+        .get::<(PortMap, PortMap)>(&format!("/api/groups/{}/portmaps", group_id.as_simple()))
+        .await
+}
+
+pub async fn get_ports_of_group(group_id: Uuid) -> Result<(Vec<String>, Vec<String>), String> {
+    HTTP_API_CLIENT()
+        .get::<(Vec<String>, Vec<String>)>(&format!("/api/groups/{}/ports", group_id.as_simple()))
+        .await
+}
 /// Send a request to add a node to the scenery.
 ///
 /// # Errors
@@ -417,6 +429,38 @@ pub async fn update_analyzer_config_ron(
         .post_ron::<AnalyzerType, String>(
             &format!("/api/scenery/analyzer/{}", node_id.as_simple()),
             analyzer_type,
+        )
+        .await
+}
+
+pub async fn add_port_map(
+    port_type: PortType,
+    group_port_name: String,
+    mapped_node_port_name: String,
+    mapped_node_id: Uuid,
+    group_id: Uuid,
+) -> Result<(Vec<String>, Vec<String>), String> {
+    HTTP_API_CLIENT()
+        .post::<(Uuid, (String, String), PortType), (Vec<String>, Vec<String>)>(
+            &format!("/api/groups/{}/port_map", group_id.as_simple()),
+            (
+                mapped_node_id,
+                (mapped_node_port_name, group_port_name),
+                port_type,
+            ),
+        )
+        .await
+}
+
+pub async fn remove_port_map(
+    group_port_name: String,
+    group_id: Uuid,
+    port_type: PortType,
+) -> Result<(bool, Vec<ConnectInfo>, Uuid), String> {
+    HTTP_API_CLIENT()
+        .delete::<(String, PortType), (bool, Vec<ConnectInfo>, Uuid)>(
+            &format!("/api/groups/{}/port_map", group_id.as_simple()),
+            (group_port_name, port_type),
         )
         .await
 }

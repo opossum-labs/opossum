@@ -43,6 +43,9 @@ impl GraphsWorkspaceState {
             .get(&graph_id)
             .map(|g| g.read().graph_store)
     }
+    pub(in super::super) fn get_graph_state(&self, graph_id: Uuid) -> Option<Signal<GraphState>> {
+        self.tabs.read().get(&graph_id).copied()
+    }
     pub(in super::super) fn get_tab(&self, graph_id: Uuid) -> Option<Signal<GraphState>> {
         self.tabs.read().get(&graph_id).copied()
     }

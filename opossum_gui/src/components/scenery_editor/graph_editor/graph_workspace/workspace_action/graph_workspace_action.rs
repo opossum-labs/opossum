@@ -1,6 +1,6 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
-    prelude::AnalyzerType,
+    prelude::{AnalyzerType, PortType},
     types::api_types::{ConnectInfo, NewRefNode},
 };
 use std::{collections::HashSet, path::PathBuf};
@@ -15,6 +15,18 @@ pub enum GraphsWorkspaceAction {
     },
     AddRootSceneryTab {
         name: String,
+    },
+    MapNodePort {
+        port_type: PortType,
+        group_port_name: String,
+        mapped_node_port_name: String,
+        mapped_node_id: Uuid,
+        group_id: Uuid,
+    },
+    RemovePortMap {
+        group_id: Uuid,
+        group_port_name: String,
+        port_type: PortType,
     },
     DeleteRootScenery,
     OpenGroupTab {

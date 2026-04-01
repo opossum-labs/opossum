@@ -1,9 +1,11 @@
 use crate::components::scenery_editor::{
-    EditorState, GraphsWorkspaceState,
+    EditorState, GraphStore, GraphsWorkspaceState,
     constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
-    edges::edges_component::{EdgePort, NewEdgeCreationStart},
-    graph_editor::DragStatus,
     node::NodeElement,
+    ports::{
+        hooks::{use_on_context_menu, use_on_mouse_down, use_on_mouse_enter, use_on_mouse_leave},
+        port_map_component::PortMapComponent,
+    },
 };
 use dioxus::prelude::*;
 use opossum_core::prelude::*;
@@ -19,6 +21,18 @@ impl Ports {
             input_ports,
             output_ports,
         }
+    }
+    pub fn set_input_ports(&mut self, ports: Vec<String>) {
+        self.input_ports = ports;
+    }
+    pub fn set_output_ports(&mut self, ports: Vec<String>) {
+        self.output_ports = ports;
+    }
+    pub fn remove_input_port(&mut self, remove: &String) {
+        self.input_ports.retain(|p| p != remove);
+    }
+    pub fn remove_output_port(&mut self, remove: &String) {
+        self.output_ports.retain(|p| p != remove);
     }
     #[must_use]
     pub const fn input_ports(&self) -> &Vec<String> {
@@ -42,23 +56,43 @@ pub fn NodePort(
     port_type: PortType,
     inverted_node: bool,
 ) -> Element {
-    let mut editor_status = use_context::<Signal<EditorState>>();
-    let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
+    let editor_status = use_context::<Signal<EditorState>>();
+    let graph_store = use_context::<Signal<GraphStore>>();
+    let workspace = use_context::<Signal<GraphsWorkspaceState>>();
 
-    let rel_port_position = node.rel_port_position(&port_type, &port_name);
-    let abs_port_position = node.abs_port_position(&port_type, &port_name);
+    let rel_port_position = node.rel_port_position(port_type, &port_name);
+    let abs_port_position = node.abs_port_position(port_type, &port_name);
     let node_id = node.id();
-    let port_class = if inverted_node {
-        if port_type == PortType::Input {
-            "output-port"
-        } else {
-            "input-port"
-        }
-    } else if port_type == PortType::Input {
-        "input-port"
-    } else {
-        "output-port"
-    };
+    let port_class = get_port_class(inverted_node, port_type);
+
+    let is_mapped_port = graph_store
+        .read()
+        .mapped_ports
+        .read()
+        .contains_port_of_node(node.id(), &port_name);
+
+    let on_mouse_down_handler = use_on_mouse_down(
+        workspace,
+        node_id,
+        port_name.clone(),
+        port_type,
+        abs_port_position,
+    );
+    let on_mouse_leave_handler = use_on_mouse_leave(editor_status);
+    let on_mouse_enter_handler = use_on_mouse_enter(
+        editor_status,
+        &port_name,
+        node_id,
+        port_type,
+        is_mapped_port,
+    );
+    let on_context_menu_handler = use_on_context_menu(
+        workspace.into(),
+        graph_store.into(),
+        node_id,
+        port_name.clone(),
+        port_type,
+    );
 
     rsx! {
         div {
@@ -74,52 +108,33 @@ pub fn NodePort(
                 -BORDER_WIDTH / 2.,
             ),
             draggable: false,
-            onmousedown: {
-                let port_name = port_name.clone();
-                let port_type = port_type.clone();
-                move |event: MouseEvent| {
-                    workspace
-                        .write()
-                        .drag_status
-                        .set(
-                            DragStatus::Edge(NewEdgeCreationStart {
-                                src_node: node_id,
-                                src_port: port_name.clone(),
-                                src_port_type: port_type.clone(),
-                                start_pos: abs_port_position,
-                            }),
-                        );
-                    event.stop_propagation();
-                }
-            },
-            onmouseenter: {
-                move |event: MouseEvent| {
-                    let edge_increation = editor_status.read().edge_in_creation.read().clone();
-                    if let Some(mut edge_in_creation) = edge_increation {
-                        edge_in_creation
-                            .set_end_port(
-                                Some(EdgePort {
-                                    node_id,
-                                    port_name: port_name.clone(),
-                                    port_type: port_type.clone(),
-                                }),
-                            );
-                        editor_status.write().edge_in_creation.set(Some(edge_in_creation));
-                        event.stop_propagation();
-                    }
-                }
-            },
-            onmouseleave: {
-                move |event: MouseEvent| {
-                    let edge_increation = editor_status.read().edge_in_creation.read().clone();
-                    event.stop_propagation();
-                    if let Some(mut edge_in_creation) = edge_increation {
-                        edge_in_creation.set_end_port(None);
-                        editor_status.write().edge_in_creation.set(Some(edge_in_creation));
-                    }
-                }
-            },
+            onmousedown: move |e| on_mouse_down_handler.call(e),
+            onmouseenter: move |e| on_mouse_enter_handler.call(e),
+            onmouseleave: move |e| on_mouse_leave_handler.call(e),
+            oncontextmenu: move |e| on_context_menu_handler.call(e),
         }
+
+        if is_mapped_port {
+            PortMapComponent {
+                on_context_menu_handler,
+                rel_port_position,
+                port_type,
+            }
+        }
+    }
+}
+
+fn get_port_class(is_inverted: bool, port_type: PortType) -> &'static str {
+    if is_inverted {
+        if port_type == PortType::Input {
+            "output-port"
+        } else {
+            "input-port"
+        }
+    } else if port_type == PortType::Input {
+        "input-port"
+    } else {
+        "output-port"
     }
 }
 
