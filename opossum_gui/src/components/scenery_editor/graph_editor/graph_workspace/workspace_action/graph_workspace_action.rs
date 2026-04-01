@@ -12,6 +12,9 @@ pub enum GraphsWorkspaceAction {
     // Group into which other nodes could be dropped
     // UUid of that group
     // z-index of that group to select group directly underneath
+    ClearNodesToBeSelected{graph_id: Uuid},
+    ClearNodesToBeRemoved{graph_id: Uuid},
+    ClearSelectedNodes{graph_id: Uuid},
     SetDropInGroup(Option<(Uuid,usize)>),
     SetSelectionBox(Option<Rect<f64>>),
     SetDragStatus(DragStatus),

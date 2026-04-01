@@ -33,7 +33,7 @@ pub fn GraphViewEditor(
 
     use_context_provider(|| graph_state);
     use_context_provider(|| editor_state);
-    use_context_provider(|| graph_store);
+    use_context_provider(|| ReadSignal::from(graph_store));
     let onwheel_handler = use_zoom();
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmousedown_handler =

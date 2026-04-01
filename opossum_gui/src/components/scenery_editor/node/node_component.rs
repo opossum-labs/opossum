@@ -25,7 +25,7 @@ pub fn Node(
     shift_pressed: Signal<bool>,
     mouse_pos_in_editor: Memo<Point2D<f64>>,
 ) -> Element {
-    let graph_store = use_context::<Signal<GraphStore>>();
+    let graph_store = use_context::<ReadSignal<GraphStore>>();
     let graph_state = use_context::<Signal<GraphState>>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
@@ -49,19 +49,19 @@ pub fn Node(
             {
                 if ctrl_pressed() && graph_store.read().selected_nodes().contains_key(&node_id) {
                     graph_store()
-                        .to_be_removed
+                        .nodes_to_be_removed
                         .write()
                         .insert(node_id, is_optical_node);
                     "node-selection-remove"
                 } else {
                     graph_store()
-                        .to_be_selected
+                        .nodes_to_be_selected
                         .write()
                         .insert(node_id, is_optical_node);
                     "node-selection"
                 }
             } else {
-                graph_store().to_be_selected.write().remove(&node_id);
+                graph_store().nodes_to_be_selected.write().remove(&node_id);
                 ""
             }
         }

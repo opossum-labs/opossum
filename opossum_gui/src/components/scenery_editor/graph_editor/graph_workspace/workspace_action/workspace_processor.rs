@@ -223,6 +223,9 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::SetDropInGroup(droppable_group) => workspace_handlers.workspace.set_drop_in_group(droppable_group),
                     GraphsWorkspaceAction::SetSelectionBox(selection_box) => workspace_handlers.workspace.set_selection_box(selection_box),
                     GraphsWorkspaceAction::SetEditorArea(editor_area) => workspace_handlers.workspace.set_editor_area(editor_area),
+                    GraphsWorkspaceAction::ClearNodesToBeSelected { graph_id } => workspace_handlers.workspace.clear_nodes_to_be_selected(graph_id),
+                    GraphsWorkspaceAction::ClearNodesToBeRemoved { graph_id } => workspace_handlers.workspace.clear_nodes_to_be_removed(graph_id),
+                    GraphsWorkspaceAction::ClearSelectedNodes { graph_id } => workspace_handlers.workspace.clear_selected_nodes(graph_id),
                 }
             }
         }

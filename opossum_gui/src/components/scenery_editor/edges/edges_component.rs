@@ -86,7 +86,7 @@ impl EdgeCreation {
 }
 #[component]
 pub fn EdgesComponent() -> Element {
-    let graph_store = use_context::<Signal<GraphStore>>();
+    let graph_store = use_context::<ReadSignal<GraphStore>>();
     let edges_signal = graph_store.peek().edges(); // do not subscribe to the graph_store signal itself but only to the edges signal therein
 
     rsx! {

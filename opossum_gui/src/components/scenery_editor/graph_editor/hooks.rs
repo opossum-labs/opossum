@@ -55,7 +55,7 @@ pub fn use_on_mouse_down(
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
     let editor_status = use_context::<Signal<EditorState>>();
-    let mut graph_store = use_context::<Signal<GraphStore>>();
+    let graph_store = use_context::<ReadSignal<GraphStore>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
@@ -68,10 +68,10 @@ pub fn use_on_mouse_down(
                     *ctx = None;
 
                     if ctrl_pressed() {
-                        graph_store.write().to_be_removed.write().clear();
+                        workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeRemoved{graph_id: graph_store.read().scenery_id});
                     } else {
-                        graph_store.write().to_be_selected.write().clear();
-                        graph_store.write().clear_selected_nodes();
+                        workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeSelected{graph_id: graph_store.read().scenery_id});
+                        workspace_processor.send(GraphsWorkspaceAction::ClearSelectedNodes{graph_id: graph_store.read().scenery_id});
                     }
                     let mouse_pos =
                         Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
@@ -122,7 +122,7 @@ pub fn use_on_mouse_down(
 }
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
-    let graph_store = use_context::<Signal<GraphStore>>();
+    let graph_store = use_context::<ReadSignal<GraphStore>>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
@@ -375,16 +375,16 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                     }
                 }
                 DragStatus::SelectionBox(_) => {
-                    let nodes_to_select = graph_store.read().to_be_selected.read().clone();
-                    let nodes_to_remove = graph_store.read().to_be_removed.read().clone();
+                    let nodes_to_select = graph_store.read().nodes_to_be_selected.read().clone();
+                    let nodes_to_remove = graph_store.read().nodes_to_be_removed.read().clone();
                     for (id, is_optical) in &nodes_to_select {
                         graph_store.write().add_to_node_selection(*id, *is_optical);
                     }
                     for id in nodes_to_remove.keys() {
                         graph_store.write().remove_from_node_selection(*id);
                     }
-                    graph_store.write().to_be_selected.write().clear();
-                    graph_store.write().to_be_removed.write().clear();
+                    graph_store.write().nodes_to_be_selected.write().clear();
+                    graph_store.write().nodes_to_be_removed.write().clear();
                     workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(None));
                 }
                 DragStatus::Edge(_) => {

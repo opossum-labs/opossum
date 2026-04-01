@@ -57,7 +57,7 @@ pub fn NodePort(
     inverted_node: bool,
 ) -> Element {
     let editor_status = use_context::<Signal<EditorState>>();
-    let graph_store = use_context::<Signal<GraphStore>>();
+    let graph_store = use_context::<ReadSignal<GraphStore>>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
     let rel_port_position = node.rel_port_position(port_type, &port_name);

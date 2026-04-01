@@ -2,7 +2,7 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::scenery_editor::{
         GraphState,
-        graph_editor::{DragStatus, graph_workspace::{GraphsWorkspaceState, workspace_state::GraphInfo}},
+        graph_editor::{DragStatus, graph_workspace::{GraphsWorkspaceState, workspace_handlers::helper_functions::with_graph_store, workspace_state::GraphInfo}},
     },
 };
 use dioxus::{html::geometry::euclid::default::Rect, prelude::*};
@@ -22,6 +22,9 @@ pub struct WorkspaceHandlers {
     set_drop_in_group: EventHandler<Option<(Uuid, usize)>>,
     set_selection_box: EventHandler<Option<Rect<f64>>>,
     set_editor_area: EventHandler<Rect<f64>>,
+    clear_nodes_to_be_selected: EventHandler<Uuid>,
+    clear_nodes_to_be_removed: EventHandler<Uuid>,
+    clear_selected_nodes: EventHandler<Uuid>,
 }
 
 impl WorkspaceHandlers {
@@ -38,8 +41,20 @@ impl WorkspaceHandlers {
             set_drag_status: set_drag_status_handler(workspace),
             set_drop_in_group: set_drop_in_group_handler(workspace),
             set_selection_box: set_selection_box_handler(workspace),
-            set_editor_area: set_editor_area_handler(workspace)
+            set_editor_area: set_editor_area_handler(workspace),
+            clear_nodes_to_be_selected: clear_nodes_to_be_selected_handler(workspace),
+            clear_nodes_to_be_removed: clear_nodes_to_be_removed_handler(workspace),
+            clear_selected_nodes: clear_selected_nodes_handler(workspace),
         }
+    }
+    pub fn clear_nodes_to_be_selected(&self, graph_id: Uuid) {
+        self.clear_nodes_to_be_selected.call(graph_id);
+    }
+    pub fn clear_nodes_to_be_removed(&self, graph_id: Uuid) {
+        self.clear_nodes_to_be_removed.call(graph_id);
+    }
+    pub fn clear_selected_nodes(&self, graph_id: Uuid) {
+        self.clear_selected_nodes.call(graph_id);
     }
     pub fn set_editor_area(&self, editor_area: Rect<f64>) {
         self.set_editor_area.call(editor_area);
@@ -91,6 +106,33 @@ impl WorkspaceHandlers {
     pub fn remove_port_map(&self, group_id: Uuid, group_port_name: String) {
         self.remove_port_map.call((group_id, group_port_name));
     }
+}
+
+fn clear_nodes_to_be_selected_handler(mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<Uuid> {
+    EventHandler::new(move |graph_id| {
+        with_graph_store(workspace, graph_id, false, |g| {
+            g.nodes_to_be_selected.clear();
+        });
+    })
+}
+
+fn clear_nodes_to_be_removed_handler(mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<Uuid> {
+    EventHandler::new(move |graph_id| {
+        with_graph_store(workspace, graph_id, false, |g| {
+            g.nodes_to_be_removed.clear();
+        });
+    })
+}
+
+fn clear_selected_nodes_handler(mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<Uuid> {
+    EventHandler::new(move |graph_id| {
+        with_graph_store(workspace, graph_id, false, |g| {
+            g.clear_selected_nodes();
+        });
+    })
 }
 
 fn set_editor_area_handler(mut workspace: Signal<GraphsWorkspaceState>,
