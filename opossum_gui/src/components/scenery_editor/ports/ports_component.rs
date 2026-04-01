@@ -58,7 +58,7 @@ pub fn NodePort(
 ) -> Element {
     let editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
-    let workspace = use_context::<Signal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
     let rel_port_position = node.rel_port_position(port_type, &port_name);
     let abs_port_position = node.abs_port_position(port_type, &port_name);
@@ -72,7 +72,6 @@ pub fn NodePort(
         .contains_port_of_node(node.id(), &port_name);
 
     let on_mouse_down_handler = use_on_mouse_down(
-        workspace,
         node_id,
         port_name.clone(),
         port_type,

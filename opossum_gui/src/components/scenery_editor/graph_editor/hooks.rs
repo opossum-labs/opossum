@@ -23,7 +23,7 @@ use serde_json::Value;
 
 pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let editor_status = use_context::<Signal<EditorState>>();
-    let workspace = use_context::<Signal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
     move |wheel_event| {
         let mut zoom = editor_status().zoom;
@@ -57,7 +57,7 @@ pub fn use_on_mouse_down(
     let editor_status = use_context::<Signal<EditorState>>();
     let mut graph_store = use_context::<Signal<GraphStore>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
     move |event: MouseEvent| {
         event.stop_propagation();
@@ -85,13 +85,11 @@ pub fn use_on_mouse_down(
                         (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
                     );
 
-                    workspace
-                        .write()
-                        .drag_status
-                        .set(DragStatus::SelectionBox(Rect::new(
+                    let drag_status = DragStatus::SelectionBox(Rect::new(
                             rect_origin,
                             Size2D::new(0., 0.),
-                        )));
+                        ));
+                    workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(drag_status));
                 }
                 MouseButton::Auxiliary => {
                     //for dragging
@@ -99,7 +97,7 @@ pub fn use_on_mouse_down(
                         event.client_coordinates().x,
                         event.client_coordinates().y,
                     ));
-                    workspace.write().drag_status.set(DragStatus::Graph);
+                    workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(DragStatus::Graph));
 
                     // for double-click zoom
                     event.stop_propagation();
@@ -125,7 +123,8 @@ pub fn use_on_mouse_down(
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
     let mut editor_status = use_context::<Signal<EditorState>>();
     let graph_store = use_context::<Signal<GraphStore>>();
-    let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
     move |event| {
         let current_shift = *editor_status().shift.read();
@@ -199,7 +198,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
                     Size2D::new(width.abs(), height.abs()),
                 );
 
-                workspace.write().selection_box.set(Some(new_rect));
+                workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(Some(new_rect)));
             }
             DragStatus::NodeInit | DragStatus::None => {}
         }

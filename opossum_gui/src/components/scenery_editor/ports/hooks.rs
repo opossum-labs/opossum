@@ -12,32 +12,28 @@ use crate::{
     components::{
         context_menu::cx_menu::{CxMenu, CxtCommand},
         scenery_editor::{
-            EditorState, GraphStore, GraphsWorkspaceState,
-            edges::edges_component::{EdgePort, NewEdgeCreationStart},
-            graph_editor::DragStatus,
+            EditorState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState, edges::edges_component::{EdgePort, NewEdgeCreationStart}, graph_editor::DragStatus
         },
     },
 };
 
 pub fn use_on_mouse_down(
-    mut workspace: Signal<GraphsWorkspaceState>,
     node_id: Uuid,
     port_name: String,
     port_type: PortType,
     abs_port_position: Point2D<f64>,
 ) -> EventHandler<MouseEvent> {
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     EventHandler::new(move |event: MouseEvent| {
         if Some(MouseButton::Primary) == event.trigger_button() {
-            workspace
-                .write()
-                .drag_status
-                .set(DragStatus::Edge(NewEdgeCreationStart {
+            event.stop_propagation();
+            let drag_status = DragStatus::Edge(NewEdgeCreationStart {
                     src_node: node_id,
                     src_port: port_name.clone(),
                     src_port_type: port_type,
                     start_pos: abs_port_position,
-                }));
-            event.stop_propagation();
+                });
+            workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(drag_status));
         }
     })
 }

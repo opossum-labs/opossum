@@ -29,11 +29,10 @@ pub fn GraphEditor(
     root_tab_open_handler: EventHandler<bool>,
 ) -> Element {
     let workspace = use_signal(GraphsWorkspaceState::default);
-    use_context_provider(|| workspace);
+    use_context_provider(|| ReadSignal::from(workspace));
     let root_graph_id = use_memo(move || *workspace.read().root_scenery_id.read());
 
     let workspace_handlers = WorkSpaceSignalHandlers::new(workspace);
-    use_context_provider(|| workspace_handlers);
 
     let graph_editor_container_class =
         use_memo(move || match *workspace.peek().drag_status.read() {

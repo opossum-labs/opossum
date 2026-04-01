@@ -5,7 +5,7 @@ use crate::components::scenery_editor::{EditorState, GraphsWorkspaceState};
 #[component]
 pub fn SelectionBoxComponent() -> Element {
     let editor_status = use_context::<Signal<EditorState>>();
-    let workspace = use_context::<Signal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let zoom = *editor_status.read().zoom.read();
     (*workspace.read().selection_box.read()).map_or_else(
         || rsx! {},

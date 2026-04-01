@@ -2,10 +2,10 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::scenery_editor::{
         GraphState,
-        graph_editor::graph_workspace::{GraphsWorkspaceState, workspace_state::GraphInfo},
+        graph_editor::{DragStatus, graph_workspace::{GraphsWorkspaceState, workspace_state::GraphInfo}},
     },
 };
-use dioxus::prelude::*;
+use dioxus::{html::geometry::euclid::default::Rect, prelude::*};
 use uuid::Uuid;
 
 #[derive(Clone, PartialEq, Copy)]
@@ -18,6 +18,9 @@ pub struct WorkspaceHandlers {
     set_active_tab: EventHandler<Uuid>,
     add_port_map: EventHandler<((Uuid, Uuid), (String, String))>,
     remove_port_map: EventHandler<(Uuid, String)>,
+    set_drag_status: EventHandler<DragStatus>,
+    set_drop_in_group: EventHandler<Option<(Uuid, usize)>>,
+    set_selection_box: EventHandler<Option<Rect<f64>>>,
 }
 
 impl WorkspaceHandlers {
@@ -31,7 +34,19 @@ impl WorkspaceHandlers {
             set_active_tab: set_active_tab_handler(workspace),
             add_port_map: add_port_map_handler(workspace),
             remove_port_map: remove_port_map_handler(workspace),
+            set_drag_status: set_drag_status_handler(workspace),
+            set_drop_in_group: set_drop_in_group_handler(workspace),
+            set_selection_box: set_selection_box_handler(workspace),
         }
+    }
+    pub fn set_selection_box(&self, selection_box: Option<Rect<f64>>) {
+        self.set_selection_box.call(selection_box);
+    }
+    pub fn set_drop_in_group(&self, drop_in_group: Option<(Uuid, usize)>) {
+        self.set_drop_in_group.call(drop_in_group);
+    }
+    pub fn set_drag_status(&self, drag_status: DragStatus) {
+        self.set_drag_status.call(drag_status);
     }
     pub fn add_new_group_tab(&self, graph_info: GraphInfo) {
         self.add_new_group_tab.call(graph_info);
@@ -71,6 +86,26 @@ impl WorkspaceHandlers {
     pub fn remove_port_map(&self, group_id: Uuid, group_port_name: String) {
         self.remove_port_map.call((group_id, group_port_name));
     }
+}
+
+fn set_selection_box_handler(mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<Option<Rect<f64>>> {
+    EventHandler::new(move |selection_box| {
+        workspace.write().selection_box.set(selection_box);
+    })
+}
+
+fn set_drop_in_group_handler(mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<Option<(Uuid, usize)>> {
+    EventHandler::new(move |drop_in_group| {
+        workspace.write().drop_in_group.set(drop_in_group);
+    })
+}
+fn set_drag_status_handler(mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<DragStatus> {
+    EventHandler::new(move |drag_status| {
+        workspace.write().drag_status.set(drag_status);
+    })
 }
 
 fn remove_port_map_handler(

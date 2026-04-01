@@ -219,6 +219,9 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
+                    GraphsWorkspaceAction::SetDragStatus(drag_status) => workspace_handlers.workspace.set_drag_status(drag_status),
+                    GraphsWorkspaceAction::SetDropInGroup(droppable_group) => workspace_handlers.workspace.set_drop_in_group(droppable_group),
+                    GraphsWorkspaceAction::SetSelectionBox(selection_box) => workspace_handlers.workspace.set_selection_box(selection_box),
                 }
             }
         }

@@ -27,7 +27,7 @@ pub fn Node(
 ) -> Element {
     let graph_store = use_context::<Signal<GraphStore>>();
     let graph_state = use_context::<Signal<GraphState>>();
-    let mut workspace = use_context::<Signal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let position = node.pos();
     let node_height = node.node_body_height() + HEADER_HEIGHT;
@@ -73,8 +73,7 @@ pub fn Node(
     let z_index = node.z_index();
     use_effect({
         move || {
-            let mut workspace_write = workspace.write();
-            let mut droppable_groups = workspace_write.drop_in_group.write();
+            let mut droppable_group = workspace.read().drop_in_group.read().clone();
             let selected_nodes = graph_store.peek().selected_nodes();
 
             if !selected_nodes.contains_key(&node_id)
@@ -85,18 +84,19 @@ pub fn Node(
                 let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
                 let contains = node_rect.contains(*mouse_pos_in_editor.read());
                 if contains {
-                    if let Some((_, g_z_index)) = *droppable_groups
+                    if let Some((_, g_z_index)) = droppable_group
                         && z_index > g_z_index
                     {
-                        *droppable_groups = Some((node_id, z_index));
-                    } else if droppable_groups.is_none() {
-                        *droppable_groups = Some((node_id, z_index));
+                        droppable_group = Some((node_id, z_index));
+                    } else if droppable_group.is_none() {
+                        droppable_group = Some((node_id, z_index));
                     }
-                } else if let Some((g_id, _)) = *droppable_groups
+                } else if let Some((g_id, _)) = droppable_group
                     && g_id == node_id
                 {
-                    *droppable_groups = None;
+                    droppable_group = None;
                 }
+                workspace_processor.send(GraphsWorkspaceAction::SetDropInGroup(droppable_group));
             }
         }
     });
@@ -119,16 +119,16 @@ pub fn Node(
                 let z_index = node.z_index();
                 move |event: MouseEvent| {
                     if Some(MouseButton::Primary) == event.trigger_button() {
-                        workspace.write().drag_status.set(DragStatus::NodeInit);
+                        workspace_processor
+                            .send(GraphsWorkspaceAction::SetDragStatus(DragStatus::NodeInit));
                         if ctrl_pressed() {
-                            if graph_store().selected_nodes().contains_key(&node_id)
-                            {
+                            if graph_store().selected_nodes().contains_key(&node_id) {
                                 graph_store().remove_from_node_selection(node_id);
-                            }
-                            else {
+                            } else {
                                 graph_store().add_to_node_selection(node_id, is_optical_node);
                             }
-                        } else if !graph_store()
+                        }
+                        else if !graph_store()
                             .selected_nodes()
                             .contains_key(&node_id)
                         {
@@ -142,7 +142,8 @@ pub fn Node(
             onmousemove: move |_| {
                 let drag_status = workspace.read().drag_status.read().clone();
                 if drag_status == DragStatus::NodeInit {
-                    workspace.write().drag_status.set(DragStatus::Nodes);
+                    workspace_processor
+                        .send(GraphsWorkspaceAction::SetDragStatus(DragStatus::Nodes));
                 }
             },
             onmouseup: {
