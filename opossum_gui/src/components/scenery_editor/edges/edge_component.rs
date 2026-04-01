@@ -113,7 +113,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                     input_class: "edge_distance_input".to_string(),
                 }
             }
-        
+
         }
     }
 }

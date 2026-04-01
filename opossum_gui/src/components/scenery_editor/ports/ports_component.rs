@@ -71,12 +71,8 @@ pub fn NodePort(
         .read()
         .contains_port_of_node(node.id(), &port_name);
 
-    let on_mouse_down_handler = use_on_mouse_down(
-        node_id,
-        port_name.clone(),
-        port_type,
-        abs_port_position,
-    );
+    let on_mouse_down_handler =
+        use_on_mouse_down(node_id, port_name.clone(), port_type, abs_port_position);
     let on_mouse_leave_handler = use_on_mouse_leave(editor_status);
     let on_mouse_enter_handler = use_on_mouse_enter(
         editor_status,

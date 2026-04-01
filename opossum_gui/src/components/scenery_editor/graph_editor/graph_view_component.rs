@@ -36,8 +36,12 @@ pub fn GraphViewEditor(
     use_context_provider(|| ReadSignal::from(graph_store));
     let onwheel_handler = use_zoom();
     let onmousemove_handler = use_drag(current_mouse_pos);
-    let onmousedown_handler =
-        use_on_mouse_down(current_mouse_pos, last_auxiliary_click, ctrl_pressed, graph_id);
+    let onmousedown_handler = use_on_mouse_down(
+        current_mouse_pos,
+        last_auxiliary_click,
+        ctrl_pressed,
+        graph_id,
+    );
 
     let shift = use_memo(move || *editor_state.read().shift.read());
     let zoom = use_memo(move || *editor_state.read().zoom.read());

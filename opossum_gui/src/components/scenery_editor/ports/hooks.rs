@@ -12,7 +12,9 @@ use crate::{
     components::{
         context_menu::cx_menu::{CxMenu, CxtCommand},
         scenery_editor::{
-            EditorState, GraphState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState, edges::edges_component::{EdgePort, NewEdgeCreationStart}, graph_editor::DragStatus
+            EditorState, GraphState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
+            edges::edges_component::{EdgePort, NewEdgeCreationStart},
+            graph_editor::DragStatus,
         },
     },
 };
@@ -28,11 +30,11 @@ pub fn use_on_mouse_down(
         if Some(MouseButton::Primary) == event.trigger_button() {
             event.stop_propagation();
             let drag_status = DragStatus::Edge(NewEdgeCreationStart {
-                    src_node: node_id,
-                    src_port: port_name.clone(),
-                    src_port_type: port_type,
-                    start_pos: abs_port_position,
-                });
+                src_node: node_id,
+                src_port: port_name.clone(),
+                src_port_type: port_type,
+                start_pos: abs_port_position,
+            });
             workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(drag_status));
         }
     })
@@ -47,8 +49,10 @@ pub fn use_on_mouse_leave(editor_status: ReadSignal<EditorState>) -> EventHandle
         event.stop_propagation();
         if let Some(mut edge_in_creation) = edge_increation {
             edge_in_creation.set_end_port(None);
-            workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation{graph_id, edge_in_creation: Some(edge_in_creation)});
-        
+            workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
+                graph_id,
+                edge_in_creation: Some(edge_in_creation),
+            });
         }
     })
 }
@@ -68,7 +72,7 @@ pub fn use_on_mouse_enter(
             let edge_increation = editor_status.read().edge_in_creation.read().clone();
             if let Some(mut edge_in_creation) = edge_increation
                 && !is_mapped_port
-                {
+            {
                 event.stop_propagation();
 
                 edge_in_creation.set_end_port(Some(EdgePort {
@@ -77,7 +81,10 @@ pub fn use_on_mouse_enter(
                     port_type,
                 }));
 
-                workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation{graph_id, edge_in_creation: Some(edge_in_creation)});
+                workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
+                    graph_id,
+                    edge_in_creation: Some(edge_in_creation),
+                });
             }
         }
     })

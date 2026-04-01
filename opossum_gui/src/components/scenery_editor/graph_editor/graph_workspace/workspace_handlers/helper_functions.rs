@@ -3,7 +3,7 @@ use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
 use crate::components::scenery_editor::{
-    EditorState, GraphState, GraphStore, graph_editor::graph_workspace::GraphsWorkspaceState
+    EditorState, GraphState, GraphStore, graph_editor::graph_workspace::GraphsWorkspaceState,
 };
 
 pub(super) fn with_graph_store<F>(
@@ -80,7 +80,6 @@ pub(super) fn with_editor_state<F>(
         ws.needs_saving.set(true);
     }
 }
-
 
 pub(super) fn with_edges<F>(
     mut workspace: Signal<GraphsWorkspaceState>,
