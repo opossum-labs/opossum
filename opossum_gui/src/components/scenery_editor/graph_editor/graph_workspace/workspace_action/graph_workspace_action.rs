@@ -15,6 +15,7 @@ pub enum GraphsWorkspaceAction {
     SetDropInGroup(Option<(Uuid,usize)>),
     SetSelectionBox(Option<Rect<f64>>),
     SetDragStatus(DragStatus),
+    SetEditorArea(Rect<f64>),
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),
     ConvertToGroup {

@@ -21,6 +21,7 @@ pub struct WorkspaceHandlers {
     set_drag_status: EventHandler<DragStatus>,
     set_drop_in_group: EventHandler<Option<(Uuid, usize)>>,
     set_selection_box: EventHandler<Option<Rect<f64>>>,
+    set_editor_area: EventHandler<Rect<f64>>,
 }
 
 impl WorkspaceHandlers {
@@ -37,7 +38,11 @@ impl WorkspaceHandlers {
             set_drag_status: set_drag_status_handler(workspace),
             set_drop_in_group: set_drop_in_group_handler(workspace),
             set_selection_box: set_selection_box_handler(workspace),
+            set_editor_area: set_editor_area_handler(workspace)
         }
+    }
+    pub fn set_editor_area(&self, editor_area: Rect<f64>) {
+        self.set_editor_area.call(editor_area);
     }
     pub fn set_selection_box(&self, selection_box: Option<Rect<f64>>) {
         self.set_selection_box.call(selection_box);
@@ -88,6 +93,12 @@ impl WorkspaceHandlers {
     }
 }
 
+fn set_editor_area_handler(mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<Rect<f64>> {
+    EventHandler::new(move |editor_area| {
+        workspace.write().editor_area.set(editor_area);
+    })
+}
 fn set_selection_box_handler(mut workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<Option<Rect<f64>>> {
     EventHandler::new(move |selection_box| {

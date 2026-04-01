@@ -43,7 +43,7 @@ pub fn GraphViewEditor(
     let zoom = use_memo(move || *editor_state.read().zoom.read());
 
     let mouse_pos_in_editor = use_memo(move || {
-        let editor_origin = workspace.peek().editor_rect.peek().origin;
+        let editor_origin = workspace.peek().editor_area.peek().origin;
         Point2D::new(
             (current_mouse_pos.read().x - editor_origin.x - shift.peek().x) / *zoom.peek(),
             (current_mouse_pos.read().y - editor_origin.y - shift.peek().y) / *zoom.peek(),

@@ -28,7 +28,7 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
     move |wheel_event| {
         let mut zoom = editor_status().zoom;
         let mut shift = editor_status().shift;
-        let rect = *workspace.read().editor_rect.read();
+        let rect = *workspace.read().editor_area.read();
         let client_pos = wheel_event.data.client_coordinates();
         let mouse_pos = Point2D::new(client_pos.x - rect.min_x(), client_pos.y - rect.min_y());
         let current_graph_shift = *shift.read();
@@ -76,7 +76,7 @@ pub fn use_on_mouse_down(
                     let mouse_pos =
                         Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
 
-                    let editor_origin = workspace().editor_rect.read().origin;
+                    let editor_origin = workspace().editor_area.read().origin;
                     let current_shift = *editor_status().shift.read();
                     let current_zoom = *editor_status().zoom.read();
 
@@ -170,7 +170,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
                 let mouse_pos =
                     Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
 
-                let editor_origin = workspace.read().editor_rect.read().origin;
+                let editor_origin = workspace.read().editor_area.read().origin;
                 let current_shift = *editor_status().shift.read();
                 let current_zoom = *editor_status().zoom.read();
 
@@ -206,9 +206,10 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
 }
 
 pub fn use_on_resize(
-    mut workspace: Signal<GraphsWorkspaceState>,
+    workspace: ReadSignal<GraphsWorkspaceState>,
     element_id: String,
 ) -> EventHandler<()> {
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     EventHandler::new(move |()| {
         let element_id = if workspace.read().active_tab.read().is_nil() {
             element_id.clone()
@@ -239,10 +240,9 @@ pub fn use_on_resize(
                     let y = rect["y"].as_f64().unwrap();
                     let width = rect["width"].as_f64().unwrap();
                     let height = rect["height"].as_f64().unwrap();
-                    workspace
-                        .write()
-                        .editor_rect
-                        .set(Rect::new(Point2D::new(x, y), Size2D::new(width, height)));
+                    let editor_area = Rect::new(Point2D::new(x, y), Size2D::new(width, height));
+                    workspace_processor.send(GraphsWorkspaceAction::SetEditorArea(editor_area));
+    
                 }
             }
         });
@@ -265,7 +265,7 @@ pub fn use_on_key_up(
 
 pub fn use_on_key_down(
     mouse_pos: Signal<Point2D<f64>>,
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: ReadSignal<GraphsWorkspaceState>,
     mut ctrl_pressed: Signal<bool>,
     mut shift_pressed: Signal<bool>,
 ) -> impl FnMut(KeyboardEvent) {
@@ -299,7 +299,7 @@ pub fn use_on_key_down(
                     && !modifiers.shift()
                     && event.data().key() == Key::Character("v".to_string())
                 {
-                    let rect = *workspace().editor_rect.read();
+                    let rect = *workspace().editor_area.read();
                     let mouse = *mouse_pos.read();
                     if mouse.x > rect.min_x()
                         && mouse.x < rect.max_x()
@@ -334,7 +334,7 @@ pub fn use_on_key_down(
     }
 }
 
-pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(MouseEvent) {
+pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(MouseEvent) {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
     move |_| {
@@ -385,7 +385,7 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
                     }
                     graph_store.write().to_be_selected.write().clear();
                     graph_store.write().to_be_removed.write().clear();
-                    workspace.write().selection_box.set(None);
+                    workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(None));
                 }
                 DragStatus::Edge(_) => {
                     if let Some(edge) = editor_status.write().edge_in_creation.write().take()
@@ -414,7 +414,8 @@ pub fn use_drag_end(mut workspace: Signal<GraphsWorkspaceState>) -> impl FnMut(M
                 }
                 _ => {}
             }
-            workspace.write().drag_status.set(DragStatus::None);
+            workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(DragStatus::None));
+
         }
     }
 }
