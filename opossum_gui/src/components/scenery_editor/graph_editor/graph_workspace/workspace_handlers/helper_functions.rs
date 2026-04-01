@@ -3,7 +3,7 @@ use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
 use crate::components::scenery_editor::{
-    GraphState, GraphStore, graph_editor::graph_workspace::GraphsWorkspaceState,
+    EditorState, GraphState, GraphStore, graph_editor::graph_workspace::GraphsWorkspaceState
 };
 
 pub(super) fn with_graph_store<F>(
@@ -61,6 +61,26 @@ pub(super) fn for_each_tab<F>(
         ws.needs_saving.set(true);
     }
 }
+
+pub(super) fn with_editor_state<F>(
+    mut workspace: Signal<GraphsWorkspaceState>,
+    graph_id: Uuid,
+    mark_dirty: bool,
+    f: F,
+) where
+    F: FnOnce(&mut EditorState),
+{
+    let mut ws = workspace.write();
+
+    if let Some(mut editor_state) = ws.get_editor_state(graph_id) {
+        f(&mut editor_state.write());
+    }
+
+    if mark_dirty {
+        ws.needs_saving.set(true);
+    }
+}
+
 
 pub(super) fn with_edges<F>(
     mut workspace: Signal<GraphsWorkspaceState>,

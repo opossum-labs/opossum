@@ -3,12 +3,9 @@ use std::time::{Duration, Instant};
 use crate::{
     CONTEXT_MENU,
     components::scenery_editor::{
-        NodeElement,
-        constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
-        edges::edges_component::EdgeCreation,
-        graph_editor::graph_workspace::{
+        GraphState, NodeElement, constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY}, graph_editor::graph_workspace::{
             DragStatus, EditorState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
-        },
+        }
     },
 };
 use dioxus::{
@@ -23,7 +20,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 pub fn use_zoom() -> impl FnMut(WheelEvent) {
-    let editor_status = use_context::<Signal<EditorState>>();
+    let editor_status = use_context::<ReadSignal<EditorState>>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
     move |wheel_event| {
@@ -56,8 +53,7 @@ pub fn use_on_mouse_down(
     graph_id: Uuid,
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
-    let editor_status = use_context::<Signal<EditorState>>();
-    let graph_store = use_context::<ReadSignal<GraphStore>>();
+    let editor_status = use_context::<ReadSignal<EditorState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
@@ -71,12 +67,9 @@ pub fn use_on_mouse_down(
 
                     if ctrl_pressed() {
                         workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeRemoved{graph_id});
-                        // graph_store.write().nodes_to_be_removed.write().clear();
                     } else {
                         workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeSelected{graph_id});
                         workspace_processor.send(GraphsWorkspaceAction::ClearSelectedNodes{graph_id});
-                        // graph_store.write().nodes_to_be_selected.write().clear();
-                        // graph_store.write().clear_selected_nodes();
                     }
                     let mouse_pos =
                         Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
@@ -126,87 +119,29 @@ pub fn use_on_mouse_down(
     }
 }
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
-    let mut editor_status = use_context::<Signal<EditorState>>();
+    let mut editor_status = use_context::<ReadSignal<EditorState>>();
     let graph_store = use_context::<ReadSignal<GraphStore>>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
+    let graph_id = use_context::<ReadSignal<GraphState>>().read().graph_info.id;
 
     move |event| {
         let current_shift = *editor_status().shift.read();
         let current_zoom = *editor_status().zoom.read();
         let drag_status = workspace.read().drag_status.read().clone();
-        let rel_shift_x = event.client_coordinates().x - current_mouse_pos().x;
-        let rel_shift_y = event.client_coordinates().y - current_mouse_pos().y;
-        current_mouse_pos.set(Point2D::new(
+        let relative_shift = Point2D::new(event.client_coordinates().x - current_mouse_pos().x, event.client_coordinates().y - current_mouse_pos().y);
+        
+        let mouse_pos = Point2D::new(
             event.client_coordinates().x,
             event.client_coordinates().y,
-        ));
-        let graph_shift = Point2D::new(rel_shift_x / current_zoom, rel_shift_y / current_zoom);
-        match drag_status {
-            DragStatus::Graph => {
-                editor_status.write().shift.set(Point2D::new(
-                    current_shift.x + rel_shift_x,
-                    current_shift.y + rel_shift_y,
-                ));
-            }
-            DragStatus::Nodes => {
-                let selected_nodes = graph_store().selected_nodes();
-                for (id, _) in selected_nodes {
-                    graph_store().shift_node_position(id, graph_shift);
-                }
-            }
-            DragStatus::Edge(edge_creation_start) => {
-                editor_status
-                    .write()
-                    .edge_in_creation
-                    .with_mut(|edge_option| {
-                        let edge = edge_option.get_or_insert_with(|| {
-                            EdgeCreation::new(
-                                edge_creation_start.src_node,
-                                edge_creation_start.src_port.clone(),
-                                edge_creation_start.src_port_type,
-                                edge_creation_start.start_pos,
-                            )
-                        });
-                        edge.shift_end(graph_shift);
-                    });
-            }
-            DragStatus::SelectionBox(rect) => {
-                let mouse_pos =
-                    Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
+        );
+        current_mouse_pos.set(mouse_pos);
 
-                let editor_origin = workspace.read().editor_area.read().origin;
-                let current_shift = *editor_status().shift.read();
-                let current_zoom = *editor_status().zoom.read();
-
-                let graph_pos = Point2D::new(
-                    (mouse_pos.x - editor_origin.x - current_shift.x) / current_zoom,
-                    (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
-                );
-
-                let width = graph_pos.x - rect.origin.x;
-                let height = graph_pos.y - rect.origin.y;
-
-                let new_rect_orig_x = if width < 0. {
-                    graph_pos.x
-                } else {
-                    rect.origin.x
-                };
-                let new_rect_orig_y = if height < 0. {
-                    graph_pos.y
-                } else {
-                    rect.origin.y
-                };
-
-                let new_rect = Rect::new(
-                    Point2D::new(new_rect_orig_x, new_rect_orig_y),
-                    Size2D::new(width.abs(), height.abs()),
-                );
-
-                workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(Some(new_rect)));
-            }
-            DragStatus::NodeInit | DragStatus::None => {}
-        }
+        let mouse_to_graph_shift = Point2D::new(
+            mouse_pos.x- current_shift.x,
+            mouse_pos.y- current_shift.y,
+        );
+        workspace_processor.send(GraphsWorkspaceAction::ApplyDrag{graph_id, drag_status, relative_shift, current_zoom, mouse_to_graph_shift});
     }
 }
 

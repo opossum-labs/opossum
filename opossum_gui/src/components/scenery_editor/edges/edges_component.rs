@@ -100,7 +100,7 @@ pub fn EdgesComponent() -> Element {
 }
 #[component]
 pub fn EdgeCreationComponent() -> Element {
-    let editor_status = use_context::<Signal<EditorState>>();
+    let editor_status = use_context::<ReadSignal<EditorState>>();
     editor_status
         .read()
         .edge_in_creation

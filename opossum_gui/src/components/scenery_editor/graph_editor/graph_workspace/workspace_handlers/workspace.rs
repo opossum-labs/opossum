@@ -1,11 +1,10 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::scenery_editor::{
-        GraphState,
-        graph_editor::{DragStatus, graph_workspace::{GraphsWorkspaceState, workspace_handlers::helper_functions::with_graph_store, workspace_state::GraphInfo}},
+        GraphState, edges::edges_component::EdgeCreation, graph_editor::{DragStatus, graph_workspace::{GraphsWorkspaceState, workspace_handlers::helper_functions::{with_editor_state, with_graph_store}, workspace_state::GraphInfo}}
     },
 };
-use dioxus::{html::geometry::euclid::default::Rect, prelude::*};
+use dioxus::{html::geometry::euclid::default::{Point2D, Rect, Size2D}, prelude::*};
 use uuid::Uuid;
 
 #[derive(Clone, PartialEq, Copy)]
@@ -25,6 +24,7 @@ pub struct WorkspaceHandlers {
     clear_nodes_to_be_selected: EventHandler<Uuid>,
     clear_nodes_to_be_removed: EventHandler<Uuid>,
     clear_selected_nodes: EventHandler<Uuid>,
+    apply_drag: EventHandler<(Uuid, DragStatus, Point2D<f64>, f64, Point2D<f64>)>,
 }
 
 impl WorkspaceHandlers {
@@ -45,8 +45,13 @@ impl WorkspaceHandlers {
             clear_nodes_to_be_selected: clear_nodes_to_be_selected_handler(workspace),
             clear_nodes_to_be_removed: clear_nodes_to_be_removed_handler(workspace),
             clear_selected_nodes: clear_selected_nodes_handler(workspace),
+            apply_drag: apply_drag_handler(workspace),
         }
     }
+    pub fn apply_drag(&self,  graph_id: Uuid, drag_status: DragStatus, relative_shift: Point2D<f64>, current_zoom: f64, mouse_to_graph_shift: Point2D<f64>){
+        self.apply_drag.call(    (graph_id, drag_status, relative_shift, current_zoom, mouse_to_graph_shift))
+    }
+
     pub fn clear_nodes_to_be_selected(&self, graph_id: Uuid) {
         self.clear_nodes_to_be_selected.call(graph_id);
     }
@@ -108,7 +113,75 @@ impl WorkspaceHandlers {
     }
 }
 
-fn clear_nodes_to_be_selected_handler(mut workspace: Signal<GraphsWorkspaceState>,
+fn apply_drag_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(Uuid, DragStatus, Point2D<f64>, f64, Point2D<f64>)>{
+    EventHandler::new(move |(graph_id, drag_status, relative_shift, current_zoom, mouse_to_graph_shift) : (Uuid, DragStatus, Point2D<f64>, f64, Point2D<f64>)| {
+        let node_edge_shift = Point2D::new(relative_shift.x / current_zoom, relative_shift.y / current_zoom);
+
+        match drag_status {
+            DragStatus::Graph => {
+                with_editor_state(workspace, graph_id, false, |e|{
+                    e.apply_shift(relative_shift);
+                });
+            }
+            DragStatus::Nodes => {
+                with_graph_store(workspace, graph_id, false, |g|{
+                    let selected_nodes = g.selected_nodes();
+                    for (id, _) in selected_nodes {
+                        g.shift_node_position(id, node_edge_shift);
+                    }
+                });
+            }
+            DragStatus::Edge(edge_creation_start) => {
+                with_editor_state(workspace, graph_id, false, |e|{
+                    e.edge_in_creation.with_mut(|edge_option| {
+                        let edge = edge_option.get_or_insert_with(|| {
+                            EdgeCreation::new(
+                                edge_creation_start.src_node,
+                                edge_creation_start.src_port.clone(),
+                                edge_creation_start.src_port_type,
+                                edge_creation_start.start_pos,
+                            )
+                        });
+                        edge.shift_end(node_edge_shift);
+                    });
+                })
+            }
+            DragStatus::SelectionBox(rect) => {
+                let editor_origin = workspace.read().editor_area.read().origin;
+
+                let graph_pos = Point2D::new(
+                    (mouse_to_graph_shift.x - editor_origin.x ) / current_zoom,
+                    (mouse_to_graph_shift.y - editor_origin.y ) / current_zoom,
+                );
+                
+                let width = graph_pos.x - rect.origin.x;
+                let height = graph_pos.y - rect.origin.y;
+
+                let new_rect_orig_x = if width < 0. {
+                    graph_pos.x
+                } else {
+                    rect.origin.x
+                };
+                let new_rect_orig_y = if height < 0. {
+                    graph_pos.y
+                } else {
+                    rect.origin.y
+                };
+
+                let new_rect = Rect::new(
+                    Point2D::new(new_rect_orig_x, new_rect_orig_y),
+                    Size2D::new(width.abs(), height.abs()),
+                );
+
+                workspace.write().selection_box.set(Some(new_rect));
+                // workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(Some(new_rect)));
+            }
+            DragStatus::NodeInit | DragStatus::None => {}
+        }
+    })
+}
+
+fn clear_nodes_to_be_selected_handler(workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<Uuid> {
     EventHandler::new(move |graph_id| {
         with_graph_store(workspace, graph_id, false, |g| {
@@ -117,7 +190,7 @@ fn clear_nodes_to_be_selected_handler(mut workspace: Signal<GraphsWorkspaceState
     })
 }
 
-fn clear_nodes_to_be_removed_handler(mut workspace: Signal<GraphsWorkspaceState>,
+fn clear_nodes_to_be_removed_handler(workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<Uuid> {
     EventHandler::new(move |graph_id| {
         with_graph_store(workspace, graph_id, false, |g| {

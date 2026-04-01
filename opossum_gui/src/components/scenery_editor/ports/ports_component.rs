@@ -56,7 +56,7 @@ pub fn NodePort(
     port_type: PortType,
     inverted_node: bool,
 ) -> Element {
-    let editor_status = use_context::<Signal<EditorState>>();
+    let editor_status = use_context::<ReadSignal<EditorState>>();
     let graph_store = use_context::<ReadSignal<GraphStore>>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 

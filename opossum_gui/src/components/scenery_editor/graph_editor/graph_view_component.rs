@@ -20,7 +20,7 @@ pub fn GraphViewEditor(
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
-    graph_state: Signal<GraphState>,
+    graph_state: ReadSignal<GraphState>,
     ctrl_pressed: Signal<bool>,
     shift_pressed: Signal<bool>,
 ) -> Element {
@@ -31,8 +31,8 @@ pub fn GraphViewEditor(
     let graph_id = graph_state.read().graph_info.id;
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
-    use_context_provider(|| graph_state);
-    use_context_provider(|| editor_state);
+    use_context_provider(|| ReadSignal::from(graph_state));
+    use_context_provider(|| ReadSignal::from(editor_state));
     use_context_provider(|| ReadSignal::from(graph_store));
     let onwheel_handler = use_zoom();
     let onmousemove_handler = use_drag(current_mouse_pos);

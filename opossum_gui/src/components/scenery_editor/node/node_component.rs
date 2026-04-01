@@ -26,7 +26,7 @@ pub fn Node(
     mouse_pos_in_editor: Memo<Point2D<f64>>,
 ) -> Element {
     let graph_store = use_context::<ReadSignal<GraphStore>>();
-    let graph_state = use_context::<Signal<GraphState>>();
+    let graph_state = use_context::<ReadSignal<GraphState>>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let position = node.pos();

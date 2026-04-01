@@ -226,6 +226,8 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::ClearNodesToBeSelected { graph_id } => workspace_handlers.workspace.clear_nodes_to_be_selected(graph_id),
                     GraphsWorkspaceAction::ClearNodesToBeRemoved { graph_id } => workspace_handlers.workspace.clear_nodes_to_be_removed(graph_id),
                     GraphsWorkspaceAction::ClearSelectedNodes { graph_id } => workspace_handlers.workspace.clear_selected_nodes(graph_id),
+                    GraphsWorkspaceAction::SetEdgeInCreation{graph_id, edge_in_creation} => workspace_handlers.edges.set_edge_in_creation(edge_in_creation, graph_id),
+                    GraphsWorkspaceAction::ApplyDrag { graph_id, drag_status, relative_shift, current_zoom, mouse_to_graph_shift } => workspace_handlers.workspace.apply_drag(graph_id, drag_status, relative_shift, current_zoom, mouse_to_graph_shift),
                 }
             }
         }
