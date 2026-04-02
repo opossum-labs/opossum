@@ -213,7 +213,6 @@ fn apply_drag_handler(
                     );
 
                     workspace.write().selection_box.set(Some(new_rect));
-                    // workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(Some(new_rect)));
                 }
                 DragStatus::NodeInit | DragStatus::None => {}
             }
@@ -226,7 +225,7 @@ fn clear_nodes_to_be_selected_handler(
 ) -> EventHandler<Uuid> {
     EventHandler::new(move |graph_id| {
         with_graph_store(workspace, graph_id, false, |g| {
-            g.nodes_to_be_selected.clear();
+            g.node_selection.write().nodes_to_be_selected.clear();
         });
     })
 }
@@ -236,7 +235,7 @@ fn clear_nodes_to_be_removed_handler(
 ) -> EventHandler<Uuid> {
     EventHandler::new(move |graph_id| {
         with_graph_store(workspace, graph_id, false, |g| {
-            g.nodes_to_be_removed.clear();
+            g.node_selection.write().nodes_to_be_removed.clear();
         });
     })
 }

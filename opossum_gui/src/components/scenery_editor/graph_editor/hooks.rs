@@ -311,7 +311,6 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                         }
                     } else if let Some((to_graph_id, _)) = droppable_groups {
                         let selected_optical_nodes = graph_store().selected_optical_nodes();
-
                         workspace_processor.send(GraphsWorkspaceAction::DropNodesIntoGroup {
                             nodes: selected_optical_nodes.iter().copied().collect(),
                             from_graph_id: *active_graph.read(),
@@ -320,16 +319,16 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                     }
                 }
                 DragStatus::SelectionBox(_) => {
-                    let nodes_to_select = graph_store.read().nodes_to_be_selected.read().clone();
-                    let nodes_to_remove = graph_store.read().nodes_to_be_removed.read().clone();
+                    let nodes_to_select = graph_store.read().node_selection.read().nodes_to_be_selected.read().clone();
+                    let nodes_to_remove = graph_store.read().node_selection.read().nodes_to_be_removed.read().clone();
                     for (id, is_optical) in &nodes_to_select {
                         graph_store.write().add_to_node_selection(*id, *is_optical);
                     }
                     for id in nodes_to_remove.keys() {
                         graph_store.write().remove_from_node_selection(*id);
                     }
-                    graph_store.write().nodes_to_be_selected.write().clear();
-                    graph_store.write().nodes_to_be_removed.write().clear();
+                    graph_store.write().node_selection.write().nodes_to_be_selected.write().clear();
+                    graph_store.write().node_selection.write().nodes_to_be_removed.write().clear();
                     workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(None));
                 }
                 DragStatus::Edge(_) => {

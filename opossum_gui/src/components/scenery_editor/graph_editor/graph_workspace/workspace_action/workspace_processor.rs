@@ -261,6 +261,11 @@ pub fn use_workspace_processor(
                         current_zoom,
                         mouse_to_graph_shift,
                     ),
+                    GraphsWorkspaceAction::NodeClick { graph_id, node_id, is_optical_node, z_index, ctrl_pressed } => workspace_handlers.nodes.node_click(graph_id, node_id, is_optical_node, z_index, ctrl_pressed),
+                    GraphsWorkspaceAction::AddToToBeRemoved { graph_id, node_id, is_optical_node } => workspace_handlers.nodes.add_to_to_be_removed(graph_id, node_id, is_optical_node),
+                    GraphsWorkspaceAction::AddToToBeSelected { graph_id, node_id, is_optical_node } => workspace_handlers.nodes.add_to_to_be_selected(graph_id, node_id, is_optical_node),
+                    GraphsWorkspaceAction::RemoveFromToBeSelected { graph_id, node_id } => workspace_handlers.nodes.remove_from_to_be_selected(graph_id, node_id),
+                    GraphsWorkspaceAction::SetNodeActive { graph_id, node_id, is_optical_node, z_index } => workspace_handlers.nodes.set_node_active(graph_id, node_id, is_optical_node, z_index),
                 }
             }
         }

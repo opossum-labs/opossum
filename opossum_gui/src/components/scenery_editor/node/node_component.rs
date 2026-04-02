@@ -27,7 +27,9 @@ pub fn Node(
 ) -> Element {
     let graph_store = use_context::<ReadSignal<GraphStore>>();
     let graph_state = use_context::<ReadSignal<GraphState>>();
+    let graph_id = graph_state.read().graph_info.id;
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+    let drag_status = workspace.read().drag_status;
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let position = node.pos();
     let node_height = node.node_body_height() + HEADER_HEIGHT;
@@ -44,45 +46,42 @@ pub fn Node(
     let in_selection_box_class = use_memo(move || {
         {
             let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
-            if let Some(select_box) = *workspace.read().selection_box.read()
+            let selection_box = *workspace.peek().selection_box.read();
+            if let Some(select_box) = selection_box
                 && select_box.intersects(&node_rect)
             {
-                if ctrl_pressed() && graph_store.read().selected_nodes().contains_key(&node_id) {
-                    graph_store()
-                        .nodes_to_be_removed
-                        .write()
-                        .insert(node_id, is_optical_node);
+                let is_contained = graph_store.peek().node_selection.peek().all_types.peek().contains_key(&node_id);
+                if ctrl_pressed() && is_contained {
+                    workspace_processor.send(GraphsWorkspaceAction::AddToToBeRemoved{graph_id, node_id, is_optical_node});
                     "node-selection-remove"
                 } else {
-                    graph_store()
-                        .nodes_to_be_selected
-                        .write()
-                        .insert(node_id, is_optical_node);
+                    workspace_processor.send(GraphsWorkspaceAction::AddToToBeSelected{graph_id, node_id, is_optical_node});
                     "node-selection"
                 }
             } else {
-                graph_store().nodes_to_be_selected.write().remove(&node_id);
+                workspace_processor.send(GraphsWorkspaceAction::RemoveFromToBeSelected{graph_id, node_id});
                 ""
             }
         }
         .to_string()
     });
-    let drag_status = workspace.read().drag_status;
+    
 
     let node_type = node.node_type().clone();
     let z_index = node.z_index();
     use_effect({
         move || {
-            let mut droppable_group = *workspace.read().drop_in_group.read();
-            let selected_nodes = graph_store.peek().selected_nodes();
+            let mouse_pos = *mouse_pos_in_editor.read();
+            let mut droppable_group = *workspace.peek().drop_in_group.read();
+            let selected_nodes = graph_store.peek().node_selection.read().all_types.read().clone();
 
             if !selected_nodes.contains_key(&node_id)
                 && let NodeType::Optical(node_type) = &node_type
                 && node_type == "group"
-                && *drag_status.read() == DragStatus::Nodes
+                && *drag_status.peek() == DragStatus::Nodes
             {
                 let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
-                let contains = node_rect.contains(*mouse_pos_in_editor.read());
+                let contains = node_rect.contains(mouse_pos);
                 if contains {
                     if let Some((_, g_z_index)) = droppable_group
                         && z_index > g_z_index
@@ -96,7 +95,9 @@ pub fn Node(
                 {
                     droppable_group = None;
                 }
-                workspace_processor.send(GraphsWorkspaceAction::SetDropInGroup(droppable_group));
+                if *workspace.peek().drop_in_group.read() != droppable_group{
+                    workspace_processor.send(GraphsWorkspaceAction::SetDropInGroup(droppable_group));
+                }
             }
         }
     });
@@ -121,20 +122,14 @@ pub fn Node(
                     if Some(MouseButton::Primary) == event.trigger_button() {
                         workspace_processor
                             .send(GraphsWorkspaceAction::SetDragStatus(DragStatus::NodeInit));
-                        if ctrl_pressed() {
-                            if graph_store().selected_nodes().contains_key(&node_id) {
-                                graph_store().remove_from_node_selection(node_id);
-                            } else {
-                                graph_store().add_to_node_selection(node_id, is_optical_node);
-                            }
-                        }
-                        else if !graph_store()
-                            .selected_nodes()
-                            .contains_key(&node_id)
-                        {
-                            graph_store()
-                                .set_node_active(node_id, z_index, is_optical_node);
-                        }
+                        workspace_processor
+                            .send(GraphsWorkspaceAction::NodeClick {
+                                graph_id,
+                                node_id,
+                                is_optical_node,
+                                z_index,
+                                ctrl_pressed: ctrl_pressed(),
+                            });
                     }
                     event.stop_propagation();
                 }
@@ -151,7 +146,13 @@ pub fn Node(
                     let drag_status = workspace.read().drag_status.read().clone();
 
                     if drag_status == DragStatus::NodeInit && !ctrl_pressed() {
-                        graph_store().set_node_active(node_id, z_index, is_optical_node);
+                        workspace_processor
+                            .send(GraphsWorkspaceAction::SetNodeActive {
+                                graph_id,
+                                node_id,
+                                is_optical_node,
+                                z_index,
+                            });
                     }
                 }
             },
@@ -182,7 +183,7 @@ pub fn Node(
                                     "Group optical nodes".to_owned(),
                                     CxtCommand::ConvertToGroup {
                                         nodes: active_optical_node_ids.iter().copied().collect(),
-                                        graph_id: graph_state.read().graph_info.id,
+                                        graph_id,
                                     },
                                 ));
                         }

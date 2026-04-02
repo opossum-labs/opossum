@@ -37,14 +37,19 @@ pub struct GraphInfo {
     pub hierarchy: Vec<(Uuid, String)>,
 }
 
+#[derive(Clone, Eq, PartialEq, Default)]
+pub struct NodeSelection{
+    pub all_types: Signal<HashMap<Uuid, bool>>,
+    pub analyzers: Signal<HashSet<Uuid>>,
+    pub nodes_to_be_selected: Signal<HashMap<Uuid, bool>>,
+    pub nodes_to_be_removed: Signal<HashMap<Uuid, bool>>,
+}
+
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct GraphStore {
     nodes: Signal<HashMap<Uuid, NodeElement>>,
     pub edges: Signal<Vec<ConnectInfo>>,
-    pub nodes_to_be_selected: Signal<HashMap<Uuid, bool>>,
-    pub nodes_to_be_removed: Signal<HashMap<Uuid, bool>>,
-    selected_nodes: Signal<HashMap<Uuid, bool>>,
-    selected_analyzer_nodes: Signal<HashSet<Uuid>>,
+    pub node_selection: Signal<NodeSelection>,
     pub mapped_ports: Signal<PortMap>,
 }
 
@@ -110,11 +115,11 @@ impl GraphStore {
     }
     #[must_use]
     pub fn selected_nodes(&self) -> HashMap<Uuid, bool> {
-        self.selected_nodes.read().clone()
+        self.node_selection.read().all_types.read().clone()
     }
     #[must_use]
     pub fn selected_optical_nodes(&self) -> HashSet<Uuid> {
-        self.selected_nodes
+        self.node_selection.read().all_types
             .read()
             .iter()
             .filter(|(_, optical)| **optical)
@@ -124,10 +129,10 @@ impl GraphStore {
     }
     #[must_use]
     pub fn selected_node_ids(&self) -> HashSet<Uuid> {
-        self.selected_nodes.read().keys().copied().collect()
+        self.node_selection.read().all_types.read().keys().copied().collect()
     }
     pub fn clear_selected_nodes(&mut self) {
-        self.selected_nodes.write().clear();
+        self.node_selection.write().all_types.write().clear();
     }
     pub fn get_selected_nodes(&self, graph_id: Uuid) -> Vec<SelectedNode> {
         let mut selected_nodes = Vec::<SelectedNode>::new();
@@ -146,13 +151,13 @@ impl GraphStore {
     pub fn set_node_active(&mut self, id: Uuid, z_index: usize, is_optical: bool) {
         self.set_z_level_to_top(id, z_index);
         self.clear_selected_nodes();
-        self.selected_nodes.write().insert(id, is_optical);
+        self.node_selection.write().all_types.write().insert(id, is_optical);
     }
     pub fn add_to_node_selection(&mut self, id: Uuid, is_optical: bool) {
-        self.selected_nodes.write().insert(id, is_optical);
+        self.node_selection.write().all_types.write().insert(id, is_optical);
     }
     pub fn remove_from_node_selection(&mut self, id: Uuid) {
-        self.selected_nodes.write().remove(&id);
+        self.node_selection.write().all_types.write().remove(&id);
     }
 
     pub fn set_active_node_none(&mut self) {
