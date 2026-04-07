@@ -322,6 +322,7 @@ pub fn use_workspace_processor(
                         .add_to_node_selection(graph_id, node_id, is_optical),
                     GraphsWorkspaceAction::SetZoom { graph_id, zoom } => workspace_handlers.view.set_zoom(graph_id, zoom),
                     GraphsWorkspaceAction::SetShift { graph_id, shift } => workspace_handlers.view.set_shift(graph_id, shift),
+                    GraphsWorkspaceAction::RemoveTabs(uuids) => workspace_handlers.workspace.remove_tabs(uuids),
                 }
             }
         }

@@ -174,7 +174,7 @@ pub fn GraphEditor(
                                                             let id_copy = *id;
                                                             move |e: MouseEvent| {
                                                                 e.stop_propagation();
-                                                                workspace_handlers.workspace.remove_tabs(vec![id_copy]);
+                                                                workspace_processor.send(GraphsWorkspaceAction::RemoveTabs(vec![id_copy]));
                                                             }
                                                         },
 
