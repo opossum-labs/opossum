@@ -17,6 +17,7 @@ pub enum NodeEditorCommand {
     AutoLayout,
     CenterGraph,
     ZoomToFit,
+    JumpToMappedPort{mapped_node_id: Uuid, parent: (Uuid, String)},
     ConvertToGroup {
         nodes: Vec<Uuid>,
         graph_id: Uuid,
@@ -124,6 +125,10 @@ pub fn node_editor_command(
                     port_type,
                 });
             }
+            NodeEditorCommand::JumpToMappedPort { mapped_node_id, parent } => {workspace_processor.send(GraphsWorkspaceAction::JumpToMappedPort {
+                    mapped_node_id,
+                    parent
+                });}
         }
         node_editor_command_handler.call(None);
     }

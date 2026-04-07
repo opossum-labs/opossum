@@ -14,7 +14,7 @@ use crate::{
         scenery_editor::{
             DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction,
             GraphsWorkspaceState,
-            edges::edges_component::{EdgePort, NewEdgeCreationStart},
+            edges::edges_component::{EdgePort, NewEdgeCreationStart}, graph_workspace::workspace_state::GraphInfo,
         },
     },
 };
@@ -93,6 +93,7 @@ pub fn use_on_mouse_enter(
 pub fn use_on_context_menu(
     workspace: ReadSignal<GraphsWorkspaceState>,
     graph_store: ReadSignal<GraphStore>,
+    graph_info: GraphInfo,
     node_id: Uuid,
     port_name: String,
     port_type: PortType,
@@ -103,9 +104,8 @@ pub fn use_on_context_menu(
         let x_coord = event.page_coordinates().x;
         let y_coord = event.page_coordinates().y;
 
-        let active_tab = *workspace.read().active_tab.read();
         let root_tab = *workspace.read().root_scenery_id.read();
-        if active_tab != root_tab {
+        if graph_info.id != root_tab {
             let mut cx_menu = CxMenu::new(x_coord, y_coord, vec![]);
 
             let mapped_external_port_opt = graph_store
@@ -117,12 +117,28 @@ pub fn use_on_context_menu(
                 let remove_entry = (
                     "Remove port map from group".to_owned(),
                     CxtCommand::RemovePortMap {
-                        group_id: active_tab,
+                        group_id: graph_info.id,
                         group_port_name,
                         port_type,
                     },
                 );
                 cx_menu.add_entry(remove_entry);
+                
+                let parent = graph_info.get_parent().unwrap_or({
+                    let root_id = *workspace.read().root_scenery_id.read();
+                    let root_name = workspace.read().tabs.read().get(&root_id).unwrap().read().graph_info.name.clone();
+                    (root_id, root_name)
+                });
+
+                let jump_to_mapped_port_entry = (
+                    "Jump to mapped port".to_owned(),
+                    CxtCommand::JumpToMappedPort {
+                        mapped_node_id: graph_info.id,
+                        parent,
+                    },
+                );
+                cx_menu.add_entry(jump_to_mapped_port_entry);
+                
             } else {
                 let add_entry = (
                     "Map port to group".to_owned(),
@@ -131,7 +147,7 @@ pub fn use_on_context_menu(
                         group_port_name: Uuid::new_v4().as_simple().to_string(),
                         mapped_node_port_name: port_name.clone(),
                         mapped_node_id: node_id,
-                        group_id: active_tab,
+                        group_id: graph_info.id,
                     },
                 );
                 cx_menu.add_entry(add_entry);

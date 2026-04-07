@@ -168,7 +168,7 @@ pub fn use_workspace_processor(
                                 group_id,
                                 group_name,
                                 workspace_handlers,
-                                root_graph_id,
+                                root_graph_id.into(),
                             )
                             .await;
                         }
@@ -333,10 +333,31 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::SetActiveTab(uuid) => {
                         workspace_handlers.workspace.set_active_tab(uuid);
                     }
+                    GraphsWorkspaceAction::JumpToMappedPort { mapped_node_id, parent } => {
+                        process_jump_to_mapped_port(root_graph_id.into(), workspace, workspace_handlers, mapped_node_id, parent.0, parent.1).await;
+                    },
                 }
             }
         }
     })
+}
+
+async fn process_jump_to_mapped_port(root_scenery_id: ReadSignal<Uuid>, workspace: ReadSignal<GraphsWorkspaceState>,ws_handler: WorkSpaceSignalHandlers, mapped_node_id: Uuid, parent_id: Uuid, parent_name: String){
+    let group_tab_already_open =
+        workspace.read().tabs.read().contains_key(&parent_id);
+    if group_tab_already_open {
+        ws_handler.workspace.set_active_tab(parent_id);
+    } else {
+        process_open_group_tab(
+            parent_id,
+            parent_name,
+            ws_handler,
+            root_scenery_id,
+        )
+        .await;
+    }
+
+    ws_handler.nodes.set_node_active(parent_id, mapped_node_id, true, 0);
 }
 
 async fn process_add_edge(
@@ -739,7 +760,7 @@ async fn process_drop_nodes_into_group(
             //remove nodes that have been dropped into a group from graph
             ws_handler.nodes.remove_nodes(nodes, from_group_id);
 
-            process_fill_graph_of_group(root_scenery_id, drop_group_id, ws_handler).await;
+            process_fill_graph_of_group(root_scenery_id.into(), drop_group_id, ws_handler).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -779,7 +800,7 @@ async fn process_open_group_tab(
     group_id: Uuid,
     group_name: String,
     ws_handler: WorkSpaceSignalHandlers,
-    root_scenery_id: Memo<Uuid>,
+    root_scenery_id: ReadSignal<Uuid>,
 ) {
     eval_action_run(
         api::get_group_hierarchy(group_id).await,
@@ -796,7 +817,7 @@ async fn process_open_group_tab(
 }
 
 async fn process_fill_graph_of_group(
-    root_scenery_id: Memo<Uuid>,
+    root_scenery_id: ReadSignal<Uuid>,
     group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
@@ -864,7 +885,7 @@ async fn process_load_from_file(
             process_add_root_scenery_tab(ws_handler, name).await;
             set_file_path_handler.call(Some(path));
             let scenery_id = *scenery_id_sig.read();
-            process_fill_graph_of_group(scenery_id_sig, scenery_id, ws_handler).await;
+            process_fill_graph_of_group(scenery_id_sig.into(), scenery_id, ws_handler).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);

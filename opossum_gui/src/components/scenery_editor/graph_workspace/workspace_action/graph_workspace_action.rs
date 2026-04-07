@@ -21,6 +21,10 @@ pub enum GraphsWorkspaceAction {
     ClearSelectedNodes {
         graph_id: Uuid,
     },
+    JumpToMappedPort{
+        mapped_node_id: Uuid,
+        parent: (Uuid, String)
+    },
     SetActiveTab(Uuid),
     RemoveTabs(Vec<Uuid>),
     RemoveFromNodeSelection {

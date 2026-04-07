@@ -35,6 +35,7 @@ pub struct WorkspaceHandlers {
     clear_selected_nodes: EventHandler<Uuid>,
     #[allow(clippy::type_complexity)]
     apply_drag: EventHandler<(Uuid, DragStatus, Point2D<f64>, f64, Point2D<f64>)>,
+    jump_to_mapped_port: EventHandler<(Uuid, Uuid)>
 }
 
 impl WorkspaceHandlers {
@@ -56,7 +57,11 @@ impl WorkspaceHandlers {
             clear_nodes_to_be_removed: clear_nodes_to_be_removed_handler(workspace),
             clear_selected_nodes: clear_selected_nodes_handler(workspace),
             apply_drag: apply_drag_handler(workspace),
+            jump_to_mapped_port: jump_to_mapped_port_handler(workspace)
         }
+    }
+    pub fn jump_to_mapped_port(&self, mapped_node_id: Uuid, parent_id: Uuid){
+        self.jump_to_mapped_port.call((mapped_node_id, parent_id))
     }
     pub fn apply_drag(
         &self,
@@ -134,6 +139,16 @@ impl WorkspaceHandlers {
     pub fn remove_port_map(&self, group_id: Uuid, group_port_name: String) {
         self.remove_port_map.call((group_id, group_port_name));
     }
+}
+
+fn jump_to_mapped_port_handler(
+    mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, Uuid)> {
+    EventHandler::new(move |(mapped_node_id, parent_id)|{
+        // for (tab_id, graph_state) in workspace.read().tabs.read().iter(){
+        //     graph_state.
+        // }
+    })
 }
 
 #[allow(clippy::type_complexity)]

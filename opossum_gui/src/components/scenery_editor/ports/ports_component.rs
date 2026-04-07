@@ -1,11 +1,8 @@
 use crate::components::scenery_editor::{
-    EditorState, GraphStore, GraphsWorkspaceState,
-    constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
-    node::NodeElement,
-    ports::{
+    EditorState, GraphState, GraphStore, GraphsWorkspaceState, constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH}, node::NodeElement, ports::{
         hooks::{use_on_context_menu, use_on_mouse_down, use_on_mouse_enter, use_on_mouse_leave},
         port_map_component::PortMapComponent,
-    },
+    }
 };
 use dioxus::prelude::*;
 use opossum_core::prelude::*;
@@ -58,6 +55,8 @@ pub fn NodePort(
 ) -> Element {
     let editor_status = use_context::<ReadSignal<EditorState>>();
     let graph_store = use_context::<ReadSignal<GraphStore>>();
+    let graph_state = use_context::<ReadSignal<GraphState>>();
+    
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
     let rel_port_position = node.rel_port_position(port_type, &port_name);
@@ -84,6 +83,7 @@ pub fn NodePort(
     let on_context_menu_handler = use_on_context_menu(
         workspace,
         graph_store,
+        graph_state.read().graph_info.clone(),
         node_id,
         port_name.clone(),
         port_type,
