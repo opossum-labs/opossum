@@ -295,7 +295,7 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::RemoveFromToBeSelected { graph_id, node_id } => {
                         workspace_handlers
                             .nodes
-                            .remove_from_to_be_selected(graph_id, node_id)
+                            .remove_from_to_be_selected(graph_id, node_id);
                     }
                     GraphsWorkspaceAction::SetNodeActive {
                         graph_id,
@@ -308,6 +308,19 @@ pub fn use_workspace_processor(
                         is_optical_node,
                         z_index,
                     ),
+                    GraphsWorkspaceAction::RemoveFromNodeSelection { graph_id, node_id } => {
+                        workspace_handlers.nodes.remove_from_node_selection(
+                        graph_id,
+                        node_id
+                    )
+                    },
+                    GraphsWorkspaceAction::AddToNodeSelection { graph_id, node_id, is_optical } => {
+                        workspace_handlers.nodes.add_to_node_selection(
+                        graph_id,
+                        node_id,
+                        is_optical
+                    )
+                    },
                 }
             }
         }
@@ -429,10 +442,6 @@ async fn process_paste_node(
                                     *mapped_node_id,
                                 );
                             }
-                            // println!("input_ports{:?}", input_ports);
-                            // ws_handler
-                            //     .nodes
-                            //     .update_group_ports(input_ports, output_ports, group);
                         },
                     ),
                 );
@@ -458,32 +467,7 @@ async fn process_paste_node(
                 .add_log(&format!("Error while pasting node/s: {e}"));
         }
     }
-    // Some(
-    //     move |(optical_nodes, analyzer_nodes, edges): (
-    //         HashMap<Uuid, Vec<NodeInfo>>,
-    //         Vec<AnalyzerInfo>,
-    //         HashMap<Uuid, Vec<ConnectInfo>>,
-    //     )| {
-    //         for (graph_id, n) in &optical_nodes {
-    //             for node in n {
-    //                 ws_handler.nodes.add_optical_node(node.clone(), *graph_id);
-    //             }
-    //         }
-    //         for a in &analyzer_nodes {
-    //             let analyzer_id = a.id();
-    //             ws_handler.nodes.add_analyzer_node(
-    //                 NewAnalyzerInfo::from(a.clone()),
-    //                 analyzer_id,
-    //                 graph_id,
-    //             );
-    //         }
-    //         for (graph_id, edges) in &edges {
-    //             for edge in edges {
-    //                 ws_handler.edges.add_edge(edge.clone(), *graph_id);
-    //             }
-    //         }
-    //     },
-    // ),
+
 }
 
 #[allow(clippy::future_not_send)]

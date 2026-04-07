@@ -67,6 +67,22 @@ impl GraphStore {
             node.set_name(name);
         }
     }
+    pub fn nodes_to_be_removed(&self) -> HashMap<Uuid, bool>{
+        self
+                                                .node_selection
+                        .read()
+                        .nodes_to_be_removed
+                        .read()
+                        .clone()
+    }
+    pub fn nodes_to_be_selected(&self) -> HashMap<Uuid, bool>{
+        self
+                        .node_selection
+                        .read()
+                        .nodes_to_be_selected
+                        .read()
+                        .clone()
+    }
     pub fn remove_port_of_node(
         &mut self,
         node_id: Uuid,
@@ -97,7 +113,7 @@ impl GraphStore {
         self.nodes.into()
     }
     #[must_use]
-    pub fn edges(&self) -> Signal<Vec<ConnectInfo>> {
+    pub const fn edges(&self) -> Signal<Vec<ConnectInfo>> {
         self.edges
     }
     #[must_use]

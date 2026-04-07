@@ -279,7 +279,6 @@ pub fn use_on_key_down(
 
 pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(MouseEvent) {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-
     move |_| {
         let active_graph = workspace.read().active_tab;
         let tabs = workspace.read().tabs.read().clone();
@@ -300,7 +299,6 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                                 .get(node_id)
                                 .map(NodeElement::pos)
                             {
-                                // Update node GUI position (only if really changed)
                                 workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition {
                                     pos,
                                     node_id: *node_id,
@@ -319,38 +317,19 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                 DragStatus::SelectionBox(_) => {
                     let nodes_to_select = graph_store
                         .read()
-                        .node_selection
-                        .read()
-                        .nodes_to_be_selected
-                        .read()
-                        .clone();
+                        .nodes_to_be_selected();
                     let nodes_to_remove = graph_store
                         .read()
-                        .node_selection
-                        .read()
-                        .nodes_to_be_removed
-                        .read()
-                        .clone();
-                    for (id, is_optical) in &nodes_to_select {
-                        graph_store.write().add_to_node_selection(*id, *is_optical);
+                        .nodes_to_be_removed();
+                    for (node_id, is_optical) in nodes_to_select {
+                        workspace_processor.send(GraphsWorkspaceAction::AddToNodeSelection { graph_id: *active_graph.read(), node_id, is_optical }) ;
                     }
-                    for id in nodes_to_remove.keys() {
-                        graph_store.write().remove_from_node_selection(*id);
+                    for node_id in nodes_to_remove.keys().copied() {
+                        workspace_processor.send(GraphsWorkspaceAction::RemoveFromNodeSelection{ graph_id: *active_graph.read(), node_id }) ;
                     }
-                    graph_store
-                        .write()
-                        .node_selection
-                        .write()
-                        .nodes_to_be_selected
-                        .write()
-                        .clear();
-                    graph_store
-                        .write()
-                        .node_selection
-                        .write()
-                        .nodes_to_be_removed
-                        .write()
-                        .clear();
+
+                    workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeRemoved { graph_id: *active_graph.read() });
+                    workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeSelected  { graph_id: *active_graph.read() });
                     workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(None));
                 }
                 DragStatus::Edge(_) => {

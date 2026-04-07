@@ -1,15 +1,12 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::scenery_editor::{
-        GraphState,
+        DragStatus, GraphState,
         edges::edges_component::EdgeCreation,
-        graph_editor::{
-            DragStatus,
-            graph_workspace::{
-                GraphsWorkspaceState,
-                workspace_handlers::helper_functions::{with_editor_state, with_graph_store},
-                workspace_state::GraphInfo,
-            },
+        graph_workspace::{
+            GraphsWorkspaceState,
+            workspace_handlers::helper_functions::{with_editor_state, with_graph_store},
+            workspace_state::GraphInfo,
         },
     },
 };

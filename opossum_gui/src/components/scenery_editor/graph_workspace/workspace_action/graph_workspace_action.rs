@@ -21,6 +21,15 @@ pub enum GraphsWorkspaceAction {
     ClearSelectedNodes {
         graph_id: Uuid,
     },
+    RemoveFromNodeSelection{
+        graph_id: Uuid,
+        node_id: Uuid
+    },
+    AddToNodeSelection{
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical: bool
+    },
     SetDropInGroup(Option<(Uuid, usize)>),
     SetSelectionBox(Option<Rect<f64>>),
     SetDragStatus(DragStatus),

@@ -31,6 +31,9 @@ pub struct NodeHandlers {
     add_to_to_be_selected: EventHandler<(Uuid, Uuid, bool)>,
     remove_from_to_be_selected: EventHandler<(Uuid, Uuid)>,
     set_node_active: EventHandler<(Uuid, Uuid, bool, usize)>,
+    remove_from_node_selection: EventHandler<(Uuid, Uuid)>,
+    add_to_node_selection: EventHandler<(Uuid, Uuid, bool)>,
+
 }
 
 impl NodeHandlers {
@@ -53,8 +56,23 @@ impl NodeHandlers {
             add_to_to_be_selected: add_to_to_be_selected_handler(workspace),
             remove_from_to_be_selected: remove_from_to_be_selected_handler(workspace),
             set_node_active: set_node_active_handler(workspace),
+            remove_from_node_selection: remove_from_node_selection_handler(workspace),
+            add_to_node_selection: add_to_node_selection_handler(workspace),
         }
     }
+
+    pub fn remove_from_node_selection(&self, 
+        graph_id: Uuid,
+        node_id: Uuid){
+            self.remove_from_node_selection.call((graph_id, node_id))
+
+        }
+    pub fn add_to_node_selection(&self, 
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical_node: bool){
+            self.add_to_node_selection.call((graph_id, node_id, is_optical_node))
+        }
 
     pub fn set_node_active(
         &self,
@@ -66,6 +84,7 @@ impl NodeHandlers {
         self.set_node_active
             .call((graph_id, node_id, is_optical_node, z_index));
     }
+
     pub fn add_to_to_be_removed(&self, graph_id: Uuid, node_id: Uuid, is_optical_node: bool) {
         self.add_to_to_be_removed
             .call((graph_id, node_id, is_optical_node));
@@ -146,6 +165,31 @@ impl NodeHandlers {
     }
 }
 
+
+fn add_to_node_selection_handler(
+    workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, Uuid, bool)>{
+    EventHandler::new(
+        move |(graph_id, node_id, is_optical_node): (Uuid, Uuid, bool)| {
+            with_graph_store(workspace, graph_id, false, |g| {
+                g.add_to_node_selection(node_id, is_optical_node);
+            });
+        },
+    )
+}
+
+fn remove_from_node_selection_handler(
+    workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, Uuid)>{
+    EventHandler::new(
+        move |(graph_id, node_id): (Uuid, Uuid)| {
+            with_graph_store(workspace, graph_id, false, |g| {
+                g.remove_from_node_selection(node_id);
+            });
+        },
+    )
+}
+
 fn set_node_active_handler(
     workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Uuid, bool, usize)> {
@@ -153,7 +197,7 @@ fn set_node_active_handler(
         move |(graph_id, node_id, is_optical_node, z_index): (Uuid, Uuid, bool, usize)| {
             with_graph_store(workspace, graph_id, false, |g| {
                 g.set_node_active(node_id, z_index, is_optical_node);
-            })
+            });
         },
     )
 }
@@ -169,7 +213,7 @@ fn add_to_to_be_removed_handler(
                     .nodes_to_be_removed
                     .write()
                     .insert(node_id, is_optical_node);
-            })
+            });
         },
     )
 }
@@ -185,7 +229,7 @@ fn add_to_to_be_selected_handler(
                     .nodes_to_be_selected
                     .write()
                     .insert(node_id, is_optical_node);
-            })
+            });
         },
     )
 }
@@ -200,7 +244,7 @@ fn remove_from_to_be_selected_handler(
                 .nodes_to_be_selected
                 .write()
                 .remove(&node_id);
-        })
+        });
     })
 }
 
