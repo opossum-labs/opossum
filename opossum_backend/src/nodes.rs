@@ -562,16 +562,19 @@ async fn post_node_name(
 async fn post_node_lidt(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
+    port_name: web::Json<String>,
     lidt: web::Json<Fluence>,
 ) -> Result<(), BackEndErrorResponse> {
     let uuid: Uuid = path.into_inner();
     let lidt = lidt.into_inner();
+    let port_name = port_name.into_inner();
     let mut document = data.document.lock();
     document
         .scenery_mut()
         .with_node_attr_node_mut(uuid, |node_attr| {
             node_attr
-                .set_lidt(&lidt)
+                .ports_mut()
+                .set_lidt(&PortType::Input, &port_name, lidt)
                 .map_err(|e| BackEndErrorResponse::new(404, "Opossum", &e.to_string()))
         })
         .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?

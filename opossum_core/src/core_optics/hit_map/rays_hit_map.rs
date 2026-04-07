@@ -1116,7 +1116,6 @@ mod test_hitpoints {
 }
 #[cfg(test)]
 mod test_rays_hit_map {
-    use uuid::Uuid;
     use super::RaysHitMap;
     use crate::{
         J_per_cm2, centimeter,
@@ -1126,6 +1125,7 @@ mod test_rays_hit_map {
         },
         joule, meter,
     };
+    use uuid::Uuid;
 
     // helper function
     fn dummy_fluence_hitpoints(n_x: usize, n_y: usize) -> HitPoints {

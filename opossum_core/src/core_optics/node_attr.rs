@@ -4,20 +4,26 @@
 //! These attributes are shared across different types of optical nodes in the system.
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
-    J_per_cm2,
-    core_optics::{OpticPorts, SceneryResources},
+    core_optics::{OpticPorts, SceneryResources, optic_surface::OpticSurface},
     error::{OpmResult, OpossumError},
-    generic_validators::{AllFinite, AllPositive},
-    nodes::fluence_detector::Fluence,
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
-    validated, validated_type,
 };
+
+/// Container for runtime state of an optical node
+#[derive(Default, Debug, Clone)]
+pub struct RuntimeSurfaces {
+    pub inputs: BTreeMap<String, OpticSurface>,
+    pub outputs: BTreeMap<String, OpticSurface>,
+}
 
 fn deserialize_name<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
@@ -38,10 +44,13 @@ pub struct NodeAttr {
     /// The name of the node.
     #[serde(deserialize_with = "deserialize_name")]
     name: String,
+    #[serde(default)]
     ports: OpticPorts,
+    #[serde(skip)]
+    runtime_surfaces: RuntimeSurfaces,
+
     /// Universally unique identifier for this node.
     uuid: Uuid,
-    lidt: validated_type!(Fluence, AllPositive && AllFinite),
     #[serde(default)]
     props: Properties,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -85,13 +94,13 @@ impl NodeAttr {
             name: node_type.into(),
             props: Properties::default(),
             ports: OpticPorts::default(),
+            runtime_surfaces: RuntimeSurfaces::default(),
             global_conf: None,
             isometry: None,
             inverted: false,
             alignment: None,
             align_like_node_at_distance: None,
             uuid: Uuid::new_v4(),
-            lidt: validated!(J_per_cm2!(1.), AllPositive && AllFinite).unwrap(),
             gui_position: None,
         }
     }
@@ -249,7 +258,16 @@ impl NodeAttr {
     pub fn set_ports(&mut self, ports: OpticPorts) {
         self.ports = ports;
     }
+    /// Returns a mutable reference to the runtime surfaces.
+    pub const fn runtime_surfaces_mut(&mut self) -> &mut RuntimeSurfaces {
+        &mut self.runtime_surfaces
+    }
 
+    /// Returns a reference to the runtime surfaces.
+    #[must_use]
+    pub const fn runtime_surfaces(&self) -> &RuntimeSurfaces {
+        &self.runtime_surfaces
+    }
     /// Returns a reference to the uuid of this [`NodeAttr`].
     #[must_use]
     pub const fn uuid(&self) -> Uuid {
@@ -258,20 +276,6 @@ impl NodeAttr {
     ///Sets the uuid of this [`NodeAttr`].
     pub const fn set_uuid(&mut self, uuid: Uuid) {
         self.uuid = uuid;
-    }
-
-    /// Returns a reference to the lidt of this [`NodeAttr`].
-    #[must_use]
-    pub const fn lidt(&self) -> &Fluence {
-        self.lidt.get()
-    }
-    ///Sets the lidt of this [`NodeAttr`].
-    ///
-    /// # Errors
-    /// Returns an error if validation fails
-    pub fn set_lidt(&mut self, lidt: &Fluence) -> OpmResult<()> {
-        self.lidt.set(*lidt)?;
-        Ok(())
     }
 
     /// set the nodeindex and distance of the node to which this node should be aligned to
@@ -300,9 +304,11 @@ impl NodeAttr {
         self.gui_position = gui_position;
     }
 
-    ///Replaces itself with a copy of the passed [`NodeAttr`] but keeps its original uuid
+    /// Replaces itself with a copy of the passed [`NodeAttr`] but keeps its original uuid
     pub fn replace_from_node_attr(&mut self, node_attr: &Self) {
         let id = self.uuid;
+        // Beim Ersetzen kopieren wir auch die Config. Die Runtime Surfaces
+        // sollten durch update_surfaces() des Nodes neu aufgebaut werden.
         *self = node_attr.clone();
         self.uuid = id;
     }

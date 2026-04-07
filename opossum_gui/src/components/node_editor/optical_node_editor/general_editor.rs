@@ -9,7 +9,6 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use opossum_core::J_per_cm2;
-use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uuid::Uuid;
 
 #[component]
@@ -23,7 +22,7 @@ pub fn GeneralEditor(
         let node_id = node_attr.read().node_id;
         let node_type = node_attr.read().node_type.clone();
         let name = node_attr.read().name.clone();
-        let lidt = node_attr.read().lidt;
+        // let lidt = node_attr.read().lidt;
         let inverted = node_attr.read().inverted;
         vec![
             rsx! {
@@ -50,7 +49,8 @@ pub fn GeneralEditor(
                 NodeConfigUnitInput {
                         id: format!("nodeLidt_{}", node_id),
                         label: "Damage Threshold".to_string(),
-                        value: lidt.get::<joule_per_square_centimeter>(),
+                        // DUMMY: FIX THIS !!!!
+                        value: J_per_cm2!(1.0).value,
                         base_unit: "J/cm²",
                         readonly,
                         onchange: move |new_lidt: f64| {

@@ -5,17 +5,15 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode, PortType},
+    core_optics::{NodeAttr, OpticNode, PortType, optic_surface::OpticSurface},
     error::OpmResult,
     light::{LightData, LightResult, Rays},
     nanometer,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
-    reporting::plottable::{
-        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
-    },
     reporting::{
         node_report::NodeReport,
+        plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
         report_note::{ReportLevel, ReportNote},
     },
     utils::{
@@ -115,11 +113,7 @@ impl OpticNode for SpotDiagram {
             for ray in rays {
                 transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
             }
-            if let Some(hit_map) = self
-                .ports()
-                .get_optic_surface(&"input_1".to_owned())
-                .map(super::super::core_optics::optic_surface::OpticSurface::hit_map)
-            {
+            if let Some(hit_map) = self.get_optic_surface("input_1").map(OpticSurface::hit_map) {
                 props
                     .create("Spot diagram", "2D spot diagram", hit_map.clone().into())
                     .unwrap();

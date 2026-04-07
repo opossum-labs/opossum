@@ -13,10 +13,11 @@ pub use fresnel::Fresnel;
 pub use ideal_ar::IdealAR;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone)]
 /// Enum for different types of optical coatings
 pub enum CoatingType {
     /// Perfect anti-reflective coating. Reflectivity is always 0.0
+    #[default]
     IdealAR,
     /// Ideal coating with a constant given reflectivity
     ConstantR {

@@ -1,18 +1,10 @@
-use core::f64;
-
-use std::sync::{Arc, Mutex};
-
-use nalgebra::{Isometry3, Point3, Vector2, Vector3, vector};
-use opm_macros_lib::OpmNode;
-use uom::si::f64::{Angle, Length};
-
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     coatings::CoatingType,
-    core_optics::{NodeAttr, OpticNode, PortType, optic_surface::OpticSurface},
+    core_optics::{NodeAttr, OpticNode, PortType},
     degree,
     error::{OpmResult, OpossumError},
     geometry::{Parabola, geo_surface::GeoSurfaceRef},
@@ -23,6 +15,11 @@ use crate::{
     radian,
     utils::geom_transformation::Isometry,
 };
+use core::f64;
+use nalgebra::{Isometry3, Point3, Vector2, Vector3, vector};
+use opm_macros_lib::OpmNode;
+use std::sync::{Arc, Mutex};
+use uom::si::f64::{Angle, Length};
 
 inventory::submit! {
     NodeRegistration::new::<ParabolicMirror>("parabolic mirror", "parabolic mirror")
@@ -375,32 +372,18 @@ impl OpticNode for ParabolicMirror {
         let total_iso = node_iso.append(&anchor_point_iso);
         let parabola = Parabola::new(-1. * self.calc_parent_focal_length()?, total_iso)?;
         let para_geo_surface = GeoSurfaceRef(Arc::new(Mutex::new(parabola)));
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"input_1".to_string())
-        {
-            optic_surf.set_geo_surface(para_geo_surface.clone());
-            optic_surf.set_anchor_point_iso(anchor_point_iso);
-        } else {
-            let mut optic_surf = OpticSurface::default();
-            optic_surf.set_geo_surface(para_geo_surface.clone());
-            optic_surf.set_anchor_point_iso(anchor_point_iso);
-            self.ports_mut()
-                .add_optic_surface(&PortType::Input, "input_1", optic_surf)?;
-        }
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"output_1".to_string())
-        {
-            optic_surf.set_geo_surface(para_geo_surface);
-            optic_surf.set_anchor_point_iso(anchor_point_iso);
-        } else {
-            let mut optic_surf = OpticSurface::default();
-            optic_surf.set_geo_surface(para_geo_surface);
-            optic_surf.set_anchor_point_iso(anchor_point_iso);
-            self.ports_mut()
-                .add_optic_surface(&PortType::Output, "output_1", optic_surf)?;
-        }
+        self.update_surface(
+            &"input_1".to_string(),
+            para_geo_surface.clone(),
+            anchor_point_iso,
+            &PortType::Input,
+        )?;
+        self.update_surface(
+            &"output_1".to_string(),
+            para_geo_surface,
+            anchor_point_iso,
+            &PortType::Output,
+        )?;
         Ok(())
     }
 }

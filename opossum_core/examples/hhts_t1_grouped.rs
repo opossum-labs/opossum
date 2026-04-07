@@ -65,7 +65,8 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     node.set_coating(&PortType::Input, "input_1", &ar_coating)?;
-    node.node_attr_mut().set_lidt(&J_per_cm2!(0.1))?;
+    node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
+    node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
     node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
     let t1_l2a = telescope.add_node(node)?;
 
@@ -77,7 +78,8 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     node.set_coating(&PortType::Input, "input_1", &ar_coating)?;
-    node.node_attr_mut().set_lidt(&J_per_cm2!(0.1))?;
+    node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
+    node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
     node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
     let t1_l2b = telescope.add_node(node)?;
     let mut node = Lens::new(
@@ -88,7 +90,8 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf2,
     )?;
     node.set_coating(&PortType::Input, "input_1", &ar_coating)?;
-    node.node_attr_mut().set_lidt(&J_per_cm2!(0.1))?;
+    node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
+    node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
     node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
     let t1_l2c = telescope.add_node(node)?;
 
@@ -125,7 +128,8 @@ fn main() -> OpmResult<()> {
 
     // Ray propagation visualization
     let mut rpv = RayPropagationVisualizer::default();
-    rpv.node_attr_mut().set_lidt(&J_per_cm2!(100.0))?;
+    rpv.set_lidt(&PortType::Input, "input_1", J_per_cm2!(100.0))?;
+    rpv.set_lidt(&PortType::Output, "output_1", J_per_cm2!(100.0))?;
     let rpv = scenery.add_node(rpv)?;
     scenery.connect_nodes(tel, "output_1", rpv, "input_1", millimeter!(100.0))?;
 

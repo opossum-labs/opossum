@@ -39,12 +39,14 @@ pub trait OpticNode: Dottable {
     /// Return all hit maps (if any) of this [`OpticNode`].
     fn hit_maps(&self) -> HashMap<String, HitMap> {
         let mut map: HashMap<String, HitMap> = HashMap::default();
-        for (port_name, optic_surf) in self.ports().ports(&PortType::Input) {
+        let runtime = self.node_attr().runtime_surfaces();
+
+        for (port_name, optic_surf) in &runtime.inputs {
             if !optic_surf.hit_map().is_empty() {
                 map.insert(port_name.clone(), optic_surf.hit_map().to_owned());
             }
         }
-        for (port_name, optic_surf) in self.ports().ports(&PortType::Output) {
+        for (port_name, optic_surf) in &runtime.outputs {
             if !optic_surf.hit_map().is_empty() {
                 map.insert(port_name.clone(), optic_surf.hit_map().to_owned());
             }
@@ -200,12 +202,13 @@ pub trait OpticNode: Dottable {
     /// Resets the data-holding fields of all [`OpticSurface`]s of this node
     /// This includes the forward and backward rays cache, as well as the hitmaps
     fn reset_optic_surfaces(&mut self) {
-        for optic_surf in self.ports_mut().ports_mut(&PortType::Input).values_mut() {
+        let runtime = self.node_attr_mut().runtime_surfaces_mut();
+        for optic_surf in runtime.inputs.values_mut() {
             optic_surf.set_backwards_rays_cache(Vec::<Rays>::new());
             optic_surf.set_forward_rays_cache(Vec::<Rays>::new());
             optic_surf.reset_hit_map();
         }
-        for optic_surf in self.ports_mut().ports_mut(&PortType::Output).values_mut() {
+        for optic_surf in runtime.outputs.values_mut() {
             optic_surf.set_backwards_rays_cache(Vec::<Rays>::new());
             optic_surf.set_forward_rays_cache(Vec::<Rays>::new());
             optic_surf.reset_hit_map();
@@ -242,6 +245,7 @@ pub trait OpticNode: Dottable {
         let mut ports = self.ports();
         ports.set_aperture(port_type, port_name, aperture)?;
         self.node_attr_mut().set_ports(ports);
+        self.update_surfaces()?;
         Ok(())
     }
     /// Set a coating for a given port name.
@@ -258,6 +262,18 @@ pub trait OpticNode: Dottable {
         let mut ports = self.ports();
         ports.set_coating(port_type, port_name, coating)?;
         self.node_attr_mut().set_ports(ports);
+        self.update_surfaces()?;
+        Ok(())
+    }
+    /// Set the LIDT for a given port name.
+    ///
+    /// # Errors
+    /// This function will return an error if the port name does not exist.
+    fn set_lidt(&mut self, port_type: &PortType, port_name: &str, lidt: Fluence) -> OpmResult<()> {
+        let mut ports = self.ports();
+        ports.set_lidt(port_type, port_name, lidt)?;
+        self.node_attr_mut().set_ports(ports);
+        self.update_surfaces()?;
         Ok(())
     }
     /// define the up-direction of this lightdata's first ray which is needed to create an isometry from this ray.
@@ -318,7 +334,6 @@ pub trait OpticNode: Dottable {
     /// # Errors
     /// This function will return an error if the overwritten function generates an error.
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
-        self.update_lidt()?;
         self.update_surfaces()?;
         Ok(())
     }
@@ -346,30 +361,42 @@ pub trait OpticNode: Dottable {
         anchor_point_iso: Isometry,
         port_type: &PortType,
     ) -> OpmResult<()> {
-        if let Some(optic_surf) = self.ports_mut().get_optic_surface_mut(surf_name) {
+        // Hole die gespeicherte Konfiguration aus OpticPorts (oder erstelle Default, falls neu)
+        let config = {
+            // Wir erzeugen einen expliziten Scope, damit wir den mutablen borrow
+            // von node_attr_mut() direkt wieder loswerden.
+            let mut ports = self.ports();
+            // Stelle sicher, dass der Portnamen registriert ist
+            if ports.ports(port_type).get(surf_name).is_none() {
+                let _ = ports.add(port_type, surf_name);
+                self.node_attr_mut().set_ports(ports.clone());
+            }
+            ports.ports(port_type).get(surf_name).cloned().unwrap()
+        };
+
+        // Prüfe, ob die Surface schon im Runtime-Speicher existiert
+        if let Some(optic_surf) = self.get_optic_surface_mut(surf_name) {
             optic_surf.set_geo_surface(geo_surface);
             optic_surf.set_anchor_point_iso(anchor_point_iso);
+            // Laufzeit-Parameter aktualisieren (falls sich die Config geändert hat)
+            optic_surf.set_aperture(config.aperture);
+            optic_surf.set_coating(config.coating);
+            optic_surf.set_lidt(*config.lidt.get())?;
         } else {
-            let mut optic_surf = OpticSurface::default();
-            optic_surf.set_geo_surface(geo_surface);
+            // Neu erstellen, Geometrie mit Config verheiraten
+            let mut optic_surf = OpticSurface::new(
+                geo_surface,
+                config.coating,
+                config.aperture,
+                *config.lidt.get(),
+            )?;
             optic_surf.set_anchor_point_iso(anchor_point_iso);
-            self.ports_mut()
-                .add_optic_surface(port_type, surf_name, optic_surf)?;
-        }
-        Ok(())
-    }
-    /// Updates the LIDT of the optical surfaces after deserialization
-    ///
-    /// # Errors
-    ///
-    /// This funtion returns an error if the LIDTs to be deserialized are invalid.
-    fn update_lidt(&mut self) -> OpmResult<()> {
-        let lidt = *self.node_attr().lidt();
-        for optic_surf in self.ports_mut().ports_mut(&PortType::Input).values_mut() {
-            optic_surf.set_lidt(lidt)?;
-        }
-        for optic_surf in self.ports_mut().ports_mut(&PortType::Output).values_mut() {
-            optic_surf.set_lidt(lidt)?;
+
+            let runtime = self.node_attr_mut().runtime_surfaces_mut();
+            match port_type {
+                PortType::Input => runtime.inputs.insert(surf_name.clone(), optic_surf),
+                PortType::Output => runtime.outputs.insert(surf_name.clone(), optic_surf),
+            };
         }
         Ok(())
     }
@@ -435,11 +462,8 @@ pub trait OpticNode: Dottable {
             node_attr_mut.set_align_like_node_at_distance(*node_idx, *distance);
         }
         node_attr_mut.update_properties(node_attributes.properties().clone());
-
         node_attr_mut.set_ports(node_attributes.ports().clone());
-
         node_attr_mut.set_uuid(node_attributes.uuid());
-        node_attr_mut.set_lidt(node_attributes.lidt())?;
         node_attr_mut.set_gui_position(node_attributes.gui_position());
         Ok(())
     }
@@ -541,17 +565,21 @@ pub trait OpticNode: Dottable {
     /// # Attributes
     /// - `surf_name`: name of the optical surface, which is the key in the [`OpticPorts`] hashmap stat stores the surfaces
     fn get_optic_surface_mut(&mut self, surf_name: &str) -> Option<&mut OpticSurface> {
-        self.node_attr_mut()
-            .ports_mut()
-            .get_optic_surface_mut(&surf_name.to_owned())
+        let runtime = self.node_attr_mut().runtime_surfaces_mut();
+        runtime
+            .inputs
+            .get_mut(surf_name)
+            .or_else(|| runtime.outputs.get_mut(surf_name))
     }
     /// Returns a reference to an [`OpticSurface`] of this [`OpticNode`] with the key `surf_name`
     /// # Attributes
     /// - `surf_name`: name of the optical surface, which is the key in the [`OpticPorts`] hashmap stat stores the surfaces
     fn get_optic_surface(&self, surf_name: &str) -> Option<&OpticSurface> {
-        self.node_attr()
-            .ports()
-            .get_optic_surface(&surf_name.to_owned())
+        let runtime = self.node_attr().runtime_surfaces();
+        runtime
+            .inputs
+            .get(surf_name)
+            .or_else(|| runtime.outputs.get(surf_name))
     }
     /// Return a [`String`] in the form `'name' (type)` for display purposes.
     fn node_info(&self) -> String {
@@ -608,20 +636,19 @@ pub trait LIDT: OpticNode + Analyzable + Sized {
     ///
     /// This function returns an error if the given LIDT is negative or NaN.
     fn with_lidt(mut self, lidt: Fluence) -> OpmResult<Self> {
-        let in_ports = self.ports().names(&PortType::Input);
-        let out_ports = self.ports().names(&PortType::Output);
+        let mut ports = self.ports();
+        let in_ports = ports.names(&PortType::Input);
+        let out_ports = ports.names(&PortType::Output);
 
         for port_name in &in_ports {
-            if let Some(surf) = self.get_optic_surface_mut(port_name) {
-                surf.set_lidt(lidt)?;
-            }
+            ports.set_lidt(&PortType::Input, port_name, lidt)?;
         }
         for port_name in &out_ports {
-            if let Some(surf) = self.get_optic_surface_mut(port_name) {
-                surf.set_lidt(lidt)?;
-            }
+            ports.set_lidt(&PortType::Output, port_name, lidt)?;
         }
-        self.node_attr_mut().set_lidt(&lidt)?;
+
+        self.node_attr_mut().set_ports(ports);
+        self.update_surfaces()?; // Wichtig: Damit die Runtime-Surfaces das Update mitbekommen
         Ok(self)
     }
 }
