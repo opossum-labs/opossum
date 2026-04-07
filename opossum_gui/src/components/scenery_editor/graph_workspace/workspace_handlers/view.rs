@@ -1,4 +1,6 @@
-use crate::components::scenery_editor::graph_workspace::{GraphsWorkspaceState, workspace_handlers::helper_functions::with_editor_state};
+use crate::components::scenery_editor::graph_workspace::{
+    GraphsWorkspaceState, workspace_handlers::helper_functions::with_editor_state,
+};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use uuid::Uuid;
 
@@ -15,7 +17,7 @@ impl ViewHandlers {
         Self {
             center_graph: center_graph_handler(workspace),
             zoom_to_fit: zoom_to_fit_handler(workspace),
-            set_zoom:  set_zoom_handler(workspace),
+            set_zoom: set_zoom_handler(workspace),
             set_shift: set_shift_handler(workspace),
         }
     }
@@ -34,7 +36,9 @@ impl ViewHandlers {
     }
 }
 
-fn set_shift_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(Uuid, Point2D<f64>)> {
+fn set_shift_handler(
+    workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, Point2D<f64>)> {
     EventHandler::new(move |(graph_id, shift)| {
         with_editor_state(workspace, graph_id, false, |e| e.shift.set(shift));
     })

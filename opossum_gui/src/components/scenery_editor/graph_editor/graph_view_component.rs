@@ -2,13 +2,15 @@
 use crate::components::scenery_editor::{
     GraphsWorkspaceState, SelectionBoxComponent,
     edges::edges_component::{EdgeCreationComponent, EdgesComponent},
-    graph_editor::{BreadCrumbs, hooks::{use_drag, use_on_mouse_down, use_zoom}},
+    graph_editor::{
+        BreadCrumbs,
+        hooks::{use_drag, use_on_mouse_down, use_zoom},
+    },
     graph_workspace::{GraphState, GraphsWorkspaceAction},
     nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use std::{path::PathBuf, time::Instant};
-use uuid::Uuid;
 
 #[component]
 pub fn GraphViewEditor(
@@ -116,4 +118,3 @@ pub fn GraphViewEditor(
         }
     }
 }
-

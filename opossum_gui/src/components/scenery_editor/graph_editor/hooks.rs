@@ -25,8 +25,8 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
     move |wheel_event| {
-        let mut zoom = editor_status().zoom;
-        let mut shift = editor_status().shift;
+        let zoom = editor_status().zoom;
+        let shift = editor_status().shift;
         let rect = *workspace.read().editor_area.read();
         let client_pos = wheel_event.data.client_coordinates();
         let mouse_pos = Point2D::new(client_pos.x - rect.min_x(), client_pos.y - rect.min_y());
@@ -44,8 +44,14 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
 
         let graph_id = *workspace.read().active_tab.read();
-        workspace_processor.send(GraphsWorkspaceAction::SetZoom { graph_id, zoom: new_graph_zoom });
-        workspace_processor.send(GraphsWorkspaceAction::SetShift { graph_id, shift: Point2D::new(new_shift_x, new_shift_y) });
+        workspace_processor.send(GraphsWorkspaceAction::SetZoom {
+            graph_id,
+            zoom: new_graph_zoom,
+        });
+        workspace_processor.send(GraphsWorkspaceAction::SetShift {
+            graph_id,
+            shift: Point2D::new(new_shift_x, new_shift_y),
+        });
     }
 }
 
@@ -361,7 +367,10 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                             0.0,
                             false,
                         );
-                        workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation { graph_id: graph_state.read().graph_info.id, edge_in_creation: None });
+                        workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
+                            graph_id: graph_state.read().graph_info.id,
+                            edge_in_creation: None,
+                        });
                         workspace_processor.send(GraphsWorkspaceAction::AddEdge {
                             new_edge,
                             graph_id: graph_state.read().graph_info.id,
