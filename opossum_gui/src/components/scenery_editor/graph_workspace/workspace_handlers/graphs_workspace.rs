@@ -1,4 +1,4 @@
-use crate::components::scenery_editor::graph_editor::graph_workspace::{
+use crate::components::scenery_editor::graph_workspace::{
     GraphsWorkspaceState,
     workspace_handlers::{
         edges::EdgeHandlers, node_handlers::NodeHandlers, view::ViewHandlers,

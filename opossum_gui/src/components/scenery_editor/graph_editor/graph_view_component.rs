@@ -3,14 +3,14 @@ use crate::components::scenery_editor::{
     GraphsWorkspaceState, SelectionBoxComponent,
     edges::edges_component::{EdgeCreationComponent, EdgesComponent},
     graph_editor::{
-        graph_workspace::{GraphState, GraphsWorkspaceAction},
+        BreadCrumbs,
         hooks::{use_drag, use_on_mouse_down, use_zoom},
     },
+    graph_workspace::{GraphState, GraphsWorkspaceAction},
     nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use std::{path::PathBuf, time::Instant};
-use uuid::Uuid;
 
 #[component]
 pub fn GraphViewEditor(
@@ -21,8 +21,8 @@ pub fn GraphViewEditor(
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
     graph_state: ReadSignal<GraphState>,
-    ctrl_pressed: Signal<bool>,
-    shift_pressed: Signal<bool>,
+    ctrl_pressed: ReadSignal<bool>,
+    shift_pressed: ReadSignal<bool>,
 ) -> Element {
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
@@ -111,34 +111,6 @@ pub fn GraphViewEditor(
                                 EdgeCreationComponent {}
                                 SelectionBoxComponent {}
                             }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[component]
-pub fn BreadCrumbs(
-    bread_crumbs: Vec<(Uuid, String)>,
-    bread_crumb_click_event: EventHandler<(Uuid, String)>,
-) -> Element {
-    rsx! {
-        div { class: "graph-breadcrumbs",
-            for (i , (id , name)) in bread_crumbs.iter().enumerate() {
-                {
-                    let name = name.clone();
-                    let id = *id;
-                    rsx! {
-                        span {
-                            class: "breadcrumb",
-                            onclick: move |_| bread_crumb_click_event.call((id, name.clone())),
-                            "{name}"
-                        }
-
-                        if i < bread_crumbs.len() - 1 {
-                            span { class: "breadcrumb-sep", " › " }
                         }
                     }
                 }

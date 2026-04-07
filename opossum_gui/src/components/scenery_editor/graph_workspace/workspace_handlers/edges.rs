@@ -1,6 +1,6 @@
 use crate::components::scenery_editor::{
     edges::edges_component::EdgeCreation,
-    graph_editor::graph_workspace::{
+    graph_workspace::{
         GraphsWorkspaceState,
         workspace_handlers::helper_functions::{with_edges, with_editor_state},
     },
@@ -105,7 +105,7 @@ fn update_edges_handler(
     EventHandler::new(move |(connections, graph_id)| {
         let mut ws = workspace.write();
 
-        if let Some(mut edges) = ws.get_graph_edges(graph_id) {
+        if let Some(mut edges) = ws.get_graph_edges_mut(graph_id) {
             edges.set(connections);
         }
 
@@ -117,7 +117,7 @@ fn add_group_edges_handler(
     mut workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Vec<ConnectInfo>)> {
     EventHandler::new(move |(group_id, edges)| {
-        if let Some(mut graph_edges) = workspace.write().get_graph_edges(group_id) {
+        if let Some(mut graph_edges) = workspace.write().get_graph_edges_mut(group_id) {
             graph_edges.set(edges);
         }
     })

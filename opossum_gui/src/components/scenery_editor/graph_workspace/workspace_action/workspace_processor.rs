@@ -1,3 +1,5 @@
+#![allow(clippy::future_not_send)]
+#![allow(clippy::large_types_passed_by_value)]
 use std::{collections::HashSet, fs, path::PathBuf};
 
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -17,7 +19,7 @@ use crate::{
         constants::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
         },
-        graph_editor::graph_workspace::{
+        graph_workspace::{
             GraphsWorkspaceState, WorkSpaceSignalHandlers,
             workspace_action::GraphsWorkspaceAction,
             workspace_state::{GraphInfo, optimize_layout_and_sync},
@@ -25,7 +27,6 @@ use crate::{
         node::MIN_NODE_BODY_HEIGHT,
     },
 };
-#[allow(clippy::large_types_passed_by_value)]
 #[allow(clippy::too_many_lines)]
 pub fn use_workspace_processor(
     workspace: ReadSignal<GraphsWorkspaceState>,
@@ -167,7 +168,7 @@ pub fn use_workspace_processor(
                                 group_id,
                                 group_name,
                                 workspace_handlers,
-                                root_graph_id,
+                                root_graph_id.into(),
                             )
                             .await;
                         }
@@ -261,14 +262,117 @@ pub fn use_workspace_processor(
                         current_zoom,
                         mouse_to_graph_shift,
                     ),
+                    GraphsWorkspaceAction::NodeClick {
+                        graph_id,
+                        node_id,
+                        is_optical_node,
+                        z_index,
+                        ctrl_pressed,
+                    } => workspace_handlers.nodes.node_click(
+                        graph_id,
+                        node_id,
+                        is_optical_node,
+                        z_index,
+                        ctrl_pressed,
+                    ),
+                    GraphsWorkspaceAction::AddToToBeRemoved {
+                        graph_id,
+                        node_id,
+                        is_optical_node,
+                    } => workspace_handlers.nodes.add_to_to_be_removed(
+                        graph_id,
+                        node_id,
+                        is_optical_node,
+                    ),
+                    GraphsWorkspaceAction::AddToToBeSelected {
+                        graph_id,
+                        node_id,
+                        is_optical_node,
+                    } => workspace_handlers.nodes.add_to_to_be_selected(
+                        graph_id,
+                        node_id,
+                        is_optical_node,
+                    ),
+                    GraphsWorkspaceAction::RemoveFromToBeSelected { graph_id, node_id } => {
+                        workspace_handlers
+                            .nodes
+                            .remove_from_to_be_selected(graph_id, node_id);
+                    }
+                    GraphsWorkspaceAction::SetNodeActive {
+                        graph_id,
+                        node_id,
+                        is_optical_node,
+                        z_index,
+                    } => workspace_handlers.nodes.set_node_active(
+                        graph_id,
+                        node_id,
+                        is_optical_node,
+                        z_index,
+                    ),
+                    GraphsWorkspaceAction::RemoveFromNodeSelection { graph_id, node_id } => {
+                        workspace_handlers
+                            .nodes
+                            .remove_from_node_selection(graph_id, node_id);
+                    }
+                    GraphsWorkspaceAction::AddToNodeSelection {
+                        graph_id,
+                        node_id,
+                        is_optical,
+                    } => workspace_handlers
+                        .nodes
+                        .add_to_node_selection(graph_id, node_id, is_optical),
+                    GraphsWorkspaceAction::SetZoom { graph_id, zoom } => {
+                        workspace_handlers.view.set_zoom(graph_id, zoom);
+                    }
+                    GraphsWorkspaceAction::SetShift { graph_id, shift } => {
+                        workspace_handlers.view.set_shift(graph_id, shift);
+                    }
+                    GraphsWorkspaceAction::RemoveTabs(uuids) => {
+                        workspace_handlers.workspace.remove_tabs(uuids);
+                    }
+                    GraphsWorkspaceAction::SetActiveTab(uuid) => {
+                        workspace_handlers.workspace.set_active_tab(uuid);
+                    }
+                    GraphsWorkspaceAction::JumpToMappedPort {
+                        mapped_node_id,
+                        parent,
+                    } => {
+                        process_jump_to_mapped_port(
+                            root_graph_id.into(),
+                            workspace,
+                            workspace_handlers,
+                            mapped_node_id,
+                            parent.0,
+                            parent.1,
+                        )
+                        .await;
+                    }
                 }
             }
         }
     })
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
+async fn process_jump_to_mapped_port(
+    root_scenery_id: ReadSignal<Uuid>,
+    workspace: ReadSignal<GraphsWorkspaceState>,
+    ws_handler: WorkSpaceSignalHandlers,
+    mapped_node_id: Uuid,
+    parent_id: Uuid,
+    parent_name: String,
+) {
+    let group_tab_already_open = workspace.read().tabs.read().contains_key(&parent_id);
+    if group_tab_already_open {
+        ws_handler.workspace.set_active_tab(parent_id);
+    } else {
+        process_open_group_tab(parent_id, parent_name, ws_handler, root_scenery_id).await;
+    }
+
+    ws_handler
+        .nodes
+        .set_node_active(parent_id, mapped_node_id, true, 0);
+}
+
 async fn process_add_edge(
     connect_info: ConnectInfo,
     ws_handler: WorkSpaceSignalHandlers,
@@ -282,8 +386,6 @@ async fn process_add_edge(
     );
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_delete_node(
     node_id: Uuid,
     workspace: ReadSignal<GraphsWorkspaceState>,
@@ -329,9 +431,6 @@ async fn process_delete_node(
     }
 }
 
-#[allow(clippy::type_complexity)]
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_paste_node(
     pos: Point2D<f64>,
     ws_handler: WorkSpaceSignalHandlers,
@@ -382,10 +481,6 @@ async fn process_paste_node(
                                     *mapped_node_id,
                                 );
                             }
-                            // println!("input_ports{:?}", input_ports);
-                            // ws_handler
-                            //     .nodes
-                            //     .update_group_ports(input_ports, output_ports, group);
                         },
                     ),
                 );
@@ -411,42 +506,12 @@ async fn process_paste_node(
                 .add_log(&format!("Error while pasting node/s: {e}"));
         }
     }
-    // Some(
-    //     move |(optical_nodes, analyzer_nodes, edges): (
-    //         HashMap<Uuid, Vec<NodeInfo>>,
-    //         Vec<AnalyzerInfo>,
-    //         HashMap<Uuid, Vec<ConnectInfo>>,
-    //     )| {
-    //         for (graph_id, n) in &optical_nodes {
-    //             for node in n {
-    //                 ws_handler.nodes.add_optical_node(node.clone(), *graph_id);
-    //             }
-    //         }
-    //         for a in &analyzer_nodes {
-    //             let analyzer_id = a.id();
-    //             ws_handler.nodes.add_analyzer_node(
-    //                 NewAnalyzerInfo::from(a.clone()),
-    //                 analyzer_id,
-    //                 graph_id,
-    //             );
-    //         }
-    //         for (graph_id, edges) in &edges {
-    //             for edge in edges {
-    //                 ws_handler.edges.add_edge(edge.clone(), *graph_id);
-    //             }
-    //         }
-    //     },
-    // ),
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_copy_nodes(nodes: HashSet<Uuid>) {
     eval_action_run(api::post_copy_nodes(nodes).await, None::<fn(String)>);
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_delete_edge(
     connect_info: ConnectInfo,
     ws_handler: WorkSpaceSignalHandlers,
@@ -458,8 +523,6 @@ async fn process_delete_edge(
     );
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_update_edge(
     connect_info: ConnectInfo,
     ws_handler: WorkSpaceSignalHandlers,
@@ -471,8 +534,6 @@ async fn process_update_edge(
     );
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_optimize_layout(
     workspace: ReadSignal<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
@@ -502,8 +563,6 @@ async fn process_optimize_layout(
     );
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_add_analyzer(
     analyzer_type: AnalyzerType,
     workspace: ReadSignal<GraphsWorkspaceState>,
@@ -551,8 +610,6 @@ async fn process_add_analyzer(
     );
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_add_reference_node(
     new_ref_node: NewRefNode,
     ws_handler: WorkSpaceSignalHandlers,
@@ -565,8 +622,6 @@ async fn process_add_reference_node(
     );
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_add_optic_node(
     new_node_type_string: &str,
     workspace: ReadSignal<GraphsWorkspaceState>,
@@ -641,8 +696,7 @@ fn find_suitable_element_position(
     }
     final_position // fallback: return last position after reaching max iterations
 }
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
+
 async fn process_remove_port_map(
     group_id: Uuid,
     group_port_name: String,
@@ -672,8 +726,7 @@ async fn process_remove_port_map(
         }
     }
 }
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
+
 async fn process_add_port_map(
     port_type: PortType,
     group_port_name: String,
@@ -708,8 +761,6 @@ async fn process_add_port_map(
     }
 }
 
-#[allow(clippy::large_types_passed_by_value)]
-#[allow(clippy::future_not_send)]
 async fn process_drop_nodes_into_group(
     nodes: Vec<Uuid>,
     from_group_id: Uuid,
@@ -722,7 +773,7 @@ async fn process_drop_nodes_into_group(
             //remove nodes that have been dropped into a group from graph
             ws_handler.nodes.remove_nodes(nodes, from_group_id);
 
-            process_fill_graph_of_group(root_scenery_id, drop_group_id, ws_handler).await;
+            process_fill_graph_of_group(root_scenery_id.into(), drop_group_id, ws_handler).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -732,8 +783,6 @@ async fn process_drop_nodes_into_group(
     ws_handler.nodes.remove_droppable_group();
 }
 
-#[allow(clippy::large_types_passed_by_value)]
-#[allow(clippy::future_not_send)]
 async fn process_convert_nodes_to_group(
     nodes: Vec<Uuid>,
     current_group_id: Uuid,
@@ -760,13 +809,11 @@ async fn process_convert_nodes_to_group(
     }
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_open_group_tab(
     group_id: Uuid,
     group_name: String,
     ws_handler: WorkSpaceSignalHandlers,
-    root_scenery_id: Memo<Uuid>,
+    root_scenery_id: ReadSignal<Uuid>,
 ) {
     eval_action_run(
         api::get_group_hierarchy(group_id).await,
@@ -782,10 +829,8 @@ async fn process_open_group_tab(
     process_fill_graph_of_group(root_scenery_id, group_id, ws_handler).await;
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_fill_graph_of_group(
-    root_scenery_id: Memo<Uuid>,
+    root_scenery_id: ReadSignal<Uuid>,
     group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
@@ -833,8 +878,7 @@ async fn process_fill_graph_of_group(
     }
     ws_handler.view.center_graph(group_id, false);
 }
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
+
 async fn process_load_from_file(
     path: PathBuf,
     scenery_id_sig: Memo<Uuid>,
@@ -854,7 +898,7 @@ async fn process_load_from_file(
             process_add_root_scenery_tab(ws_handler, name).await;
             set_file_path_handler.call(Some(path));
             let scenery_id = *scenery_id_sig.read();
-            process_fill_graph_of_group(scenery_id_sig, scenery_id, ws_handler).await;
+            process_fill_graph_of_group(scenery_id_sig.into(), scenery_id, ws_handler).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -862,8 +906,6 @@ async fn process_load_from_file(
     }
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_delete_root_scenery(
     workspace_handlers: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
@@ -877,8 +919,6 @@ async fn process_delete_root_scenery(
     );
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_save_root_scenery_to_file(
     path: PathBuf,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
@@ -903,8 +943,6 @@ async fn process_save_root_scenery_to_file(
     }
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers, name: String) {
     match api::get_scenery_uuid().await {
         Ok(id) => {
@@ -922,8 +960,6 @@ async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers, name:
     }
 }
 
-#[allow(clippy::future_not_send)]
-#[allow(clippy::large_types_passed_by_value)]
 async fn process_rename_root_scenery(
     ws_handler: WorkSpaceSignalHandlers,
     name: String,

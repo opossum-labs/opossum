@@ -1,15 +1,12 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::scenery_editor::{
-        GraphState,
+        DragStatus, GraphState,
         edges::edges_component::EdgeCreation,
-        graph_editor::{
-            DragStatus,
-            graph_workspace::{
-                GraphsWorkspaceState,
-                workspace_handlers::helper_functions::{with_editor_state, with_graph_store},
-                workspace_state::GraphInfo,
-            },
+        graph_workspace::{
+            GraphsWorkspaceState,
+            workspace_handlers::helper_functions::{with_editor_state, with_graph_store},
+            workspace_state::GraphInfo,
         },
     },
 };
@@ -139,6 +136,8 @@ impl WorkspaceHandlers {
     }
 }
 
+
+
 #[allow(clippy::type_complexity)]
 fn apply_drag_handler(
     mut workspace: Signal<GraphsWorkspaceState>,
@@ -213,7 +212,6 @@ fn apply_drag_handler(
                     );
 
                     workspace.write().selection_box.set(Some(new_rect));
-                    // workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(Some(new_rect)));
                 }
                 DragStatus::NodeInit | DragStatus::None => {}
             }
@@ -226,7 +224,7 @@ fn clear_nodes_to_be_selected_handler(
 ) -> EventHandler<Uuid> {
     EventHandler::new(move |graph_id| {
         with_graph_store(workspace, graph_id, false, |g| {
-            g.nodes_to_be_selected.clear();
+            g.node_selection.write().nodes_to_be_selected.clear();
         });
     })
 }
@@ -236,7 +234,7 @@ fn clear_nodes_to_be_removed_handler(
 ) -> EventHandler<Uuid> {
     EventHandler::new(move |graph_id| {
         with_graph_store(workspace, graph_id, false, |g| {
-            g.nodes_to_be_removed.clear();
+            g.node_selection.write().nodes_to_be_removed.clear();
         });
     })
 }

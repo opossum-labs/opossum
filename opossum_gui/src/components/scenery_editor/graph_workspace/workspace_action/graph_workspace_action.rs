@@ -6,9 +6,7 @@ use opossum_core::{
 use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
 
-use crate::components::scenery_editor::{
-    edges::edges_component::EdgeCreation, graph_editor::DragStatus,
-};
+use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 
 pub enum GraphsWorkspaceAction {
     // Group into which other nodes could be dropped
@@ -23,9 +21,45 @@ pub enum GraphsWorkspaceAction {
     ClearSelectedNodes {
         graph_id: Uuid,
     },
+    JumpToMappedPort {
+        mapped_node_id: Uuid,
+        parent: (Uuid, String),
+    },
+    SetActiveTab(Uuid),
+    RemoveTabs(Vec<Uuid>),
+    RemoveFromNodeSelection {
+        graph_id: Uuid,
+        node_id: Uuid,
+    },
+    AddToNodeSelection {
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical: bool,
+    },
     SetDropInGroup(Option<(Uuid, usize)>),
     SetSelectionBox(Option<Rect<f64>>),
     SetDragStatus(DragStatus),
+    SetNodeActive {
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical_node: bool,
+        z_index: usize,
+    },
+    NodeClick {
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical_node: bool,
+        z_index: usize,
+        ctrl_pressed: bool,
+    },
+    SetZoom {
+        graph_id: Uuid,
+        zoom: f64,
+    },
+    SetShift {
+        graph_id: Uuid,
+        shift: Point2D<f64>,
+    },
     ApplyDrag {
         graph_id: Uuid,
         drag_status: DragStatus,
@@ -36,6 +70,20 @@ pub enum GraphsWorkspaceAction {
     SetEdgeInCreation {
         graph_id: Uuid,
         edge_in_creation: Option<EdgeCreation>,
+    },
+    AddToToBeRemoved {
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical_node: bool,
+    },
+    AddToToBeSelected {
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical_node: bool,
+    },
+    RemoveFromToBeSelected {
+        graph_id: Uuid,
+        node_id: Uuid,
     },
     SetEditorArea(Rect<f64>),
     LoadFromFile(PathBuf),

@@ -8,12 +8,9 @@ use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
 use crate::components::scenery_editor::{
-    NodeType,
+    DragStatus, NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
-    graph_editor::{
-        DragStatus,
-        graph_workspace::{EditorState, GraphState, GraphStore},
-    },
+    graph_workspace::{EditorState, GraphState, GraphStore},
 };
 
 #[derive(Clone, PartialEq)]
@@ -61,7 +58,7 @@ impl GraphsWorkspaceState {
             .get(&graph_id)
             .map(|g| g.read().editor_state)
     }
-    pub(in super::super) fn get_graph_edges(
+    pub(in super::super) fn get_graph_edges_mut(
         &self,
         graph_id: Uuid,
     ) -> Option<Signal<Vec<ConnectInfo>>> {

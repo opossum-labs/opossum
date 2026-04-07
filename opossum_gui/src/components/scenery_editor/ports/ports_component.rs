@@ -1,5 +1,5 @@
 use crate::components::scenery_editor::{
-    EditorState, GraphStore, GraphsWorkspaceState,
+    EditorState, GraphState, GraphStore, GraphsWorkspaceState,
     constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
     node::NodeElement,
     ports::{
@@ -58,6 +58,8 @@ pub fn NodePort(
 ) -> Element {
     let editor_status = use_context::<ReadSignal<EditorState>>();
     let graph_store = use_context::<ReadSignal<GraphStore>>();
+    let graph_state = use_context::<ReadSignal<GraphState>>();
+
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
     let rel_port_position = node.rel_port_position(port_type, &port_name);
@@ -65,11 +67,11 @@ pub fn NodePort(
     let node_id = node.id();
     let port_class = get_port_class(inverted_node, port_type);
 
-    let is_mapped_port = graph_store
+    let external_port_opt = graph_store
         .read()
         .mapped_ports
         .read()
-        .contains_port_of_node(node.id(), &port_name);
+        .external_port_of_mapped_port(node.id(), &port_name);
 
     let on_mouse_down_handler =
         use_on_mouse_down(node_id, port_name.clone(), port_type, abs_port_position);
@@ -79,11 +81,12 @@ pub fn NodePort(
         &port_name,
         node_id,
         port_type,
-        is_mapped_port,
+        external_port_opt.is_some(),
     );
     let on_context_menu_handler = use_on_context_menu(
         workspace,
         graph_store,
+        graph_state.read().graph_info.clone(),
         node_id,
         port_name.clone(),
         port_type,
@@ -109,11 +112,12 @@ pub fn NodePort(
             oncontextmenu: move |e| on_context_menu_handler.call(e),
         }
 
-        if is_mapped_port {
+        if let Some(external_port) = external_port_opt {
             PortMapComponent {
                 on_context_menu_handler,
                 rel_port_position,
                 port_type,
+                external_port
             }
         }
     }

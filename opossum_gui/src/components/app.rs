@@ -232,6 +232,15 @@ pub fn App() -> Element {
                         port_type: *port_type,
                     }));
                 }
+                CxtCommand::JumpToMappedPort {
+                    mapped_node_id,
+                    parent,
+                } => {
+                    node_editor_command_handler.call(Some(NodeEditorCommand::JumpToMappedPort {
+                        mapped_node_id: *mapped_node_id,
+                        parent: parent.clone(),
+                    }));
+                }
             }
         }
     });
