@@ -315,21 +315,28 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                     }
                 }
                 DragStatus::SelectionBox(_) => {
-                    let nodes_to_select = graph_store
-                        .read()
-                        .nodes_to_be_selected();
-                    let nodes_to_remove = graph_store
-                        .read()
-                        .nodes_to_be_removed();
+                    let nodes_to_select = graph_store.read().nodes_to_be_selected();
+                    let nodes_to_remove = graph_store.read().nodes_to_be_removed();
                     for (node_id, is_optical) in nodes_to_select {
-                        workspace_processor.send(GraphsWorkspaceAction::AddToNodeSelection { graph_id: *active_graph.read(), node_id, is_optical }) ;
+                        workspace_processor.send(GraphsWorkspaceAction::AddToNodeSelection {
+                            graph_id: *active_graph.read(),
+                            node_id,
+                            is_optical,
+                        });
                     }
                     for node_id in nodes_to_remove.keys().copied() {
-                        workspace_processor.send(GraphsWorkspaceAction::RemoveFromNodeSelection{ graph_id: *active_graph.read(), node_id }) ;
+                        workspace_processor.send(GraphsWorkspaceAction::RemoveFromNodeSelection {
+                            graph_id: *active_graph.read(),
+                            node_id,
+                        });
                     }
 
-                    workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeRemoved { graph_id: *active_graph.read() });
-                    workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeSelected  { graph_id: *active_graph.read() });
+                    workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeRemoved {
+                        graph_id: *active_graph.read(),
+                    });
+                    workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeSelected {
+                        graph_id: *active_graph.read(),
+                    });
                     workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(None));
                 }
                 DragStatus::Edge(_) => {

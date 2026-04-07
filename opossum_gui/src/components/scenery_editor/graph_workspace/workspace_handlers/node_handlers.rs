@@ -33,7 +33,6 @@ pub struct NodeHandlers {
     set_node_active: EventHandler<(Uuid, Uuid, bool, usize)>,
     remove_from_node_selection: EventHandler<(Uuid, Uuid)>,
     add_to_node_selection: EventHandler<(Uuid, Uuid, bool)>,
-
 }
 
 impl NodeHandlers {
@@ -61,18 +60,13 @@ impl NodeHandlers {
         }
     }
 
-    pub fn remove_from_node_selection(&self, 
-        graph_id: Uuid,
-        node_id: Uuid){
-            self.remove_from_node_selection.call((graph_id, node_id))
-
-        }
-    pub fn add_to_node_selection(&self, 
-        graph_id: Uuid,
-        node_id: Uuid,
-        is_optical_node: bool){
-            self.add_to_node_selection.call((graph_id, node_id, is_optical_node))
-        }
+    pub fn remove_from_node_selection(&self, graph_id: Uuid, node_id: Uuid) {
+        self.remove_from_node_selection.call((graph_id, node_id))
+    }
+    pub fn add_to_node_selection(&self, graph_id: Uuid, node_id: Uuid, is_optical_node: bool) {
+        self.add_to_node_selection
+            .call((graph_id, node_id, is_optical_node))
+    }
 
     pub fn set_node_active(
         &self,
@@ -165,10 +159,9 @@ impl NodeHandlers {
     }
 }
 
-
 fn add_to_node_selection_handler(
     workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<(Uuid, Uuid, bool)>{
+) -> EventHandler<(Uuid, Uuid, bool)> {
     EventHandler::new(
         move |(graph_id, node_id, is_optical_node): (Uuid, Uuid, bool)| {
             with_graph_store(workspace, graph_id, false, |g| {
@@ -180,14 +173,12 @@ fn add_to_node_selection_handler(
 
 fn remove_from_node_selection_handler(
     workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<(Uuid, Uuid)>{
-    EventHandler::new(
-        move |(graph_id, node_id): (Uuid, Uuid)| {
-            with_graph_store(workspace, graph_id, false, |g| {
-                g.remove_from_node_selection(node_id);
-            });
-        },
-    )
+) -> EventHandler<(Uuid, Uuid)> {
+    EventHandler::new(move |(graph_id, node_id): (Uuid, Uuid)| {
+        with_graph_store(workspace, graph_id, false, |g| {
+            g.remove_from_node_selection(node_id);
+        });
+    })
 }
 
 fn set_node_active_handler(

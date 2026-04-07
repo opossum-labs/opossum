@@ -309,18 +309,17 @@ pub fn use_workspace_processor(
                         z_index,
                     ),
                     GraphsWorkspaceAction::RemoveFromNodeSelection { graph_id, node_id } => {
-                        workspace_handlers.nodes.remove_from_node_selection(
-                        graph_id,
-                        node_id
-                    )
-                    },
-                    GraphsWorkspaceAction::AddToNodeSelection { graph_id, node_id, is_optical } => {
-                        workspace_handlers.nodes.add_to_node_selection(
+                        workspace_handlers
+                            .nodes
+                            .remove_from_node_selection(graph_id, node_id)
+                    }
+                    GraphsWorkspaceAction::AddToNodeSelection {
                         graph_id,
                         node_id,
-                        is_optical
-                    )
-                    },
+                        is_optical,
+                    } => workspace_handlers
+                        .nodes
+                        .add_to_node_selection(graph_id, node_id, is_optical),
                 }
             }
         }
@@ -467,7 +466,6 @@ async fn process_paste_node(
                 .add_log(&format!("Error while pasting node/s: {e}"));
         }
     }
-
 }
 
 #[allow(clippy::future_not_send)]

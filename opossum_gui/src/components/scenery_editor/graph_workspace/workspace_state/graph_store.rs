@@ -67,21 +67,19 @@ impl GraphStore {
             node.set_name(name);
         }
     }
-    pub fn nodes_to_be_removed(&self) -> HashMap<Uuid, bool>{
-        self
-                                                .node_selection
-                        .read()
-                        .nodes_to_be_removed
-                        .read()
-                        .clone()
+    pub fn nodes_to_be_removed(&self) -> HashMap<Uuid, bool> {
+        self.node_selection
+            .read()
+            .nodes_to_be_removed
+            .read()
+            .clone()
     }
-    pub fn nodes_to_be_selected(&self) -> HashMap<Uuid, bool>{
-        self
-                        .node_selection
-                        .read()
-                        .nodes_to_be_selected
-                        .read()
-                        .clone()
+    pub fn nodes_to_be_selected(&self) -> HashMap<Uuid, bool> {
+        self.node_selection
+            .read()
+            .nodes_to_be_selected
+            .read()
+            .clone()
     }
     pub fn remove_port_of_node(
         &mut self,
