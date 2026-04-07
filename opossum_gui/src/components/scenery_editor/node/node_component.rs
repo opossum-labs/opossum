@@ -2,7 +2,7 @@
 use super::NodeElement;
 use crate::CONTEXT_MENU;
 use crate::components::scenery_editor::constants::HEADER_HEIGHT;
-use crate::components::scenery_editor::graph_editor::{DragStatus, GraphStore};
+use crate::components::scenery_editor::{DragStatus, GraphStore};
 use crate::components::scenery_editor::{GraphState, GraphsWorkspaceState};
 use crate::components::{
     context_menu::cx_menu::{CxMenu, CxtCommand},

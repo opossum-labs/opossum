@@ -14,7 +14,7 @@ use crate::{
         scenery_editor::{
             EditorState, GraphState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
             edges::edges_component::{EdgePort, NewEdgeCreationStart},
-            graph_editor::DragStatus,
+            DragStatus,
         },
     },
 };

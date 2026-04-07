@@ -5,7 +5,7 @@ use crate::{
     components::scenery_editor::{
         GraphState, NodeElement,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
-        graph_editor::graph_workspace::{
+        graph_workspace::{
             DragStatus, EditorState, GraphsWorkspaceAction, GraphsWorkspaceState,
         },
     },

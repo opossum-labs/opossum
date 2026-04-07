@@ -7,7 +7,7 @@ use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
 
 use crate::components::scenery_editor::{
-    edges::edges_component::EdgeCreation, graph_editor::DragStatus,
+    edges::edges_component::EdgeCreation, DragStatus,
 };
 
 pub enum GraphsWorkspaceAction {

@@ -1,4 +1,4 @@
-use crate::components::scenery_editor::graph_editor::graph_workspace::GraphsWorkspaceState;
+use crate::components::scenery_editor::graph_workspace::GraphsWorkspaceState;
 use dioxus::prelude::*;
 use uuid::Uuid;
 

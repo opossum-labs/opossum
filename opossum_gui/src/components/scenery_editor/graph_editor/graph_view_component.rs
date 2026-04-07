@@ -2,10 +2,10 @@
 use crate::components::scenery_editor::{
     GraphsWorkspaceState, SelectionBoxComponent,
     edges::edges_component::{EdgeCreationComponent, EdgesComponent},
-    graph_editor::{
-        graph_workspace::{GraphState, GraphsWorkspaceAction},
+    graph_workspace::{GraphState, GraphsWorkspaceAction},
+    graph_editor::
         hooks::{use_drag, use_on_mouse_down, use_zoom},
-    },
+    
     nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};

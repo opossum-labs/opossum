@@ -17,7 +17,7 @@ use crate::{
         constants::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
         },
-        graph_editor::graph_workspace::{
+        graph_workspace::{
             GraphsWorkspaceState, WorkSpaceSignalHandlers,
             workspace_action::GraphsWorkspaceAction,
             workspace_state::{GraphInfo, optimize_layout_and_sync},

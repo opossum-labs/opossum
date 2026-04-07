@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::components::scenery_editor::graph_editor::graph_workspace::{
+use crate::components::scenery_editor::graph_workspace::{
     GraphsWorkspaceState,
     workspace_handlers::helper_functions::{for_each_tab, with_graph_store, with_tab},
 };

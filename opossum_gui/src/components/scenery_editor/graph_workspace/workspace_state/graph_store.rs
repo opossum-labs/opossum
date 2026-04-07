@@ -3,7 +3,7 @@ use crate::{
     components::scenery_editor::{
         NodeElement, NodeType, SelectedNode,
         constants::{SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
-        graph_editor::graph_workspace::EditorState,
+        graph_workspace::EditorState,
         ports::ports_component::Ports,
     },
 };

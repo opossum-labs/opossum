@@ -10,10 +10,9 @@ use uuid::Uuid;
 use crate::components::scenery_editor::{
     NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
-    graph_editor::{
         DragStatus,
         graph_workspace::{EditorState, GraphState, GraphStore},
-    },
+    
 };
 
 #[derive(Clone, PartialEq)]
