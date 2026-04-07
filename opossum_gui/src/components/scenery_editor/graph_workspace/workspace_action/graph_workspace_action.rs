@@ -46,6 +46,14 @@ pub enum GraphsWorkspaceAction {
         z_index: usize,
         ctrl_pressed: bool,
     },
+    SetZoom{
+        graph_id: Uuid,
+        zoom: f64
+    },
+    SetShift{
+        graph_id: Uuid,
+        shift: Point2D<f64>
+    },
     ApplyDrag {
         graph_id: Uuid,
         drag_status: DragStatus,

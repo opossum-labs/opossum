@@ -61,11 +61,11 @@ impl NodeHandlers {
     }
 
     pub fn remove_from_node_selection(&self, graph_id: Uuid, node_id: Uuid) {
-        self.remove_from_node_selection.call((graph_id, node_id))
+        self.remove_from_node_selection.call((graph_id, node_id));
     }
     pub fn add_to_node_selection(&self, graph_id: Uuid, node_id: Uuid, is_optical_node: bool) {
         self.add_to_node_selection
-            .call((graph_id, node_id, is_optical_node))
+            .call((graph_id, node_id, is_optical_node));
     }
 
     pub fn set_node_active(

@@ -283,8 +283,8 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
         let active_graph = workspace.read().active_tab;
         let tabs = workspace.read().tabs.read().clone();
         if let Some(graph_state) = tabs.get(&*active_graph.read()) {
-            let mut editor_status = graph_state.read().editor_state;
-            let mut graph_store = graph_state.read().graph_store;
+            let editor_status = graph_state.read().editor_state;
+            let graph_store = graph_state.read().graph_store;
             let drag_status = workspace.read().drag_status.read().clone();
             let droppable_groups = *workspace.read().drop_in_group.read();
             match drag_status {
@@ -340,7 +340,7 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                     workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(None));
                 }
                 DragStatus::Edge(_) => {
-                    if let Some(edge) = editor_status.write().edge_in_creation.write().take()
+                    if let Some(edge) = editor_status.read().edge_in_creation.read().clone()
                         && edge.is_valid()
                         && let (Some(end_port), start_port) = (edge.end_port(), edge.start_port())
                     {
@@ -358,6 +358,7 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                             0.0,
                             false,
                         );
+                        workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation { graph_id: graph_state.read().graph_info.id, edge_in_creation: None });
                         workspace_processor.send(GraphsWorkspaceAction::AddEdge {
                             new_edge,
                             graph_id: graph_state.read().graph_info.id,

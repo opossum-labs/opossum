@@ -311,7 +311,7 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::RemoveFromNodeSelection { graph_id, node_id } => {
                         workspace_handlers
                             .nodes
-                            .remove_from_node_selection(graph_id, node_id)
+                            .remove_from_node_selection(graph_id, node_id);
                     }
                     GraphsWorkspaceAction::AddToNodeSelection {
                         graph_id,
@@ -320,6 +320,8 @@ pub fn use_workspace_processor(
                     } => workspace_handlers
                         .nodes
                         .add_to_node_selection(graph_id, node_id, is_optical),
+                    GraphsWorkspaceAction::SetZoom { graph_id, zoom } => workspace_handlers.view.set_zoom(graph_id, zoom),
+                    GraphsWorkspaceAction::SetShift { graph_id, shift } => workspace_handlers.view.set_shift(graph_id, shift),
                 }
             }
         }
