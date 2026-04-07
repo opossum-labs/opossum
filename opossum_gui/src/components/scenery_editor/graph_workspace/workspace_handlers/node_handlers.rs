@@ -274,7 +274,11 @@ fn remove_group_port_handler(
             let ws = workspace.write();
 
             if let Some(graph_state) = ws.get_graph_state(group_id) {
-                let parent_id = graph_state.read().graph_info.get_parent_id().unwrap_or(root_id);
+                let parent_id = graph_state
+                    .read()
+                    .graph_info
+                    .get_parent_id()
+                    .unwrap_or(root_id);
                 if let Some(mut graph_store) = ws.get_graph_store(parent_id) {
                     graph_store
                         .write()

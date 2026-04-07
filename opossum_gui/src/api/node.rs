@@ -246,8 +246,6 @@ pub async fn update_node_name(
         .await
 }
 
-
-
 /// Update the lidt of the node with the given `node_id`.
 ///
 /// # Errors

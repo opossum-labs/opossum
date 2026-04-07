@@ -28,8 +28,8 @@ pub struct GraphState {
     pub graph_info: GraphInfo,
 }
 
-impl GraphInfo{
-    pub fn get_parent_id(&self) -> Option<Uuid>{
+impl GraphInfo {
+    pub fn get_parent_id(&self) -> Option<Uuid> {
         let parent_hierarchy_pos = self.hierarchy.len() - 2;
         if parent_hierarchy_pos > 0 {
             Some(self.hierarchy[parent_hierarchy_pos].0)
@@ -37,7 +37,7 @@ impl GraphInfo{
             None
         }
     }
-    pub fn get_parent(&self) -> Option<(Uuid, String)>{
+    pub fn get_parent(&self) -> Option<(Uuid, String)> {
         let parent_hierarchy_pos = self.hierarchy.len() - 2;
         if parent_hierarchy_pos > 0 {
             Some(self.hierarchy[parent_hierarchy_pos].clone())

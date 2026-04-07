@@ -333,31 +333,44 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::SetActiveTab(uuid) => {
                         workspace_handlers.workspace.set_active_tab(uuid);
                     }
-                    GraphsWorkspaceAction::JumpToMappedPort { mapped_node_id, parent } => {
-                        process_jump_to_mapped_port(root_graph_id.into(), workspace, workspace_handlers, mapped_node_id, parent.0, parent.1).await;
-                    },
+                    GraphsWorkspaceAction::JumpToMappedPort {
+                        mapped_node_id,
+                        parent,
+                    } => {
+                        process_jump_to_mapped_port(
+                            root_graph_id.into(),
+                            workspace,
+                            workspace_handlers,
+                            mapped_node_id,
+                            parent.0,
+                            parent.1,
+                        )
+                        .await;
+                    }
                 }
             }
         }
     })
 }
 
-async fn process_jump_to_mapped_port(root_scenery_id: ReadSignal<Uuid>, workspace: ReadSignal<GraphsWorkspaceState>,ws_handler: WorkSpaceSignalHandlers, mapped_node_id: Uuid, parent_id: Uuid, parent_name: String){
-    let group_tab_already_open =
-        workspace.read().tabs.read().contains_key(&parent_id);
+async fn process_jump_to_mapped_port(
+    root_scenery_id: ReadSignal<Uuid>,
+    workspace: ReadSignal<GraphsWorkspaceState>,
+    ws_handler: WorkSpaceSignalHandlers,
+    mapped_node_id: Uuid,
+    parent_id: Uuid,
+    parent_name: String,
+) {
+    let group_tab_already_open = workspace.read().tabs.read().contains_key(&parent_id);
     if group_tab_already_open {
         ws_handler.workspace.set_active_tab(parent_id);
     } else {
-        process_open_group_tab(
-            parent_id,
-            parent_name,
-            ws_handler,
-            root_scenery_id,
-        )
-        .await;
+        process_open_group_tab(parent_id, parent_name, ws_handler, root_scenery_id).await;
     }
 
-    ws_handler.nodes.set_node_active(parent_id, mapped_node_id, true, 0);
+    ws_handler
+        .nodes
+        .set_node_active(parent_id, mapped_node_id, true, 0);
 }
 
 async fn process_add_edge(

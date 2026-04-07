@@ -8,7 +8,7 @@ pub fn PortMapComponent(
     on_context_menu_handler: Callback<Event<MouseData>>,
     rel_port_position: Point2D<f64>,
     port_type: PortType,
-    external_port: String
+    external_port: String,
 ) -> Element {
     match port_type {
         PortType::Input => rsx! {
@@ -24,7 +24,7 @@ pub fn PortMapComponent(
 pub fn InputPortMapComponent(
     on_context_menu_handler: EventHandler<Event<MouseData>>,
     rel_port_position: Point2D<f64>,
-    external_port: String
+    external_port: String,
 ) -> Element {
     rsx! {
         div {
@@ -50,7 +50,7 @@ pub fn InputPortMapComponent(
 pub fn OutputPortMapComponent(
     on_context_menu_handler: EventHandler<Event<MouseData>>,
     rel_port_position: Point2D<f64>,
-    external_port: String
+    external_port: String,
 ) -> Element {
     rsx! {
         div {

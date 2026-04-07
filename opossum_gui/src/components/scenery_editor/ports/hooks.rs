@@ -14,7 +14,8 @@ use crate::{
         scenery_editor::{
             DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction,
             GraphsWorkspaceState,
-            edges::edges_component::{EdgePort, NewEdgeCreationStart}, graph_workspace::workspace_state::GraphInfo,
+            edges::edges_component::{EdgePort, NewEdgeCreationStart},
+            graph_workspace::workspace_state::GraphInfo,
         },
     },
 };
@@ -123,10 +124,19 @@ pub fn use_on_context_menu(
                     },
                 );
                 cx_menu.add_entry(remove_entry);
-                
+
                 let parent = graph_info.get_parent().unwrap_or({
                     let root_id = *workspace.read().root_scenery_id.read();
-                    let root_name = workspace.read().tabs.read().get(&root_id).unwrap().read().graph_info.name.clone();
+                    let root_name = workspace
+                        .read()
+                        .tabs
+                        .read()
+                        .get(&root_id)
+                        .unwrap()
+                        .read()
+                        .graph_info
+                        .name
+                        .clone();
                     (root_id, root_name)
                 });
 
@@ -138,7 +148,6 @@ pub fn use_on_context_menu(
                     },
                 );
                 cx_menu.add_entry(jump_to_mapped_port_entry);
-                
             } else {
                 let add_entry = (
                     "Map port to group".to_owned(),

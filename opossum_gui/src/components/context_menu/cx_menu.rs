@@ -23,10 +23,10 @@ pub enum CxtCommand {
         group_port_name: String,
         port_type: PortType,
     },
-    JumpToMappedPort{
+    JumpToMappedPort {
         mapped_node_id: Uuid,
-        parent: (Uuid, String)
-    }
+        parent: (Uuid, String),
+    },
 }
 
 #[derive(Clone, PartialEq, Debug)]
