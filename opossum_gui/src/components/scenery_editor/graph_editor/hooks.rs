@@ -5,9 +5,7 @@ use crate::{
     components::scenery_editor::{
         GraphState, NodeElement,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
-        graph_workspace::{
-            DragStatus, EditorState, GraphsWorkspaceAction, GraphsWorkspaceState,
-        },
+        graph_workspace::{DragStatus, EditorState, GraphsWorkspaceAction, GraphsWorkspaceState},
     },
 };
 use dioxus::{
@@ -319,16 +317,40 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                     }
                 }
                 DragStatus::SelectionBox(_) => {
-                    let nodes_to_select = graph_store.read().node_selection.read().nodes_to_be_selected.read().clone();
-                    let nodes_to_remove = graph_store.read().node_selection.read().nodes_to_be_removed.read().clone();
+                    let nodes_to_select = graph_store
+                        .read()
+                        .node_selection
+                        .read()
+                        .nodes_to_be_selected
+                        .read()
+                        .clone();
+                    let nodes_to_remove = graph_store
+                        .read()
+                        .node_selection
+                        .read()
+                        .nodes_to_be_removed
+                        .read()
+                        .clone();
                     for (id, is_optical) in &nodes_to_select {
                         graph_store.write().add_to_node_selection(*id, *is_optical);
                     }
                     for id in nodes_to_remove.keys() {
                         graph_store.write().remove_from_node_selection(*id);
                     }
-                    graph_store.write().node_selection.write().nodes_to_be_selected.write().clear();
-                    graph_store.write().node_selection.write().nodes_to_be_removed.write().clear();
+                    graph_store
+                        .write()
+                        .node_selection
+                        .write()
+                        .nodes_to_be_selected
+                        .write()
+                        .clear();
+                    graph_store
+                        .write()
+                        .node_selection
+                        .write()
+                        .nodes_to_be_removed
+                        .write()
+                        .clear();
                     workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(None));
                 }
                 DragStatus::Edge(_) => {

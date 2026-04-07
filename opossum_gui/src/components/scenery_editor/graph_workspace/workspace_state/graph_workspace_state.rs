@@ -8,11 +8,9 @@ use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
 use crate::components::scenery_editor::{
-    NodeType,
+    DragStatus, NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
-        DragStatus,
-        graph_workspace::{EditorState, GraphState, GraphStore},
-    
+    graph_workspace::{EditorState, GraphState, GraphStore},
 };
 
 #[derive(Clone, PartialEq)]

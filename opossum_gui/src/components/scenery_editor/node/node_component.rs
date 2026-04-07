@@ -50,22 +50,36 @@ pub fn Node(
             if let Some(select_box) = selection_box
                 && select_box.intersects(&node_rect)
             {
-                let is_contained = graph_store.peek().node_selection.peek().all_nodes.peek().contains_key(&node_id);
+                let is_contained = graph_store
+                    .peek()
+                    .node_selection
+                    .peek()
+                    .all_nodes
+                    .peek()
+                    .contains_key(&node_id);
                 if ctrl_pressed() && is_contained {
-                    workspace_processor.send(GraphsWorkspaceAction::AddToToBeRemoved{graph_id, node_id, is_optical_node});
+                    workspace_processor.send(GraphsWorkspaceAction::AddToToBeRemoved {
+                        graph_id,
+                        node_id,
+                        is_optical_node,
+                    });
                     "node-selection-remove"
                 } else {
-                    workspace_processor.send(GraphsWorkspaceAction::AddToToBeSelected{graph_id, node_id, is_optical_node});
+                    workspace_processor.send(GraphsWorkspaceAction::AddToToBeSelected {
+                        graph_id,
+                        node_id,
+                        is_optical_node,
+                    });
                     "node-selection"
                 }
             } else {
-                workspace_processor.send(GraphsWorkspaceAction::RemoveFromToBeSelected{graph_id, node_id});
+                workspace_processor
+                    .send(GraphsWorkspaceAction::RemoveFromToBeSelected { graph_id, node_id });
                 ""
             }
         }
         .to_string()
     });
-    
 
     let node_type = node.node_type().clone();
     let z_index = node.z_index();
@@ -73,7 +87,13 @@ pub fn Node(
         move || {
             let mouse_pos = *mouse_pos_in_editor.read();
             let mut droppable_group = *workspace.peek().drop_in_group.read();
-            let selected_nodes = graph_store.peek().node_selection.read().all_nodes.read().clone();
+            let selected_nodes = graph_store
+                .peek()
+                .node_selection
+                .read()
+                .all_nodes
+                .read()
+                .clone();
 
             if !selected_nodes.contains_key(&node_id)
                 && let NodeType::Optical(node_type) = &node_type
@@ -95,8 +115,9 @@ pub fn Node(
                 {
                     droppable_group = None;
                 }
-                if *workspace.peek().drop_in_group.read() != droppable_group{
-                    workspace_processor.send(GraphsWorkspaceAction::SetDropInGroup(droppable_group));
+                if *workspace.peek().drop_in_group.read() != droppable_group {
+                    workspace_processor
+                        .send(GraphsWorkspaceAction::SetDropInGroup(droppable_group));
                 }
             }
         }

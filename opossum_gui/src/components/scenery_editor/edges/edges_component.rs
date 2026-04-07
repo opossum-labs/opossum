@@ -1,8 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
+    EditorState, GraphStore,
     constants::EDGE_BEZIER_OFFSET,
     edges::{define_bezier_path, edge_component::EdgeComponent},
-    EditorState, GraphStore,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::prelude::*;

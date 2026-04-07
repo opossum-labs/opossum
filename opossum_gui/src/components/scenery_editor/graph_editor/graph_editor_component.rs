@@ -2,15 +2,14 @@
 use crate::components::{
     node_editor::NodeConfigEditor,
     scenery_editor::{
-        NodeEditorCommand, SelectedNode,
-        DragStatus,
-        graph_workspace::{
-            GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
-            use_workspace_processor, workspace_action::node_editor_command,
-        },
+        DragStatus, NodeEditorCommand, SelectedNode,
         graph_editor::{
             GraphViewEditor,
             hooks::{use_drag_end, use_on_key_down, use_on_key_up, use_on_resize},
+        },
+        graph_workspace::{
+            GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
+            use_workspace_processor, workspace_action::node_editor_command,
         },
     },
 };

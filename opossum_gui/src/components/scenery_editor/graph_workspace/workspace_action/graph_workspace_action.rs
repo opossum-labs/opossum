@@ -6,9 +6,7 @@ use opossum_core::{
 use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
 
-use crate::components::scenery_editor::{
-    edges::edges_component::EdgeCreation, DragStatus,
-};
+use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 
 pub enum GraphsWorkspaceAction {
     // Group into which other nodes could be dropped
@@ -26,8 +24,19 @@ pub enum GraphsWorkspaceAction {
     SetDropInGroup(Option<(Uuid, usize)>),
     SetSelectionBox(Option<Rect<f64>>),
     SetDragStatus(DragStatus),
-    SetNodeActive{graph_id: Uuid, node_id: Uuid, is_optical_node: bool, z_index: usize},
-    NodeClick{graph_id: Uuid, node_id: Uuid, is_optical_node: bool, z_index: usize, ctrl_pressed: bool},
+    SetNodeActive {
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical_node: bool,
+        z_index: usize,
+    },
+    NodeClick {
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical_node: bool,
+        z_index: usize,
+        ctrl_pressed: bool,
+    },
     ApplyDrag {
         graph_id: Uuid,
         drag_status: DragStatus,
@@ -39,9 +48,20 @@ pub enum GraphsWorkspaceAction {
         graph_id: Uuid,
         edge_in_creation: Option<EdgeCreation>,
     },
-    AddToToBeRemoved{graph_id: Uuid, node_id: Uuid, is_optical_node: bool},
-    AddToToBeSelected{graph_id: Uuid, node_id: Uuid, is_optical_node: bool},
-    RemoveFromToBeSelected{graph_id: Uuid, node_id: Uuid},
+    AddToToBeRemoved {
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical_node: bool,
+    },
+    AddToToBeSelected {
+        graph_id: Uuid,
+        node_id: Uuid,
+        is_optical_node: bool,
+    },
+    RemoveFromToBeSelected {
+        graph_id: Uuid,
+        node_id: Uuid,
+    },
     SetEditorArea(Rect<f64>),
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),

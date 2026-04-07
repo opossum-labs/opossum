@@ -18,9 +18,7 @@ use opossum_core::{
     utils::to_f64,
 };
 use rust_sugiyama::{configure::Config, from_edges};
-use std::{
-    collections::{HashMap, HashSet},
-};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 #[derive(Clone, Eq, PartialEq, Default)]
@@ -38,7 +36,7 @@ pub struct GraphInfo {
 }
 
 #[derive(Clone, Eq, PartialEq, Default)]
-pub struct NodeSelection{
+pub struct NodeSelection {
     pub all_nodes: Signal<HashMap<Uuid, bool>>,
     pub analyzers: Signal<HashSet<Uuid>>,
     pub nodes_to_be_selected: Signal<HashMap<Uuid, bool>>,
@@ -69,7 +67,12 @@ impl GraphStore {
             node.set_name(name);
         }
     }
-    pub fn remove_port_of_node(&mut self, node_id: Uuid, remove_port: &String, port_type: PortType) {
+    pub fn remove_port_of_node(
+        &mut self,
+        node_id: Uuid,
+        remove_port: &String,
+        port_type: PortType,
+    ) {
         if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
             node.remove_port(remove_port, port_type);
         }
@@ -94,7 +97,7 @@ impl GraphStore {
         self.nodes.into()
     }
     #[must_use]
-    pub fn edges(&self) ->Signal<Vec<ConnectInfo>> {
+    pub fn edges(&self) -> Signal<Vec<ConnectInfo>> {
         self.edges
     }
     #[must_use]
@@ -119,7 +122,9 @@ impl GraphStore {
     }
     #[must_use]
     pub fn selected_optical_nodes(&self) -> HashSet<Uuid> {
-        self.node_selection.read().all_nodes
+        self.node_selection
+            .read()
+            .all_nodes
             .read()
             .iter()
             .filter(|(_, optical)| **optical)
@@ -129,7 +134,13 @@ impl GraphStore {
     }
     #[must_use]
     pub fn selected_node_ids(&self) -> HashSet<Uuid> {
-        self.node_selection.read().all_nodes.read().keys().copied().collect()
+        self.node_selection
+            .read()
+            .all_nodes
+            .read()
+            .keys()
+            .copied()
+            .collect()
     }
     pub fn clear_selected_nodes(&mut self) {
         self.node_selection.write().all_nodes.write().clear();
@@ -151,10 +162,18 @@ impl GraphStore {
     pub fn set_node_active(&mut self, id: Uuid, z_index: usize, is_optical: bool) {
         self.set_z_level_to_top(id, z_index);
         self.clear_selected_nodes();
-        self.node_selection.write().all_nodes.write().insert(id, is_optical);
+        self.node_selection
+            .write()
+            .all_nodes
+            .write()
+            .insert(id, is_optical);
     }
     pub fn add_to_node_selection(&mut self, id: Uuid, is_optical: bool) {
-        self.node_selection.write().all_nodes.write().insert(id, is_optical);
+        self.node_selection
+            .write()
+            .all_nodes
+            .write()
+            .insert(id, is_optical);
     }
     pub fn remove_from_node_selection(&mut self, id: Uuid) {
         self.node_selection.write().all_nodes.write().remove(&id);
