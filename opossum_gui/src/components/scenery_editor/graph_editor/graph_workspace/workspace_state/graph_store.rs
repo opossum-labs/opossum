@@ -39,7 +39,7 @@ pub struct GraphInfo {
 
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct NodeSelection{
-    pub all_types: Signal<HashMap<Uuid, bool>>,
+    pub all_nodes: Signal<HashMap<Uuid, bool>>,
     pub analyzers: Signal<HashSet<Uuid>>,
     pub nodes_to_be_selected: Signal<HashMap<Uuid, bool>>,
     pub nodes_to_be_removed: Signal<HashMap<Uuid, bool>>,
@@ -65,36 +65,36 @@ impl GraphStore {
             .extend(analyzers.iter().map(|node| (node.id(), node.into())));
     }
     pub fn set_name_of_node(&mut self, node_id: Uuid, name: String) {
-        if let Some(node) = self.nodes().write().get_mut(&node_id) {
+        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
             node.set_name(name);
         }
     }
-    pub fn remove_port_of_node(&self, node_id: Uuid, remove_port: &String, port_type: PortType) {
-        if let Some(node) = self.nodes().write().get_mut(&node_id) {
+    pub fn remove_port_of_node(&mut self, node_id: Uuid, remove_port: &String, port_type: PortType) {
+        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
             node.remove_port(remove_port, port_type);
         }
     }
     pub fn update_ports_of_node(
-        &self,
+        &mut self,
         node_id: Uuid,
         input_ports: Vec<String>,
         output_ports: Vec<String>,
     ) {
-        if let Some(node) = self.nodes().write().get_mut(&node_id) {
+        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
             node.set_ports(input_ports, output_ports);
         }
     }
     pub fn set_node_inverted(&mut self, node_id: Uuid, inverted: bool) {
-        if let Some(node) = self.nodes().write().get_mut(&node_id) {
+        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
             node.set_inverted(inverted);
         }
     }
     #[must_use]
-    pub const fn nodes(&self) -> Signal<HashMap<Uuid, NodeElement>> {
-        self.nodes
+    pub fn nodes(&self) -> ReadSignal<HashMap<Uuid, NodeElement>> {
+        self.nodes.into()
     }
     #[must_use]
-    pub const fn edges(&self) -> Signal<Vec<ConnectInfo>> {
+    pub fn edges(&self) ->Signal<Vec<ConnectInfo>> {
         self.edges
     }
     #[must_use]
@@ -115,11 +115,11 @@ impl GraphStore {
     }
     #[must_use]
     pub fn selected_nodes(&self) -> HashMap<Uuid, bool> {
-        self.node_selection.read().all_types.read().clone()
+        self.node_selection.read().all_nodes.read().clone()
     }
     #[must_use]
     pub fn selected_optical_nodes(&self) -> HashSet<Uuid> {
-        self.node_selection.read().all_types
+        self.node_selection.read().all_nodes
             .read()
             .iter()
             .filter(|(_, optical)| **optical)
@@ -129,10 +129,10 @@ impl GraphStore {
     }
     #[must_use]
     pub fn selected_node_ids(&self) -> HashSet<Uuid> {
-        self.node_selection.read().all_types.read().keys().copied().collect()
+        self.node_selection.read().all_nodes.read().keys().copied().collect()
     }
     pub fn clear_selected_nodes(&mut self) {
-        self.node_selection.write().all_types.write().clear();
+        self.node_selection.write().all_nodes.write().clear();
     }
     pub fn get_selected_nodes(&self, graph_id: Uuid) -> Vec<SelectedNode> {
         let mut selected_nodes = Vec::<SelectedNode>::new();
@@ -151,13 +151,13 @@ impl GraphStore {
     pub fn set_node_active(&mut self, id: Uuid, z_index: usize, is_optical: bool) {
         self.set_z_level_to_top(id, z_index);
         self.clear_selected_nodes();
-        self.node_selection.write().all_types.write().insert(id, is_optical);
+        self.node_selection.write().all_nodes.write().insert(id, is_optical);
     }
     pub fn add_to_node_selection(&mut self, id: Uuid, is_optical: bool) {
-        self.node_selection.write().all_types.write().insert(id, is_optical);
+        self.node_selection.write().all_nodes.write().insert(id, is_optical);
     }
     pub fn remove_from_node_selection(&mut self, id: Uuid) {
-        self.node_selection.write().all_types.write().remove(&id);
+        self.node_selection.write().all_nodes.write().remove(&id);
     }
 
     pub fn set_active_node_none(&mut self) {

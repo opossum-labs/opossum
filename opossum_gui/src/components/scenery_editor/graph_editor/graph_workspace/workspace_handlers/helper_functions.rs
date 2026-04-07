@@ -91,7 +91,7 @@ pub(super) fn with_edges<F>(
 {
     let mut ws = workspace.write();
 
-    if let Some(mut edges) = ws.get_graph_edges(graph_id) {
+    if let Some(mut edges) = ws.get_graph_edges_mut(graph_id) {
         f(&mut edges.write());
     }
 

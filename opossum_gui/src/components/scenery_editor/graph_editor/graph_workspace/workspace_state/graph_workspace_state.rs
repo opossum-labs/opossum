@@ -61,8 +61,8 @@ impl GraphsWorkspaceState {
             .get(&graph_id)
             .map(|g| g.read().editor_state)
     }
-    pub(in super::super) fn get_graph_edges(
-        &self,
+    pub(in super::super) fn get_graph_edges_mut(
+        &mut self,
         graph_id: Uuid,
     ) -> Option<Signal<Vec<ConnectInfo>>> {
         self.tabs
