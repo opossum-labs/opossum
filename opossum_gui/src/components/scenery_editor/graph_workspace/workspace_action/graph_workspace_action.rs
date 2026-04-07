@@ -21,6 +21,7 @@ pub enum GraphsWorkspaceAction {
     ClearSelectedNodes {
         graph_id: Uuid,
     },
+    SetActiveTab(Uuid),
     RemoveTabs(Vec<Uuid>),
     RemoveFromNodeSelection {
         graph_id: Uuid,

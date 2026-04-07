@@ -2,7 +2,7 @@
 use crate::components::scenery_editor::{
     GraphsWorkspaceState, SelectionBoxComponent,
     edges::edges_component::{EdgeCreationComponent, EdgesComponent},
-    graph_editor::hooks::{use_drag, use_on_mouse_down, use_zoom},
+    graph_editor::{BreadCrumbs, hooks::{use_drag, use_on_mouse_down, use_zoom}},
     graph_workspace::{GraphState, GraphsWorkspaceAction},
     nodes::Nodes,
 };
@@ -117,30 +117,3 @@ pub fn GraphViewEditor(
     }
 }
 
-#[component]
-pub fn BreadCrumbs(
-    bread_crumbs: Vec<(Uuid, String)>,
-    bread_crumb_click_event: EventHandler<(Uuid, String)>,
-) -> Element {
-    rsx! {
-        div { class: "graph-breadcrumbs",
-            for (i , (id , name)) in bread_crumbs.iter().enumerate() {
-                {
-                    let name = name.clone();
-                    let id = *id;
-                    rsx! {
-                        span {
-                            class: "breadcrumb",
-                            onclick: move |_| bread_crumb_click_event.call((id, name.clone())),
-                            "{name}"
-                        }
-
-                        if i < bread_crumbs.len() - 1 {
-                            span { class: "breadcrumb-sep", " › " }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}

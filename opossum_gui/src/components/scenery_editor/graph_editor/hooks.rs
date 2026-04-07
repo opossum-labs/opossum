@@ -22,6 +22,7 @@ use uuid::Uuid;
 pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let editor_status = use_context::<ReadSignal<EditorState>>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
     move |wheel_event| {
         let mut zoom = editor_status().zoom;
@@ -41,8 +42,10 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         };
         let new_shift_x = mouse_on_graph_x.mul_add(-new_graph_zoom, mouse_pos.x);
         let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
-        zoom.set(new_graph_zoom);
-        shift.set(Point2D::new(new_shift_x, new_shift_y));
+
+        let graph_id = *workspace.read().active_tab.read();
+        workspace_processor.send(GraphsWorkspaceAction::SetZoom { graph_id, zoom: new_graph_zoom });
+        workspace_processor.send(GraphsWorkspaceAction::SetShift { graph_id, shift: Point2D::new(new_shift_x, new_shift_y) });
     }
 }
 

@@ -106,12 +106,10 @@ pub fn GraphEditor(
 
     let selected_nodes_memo = use_memo(move || {
         let read_workspace = workspace.read();
-        let active_tab = *read_workspace.active_tab.read();
-
         read_workspace
-            .get_graph_store_read(active_tab)
+            .get_graph_store_read(active_tab())
             .map_or(Vec::<SelectedNode>::new(), |g| {
-                g.read().get_selected_nodes(active_tab)
+                g.read().get_selected_nodes(active_tab())
             })
     });
     let onmouseleave_handler = use_drag_end(workspace.into());
@@ -147,10 +145,10 @@ pub fn GraphEditor(
 
                 Tabs {
                     class: "editor-tabs",
-                    value: (*workspace.read().active_tab.read()).as_simple().to_string(),
+                    value: active_tab().as_simple().to_string(),
                     on_value_change: move |v: String| {
                         if let Ok(new_id) = Uuid::parse_str(&v) {
-                            workspace_handlers.workspace.set_active_tab(new_id);
+                            workspace_processor.send(GraphsWorkspaceAction::SetActiveTab(new_id));
                         }
                     },
                     {
