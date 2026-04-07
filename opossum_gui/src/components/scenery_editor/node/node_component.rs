@@ -21,8 +21,8 @@ use opossum_core::types::api_types::NewRefNode;
 #[component]
 pub fn Node(
     node: NodeElement,
-    ctrl_pressed: Signal<bool>,
-    shift_pressed: Signal<bool>,
+    ctrl_pressed: ReadSignal<bool>,
+    shift_pressed: ReadSignal<bool>,
     mouse_pos_in_editor: Memo<Point2D<f64>>,
 ) -> Element {
     let graph_store = use_context::<ReadSignal<GraphStore>>();

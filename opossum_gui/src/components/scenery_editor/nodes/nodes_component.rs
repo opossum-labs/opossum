@@ -7,8 +7,8 @@ use uuid::Uuid;
 pub fn Nodes(
     graph_store: ReadSignal<GraphStore>,
     graph_id: Uuid,
-    ctrl_pressed: Signal<bool>,
-    shift_pressed: Signal<bool>,
+    ctrl_pressed: ReadSignal<bool>,
+    shift_pressed: ReadSignal<bool>,
     mouse_pos_in_editor: Memo<Point2D<f64>>,
 ) -> Element {
     rsx! {

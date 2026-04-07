@@ -49,7 +49,7 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
 pub fn use_on_mouse_down(
     mut current_mouse_pos: Signal<Point2D<f64>>,
     mut last_click: Signal<Option<Instant>>,
-    ctrl_pressed: Signal<bool>,
+    ctrl_pressed: ReadSignal<bool>,
     graph_id: Uuid,
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
