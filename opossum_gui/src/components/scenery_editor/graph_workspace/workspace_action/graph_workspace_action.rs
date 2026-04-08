@@ -85,7 +85,7 @@ pub enum GraphsWorkspaceAction {
         graph_id: Uuid,
         node_id: Uuid,
     },
-    SetEditorArea(Rect<f64>),
+    GetEditorArea(),
     LoadFromFile(PathBuf),
     SaveToFile(PathBuf),
     ConvertToGroup {

@@ -5,7 +5,7 @@ use crate::components::{
         DragStatus, NodeEditorCommand, SelectedNode,
         graph_editor::{
             GraphViewEditor,
-            hooks::{use_drag_end, use_on_key_down, use_on_key_up, use_on_resize},
+            hooks::{use_drag_end, use_on_key_down, use_on_key_up},
         },
         graph_workspace::{
             GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
@@ -120,11 +120,6 @@ pub fn GraphEditor(
         shift_pressed,
     );
     let onkeyuphandler = use_on_key_up(ctrl_pressed, shift_pressed);
-    let graph_editor_content_container_id = "graphEditorContentContainer";
-    let onresizehandler = use_on_resize(
-        workspace.into(),
-        graph_editor_content_container_id.to_string(),
-    );
 
     rsx! {
         div { class: "row main-content-row",
@@ -185,9 +180,9 @@ pub fn GraphEditor(
                                 div { class: "editor-tab-filler" }
                             }
                             div {
-                                id: graph_editor_content_container_id,
+                                id: "graphEditorContentContainer",
                                 class: "graph-editor-tab-content",
-                                onresize: move |_| onresizehandler.call(()),
+                                onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea()),
                                 for (i , id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = tabs.get(id) {
                                         TabContent {

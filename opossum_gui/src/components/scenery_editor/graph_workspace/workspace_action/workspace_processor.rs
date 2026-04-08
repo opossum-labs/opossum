@@ -2,13 +2,17 @@
 #![allow(clippy::large_types_passed_by_value)]
 use std::{collections::HashSet, fs, path::PathBuf};
 
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus::{
+    html::geometry::euclid::default::{Point2D, Rect, Size2D},
+    prelude::*,
+};
 use futures_util::StreamExt;
 use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, PortMap, PortType},
     types::api_types::{ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo},
 };
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
@@ -41,6 +45,7 @@ pub fn use_workspace_processor(
                 match action {
                     GraphsWorkspaceAction::LoadFromFile(path) => {
                         process_load_from_file(
+                            workspace,
                             path,
                             root_graph_id,
                             workspace_handlers,
@@ -62,7 +67,7 @@ pub fn use_workspace_processor(
                             .await;
                     }
                     GraphsWorkspaceAction::AddRootSceneryTab { name } => {
-                        process_add_root_scenery_tab(workspace_handlers, name).await;
+                        process_add_root_scenery_tab(workspace, workspace_handlers, name).await;
                     }
                     GraphsWorkspaceAction::AddOpticNode {
                         node_type,
@@ -235,9 +240,6 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::SetSelectionBox(selection_box) => workspace_handlers
                         .workspace
                         .set_selection_box(selection_box),
-                    GraphsWorkspaceAction::SetEditorArea(editor_area) => {
-                        workspace_handlers.workspace.set_editor_area(editor_area);
-                    }
                     GraphsWorkspaceAction::ClearNodesToBeSelected { graph_id } => {
                         workspace_handlers
                             .workspace
@@ -353,10 +355,48 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
+                    GraphsWorkspaceAction::GetEditorArea() => {
+                        process_get_editor_area(workspace, workspace_handlers).await;
+                    }
                 }
             }
         }
     })
+}
+
+async fn process_get_editor_area(
+    workspace: ReadSignal<GraphsWorkspaceState>,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    let element_id = format!("editor_{}", *workspace.read().active_tab.read().as_simple());
+    let js = format!(
+        r"
+        let el = document.getElementById('{element_id}');
+        if (!el) {{
+            dioxus.send(null);
+        }} else {{
+            let r = el.getBoundingClientRect();
+            dioxus.send({{
+                x: r.x,
+                y: r.y,
+                width: r.width,
+                height: r.height
+            }});
+        }}
+        "
+    );
+    let mut eval = dioxus::document::eval(&js);
+    if let Ok(rect) = eval.recv::<Value>().await
+        && let (Some(x), Some(y), Some(width), Some(height)) = (
+            rect["x"].as_f64(),
+            rect["y"].as_f64(),
+            rect["width"].as_f64(),
+            rect["height"].as_f64(),
+        )
+    {
+        let editor_area = Rect::new(Point2D::new(x, y), Size2D::new(width, height));
+        ws_handler.workspace.set_editor_area(editor_area);
+    }
 }
 
 async fn process_jump_to_mapped_port(
@@ -898,6 +938,7 @@ async fn process_fill_graph_of_group(
 }
 
 async fn process_load_from_file(
+    workspace: ReadSignal<GraphsWorkspaceState>,
     path: PathBuf,
     scenery_id_sig: Memo<Uuid>,
     ws_handler: WorkSpaceSignalHandlers,
@@ -913,7 +954,7 @@ async fn process_load_from_file(
     };
     match api::post_opm_file(opm_string).await {
         Ok(name) => {
-            process_add_root_scenery_tab(ws_handler, name).await;
+            process_add_root_scenery_tab(workspace, ws_handler, name).await;
             set_file_path_handler.call(Some(path));
             let scenery_id = *scenery_id_sig.read();
             process_fill_graph_of_group(scenery_id_sig.into(), scenery_id, ws_handler).await;
@@ -961,7 +1002,11 @@ async fn process_save_root_scenery_to_file(
     }
 }
 
-async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers, name: String) {
+async fn process_add_root_scenery_tab(
+    workspace: ReadSignal<GraphsWorkspaceState>,
+    ws_handler: WorkSpaceSignalHandlers,
+    name: String,
+) {
     match api::get_scenery_uuid().await {
         Ok(id) => {
             ws_handler.workspace.set_root_scenery_id(id);
@@ -971,6 +1016,7 @@ async fn process_add_root_scenery_tab(ws_handler: WorkSpaceSignalHandlers, name:
                 hierarchy: vec![(id, name.clone())],
             });
             process_rename_root_scenery(ws_handler, name, id, false).await;
+            process_get_editor_area(workspace, ws_handler).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
