@@ -3,9 +3,9 @@ use core::f64;
 use crate::components::{
     node_editor::inputs::input_components::UnitInput,
     scenery_editor::{
+        GraphState, GraphsWorkspaceAction,
         constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
         edges::define_bezier_path,
-        graph_store::{GraphStore, GraphStoreAction},
     },
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -13,8 +13,9 @@ use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 
 #[component]
 pub fn EdgeComponent(edge: ConnectInfo) -> Element {
-    let graph_store = use_context::<Signal<GraphStore>>();
-    let graph_processor = use_coroutine_handle::<GraphStoreAction>();
+    let graph_state = use_context::<ReadSignal<GraphState>>();
+    let graph_store = graph_state.read().graph_store;
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
     // Memoize the start and end positions. This will only re-read the node
     // positions and re-calculate when the `edge` prop itself changes.
@@ -28,7 +29,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 .nodes()
                 .read()
                 .get(&edge.src_uuid())
-                .map(|n| n.abs_port_position(&PortType::Output, edge.src_port()))
+                .map(|n| n.abs_port_position(PortType::Output, edge.src_port()))
                 .unwrap_or_default()
         }
     });
@@ -41,7 +42,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 .nodes()
                 .read()
                 .get(&edge.target_uuid())
-                .map(|n| n.abs_port_position(&PortType::Input, edge.target_port()))
+                .map(|n| n.abs_port_position(PortType::Input, edge.target_port()))
                 .unwrap_or_default()
         }
     });
@@ -61,7 +62,11 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
             onkeydown: {
                 move |event: Event<KeyboardData>| {
                     if event.data().key() == Key::Delete {
-                        graph_processor.send(GraphStoreAction::DeleteEdge(edge.clone()));
+                        workspace_processor
+                            .send(GraphsWorkspaceAction::DeleteEdge {
+                                connection: edge.clone(),
+                                graph_id: graph_state.read().graph_info.id,
+                            });
                     }
                     event.stop_propagation();
                 }
@@ -97,7 +102,11 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                             let mut edge = edge.clone();
 
                             edge.set_distance(new_distance);
-                            graph_processor.send(GraphStoreAction::UpdateEdge(edge));
+                            workspace_processor
+                                .send(GraphsWorkspaceAction::UpdateEdge {
+                                    connection: edge,
+                                    graph_id: graph_state.read().graph_info.id,
+                                });
                         }
                     },
                     flushable_input: false,

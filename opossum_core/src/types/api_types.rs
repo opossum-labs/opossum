@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{opm_document::AnalyzerInfo, prelude::AnalyzerType};
+use crate::{nodes::ConnectionInfo, opm_document::AnalyzerInfo, prelude::AnalyzerType};
 
 /// Structure holding the version information
 #[derive(ToSchema, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -108,6 +108,12 @@ impl NodeInfo {
     pub fn output_ports(&self) -> Vec<String> {
         self.output_ports.clone()
     }
+    pub fn set_input_ports(&mut self, inputs: Vec<String>) {
+        self.input_ports = inputs;
+    }
+    pub fn set_output_ports(&mut self, outputs: Vec<String>) {
+        self.output_ports = outputs;
+    }
 }
 #[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
 pub struct NewRefNode {
@@ -147,6 +153,7 @@ pub struct ConnectInfo {
     /// Flag for reference-node indication. true if target node is a reference node.
     target_is_reference: bool,
 }
+
 impl ConnectInfo {
     #[must_use]
     pub const fn new(
@@ -164,6 +171,17 @@ impl ConnectInfo {
             target_port,
             distance,
             target_is_reference,
+        }
+    }
+    #[must_use]
+    pub fn from_connection_info(c: &ConnectionInfo, is_reference: bool) -> Self {
+        Self {
+            src_uuid: c.src_id,
+            src_port: c.src_port.clone(),
+            target_uuid: c.target_id,
+            target_port: c.target_port.clone(),
+            distance: c.distance.value,
+            target_is_reference: is_reference,
         }
     }
     #[must_use]

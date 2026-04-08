@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::nodes::NodeAttr;
@@ -36,6 +36,18 @@ pub async fn get_connections(group_id: Uuid) -> Result<Vec<ConnectInfo>, String>
         ))
         .await
 }
+
+pub async fn get_port_maps_of_group(group_id: Uuid) -> Result<(PortMap, PortMap), String> {
+    HTTP_API_CLIENT()
+        .get::<(PortMap, PortMap)>(&format!("/api/groups/{}/portmaps", group_id.as_simple()))
+        .await
+}
+
+pub async fn get_ports_of_group(group_id: Uuid) -> Result<(Vec<String>, Vec<String>), String> {
+    HTTP_API_CLIENT()
+        .get::<(Vec<String>, Vec<String>)>(&format!("/api/groups/{}/ports", group_id.as_simple()))
+        .await
+}
 /// Send a request to add a node to the scenery.
 ///
 /// # Errors
@@ -54,71 +66,39 @@ pub async fn post_add_node(new_node_info: NewNode, group_id: Uuid) -> Result<Nod
         .await
 }
 
-/// Request the node type that has been stored in the copy-node cache
-///
-/// # Returns
-/// - Returns true if it is an optical node
-/// - Returns false if it is an analyzer node
-///
-/// # Errors
-/// Returns an error if there is no node in the copy cache
-pub async fn get_copied_node_type() -> Result<bool, String> {
-    HTTP_API_CLIENT()
-        .get::<bool>("/api/scenery/copied_node_type")
-        .await
-}
-/// Send a request to copy a optical node of the scenery.
+/// Send a request to copy nodes of the scenery.
 ///
 /// # Errors
 ///
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized
 /// - the request fails (e.g. the node ide does not exist)
-/// - the response cannot be deserialized into the [`NodeInfo`] struct
-pub async fn post_copy_optical_node(node_id: Uuid) -> Result<String, String> {
+pub async fn post_copy_nodes(nodes: HashSet<Uuid>) -> Result<String, String> {
     HTTP_API_CLIENT()
-        .post::<Uuid, String>("/api/scenery/node_copy", node_id)
+        .post::<HashSet<Uuid>, String>("/api/scenery/nodes_copy", nodes)
         .await
 }
 
-pub async fn post_paste_optical_node(
+pub async fn post_paste_nodes(
     group_id: Uuid,
     pos: Point2D<f64>,
-) -> Result<Option<NodeInfo>, String> {
+) -> Result<
+    (
+        HashMap<Uuid, Vec<NodeInfo>>,
+        Vec<AnalyzerInfo>,
+        HashMap<Uuid, Vec<ConnectInfo>>,
+    ),
+    String,
+> {
     HTTP_API_CLIENT()
-        .post::<(Uuid, (f64, f64)), Option<NodeInfo>>(
-            "/api/scenery/node_paste",
-            (group_id, (pos.x, pos.y)),
-        )
-        .await
-}
-/// Send a request to copy an analyzer node of the scenery.
-///
-/// # Errors
-///
-/// This function will return an error if
-/// - the provided [`Uuid`] cannot be serialized
-/// - the request fails (e.g. the node id does not exist)
-/// - the response cannot be deserialized into the [`AnalyzerInfo`] struct
-pub async fn post_copy_analyzer_node(analyzer_id: Uuid) -> Result<String, String> {
-    HTTP_API_CLIENT()
-        .post::<Uuid, String>("/api/scenery/analyzer_copy", analyzer_id)
+        .post::<(Uuid, (f64, f64)), (
+            HashMap<Uuid, Vec<NodeInfo>>,
+            Vec<AnalyzerInfo>,
+            HashMap<Uuid, Vec<ConnectInfo>>,
+        )>("/api/scenery/nodes_paste", (group_id, (pos.x, pos.y)))
         .await
 }
 
-/// Send a request to paste an analyzer node of the scenery.
-///
-/// # Errors
-///
-/// This function will return an error if
-/// - the provided [`Uuid`] cannot be serialized
-/// - the request fails (e.g. the node id does not exist)
-/// - the response cannot be deserialized into the [`AnalyzerInfo`] struct
-pub async fn post_paste_analyzer_node(pos: Point2D<f64>) -> Result<AnalyzerInfo, String> {
-    HTTP_API_CLIENT()
-        .post::<(f64, f64), AnalyzerInfo>("/api/scenery/analyzer_paste", (pos.x, pos.y))
-        .await
-}
 /// Send a request to add a reference node to the scenery.
 ///
 /// # Errors
@@ -293,6 +273,56 @@ pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result
         .await
 }
 
+/// Get the hierarchy of the group with the given `group_id`.
+///
+/// # Errors
+///
+/// This function will return an error if the `group_id` was not found.
+pub async fn get_group_hierarchy(group_id: Uuid) -> Result<Vec<(Uuid, String)>, String> {
+    HTTP_API_CLIENT()
+        .get::<Vec<(Uuid, String)>>(&format!("/api/scenery/{}/hierarchy", group_id.as_simple()))
+        .await
+}
+
+/// Convert the given `nodes` into a subgroup of the specified `group_id`.
+///
+/// Returns information about the created group node and its connections.
+///
+/// # Errors
+///
+/// This function will return an error if the `group_id` was not found
+/// or if any of the provided `nodes` are invalid.
+pub async fn convert_nodes_to_group(
+    nodes: Vec<Uuid>,
+    group_id: Uuid,
+) -> Result<(NodeInfo, Vec<ConnectInfo>), String> {
+    HTTP_API_CLIENT()
+        .post::<Vec<Uuid>, (NodeInfo, Vec<ConnectInfo>)>(
+            &format!("/api/groups/{}/convert_to_group", group_id.as_simple()),
+            nodes,
+        )
+        .await
+}
+
+/// Move the given `nodes` from `from_group_id` into `drop_group_id`.
+///
+/// # Errors
+///
+/// This function will return an error if either group was not found
+/// or if any of the provided `nodes` are invalid.
+pub async fn drop_nodes_into_group(
+    nodes: Vec<Uuid>,
+    from_group_id: Uuid,
+    drop_group_id: Uuid,
+) -> Result<String, String> {
+    HTTP_API_CLIENT()
+        .post::<(Vec<Uuid>, Uuid), String>(
+            &format!("/api/groups/{}/drop_into_group", from_group_id.as_simple()),
+            (nodes, drop_group_id),
+        )
+        .await
+}
+
 /// Update the property of the node with the given `node_id`.
 /// The property value is already passes as a `serde_json::Value` to avoid implementing `PartialEq` for every property type.
 ///
@@ -399,6 +429,38 @@ pub async fn update_analyzer_config_ron(
         .post_ron::<AnalyzerType, String>(
             &format!("/api/scenery/analyzer/{}", node_id.as_simple()),
             analyzer_type,
+        )
+        .await
+}
+
+pub async fn add_port_map(
+    port_type: PortType,
+    group_port_name: String,
+    mapped_node_port_name: String,
+    mapped_node_id: Uuid,
+    group_id: Uuid,
+) -> Result<(Vec<String>, Vec<String>), String> {
+    HTTP_API_CLIENT()
+        .post::<(Uuid, (String, String), PortType), (Vec<String>, Vec<String>)>(
+            &format!("/api/groups/{}/port_map", group_id.as_simple()),
+            (
+                mapped_node_id,
+                (mapped_node_port_name, group_port_name),
+                port_type,
+            ),
+        )
+        .await
+}
+
+pub async fn remove_port_map(
+    group_port_name: String,
+    group_id: Uuid,
+    port_type: PortType,
+) -> Result<(bool, Vec<ConnectInfo>, Uuid), String> {
+    HTTP_API_CLIENT()
+        .delete::<(String, PortType), (bool, Vec<ConnectInfo>, Uuid)>(
+            &format!("/api/groups/{}/port_map", group_id.as_simple()),
+            (group_port_name, port_type),
         )
         .await
 }

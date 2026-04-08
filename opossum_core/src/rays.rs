@@ -772,10 +772,7 @@ impl Rays {
                 //             0.,
                 //         );
                 //         for (wf_map, (wvl, spec_int)) in wf_error.iter().zip(wvls.iter().zip(spec_int.iter())) {
-                //             println!("{:?}", wf_map);
-                //             println!("{:?}", xy_coord);
                 //             let (interp_dat, _) = vec_interpolate_3d_scatter_data(&wf_map, &xy_coord)?;
-                //             println!("{:?}", interp_dat);
                 //             averaged_wavefront_data += interp_dat; // * *spec_int*center_wavelength/ *wvl;
                 //         }
                 //         let dat = MatrixXx3::from_columns(&[

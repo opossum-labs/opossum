@@ -8,10 +8,11 @@ pub use super::lightdata::{
     ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
 };
 pub use super::nodes::{
-    BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens, Metertype,
-    NodeGroup, NodeReference, ParabolicMirror, ParaxialSurface, RayPropagationVisualizer,
-    ReflectiveGrating, Source, SourcePort, Spectrometer, SpectrometerType, SplittingConfigBuilder,
-    SpotDiagram, ThinMirror, WaveFront, Wedge, collimated_line_ray_builder,
+    BeamSplitter, ConnectionInfo, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter,
+    Lens, Metertype, NodeGroup, NodeReference, ParabolicMirror, ParaxialSurface,
+    RayPropagationVisualizer, ReflectiveGrating, Source, SourcePort, Spectrometer,
+    SpectrometerType, SplittingConfigBuilder, SpotDiagram, ThinMirror, WaveFront, Wedge,
+    collimated_line_ray_builder,
     ideal_filter::{
         BandFilter, BandFilterType, EdgeFilter, EdgeFilterType, FilterTypeBuilder,
         SpectralFilterBuilder,
@@ -21,6 +22,7 @@ pub use super::nodes::{
 pub use super::opm_document::OpmDocument;
 pub use super::optic_node::{Alignable, OpticNode};
 pub use super::optic_ports::PortType;
+pub use super::port_map::PortMap;
 pub use super::properties::{Properties, Property, Proptype};
 pub use super::refractive_index::{
     RefrIndexConst, RefrIndexSchott, RefrIndexSellmeier1, RefractiveIndex,
