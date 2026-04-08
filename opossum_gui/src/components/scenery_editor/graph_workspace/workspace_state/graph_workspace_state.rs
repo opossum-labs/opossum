@@ -31,6 +31,7 @@ pub struct GraphsWorkspaceState {
     pub drag_status: Signal<DragStatus>,
     pub selection_box: Signal<Option<Rect<f64>>>,
     pub drop_in_group: Signal<Option<(Uuid, usize)>>,
+    pub nodes_cut: bool
 }
 
 impl GraphsWorkspaceState {

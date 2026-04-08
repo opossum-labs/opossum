@@ -247,7 +247,17 @@ pub fn use_on_key_down(
                         nodes: graph_store.read().selected_node_ids(),
                     });
                     event.stop_propagation();
-                } else if ctrl_or_meta
+                }
+                else if ctrl_or_meta
+                    && !modifiers.shift()
+                    && event.data().key() == Key::Character("x".to_string())
+                {
+                     workspace_processor.send(GraphsWorkspaceAction::CutNodes {
+                        nodes: graph_store.read().selected_node_ids(),
+                    });
+                    event.stop_propagation();
+                }                
+                else if ctrl_or_meta
                     && !modifiers.shift()
                     && event.data().key() == Key::Character("v".to_string())
                 {

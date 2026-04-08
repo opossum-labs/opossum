@@ -35,6 +35,7 @@ pub struct WorkspaceHandlers {
     clear_selected_nodes: EventHandler<Uuid>,
     #[allow(clippy::type_complexity)]
     apply_drag: EventHandler<(Uuid, DragStatus, Point2D<f64>, f64, Point2D<f64>)>,
+    set_nodes_cut: EventHandler<bool>,
 }
 
 impl WorkspaceHandlers {
@@ -56,7 +57,11 @@ impl WorkspaceHandlers {
             clear_nodes_to_be_removed: clear_nodes_to_be_removed_handler(workspace),
             clear_selected_nodes: clear_selected_nodes_handler(workspace),
             apply_drag: apply_drag_handler(workspace),
+            set_nodes_cut: set_nodes_cut_handler(workspace)
         }
+    }
+    pub fn set_nodes_cut(&self, nodes_cut: bool){
+        self.set_nodes_cut.call(nodes_cut);
     }
     pub fn apply_drag(
         &self,
@@ -134,6 +139,14 @@ impl WorkspaceHandlers {
     pub fn remove_port_map(&self, group_id: Uuid, group_port_name: String) {
         self.remove_port_map.call((group_id, group_port_name));
     }
+}
+
+fn set_nodes_cut_handler(
+    mut workspace: Signal<GraphsWorkspaceState>,
+) -> EventHandler<bool> {
+    EventHandler::new(move |nodes_cut: bool| {
+        workspace.write().nodes_cut = nodes_cut;
+    })
 }
 
 #[allow(clippy::type_complexity)]
