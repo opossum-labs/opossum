@@ -346,6 +346,7 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                     workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeSelected {
                         graph_id: *active_graph.read(),
                     });
+
                     workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(None));
                 }
                 DragStatus::Edge(_) => {
