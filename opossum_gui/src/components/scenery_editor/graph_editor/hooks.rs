@@ -16,7 +16,6 @@ use dioxus::{
     prelude::*,
 };
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
-use serde_json::Value;
 use uuid::Uuid;
 
 pub fn use_zoom() -> impl FnMut(WheelEvent) {
@@ -156,49 +155,6 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
             mouse_to_graph_shift,
         });
     }
-}
-
-pub fn use_on_resize(
-    workspace: ReadSignal<GraphsWorkspaceState>,
-    element_id: String,
-) -> EventHandler<()> {
-    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    EventHandler::new(move |()| {
-        let element_id = if workspace.read().active_tab.read().is_nil() {
-            element_id.clone()
-        } else {
-            format!("editor_{}", *workspace.read().active_tab.read().as_simple())
-        };
-        spawn({
-            async move {
-                let js = format!(
-                    r"
-                    let el = document.getElementById('{element_id}');
-                    if (!el) {{
-                        dioxus.send(null);
-                    }} else {{
-                        let r = el.getBoundingClientRect();
-                        dioxus.send({{
-                            x: r.x,
-                            y: r.y,
-                            width: r.width,
-                            height: r.height
-                        }});
-                    }}
-                    "
-                );
-                let mut eval = dioxus::document::eval(&js);
-                if let Ok(rect) = eval.recv::<Value>().await {
-                    let x = rect["x"].as_f64().unwrap();
-                    let y = rect["y"].as_f64().unwrap();
-                    let width = rect["width"].as_f64().unwrap();
-                    let height = rect["height"].as_f64().unwrap();
-                    let editor_area = Rect::new(Point2D::new(x, y), Size2D::new(width, height));
-                    workspace_processor.send(GraphsWorkspaceAction::SetEditorArea(editor_area));
-                }
-            }
-        });
-    })
 }
 
 pub fn use_on_key_up(
