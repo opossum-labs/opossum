@@ -64,7 +64,7 @@ pub enum ApertureType {
 pub enum Aperture {
     /// completely transparent aperture. This is the default.
     #[default]
-    None,
+    Open,
     /// binary (either transparent or opaque) circular aperture defined by a radius and center point
     BinaryCircle(CircleShape, ApertureType),
     /// binary (either transparent or opaque) rectangular aperture defined by width and height as well as its center point
@@ -140,7 +140,7 @@ impl Aperture {
     #[must_use]
     /// Check if the aperture is [`Aperture::None`]
     pub const fn is_none(&self) -> bool {
-        matches!(self, Self::None)
+        matches!(self, Self::Open)
     }
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.
@@ -148,7 +148,7 @@ impl Aperture {
     pub fn apodize(&self, point: &Point2<Length>) -> f64 {
         // Resolve both transmission and type in a single match for clarity and correctness
         let (base_transmission, aperture_type) = match self {
-            Self::None => (1.0, &ApertureType::Hole),
+            Self::Open => (1.0, &ApertureType::Hole),
             Self::BinaryCircle(shape, at) => (shape.transmission_factor(point), at),
             Self::BinaryRectangle(shape, at) => (shape.transmission_factor(point), at),
             Self::BinaryPolygon(shape, at) => (shape.transmission_factor(point), at),
@@ -189,7 +189,7 @@ impl Plottable for Aperture {
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let plt_series_opt = match plt_type {
             PlotType::Line2D(_) | PlotType::Scatter2D(_) => match self {
-                Self::None => None,
+                Self::Open => None,
                 Self::BinaryCircle(conf, _) => Some(stack::plot_circle(conf)),
                 Self::BinaryRectangle(conf, _) => {
                     let center_x = conf.center().x.get::<millimeter>();
@@ -295,7 +295,7 @@ mod test {
     use crate::meter;
     #[test]
     fn default() {
-        assert!(matches!(Aperture::default(), Aperture::None));
+        assert!(matches!(Aperture::default(), Aperture::Open));
     }
     #[test]
     fn test_new_circle() {
@@ -367,7 +367,7 @@ mod test {
 
     #[test]
     fn test_is_none() {
-        assert!(Aperture::None.is_none());
+        assert!(Aperture::Open.is_none());
         let circle =
             Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
         assert!(!circle.is_none());

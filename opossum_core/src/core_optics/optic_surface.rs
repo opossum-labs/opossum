@@ -334,7 +334,7 @@ mod test {
     #[test]
     fn default() {
         let os = OpticSurface::default();
-        assert!(matches!(os.aperture, Aperture::None));
+        assert!(matches!(os.aperture, Aperture::Open));
         assert!(matches!(os.coating, CoatingType::IdealAR));
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 0);
@@ -348,7 +348,7 @@ mod test {
             OpticSurface::new(
                 gs.clone(),
                 CoatingType::IdealAR,
-                Aperture::None,
+                Aperture::Open,
                 J_per_cm2!(f64::NAN)
             )
             .is_err()
@@ -357,7 +357,7 @@ mod test {
             OpticSurface::new(
                 gs.clone(),
                 CoatingType::IdealAR,
-                Aperture::None,
+                Aperture::Open,
                 J_per_cm2!(f64::NEG_INFINITY)
             )
             .is_err()
@@ -366,7 +366,7 @@ mod test {
             OpticSurface::new(
                 gs.clone(),
                 CoatingType::IdealAR,
-                Aperture::None,
+                Aperture::Open,
                 J_per_cm2!(-0.1)
             )
             .is_err()
@@ -375,7 +375,7 @@ mod test {
             OpticSurface::new(
                 gs.clone(),
                 CoatingType::IdealAR,
-                Aperture::None,
+                Aperture::Open,
                 J_per_cm2!(f64::INFINITY)
             )
             .is_ok()

@@ -9,8 +9,7 @@
                 inputs: {},
                 outputs: {},
             ),
-            uuid: "8878ebd3-83e5-4045-884e-bf6bea18e752",
-            lidt: 10000.0,
+            uuid: "aaed0f62-51cb-4676-b90e-98915885646c",
             props: {
                 "expand view": Bool(false),
             },
@@ -18,84 +17,58 @@
         ),
         graph: (
             nodes: [
-                (
-                    attributes: (
-                        node_type: "dummy",
-                        name: "dummy1",
-                        ports: (
-                            inputs: {
-                                "input_1": (
-                                    anchor_point_iso: (
-                                        transform: (
-                                            rotation: (0.0, 0.0, 0.0, 1.0),
-                                            translation: (0.0, 0.0, 0.0),
-                                        ),
-                                    ),
-                                    coating: IdealAR,
-                                    lidt: 10000.0,
-                                ),
-                            },
-                            outputs: {
-                                "output_1": (
-                                    anchor_point_iso: (
-                                        transform: (
-                                            rotation: (0.0, 0.0, 0.0, 1.0),
-                                            translation: (0.0, 0.0, 0.0),
-                                        ),
-                                    ),
-                                    coating: IdealAR,
-                                    lidt: 10000.0,
-                                ),
-                            },
-                        ),
-                        uuid: "192f75b0-01e6-4c4b-a782-0fde70e339fa",
-                        lidt: 10000.0,
-                        props: {},
-                        inverted: false,
+                {
+                    "node_type": "dummy",
+                    "name": "dummy1",
+                    "ports": (
+                        inputs: {
+                            "input_1": (
+                                aperture: Open,
+                                coating: IdealAR,
+                                lidt: 10000.0,
+                            ),
+                        },
+                        outputs: {
+                            "output_1": (
+                                aperture: Open,
+                                coating: IdealAR,
+                                lidt: 10000.0,
+                            ),
+                        },
                     ),
-                ),
-                (
-                    attributes: (
-                        node_type: "dummy",
-                        name: "dummy2",
-                        ports: (
-                            inputs: {
-                                "input_1": (
-                                    anchor_point_iso: (
-                                        transform: (
-                                            rotation: (0.0, 0.0, 0.0, 1.0),
-                                            translation: (0.0, 0.0, 0.0),
-                                        ),
-                                    ),
-                                    coating: IdealAR,
-                                    lidt: 10000.0,
-                                ),
-                            },
-                            outputs: {
-                                "output_1": (
-                                    anchor_point_iso: (
-                                        transform: (
-                                            rotation: (0.0, 0.0, 0.0, 1.0),
-                                            translation: (0.0, 0.0, 0.0),
-                                        ),
-                                    ),
-                                    coating: IdealAR,
-                                    lidt: 10000.0,
-                                ),
-                            },
-                        ),
-                        uuid: "d6c00974-9195-4293-938e-06b41676fa08",
-                        lidt: 10000.0,
-                        props: {},
-                        inverted: false,
+                    "uuid": "a2534789-ec98-4e9b-a1da-315a59d9da43",
+                    "props": {},
+                    "inverted": false,
+                },
+                {
+                    "node_type": "dummy",
+                    "name": "dummy2",
+                    "ports": (
+                        inputs: {
+                            "input_1": (
+                                aperture: Open,
+                                coating: IdealAR,
+                                lidt: 10000.0,
+                            ),
+                        },
+                        outputs: {
+                            "output_1": (
+                                aperture: Open,
+                                coating: IdealAR,
+                                lidt: 10000.0,
+                            ),
+                        },
                     ),
-                ),
+                    "uuid": "6002431d-9f31-49cf-935c-c2d56caa364e",
+                    "props": {},
+                    "inverted": false,
+                },
             ],
             edges: [
                 (
-                    src_id: "192f75b0-01e6-4c4b-a782-0fde70e339fa",
+                    src_id: "a2534789-ec98-4e9b-a1da-315a59d9da43",
                     src_port: "output_1",
-                    target_id: "d6c00974-9195-4293-938e-06b41676fa08",
+                    target_id: "6002431d-9f31-49cf-935c-c2d56caa364e",
                     target_port: "input_1",
                     distance: 0.0,
                 ),
@@ -108,7 +81,7 @@
         ),
     ),
     analyzers: {
-        "99f92222-3fcb-48c2-9b2c-d4cd78abc789": (
+        "eb40c6ac-664b-4bf2-9355-1f0e280459b1": (
             analyzer_type: RayTrace(
                 min_energy_per_ray: 0.000000000001,
                 max_number_of_bounces: 1000,
@@ -116,7 +89,7 @@
                 missed_surface_strategy: Stop,
                 source_map: {},
             ),
-            id: "99f92222-3fcb-48c2-9b2c-d4cd78abc789",
+            id: "eb40c6ac-664b-4bf2-9355-1f0e280459b1",
             gui_position: None,
         ),
     },

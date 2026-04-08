@@ -3,7 +3,6 @@
 use serde::{
     Deserialize, Serialize,
     de::{self},
-    ser::SerializeStruct,
 };
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
@@ -73,25 +72,35 @@ impl Serialize for OpticRef {
     where
         S: serde::Serializer,
     {
-        let mut optical_ref = self.optical_ref.lock_opm().unwrap();
+        // temporary helper struct which allows for attribute flattening
+        #[derive(Serialize)]
+        struct FlattenedOpticRef<'a> {
+            #[serde(flatten)]
+            attributes: &'a NodeAttr,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            graph: Option<&'a OpticGraph>,
+        }
 
-        // We check if the node can be treated as a group node.
-        // This avoids serializing the 'graph' field for non-group nodes.
-        if let Ok(group_node) = optical_ref.as_group_mut() {
-            let mut state = serializer.serialize_struct("OpticRef", 2)?;
-            state.serialize_field("attributes", &group_node.node_attr())?;
-            state.serialize_field("graph", &group_node.graph())?;
-            state.end()
+        let optical_ref = self.optical_ref.lock_opm().unwrap();
+
+        if let Ok(group_node) = optical_ref.as_group() {
+            FlattenedOpticRef {
+                attributes: group_node.node_attr(),
+                graph: Some(group_node.graph()),
+            }
+            .serialize(serializer)
         } else {
-            let mut state = serializer.serialize_struct("OpticRef", 1)?;
-            state.serialize_field("attributes", &optical_ref.node_attr())?;
-            drop(optical_ref);
-            state.end()
+            FlattenedOpticRef {
+                attributes: optical_ref.node_attr(),
+                graph: None,
+            }
+            .serialize(serializer)
         }
     }
 }
 #[derive(Deserialize)]
 struct OpticRefIntermediate {
+    #[serde(flatten)]
     attributes: NodeAttr,
     #[serde(default)]
     graph: OpticGraph,
@@ -159,11 +168,11 @@ mod test {
         let optic_ref: OpticRef = ron::from_str(&file_content).unwrap();
         assert_eq!(
             optic_ref.uuid(),
-            uuid!("98248e7f-dc4c-4131-8710-f3d5be2ff087")
+            uuid!("a2534789-ec98-4e9b-a1da-315a59d9da43")
         );
         let optic_ref = optic_ref.optical_ref.lock_opm().unwrap();
         assert_eq!(optic_ref.node_type(), "dummy");
-        assert_eq!(optic_ref.name(), "test123");
+        assert_eq!(optic_ref.name(), "dummy1");
     }
     #[test]
     fn debug() {
