@@ -353,7 +353,6 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
-                    
                 }
             }
         }
@@ -438,12 +437,11 @@ async fn process_delete_node(
     }
 }
 
-
 async fn process_paste_nodes(
     pos: Point2D<f64>,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
-    cut_nodes: bool
+    cut_nodes: bool,
 ) {
     match api::post_paste_nodes(graph_id, pos).await {
         Ok((optical_nodes, analyzer_nodes, edges)) => {
@@ -509,11 +507,15 @@ async fn process_paste_nodes(
                 }
             }
 
-            if cut_nodes{
-                eval_action_run(api::delete_cut_nodes(graph_id).await, 
-                Some(move |(deleted_nodes, cut_from_graph_id)| {
-                    ws_handler.nodes.remove_nodes(deleted_nodes, cut_from_graph_id);
-                    }));
+            if cut_nodes {
+                eval_action_run(
+                    api::delete_cut_nodes(graph_id).await,
+                    Some(move |(deleted_nodes, cut_from_graph_id)| {
+                        ws_handler
+                            .nodes
+                            .remove_nodes(deleted_nodes, cut_from_graph_id);
+                    }),
+                );
             }
         }
         Err(e) => {
@@ -522,9 +524,7 @@ async fn process_paste_nodes(
                 .add_log(&format!("Error while pasting node/s: {e}"));
         }
     }
-
 }
-
 
 async fn process_copy_nodes(nodes: HashSet<Uuid>) {
     eval_action_run(api::post_copy_nodes(nodes).await, None::<fn(String)>);

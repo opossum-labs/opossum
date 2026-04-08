@@ -57,10 +57,10 @@ impl WorkspaceHandlers {
             clear_nodes_to_be_removed: clear_nodes_to_be_removed_handler(workspace),
             clear_selected_nodes: clear_selected_nodes_handler(workspace),
             apply_drag: apply_drag_handler(workspace),
-            set_nodes_cut: set_nodes_cut_handler(workspace)
+            set_nodes_cut: set_nodes_cut_handler(workspace),
         }
     }
-    pub fn set_nodes_cut(&self, nodes_cut: bool){
+    pub fn set_nodes_cut(&self, nodes_cut: bool) {
         self.set_nodes_cut.call(nodes_cut);
     }
     pub fn apply_drag(
@@ -141,9 +141,7 @@ impl WorkspaceHandlers {
     }
 }
 
-fn set_nodes_cut_handler(
-    mut workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<bool> {
+fn set_nodes_cut_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<bool> {
     EventHandler::new(move |nodes_cut: bool| {
         workspace.write().nodes_cut = nodes_cut;
     })
