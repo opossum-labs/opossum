@@ -125,7 +125,7 @@ pub fn use_on_context_menu(
                 );
                 cx_menu.add_entry(remove_entry);
 
-                let parent = graph_info.get_parent().unwrap_or({
+                let parent = graph_info.get_parent().unwrap_or_else(|| {
                     let root_id = *workspace.read().root_scenery_id.read();
                     let root_name = workspace
                         .read()

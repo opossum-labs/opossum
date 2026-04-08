@@ -95,7 +95,13 @@ pub async fn post_paste_nodes(
             HashMap<Uuid, Vec<NodeInfo>>,
             Vec<AnalyzerInfo>,
             HashMap<Uuid, Vec<ConnectInfo>>,
-        )>("/api/scenery/nodes_paste", (group_id, (pos.x, pos.y)))
+        )>("/api/scenery/paste_nodes", (group_id, (pos.x, pos.y)))
+        .await
+}
+
+pub async fn delete_cut_nodes(group_id: Uuid) -> Result<(Vec<Uuid>, Uuid), String> {
+    HTTP_API_CLIENT()
+        .delete::<Uuid, (Vec<Uuid>, Uuid)>("/api/scenery/cut_nodes", group_id)
         .await
 }
 

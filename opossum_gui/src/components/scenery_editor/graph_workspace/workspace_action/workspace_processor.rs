@@ -137,9 +137,15 @@ pub fn use_workspace_processor(
                     }
                     GraphsWorkspaceAction::CopyNodes { nodes } => {
                         process_copy_nodes(nodes).await;
+                        workspace_handlers.workspace.set_nodes_cut(false);
+                    }
+                    GraphsWorkspaceAction::CutNodes { nodes } => {
+                        process_copy_nodes(nodes).await;
+                        workspace_handlers.workspace.set_nodes_cut(true);
                     }
                     GraphsWorkspaceAction::PasteNode { pos, graph_id } => {
-                        process_paste_node(pos, workspace_handlers, graph_id).await;
+                        let nodes_cut = workspace.read().nodes_cut;
+                        process_paste_nodes(pos, workspace_handlers, graph_id, nodes_cut).await;
                     }
                     GraphsWorkspaceAction::SyncNodePosition { node_id, pos } => {
                         eval_action_run(
@@ -431,10 +437,11 @@ async fn process_delete_node(
     }
 }
 
-async fn process_paste_node(
+async fn process_paste_nodes(
     pos: Point2D<f64>,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
+    cut_nodes: bool,
 ) {
     match api::post_paste_nodes(graph_id, pos).await {
         Ok((optical_nodes, analyzer_nodes, edges)) => {
@@ -498,6 +505,17 @@ async fn process_paste_node(
                 for edge in edges {
                     ws_handler.edges.add_edge(edge.clone(), *graph_id);
                 }
+            }
+
+            if cut_nodes {
+                eval_action_run(
+                    api::delete_cut_nodes(graph_id).await,
+                    Some(move |(deleted_nodes, cut_from_graph_id)| {
+                        ws_handler
+                            .nodes
+                            .remove_nodes(deleted_nodes, cut_from_graph_id);
+                    }),
+                );
             }
         }
         Err(e) => {

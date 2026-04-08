@@ -165,6 +165,9 @@ pub enum GraphsWorkspaceAction {
     CopyNodes {
         nodes: HashSet<Uuid>,
     },
+    CutNodes {
+        nodes: HashSet<Uuid>,
+    },
     PasteNode {
         pos: Point2D<f64>,
         graph_id: Uuid,

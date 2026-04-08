@@ -448,7 +448,7 @@ fn resolve_references(
 /// This function sends already copied nodes to the frontend
 #[utoipa::path(tag = "node",
     request_body(content = (Uuid, (f64, f64)),
-        description = "Uuid of the group node to be pasted in and the position at which the node should be pasted",
+        description = "Uuid of the group node to be pasted in, the position at which the node should be pasted",
         content_type = "application/json",
     ),
     responses(
@@ -457,7 +457,7 @@ fn resolve_references(
     )
 )]
 #[allow(clippy::significant_drop_tightening)]
-#[post("/nodes_paste")]
+#[post("/paste_nodes")]
 async fn post_paste_nodes(
     data: web::Data<AppState>,
     node_paste_info: web::Json<(Uuid, (f64, f64))>,
@@ -532,8 +532,68 @@ async fn post_paste_nodes(
         let connect_info = set_copied_connections(scenery, *g_id, connections)?;
         grouped_connect_info.insert(*g_id, connect_info);
     }
-
     Ok(Json((grouped_node_infos, analyzers, grouped_connect_info)))
+}
+
+/// Delete all nodes that have been cut out previously and
+///
+/// This function sends already copied nodes to the frontend
+#[utoipa::path(tag = "node",
+    responses(
+        (status = OK, body= NodeInfo, description = "Cut-out nodes successfully  removed and cache cleared", content_type="application/json"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[allow(clippy::significant_drop_tightening)]
+#[delete("/cut_nodes")]
+async fn delete_cut_nodes(
+    data: web::Data<AppState>,
+    paste_in_group_id: web::Json<Uuid>,
+) -> Result<Json<(Vec<Uuid>, Uuid)>, BackEndErrorResponse> {
+    let paste_in_group_id = paste_in_group_id.into_inner();
+    let mut nodes_to_delete = vec![];
+    let mut analyzers_to_delete = vec![];
+    let mut node_cache = data.node_copy_cache.lock();
+    while let Some(cache) = node_cache.pop() {
+        match cache {
+            NodeCacheItem::Optical(optic_ref) => {
+                nodes_to_delete.push(optic_ref.uuid());
+            }
+            NodeCacheItem::Analyzer(analyzer_info) => {
+                analyzers_to_delete.push(analyzer_info.id());
+            }
+        }
+    }
+    drop(node_cache);
+
+    let mut document = data.document.lock();
+    let mut deleted_nodes = vec![];
+    let scenery = document.scenery();
+    let scenery_id = scenery.node_attr().uuid();
+
+    let group_id = if analyzers_to_delete.is_empty()
+        && let Some(id) = nodes_to_delete.first()
+    {
+        let (_, group_id) = scenery.node_recursive(*id)?;
+        group_id
+    } else {
+        scenery_id
+    };
+
+    if scenery_id == paste_in_group_id {
+        for analyzer in &analyzers_to_delete {
+            deleted_nodes.push(*analyzer);
+            document.remove_analyzer(*analyzer)?;
+        }
+    }
+
+    let scenery = document.scenery_mut();
+
+    for node in &nodes_to_delete {
+        deleted_nodes.extend(scenery.delete_node(*node)?);
+    }
+
+    Ok(Json((deleted_nodes, group_id)))
 }
 
 fn reconfigure_ports(
@@ -1505,6 +1565,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_node_name);
     cfg.service(post_copy_nodes);
     cfg.service(post_paste_nodes);
+    cfg.service(delete_cut_nodes);
     cfg.service(post_node_lidt);
     cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);
