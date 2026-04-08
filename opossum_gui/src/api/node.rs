@@ -100,9 +100,10 @@ pub async fn post_paste_nodes(
 }
 
 pub async fn delete_cut_nodes(
+    group_id: Uuid,
 ) -> Result<(Vec<Uuid>, Uuid),String> {
     HTTP_API_CLIENT()
-        .delete::<String, (Vec<Uuid>, Uuid)>("/api/scenery/cut_nodes", String::new(),)
+        .delete::<Uuid, (Vec<Uuid>, Uuid)>("/api/scenery/cut_nodes", group_id)
         .await
 }
 

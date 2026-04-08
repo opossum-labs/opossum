@@ -510,9 +510,9 @@ async fn process_paste_nodes(
             }
 
             if cut_nodes{
-                eval_action_run(api::delete_cut_nodes().await, 
-                Some(move |(deleted_nodes, graph_id)| {
-                    ws_handler.nodes.remove_nodes(deleted_nodes, graph_id);
+                eval_action_run(api::delete_cut_nodes(graph_id).await, 
+                Some(move |(deleted_nodes, cut_from_graph_id)| {
+                    ws_handler.nodes.remove_nodes(deleted_nodes, cut_from_graph_id);
                     }));
             }
         }

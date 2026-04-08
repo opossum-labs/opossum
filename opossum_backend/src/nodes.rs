@@ -548,10 +548,12 @@ async fn post_paste_nodes(
 #[delete("/cut_nodes")]
 async fn delete_cut_nodes(
     data: web::Data<AppState>,
+    paste_in_group_id: web::Json<Uuid>,
 ) -> Result<
     Json<        (Vec<Uuid>, Uuid)    >,
     BackEndErrorResponse,
 > {
+    let paste_in_group_id = paste_in_group_id.into_inner();
     let mut nodes_to_delete = vec![];
     let mut analyzers_to_delete = vec![];
     while let Some(cache) = data.node_copy_cache.lock().pop() {
@@ -567,18 +569,26 @@ async fn delete_cut_nodes(
 
     let mut document = data.document.lock();
     let mut deleted_nodes = vec![];
-    for analyzer in &analyzers_to_delete{
-        deleted_nodes.push(*analyzer);
-        document.remove_analyzer(*analyzer)?;
-    }
-    let scenery = document.scenery_mut();
+    let scenery = document.scenery();
+    let scenery_id = scenery.node_attr().uuid();
+    
     let group_id = if analyzers_to_delete.is_empty() &&  let Some(id) = nodes_to_delete.first(){
         let (_, group_id) = scenery.node_recursive(*id)?;
         group_id
     }
     else{
-        scenery.node_attr().uuid()
+        scenery_id
     };
+
+    if scenery_id == paste_in_group_id{
+        for analyzer in &analyzers_to_delete{
+            deleted_nodes.push(*analyzer);
+            document.remove_analyzer(*analyzer)?;
+        }
+    }
+
+    let scenery = document.scenery_mut();
+
     
     for node in &nodes_to_delete{
         deleted_nodes.extend(scenery.delete_node(*node)?);
