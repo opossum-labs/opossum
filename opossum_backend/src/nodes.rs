@@ -553,7 +553,8 @@ async fn delete_cut_nodes(
     let paste_in_group_id = paste_in_group_id.into_inner();
     let mut nodes_to_delete = vec![];
     let mut analyzers_to_delete = vec![];
-    while let Some(cache) = data.node_copy_cache.lock().pop() {
+    let mut node_cache = data.node_copy_cache.lock();
+    while let Some(cache) = node_cache.pop() {
         match cache {
             NodeCacheItem::Optical(optic_ref) => {
                 nodes_to_delete.push(optic_ref.uuid());
@@ -563,6 +564,7 @@ async fn delete_cut_nodes(
             }
         }
     }
+    drop(node_cache);
 
     let mut document = data.document.lock();
     let mut deleted_nodes = vec![];
