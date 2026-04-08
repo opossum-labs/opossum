@@ -17,10 +17,7 @@ use crate::components::node_editor::{
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_core::{
-    nodes::fluence_detector::Fluence,
-    prelude::{Isometry, Properties},
-};
+use opossum_core::prelude::{Isometry, Properties};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, Default)]
