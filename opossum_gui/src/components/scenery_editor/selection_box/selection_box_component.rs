@@ -7,10 +7,8 @@ pub fn SelectionBoxComponent() -> Element {
     let editor_status = use_context::<ReadSignal<EditorState>>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let zoom = *editor_status.read().zoom.read();
-    let select_box_opt = use_memo(move || {
-        *workspace.read().selection_box.read()
-    });
-    rsx!{
+    let select_box_opt = use_memo(move || *workspace.read().selection_box.read());
+    rsx! {
         if let Some(select_box) = select_box_opt(){
             rect {
                     x: select_box.origin.x,

@@ -136,8 +136,6 @@ impl WorkspaceHandlers {
     }
 }
 
-
-
 #[allow(clippy::type_complexity)]
 fn apply_drag_handler(
     mut workspace: Signal<GraphsWorkspaceState>,
@@ -213,7 +211,9 @@ fn apply_drag_handler(
 
                     workspace.write().selection_box.set(Some(new_rect));
                 }
-                DragStatus::NodeInit | DragStatus::None => {workspace.write().selection_box.set(None);}
+                DragStatus::NodeInit | DragStatus::None => {
+                    workspace.write().selection_box.set(None);
+                }
             }
         },
     )

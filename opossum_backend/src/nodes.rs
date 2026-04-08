@@ -841,11 +841,10 @@ async fn post_node_name(
     let mut document = data.document.lock();
     let mut processed_names = HashMap::<Uuid, String>::new();
     let scenery = document.scenery_mut();
-    if scenery.node_attr().uuid() == uuid{
+    if scenery.node_attr().uuid() == uuid {
         scenery.node_attr_mut().set_name(&name);
         processed_names.insert(uuid, name);
-    }
-    else{
+    } else {
         let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid)?;
         for node_uuid in &nodes_to_rename {
             scenery
@@ -858,7 +857,9 @@ async fn post_node_name(
                     node_attr.set_name(&name);
                     processed_names.insert(*node_uuid, name);
                 })
-                .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?;
+                .map_err(|_| {
+                    BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes")
+                })?;
         }
     }
     drop(document);
