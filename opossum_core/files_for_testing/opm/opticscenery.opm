@@ -1,87 +1,44 @@
 #![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: "0",
-    scenery: (
-        node_attr: (
-            node_type: "group",
-            name: "OpticScenery demo",
-            ports: (
-                inputs: {},
-                outputs: {},
-            ),
-            uuid: "aaed0f62-51cb-4676-b90e-98915885646c",
-            props: {
-                "expand view": Bool(false),
-            },
-            inverted: false,
-        ),
-        graph: (
+    scenery: {
+        "node_type": "group",
+        "name": "OpticScenery demo",
+        "uuid": "8f33db44-c94d-4b64-ae1a-a4bdd35ce4ed",
+        "props": {
+            "expand view": Bool(false),
+        },
+        "graph": (
             nodes: [
                 {
                     "node_type": "dummy",
                     "name": "dummy1",
-                    "ports": (
-                        inputs: {
-                            "input_1": (
-                                aperture: Open,
-                                coating: IdealAR,
-                                lidt: 10000.0,
-                            ),
-                        },
-                        outputs: {
-                            "output_1": (
-                                aperture: Open,
-                                coating: IdealAR,
-                                lidt: 10000.0,
-                            ),
-                        },
-                    ),
-                    "uuid": "a2534789-ec98-4e9b-a1da-315a59d9da43",
-                    "props": {},
-                    "inverted": false,
+                    "uuid": "55a68309-3dcc-4b20-8343-a44364ce362e",
                 },
                 {
                     "node_type": "dummy",
                     "name": "dummy2",
-                    "ports": (
-                        inputs: {
-                            "input_1": (
-                                aperture: Open,
-                                coating: IdealAR,
-                                lidt: 10000.0,
-                            ),
-                        },
-                        outputs: {
-                            "output_1": (
-                                aperture: Open,
-                                coating: IdealAR,
-                                lidt: 10000.0,
-                            ),
-                        },
-                    ),
-                    "uuid": "6002431d-9f31-49cf-935c-c2d56caa364e",
-                    "props": {},
-                    "inverted": false,
+                    "uuid": "53f03321-5414-46c0-a518-eff38decf917",
                 },
             ],
             edges: [
                 (
-                    src_id: "a2534789-ec98-4e9b-a1da-315a59d9da43",
+                    src_id: "55a68309-3dcc-4b20-8343-a44364ce362e",
                     src_port: "output_1",
-                    target_id: "6002431d-9f31-49cf-935c-c2d56caa364e",
+                    target_id: "53f03321-5414-46c0-a518-eff38decf917",
                     target_port: "input_1",
                     distance: 0.0,
                 ),
             ],
         ),
-    ),
+    },
     global: (
         ambient_refr_index: Const(
             refractive_index: 1.0,
         ),
     ),
     analyzers: {
-        "eb40c6ac-664b-4bf2-9355-1f0e280459b1": (
+        "ef404ea1-189e-4ea4-b895-747411a2f343": (
             analyzer_type: RayTrace(
                 min_energy_per_ray: 0.000000000001,
                 max_number_of_bounces: 1000,
@@ -89,7 +46,7 @@
                 missed_surface_strategy: Stop,
                 source_map: {},
             ),
-            id: "eb40c6ac-664b-4bf2-9355-1f0e280459b1",
+            id: "ef404ea1-189e-4ea4-b895-747411a2f343",
             gui_position: None,
         ),
     },

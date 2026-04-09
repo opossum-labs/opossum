@@ -53,7 +53,7 @@ pub struct NodeAttr {
     props: Properties,
     #[serde(skip_serializing_if = "Option::is_none")]
     isometry: Option<Isometry>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     inverted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     alignment: Option<Isometry>,

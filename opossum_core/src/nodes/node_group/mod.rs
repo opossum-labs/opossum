@@ -77,6 +77,7 @@ inventory::submit! {
 /// **Note**: The group node does currently ignore all [`Aperture`](crate::apertures::Aperture) definitions on its publicly
 /// mapped input and output ports.
 pub struct NodeGroup {
+    #[serde(flatten)]
     node_attr: NodeAttr,
     graph: OpticGraph,
     #[serde(skip)]
