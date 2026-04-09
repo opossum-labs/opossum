@@ -58,8 +58,6 @@ pub struct GraphInfo {
 pub struct NodeSelection {
     pub all_nodes: Signal<HashMap<Uuid, bool>>,
     pub analyzers: Signal<HashSet<Uuid>>,
-    pub nodes_to_be_selected: Signal<HashMap<Uuid, bool>>,
-    pub nodes_to_be_removed: Signal<HashMap<Uuid, bool>>,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
@@ -85,20 +83,6 @@ impl GraphStore {
         if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
             node.set_name(name);
         }
-    }
-    pub fn nodes_to_be_removed(&self) -> HashMap<Uuid, bool> {
-        self.node_selection
-            .read()
-            .nodes_to_be_removed
-            .read()
-            .clone()
-    }
-    pub fn nodes_to_be_selected(&self) -> HashMap<Uuid, bool> {
-        self.node_selection
-            .read()
-            .nodes_to_be_selected
-            .read()
-            .clone()
     }
     pub fn remove_port_of_node(
         &mut self,

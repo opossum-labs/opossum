@@ -30,8 +30,6 @@ pub struct WorkspaceHandlers {
     set_drop_in_group: EventHandler<Option<(Uuid, usize)>>,
     set_selection_box: EventHandler<Option<Rect<f64>>>,
     set_editor_area: EventHandler<Rect<f64>>,
-    clear_nodes_to_be_selected: EventHandler<Uuid>,
-    clear_nodes_to_be_removed: EventHandler<Uuid>,
     clear_selected_nodes: EventHandler<Uuid>,
     #[allow(clippy::type_complexity)]
     apply_drag: EventHandler<(Uuid, DragStatus, Point2D<f64>, f64, Point2D<f64>)>,
@@ -53,8 +51,6 @@ impl WorkspaceHandlers {
             set_drop_in_group: set_drop_in_group_handler(workspace),
             set_selection_box: set_selection_box_handler(workspace),
             set_editor_area: set_editor_area_handler(workspace),
-            clear_nodes_to_be_selected: clear_nodes_to_be_selected_handler(workspace),
-            clear_nodes_to_be_removed: clear_nodes_to_be_removed_handler(workspace),
             clear_selected_nodes: clear_selected_nodes_handler(workspace),
             apply_drag: apply_drag_handler(workspace),
             set_nodes_cut: set_nodes_cut_handler(workspace),
@@ -80,12 +76,6 @@ impl WorkspaceHandlers {
         ));
     }
 
-    pub fn clear_nodes_to_be_selected(&self, graph_id: Uuid) {
-        self.clear_nodes_to_be_selected.call(graph_id);
-    }
-    pub fn clear_nodes_to_be_removed(&self, graph_id: Uuid) {
-        self.clear_nodes_to_be_removed.call(graph_id);
-    }
     pub fn clear_selected_nodes(&self, graph_id: Uuid) {
         self.clear_selected_nodes.call(graph_id);
     }
@@ -222,32 +212,10 @@ fn apply_drag_handler(
 
                     workspace.write().selection_box.set(Some(new_rect));
                 }
-                DragStatus::NodeInit | DragStatus::None => {
-                    workspace.write().selection_box.set(None);
-                }
+                DragStatus::None | DragStatus::NodeInit => {}
             }
         },
     )
-}
-
-fn clear_nodes_to_be_selected_handler(
-    workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<Uuid> {
-    EventHandler::new(move |graph_id| {
-        with_graph_store(workspace, graph_id, false, |g| {
-            g.node_selection.write().nodes_to_be_selected.clear();
-        });
-    })
-}
-
-fn clear_nodes_to_be_removed_handler(
-    workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<Uuid> {
-    EventHandler::new(move |graph_id| {
-        with_graph_store(workspace, graph_id, false, |g| {
-            g.node_selection.write().nodes_to_be_removed.clear();
-        });
-    })
 }
 
 fn clear_selected_nodes_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<Uuid> {

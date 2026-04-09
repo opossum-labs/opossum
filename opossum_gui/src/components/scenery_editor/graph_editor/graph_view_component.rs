@@ -4,17 +4,17 @@ use crate::components::scenery_editor::{
     edges::edges_component::{EdgeCreationComponent, EdgesComponent},
     graph_editor::{
         BreadCrumbs,
-        hooks::{use_drag, use_on_mouse_down, use_zoom},
+        hooks::{use_drag, use_drag_end, use_on_mouse_down, use_zoom},
     },
     graph_workspace::{GraphState, GraphsWorkspaceAction},
     nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use std::{path::PathBuf, time::Instant};
+use std::{collections::HashSet, path::PathBuf, time::Instant};
+use uuid::Uuid;
 
 #[component]
 pub fn GraphViewEditor(
-    onmouseup_handler: EventHandler<Event<MouseData>>,
     model_modified_sig: ReadSignal<bool>,
     model_modified_handler: EventHandler<bool>,
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
@@ -42,6 +42,27 @@ pub fn GraphViewEditor(
         ctrl_pressed,
         graph_id,
     );
+
+    let nodes_in_selection = use_memo(move || {
+        let selection_box = *workspace.peek().selection_box.read();
+        let nodes = graph_store.peek().nodes().peek().clone();
+
+        if let Some(select_box) = selection_box {
+            nodes
+                .iter()
+                .filter_map(|(id, node)| {
+                    let rect = node.get_bounding_box(); // hast du schon 👍
+                    if select_box.intersects(&rect) {
+                        Some(*id)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<HashSet<Uuid>>()
+        } else {
+            HashSet::<Uuid>::new()
+        }
+    });
 
     let shift = use_memo(move || *editor_state.read().shift.read());
     let zoom = use_memo(move || *editor_state.read().zoom.read());
@@ -83,7 +104,7 @@ pub fn GraphViewEditor(
 
                 onwheel: onwheel_handler,
                 onmousedown: onmousedown_handler,
-                onmouseup: move |e| onmouseup_handler.call(e),
+                onmouseup: use_drag_end(workspace.into(), Some(nodes_in_selection())),
                 onmousemove: onmousemove_handler,
                 div {
                     draggable: false,
@@ -99,6 +120,7 @@ pub fn GraphViewEditor(
                         ctrl_pressed,
                         shift_pressed,
                         mouse_pos_in_editor,
+                        nodes_in_selection
                     }
                     svg {
                         width: "100%",

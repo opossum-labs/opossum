@@ -1,4 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
+use std::collections::HashSet;
+
 use crate::components::scenery_editor::{GraphStore, node::Node};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use uuid::Uuid;
@@ -10,6 +12,7 @@ pub fn Nodes(
     ctrl_pressed: ReadSignal<bool>,
     shift_pressed: ReadSignal<bool>,
     mouse_pos_in_editor: Memo<Point2D<f64>>,
+    nodes_in_selection: Memo<HashSet<Uuid>>,
 ) -> Element {
     rsx! {
         for node in graph_store().nodes().read().iter() {
@@ -20,6 +23,7 @@ pub fn Nodes(
                         ctrl_pressed,
                         shift_pressed,
                         mouse_pos_in_editor,
+                        nodes_in_selection
                     }
                 }
             }

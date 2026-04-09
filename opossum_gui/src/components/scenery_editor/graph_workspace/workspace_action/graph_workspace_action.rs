@@ -9,15 +9,6 @@ use uuid::Uuid;
 use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 
 pub enum GraphsWorkspaceAction {
-    // Group into which other nodes could be dropped
-    // UUid of that group
-    // z-index of that group to select group directly underneath
-    ClearNodesToBeSelected {
-        graph_id: Uuid,
-    },
-    ClearNodesToBeRemoved {
-        graph_id: Uuid,
-    },
     ClearSelectedNodes {
         graph_id: Uuid,
     },
@@ -36,6 +27,9 @@ pub enum GraphsWorkspaceAction {
         node_id: Uuid,
         is_optical: bool,
     },
+    // Group into which other nodes could be dropped
+    // UUid of that group
+    // z-index of that group to select group directly underneath
     SetDropInGroup(Option<(Uuid, usize)>),
     SetSelectionBox(Option<Rect<f64>>),
     SetDragStatus(DragStatus),
@@ -70,20 +64,6 @@ pub enum GraphsWorkspaceAction {
     SetEdgeInCreation {
         graph_id: Uuid,
         edge_in_creation: Option<EdgeCreation>,
-    },
-    AddToToBeRemoved {
-        graph_id: Uuid,
-        node_id: Uuid,
-        is_optical_node: bool,
-    },
-    AddToToBeSelected {
-        graph_id: Uuid,
-        node_id: Uuid,
-        is_optical_node: bool,
-    },
-    RemoveFromToBeSelected {
-        graph_id: Uuid,
-        node_id: Uuid,
     },
     GetEditorArea(),
     LoadFromFile(PathBuf),
