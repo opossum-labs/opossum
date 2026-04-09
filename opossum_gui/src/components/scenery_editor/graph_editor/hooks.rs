@@ -332,15 +332,15 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                             0.0,
                             false,
                         );
-                        workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
-                            graph_id: graph_state.read().graph_info.id,
-                            edge_in_creation: None,
-                        });
                         workspace_processor.send(GraphsWorkspaceAction::AddEdge {
                             new_edge,
                             graph_id: graph_state.read().graph_info.id,
                         });
                     }
+                    workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
+                        graph_id: graph_state.read().graph_info.id,
+                        edge_in_creation: None,
+                    });
                 }
                 _ => {}
             }
