@@ -47,7 +47,7 @@ pub fn GraphViewEditor(
         let selection_box = *workspace.peek().selection_box.read();
         let nodes = graph_store.peek().nodes().peek().clone();
 
-        if let Some(select_box) = selection_box {
+        selection_box.map_or_else(HashSet::<Uuid>::new, |select_box| {
             nodes
                 .iter()
                 .filter_map(|(id, node)| {
@@ -59,9 +59,7 @@ pub fn GraphViewEditor(
                     }
                 })
                 .collect::<HashSet<Uuid>>()
-        } else {
-            HashSet::<Uuid>::new()
-        }
+        })
     });
 
     let shift = use_memo(move || *editor_state.read().shift.read());
@@ -104,7 +102,7 @@ pub fn GraphViewEditor(
 
                 onwheel: onwheel_handler,
                 onmousedown: onmousedown_handler,
-                onmouseup: use_drag_end(workspace.into(), Some(nodes_in_selection())),
+                onmouseup: use_drag_end(workspace, Some(nodes_in_selection())),
                 onmousemove: onmousemove_handler,
                 div {
                     draggable: false,

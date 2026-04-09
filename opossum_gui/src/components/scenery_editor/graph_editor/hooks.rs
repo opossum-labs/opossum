@@ -248,6 +248,7 @@ pub fn use_on_key_down(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn use_drag_end(
     workspace: ReadSignal<GraphsWorkspaceState>,
     nodes_in_selection: Option<HashSet<Uuid>>,
