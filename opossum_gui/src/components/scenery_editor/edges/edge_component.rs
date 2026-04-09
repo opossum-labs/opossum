@@ -85,7 +85,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 pointer_events: "auto",
                 class: "input-with-unit",
                 style: "display: flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; box-sizing: border-box;",
-                onmousedown: |e: MouseEvent| e.stop_propagation(),
+                onmousedown: move |e: MouseEvent| {e.stop_propagation(); workspace_processor.send(GraphsWorkspaceAction::ClearSelectedNodes { graph_id: graph_state.read().graph_info.id });},
                 UnitInput {
                     id: format!(
                         "distance-{}{}",
