@@ -27,6 +27,7 @@ pub use logical_combinations::{
 pub use normal::{AllNormal, XNormal, YNormal};
 pub use not_all_zero::{NotAllZero, XNotAllZero, YNotAllZero};
 pub use not_empty::AllNotEmpty;
+pub use not_nan::{AllNotNan, XNotNan, YNotNan};
 pub use not_zero::AllNotZero;
 pub use numlike::NumLike;
 pub use only_one_zero::OnlyOneZero;

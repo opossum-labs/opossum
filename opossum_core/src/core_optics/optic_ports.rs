@@ -19,7 +19,7 @@ use crate::{
     apertures::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
-    generic_validators::{AllFinite, AllPositive},
+    generic_validators::{AllNotNan, AllPositive},
     nodes::fluence_detector::Fluence,
     validated, validated_type,
 };
@@ -31,8 +31,18 @@ use uom::si::radiant_exposure::joule_per_square_centimeter;
 /// We need this because Serde's `#[serde(default)]` attribute requires a function path
 /// when dealing with custom types that don't implement the standard `Default` trait
 /// exactly how we need it here (with the validation macro).
-fn default_lidt() -> validated_type!(Fluence, AllPositive && AllFinite) {
-    validated!(J_per_cm2!(1.), AllPositive && AllFinite).unwrap()
+fn default_lidt() -> validated_type!(Fluence, AllPositive && AllNotNan) {
+    validated!(J_per_cm2!(f64::INFINITY), AllPositive && AllNotNan).unwrap()
+}
+
+/// Prüft, ob das Coating dem Standard entspricht
+const fn is_ideal_ar(coating: &CoatingType) -> bool {
+    matches!(coating, CoatingType::IdealAR)
+}
+/// Check if LIDT is infinite ("undestructible")
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_default_lidt(lidt: &validated_type!(Fluence, AllPositive && AllNotNan)) -> bool {
+    lidt.get().value.is_infinite()
 }
 
 /// Configuration of an optical port containing user-adjustable parameters.
@@ -42,14 +52,22 @@ fn default_lidt() -> validated_type!(Fluence, AllPositive && AllFinite) {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortConfig {
     /// The aperture of the port, defining the spatial transmission.
-    #[serde(default)]
+    #[serde(default)] //, skip_serializing_if = "Aperture::is_none")]
     pub aperture: Aperture,
     /// The coating of the port, defining reflection and transmission properties.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_ideal_ar")]
     pub coating: CoatingType,
     /// The Laser Induced Damage Threshold (LIDT) specific to this port.
-    #[serde(default = "default_lidt")]
-    pub lidt: validated_type!(Fluence, AllPositive && AllFinite),
+    #[serde(default = "default_lidt", skip_serializing_if = "is_default_lidt")]
+    pub lidt: validated_type!(Fluence, AllPositive && AllNotNan),
+}
+
+impl PortConfig {
+    /// Checks if this configuration exactly matches the default values.
+    #[must_use]
+    pub fn is_default_config(&self) -> bool {
+        self.aperture.is_none() && is_ideal_ar(&self.coating) && is_default_lidt(&self.lidt)
+    }
 }
 
 impl Default for PortConfig {
@@ -95,6 +113,11 @@ impl OpticPorts {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+    /// Check if all registered ports (Inputs and Outputs) are on default values (aperture: `Open`, coating: `IdealAR`, LIDT: `inf J/cm^2`).
+    pub fn is_all_default(&self) -> bool {
+        self.inputs.values().all(PortConfig::is_default_config)
+            && self.outputs.values().all(PortConfig::is_default_config)
     }
 
     /// Add a new input / output port with the given name.
@@ -396,7 +419,7 @@ mod test {
         ports.add(&PortType::Output, "test2").unwrap();
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1> aperture: Open, coating: IdealAR, lidt: 1.0 J/cm^2\noutput:\n  <test2> aperture: Open, coating: IdealAR, lidt: 1.0 J/cm^2\n".to_owned()
+            "inputs:\n  <test1> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
         );
     }
     #[test]
@@ -408,7 +431,7 @@ mod test {
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test2> aperture: Open, coating: IdealAR, lidt: 1.0 J/cm^2\noutput:\n  <test1> aperture: Open, coating: IdealAR, lidt: 1.0 J/cm^2\nports are inverted\n".to_owned()
+            "inputs:\n  <test2> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
         );
     }
     #[test]

@@ -44,14 +44,12 @@ pub struct NodeAttr {
     /// The name of the node.
     #[serde(deserialize_with = "deserialize_name")]
     name: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "OpticPorts::is_all_default")]
     ports: OpticPorts,
     #[serde(skip)]
     runtime_surfaces: RuntimeSurfaces,
-
-    /// Universally unique identifier for this node.
     uuid: Uuid,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Properties::is_empty")]
     props: Properties,
     #[serde(skip_serializing_if = "Option::is_none")]
     isometry: Option<Isometry>,
