@@ -1,9 +1,12 @@
-use std::time::{Duration, Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    time::{Duration, Instant},
+};
 
 use crate::{
     CONTEXT_MENU,
     components::scenery_editor::{
-        GraphState, NodeElement,
+        GraphState, NodeElement, NodeType,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
         graph_workspace::{DragStatus, EditorState, GraphsWorkspaceAction, GraphsWorkspaceState},
     },
@@ -73,12 +76,7 @@ pub fn use_on_mouse_down(
                     let mut ctx = CONTEXT_MENU.write();
                     *ctx = None;
 
-                    if ctrl_pressed() {
-                        workspace_processor
-                            .send(GraphsWorkspaceAction::ClearNodesToBeRemoved { graph_id });
-                    } else {
-                        workspace_processor
-                            .send(GraphsWorkspaceAction::ClearNodesToBeSelected { graph_id });
+                    if !ctrl_pressed() {
                         workspace_processor
                             .send(GraphsWorkspaceAction::ClearSelectedNodes { graph_id });
                     }
@@ -250,7 +248,11 @@ pub fn use_on_key_down(
     }
 }
 
-pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(MouseEvent) {
+#[allow(clippy::too_many_lines)]
+pub fn use_drag_end(
+    workspace: ReadSignal<GraphsWorkspaceState>,
+    nodes_in_selection: Option<HashSet<Uuid>>,
+) -> impl FnMut(MouseEvent) {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     move |_| {
         let active_graph = workspace.read().active_tab;
@@ -288,28 +290,50 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                     }
                 }
                 DragStatus::SelectionBox(_) => {
-                    let nodes_to_select = graph_store.read().nodes_to_be_selected();
-                    let nodes_to_remove = graph_store.read().nodes_to_be_removed();
-                    for (node_id, is_optical) in nodes_to_select {
-                        workspace_processor.send(GraphsWorkspaceAction::AddToNodeSelection {
-                            graph_id: *active_graph.read(),
-                            node_id,
-                            is_optical,
-                        });
-                    }
-                    for node_id in nodes_to_remove.keys().copied() {
-                        workspace_processor.send(GraphsWorkspaceAction::RemoveFromNodeSelection {
-                            graph_id: *active_graph.read(),
-                            node_id,
-                        });
-                    }
+                    let active_graph_id = *active_graph.read();
+                    let graph_store_read = graph_store.read();
 
-                    workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeRemoved {
-                        graph_id: *active_graph.read(),
-                    });
-                    workspace_processor.send(GraphsWorkspaceAction::ClearNodesToBeSelected {
-                        graph_id: *active_graph.read(),
-                    });
+                    if let Some(nodes_in_selection) = &nodes_in_selection {
+                        let current_selection = graph_store_read
+                            .node_selection
+                            .read()
+                            .all_nodes
+                            .read()
+                            .clone();
+
+                        let nodes_to_remove: HashSet<Uuid> = nodes_in_selection
+                            .iter()
+                            .filter(|id| current_selection.contains_key(id))
+                            .copied()
+                            .collect();
+
+                        let nodes_to_add: HashMap<Uuid, bool> = nodes_in_selection
+                            .iter()
+                            .filter(|id| !current_selection.contains_key(id))
+                            .map(|id| {
+                                let node = graph_store_read.nodes().read()[id].clone();
+                                let is_optical = matches!(node.node_type(), NodeType::Optical(_));
+                                (*id, is_optical)
+                            })
+                            .collect();
+
+                        for (node_id, is_optical) in nodes_to_add {
+                            workspace_processor.send(GraphsWorkspaceAction::AddToNodeSelection {
+                                graph_id: active_graph_id,
+                                node_id,
+                                is_optical,
+                            });
+                        }
+
+                        for node_id in nodes_to_remove {
+                            workspace_processor.send(
+                                GraphsWorkspaceAction::RemoveFromNodeSelection {
+                                    graph_id: active_graph_id,
+                                    node_id,
+                                },
+                            );
+                        }
+                    }
 
                     workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(None));
                 }
@@ -344,6 +368,7 @@ pub fn use_drag_end(workspace: ReadSignal<GraphsWorkspaceState>) -> impl FnMut(M
                 }
                 _ => {}
             }
+
             workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(DragStatus::None));
         }
     }

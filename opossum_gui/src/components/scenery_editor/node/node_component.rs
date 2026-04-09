@@ -1,4 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
+use std::collections::HashSet;
+
 use super::NodeElement;
 use crate::CONTEXT_MENU;
 use crate::components::scenery_editor::constants::HEADER_HEIGHT;
@@ -17,6 +19,7 @@ use dioxus::html::geometry::euclid::default::{Point2D, Rect, Size2D};
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
+use uuid::Uuid;
 
 #[component]
 pub fn Node(
@@ -24,12 +27,13 @@ pub fn Node(
     ctrl_pressed: ReadSignal<bool>,
     shift_pressed: ReadSignal<bool>,
     mouse_pos_in_editor: Memo<Point2D<f64>>,
+    nodes_in_selection: Memo<HashSet<Uuid>>,
 ) -> Element {
     let graph_store = use_context::<ReadSignal<GraphStore>>();
     let graph_state = use_context::<ReadSignal<GraphState>>();
-    let graph_id = graph_state.read().graph_info.id;
+    let graph_id = graph_state.peek().graph_info.id;
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
-    let drag_status = workspace.read().drag_status;
+    let drag_status = workspace.peek().drag_status;
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let position = node.pos();
     let node_height = node.node_body_height() + HEADER_HEIGHT;
@@ -37,46 +41,29 @@ pub fn Node(
     let active_optical_node_ids = graph_store().selected_optical_nodes();
     let node_id = node.id();
     let is_optical_node = node.is_optical_node();
-
     let is_active = if active_node_ids.contains(&node.id()) {
         "active-node"
     } else {
         ""
     };
     let in_selection_box_class = use_memo(move || {
-        {
-            let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
-            let selection_box = *workspace.peek().selection_box.read();
-            if let Some(select_box) = selection_box
-                && select_box.intersects(&node_rect)
-            {
-                let is_contained = graph_store
-                    .peek()
-                    .node_selection
-                    .peek()
-                    .all_nodes
-                    .peek()
-                    .contains_key(&node_id);
-                if ctrl_pressed() && is_contained {
-                    workspace_processor.send(GraphsWorkspaceAction::AddToToBeRemoved {
-                        graph_id,
-                        node_id,
-                        is_optical_node,
-                    });
-                    "node-selection-remove"
-                } else {
-                    workspace_processor.send(GraphsWorkspaceAction::AddToToBeSelected {
-                        graph_id,
-                        node_id,
-                        is_optical_node,
-                    });
-                    "node-selection"
-                }
+        let in_selection = nodes_in_selection.read().contains(&node_id);
+        let already_selected = graph_store
+            .read()
+            .node_selection
+            .read()
+            .all_nodes
+            .read()
+            .contains_key(&node_id);
+
+        if in_selection {
+            if ctrl_pressed() && already_selected {
+                "node-selection-remove"
             } else {
-                workspace_processor
-                    .send(GraphsWorkspaceAction::RemoveFromToBeSelected { graph_id, node_id });
-                ""
+                "node-selection"
             }
+        } else {
+            ""
         }
         .to_string()
     });

@@ -112,7 +112,7 @@ pub fn GraphEditor(
                 g.read().get_selected_nodes(active_tab())
             })
     });
-    let onmouseleave_handler = use_drag_end(workspace.into());
+    let onmouseleave_handler = use_drag_end(workspace.into(), None);
     let onkeydownhandler = use_on_key_down(
         current_mouse_in_editor_pos,
         workspace.into(),
@@ -191,7 +191,6 @@ pub fn GraphEditor(
                                             value: id.as_simple().to_string(),
                                             index: i,
                                             GraphViewEditor {
-                                                onmouseup_handler: EventHandler::new(use_drag_end(workspace.into())),
                                                 model_modified_sig,
                                                 model_modified_handler,
                                                 model_file_path_sig,
