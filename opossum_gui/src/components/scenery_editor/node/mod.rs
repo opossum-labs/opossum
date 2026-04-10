@@ -1,9 +1,6 @@
 #![allow(clippy::volatile_composites)]
 use dioxus::{
-    html::geometry::euclid::{
-        Size2D,
-        default::{Point2D, Rect},
-    },
+    html::geometry::euclid::default::{Point2D, Rect, Size2D},
     prelude::*,
 };
 use opossum_core::{
@@ -125,6 +122,16 @@ impl NodeElement {
     pub const fn output_ports(&self) -> &Vec<String> {
         self.ports.output_ports()
     }
+    pub fn remove_port(&mut self, remove_port: &String, port_type: PortType) {
+        match port_type {
+            PortType::Input => self.ports.remove_input_port(remove_port),
+            PortType::Output => self.ports.remove_output_port(remove_port),
+        }
+    }
+    pub fn set_ports(&mut self, input_ports: Vec<String>, output_ports: Vec<String>) {
+        self.ports.set_input_ports(input_ports);
+        self.ports.set_output_ports(output_ports);
+    }
     #[must_use]
     pub const fn z_index(&self) -> usize {
         self.z_index
@@ -165,7 +172,7 @@ impl NodeElement {
         self.pos.y += shift.y;
     }
     #[must_use]
-    pub fn rel_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
+    pub fn rel_port_position(&self, port_type: PortType, port_name: &str) -> Point2D<f64> {
         let (x_pos, port_list) = match port_type {
             PortType::Input => (0.0, self.input_ports()),
             PortType::Output => (NODE_WIDTH + BORDER_WIDTH, self.output_ports()),
@@ -178,7 +185,7 @@ impl NodeElement {
         Point2D::new(x_pos, y_pos)
     }
     #[must_use]
-    pub fn abs_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
+    pub fn abs_port_position(&self, port_type: PortType, port_name: &str) -> Point2D<f64> {
         let rel_pos = self.rel_port_position(port_type, port_name);
         Point2D::new(
             self.pos.x + rel_pos.x + BORDER_WIDTH,

@@ -1,24 +1,26 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::components::node_editor::{
-    accordion::AccordionItem,
-    inputs::input_components::{
-        FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput,
+use crate::components::{
+    node_editor::{
+        accordion::AccordionItem,
+        inputs::input_components::{
+            FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput,
+        },
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        optical_node_editor::UINodeAttr,
     },
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::UINodeAttr,
+    scenery_editor::SelectedNode,
 };
 use dioxus::prelude::*;
 use opossum_core::J_per_cm2;
-use uuid::Uuid;
 
 #[component]
 pub fn GeneralEditor(
     node_attr: ReadSignal<UINodeAttr>,
-    node_id: Memo<Uuid>,
+    active_node: Memo<SelectedNode>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let accordion_content = if node_attr.read().node_id == *node_id.read() {
+    let accordion_content = if node_attr.read().node_id == active_node.read().node_id {
         let node_id = node_attr.read().node_id;
         let node_type = node_attr.read().node_type.clone();
         let name = node_attr.read().name.clone();
@@ -40,7 +42,7 @@ pub fn GeneralEditor(
                     on_save: move |new_val: String| {
                         on_change.call(NodeChangeEvent {
                             node_id,
-                            action: NodeChangeAction::Name(new_val),
+                            action: NodeChangeAction::Name{name: new_val, graph_id: active_node.read().graph_id},
                         });
                     },
                 }
@@ -71,7 +73,7 @@ pub fn GeneralEditor(
                     on_valid_change: move |new_state: bool| {
                         on_change.call(NodeChangeEvent {
                             node_id,
-                            action: NodeChangeAction::Inverted(new_state),
+                            action: NodeChangeAction::Inverted{inverted: new_state, graph_id: active_node.read().graph_id},
                         });
                     }
                 }

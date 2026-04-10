@@ -1,11 +1,32 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{CONTEXT_MENU, components::context_menu::sub_menu_item::MenuItem};
 use dioxus::prelude::*;
-use opossum_core::types::api_types::NewRefNode;
+use opossum_core::{prelude::PortType, types::api_types::NewRefNode};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CxtCommand {
     AddRefNode(NewRefNode),
+    ConvertToGroup {
+        nodes: Vec<Uuid>,
+        graph_id: Uuid,
+    },
+    MapNodePort {
+        port_type: PortType,
+        group_port_name: String,
+        mapped_node_port_name: String,
+        mapped_node_id: Uuid,
+        group_id: Uuid,
+    },
+    RemovePortMap {
+        group_id: Uuid,
+        group_port_name: String,
+        port_type: PortType,
+    },
+    JumpToMappedPort {
+        mapped_node_id: Uuid,
+        parent: (Uuid, String),
+    },
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -26,6 +47,10 @@ impl CxMenu {
     #[must_use]
     pub const fn new(x: f64, y: f64, entries: Vec<(String, CxtCommand)>) -> Self {
         Self { x, y, entries }
+    }
+
+    pub fn add_entry(&mut self, entry: (String, CxtCommand)) {
+        self.entries.push(entry);
     }
 }
 

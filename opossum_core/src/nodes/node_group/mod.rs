@@ -1,9 +1,12 @@
 #![warn(missing_docs)]
+//! # Node groups
+//!
+//! A node group is a special type of optical node that can contain other optical nodes (including other groups) and connections between them. It allows to build up complex optical systems in a hierarchical way. The internal structure of a node group can be hidden or shown in the dot format by setting the `expand view` property of the group node. To use a node group from the outside, internal nodes / ports must be mapped to be visible (see [`map_input_port`](NodeGroup::map_input_port()) & [`map_output_port`](NodeGroup::map_output_port()) functions).
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 mod optic_graph;
-mod port_map;
+pub mod port_map;
 use crate::{
     analyzers::Analyzable,
     core_optics::{
@@ -25,8 +28,7 @@ use crate::{
     },
     utils::LockExt,
 };
-use optic_graph::ConnectionInfo;
-pub use optic_graph::OpticGraph;
+pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -116,6 +118,7 @@ impl NodeGroup {
         group.node_attr.set_name(name);
         group
     }
+
     /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
     ///
     /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is
@@ -213,6 +216,47 @@ impl NodeGroup {
         Ok(result)
     }
 
+    /// Returns the hierarchy of nodes starting from the given node and walking up
+    /// through its parent groups until the root is reached.
+    ///
+    /// The returned vector contains tuples of `(Uuid, String)` where:
+    /// - `Uuid` is the node ID
+    /// - `String` is the node's name
+    ///
+    /// The hierarchy is ordered **bottom-up**, meaning:
+    /// - The first element is the provided `node_id`
+    /// - Each following element is the parent group
+    /// - The last element is the root node of the hierarchy
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The node cannot be resolved via `node_recursive`
+    /// - The internal optic reference cannot be locked
+    ///
+    /// # Notes
+    ///
+    /// This function performs a recursive traversal using `node_recursive`
+    /// to resolve parent nodes until the root node is reached.
+    pub fn get_node_hierarchy_bottom_up(&self, node_id: Uuid) -> OpmResult<Vec<(Uuid, String)>> {
+        let mut group_hierarchy = Vec::<(Uuid, String)>::new();
+
+        self.with_node_attr(node_id, |node_attr| {
+            group_hierarchy.push((node_id, node_attr.name()));
+        })?;
+
+        if self.node_attr().uuid() != node_id {
+            let parent_id = self.node_recursive(node_id)?.1;
+
+            let group_vec = self.get_node_hierarchy_bottom_up(parent_id).map_err(|e| {
+                OpossumError::OpticGroup(format!("Error getting node hierarchy: {e}"))
+            })?;
+
+            group_hierarchy.extend(group_vec);
+        }
+        Ok(group_hierarchy)
+    }
+
     fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
         let node_ref = self.graph.node(node_id)?;
         let node = node_ref.optical_ref.lock_opm()?;
@@ -303,7 +347,6 @@ impl NodeGroup {
 
         Ok(out)
     }
-
     /// Execute a mutable operation on the `NodeGroup` identified by `node_id`.
     ///
     /// If `node_id` equals this group's own UUID, the closure is invoked directly with
@@ -350,6 +393,41 @@ impl NodeGroup {
         Ok(out)
     }
 
+    /// Execute a mutable operation on the optical node identified by `node_id`.
+    ///
+    /// This method locks the node's internal mutex and provides a mutable reference
+    /// to the node (as `&mut dyn Analyzable`) for the duration of the closure `f`.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the target node (can be any node type, not necessarily a group).
+    /// - `f`: Closure that receives `&mut dyn Analyzable` and returns a value of type `R`.
+    ///
+    /// # Returns
+    /// The value produced by `f`, wrapped in `OpmResult<R>`.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The node with `node_id` cannot be found in the graph.
+    /// - The internal mutex is poisoned or cannot be acquired.
+    ///
+    /// # Concurrency
+    /// The lock is only held for the duration of the closure. Avoid calling
+    /// functions inside `f` that would attempt to lock the same node to prevent deadlocks.
+    ///
+    /// # Panic Safety
+    /// If `f` panics while the mutex is held, the mutex may become poisoned;
+    /// subsequent calls to `with_node_mut` may fail with a poisoned-lock error.
+    pub fn with_node_mut<R>(
+        &mut self,
+        node_id: Uuid,
+        f: impl FnOnce(&mut dyn Analyzable) -> R,
+    ) -> OpmResult<R> {
+        let (node_ref, _) = self.node_recursive(node_id)?;
+        let result = f(&mut *node_ref.optical_ref.lock_opm()?);
+
+        Ok(result)
+    }
+
     /// Execute a mutable operation on the `NodeAttr` of the node identified by `node_id`.
     ///
     /// If `node_id` equals this group's own UUID, the closure is invoked directly with
@@ -376,7 +454,7 @@ impl NodeGroup {
     /// # Panic Safety
     /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
     /// fail with a poisoned-lock error.
-    pub fn with_node_attr_node_mut<R>(
+    pub fn with_node_attr_mut<R>(
         &mut self,
         node_id: Uuid,
         f: impl FnOnce(&mut NodeAttr) -> R,
@@ -419,11 +497,7 @@ impl NodeGroup {
     /// # Panic Safety
     /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
     /// fail with a poisoned-lock error.
-    pub fn with_node_attr_node<R>(
-        &self,
-        node_id: Uuid,
-        f: impl FnOnce(&NodeAttr) -> R,
-    ) -> OpmResult<R> {
+    pub fn with_node_attr<R>(&self, node_id: Uuid, f: impl FnOnce(&NodeAttr) -> R) -> OpmResult<R> {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self.node_attr()));
         }
@@ -563,6 +637,14 @@ impl NodeGroup {
         self.graph
             .map_port(output_node, &PortType::Output, internal_name, external_name)
     }
+
+    /// Remove a port mapping
+    ///
+    /// Returns true if successful
+    pub fn remove_mapped_port(&mut self, external_name: &str, port_type: PortType) -> bool {
+        self.graph.remove_mapped_port(external_name, port_type)
+    }
+
     /// Defines and returns the node/port identifier to connect the edges in the dot format
     /// # Parameters
     ///   - `port_name`:            name of the external port of the group

@@ -175,26 +175,40 @@ impl OpticGraph {
         None
     }
 
-    /// Return the a vector of [`NodeIndex`] of nodes that reference a certain node with the given [`Uuid`] in this [`OpticGraph`].
+    /// Return a vector of [`Uuid`] of nodes that reference a certain node with the given [`Uuid`] in this [`OpticGraph`].
     ///
-    /// This also includes the node itself, but also reference nodes referring to the given [`Uuid`]. This function returns
-    /// an empty vector if no node with (or referring to) the given [`Uuid`] was found.
+    /// This includes:
+    /// - The node itself if it matches `node_id`
+    /// - Any reference nodes that refer to the given `node_id`
+    /// - Recursively any nodes inside groups that reference the `node_id`
     ///
-    /// # Panics
+    /// Returns an empty vector if no node with (or referring to) the given `node_id` was found.
     ///
-    /// Panics if the mutex lock fails.
-    #[must_use]
-    pub fn find_all_nodes_referring_to_uuid(&self, node_id: Uuid) -> Vec<NodeIndex> {
-        let mut nodes_indices = Vec::<NodeIndex>::new();
+    /// # Arguments
+    ///
+    /// * `node_id` - The UUID of the node to find references to.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Vec<Uuid>` containing the UUIDs of all nodes referring to the specified `node_id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`OpmResult::Err`] if:
+    /// - Accessing a node by index fails
+    /// - Locking a node’s `OpticRef` fails
+    /// - Any recursive group traversal fails
+    pub fn find_all_nodes_referring_to_uuid(&self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
+        let mut nodes_indices = Vec::<Uuid>::new();
         for node_idx in self.g.node_indices() {
-            let node_ref = self.node_by_idx(node_idx).unwrap();
+            let node_ref = self.node_by_idx(node_idx)?;
             if node_ref.uuid() == node_id {
-                nodes_indices.push(node_idx);
+                nodes_indices.push(node_id);
             }
-            let node = node_ref.optical_ref.lock_opm().unwrap();
+            let node = node_ref.optical_ref.lock_opm()?;
             let node_attrs = node.node_attr().clone();
             if let Ok(group) = node.as_group() {
-                nodes_indices.extend(group.graph().find_all_nodes_referring_to_uuid(node_id));
+                nodes_indices.extend(group.graph().find_all_nodes_referring_to_uuid(node_id)?);
             }
             drop(node);
             if node_attrs.node_type() == "reference" {
@@ -202,11 +216,11 @@ impl OpticGraph {
                 if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id")
                     && *ref_uuid == node_id
                 {
-                    nodes_indices.push(node_idx);
+                    nodes_indices.push(node_attrs.uuid());
                 }
             }
         }
-        nodes_indices
+        Ok(nodes_indices)
     }
     /// Delete all edges of a node with the [`NodeIndex`] `node_index`
     pub fn delete_edges_of_node(&mut self, node_index: NodeIndex) {
@@ -516,7 +530,7 @@ impl OpticGraph {
         self.g.reverse();
         Ok(())
     }
-    fn external_nodes(&self, port_type: &PortType) -> Vec<NodeIndex> {
+    fn external_nodes(&self, port_type: PortType) -> Vec<NodeIndex> {
         let edge_direction = match port_type {
             PortType::Input => Direction::Incoming,
             PortType::Output => Direction::Outgoing,
@@ -531,7 +545,7 @@ impl OpticGraph {
                 .lock_opm()
                 .unwrap()
                 .ports()
-                .names(port_type)
+                .names(&port_type)
                 .len();
             if ports != edges {
                 nodes.push(node_idx);
@@ -540,6 +554,15 @@ impl OpticGraph {
         nodes
     }
 
+    /// Remove a port mapping
+    ///
+    /// Returns true if successful
+    pub fn remove_mapped_port(&mut self, external_name: &str, port_type: PortType) -> bool {
+        match port_type {
+            PortType::Input => self.input_port_map.remove_key(external_name),
+            PortType::Output => self.output_port_map.remove_key(external_name),
+        }
+    }
     /// Map a port of an internal node to an external port of the group.
     ///
     /// In oder to use an [`OpticGraph`] from the outside, internal nodes / ports must be mapped to be visible. The
@@ -576,7 +599,7 @@ impl OpticGraph {
                 "node with id {node_id} not found"
             )));
         };
-        if !self.external_nodes(port_type).contains(&node_idx) {
+        if !self.external_nodes(*port_type).contains(&node_idx) {
             return Err(OpossumError::OpticGroup(format!(
                 "node to be mapped is not an {name_type} node of the group"
             )));
@@ -964,10 +987,7 @@ mod test {
             .unwrap();
         og.connect_nodes(sn2_i, "output_1", sn3_i, "input_1", Length::zero())
             .unwrap();
-        assert_eq!(
-            og.external_nodes(&PortType::Input),
-            vec![0.into(), 2.into()]
-        )
+        assert_eq!(og.external_nodes(PortType::Input), vec![0.into(), 2.into()])
     }
     #[test]
     fn output_nodes() {
@@ -981,10 +1001,7 @@ mod test {
             .unwrap();
         og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "input_1", Length::zero())
             .unwrap();
-        assert_eq!(
-            og.external_nodes(&PortType::Input),
-            vec![0.into(), 1.into()]
-        )
+        assert_eq!(og.external_nodes(PortType::Input), vec![0.into(), 1.into()])
     }
     #[test]
     fn next_node_with_uuid_single() {

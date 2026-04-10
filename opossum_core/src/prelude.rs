@@ -1,31 +1,35 @@
 // Re-export the most common items
-pub use super::analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig};
-pub use super::apertures::{Aperture, ApertureType};
-pub use super::core_optics::PortType;
-pub use super::core_optics::{Alignable, OpticNode};
-pub use super::error::{OpmResult, OpossumError};
-pub use super::light::lightdata::{
-    energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
-    light_data_builder::LightDataBuilder,
-    ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
-};
-pub use super::nodes::{
-    BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens, Metertype,
-    NodeGroup, NodeReference, ParabolicMirror, ParaxialSurface, RayPropagationVisualizer,
-    ReflectiveGrating, Source, SourcePort, Spectrometer, SpectrometerType, SplittingConfigBuilder,
-    SpotDiagram, ThinMirror, WaveFront, Wedge, collimated_line_ray_builder,
-    ideal_filter::{
-        BandFilter, BandFilterType, EdgeFilter, EdgeFilterType, FilterTypeBuilder,
-        SpectralFilterBuilder,
-    },
-    point_ray_builder, round_collimated_ray_builder,
-};
-pub use super::opm_document::OpmDocument;
-pub use super::properties::{Properties, Property, Proptype};
-pub use super::refractive_index::{
-    RefrIndexConst, RefrIndexSchott, RefrIndexSellmeier1, RefractiveIndex,
-};
-pub use super::utils::geom_transformation::Isometry;
 pub use super::{
-    centimeter, degree, joule, meter, micrometer, millimeter, nanometer, num_per_mm, radian,
+    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
+    apertures::{Aperture, ApertureType},
+    centimeter,
+    core_optics::{Alignable, OpticNode, PortType},
+    degree,
+    error::{OpmResult, OpossumError},
+    joule,
+    light::lightdata::{
+        energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+        light_data_builder::LightDataBuilder,
+        ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
+    },
+    meter, micrometer, millimeter, nanometer,
+    nodes::{
+        BeamSplitter, ConnectionInfo, CylindricLens, Dummy, EnergyMeter, FluenceDetector,
+        IdealFilter, Lens, Metertype, NodeGroup, NodeReference, ParabolicMirror, ParaxialSurface,
+        RayPropagationVisualizer, ReflectiveGrating, Source, SourcePort, Spectrometer,
+        SpectrometerType, SplittingConfigBuilder, SpotDiagram, ThinMirror, WaveFront, Wedge,
+        collimated_line_ray_builder,
+        ideal_filter::{
+            BandFilter, BandFilterType, EdgeFilter, EdgeFilterType, FilterTypeBuilder,
+            SpectralFilterBuilder,
+        },
+        node_group::port_map::PortMap,
+        point_ray_builder, round_collimated_ray_builder,
+    },
+    num_per_mm,
+    opm_document::OpmDocument,
+    properties::{Properties, Property, Proptype},
+    radian,
+    refractive_index::{RefrIndexConst, RefrIndexSchott, RefrIndexSellmeier1, RefractiveIndex},
+    utils::geom_transformation::Isometry,
 };

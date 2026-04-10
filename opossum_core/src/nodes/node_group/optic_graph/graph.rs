@@ -13,16 +13,29 @@ use std::{
 use uom::si::f64::Length;
 use uuid::Uuid;
 
+/// Represents a connection (edge) between two optical nodes.
+///
+/// Contains all information necessary to identify the source and target nodes
+/// and their ports, along with the distance of the connection.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionInfo {
+    /// UUID of the source node.
     pub src_id: Uuid,
+    /// Name of the output port on the source node.
     pub src_port: String,
+    /// UUID of the target node.
     pub target_id: Uuid,
+    /// Name of the input port on the target node.
     pub target_port: String,
+    /// Physical distance between source and target for optical calculations.
     pub distance: Length,
 }
 
 impl ConnectionInfo {
+    /// Swap the source and target of this connection.
+    ///
+    /// After calling `invert`, the original `src_id`/`src_port` become the `target_id`/`target_port`,
+    /// and vice versa. The `distance` remains unchanged.
     pub fn invert(&mut self) {
         let src_id_buf = self.src_id;
         let src_port_buf = self.src_port.clone();

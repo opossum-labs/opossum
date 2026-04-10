@@ -32,7 +32,8 @@ pub enum AppCommand {
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     AutoLayout,
-    CenterGraph { zoom_to_fit: bool },
+    CenterGraph,
+    ZoomToFit,
     Quit,
     Simulate,
 }
@@ -42,6 +43,7 @@ pub fn MenuBar(
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
     model_modified_sig: ReadSignal<bool>,
     on_menu_action: EventHandler<AppCommand>,
+    root_tab_open: ReadSignal<bool>,
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
 
@@ -136,20 +138,29 @@ pub fn MenuBar(
                                     }
                                 }
                             }
-                            li { class: "dropdown-submenu",
-                                a {
-                                    class: "dropdown-item d-flex justify-content-between align-items-center",
-                                    role: "button",
-                                    "Add Analyzer"
-                                    Icon { height: 10, icon: FaAngleRight }
-                                }
-                                ul { class: "dropdown-menu custom-scroll",
-                                    AnalyzersMenu {
-                                        on_analyzer_selected: move |analyzer_type| {
-                                            on_menu_action.call(AppCommand::AddAnalyzer(analyzer_type));
-                                            hide_dropdown("navbarDropdownEditMenuLink");
-                                        },
+                            {
+                                if *root_tab_open.read() {
+                                    rsx! {
+                                        li { class: "dropdown-submenu",
+                                            a {
+                                                class: "dropdown-item d-flex justify-content-between align-items-center",
+                                                role: "button",
+                                                "Add Analyzer"
+                                                Icon { height: 10, icon: FaAngleRight }
+                                            }
+                                            ul { class: "dropdown-menu custom-scroll",
+                                                AnalyzersMenu {
+                                                    on_analyzer_selected: move |analyzer_type| {
+                                                        on_menu_action.call(AppCommand::AddAnalyzer(analyzer_type));
+                                                        hide_dropdown("navbarDropdownEditMenuLink");
+                                                    },
+                                                }
+                                            }
+                                        }
                                     }
+                                }
+                                else{
+                                    rsx! {}
                                 }
                             }
                         }
@@ -169,18 +180,15 @@ pub fn MenuBar(
                                 short_cut_action: ShortCutAction::Center,
                                 on_click: move |_| {
                                     on_menu_action
-                                        .call(AppCommand::CenterGraph {
-                                            zoom_to_fit: false,
-                                        });
+                                        .call(AppCommand::CenterGraph
+                                        );
                                 },
                             }
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::ZoomToFit,
                                 on_click: move |_| {
                                     on_menu_action
-                                        .call(AppCommand::CenterGraph {
-                                            zoom_to_fit: true,
-                                        });
+                                        .call(AppCommand::ZoomToFit);
                                 },
                             }
                             MenuListItemShortCut {

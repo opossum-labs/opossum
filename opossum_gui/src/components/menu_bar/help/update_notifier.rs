@@ -26,6 +26,7 @@ pub fn UpdateNotifier(version_info: VersionInfo) -> Element {
           }
         };
     }
+
     // Do not render anything if no new version or offline
     rsx! {
       div { display: "none" }

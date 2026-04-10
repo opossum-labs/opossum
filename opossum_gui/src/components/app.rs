@@ -37,6 +37,10 @@ pub fn App() -> Element {
     let mut run_simulation = use_signal(|| false);
 
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> = use_signal(|| None);
+    let node_editor_command_handler =
+        EventHandler::new(move |node_editor_command_opt: Option<NodeEditorCommand>| {
+            node_editor_command.set(node_editor_command_opt);
+        });
     let mut cxt_command = use_signal(|| None::<CxtCommand>);
 
     // global signals
@@ -56,22 +60,22 @@ pub fn App() -> Element {
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
-            node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
+            node_editor_command_handler.call(Some(NodeEditorCommand::DeleteAll));
         }
         AppCommand::OpenTrigger => {
             spawn(async move {
                 if let Some(path) = select_open_path().await {
-                    node_editor_command.set(Some(NodeEditorCommand::LoadFile(path)));
+                    node_editor_command_handler.call(Some(NodeEditorCommand::LoadFile(path)));
                 }
             });
         }
         AppCommand::Save => {
             if let Some(path) = model_file_path_sig.read().clone() {
-                node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
+                node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
             } else {
                 spawn(async move {
                     if let Some(path) = select_save_path().await {
-                        node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
+                        node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
                     }
                 });
             }
@@ -79,7 +83,7 @@ pub fn App() -> Element {
         AppCommand::SaveAs => {
             spawn(async move {
                 if let Some(path) = select_save_path().await {
-                    node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
+                    node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
                 }
             });
         }
@@ -105,15 +109,20 @@ pub fn App() -> Element {
                 window_for_quit.close();
             }
         }
-        AppCommand::AutoLayout => node_editor_command.set(Some(NodeEditorCommand::AutoLayout)),
-        AppCommand::CenterGraph { zoom_to_fit } => {
-            node_editor_command.set(Some(NodeEditorCommand::CenterGraph { zoom_to_fit }));
+        AppCommand::AutoLayout => {
+            node_editor_command_handler.call(Some(NodeEditorCommand::AutoLayout));
+        }
+        AppCommand::CenterGraph => {
+            node_editor_command_handler.call(Some(NodeEditorCommand::CenterGraph));
+        }
+        AppCommand::ZoomToFit => {
+            node_editor_command_handler.call(Some(NodeEditorCommand::ZoomToFit));
         }
         AppCommand::AddNode(name) => {
-            node_editor_command.set(Some(NodeEditorCommand::AddNode(name)));
+            node_editor_command_handler.call(Some(NodeEditorCommand::AddNode(name)));
         }
         AppCommand::AddAnalyzer(atype) => {
-            node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(atype)));
+            node_editor_command_handler.call(Some(NodeEditorCommand::AddAnalyzer(atype)));
         }
         AppCommand::Simulate => {
             #[cfg(not(target_arch = "wasm32"))]
@@ -159,7 +168,7 @@ pub fn App() -> Element {
         }
         AppCommand::Save => {
             if let Some(path) = model_file_path_sig.read().clone() {
-                node_editor_command.set(Some(NodeEditorCommand::SaveFile(path)));
+                node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
             } else {
                 execute_immediate(AppCommand::SaveAs);
             }
@@ -190,7 +199,47 @@ pub fn App() -> Element {
         if let Some(cmd) = &*(cxt_command_val) {
             match cmd {
                 CxtCommand::AddRefNode(new_ref_node) => {
-                    node_editor_command.set(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
+                    node_editor_command_handler
+                        .call(Some(NodeEditorCommand::AddNodeRef(*new_ref_node)));
+                }
+                CxtCommand::ConvertToGroup { nodes, graph_id } => {
+                    node_editor_command_handler.call(Some(NodeEditorCommand::ConvertToGroup {
+                        nodes: nodes.clone(),
+                        graph_id: *graph_id,
+                    }));
+                }
+                CxtCommand::MapNodePort {
+                    port_type,
+                    group_port_name,
+                    mapped_node_port_name,
+                    mapped_node_id,
+                    group_id,
+                } => node_editor_command_handler.call(Some(NodeEditorCommand::MapNodePort {
+                    port_type: *port_type,
+                    group_port_name: group_port_name.clone(),
+                    mapped_node_port_name: mapped_node_port_name.clone(),
+                    mapped_node_id: *mapped_node_id,
+                    group_id: *group_id,
+                })),
+                CxtCommand::RemovePortMap {
+                    group_id,
+                    group_port_name,
+                    port_type,
+                } => {
+                    node_editor_command_handler.call(Some(NodeEditorCommand::RemovePortMap {
+                        group_id: *group_id,
+                        group_port_name: group_port_name.clone(),
+                        port_type: *port_type,
+                    }));
+                }
+                CxtCommand::JumpToMappedPort {
+                    mapped_node_id,
+                    parent,
+                } => {
+                    node_editor_command_handler.call(Some(NodeEditorCommand::JumpToMappedPort {
+                        mapped_node_id: *mapped_node_id,
+                        parent: parent.clone(),
+                    }));
                 }
             }
         }
@@ -287,8 +336,11 @@ pub fn App() -> Element {
                     model_file_path_sig.set(path_opt);
                 }),
                 model_modified_sig,
-                model_modified_handler: EventHandler::new(move |is_modified: bool| model_modified_sig.set(is_modified)),
+                model_modified_handler: EventHandler::new(move |is_modified: bool| {
+                    model_modified_sig.set(is_modified);
+                }),
                 node_editor_command,
+                node_editor_command_handler,
                 show_alert,
                 on_alert_confirm,
                 on_alert_cancel,
@@ -331,10 +383,13 @@ fn CommonAppLayout(
     model_modified_handler: EventHandler<bool>,
     model_modified_sig: ReadSignal<bool>,
     node_editor_command: ReadSignal<Option<NodeEditorCommand>>,
+    node_editor_command_handler: EventHandler<Option<NodeEditorCommand>>,
     show_alert: Signal<bool>,
     on_alert_confirm: EventHandler<MouseEvent>,
     on_alert_cancel: EventHandler<MouseEvent>,
 ) -> Element {
+    let mut root_tab_open = use_signal(|| true);
+    let root_tab_open_handler = EventHandler::<bool>::new(move |b| root_tab_open.set(b));
     let mut height = use_signal(|| 100.0);
     let mut dragging = use_signal(|| false);
     let mut last_y = use_signal(|| 0.0);
@@ -369,15 +424,18 @@ fn CommonAppLayout(
                         model_file_path_sig,
                         model_modified_sig,
                         on_menu_action,
+                        root_tab_open,
                     }
                 }
             }
             GraphEditor {
                 command: node_editor_command,
+                node_editor_command_handler,
                 model_modified_handler,
                 model_modified_sig,
                 model_file_path_sig,
                 model_file_path_handler,
+                root_tab_open_handler,
             }
             Logger { drag_handler: on_mousedown, height }
         }

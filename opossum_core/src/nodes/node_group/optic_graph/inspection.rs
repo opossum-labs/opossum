@@ -164,6 +164,103 @@ impl OpticGraph {
         }
         connections
     }
+
+    /// Returns all outgoing connections from the node with the given [`Uuid`].
+    ///
+    /// Each outgoing connection is represented as a [`ConnectionInfo`], including
+    /// source and target IDs, port names, and distance.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the source node whose outgoing connections are requested.
+    ///
+    /// # Returns
+    /// A vector of [`ConnectionInfo`] representing all outgoing edges of the node.
+    ///
+    /// # Panics
+    /// This function may panic if the internal graph contains edges referencing non-existent nodes.
+    #[must_use]
+    pub fn get_outgoing_connection_info_of_node(&self, node_id: Uuid) -> Vec<ConnectionInfo> {
+        let mut connections = Vec::<ConnectionInfo>::new();
+        for edge_ref in self.g.edge_references() {
+            let src_id = self.g.node_weight(edge_ref.source()).unwrap().uuid();
+            if node_id == src_id {
+                let connection = ConnectionInfo {
+                    src_id,
+                    src_port: edge_ref.weight().src_port().to_string(),
+                    target_id: self.g.node_weight(edge_ref.target()).unwrap().uuid(),
+                    target_port: edge_ref.weight().target_port().to_string(),
+                    distance: *edge_ref.weight().distance(),
+                };
+                connections.push(connection);
+            }
+        }
+        connections
+    }
+
+    /// Returns all connections from the node with the given [`Uuid`].
+    ///
+    /// Each connection is represented as a [`ConnectionInfo`], including
+    /// source and target IDs, port names, and distance.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the source node whose connections are requested.
+    ///
+    /// # Returns
+    /// A vector of [`ConnectionInfo`] representing all edges of the node.
+    ///
+    /// # Panics
+    /// This function may panic if the internal graph contains edges referencing non-existent nodes.
+    #[must_use]
+    pub fn get_connection_info_of_node(&self, node_id: Uuid) -> Vec<ConnectionInfo> {
+        let mut connections = Vec::<ConnectionInfo>::new();
+        for edge_ref in self.g.edge_references() {
+            let src = self.g.node_weight(edge_ref.source()).unwrap();
+            let target = self.g.node_weight(edge_ref.target()).unwrap();
+            if node_id == src.uuid() || node_id == target.uuid() {
+                let connection = ConnectionInfo {
+                    src_id: src.uuid(),
+                    src_port: edge_ref.weight().src_port().to_string(),
+                    target_id: target.uuid(),
+                    target_port: edge_ref.weight().target_port().to_string(),
+                    distance: *edge_ref.weight().distance(),
+                };
+                connections.push(connection);
+            }
+        }
+        connections
+    }
+
+    /// Returns all incoming connections from the node with the given [`Uuid`].
+    ///
+    /// Each incoming connection is represented as a [`ConnectionInfo`], including
+    /// source and target IDs, port names, and distance.
+    ///
+    /// # Parameters
+    /// - `node_id`: UUID of the source node whose incoming connections are requested.
+    ///
+    /// # Returns
+    /// A vector of [`ConnectionInfo`] representing all incoming edges of the node.
+    ///
+    /// # Panics
+    /// This function may panic if the internal graph contains edges referencing non-existent nodes.
+    #[must_use]
+    pub fn get_incoming_connection_info_of_node(&self, node_id: Uuid) -> Vec<ConnectionInfo> {
+        let mut connections = Vec::<ConnectionInfo>::new();
+        for edge_ref in self.g.edge_references() {
+            let target_id = self.g.node_weight(edge_ref.target()).unwrap().uuid();
+            if node_id == target_id {
+                let connection = ConnectionInfo {
+                    src_id: self.g.node_weight(edge_ref.source()).unwrap().uuid(),
+                    src_port: edge_ref.weight().src_port().to_string(),
+                    target_id,
+                    target_port: edge_ref.weight().target_port().to_string(),
+                    distance: *edge_ref.weight().distance(),
+                };
+                connections.push(connection);
+            }
+        }
+        connections
+    }
     /// Returns the is single tree of this [`OpticGraph`].
     #[must_use]
     pub fn is_single_tree(&self) -> bool {

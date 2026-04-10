@@ -92,14 +92,24 @@ impl Display for PortConfig {
     }
 }
 /// Type of an [`OpticPorts`]
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub enum PortType {
     /// input port, receiving [`LightData`](crate::lightdata::LightData)
     Input,
     /// ouput port, sending [`LightData`](crate::lightdata::LightData)
     Output,
 }
-/// Structure defining the optical ports (input / output terminals) and their configuration of an [`OpticNode`](crate::core_optics::OpticNode).
+
+impl Display for PortType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Input => write!(f, "input"),
+            Self::Output => write!(f, "output"),
+        }
+    }
+}
+
+/// Structure defining the optical ports (input / output terminals) of an [`OpticNode`](crate::optic_node::OpticNode).
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct OpticPorts {
     inputs: BTreeMap<String, PortConfig>,
