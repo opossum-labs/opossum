@@ -183,6 +183,29 @@ fn apply_drag_handler(
                         });
                     });
                 }
+                
+                DragStatus::ArmedSelection(start) => {
+    let editor_origin = workspace.read().editor_area.read().origin;
+
+    let graph_pos = Point2D::new(
+        (mouse_to_graph_shift.x - editor_origin.x) / current_zoom,
+        (mouse_to_graph_shift.y - editor_origin.y) / current_zoom,
+    );
+
+    let dx = graph_pos.x - start.x;
+    let dy = graph_pos.y - start.y;
+
+    let dist_sq = dx * dx + dy * dy;
+
+    if dist_sq < 25.0 {
+        return;
+    }
+
+    // ✅ jetzt wird wirklich aktiviert
+    let rect = Rect::new(start, Size2D::new(0.0, 0.0));
+
+    workspace.write().drag_status.set(DragStatus::SelectionBox(rect));
+}
                 DragStatus::SelectionBox(rect) => {
                     let editor_origin = workspace.read().editor_area.read().origin;
 
@@ -210,8 +233,14 @@ fn apply_drag_handler(
                         Size2D::new(width.abs(), height.abs()),
                     );
 
+                    if rect == new_rect {
+    return;
+}
+
                     workspace.write().selection_box.set(Some(new_rect));
+                    workspace.write().drag_status.set(DragStatus::SelectionBox(new_rect));
                 }
+                
                 DragStatus::None | DragStatus::NodeInit => {}
             }
         },

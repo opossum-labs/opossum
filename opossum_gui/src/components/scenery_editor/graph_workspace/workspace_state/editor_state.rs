@@ -41,5 +41,6 @@ pub enum DragStatus {
     Nodes,
     NodeInit,
     Edge(NewEdgeCreationStart),
+    ArmedSelection(Point2D<f64>),
     SelectionBox(Rect<f64>),
 }

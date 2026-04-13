@@ -95,16 +95,8 @@ pub fn use_on_mouse_down(
                         (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
                     );
 
-                    let dx = new_rect.origin.x - rect.origin.x;
-                    let dy = new_rect.origin.y - rect.origin.y;
-
-                    let dw = width.abs() - rect.size.width;
-                    let dh = height.abs() - rect.size.height;
-                    if dx.abs() < 0.5 && dy.abs() < 0.5 && dw.abs() < 0.5 && dh.abs() < 0.5 {
-                        return;
-                    }
                     let drag_status =
-                        DragStatus::SelectionBox(Rect::new(rect_origin, Size2D::new(0., 0.)));
+                        DragStatus::ArmedSelection(rect_origin);
                     workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(drag_status));
                 }
                 MouseButton::Auxiliary => {
