@@ -1,33 +1,19 @@
 #![warn(missing_docs)]
-use log::warn;
-use nalgebra::{DVector, MatrixXx2};
-use opm_macros_lib::OpmNode;
-use plotters::style::RGBAColor;
-use serde::{Deserialize, Serialize};
-use uom::si::{
-    f64::Length,
-    length::{meter, nanometer},
-};
-
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::{NodeAttr, OpticNode, PortType, optic_surface::OpticSurface},
     error::OpmResult,
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult, Rays},
     nanometer,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    optic_ports::PortType,
-    plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
-    rays::Rays,
     reporting::{
         node_report::NodeReport,
+        plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
         report_note::{ReportLevel, ReportNote},
     },
     utils::{
@@ -39,6 +25,15 @@ use crate::{
     },
 };
 use core::f64;
+use log::warn;
+use nalgebra::{DVector, MatrixXx2};
+use opm_macros_lib::OpmNode;
+use plotters::style::RGBAColor;
+use serde::{Deserialize, Serialize};
+use uom::si::{
+    f64::Length,
+    length::{meter, nanometer},
+};
 
 inventory::submit! {
     NodeRegistration::new::<SpotDiagram>("spot diagram", "spot diagram detector")
@@ -118,11 +113,7 @@ impl OpticNode for SpotDiagram {
             for ray in rays {
                 transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
             }
-            if let Some(hit_map) = self
-                .ports()
-                .get_optic_surface(&"input_1".to_owned())
-                .map(super::super::surface::optic_surface::OpticSurface::hit_map)
-            {
+            if let Some(hit_map) = self.get_optic_surface("input_1").map(OpticSurface::hit_map) {
                 props
                     .create("Spot diagram", "2D spot diagram", hit_map.clone().into())
                     .unwrap();
@@ -355,14 +346,12 @@ impl Plottable for SpotDiagram {
 mod test {
     use super::*;
     use crate::{
+        core_optics::PortType,
+        distributions::position::Hexapolar,
         joule,
-        light_result::LightRays,
+        light::{Rays, light_result::LightRays, spectrum_helper::create_he_ne_spec},
         nodes::{NodeGroup, SourcePort, test_helper::test_helper::*},
-        optic_ports::PortType,
-        position_distributions::Hexapolar,
         prelude::{AnalyzerType, EnergyDataBuilder, GhostFocusConfig, OpmDocument},
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
     };
     use uom::num_traits::Zero;
 
@@ -512,11 +501,8 @@ mod test {
         use crate::{
             analyzers::raytrace::{AnalysisRayTrace, RayTraceConfig},
             apertures::{Aperture, ApertureType},
-            light_result::LightResult,
-            lightdata::LightData,
+            light::{LightData, LightResult, Ray, Rays},
             prelude::*,
-            ray::Ray,
-            rays::Rays,
         };
         use nalgebra::{Point3, Vector3};
 

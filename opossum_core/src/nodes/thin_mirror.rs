@@ -1,28 +1,23 @@
 #![warn(missing_docs)]
 //! Infinitely thin mirror with spherical or flat surface
-use std::sync::{Arc, Mutex};
-
-use super::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     coatings::CoatingType,
+    core_optics::{NodeAttr, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    light_result::{LightRays, LightResult},
-    lightdata::LightData,
+    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
+    light::{LightData, LightResult, Rays, light_result::LightRays},
     meter, millimeter,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     radian,
-    rays::Rays,
-    surface::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
+use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
 
 inventory::submit! {
@@ -255,12 +250,12 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        degree, joule, nanometer,
+        core_optics::PortType,
+        degree, joule,
+        light::spectrum_helper::create_he_ne_spec,
+        light::{Ray, Rays},
+        nanometer,
         nodes::test_helper::test_helper::*,
-        optic_ports::PortType,
-        ray::Ray,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
         utils::geom_transformation::Isometry,
     };
     use nalgebra::vector;

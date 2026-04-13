@@ -1,27 +1,31 @@
 #![warn(missing_docs)]
+//! # Node groups
+//!
+//! A node group is a special type of optical node that can contain other optical nodes (including other groups) and connections between them. It allows to build up complex optical systems in a hierarchical way. The internal structure of a node group can be hidden or shown in the dot format by setting the `expand view` property of the group node. To use a node group from the outside, internal nodes / ports must be mapped to be visible (see [`map_input_port`](NodeGroup::map_input_port()) & [`map_output_port`](NodeGroup::map_output_port()) functions).
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 mod optic_graph;
-use super::node_attr::NodeAttr;
+pub mod port_map;
 use crate::{
-    SceneryResources,
     analyzers::Analyzable,
-    dottable::Dottable,
+    core_optics::{
+        NodeAttr, OpticNode, OpticPorts, OpticRef, PortType, SceneryResources,
+        optic_surface::OpticSurface,
+    },
     error::{OpmResult, OpossumError},
-    lightdata::{LightData, light_data_builder::LightDataBuilder},
+    light::{
+        Rays,
+        lightdata::{LightData, light_data_builder::LightDataBuilder},
+    },
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    optic_ports::{OpticPorts, PortType},
-    optic_ref::OpticRef,
     properties::{Properties, Proptype},
-    rays::Rays,
+    reporting::Dottable,
     reporting::{
         analysis_report::AnalysisReport,
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
     },
-    surface::optic_surface::OpticSurface,
     utils::LockExt,
 };
 pub use optic_graph::{ConnectionInfo, OpticGraph};
@@ -75,6 +79,7 @@ inventory::submit! {
 /// **Note**: The group node does currently ignore all [`Aperture`](crate::apertures::Aperture) definitions on its publicly
 /// mapped input and output ports.
 pub struct NodeGroup {
+    #[serde(flatten)]
     node_attr: NodeAttr,
     graph: OpticGraph,
     #[serde(skip)]
@@ -1038,14 +1043,12 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
+        core_optics::OpticNode,
         joule,
-        light_result::LightResult,
+        light::{LightResult, Ray, Rays},
         millimeter, nanometer,
         nodes::{Dummy, EnergyMeter, SourcePort, test_helper::test_helper::*},
-        optic_node::OpticNode,
         prelude::RayDataSource,
-        ray::Ray,
-        rays::Rays,
         utils::{LockExt, geom_transformation::Isometry},
     };
     use num::Zero;

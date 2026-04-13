@@ -1,9 +1,4 @@
 #![warn(missing_docs)]
-use log::{info, warn};
-use opm_macros_lib::OpmNode;
-use uom::si::f64::Length;
-
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig,
@@ -11,24 +6,27 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::{NodeAttr, OpticNode, PortType},
     error::{OpmResult, OpossumError},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
     joule,
-    light_result::{LightRays, LightResult},
-    lightdata::{LightData, light_data_builder::LightDataBuilder},
+    light::{
+        LightResult, Ray, Rays,
+        light_result::LightRays,
+        lightdata::{LightData, light_data_builder::LightDataBuilder},
+    },
     millimeter,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Proptype, validator::Validator},
-    ray::Ray,
-    rays::Rays,
-    surface::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
+use log::{info, warn};
+use opm_macros_lib::OpmNode;
 use std::{
     fmt::Debug,
     sync::{Arc, Mutex},
 };
+use uom::si::f64::Length;
 
 /// A general light source
 ///
@@ -103,7 +101,7 @@ impl Source {
     ///
     /// ```rust
     /// use opossum_core::prelude::*;
-    /// use opossum_core::{spectrum_helper::create_he_ne_spec};
+    /// use opossum_core::{light::spectrum_helper::create_he_ne_spec};
     ///
     /// let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0).unwrap()));
     /// let source=Source::new("My Source", light_data_builder);
@@ -323,9 +321,10 @@ impl AnalysisGhostFocus for Source {
 mod test {
     use super::*;
     use crate::{
-        lightdata::ray_data_source::RayDataSource, nanometer, optic_ports::PortType,
-        position_distributions::Hexapolar, prelude::EnergyDataBuilder,
-        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
+        core_optics::PortType, distributions::position::Hexapolar,
+        light::lightdata::ray_data_source::RayDataSource,
+        light::spectrum_helper::create_he_ne_spec, nanometer, prelude::EnergyDataBuilder,
+        utils::geom_transformation::Isometry,
     };
     use assert_matches::assert_matches;
     use core::f64;

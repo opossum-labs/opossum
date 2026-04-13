@@ -1,7 +1,7 @@
 use opossum_core::prelude::*;
 use opossum_core::{
-    J_per_cm2, coatings::CoatingType, energy_distributions::General2DGaussian,
-    position_distributions::HexagonalTiling, spectral_distribution::LaserLines,
+    J_per_cm2, coatings::CoatingType, distributions::energy::General2DGaussian,
+    distributions::position::HexagonalTiling, distributions::spectral::LaserLines,
 };
 use std::path::Path;
 
@@ -9,7 +9,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Ghostfocus demo");
 
     let mut src = SourcePort::new("collimated ray source");
-    src.node_attr_mut().set_lidt(&J_per_cm2!(2.0))?;
+    src.set_lidt(&PortType::Output, "output_1", J_per_cm2!(2.0))?;
     let i_src = scenery.add_node(src)?;
 
     let mir1 = scenery.add_node(ThinMirror::new("Mirror 1").with_tilt(degree!(45., 0., 0.))?)?;
@@ -26,7 +26,8 @@ fn main() -> OpmResult<()> {
         "output_1",
         &CoatingType::ConstantR { reflectivity: 0.05 },
     )?;
-    lens.node_attr_mut().set_lidt(&J_per_cm2!(2.0))?;
+    lens.set_lidt(&PortType::Input, "input_1", J_per_cm2!(2.0))?;
+    lens.set_lidt(&PortType::Output, "output_1", J_per_cm2!(2.0))?;
     let i_l = scenery.add_node(lens)?;
 
     let mir2 = scenery.add_node(ThinMirror::new("Mirror 2").with_tilt(degree!(45., 0., 0.))?)?;
@@ -45,7 +46,8 @@ fn main() -> OpmResult<()> {
     )?;
     lens2.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
     lens2.set_coating(&PortType::Output, "output_1", &CoatingType::Fresnel)?;
-    lens2.node_attr_mut().set_lidt(&J_per_cm2!(2.0))?;
+    lens2.set_lidt(&PortType::Input, "input_1", J_per_cm2!(2.0))?;
+    lens2.set_lidt(&PortType::Output, "output_1", J_per_cm2!(2.0))?;
     let i_l2 = scenery.add_node(lens2)?;
 
     let mir3 = scenery.add_node(ThinMirror::new("Mirror 3"))?; // .with_tilt(degree!(5., 0., 0.))?)?;

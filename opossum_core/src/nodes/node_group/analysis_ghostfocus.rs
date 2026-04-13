@@ -2,12 +2,12 @@
 use super::NodeGroup;
 use crate::{
     analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
+    core_optics::{OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    light_result::{LightRays, light_rays_to_light_result, light_result_to_light_rays},
-    lightdata::LightData,
-    optic_node::OpticNode,
-    optic_ports::PortType,
-    rays::Rays,
+    light::{
+        LightData, LightRays, Rays,
+        light_result::{light_rays_to_light_result, light_result_to_light_rays},
+    },
     utils::LockExt,
 };
 use log::warn;

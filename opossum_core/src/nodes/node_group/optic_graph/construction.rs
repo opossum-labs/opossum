@@ -6,9 +6,9 @@ use std::{
 use super::graph::OpticGraph;
 use crate::{
     analyzers::Analyzable,
+    core_optics::OpticRef,
     error::{OpmResult, OpossumError},
-    light_flow::LightFlow,
-    optic_ref::OpticRef,
+    light::LightFlow,
     prelude::PortType,
     properties::Proptype,
     utils::LockExt,
@@ -670,9 +670,9 @@ impl OpticGraph {
 mod test {
     use super::*;
     use crate::{
+        core_optics::OpticNode,
         millimeter,
         nodes::{BeamSplitter, Dummy, NodeGroup, NodeReference, SplittingConfigBuilder},
-        optic_node::OpticNode,
     };
     use num::Zero;
     #[test]

@@ -14,7 +14,7 @@ use dioxus::prelude::*;
 use gaussian_editor::GaussianSpectrumParam;
 use laser_lines_editor::LaserLineInput;
 use opossum_core::{
-    prelude::RayDataSource, spectral_distribution::SpecDistType,
+    distributions::spectral::SpecDistType, prelude::RayDataSource,
     utils::default_from_name::DefaultFromName,
 };
 

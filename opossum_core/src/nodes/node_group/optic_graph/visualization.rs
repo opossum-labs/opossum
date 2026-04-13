@@ -1,7 +1,7 @@
 use super::OpticGraph;
 use crate::{
     error::{OpmResult, OpossumError},
-    light_flow::LightFlow,
+    light::LightFlow,
     properties::proptype::format_quantity,
     utils::LockExt,
 };

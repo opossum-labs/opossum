@@ -5,15 +5,13 @@ use std::collections::HashMap;
 use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
+    core_optics::{NodeAttr, OpticNode},
     degree,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::ray_data_builder::RayDataBuilder,
-    nodes::{NodeAttr, NodeGroup},
-    optic_node::OpticNode,
+    light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
+    nodes::NodeGroup,
     picojoule,
     properties::Proptype,
-    rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::analysis_report::AnalysisReport,
 };
@@ -411,7 +409,7 @@ mod test {
     }
     #[test]
     fn test_map_and_get_source() {
-        use crate::lightdata::ray_data_source::{CollimatedSrc, PointSrc, RayDataSource};
+        use crate::light::lightdata::ray_data_source::{CollimatedSrc, PointSrc, RayDataSource};
         use uuid::Uuid;
         let mut config = RayTraceConfig::default();
         let uuid = Uuid::new_v4();
@@ -429,7 +427,7 @@ mod test {
 
     #[test]
     fn test_remove_source() {
-        use crate::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
+        use crate::light::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
         use uuid::Uuid;
         let mut config = RayTraceConfig::default();
         let uuid = Uuid::new_v4();
@@ -443,7 +441,7 @@ mod test {
 
     #[test]
     fn test_prune_source_map() {
-        use crate::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
+        use crate::light::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
         use uuid::Uuid;
 
         let mut scene = NodeGroup::default();

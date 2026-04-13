@@ -1,10 +1,10 @@
 use core::f64;
 use nalgebra::Vector3;
-use opossum_core::lightdata::ray_data_builder::RayDataBuilder;
+use opossum_core::light::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
 use opossum_core::{
-    energy_distributions::UniformDist, position_distributions::Hexapolar,
-    spectral_distribution::Gaussian,
+    distributions::energy::UniformDist, distributions::position::Hexapolar,
+    distributions::spectral::Gaussian,
 };
 use std::path::Path;
 

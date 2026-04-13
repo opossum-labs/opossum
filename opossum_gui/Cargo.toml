@@ -36,7 +36,7 @@ futures-util = "0.3.31"
 ico = "0.5"
 Inflector = "0.11.4"
 reqwest = { version = "0.13.2", features = ["json", "stream"] }
-rfd = { version = "0.17.2" }                                                                                          #, 
+rfd = { version = "0.17.2" }
 rust-sugiyama = "0.4.0"
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
 regex = "1.12.2"

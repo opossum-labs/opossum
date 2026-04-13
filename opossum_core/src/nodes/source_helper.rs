@@ -2,15 +2,17 @@
 //! Helper functions for easier creation of `standard` [`RayDataBuilder`].
 use crate::{
     degree,
-    energy_distributions::UniformDist,
+    distributions::{
+        energy::UniformDist,
+        position::{Grid, Hexapolar},
+        spectral::LaserLines,
+    },
     error::{OpmResult, OpossumError},
-    lightdata::{
+    light::lightdata::{
         ray_data_builder::RayDataBuilder,
         ray_data_source::{CollimatedSrc, PointSrc, RayDataSource},
     },
     meter, millimeter, nanometer,
-    position_distributions::{Grid, Hexapolar},
-    spectral_distribution::LaserLines,
 };
 use nalgebra::Point2;
 use num::Zero;
@@ -96,7 +98,7 @@ pub fn point_ray_builder(cone_angle: Angle, energy: Energy) -> OpmResult<RayData
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{degree, joule, millimeter, ray::Ray};
+    use crate::{degree, joule, light::Ray, millimeter};
     use approx::assert_abs_diff_eq;
     use uom::si::energy::joule;
     #[test]

@@ -1,8 +1,8 @@
 use nalgebra::Point2;
 use opossum_core::prelude::*;
 use opossum_core::{
-    coatings::CoatingType, energy_distributions::UniformDist, optic_ports::PortType,
-    position_distributions::Grid, spectral_distribution::LaserLines,
+    coatings::CoatingType, core_optics::PortType, distributions::energy::UniformDist,
+    distributions::position::Grid, distributions::spectral::LaserLines,
 };
 use std::path::Path;
 

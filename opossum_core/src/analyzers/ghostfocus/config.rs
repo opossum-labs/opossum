@@ -1,10 +1,10 @@
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
+    core_optics::hit_map::fluence_estimator::FluenceEstimator,
+    core_optics::optic_surface::OpticSurface,
     error::OpmResult,
-    lightdata::ray_data_builder::RayDataBuilder,
+    light::{Rays, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
-    rays::Rays,
-    surface::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -94,8 +94,8 @@ impl PropagationStrategy for GhostFocusConfig {
 mod test_ghost_focus_config {
     use super::GhostFocusConfig;
     use crate::{
-        lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
-        surface::hit_map::fluence_estimator::FluenceEstimator,
+        core_optics::hit_map::fluence_estimator::FluenceEstimator,
+        light::lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
     };
     #[test]
     fn default() {
@@ -117,7 +117,7 @@ mod test_ghost_focus_config {
     }
     #[test]
     fn test_map_and_get_source() {
-        use crate::lightdata::ray_data_source::{CollimatedSrc, PointSrc, RayDataSource};
+        use crate::light::lightdata::ray_data_source::{CollimatedSrc, PointSrc, RayDataSource};
         use uuid::Uuid;
         let mut config = GhostFocusConfig::default();
         let uuid = Uuid::new_v4();
@@ -133,7 +133,7 @@ mod test_ghost_focus_config {
 
     #[test]
     fn test_remove_source() {
-        use crate::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
+        use crate::light::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
         use uuid::Uuid;
         let mut config = GhostFocusConfig::default();
         let uuid = Uuid::new_v4();
@@ -148,7 +148,7 @@ mod test_ghost_focus_config {
     #[test]
     fn test_prune_source_map() {
         use crate::{
-            lightdata::ray_data_source::{CollimatedSrc, RayDataSource},
+            light::lightdata::ray_data_source::{CollimatedSrc, RayDataSource},
             nodes::NodeGroup,
         };
         use uuid::Uuid;

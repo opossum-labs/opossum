@@ -1,14 +1,14 @@
 #![warn(missing_docs)]
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
+    core_optics::OpticNode,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    light::LightData,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
 };
@@ -214,9 +214,10 @@ impl AnalysisRayTrace for EnergyMeter {}
 mod test {
     use super::*;
     use crate::{
-        analyzers::energy::EnergyConfig, light_result::LightResult,
-        nodes::test_helper::test_helper::*, optic_ports::PortType,
-        spectrum_helper::create_he_ne_spec,
+        analyzers::energy::EnergyConfig,
+        core_optics::PortType,
+        light::{LightResult, spectrum_helper::create_he_ne_spec},
+        nodes::test_helper::test_helper::*,
     };
     #[test]
     fn default() {

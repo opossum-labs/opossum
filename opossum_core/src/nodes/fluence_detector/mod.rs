@@ -2,18 +2,16 @@
 //! fluence measurement node
 pub mod fluence_data;
 
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
+    core_optics::{NodeAttr, OpticNode, hit_map::fluence_estimator::FluenceEstimator},
     error::OpmResult,
-    lightdata::LightData,
+    light::LightData,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
-    surface::hit_map::fluence_estimator::FluenceEstimator,
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
@@ -181,11 +179,12 @@ impl AnalysisRayTrace for FluenceDetector {}
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::analyzers::energy::EnergyConfig;
-    use crate::light_result::LightResult;
-    use crate::lightdata::LightData;
-    use crate::optic_ports::PortType;
-    use crate::{nodes::test_helper::test_helper::*, spectrum_helper::create_he_ne_spec};
+    use crate::{
+        analyzers::energy::EnergyConfig,
+        core_optics::PortType,
+        light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
+        nodes::test_helper::test_helper::*,
+    };
     #[test]
     fn default() {
         let mut node = FluenceDetector::default();

@@ -1,28 +1,23 @@
 #![warn(missing_docs)]
 //! Infinitely thin mirror with spherical or flat surface
-use std::f64::consts::PI;
-
-use super::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
+    core_optics::{NodeAttr, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    light_result::{LightRays, LightResult},
-    lightdata::LightData,
+    light::{LightData, LightRays, LightResult, Rays},
     nodes::NodeRegistration,
     num_per_mm,
-    optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     radian,
-    rays::Rays,
     refractive_index::refr_index_vaccuum,
     utils::to_f64,
 };
 use nalgebra::Vector3;
 use opm_macros_lib::OpmNode;
+use std::f64::consts::PI;
 use uom::si::{
     angle::radian,
     f64::{Angle, Length},
@@ -280,12 +275,11 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        degree, joule, millimeter, nanometer,
+        core_optics::PortType,
+        degree, joule,
+        light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
+        millimeter, nanometer,
         nodes::test_helper::test_helper::*,
-        optic_ports::PortType,
-        ray::Ray,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;

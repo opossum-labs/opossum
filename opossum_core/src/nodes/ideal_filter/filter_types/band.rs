@@ -7,9 +7,9 @@ use uom::si::{f64::Length, length::micrometer};
 
 use crate::{
     error::{OpmResult, OpossumError},
+    light::Spectrum,
     nanometer,
     nodes::ideal_filter::filter_types::math::interpolate_transition,
-    spectrum::Spectrum,
     utils::default_from_name::DefaultFromName,
 };
 

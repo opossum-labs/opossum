@@ -1,6 +1,6 @@
 use actix_web::dev::ServerHandle;
 use opossum_core::{
-    OpticRef,
+    core_optics::OpticRef,
     opm_document::{AnalyzerInfo, OpmDocument},
 };
 use parking_lot::Mutex;

@@ -9,7 +9,7 @@ pub use spectral_builder::SpectralFilterBuilder;
 
 use std::fmt::Display;
 
-use crate::{error::OpmResult, spectrum::Spectrum, utils::default_from_name::DefaultFromName};
+use crate::{error::OpmResult, light::Spectrum, utils::default_from_name::DefaultFromName};
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, IntoEnumIterator};
 

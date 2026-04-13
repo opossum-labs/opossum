@@ -8,10 +8,10 @@ use uom::si::f64::Length;
 
 use crate::{
     error::{OpmResult, OpossumError},
+    light::Spectrum,
     micrometer, nanometer,
     nodes::ideal_filter::filter_types::math::interpolate_transition,
     prelude::SpectralFilterBuilder,
-    spectrum::Spectrum,
     utils::default_from_name::DefaultFromName,
 };
 

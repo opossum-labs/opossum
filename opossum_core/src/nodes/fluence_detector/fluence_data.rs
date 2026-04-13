@@ -4,11 +4,11 @@ use std::ops::Range;
 use super::Fluence;
 use crate::{
     J_per_cm2,
+    core_optics::hit_map::fluence_estimator::FluenceEstimator,
     error::OpmResult,
     joule,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
-    surface::hit_map::fluence_estimator::FluenceEstimator,
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{griddata::linspace, to_f64},
 };
 use nalgebra::{DMatrix, DVector};
@@ -197,10 +197,11 @@ impl Plottable for FluenceData {
 mod test {
     use super::FluenceData;
     use crate::{
-        J_per_cm2, J_per_m2, joule, meter,
-        plottable::{PlotType, Plottable},
+        J_per_cm2, J_per_m2,
+        core_optics::hit_map::fluence_estimator::FluenceEstimator,
+        joule, meter,
         properties::Proptype,
-        surface::hit_map::fluence_estimator::FluenceEstimator,
+        reporting::plottable::{PlotType, Plottable},
     };
     use assert_matches::assert_matches;
     use nalgebra::{dmatrix, vector};

@@ -13,24 +13,22 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::{NodeAttr, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult},
     nanometer,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    optic_ports::PortType,
-    plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
+    reporting::plottable::{
+        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
+    },
     utils::{
         geom_transformation::Isometry,
         griddata::{create_linspace_axes, grid_interpolate_3d_scatter_data},
         to_f64,
     },
 };
-
-use super::node_attr::NodeAttr;
 
 inventory::submit! {
     NodeRegistration::new::<WaveFront>("wavefront monitor", "wavefront detector")
@@ -462,7 +460,11 @@ impl Plottable for WaveFrontErrorMap {
 #[cfg(test)]
 mod test_wavefront_error_map {
     use super::*;
-    use crate::{joule, nanometer, ray::Ray, rays::Rays};
+    use crate::{
+        joule,
+        light::{Ray, Rays},
+        nanometer,
+    };
     use approx::assert_abs_diff_eq;
     use nalgebra::Point3;
     #[test]
@@ -495,10 +497,9 @@ mod test_wavefront_error_map {
 mod test {
     use super::*;
     use crate::{
-        analyzers::RayTraceConfig, joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*, optic_ports::PortType,
-        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
-        utils::geom_transformation::Isometry,
+        analyzers::RayTraceConfig, core_optics::PortType, distributions::position::Hexapolar,
+        joule, light::Rays, light::spectrum_helper::create_he_ne_spec, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, utils::geom_transformation::Isometry,
     };
     #[test]
     fn default() {

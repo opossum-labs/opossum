@@ -2,12 +2,14 @@
 #![warn(missing_docs)]
 use std::collections::HashMap;
 
-use super::Analyzer;
-use super::{AnalyzerRegistration, AnalyzerType};
-use crate::analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy};
-use crate::prelude::EnergyDataBuilder;
+use super::{Analyzer, AnalyzerRegistration, AnalyzerType};
 use crate::{
-    error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode,
+    analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
+    core_optics::OpticNode,
+    error::OpmResult,
+    light::LightResult,
+    nodes::NodeGroup,
+    prelude::EnergyDataBuilder,
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
@@ -99,8 +101,8 @@ pub trait AnalysisEnergy: OpticNode {
         mut incoming_data: LightResult,
         _config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
-        let in_ports = self.ports().names(&crate::optic_ports::PortType::Input);
-        let out_ports = self.ports().names(&crate::optic_ports::PortType::Output);
+        let in_ports = self.ports().names(&crate::core_optics::PortType::Input);
+        let out_ports = self.ports().names(&crate::core_optics::PortType::Output);
 
         // If the node doesn't have at least one input and output, we can't pass energy through
         // which would be a programming error in the implementation of the node. We use debug asserts here to catch this.
@@ -156,7 +158,7 @@ mod test {
     use crate::{
         analyzers::{Analyzer, energy::EnergyConfig},
         joule,
-        lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+        light::lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
         nanometer,
         nodes::{EnergyMeter, NodeGroup, SourcePort},
     };

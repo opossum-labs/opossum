@@ -3,9 +3,10 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use nalgebra::Vector3;
 use opossum_core::{
-    joule, millimeter, nanometer,
-    ray::Ray,
-    surface::{Cylinder, Parabola, Plane, Sphere, geo_surface::GeoSurface},
+    geometry::{Cylinder, Parabola, Plane, Sphere, geo_surface::GeoSurface},
+    joule,
+    light::Ray,
+    millimeter, nanometer,
     utils::geom_transformation::Isometry,
 };
 use std::time::Duration;

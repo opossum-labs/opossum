@@ -4,7 +4,9 @@ use crate::components::node_editor::inputs::{
     input_components::LabeledSelect, select_options_from_enum_iterator,
 };
 use dioxus::prelude::*;
-use opossum_core::{prelude::RayDataSource, rays::Rays, utils::default_from_name::DefaultFromName};
+use opossum_core::{
+    light::Rays, prelude::RayDataSource, utils::default_from_name::DefaultFromName,
+};
 
 #[component]
 pub fn RayDataBuilderSelector(

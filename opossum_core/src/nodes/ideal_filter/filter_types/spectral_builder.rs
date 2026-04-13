@@ -2,8 +2,8 @@ use std::fmt::Display;
 use std::path::PathBuf;
 
 use crate::error::OpmResult;
+use crate::light::Spectrum;
 use crate::prelude::FilterTypeBuilder;
-use crate::spectrum::Spectrum;
 use crate::utils::default_from_name::DefaultFromName;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;

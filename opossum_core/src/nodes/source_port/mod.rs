@@ -4,10 +4,11 @@ use std::{
 };
 
 use crate::{
+    core_optics::NodeAttr,
     error::OpmResult,
-    nodes::{NodeAttr, NodeRegistration},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    nodes::NodeRegistration,
     prelude::{Isometry, OpticNode, PortType, Proptype},
-    surface::{Plane, geo_surface::GeoSurfaceRef},
 };
 use opm_macros_lib::OpmNode;
 

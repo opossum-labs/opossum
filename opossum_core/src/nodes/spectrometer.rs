@@ -4,20 +4,18 @@ use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
 use uom::si::length::nanometer;
 
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
+    core_optics::{NodeAttr, OpticNode},
     error::OpmResult,
-    lightdata::LightData,
+    light::LightData,
+    light::{Rays, Spectrum},
     nanometer,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
     properties::{Properties, Proptype},
-    rays::Rays,
     reporting::node_report::NodeReport,
-    spectrum::Spectrum,
 };
 use std::fmt::{Debug, Display};
 
@@ -250,13 +248,14 @@ mod test {
     use super::*;
     use crate::{
         analyzers::energy::EnergyConfig,
+        core_optics::PortType,
+        distributions::position::Hexapolar,
         joule,
-        light_result::LightResult,
+        light::{
+            LightResult, Rays,
+            spectrum_helper::{create_he_ne_spec, create_visible_spec},
+        },
         nodes::{EnergyMeter, test_helper::test_helper::*},
-        optic_ports::PortType,
-        position_distributions::Hexapolar,
-        rays::Rays,
-        spectrum_helper::{create_he_ne_spec, create_visible_spec},
     };
     use num::Zero;
     use uom::si::f64::Length;

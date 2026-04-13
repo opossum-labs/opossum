@@ -1,11 +1,9 @@
 use super::Lens;
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
+    core_optics::{OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::LightData,
-    optic_node::OpticNode,
-    optic_ports::PortType,
+    light::{LightData, LightResult},
 };
 
 impl AnalysisRayTrace for Lens {

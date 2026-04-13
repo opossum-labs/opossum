@@ -7,8 +7,8 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
+    core_optics::hit_map::fluence_estimator::FluenceEstimator,
     prelude::{AnalyzerType, GhostFocusConfig},
-    surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::default_from_name::DefaultFromName,
 };
 use uuid::Uuid;

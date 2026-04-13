@@ -1,4 +1,3 @@
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         RayTraceConfig,
@@ -6,12 +5,10 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::{NodeAttr, OpticNode, OpticPorts, OpticRef},
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
+    light::LightResult,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    optic_ports::OpticPorts,
-    optic_ref::OpticRef,
     properties::Proptype,
     utils::{LockExt, geom_transformation::Isometry},
 };
@@ -196,10 +193,10 @@ impl AnalysisRayTrace for NodeReference {
 mod test {
     use super::*;
     use crate::{
-        lightdata::LightData,
+        core_optics::PortType,
+        light::LightData,
+        light::spectrum_helper::create_he_ne_spec,
         nodes::{Dummy, NodeGroup, test_helper::test_helper::*},
-        optic_ports::PortType,
-        spectrum_helper::create_he_ne_spec,
         utils::LockExt,
     };
     #[test]

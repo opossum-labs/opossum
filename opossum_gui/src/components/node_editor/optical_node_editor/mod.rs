@@ -20,10 +20,7 @@ use crate::components::{
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_core::{
-    nodes::fluence_detector::Fluence,
-    prelude::{Isometry, Properties},
-};
+use opossum_core::prelude::{Isometry, Properties};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -31,7 +28,7 @@ pub struct UINodeAttr {
     pub node_id: Uuid,
     pub node_type: String,
     pub name: String,
-    pub lidt: Fluence,
+    // pub lidt: Fluence,
     pub inverted: bool,
     pub properties: Properties,
     pub position: Option<Isometry>,
@@ -55,7 +52,7 @@ pub fn OpticalNodeEditor(
                     node_id,
                     node_type: node_attr.node_type(),
                     name: node_attr.name(),
-                    lidt: *node_attr.lidt(),
+                    // lidt: *node_attr.lidt(),
                     inverted: node_attr.inverted(),
                     properties: node_attr.properties().clone(),
                     position: node_attr.isometry(),

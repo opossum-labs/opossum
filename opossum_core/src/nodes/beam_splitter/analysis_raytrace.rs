@@ -1,9 +1,8 @@
 use crate::{
     analyzers::{AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace},
+    core_optics::OpticNode,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::LightData,
-    optic_node::OpticNode,
+    light::{LightData, LightResult},
 };
 
 use super::BeamSplitter;
@@ -101,18 +100,15 @@ mod test {
 
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
+        core_optics::OpticNode,
         joule,
-        light_result::LightResult,
-        lightdata::LightData,
+        light::{LightData, LightResult, Ray, Rays},
         millimeter, nanometer,
         nodes::{
             BeamSplitter, NodeGroup, SourcePort, SplittingConfigBuilder,
             round_collimated_ray_builder,
         },
-        optic_node::OpticNode,
         prelude::{AnalyzerType, OpmDocument},
-        ray::Ray,
-        rays::Rays,
         utils::geom_transformation::Isometry,
     };
 

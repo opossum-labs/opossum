@@ -1,18 +1,15 @@
 #![warn(missing_docs)]
 use opm_macros_lib::OpmNode;
 
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::{NodeAttr, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult},
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    optic_ports::PortType,
 };
 
 inventory::submit! {
@@ -134,8 +131,8 @@ impl OpticNode for Dummy {
 mod test {
     use super::*;
     use crate::{
-        analyzers::energy::EnergyConfig, lightdata::LightData, nodes::test_helper::test_helper::*,
-        optic_ports::PortType, spectrum_helper::create_he_ne_spec,
+        analyzers::energy::EnergyConfig, core_optics::PortType, light::LightData,
+        light::spectrum_helper::create_he_ne_spec, nodes::test_helper::test_helper::*,
     };
     #[test]
     fn default() {

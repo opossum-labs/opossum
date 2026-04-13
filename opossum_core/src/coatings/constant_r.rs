@@ -2,7 +2,7 @@
 use super::{Coating, CoatingType};
 use crate::{
     error::{OpmResult, OpossumError},
-    ray::Ray,
+    light::Ray,
 };
 use nalgebra::Vector3;
 /// Ideal coating with constant reflectivity
@@ -49,7 +49,7 @@ impl From<ConstantR> for CoatingType {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{joule, nanometer, ray::Ray};
+    use crate::{joule, light::Ray, nanometer};
     use core::f64;
     use nalgebra::vector;
 

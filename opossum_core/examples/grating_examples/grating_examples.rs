@@ -1,10 +1,7 @@
 use nalgebra::Vector3;
-use opossum_core::lightdata::ray_data_builder::RayDataBuilder;
+use opossum_core::distributions::{energy::UniformDist, position::Hexapolar, spectral::Gaussian};
+use opossum_core::light::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
-use opossum_core::{
-    energy_distributions::UniformDist, position_distributions::Hexapolar,
-    spectral_distribution::Gaussian,
-};
 
 mod folded_martinez;
 use folded_martinez::folded_martinez;

@@ -1,19 +1,19 @@
 use std::sync::{Arc, Mutex};
 
-use super::NodeAttr;
 #[cfg(test)]
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
+    core_optics::NodeAttr,
+    core_optics::OpticNode,
+    core_optics::PortType,
     degree,
     error::{OpmResult, OpossumError},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
     millimeter,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     refractive_index::{RefrIndexConst, RefractiveIndexType},
-    surface::{Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;
@@ -192,16 +192,12 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
+        core_optics::PortType,
         degree, joule,
-        light_result::LightResult,
-        lightdata::LightData,
+        light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::test_helper::test_helper::*,
-        optic_ports::PortType,
         properties::Proptype,
-        ray::Ray,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
     };
     use nalgebra::Vector3;
 

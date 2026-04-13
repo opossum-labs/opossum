@@ -4,8 +4,8 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
+    distributions::position::{Grid, PosDistType},
     meter,
-    position_distributions::{Grid, PosDistType},
     utils::try_f64_to_usize,
 };
 use strum::EnumIter;

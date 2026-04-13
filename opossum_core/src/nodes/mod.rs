@@ -29,8 +29,7 @@ mod energy_meter;
 pub mod fluence_detector;
 pub mod ideal_filter;
 mod lens;
-mod node_attr;
-mod node_group;
+pub mod node_group;
 mod parabolic_mirror;
 mod paraxial_surface;
 pub mod ray_propagation_visualizer;
@@ -52,7 +51,6 @@ pub use energy_meter::{EnergyMeter, Metertype};
 pub use fluence_detector::FluenceDetector;
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::Lens;
-pub use node_attr::NodeAttr;
 pub use node_group::{ConnectionInfo, NodeGroup, OpticGraph};
 pub use parabolic_mirror::ParabolicMirror;
 pub use paraxial_surface::ParaxialSurface;
@@ -74,8 +72,8 @@ pub use wedge::Wedge;
 
 use crate::{
     analyzers::Analyzable,
+    core_optics::OpticRef,
     error::{OpmResult, OpossumError},
-    optic_ref::OpticRef,
 };
 
 /// Struct to hold all info about a node type

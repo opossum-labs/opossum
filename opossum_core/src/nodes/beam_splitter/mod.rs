@@ -4,18 +4,18 @@ mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
+    core_optics::NodeAttr,
+    core_optics::OpticNode,
+    core_optics::PortType,
     error::{OpmResult, OpossumError},
-    lightdata::LightData,
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    light::LightData,
+    light::Rays,
+    light::spectrum::{Spectrum, merge_spectra},
     nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
-    optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Proptype, validator::Validator},
-    rays::Rays,
-    spectrum::{Spectrum, merge_spectra},
-    surface::{Plane, geo_surface::GeoSurfaceRef},
     utils::{default_from_name::DefaultFromName, geom_transformation::Isometry},
 };
 use opm_macros_lib::OpmNode;
@@ -417,7 +417,7 @@ impl OpticNode for BeamSplitter {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{nodes::test_helper::test_helper::*, optic_ports::PortType};
+    use crate::{core_optics::PortType, nodes::test_helper::test_helper::*};
     #[test]
     fn default() {
         let mut node = BeamSplitter::default();

@@ -1,11 +1,9 @@
 use super::CylindricLens;
 use crate::{
     analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace},
+    core_optics::{OpticNode, PortType},
     error::OpmResult,
-    light_result::LightRays,
-    optic_node::OpticNode,
-    optic_ports::PortType,
-    rays::Rays,
+    light::{LightRays, Rays},
 };
 
 impl AnalysisGhostFocus for CylindricLens {

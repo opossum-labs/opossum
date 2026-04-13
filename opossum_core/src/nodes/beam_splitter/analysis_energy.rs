@@ -1,9 +1,9 @@
 use super::BeamSplitter;
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
+    core_optics::OpticNode,
     error::OpmResult,
-    light_result::LightResult,
-    optic_node::OpticNode,
+    light::LightResult,
 };
 
 impl AnalysisEnergy for BeamSplitter {
@@ -44,17 +44,15 @@ mod test {
 
     use crate::{
         analyzers::energy::{AnalysisEnergy, EnergyConfig},
+        core_optics::OpticNode,
         joule,
-        light_result::LightResult,
-        lightdata::LightData,
+        light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::{BeamSplitter, SplittingConfigBuilder},
-        optic_node::OpticNode,
         prelude::{
             EdgeFilter, EdgeFilterType, EnergyDataBuilder, EnergyLaserLines, LightDataBuilder,
             SpectralFilterBuilder,
         },
-        spectrum_helper::create_he_ne_spec,
     };
 
     #[test]

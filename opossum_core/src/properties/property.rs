@@ -1,8 +1,8 @@
 use super::Proptype;
 use crate::{
     error::{OpmResult, OpossumError},
-    plottable::Plottable,
     properties::validator::Validator,
+    reporting::plottable::{Plottable, PltBackEnd},
 };
 use nalgebra::vector;
 use serde::{Deserialize, Serialize};
@@ -86,28 +86,24 @@ impl Property {
     pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
         match &self.prop {
             Proptype::FluenceData(fluence) => {
-                fluence.to_plot(report_path, id, crate::plottable::PltBackEnd::Bitmap)?;
+                fluence.to_plot(report_path, id, PltBackEnd::Bitmap)?;
             }
             Proptype::Spectrum(spectrum) => {
-                spectrum.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
+                spectrum.to_plot(report_path, id, PltBackEnd::SVG)?;
             }
             Proptype::RayPositionHistory(ray_hist) => {
-                ray_hist.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
+                ray_hist.to_plot(report_path, id, PltBackEnd::SVG)?;
             }
             Proptype::GhostFocusHistory(ghost_hist) => {
                 let mut ghost_hist = ghost_hist.clone();
                 ghost_hist.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
-                ghost_hist.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
+                ghost_hist.to_plot(report_path, id, PltBackEnd::SVG)?;
             }
             Proptype::WaveFrontData(wavefront_error_map) => {
-                wavefront_error_map.to_plot(
-                    report_path,
-                    id,
-                    crate::plottable::PltBackEnd::Bitmap,
-                )?;
+                wavefront_error_map.to_plot(report_path, id, PltBackEnd::Bitmap)?;
             }
             Proptype::HitMap(hit_map) => {
-                hit_map.to_plot(report_path, id, crate::plottable::PltBackEnd::SVG)?;
+                hit_map.to_plot(report_path, id, PltBackEnd::SVG)?;
             }
             Proptype::NodeReport(report) => {
                 report.export(report_path)?;

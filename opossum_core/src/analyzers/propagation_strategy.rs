@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
 use crate::{
-    error::OpmResult, rays::Rays, surface::optic_surface::OpticSurface,
+    core_optics::optic_surface::OpticSurface, error::OpmResult, light::Rays,
     utils::default_from_name::DefaultFromName,
 };
 

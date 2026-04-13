@@ -1,9 +1,6 @@
 use nalgebra::Point2;
+use opossum_core::distributions::{energy::UniformDist, position::Grid, spectral::LaserLines};
 use opossum_core::prelude::*;
-use opossum_core::{
-    energy_distributions::UniformDist, position_distributions::Grid,
-    spectral_distribution::LaserLines,
-};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

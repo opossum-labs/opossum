@@ -1,20 +1,16 @@
 #![warn(missing_docs)]
 //! A paraxial surface (ideal lens)
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::{NodeAttr, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    light_result::{LightRays, LightResult},
-    lightdata::LightData,
+    light::{LightData, LightRays, LightResult, Rays},
     millimeter,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Proptype, validator::Validator},
-    rays::Rays,
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
@@ -162,8 +158,12 @@ impl AnalysisRayTrace for ParaxialSurface {
 mod test {
     use super::*;
     use crate::{
-        analyzers::RayTraceConfig, degree, joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*, optic_ports::PortType, ray::Ray, rays::Rays,
+        analyzers::RayTraceConfig,
+        core_optics::PortType,
+        degree, joule,
+        light::{Ray, Rays},
+        millimeter, nanometer,
+        nodes::test_helper::test_helper::*,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;

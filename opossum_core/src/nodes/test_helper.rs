@@ -7,15 +7,11 @@ pub mod test_helper {
             raytrace::AnalysisRayTrace,
         },
         apertures::{Aperture, ApertureType, CircleShape},
+        core_optics::{OpticNode, PortType},
+        distributions::position::Hexapolar,
         joule,
-        light_result::LightResult,
-        lightdata::LightData,
+        light::{LightData, LightResult, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
-        optic_node::OpticNode,
-        optic_ports::PortType,
-        position_distributions::Hexapolar,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     pub fn test_inverted<T: Default + OpticNode>() {

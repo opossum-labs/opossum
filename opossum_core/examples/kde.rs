@@ -1,11 +1,11 @@
-use opossum_core::prelude::*;
 use opossum_core::{
-    plottable::Plottable,
-    position_distributions::{Hexapolar, PositionDistribution},
-    surface::hit_map::{
+    core_optics::hit_map::{
         fluence_estimator::FluenceEstimator,
         rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
     },
+    distributions::position::{Hexapolar, PositionDistribution},
+    prelude::*,
+    reporting::plottable::{Plottable, PltBackEnd},
 };
 use std::path::Path;
 use uom::si::f64::Ratio;
@@ -24,7 +24,7 @@ fn main() -> OpmResult<()> {
     fluence_data.to_plot(
         Path::new("./opossum_core/playground"),
         "kde",
-        opossum_core::plottable::PltBackEnd::Bitmap,
+        PltBackEnd::Bitmap,
     )?;
     Ok(())
 }

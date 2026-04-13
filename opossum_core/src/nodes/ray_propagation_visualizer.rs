@@ -10,26 +10,23 @@ use uom::si::{
     length::{millimeter, nanometer},
 };
 
-use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::{NodeAttr, OpticNode},
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult, Spectrum},
     millimeter,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype, validator::Validator},
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     reporting::{
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
     },
-    spectrum::Spectrum,
 };
 
 inventory::submit! {
@@ -409,8 +406,12 @@ impl Plottable for RayPositionHistories {
 mod test {
     use super::*;
     use crate::{
-        joule, millimeter, nanometer, nodes::test_helper::test_helper::*, optic_ports::PortType,
-        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
+        core_optics::PortType,
+        distributions::position::Hexapolar,
+        joule,
+        light::{Rays, spectrum_helper::create_he_ne_spec},
+        millimeter, nanometer,
+        nodes::test_helper::test_helper::*,
     };
     use approx::assert_relative_eq;
     use uom::si::length::{millimeter, nanometer};
@@ -533,7 +534,7 @@ mod test {
 
         // Test Energy Data Warning
         fd.set_apodization_warning(false);
-        fd.light_data = Some(LightData::Energy(crate::spectrum::Spectrum::default()));
+        fd.light_data = Some(LightData::Energy(crate::light::Spectrum::default()));
         let node_report = fd.node_report("").unwrap();
         assert_eq!(node_report.notes().len(), 1);
         assert_eq!(

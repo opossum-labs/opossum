@@ -1,9 +1,9 @@
 use nalgebra::{DMatrix, DVector, MatrixXx2};
 use opossum_core::{
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
-    position_distributions::Hexapolar,
+    distributions::position::Hexapolar,
+    light::Rays,
     prelude::*,
-    rays::Rays,
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     utils::geom_transformation::Isometry,
 };
 use plotters::style::RGBAColor;

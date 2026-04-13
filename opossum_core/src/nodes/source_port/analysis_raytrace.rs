@@ -4,13 +4,10 @@ use crate::{
     analyzers::raytrace::AnalysisRayTrace,
     error::{OpmResult, OpossumError},
     joule,
-    light_result::LightResult,
-    lightdata::LightData,
+    light::{LightData, LightResult, Ray, Rays},
     millimeter,
     nodes::SourcePort,
     prelude::{OpticNode, PortType, RayTraceConfig},
-    ray::Ray,
-    rays::Rays,
 };
 
 impl AnalysisRayTrace for SourcePort {
@@ -79,16 +76,13 @@ impl AnalysisRayTrace for SourcePort {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        energy_distributions::UniformDist,
-        lightdata::ray_data_builder::RayDataBuilder,
-        nanometer,
-        position_distributions::Hexapolar,
-        prelude::{CollimatedSrc, RayDataSource},
-        spectral_distribution::LaserLines,
-    };
-
     use super::*;
+    use crate::{
+        distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
+        light::lightdata::ray_data_builder::RayDataBuilder,
+        nanometer,
+        prelude::{CollimatedSrc, RayDataSource},
+    };
 
     #[test]
     fn analyze_raytrace_no_source_definition() {

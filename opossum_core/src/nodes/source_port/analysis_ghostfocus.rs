@@ -1,10 +1,9 @@
 use crate::{
     analyzers::ghostfocus::AnalysisGhostFocus,
     error::{OpmResult, OpossumError},
-    light_result::LightRays,
+    light::{LightRays, Rays},
     nodes::SourcePort,
     prelude::{GhostFocusConfig, OpticNode},
-    rays::Rays,
 };
 
 impl AnalysisGhostFocus for SourcePort {

@@ -1,10 +1,10 @@
 use nalgebra::{DMatrix, DVector};
 use opossum_core::prelude::*;
 use opossum_core::{
-    energy_distributions::general_gaussian::General2DGaussian,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
-    position_distributions::FibonacciRectangle,
-    rays::Rays,
+    distributions::energy::general_gaussian::General2DGaussian,
+    distributions::position::FibonacciRectangle,
+    light::Rays,
+    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     utils::geom_transformation::Isometry,
 };
 use plotters::style::RGBAColor;

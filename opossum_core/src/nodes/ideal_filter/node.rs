@@ -6,15 +6,15 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
-    light_result::{
-        LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
+    light::{
+        LightData, LightRays, LightResult, Rays,
+        light_result::{light_rays_to_light_result, light_result_to_light_rays},
     },
-    lightdata::LightData,
-    nodes::{FilterType, NodeAttr, NodeRegistration},
+    nodes::{FilterType, NodeRegistration},
     prelude::{FilterTypeBuilder, GhostFocusConfig, OpticNode, PortType, Proptype, RayTraceConfig},
     properties::validator::Validator,
-    rays::Rays,
 };
 
 inventory::submit! {
@@ -247,18 +247,18 @@ impl AnalysisRayTrace for IdealFilter {
 }
 #[cfg(test)]
 mod test {
-    use approx::assert_abs_diff_eq;
-
     use super::*;
     use crate::{
-        joule, millimeter, nanometer,
+        distributions::position::Hexapolar,
+        joule,
+        light::spectrum_helper::create_he_ne_spec,
+        millimeter, nanometer,
         nodes::test_helper::test_helper::{
             test_analyze_empty, test_analyze_wrong_data_type, test_inverted,
         },
-        position_distributions::Hexapolar,
         prelude::{BandFilter, Isometry},
-        spectrum_helper::create_he_ne_spec,
     };
+    use approx::assert_abs_diff_eq;
     use uom::si::energy::joule;
     #[test]
     fn default() {

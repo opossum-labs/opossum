@@ -1,12 +1,9 @@
 use super::BeamSplitter;
 use crate::{
     analyzers::{AnalyzerType, GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
+    core_optics::{OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    light_result::LightRays,
-    lightdata::LightData,
-    optic_node::OpticNode,
-    optic_ports::PortType,
-    rays::Rays,
+    light::{LightData, LightRays, Rays},
 };
 
 impl AnalysisGhostFocus for BeamSplitter {

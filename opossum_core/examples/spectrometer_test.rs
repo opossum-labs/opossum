@@ -1,7 +1,7 @@
 use opossum_core::prelude::*;
 use opossum_core::{
-    energy_distributions::UniformDist, position_distributions::Hexapolar,
-    spectral_distribution::LaserLines,
+    distributions::energy::UniformDist, distributions::position::Hexapolar,
+    distributions::spectral::LaserLines,
 };
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Spectrometer demo");

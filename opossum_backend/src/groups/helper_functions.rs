@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use actix_web::web;
 use nalgebra::Point2;
 use opossum_core::{
-    OpticRef,
+    core_optics::OpticRef,
     error::OpmResult,
     meter,
     nodes::{ConnectionInfo, NodeGroup},

@@ -1,4 +1,4 @@
-use opossum_core::{prelude::*, surface::hit_map::fluence_estimator::FluenceEstimator};
+use opossum_core::{core_optics::hit_map::fluence_estimator::FluenceEstimator, prelude::*};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

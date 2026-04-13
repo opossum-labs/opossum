@@ -5,8 +5,10 @@ use std::cell::RefCell;
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     apertures::Aperture,
+    core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     error::{OpmResult, OpossumError},
-    lightdata::{
+    light::Spectrum,
+    light::lightdata::{
         LightData,
         light_data_builder::LightDataBuilder,
         ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
@@ -20,8 +22,6 @@ use crate::{
     },
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
-    spectrum::Spectrum,
-    surface::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},

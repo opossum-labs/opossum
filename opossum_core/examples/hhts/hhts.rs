@@ -8,11 +8,11 @@ use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
 use num::Zero;
-use opossum_core::lightdata::ray_data_builder::RayDataBuilder;
+use opossum_core::light::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
 use opossum_core::{
-    energy_distributions::General2DGaussian, position_distributions::HexagonalTiling,
-    refractive_index::refr_index_schott::RefrIndexSchott, spectral_distribution::LaserLines,
+    distributions::{energy::General2DGaussian, position::HexagonalTiling, spectral::LaserLines},
+    refractive_index::refr_index_schott::RefrIndexSchott,
 };
 use uom::si::f64::Length;
 

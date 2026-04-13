@@ -1,20 +1,18 @@
 #![warn(missing_docs)]
 //! Cylindric lens with spherical or flat surfaces.
 
-use super::node_attr::NodeAttr;
 #[cfg(test)]
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
+    core_optics::{NodeAttr, OpticNode, PortType},
     error::{OpmResult, OpossumError},
+    geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     meter, millimeter,
     nodes::NodeRegistration,
-    optic_node::OpticNode,
-    optic_ports::PortType,
     properties::{Proptype, validator::Validator},
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndexType},
-    surface::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -228,14 +226,12 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
+        distributions::position::Hexapolar,
         joule,
-        light_result::LightResult,
-        lightdata::LightData,
+        light::{LightData, LightResult, Rays},
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
-        position_distributions::Hexapolar,
         properties::Proptype,
-        rays::Rays,
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
