@@ -8,8 +8,9 @@ use crate::components::{
             hooks::{use_drag_end, use_on_key_down, use_on_key_up},
         },
         graph_workspace::{
-            GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,GraphStateStoreExt,
-            use_workspace_processor, workspace_action::node_editor_command,
+            GraphStateStoreExt, GraphsWorkspaceAction, GraphsWorkspaceState,
+            WorkSpaceSignalHandlers, use_workspace_processor,
+            workspace_action::node_editor_command,
         },
     },
 };

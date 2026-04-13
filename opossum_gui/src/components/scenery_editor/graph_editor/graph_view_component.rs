@@ -1,11 +1,19 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::components::scenery_editor::{EditorStateStoreExt,
-    DragStatus, GraphsWorkspaceState, NodeType, SelectionBoxComponent, constants::{HEADER_HEIGHT, NODE_WIDTH}, edges::edges_component::{EdgeCreationComponent, EdgesComponent}, graph_editor::{
+use crate::components::scenery_editor::{
+    DragStatus, EditorStateStoreExt, GraphsWorkspaceState, NodeType, SelectionBoxComponent,
+    constants::{HEADER_HEIGHT, NODE_WIDTH},
+    edges::edges_component::{EdgeCreationComponent, EdgesComponent},
+    graph_editor::{
         BreadCrumbs,
         hooks::{use_drag, use_drag_end, use_on_mouse_down, use_zoom},
-    }, graph_workspace::{GraphState, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceAction}, node::Node
+    },
+    graph_workspace::{GraphState, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceAction},
+    node::Node,
 };
-use dioxus::{html::geometry::euclid::default::{Point2D, Rect, Size2D}, prelude::*};
+use dioxus::{
+    html::geometry::euclid::default::{Point2D, Rect, Size2D},
+    prelude::*,
+};
 use std::{collections::HashSet, path::PathBuf, time::Instant};
 use uuid::Uuid;
 
@@ -20,7 +28,7 @@ pub fn GraphViewEditor(
     ctrl_pressed: ReadSignal<bool>,
     shift_pressed: ReadSignal<bool>,
 ) -> Element {
-        println!("GraphViewEditor rerender");
+    println!("GraphViewEditor rerender");
 
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let graph_id = graph_state.graph_info().read().id;
@@ -46,7 +54,7 @@ pub fn GraphViewEditor(
             nodes
                 .iter()
                 .filter_map(|(id, node)| {
-                    let rect = node.get_bounding_box(); 
+                    let rect = node.get_bounding_box();
                     if select_box.intersects(&rect) {
                         Some(*id)
                     } else {
@@ -85,7 +93,10 @@ pub fn GraphViewEditor(
                     continue;
                 }
 
-                let rect = Rect::new(node_read.pos(), Size2D::new(NODE_WIDTH, node_read.node_body_height() + HEADER_HEIGHT));
+                let rect = Rect::new(
+                    node_read.pos(),
+                    Size2D::new(NODE_WIDTH, node_read.node_body_height() + HEADER_HEIGHT),
+                );
 
                 if rect.contains(*mouse) {
                     let z = node_read.z_index();
@@ -110,7 +121,6 @@ pub fn GraphViewEditor(
 
     let bread_crumbs = graph_state.graph_info().read().hierarchy.clone();
 
-    
     rsx! {
         div { class: "graph-view-container",
 

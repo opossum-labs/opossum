@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::components::scenery_editor::graph_workspace::{
-    GraphsWorkspaceState, GraphStateStoreExt,
+    GraphStateStoreExt, GraphsWorkspaceState,
     workspace_handlers::helper_functions::{for_each_tab, with_graph_store, with_tab},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -210,7 +210,8 @@ fn remove_group_port_handler(
 
             if let Some(graph_state) = ws.get_graph_state(group_id) {
                 let parent_id = graph_state
-                    .graph_info().read()
+                    .graph_info()
+                    .read()
                     .get_parent_id()
                     .unwrap_or(root_id);
                 if let Some(mut graph_store) = ws.get_graph_store(parent_id) {
@@ -318,7 +319,8 @@ fn set_node_name_handler(
             });
             for_each_tab(workspace, needs_saving, |tab| {
                 if let Some((_, h_name)) = tab
-                    .graph_info().write()
+                    .graph_info()
+                    .write()
                     .hierarchy
                     .iter_mut()
                     .find(|(h_id, _)| *h_id == node_id)

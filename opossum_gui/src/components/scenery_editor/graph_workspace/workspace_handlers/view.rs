@@ -1,5 +1,6 @@
-use crate::components::scenery_editor::graph_workspace::{EditorStateStoreExt,
-    GraphsWorkspaceState, workspace_handlers::helper_functions::with_editor_state,
+use crate::components::scenery_editor::graph_workspace::{
+    EditorStateStoreExt, GraphsWorkspaceState,
+    workspace_handlers::helper_functions::with_editor_state,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use uuid::Uuid;

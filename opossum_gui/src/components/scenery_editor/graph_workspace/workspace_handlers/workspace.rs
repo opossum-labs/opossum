@@ -1,12 +1,13 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::scenery_editor::{
-        DragStatus, EditorState, GraphState, GraphStore, edges::edges_component::EdgeCreation, graph_workspace::{
-            GraphStoreStoreExt,
-            GraphsWorkspaceState, EditorStateStoreExt,
+        DragStatus, EditorState, GraphState, GraphStore,
+        edges::edges_component::EdgeCreation,
+        graph_workspace::{
+            EditorStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState,
             workspace_handlers::helper_functions::{with_editor_state, with_graph_store},
             workspace_state::GraphInfo,
-        }
+        },
     },
 };
 
@@ -169,45 +170,46 @@ fn apply_drag_handler(
                     });
                 }
                 DragStatus::Edge(edge_creation_start) => {
-                    if let Some(e) =workspace.write().get_editor_state(graph_id){
+                    if let Some(e) = workspace.write().get_editor_state(graph_id) {
                         let mut edge_in_creation = e.edge_in_creation();
                         let mut e_write = edge_in_creation.write();
                         let edge = e_write.get_or_insert_with(|| {
-                                EdgeCreation::new(
-                                    edge_creation_start.src_node,
-                                    edge_creation_start.src_port.clone(),
-                                    edge_creation_start.src_port_type,
-                                    edge_creation_start.start_pos,
-                                )
-                            });
+                            EdgeCreation::new(
+                                edge_creation_start.src_node,
+                                edge_creation_start.src_port.clone(),
+                                edge_creation_start.src_port_type,
+                                edge_creation_start.start_pos,
+                            )
+                        });
                         edge.shift_end(node_edge_shift);
+                    }
+                }
 
+                DragStatus::ArmedSelection(start) => {
+                    let editor_origin = workspace.read().editor_area.read().origin;
+
+                    let graph_pos = Point2D::new(
+                        (mouse_to_graph_shift.x - editor_origin.x) / current_zoom,
+                        (mouse_to_graph_shift.y - editor_origin.y) / current_zoom,
+                    );
+
+                    let dx = graph_pos.x - start.x;
+                    let dy = graph_pos.y - start.y;
+
+                    let dist_sq = dx * dx + dy * dy;
+
+                    if dist_sq < 25.0 {
+                        return;
                     }
 
+                    // ✅ jetzt wird wirklich aktiviert
+                    let rect = Rect::new(start, Size2D::new(0.0, 0.0));
+
+                    workspace
+                        .write()
+                        .drag_status
+                        .set(DragStatus::SelectionBox(rect));
                 }
-                
-                DragStatus::ArmedSelection(start) => {
-    let editor_origin = workspace.read().editor_area.read().origin;
-
-    let graph_pos = Point2D::new(
-        (mouse_to_graph_shift.x - editor_origin.x) / current_zoom,
-        (mouse_to_graph_shift.y - editor_origin.y) / current_zoom,
-    );
-
-    let dx = graph_pos.x - start.x;
-    let dy = graph_pos.y - start.y;
-
-    let dist_sq = dx * dx + dy * dy;
-
-    if dist_sq < 25.0 {
-        return;
-    }
-
-    // ✅ jetzt wird wirklich aktiviert
-    let rect = Rect::new(start, Size2D::new(0.0, 0.0));
-
-    workspace.write().drag_status.set(DragStatus::SelectionBox(rect));
-}
                 DragStatus::SelectionBox(rect) => {
                     let editor_origin = workspace.read().editor_area.read().origin;
 
@@ -216,33 +218,24 @@ fn apply_drag_handler(
                         (mouse_to_graph_shift.y - editor_origin.y) / current_zoom,
                     );
 
-                    let width = graph_pos.x - rect.origin.x;
-                    let height = graph_pos.y - rect.origin.y;
+                    let min_x = rect.origin.x.min(graph_pos.x);
+                    let min_y = rect.origin.y.min(graph_pos.y);
 
-                    let new_rect_orig_x = if width < 0. {
-                        graph_pos.x
-                    } else {
-                        rect.origin.x
-                    };
-                    let new_rect_orig_y = if height < 0. {
-                        graph_pos.y
-                    } else {
-                        rect.origin.y
-                    };
+                    let max_x = rect.origin.x.max(graph_pos.x);
+                    let max_y = rect.origin.y.max(graph_pos.y);
 
                     let new_rect = Rect::new(
-                        Point2D::new(new_rect_orig_x, new_rect_orig_y),
-                        Size2D::new(width.abs(), height.abs()),
+                        Point2D::new(min_x, min_y),
+                        Size2D::new(max_x - min_x, max_y - min_y),
                     );
 
                     if rect == new_rect {
-    return;
-}
+                        return;
+                    }
 
                     workspace.write().selection_box.set(Some(new_rect));
-                    workspace.write().drag_status.set(DragStatus::SelectionBox(new_rect));
                 }
-                
+
                 DragStatus::None | DragStatus::NodeInit => {}
             }
         },
@@ -334,7 +327,8 @@ fn add_new_group_tab_handler(
         let mut ws = workspace.write();
 
         let id = graph_info.id;
-        let graph_state = GraphState::new(GraphStore::default(), EditorState::default(), graph_info);
+        let graph_state =
+            GraphState::new(GraphStore::default(), EditorState::default(), graph_info);
         ws.tabs.write().insert(id, Store::new(graph_state));
 
         ws.tab_order.write().push(id);

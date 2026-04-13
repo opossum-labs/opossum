@@ -3,7 +3,8 @@ use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
 use crate::components::scenery_editor::{
-    EditorState, GraphState, GraphStore, graph_workspace::{GraphStoreStoreExt, GraphsWorkspaceState}
+    EditorState, GraphState, GraphStore,
+    graph_workspace::{GraphStoreStoreExt, GraphsWorkspaceState},
 };
 
 pub(super) fn with_graph_store<F>(

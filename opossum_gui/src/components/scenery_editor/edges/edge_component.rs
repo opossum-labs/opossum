@@ -3,10 +3,10 @@ use core::f64;
 use crate::components::{
     node_editor::inputs::input_components::UnitInput,
     scenery_editor::{
-        graph_workspace::{GraphStoreStoreExt, GraphStateStoreExt},
         GraphState, GraphsWorkspaceAction,
         constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
         edges::define_bezier_path,
+        graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
     },
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -29,7 +29,10 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
             graph_store
                 .nodes()
                 .get(edge.src_uuid())
-                .map(|n| n.read().abs_port_position(PortType::Output, edge.src_port()))
+                .map(|n| {
+                    n.read()
+                        .abs_port_position(PortType::Output, edge.src_port())
+                })
                 .unwrap_or_default()
         }
     });
@@ -40,7 +43,10 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
             graph_store
                 .nodes()
                 .get(edge.target_uuid())
-                .map(|n| n.read().abs_port_position(PortType::Input, edge.target_port()))
+                .map(|n| {
+                    n.read()
+                        .abs_port_position(PortType::Input, edge.target_port())
+                })
                 .unwrap_or_default()
         }
     });

@@ -1,6 +1,9 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
-    EditorStateStoreExt, GraphState, GraphStore, constants::EDGE_BEZIER_OFFSET, edges::{define_bezier_path, edge_component::EdgeComponent}, graph_workspace::{GraphStoreStoreExt, GraphStateStoreExt}
+    EditorStateStoreExt, GraphState, GraphStore,
+    constants::EDGE_BEZIER_OFFSET,
+    edges::{define_bezier_path, edge_component::EdgeComponent},
+    graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::prelude::*;
@@ -99,23 +102,18 @@ pub fn EdgesComponent() -> Element {
 pub fn EdgeCreationComponent() -> Element {
     let graph_state = use_context::<ReadStore<GraphState>>();
     let editor_status = graph_state.editor_state();
-    editor_status
-        
-        .edge_in_creation()
-        .read()
-        .clone()
-        .map_or_else(
-            || rsx! {},
-            |edge| {
-                let new_path = define_bezier_path(edge.start, edge.end, edge.bezier_offset);
-                rsx! {
-                    path {
-                        d: new_path,
-                        stroke: "black",
-                        fill: "transparent",
-                        stroke_width: format!("{}", 2.),
-                    }
+    editor_status.edge_in_creation().read().clone().map_or_else(
+        || rsx! {},
+        |edge| {
+            let new_path = define_bezier_path(edge.start, edge.end, edge.bezier_offset);
+            rsx! {
+                path {
+                    d: new_path,
+                    stroke: "black",
+                    fill: "transparent",
+                    stroke_width: format!("{}", 2.),
                 }
-            },
-        )
+            }
+        },
+    )
 }

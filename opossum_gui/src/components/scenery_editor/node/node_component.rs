@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use super::NodeElement;
 use crate::CONTEXT_MENU;
 use crate::components::scenery_editor::constants::HEADER_HEIGHT;
+use crate::components::scenery_editor::graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt};
 use crate::components::scenery_editor::{DragStatus, GraphStore};
 use crate::components::scenery_editor::{GraphState, GraphsWorkspaceState};
 use crate::components::{
@@ -20,7 +21,6 @@ use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
 use uuid::Uuid;
-use crate::components::scenery_editor::graph_workspace::{GraphStoreStoreExt, GraphStateStoreExt};
 
 #[component]
 pub fn Node(
@@ -54,7 +54,8 @@ pub fn Node(
     let in_selection_box_class = use_memo(move || {
         let in_selection = nodes_in_selection.read().contains(&node_id);
         let already_selected = graph_store
-            .node_selection().read()
+            .node_selection()
+            .read()
             .all_nodes
             .read()
             .contains_key(&node_id);
@@ -72,7 +73,7 @@ pub fn Node(
     });
 
     let z_index = node.z_index();
-    
+
     let node_icon = node.node_type.icon();
     rsx! {
         div {

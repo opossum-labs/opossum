@@ -10,7 +10,10 @@ use uuid::Uuid;
 use crate::components::scenery_editor::{
     DragStatus, NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
-    graph_workspace::{EditorState, GraphState, GraphStore, GraphStoreStoreExt, GraphStateStoreExt, EditorStateStoreExt},
+    graph_workspace::{
+        EditorState, EditorStateStoreExt, GraphState, GraphStateStoreExt, GraphStore,
+        GraphStoreStoreExt,
+    },
 };
 
 #[derive(Clone, PartialEq)]
@@ -35,16 +38,17 @@ pub struct GraphsWorkspaceState {
 }
 
 impl GraphsWorkspaceState {
-    pub(in super::super) fn get_graph_store(&self, graph_id: Uuid) -> Option<Store<GraphStore>>{
+    pub(in super::super) fn get_graph_store(&self, graph_id: Uuid) -> Option<Store<GraphStore>> {
         self.tabs
             .read()
-            .get(&graph_id).copied()
+            .get(&graph_id)
+            .copied()
             .map(|g| g.graph_store().into())
     }
-    pub(in super::super) fn get_graph_state(&self, graph_id: Uuid) -> Option<Store<GraphState>>{
+    pub(in super::super) fn get_graph_state(&self, graph_id: Uuid) -> Option<Store<GraphState>> {
         self.tabs.read().get(&graph_id).copied()
     }
-    pub(in super::super) fn get_tab(&self, graph_id: Uuid) -> Option<Store<GraphState>>{
+    pub(in super::super) fn get_tab(&self, graph_id: Uuid) -> Option<Store<GraphState>> {
         self.tabs.read().get(&graph_id).copied()
     }
     pub fn get_graph_store_read(&self, graph_id: Uuid) -> Option<ReadStore<GraphStore>> {
@@ -53,7 +57,7 @@ impl GraphsWorkspaceState {
             .get(&graph_id)
             .map(|g| g.graph_store().into())
     }
-    pub(in super::super) fn get_editor_state(&self, graph_id: Uuid) -> Option<Store<EditorState>>{
+    pub(in super::super) fn get_editor_state(&self, graph_id: Uuid) -> Option<Store<EditorState>> {
         self.tabs
             .read()
             .get(&graph_id)
@@ -116,7 +120,6 @@ impl GraphsWorkspaceState {
             let height_fac = view_box.height * padding_fac / zoom / bounding_box.height();
             let width_fac = view_box.width * padding_fac / zoom / bounding_box.width();
             editor
-            
                 .zoom()
                 .set((zoom * width_fac.min(height_fac)).clamp(MIN_ZOOM, MAX_ZOOM));
 

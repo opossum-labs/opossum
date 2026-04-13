@@ -1,3 +1,4 @@
+use crate::components::scenery_editor::graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt};
 use crate::components::scenery_editor::{
     EditorState, GraphState, GraphStore, GraphsWorkspaceState,
     constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
@@ -7,7 +8,6 @@ use crate::components::scenery_editor::{
         port_map_component::PortMapComponent,
     },
 };
-use crate::components::scenery_editor::graph_workspace::{GraphStoreStoreExt, GraphStateStoreExt};
 use dioxus::prelude::*;
 use opossum_core::prelude::*;
 #[derive(Clone, Eq, PartialEq, Default, Debug)]

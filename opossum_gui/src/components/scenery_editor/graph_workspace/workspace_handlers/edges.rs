@@ -1,7 +1,7 @@
 use crate::components::scenery_editor::{
     edges::edges_component::EdgeCreation,
     graph_workspace::{
-        GraphsWorkspaceState, EditorStateStoreExt,
+        EditorStateStoreExt, GraphsWorkspaceState,
         workspace_handlers::helper_functions::{with_edges, with_editor_state},
     },
 };

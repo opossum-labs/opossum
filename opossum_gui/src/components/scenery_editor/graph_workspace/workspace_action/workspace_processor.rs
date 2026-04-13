@@ -24,9 +24,8 @@ use crate::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
         },
         graph_workspace::{
-            GraphStoreStoreExt,
-            GraphStateStoreExt,EditorStateStoreExt,
-            GraphsWorkspaceState, WorkSpaceSignalHandlers,
+            EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState,
+            WorkSpaceSignalHandlers,
             workspace_action::GraphsWorkspaceAction,
             workspace_state::{GraphInfo, optimize_layout_and_sync},
         },
@@ -619,7 +618,9 @@ async fn process_add_analyzer(
 
         let proposed_pos = ((center.x - shift.x) / zoom, (center.y - shift.y) / zoom);
 
-        let existing_positions: Vec<_> = graph_store.nodes().read()
+        let existing_positions: Vec<_> = graph_store
+            .nodes()
+            .read()
             .values()
             .map(|n| (n.pos().x, n.pos().y))
             .collect();
@@ -680,7 +681,9 @@ async fn process_add_optic_node(
             (center.y - shift.y - f64::midpoint(MIN_NODE_BODY_HEIGHT, HEADER_HEIGHT)) / zoom,
         );
 
-        let existing_positions: Vec<_> = graph_store.nodes().read()
+        let existing_positions: Vec<_> = graph_store
+            .nodes()
+            .read()
             .values()
             .map(|n| (n.pos().x, n.pos().y))
             .collect();

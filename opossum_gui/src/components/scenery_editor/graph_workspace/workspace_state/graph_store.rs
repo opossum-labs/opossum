@@ -28,11 +28,13 @@ pub struct GraphState {
     graph_info: GraphInfo,
 }
 
-impl GraphState{
-    pub fn new(graph_store: GraphStore,
-    editor_state: EditorState,
-    graph_info: GraphInfo) -> Self{
-        Self { graph_store, editor_state, graph_info }
+impl GraphState {
+    pub fn new(graph_store: GraphStore, editor_state: EditorState, graph_info: GraphInfo) -> Self {
+        Self {
+            graph_store,
+            editor_state,
+            graph_info,
+        }
     }
 }
 
@@ -182,16 +184,10 @@ impl GraphStore {
     pub fn set_node_active(&mut self, id: Uuid, z_index: usize, is_optical: bool) {
         self.set_z_level_to_top(id, z_index);
         self.clear_selected_nodes();
-        self.node_selection
-            .all_nodes
-            .write()
-            .insert(id, is_optical);
+        self.node_selection.all_nodes.write().insert(id, is_optical);
     }
     pub fn add_to_node_selection(&mut self, id: Uuid, is_optical: bool) {
-        self.node_selection
-            .all_nodes
-            .write()
-            .insert(id, is_optical);
+        self.node_selection.all_nodes.write().insert(id, is_optical);
     }
     pub fn remove_from_node_selection(&mut self, id: Uuid) {
         self.node_selection.all_nodes.write().remove(&id);
@@ -278,7 +274,8 @@ impl GraphStore {
         for node_id in node_ids {
             self.nodes.remove(node_id);
             self.renumber_z_levels();
-            self.edges.retain_mut(|e| e.src_uuid() != *node_id && e.target_uuid() != *node_id);
+            self.edges
+                .retain_mut(|e| e.src_uuid() != *node_id && e.target_uuid() != *node_id);
         }
         self.set_active_node_none();
     }
@@ -297,8 +294,7 @@ impl GraphStore {
             Ports::new(node_info.input_ports(), node_info.output_ports()),
             node_info.inverted(),
         );
-        self.nodes
-            .insert(node_info.uuid(), node_element.clone());
+        self.nodes.insert(node_info.uuid(), node_element.clone());
         self.set_node_active(node_info.uuid(), node_element.z_index(), true);
     }
     /// Adds a new analyzer to the graph store.
