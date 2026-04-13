@@ -9,7 +9,7 @@ mod selection_box;
 
 pub use graph_editor::GraphEditor;
 pub use graph_workspace::{
-    DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
+    DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,EditorStateStoreExt,
     NodeEditorCommand, SelectedNode,
 };
 pub use node::{NodeElement, NodeType};

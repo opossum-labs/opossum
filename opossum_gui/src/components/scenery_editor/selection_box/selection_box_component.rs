@@ -1,12 +1,12 @@
 use dioxus::prelude::*;
 
-use crate::components::scenery_editor::{GraphState, GraphsWorkspaceState, graph_workspace::GraphStateStoreExt};
+use crate::components::scenery_editor::{GraphState, GraphsWorkspaceState, graph_workspace::{GraphStateStoreExt, EditorStateStoreExt}};
 
 #[component]
 pub fn SelectionBoxComponent() -> Element {
 let graph_state = use_context::<ReadStore<GraphState>>();
     let editor_status = graph_state.editor_state();    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
-    let zoom = *editor_status.read().zoom.read();
+    let zoom = *editor_status.zoom().read();
     let select_box_opt = use_memo(move || *workspace.read().selection_box.read());
     rsx! {
         if let Some(select_box) = select_box_opt(){

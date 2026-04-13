@@ -1,7 +1,7 @@
 use crate::components::scenery_editor::{
     edges::edges_component::EdgeCreation,
     graph_workspace::{
-        GraphsWorkspaceState,
+        GraphsWorkspaceState, EditorStateStoreExt,
         workspace_handlers::helper_functions::{with_edges, with_editor_state},
     },
 };
@@ -61,7 +61,7 @@ fn set_edge_in_creation_handler(
 ) -> EventHandler<(Option<EdgeCreation>, Uuid)> {
     EventHandler::new(move |(edge_in_creation, graph_id)| {
         with_editor_state(workspace, graph_id, false, |e| {
-            e.edge_in_creation.set(edge_in_creation);
+            e.edge_in_creation().set(edge_in_creation);
         });
     })
 }

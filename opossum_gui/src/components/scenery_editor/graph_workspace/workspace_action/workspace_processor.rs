@@ -25,7 +25,7 @@ use crate::{
         },
         graph_workspace::{
             GraphStoreStoreExt,
-            GraphStateStoreExt,
+            GraphStateStoreExt,EditorStateStoreExt,
             GraphsWorkspaceState, WorkSpaceSignalHandlers,
             workspace_action::GraphsWorkspaceAction,
             workspace_state::{GraphInfo, optimize_layout_and_sync},
@@ -610,11 +610,11 @@ async fn process_add_analyzer(
             return;
         };
 
-        let editor_state = *graph.editor_state().peek();
+        let editor_state = graph.editor_state();
         let graph_store = graph.graph_store();
 
-        let zoom = *editor_state.zoom.peek();
-        let shift = *editor_state.shift.peek();
+        let zoom = *editor_state.zoom().peek();
+        let shift = *editor_state.shift().peek();
         let center = workspace.read().get_view_port_center();
 
         let proposed_pos = ((center.x - shift.x) / zoom, (center.y - shift.y) / zoom);
@@ -671,9 +671,9 @@ async fn process_add_optic_node(
             return;
         };
 
-        let zoom = *editor_state.read().zoom.peek();
+        let zoom = *editor_state.zoom().peek();
 
-        let shift = *editor_state.read().shift.peek();
+        let shift = *editor_state.shift().peek();
         let center = workspace.read().get_view_port_center();
         let proposed_pos = (
             (center.x - shift.x - NODE_WIDTH / 2.) / zoom,

@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::components::scenery_editor::{
+use crate::components::scenery_editor::{EditorStateStoreExt,
     DragStatus, GraphsWorkspaceState, NodeType, SelectionBoxComponent, constants::{HEADER_HEIGHT, NODE_WIDTH}, edges::edges_component::{EdgeCreationComponent, EdgesComponent}, graph_editor::{
         BreadCrumbs,
         hooks::{use_drag, use_drag_end, use_on_mouse_down, use_zoom},
@@ -57,8 +57,8 @@ pub fn GraphViewEditor(
         })
     });
 
-    let shift = use_memo(move || *editor_state.read().shift.read());
-    let zoom = use_memo(move || *editor_state.read().zoom.read());
+    let shift = use_memo(move || *editor_state.shift().read());
+    let zoom = use_memo(move || *editor_state.zoom().read());
 
     let mouse_pos_in_editor = use_memo(move || {
         let editor_origin = workspace.peek().editor_area.peek().origin;

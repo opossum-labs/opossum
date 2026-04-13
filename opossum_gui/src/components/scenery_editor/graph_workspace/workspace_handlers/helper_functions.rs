@@ -68,12 +68,12 @@ pub(super) fn with_editor_state<F>(
     mark_dirty: bool,
     f: F,
 ) where
-    F: FnOnce(&mut EditorState),
+    F: FnOnce(&mut Store<EditorState>),
 {
     let mut ws = workspace.write();
 
     if let Some(mut editor_state) = ws.get_editor_state(graph_id) {
-        f(&mut editor_state.write());
+        f(&mut editor_state);
     }
 
     if mark_dirty {

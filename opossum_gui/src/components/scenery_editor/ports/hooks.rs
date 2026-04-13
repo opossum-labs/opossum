@@ -12,7 +12,7 @@ use crate::{
     components::{
         context_menu::cx_menu::{CxMenu, CxtCommand},
         scenery_editor::{
-            DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction,
+            DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction,EditorStateStoreExt,
             GraphsWorkspaceState,
             edges::edges_component::{EdgePort, NewEdgeCreationStart},
             graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt, workspace_state::GraphInfo},
@@ -45,16 +45,17 @@ pub fn use_on_mouse_leave(editor_status: Store<EditorState, impl Readable<Target
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let graph_id = use_context::<ReadStore<GraphState>>().graph_info().read().id;
 
-    EventHandler::new(move |event: MouseEvent| {
-        let edge_increation = editor_status.read().edge_in_creation.read().clone();
+    EventHandler::new({
+        let edge_increation = editor_status.edge_in_creation().read().clone();
+        move |event: MouseEvent| {
         event.stop_propagation();
-        if let Some(mut edge_in_creation) = edge_increation {
+        if let Some(mut edge_in_creation) = edge_increation.clone() {
             edge_in_creation.set_end_port(None);
             workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
                 graph_id,
                 edge_in_creation: Some(edge_in_creation),
             });
-        }
+        }}
     })
 }
 
@@ -68,10 +69,10 @@ pub fn use_on_mouse_enter(
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let graph_id = use_context::<ReadStore<GraphState>>().graph_info().read().id;
     EventHandler::new({
+        let edge_increation = editor_status.edge_in_creation().read().clone();
         let port_name = port_name.to_owned();
         move |event: MouseEvent| {
-            let edge_increation = editor_status.read().edge_in_creation.read().clone();
-            if let Some(mut edge_in_creation) = edge_increation
+            if let Some(mut edge_in_creation) = edge_increation.clone()
                 && !is_mapped_port
             {
                 event.stop_propagation();

@@ -8,7 +8,7 @@ use crate::{
     components::scenery_editor::{
         GraphState, NodeElement, NodeType,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
-        graph_workspace::{DragStatus, EditorState, GraphsWorkspaceAction, GraphsWorkspaceState, GraphStoreStoreExt, GraphStateStoreExt},
+        graph_workspace::{DragStatus, EditorState, EditorStateStoreExt, GraphsWorkspaceAction, GraphsWorkspaceState, GraphStoreStoreExt, GraphStateStoreExt},
     },
 };
 use dioxus::{
@@ -27,13 +27,11 @@ let graph_state = use_context::<ReadStore<GraphState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
     move |wheel_event| {
-        let zoom = editor_status().zoom;
-        let shift = editor_status().shift;
+        let current_graph_zoom = *editor_status.zoom().read();
+        let current_graph_shift = *editor_status.shift().read();
         let rect = *workspace.read().editor_area.read();
         let client_pos = wheel_event.data.client_coordinates();
         let mouse_pos = Point2D::new(client_pos.x - rect.min_x(), client_pos.y - rect.min_y());
-        let current_graph_shift = *shift.read();
-        let current_graph_zoom = *zoom.read();
         let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
         let mouse_on_graph_y = (mouse_pos.y - current_graph_shift.y) / current_graph_zoom;
         let delta = wheel_event.delta().strip_units().y;
@@ -87,8 +85,8 @@ pub fn use_on_mouse_down(
                         Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
 
                     let editor_origin = workspace().editor_area.read().origin;
-                    let current_shift = *editor_status().shift.read();
-                    let current_zoom = *editor_status().zoom.read();
+                    let current_shift = *editor_status.shift().read();
+                    let current_zoom = *editor_status.zoom().read();
 
                     let rect_origin = Point2D::new(
                         (mouse_pos.x - editor_origin.x - current_shift.x) / current_zoom,
@@ -136,7 +134,7 @@ let graph_state = use_context::<ReadStore<GraphState>>();
     let graph_id = graph_state.graph_info().read().id;
 
     move |event| {
-        let current_shift = *editor_status().shift.read();
+        let current_shift = *editor_status.shift().read();
         let relative_shift = Point2D::new(
             event.client_coordinates().x - current_mouse_pos().x,
             event.client_coordinates().y - current_mouse_pos().y,
@@ -152,7 +150,7 @@ let graph_state = use_context::<ReadStore<GraphState>>();
             graph_id,
             drag_status: workspace.read().drag_status.read().clone(),
             relative_shift,
-            current_zoom: *editor_status().zoom.read(),
+            current_zoom: *editor_status.zoom().read(),
             mouse_to_graph_shift,
         });
     }
@@ -223,8 +221,8 @@ pub fn use_on_key_down(
                         && mouse.y > rect.min_y()
                         && mouse.y < rect.max_y()
                     {
-                        let shift = *editor_status().shift.read();
-                        let zoom = *editor_status().zoom.read();
+                        let shift = *editor_status.shift().read();
+                        let zoom = *editor_status.zoom().read();
                         let pos = Point2D::new(
                             (mouse.x - shift.x - rect.min_x()) / zoom,
                             (mouse.y - shift.y - rect.min_y()) / zoom,
@@ -338,7 +336,7 @@ pub fn use_drag_end(
                     workspace_processor.send(GraphsWorkspaceAction::SetSelectionBox(None));
                 }
                 DragStatus::Edge(_) => {
-                    if let Some(edge) = editor_status.read().edge_in_creation.read().clone()
+                    if let Some(edge) = editor_status.edge_in_creation().read().clone()
                         && edge.is_valid()
                         && let (Some(end_port), start_port) = (edge.end_port(), edge.start_port())
                     {

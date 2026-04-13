@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::components::scenery_editor::{
     DragStatus, NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
-    graph_workspace::{EditorState, GraphState, GraphStore, GraphStoreStoreExt, GraphStateStoreExt},
+    graph_workspace::{EditorState, GraphState, GraphStore, GraphStoreStoreExt, GraphStateStoreExt, EditorStateStoreExt},
 };
 
 #[derive(Clone, PartialEq)]
@@ -78,12 +78,12 @@ impl GraphsWorkspaceState {
     pub(in super::super) fn center_graph(&self, graph_id: Uuid) {
         let bounding_box_opt = self.get_graph_bounding_box(graph_id);
         let view_center = self.get_view_port_center();
-        if let (Some(mut editor), Some(bounding_box)) =
+        if let (Some(editor), Some(bounding_box)) =
             (self.get_editor_state(graph_id), bounding_box_opt)
         {
             let center = bounding_box.center();
-            let zoom = *editor.read().zoom.read();
-            editor.write().shift.set(Point2D::new(
+            let zoom = *editor.zoom().read();
+            editor.shift().set(Point2D::new(
                 center.x.mul_add(-zoom, view_center.x),
                 center.y.mul_add(-zoom, view_center.y),
             ));
@@ -112,17 +112,17 @@ impl GraphsWorkspaceState {
             (self.get_editor_state(graph_id), bounding_box_opt)
         {
             let padding_fac = 0.95;
-            let zoom = *editor.read().zoom.read();
+            let zoom = *editor.zoom().read();
             let height_fac = view_box.height * padding_fac / zoom / bounding_box.height();
             let width_fac = view_box.width * padding_fac / zoom / bounding_box.width();
             editor
-                .write()
-                .zoom
+            
+                .zoom()
                 .set((zoom * width_fac.min(height_fac)).clamp(MIN_ZOOM, MAX_ZOOM));
 
             let center = bounding_box.center();
-            let zoom = *editor.read().zoom.read();
-            editor.write().shift.set(Point2D::new(
+            let zoom = *editor.zoom().read();
+            editor.shift().set(Point2D::new(
                 center.x.mul_add(-zoom, view_center.x),
                 center.y.mul_add(-zoom, view_center.y),
             ));

@@ -1,4 +1,4 @@
-use crate::components::scenery_editor::graph_workspace::{
+use crate::components::scenery_editor::graph_workspace::{EditorStateStoreExt,
     GraphsWorkspaceState, workspace_handlers::helper_functions::with_editor_state,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -40,13 +40,13 @@ fn set_shift_handler(
     workspace: Signal<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Point2D<f64>)> {
     EventHandler::new(move |(graph_id, shift)| {
-        with_editor_state(workspace, graph_id, false, |e| e.shift.set(shift));
+        with_editor_state(workspace, graph_id, false, |e| e.shift().set(shift));
     })
 }
 
 fn set_zoom_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(Uuid, f64)> {
     EventHandler::new(move |(graph_id, zoom)| {
-        with_editor_state(workspace, graph_id, false, |e| e.zoom.set(zoom));
+        with_editor_state(workspace, graph_id, false, |e| e.zoom().set(zoom));
     })
 }
 fn center_graph_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(Uuid, bool)> {

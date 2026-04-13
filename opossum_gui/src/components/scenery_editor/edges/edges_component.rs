@@ -1,6 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
-    EditorState, GraphState, GraphStore, constants::EDGE_BEZIER_OFFSET, edges::{define_bezier_path, edge_component::EdgeComponent}, graph_workspace::{GraphStoreStoreExt, GraphStateStoreExt}
+    EditorStateStoreExt, GraphState, GraphStore, constants::EDGE_BEZIER_OFFSET, edges::{define_bezier_path, edge_component::EdgeComponent}, graph_workspace::{GraphStoreStoreExt, GraphStateStoreExt}
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::prelude::*;
@@ -100,8 +100,8 @@ pub fn EdgeCreationComponent() -> Element {
     let graph_state = use_context::<ReadStore<GraphState>>();
     let editor_status = graph_state.editor_state();
     editor_status
-        .read()
-        .edge_in_creation
+        
+        .edge_in_creation()
         .read()
         .clone()
         .map_or_else(

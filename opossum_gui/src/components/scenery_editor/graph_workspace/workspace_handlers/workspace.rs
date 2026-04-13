@@ -3,7 +3,7 @@ use crate::{
     components::scenery_editor::{
         DragStatus, EditorState, GraphState, GraphStore, edges::edges_component::EdgeCreation, graph_workspace::{
             GraphStoreStoreExt,
-            GraphsWorkspaceState,
+            GraphsWorkspaceState, EditorStateStoreExt,
             workspace_handlers::helper_functions::{with_editor_state, with_graph_store},
             workspace_state::GraphInfo,
         }
@@ -157,7 +157,7 @@ fn apply_drag_handler(
             match drag_status {
                 DragStatus::Graph => {
                     with_editor_state(workspace, graph_id, false, |e| {
-                        e.apply_shift(relative_shift);
+                        e.write().apply_shift(relative_shift);
                     });
                 }
                 DragStatus::Nodes => {
@@ -169,9 +169,10 @@ fn apply_drag_handler(
                     });
                 }
                 DragStatus::Edge(edge_creation_start) => {
-                    with_editor_state(workspace, graph_id, false, |e| {
-                        e.edge_in_creation.with_mut(|edge_option| {
-                            let edge = edge_option.get_or_insert_with(|| {
+                    if let Some(e) =workspace.write().get_editor_state(graph_id){
+                        let mut edge_in_creation = e.edge_in_creation();
+                        let mut e_write = edge_in_creation.write();
+                        let edge = e_write.get_or_insert_with(|| {
                                 EdgeCreation::new(
                                     edge_creation_start.src_node,
                                     edge_creation_start.src_port.clone(),
@@ -179,9 +180,10 @@ fn apply_drag_handler(
                                     edge_creation_start.start_pos,
                                 )
                             });
-                            edge.shift_end(node_edge_shift);
-                        });
-                    });
+                        edge.shift_end(node_edge_shift);
+
+                    }
+
                 }
                 
                 DragStatus::ArmedSelection(start) => {
