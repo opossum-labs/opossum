@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::components::scenery_editor::{
     DragStatus, NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
-    graph_workspace::{EditorState, GraphState, GraphStore},
+    graph_workspace::{EditorState, GraphState, GraphStore, GraphStoreStoreExt, GraphStateStoreExt},
 };
 
 #[derive(Clone, PartialEq)]
@@ -22,7 +22,7 @@ pub struct SelectedNode {
 
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct GraphsWorkspaceState {
-    pub tabs: Signal<HashMap<Uuid, Signal<GraphState>>>,
+    pub tabs: Signal<HashMap<Uuid, Store<GraphState>>>,
     pub tab_order: Signal<Vec<Uuid>>,
     pub active_tab: Signal<Uuid>,
     pub root_scenery_id: Signal<Uuid>,
@@ -35,44 +35,44 @@ pub struct GraphsWorkspaceState {
 }
 
 impl GraphsWorkspaceState {
-    pub(in super::super) fn get_graph_store(&self, graph_id: Uuid) -> Option<Signal<GraphStore>> {
+    pub(in super::super) fn get_graph_store(&self, graph_id: Uuid) -> Option<Store<GraphStore>>{
         self.tabs
             .read()
-            .get(&graph_id)
-            .map(|g| g.read().graph_store)
+            .get(&graph_id).copied()
+            .map(|g| g.graph_store().into())
     }
-    pub(in super::super) fn get_graph_state(&self, graph_id: Uuid) -> Option<Signal<GraphState>> {
+    pub(in super::super) fn get_graph_state(&self, graph_id: Uuid) -> Option<Store<GraphState>>{
         self.tabs.read().get(&graph_id).copied()
     }
-    pub(in super::super) fn get_tab(&self, graph_id: Uuid) -> Option<Signal<GraphState>> {
+    pub(in super::super) fn get_tab(&self, graph_id: Uuid) -> Option<Store<GraphState>>{
         self.tabs.read().get(&graph_id).copied()
     }
-    pub fn get_graph_store_read(&self, graph_id: Uuid) -> Option<ReadSignal<GraphStore>> {
+    pub fn get_graph_store_read(&self, graph_id: Uuid) -> Option<ReadStore<GraphStore>> {
         self.tabs
             .read()
             .get(&graph_id)
-            .map(|g| g.read().graph_store.into())
+            .map(|g| g.graph_store().into())
     }
-    pub(in super::super) fn get_editor_state(&self, graph_id: Uuid) -> Option<Signal<EditorState>> {
+    pub(in super::super) fn get_editor_state(&self, graph_id: Uuid) -> Option<Store<EditorState>>{
         self.tabs
             .read()
             .get(&graph_id)
-            .map(|g| g.read().editor_state)
+            .map(|g| g.editor_state().into())
     }
     pub(in super::super) fn get_graph_edges_mut(
         &self,
         graph_id: Uuid,
-    ) -> Option<Signal<Vec<ConnectInfo>>> {
+    ) -> Option<Store<Vec<ConnectInfo>, impl Writable<Target = Vec<ConnectInfo>>>> {
         self.tabs
             .read()
             .get(&graph_id)
-            .map(|g| g.read().graph_store.read().edges())
+            .map(|g| g.graph_store().edges())
     }
     pub fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64>> {
         self.tabs
             .read()
             .get(&graph_id)
-            .map(|g| g.read().graph_store.read().get_bounding_box())
+            .map(|g| g.graph_store().read().get_bounding_box())
     }
 
     pub(in super::super) fn center_graph(&self, graph_id: Uuid) {

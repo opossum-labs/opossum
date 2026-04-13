@@ -1,15 +1,15 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::scenery_editor::{
-        DragStatus, GraphState,
-        edges::edges_component::EdgeCreation,
-        graph_workspace::{
+        DragStatus, EditorState, GraphState, GraphStore, edges::edges_component::EdgeCreation, graph_workspace::{
+            GraphStoreStoreExt,
             GraphsWorkspaceState,
             workspace_handlers::helper_functions::{with_editor_state, with_graph_store},
             workspace_state::GraphInfo,
-        },
+        }
     },
 };
+
 use dioxus::{
     html::geometry::euclid::default::{Point2D, Rect, Size2D},
     prelude::*,
@@ -262,8 +262,7 @@ fn remove_port_map_handler(
 
         if let Some(mut graph_store) = ws.get_graph_store(group_id)
             && !graph_store
-                .write()
-                .mapped_ports
+                .mapped_ports()
                 .write()
                 .remove_key(&group_port_name)
         {
@@ -285,7 +284,7 @@ fn add_port_map_handler(
             let ws = workspace.write();
 
             if let Some(mut graph_store) = ws.get_graph_store(group_id)
-                && let Err(e) = graph_store.write().mapped_ports.write().add(
+                && let Err(e) = graph_store.mapped_ports().write().add(
                     &group_port_name,
                     mapped_node_id,
                     &mapped_node_port_name,
@@ -304,12 +303,8 @@ fn add_new_group_tab_handler(
         let mut ws = workspace.write();
 
         let id = graph_info.id;
-        let graph_state = GraphState {
-            graph_info,
-            ..Default::default()
-        };
-
-        ws.tabs.write().insert(id, Signal::new(graph_state));
+        let graph_state = GraphState::new(GraphStore::default(), EditorState::default(), graph_info);
+        ws.tabs.write().insert(id, Store::new(graph_state));
 
         ws.tab_order.write().push(id);
         ws.active_tab.set(id);

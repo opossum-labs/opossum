@@ -20,18 +20,20 @@ use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
 use uuid::Uuid;
+use crate::components::scenery_editor::graph_workspace::{GraphStoreStoreExt, GraphStateStoreExt};
 
 #[component]
 pub fn Node(
-    node: NodeElement,
+    node: ReadStore<NodeElement>,
     ctrl_pressed: ReadSignal<bool>,
     shift_pressed: ReadSignal<bool>,
     mouse_pos_in_editor: Memo<Point2D<f64>>,
     nodes_in_selection: Memo<HashSet<Uuid>>,
 ) -> Element {
-    let graph_store = use_context::<ReadSignal<GraphStore>>();
-    let graph_state = use_context::<ReadSignal<GraphState>>();
-    let graph_id = graph_state.peek().graph_info.id;
+    let node = node();
+    let graph_state = use_context::<ReadStore<GraphState>>();
+    let graph_store = graph_state.graph_store();
+    let graph_id = graph_state.graph_info().read().id;
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let drag_status = workspace.peek().drag_status;
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
@@ -46,12 +48,13 @@ pub fn Node(
     } else {
         ""
     };
+
+    println!("node rerender: {}", node.id().as_simple());
+
     let in_selection_box_class = use_memo(move || {
         let in_selection = nodes_in_selection.read().contains(&node_id);
         let already_selected = graph_store
-            .read()
-            .node_selection
-            .read()
+            .node_selection().read()
             .all_nodes
             .read()
             .contains_key(&node_id);
@@ -68,47 +71,8 @@ pub fn Node(
         .to_string()
     });
 
-    let node_type = node.node_type().clone();
     let z_index = node.z_index();
-    use_effect({
-        move || {
-            let mouse_pos = *mouse_pos_in_editor.read();
-            let mut droppable_group = *workspace.peek().drop_in_group.read();
-            let selected_nodes = graph_store
-                .peek()
-                .node_selection
-                .read()
-                .all_nodes
-                .read()
-                .clone();
-
-            if !selected_nodes.contains_key(&node_id)
-                && let NodeType::Optical(node_type) = &node_type
-                && node_type == "group"
-                && *drag_status.peek() == DragStatus::Nodes
-            {
-                let node_rect = Rect::new(position, Size2D::new(NODE_WIDTH, node_height));
-                let contains = node_rect.contains(mouse_pos);
-                if contains {
-                    if let Some((_, g_z_index)) = droppable_group
-                        && z_index > g_z_index
-                    {
-                        droppable_group = Some((node_id, z_index));
-                    } else if droppable_group.is_none() {
-                        droppable_group = Some((node_id, z_index));
-                    }
-                } else if let Some((g_id, _)) = droppable_group
-                    && g_id == node_id
-                {
-                    droppable_group = None;
-                }
-                if *workspace.peek().drop_in_group.read() != droppable_group {
-                    workspace_processor
-                        .send(GraphsWorkspaceAction::SetDropInGroup(droppable_group));
-                }
-            }
-        }
-    });
+    
     let node_icon = node.node_type.icon();
     rsx! {
         div {

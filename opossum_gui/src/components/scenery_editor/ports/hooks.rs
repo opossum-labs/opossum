@@ -15,7 +15,7 @@ use crate::{
             DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction,
             GraphsWorkspaceState,
             edges::edges_component::{EdgePort, NewEdgeCreationStart},
-            graph_workspace::workspace_state::GraphInfo,
+            graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt, workspace_state::GraphInfo},
         },
     },
 };
@@ -41,9 +41,9 @@ pub fn use_on_mouse_down(
     })
 }
 
-pub fn use_on_mouse_leave(editor_status: ReadSignal<EditorState>) -> EventHandler<MouseEvent> {
+pub fn use_on_mouse_leave(editor_status: Store<EditorState, impl Readable<Target=EditorState> + 'static>) -> EventHandler<MouseEvent> {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let graph_id = use_context::<ReadSignal<GraphState>>().read().graph_info.id;
+    let graph_id = use_context::<ReadStore<GraphState>>().graph_info().read().id;
 
     EventHandler::new(move |event: MouseEvent| {
         let edge_increation = editor_status.read().edge_in_creation.read().clone();
@@ -59,14 +59,14 @@ pub fn use_on_mouse_leave(editor_status: ReadSignal<EditorState>) -> EventHandle
 }
 
 pub fn use_on_mouse_enter(
-    editor_status: ReadSignal<EditorState>,
+    editor_status: Store<EditorState, impl Readable<Target=EditorState> + 'static>,
     port_name: &str,
     node_id: Uuid,
     port_type: PortType,
     is_mapped_port: bool,
 ) -> EventHandler<MouseEvent> {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let graph_id = use_context::<ReadSignal<GraphState>>().read().graph_info.id;
+    let graph_id = use_context::<ReadStore<GraphState>>().graph_info().read().id;
     EventHandler::new({
         let port_name = port_name.to_owned();
         move |event: MouseEvent| {
@@ -93,12 +93,13 @@ pub fn use_on_mouse_enter(
 
 pub fn use_on_context_menu(
     workspace: ReadSignal<GraphsWorkspaceState>,
-    graph_store: ReadSignal<GraphStore>,
+    graph_store: Store<GraphStore, impl Readable<Target=GraphStore> + 'static>,
     graph_info: GraphInfo,
     node_id: Uuid,
     port_name: String,
     port_type: PortType,
 ) -> EventHandler<MouseEvent> {
+    let mapped_ports = graph_store.mapped_ports();
     EventHandler::new(move |event: MouseEvent| {
         event.prevent_default();
         event.stop_propagation();
@@ -109,9 +110,7 @@ pub fn use_on_context_menu(
         if graph_info.id != root_tab {
             let mut cx_menu = CxMenu::new(x_coord, y_coord, vec![]);
 
-            let mapped_external_port_opt = graph_store
-                .read()
-                .mapped_ports
+            let mapped_external_port_opt = mapped_ports
                 .read()
                 .external_port_of_mapped_port(node_id, &port_name);
             if let Some(group_port_name) = mapped_external_port_opt {
@@ -133,8 +132,7 @@ pub fn use_on_context_menu(
                         .read()
                         .get(&root_id)
                         .unwrap()
-                        .read()
-                        .graph_info
+                        .graph_info().read()
                         .name
                         .clone();
                     (root_id, root_name)

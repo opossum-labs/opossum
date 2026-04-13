@@ -1,8 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
-    EditorState, GraphStore,
-    constants::EDGE_BEZIER_OFFSET,
-    edges::{define_bezier_path, edge_component::EdgeComponent},
+    EditorState, GraphState, GraphStore, constants::EDGE_BEZIER_OFFSET, edges::{define_bezier_path, edge_component::EdgeComponent}, graph_workspace::{GraphStoreStoreExt, GraphStateStoreExt}
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::prelude::*;
@@ -86,13 +84,12 @@ impl EdgeCreation {
 }
 #[component]
 pub fn EdgesComponent() -> Element {
-    let graph_store = use_context::<ReadSignal<GraphStore>>();
-    let edges_signal = graph_store.peek().edges(); // do not subscribe to the graph_store signal itself but only to the edges signal therein
-
+    let graph_state = use_context::<ReadStore<GraphState>>();
+    let graph_store = graph_state.graph_store();
     rsx! {
-        for edge in edges_signal() {
+        for edge in graph_store.edges().iter() {
             EdgeComponent {
-                key: "{edge.src_uuid()}-{edge.src_port()}-{edge.target_uuid()}-{edge.target_port()}",
+                key: "{edge.read().src_uuid()}-{edge.read().src_port()}-{edge.read().target_uuid()}-{edge.read().target_port()}",
                 edge,
             }
         }
@@ -100,7 +97,8 @@ pub fn EdgesComponent() -> Element {
 }
 #[component]
 pub fn EdgeCreationComponent() -> Element {
-    let editor_status = use_context::<ReadSignal<EditorState>>();
+    let graph_state = use_context::<ReadStore<GraphState>>();
+    let editor_status = graph_state.editor_state();
     editor_status
         .read()
         .edge_in_creation

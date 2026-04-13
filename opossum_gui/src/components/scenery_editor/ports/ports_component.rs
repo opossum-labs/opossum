@@ -7,6 +7,7 @@ use crate::components::scenery_editor::{
         port_map_component::PortMapComponent,
     },
 };
+use crate::components::scenery_editor::graph_workspace::{GraphStoreStoreExt, GraphStateStoreExt};
 use dioxus::prelude::*;
 use opossum_core::prelude::*;
 #[derive(Clone, Eq, PartialEq, Default, Debug)]
@@ -56,10 +57,9 @@ pub fn NodePort(
     port_type: PortType,
     inverted_node: bool,
 ) -> Element {
-    let editor_status = use_context::<ReadSignal<EditorState>>();
-    let graph_store = use_context::<ReadSignal<GraphStore>>();
-    let graph_state = use_context::<ReadSignal<GraphState>>();
-
+    let graph_state = use_context::<ReadStore<GraphState>>();
+    let editor_status = graph_state.editor_state();
+    let graph_store = graph_state.graph_store();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
     let rel_port_position = node.rel_port_position(port_type, &port_name);
@@ -68,8 +68,7 @@ pub fn NodePort(
     let port_class = get_port_class(inverted_node, port_type);
 
     let external_port_opt = graph_store
-        .read()
-        .mapped_ports
+        .mapped_ports()
         .read()
         .external_port_of_mapped_port(node.id(), &port_name);
 
@@ -86,7 +85,7 @@ pub fn NodePort(
     let on_context_menu_handler = use_on_context_menu(
         workspace,
         graph_store,
-        graph_state.read().graph_info.clone(),
+        graph_state.graph_info().read().clone(),
         node_id,
         port_name.clone(),
         port_type,

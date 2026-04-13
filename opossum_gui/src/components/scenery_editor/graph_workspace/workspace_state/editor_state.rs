@@ -6,7 +6,7 @@ use dioxus::{
     prelude::*,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct EditorState {
     pub edge_in_creation: Signal<Option<EdgeCreation>>,
     pub zoom: Signal<f64>,

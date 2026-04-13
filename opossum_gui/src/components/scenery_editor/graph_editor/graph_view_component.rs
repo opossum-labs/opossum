@@ -1,15 +1,11 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
-    GraphsWorkspaceState, SelectionBoxComponent,
-    edges::edges_component::{EdgeCreationComponent, EdgesComponent},
-    graph_editor::{
+    DragStatus, GraphsWorkspaceState, NodeType, SelectionBoxComponent, constants::{HEADER_HEIGHT, NODE_WIDTH}, edges::edges_component::{EdgeCreationComponent, EdgesComponent}, graph_editor::{
         BreadCrumbs,
         hooks::{use_drag, use_drag_end, use_on_mouse_down, use_zoom},
-    },
-    graph_workspace::{GraphState, GraphsWorkspaceAction},
-    nodes::Nodes,
+    }, graph_workspace::{GraphState, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceAction}, node::Node
 };
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus::{html::geometry::euclid::default::{Point2D, Rect, Size2D}, prelude::*};
 use std::{collections::HashSet, path::PathBuf, time::Instant};
 use uuid::Uuid;
 
@@ -20,20 +16,19 @@ pub fn GraphViewEditor(
     model_file_path_sig: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
-    graph_state: ReadSignal<GraphState>,
+    graph_state: ReadStore<GraphState>,
     ctrl_pressed: ReadSignal<bool>,
     shift_pressed: ReadSignal<bool>,
 ) -> Element {
+        println!("GraphViewEditor rerender");
+
+    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+    let graph_id = graph_state.graph_info().read().id;
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let editor_state = graph_state.read().editor_state;
-    let graph_store = graph_state.read().graph_store;
-    let graph_id = graph_state.read().graph_info.id;
-    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
-
+    let editor_state = graph_state.editor_state();
+    let graph_store = graph_state.graph_store();
     use_context_provider(|| graph_state);
-    use_context_provider(|| ReadSignal::from(editor_state));
-    use_context_provider(|| ReadSignal::from(graph_store));
     let onwheel_handler = use_zoom();
     let onmousemove_handler = use_drag(current_mouse_pos);
     let onmousedown_handler = use_on_mouse_down(
@@ -45,13 +40,13 @@ pub fn GraphViewEditor(
 
     let nodes_in_selection = use_memo(move || {
         let selection_box = *workspace.peek().selection_box.read();
-        let nodes = graph_store.peek().nodes().peek().clone();
+        let nodes = graph_store.nodes().peek().clone();
 
         selection_box.map_or_else(HashSet::<Uuid>::new, |select_box| {
             nodes
                 .iter()
                 .filter_map(|(id, node)| {
-                    let rect = node.get_bounding_box(); // hast du schon 👍
+                    let rect = node.get_bounding_box(); 
                     if select_box.intersects(&rect) {
                         Some(*id)
                     } else {
@@ -74,14 +69,48 @@ pub fn GraphViewEditor(
     });
 
     use_effect(move || {
+        let mouse = mouse_pos_in_editor.read();
+        let drag_status = workspace.read().drag_status.read().clone();
+
+        if drag_status != DragStatus::Nodes {
+            return;
+        }
+
+        let mut best_match = None;
+
+        for (_, node) in graph_store.nodes().iter() {
+            let node_read = node.read();
+            if let NodeType::Optical(t) = node_read.node_type() {
+                if t != "group" {
+                    continue;
+                }
+
+                let rect = Rect::new(node_read.pos(), Size2D::new(NODE_WIDTH, node_read.node_body_height() + HEADER_HEIGHT));
+
+                if rect.contains(*mouse) {
+                    let z = node_read.z_index();
+
+                    match best_match {
+                        Some((_, best_z)) if z <= best_z => {}
+                        _ => best_match = Some((node_read.id(), z)),
+                    }
+                }
+            }
+        }
+
+        workspace_processor.send(GraphsWorkspaceAction::SetDropInGroup(best_match));
+    });
+
+    use_effect(move || {
         workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
             graph_id,
             save_changes: false,
         });
     });
 
-    let bread_crumbs = graph_state.read().graph_info.hierarchy.clone();
+    let bread_crumbs = graph_state.graph_info().read().hierarchy.clone();
 
+    
     rsx! {
         div { class: "graph-view-container",
 
@@ -112,14 +141,27 @@ pub fn GraphViewEditor(
                         shift().y,
                         zoom(),
                     ),
-                    Nodes {
-                        graph_store,
-                        graph_id,
-                        ctrl_pressed,
-                        shift_pressed,
-                        mouse_pos_in_editor,
-                        nodes_in_selection
+                    for (_, node) in graph_store.nodes().iter() {
+                        {
+                            rsx! {
+                                Node {
+                                    node,
+                                    ctrl_pressed,
+                                    shift_pressed,
+                                    mouse_pos_in_editor,
+                                    nodes_in_selection
+                                }
+                            }
+                        }
                     }
+                    // Nodes {
+                    //     graph_store,
+                    //     // graph_id,
+                    //     // ctrl_pressed,
+                    //     // shift_pressed,
+                    //     // mouse_pos_in_editor,
+                    //     // nodes_in_selection
+                    // }
                     svg {
                         width: "100%",
                         height: "100%",

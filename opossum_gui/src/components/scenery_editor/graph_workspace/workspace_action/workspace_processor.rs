@@ -24,6 +24,8 @@ use crate::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
         },
         graph_workspace::{
+            GraphStoreStoreExt,
+            GraphStateStoreExt,
             GraphsWorkspaceState, WorkSpaceSignalHandlers,
             workspace_action::GraphsWorkspaceAction,
             workspace_state::{GraphInfo, optimize_layout_and_sync},
@@ -418,7 +420,7 @@ async fn process_delete_node(
             return;
         };
 
-        graph.read().graph_store.read().get_node_type(node_id)
+        graph.graph_store().read().get_node_type(node_id)
     };
     if let Some(node_type) = node_type_to_delete {
         match node_type {
@@ -571,7 +573,7 @@ async fn process_optimize_layout(
         .tabs
         .peek()
         .get(&graph_id)
-        .map(|g| g.read().graph_store.read().edges().read().clone())
+        .map(|g| g.graph_store().edges().read().clone())
     else {
         OPOSSUM_UI_LOGS.write().add_log(&format!(
             "No graph with id '{}' found",
@@ -608,8 +610,8 @@ async fn process_add_analyzer(
             return;
         };
 
-        let editor_state = *graph.peek().editor_state.peek();
-        let graph_store = *graph.peek().graph_store.peek();
+        let editor_state = *graph.editor_state().peek();
+        let graph_store = graph.graph_store();
 
         let zoom = *editor_state.zoom.peek();
         let shift = *editor_state.shift.peek();
@@ -617,7 +619,7 @@ async fn process_add_analyzer(
 
         let proposed_pos = ((center.x - shift.x) / zoom, (center.y - shift.y) / zoom);
 
-        let existing_positions: Vec<_> = graph_store.nodes()()
+        let existing_positions: Vec<_> = graph_store.nodes().read()
             .values()
             .map(|n| (n.pos().x, n.pos().y))
             .collect();
@@ -657,9 +659,11 @@ async fn process_add_optic_node(
 ) {
     // ----- READ PHASE -----
     let new_node_info = {
-        let graph = workspace.peek().tabs.peek().get(&graph_id).copied();
+        let workspace_ref = workspace.peek();
+        let editor_state_opt = workspace_ref.get_editor_state(graph_id);
+        let graph_store_opt = workspace_ref.get_graph_store(graph_id);
 
-        let Some(graph) = graph else {
+        let (Some(graph_store), Some(editor_state)) = (graph_store_opt, editor_state_opt) else {
             OPOSSUM_UI_LOGS.write().add_log(&format!(
                 "No graph with id '{}' found",
                 graph_id.as_simple()
@@ -667,19 +671,16 @@ async fn process_add_optic_node(
             return;
         };
 
-        let editor_state = *graph.peek().editor_state.peek();
-        let graph_store = *graph.peek().graph_store.peek();
+        let zoom = *editor_state.read().zoom.peek();
 
-        let zoom = *editor_state.zoom.peek();
-
-        let shift = *editor_state.shift.peek();
+        let shift = *editor_state.read().shift.peek();
         let center = workspace.read().get_view_port_center();
         let proposed_pos = (
             (center.x - shift.x - NODE_WIDTH / 2.) / zoom,
             (center.y - shift.y - f64::midpoint(MIN_NODE_BODY_HEIGHT, HEADER_HEIGHT)) / zoom,
         );
 
-        let existing_positions: Vec<_> = graph_store.nodes()()
+        let existing_positions: Vec<_> = graph_store.nodes().read()
             .values()
             .map(|n| (n.pos().x, n.pos().y))
             .collect();

@@ -4,7 +4,6 @@ mod constants;
 mod edges;
 mod graph_workspace;
 mod node;
-mod nodes;
 mod ports;
 mod selection_box;
 

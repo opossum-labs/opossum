@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::components::scenery_editor::graph_workspace::{
-    GraphsWorkspaceState,
+    GraphsWorkspaceState, GraphStateStoreExt,
     workspace_handlers::helper_functions::{for_each_tab, with_graph_store, with_tab},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -210,8 +210,7 @@ fn remove_group_port_handler(
 
             if let Some(graph_state) = ws.get_graph_state(group_id) {
                 let parent_id = graph_state
-                    .read()
-                    .graph_info
+                    .graph_info().read()
                     .get_parent_id()
                     .unwrap_or(root_id);
                 if let Some(mut graph_store) = ws.get_graph_store(parent_id) {
@@ -232,8 +231,10 @@ fn update_group_ports_handler(
             let ws = workspace.write();
 
             if let Some(graph_state) = ws.get_graph_state(group_id) {
-                let parent_hierarchy_pos = graph_state.read().graph_info.hierarchy.len() - 2;
-                let (parent_id, _) = graph_state.read().graph_info.hierarchy[parent_hierarchy_pos];
+                let graph_info = graph_state.graph_info();
+                let hierarchy = &graph_info.read().hierarchy;
+                let parent_hierarchy_pos = hierarchy.len() - 2;
+                let (parent_id, _) = hierarchy[parent_hierarchy_pos];
 
                 if let Some(mut graph_store) = ws.get_graph_store(parent_id) {
                     graph_store
@@ -313,11 +314,11 @@ fn set_node_name_handler(
                 store.set_name_of_node(node_id, name.clone());
             });
             with_tab(workspace, node_id, needs_saving, |tab| {
-                tab.graph_info.name.clone_from(&name);
+                tab.graph_info().write().name.clone_from(&name);
             });
             for_each_tab(workspace, needs_saving, |tab| {
                 if let Some((_, h_name)) = tab
-                    .graph_info
+                    .graph_info().write()
                     .hierarchy
                     .iter_mut()
                     .find(|(h_id, _)| *h_id == node_id)

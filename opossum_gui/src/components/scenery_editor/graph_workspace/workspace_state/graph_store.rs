@@ -21,11 +21,19 @@ use rust_sugiyama::{configure::Config, from_edges};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-#[derive(Clone, Eq, PartialEq, Default)]
+#[derive(Clone, PartialEq, Store, Default)]
 pub struct GraphState {
-    pub graph_store: Signal<GraphStore>,
-    pub editor_state: Signal<EditorState>,
-    pub graph_info: GraphInfo,
+    graph_store: GraphStore,
+    editor_state: EditorState,
+    graph_info: GraphInfo,
+}
+
+impl GraphState{
+    pub fn new(graph_store: GraphStore,
+    editor_state: EditorState,
+    graph_info: GraphInfo) -> Self{
+        Self { graph_store, editor_state, graph_info }
+    }
 }
 
 impl GraphInfo {
@@ -60,27 +68,25 @@ pub struct NodeSelection {
     pub analyzers: Signal<HashSet<Uuid>>,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Default)]
+#[derive(Clone, PartialEq, Store, Default)]
 pub struct GraphStore {
-    nodes: Signal<HashMap<Uuid, NodeElement>>,
-    pub edges: Signal<Vec<ConnectInfo>>,
-    pub node_selection: Signal<NodeSelection>,
-    pub mapped_ports: Signal<PortMap>,
+    nodes: HashMap<Uuid, NodeElement>,
+    edges: Vec<ConnectInfo>,
+    node_selection: NodeSelection,
+    mapped_ports: PortMap,
 }
 
 impl GraphStore {
     pub fn add_nodes(&mut self, nodes: &[NodeInfo]) {
         self.nodes
-            .write()
             .extend(nodes.iter().map(|node| (node.uuid(), node.into())));
     }
     pub fn add_analyzers(&mut self, analyzers: &[AnalyzerInfo]) {
         self.nodes
-            .write()
             .extend(analyzers.iter().map(|node| (node.id(), node.into())));
     }
     pub fn set_name_of_node(&mut self, node_id: Uuid, name: String) {
-        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
+        if let Some(node) = self.nodes.get_mut(&node_id) {
             node.set_name(name);
         }
     }
@@ -90,7 +96,7 @@ impl GraphStore {
         remove_port: &String,
         port_type: PortType,
     ) {
-        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
+        if let Some(node) = self.nodes.get_mut(&node_id) {
             node.remove_port(remove_port, port_type);
         }
     }
@@ -100,47 +106,45 @@ impl GraphStore {
         input_ports: Vec<String>,
         output_ports: Vec<String>,
     ) {
-        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
+        if let Some(node) = self.nodes.get_mut(&node_id) {
             node.set_ports(input_ports, output_ports);
         }
     }
     pub fn set_node_inverted(&mut self, node_id: Uuid, inverted: bool) {
-        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
+        if let Some(node) = self.nodes.get_mut(&node_id) {
             node.set_inverted(inverted);
         }
     }
-    #[must_use]
-    pub fn nodes(&self) -> ReadSignal<HashMap<Uuid, NodeElement>> {
-        self.nodes.into()
-    }
-    #[must_use]
-    pub const fn edges(&self) -> Signal<Vec<ConnectInfo>> {
-        self.edges
-    }
+    // #[must_use]
+    // pub fn nodes(&self) -> ReadStore<HashMap<Uuid, NodeElement>> {
+    //     self.nodes.into()
+    // }
+    // #[must_use]
+    // pub const fn edges(&self) -> Signal<Vec<ConnectInfo>> {
+    //     self.edges
+    // }
     #[must_use]
     pub fn get_node_type(&self, node_id: Uuid) -> Option<NodeType> {
         self.nodes
-            .read()
             .get(&node_id)
             .map(NodeElement::node_type)
             .cloned()
     }
-    pub const fn nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
-        &mut self.nodes
-    }
+    // pub const fn nodes_mut(&mut self) -> &mut WriteStore<HashMap<Uuid, NodeElement>> {
+    //     &mut self.nodes
+    // }
     pub fn shift_node_position(&mut self, node_id: Uuid, shift: Point2D<f64>) {
-        if let Some(node) = self.nodes_mut().write().get_mut(&node_id) {
+        if let Some(node) = self.nodes.get_mut(&node_id) {
             node.shift_position(shift);
         }
     }
     #[must_use]
     pub fn selected_nodes(&self) -> HashMap<Uuid, bool> {
-        self.node_selection.read().all_nodes.read().clone()
+        self.node_selection.all_nodes.read().clone()
     }
     #[must_use]
     pub fn selected_optical_nodes(&self) -> HashSet<Uuid> {
         self.node_selection
-            .read()
             .all_nodes
             .read()
             .iter()
@@ -152,7 +156,6 @@ impl GraphStore {
     #[must_use]
     pub fn selected_node_ids(&self) -> HashSet<Uuid> {
         self.node_selection
-            .read()
             .all_nodes
             .read()
             .keys()
@@ -160,12 +163,12 @@ impl GraphStore {
             .collect()
     }
     pub fn clear_selected_nodes(&mut self) {
-        self.node_selection.write().all_nodes.write().clear();
+        self.node_selection.all_nodes.write().clear();
     }
     pub fn get_selected_nodes(&self, graph_id: Uuid) -> Vec<SelectedNode> {
         let mut selected_nodes = Vec::<SelectedNode>::new();
         for n_id in &self.selected_node_ids() {
-            if let Some(n) = self.nodes().read().get(n_id) {
+            if let Some(n) = self.nodes.get(n_id) {
                 let selected_node = SelectedNode {
                     node_id: n.id(),
                     graph_id,
@@ -180,66 +183,59 @@ impl GraphStore {
         self.set_z_level_to_top(id, z_index);
         self.clear_selected_nodes();
         self.node_selection
-            .write()
             .all_nodes
             .write()
             .insert(id, is_optical);
     }
     pub fn add_to_node_selection(&mut self, id: Uuid, is_optical: bool) {
         self.node_selection
-            .write()
             .all_nodes
             .write()
             .insert(id, is_optical);
     }
     pub fn remove_from_node_selection(&mut self, id: Uuid) {
-        self.node_selection.write().all_nodes.write().remove(&id);
+        self.node_selection.all_nodes.write().remove(&id);
     }
 
     pub fn set_active_node_none(&mut self) {
         self.clear_selected_nodes();
     }
     pub fn update_node_positions(&mut self, new_positions: HashMap<Uuid, Point2D<f64>>) {
-        let mut nodes = self.nodes.write();
         for (id, pos) in new_positions {
-            if let Some(node) = nodes.get_mut(&id) {
+            if let Some(node) = self.nodes.get_mut(&id) {
                 node.set_pos(pos);
             }
         }
     }
     pub fn get_bounding_box(&self) -> Rect<f64> {
-        let optic_nodes = self.nodes()();
-        if optic_nodes.is_empty() {
+        if self.nodes.is_empty() {
             return Rect::new(Point2D::zero(), Size2D::zero());
         }
         // Use the first node to initialize the bounding box
-        let mut rect = optic_nodes.iter().next().unwrap().1.get_bounding_box();
+        let mut rect = self.nodes.iter().next().unwrap().1.get_bounding_box();
 
         // Iterate over the rest of the nodes to expand the bounding box
-        for node in optic_nodes.iter().skip(1) {
-            rect = rect.union(&node.1.get_bounding_box());
+        for node in self.nodes.values().skip(1) {
+            rect = rect.union(&node.get_bounding_box());
         }
         rect
     }
     pub fn renumber_z_levels(&mut self) {
         let mut node_elements: Vec<(Uuid, usize)> = self
             .nodes
-            .read()
             .iter()
             .map(|n| (n.1.id(), n.1.z_index()))
             .collect();
         node_elements.sort_by(|e_1, e_2| e_1.1.cmp(&e_2.1));
-        let mut nodes = self.nodes.write();
         for element in node_elements.iter().enumerate() {
-            if let Some(node) = nodes.get_mut(&element.1.0) {
+            if let Some(node) = self.nodes.get_mut(&element.1.0) {
                 node.set_z_index(element.0);
             }
         }
     }
     pub fn set_z_level_to_top(&mut self, node_id: Uuid, z_level: usize) {
-        let number_of_nodes = self.nodes().read().len();
-        let mut nodes = self.nodes.write();
-        for (id, elem) in nodes.iter_mut() {
+        let number_of_nodes = self.nodes.len();
+        for (id, elem) in self.nodes.iter_mut() {
             let z_index = elem.z_index();
             if z_index > z_level && *id != node_id {
                 elem.set_z_index(z_index - 1);
@@ -267,9 +263,9 @@ impl GraphStore {
             ref_node_info.inverted(),
         );
         let id = ref_node_info.uuid();
-        let nr_of_nodes = self.nodes().read().len();
+        let nr_of_nodes = self.nodes.len();
         node_element.set_z_index(nr_of_nodes + 1);
-        self.nodes.write().insert(id, node_element.clone());
+        self.nodes.insert(id, node_element.clone());
         self.set_node_active(id, node_element.z_index(), true);
         node_element
     }
@@ -280,11 +276,9 @@ impl GraphStore {
     /// * `deleted_ids`: A vector of `Uuid` representing the IDs of the nodes to be removed.
     pub fn remove_nodes_by_id(&mut self, node_ids: &Vec<Uuid>) {
         for node_id in node_ids {
-            self.nodes_mut().write().remove(node_id);
+            self.nodes.remove(node_id);
             self.renumber_z_levels();
-            self.edges.with_mut(|edges| {
-                edges.retain_mut(|e| e.src_uuid() != *node_id && e.target_uuid() != *node_id);
-            });
+            self.edges.retain_mut(|e| e.src_uuid() != *node_id && e.target_uuid() != *node_id);
         }
         self.set_active_node_none();
     }
@@ -304,7 +298,6 @@ impl GraphStore {
             node_info.inverted(),
         );
         self.nodes
-            .write()
             .insert(node_info.uuid(), node_element.clone());
         self.set_node_active(node_info.uuid(), node_element.z_index(), true);
     }
@@ -324,9 +317,9 @@ impl GraphStore {
             Ports::default(),
             false,
         );
-        let nr_of_nodes = self.nodes().read().len();
+        let nr_of_nodes = self.nodes.len();
         node_element.set_z_index(nr_of_nodes + 1);
-        self.nodes.write().insert(analyzer_id, node_element.clone());
+        self.nodes.insert(analyzer_id, node_element.clone());
         self.set_node_active(analyzer_id, node_element.z_index(), false);
     }
 }

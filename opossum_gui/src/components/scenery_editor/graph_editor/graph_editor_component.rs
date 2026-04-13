@@ -8,7 +8,7 @@ use crate::components::{
             hooks::{use_drag_end, use_on_key_down, use_on_key_up},
         },
         graph_workspace::{
-            GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,
+            GraphsWorkspaceAction, GraphsWorkspaceState, WorkSpaceSignalHandlers,GraphStateStoreExt,
             use_workspace_processor, workspace_action::node_editor_command,
         },
     },
@@ -159,7 +159,7 @@ pub fn GraphEditor(
                                             index: i,
                                             class: if active_tab() == *id { "editor-tab active-tab" } else { "editor-tab" },
                                             div { class: "tab-inner",
-                                                span { {graph_state.read().graph_info.name.clone()} }
+                                                span { {graph_state.graph_info().read().name.clone()} }
                                                 if *id != root_graph_id() {
                                                     button {
                                                         class: "tab-close",

@@ -8,7 +8,7 @@ use crate::{
     components::scenery_editor::{
         GraphState, NodeElement, NodeType,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
-        graph_workspace::{DragStatus, EditorState, GraphsWorkspaceAction, GraphsWorkspaceState},
+        graph_workspace::{DragStatus, EditorState, GraphsWorkspaceAction, GraphsWorkspaceState, GraphStoreStoreExt, GraphStateStoreExt},
     },
 };
 use dioxus::{
@@ -22,8 +22,8 @@ use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 use uuid::Uuid;
 
 pub fn use_zoom() -> impl FnMut(WheelEvent) {
-    let editor_status = use_context::<ReadSignal<EditorState>>();
-    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+let graph_state = use_context::<ReadStore<GraphState>>();
+    let editor_status = graph_state.editor_state();    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
     move |wheel_event| {
@@ -64,7 +64,9 @@ pub fn use_on_mouse_down(
     graph_id: Uuid,
 ) -> impl FnMut(MouseEvent) {
     let dc_time = Duration::from_millis(300);
-    let editor_status = use_context::<ReadSignal<EditorState>>();
+    let graph_state = use_context::<ReadStore<GraphState>>();
+    let editor_status = graph_state.editor_state();    
+    let graph_store = graph_state.graph_store();    
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
 
@@ -76,7 +78,8 @@ pub fn use_on_mouse_down(
                     let mut ctx = CONTEXT_MENU.write();
                     *ctx = None;
 
-                    if !ctrl_pressed() {
+                    let selected = graph_store.node_selection().peek().clone();
+                    if !ctrl_pressed() && !selected.all_nodes.is_empty() {
                         workspace_processor
                             .send(GraphsWorkspaceAction::ClearSelectedNodes { graph_id });
                     }
@@ -92,6 +95,14 @@ pub fn use_on_mouse_down(
                         (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
                     );
 
+                    let dx = new_rect.origin.x - rect.origin.x;
+                    let dy = new_rect.origin.y - rect.origin.y;
+
+                    let dw = width.abs() - rect.size.width;
+                    let dh = height.abs() - rect.size.height;
+                    if dx.abs() < 0.5 && dy.abs() < 0.5 && dw.abs() < 0.5 && dh.abs() < 0.5 {
+                        return;
+                    }
                     let drag_status =
                         DragStatus::SelectionBox(Rect::new(rect_origin, Size2D::new(0., 0.)));
                     workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(drag_status));
@@ -127,10 +138,10 @@ pub fn use_on_mouse_down(
     }
 }
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
-    let editor_status = use_context::<ReadSignal<EditorState>>();
-    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+let graph_state = use_context::<ReadStore<GraphState>>();
+    let editor_status = graph_state.editor_state();    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let graph_id = use_context::<ReadSignal<GraphState>>().read().graph_info.id;
+    let graph_id = graph_state.graph_info().read().id;
 
     move |event| {
         let current_shift = *editor_status().shift.read();
@@ -179,8 +190,8 @@ pub fn use_on_key_down(
     move |event| {
         let active_graph = workspace.read().active_tab;
         if let Some(graph_state) = workspace.read().tabs.read().get(&*active_graph.read()) {
-            let editor_status = graph_state.read().editor_state;
-            let graph_store = graph_state.read().graph_store;
+            let editor_status = graph_state.editor_state();
+            let graph_store = graph_state.graph_store();
             if !event.is_auto_repeating() {
                 let modifiers = event.modifiers();
                 let ctrl_or_meta = modifiers.ctrl() || modifiers.meta();
@@ -228,7 +239,7 @@ pub fn use_on_key_down(
                         );
                         workspace_processor.send(GraphsWorkspaceAction::PasteNode {
                             pos,
-                            graph_id: graph_state.read().graph_info.id,
+                            graph_id: graph_state.graph_info().read().id,
                         });
                     }
                     event.stop_propagation();
@@ -237,7 +248,7 @@ pub fn use_on_key_down(
                     for node_id in nodes_to_delete.keys() {
                         workspace_processor.send(GraphsWorkspaceAction::DeleteNode {
                             node_id: *node_id,
-                            graph_id: graph_state.read().graph_info.id,
+                            graph_id: graph_state.graph_info().read().id,
                         });
                     }
 
@@ -258,8 +269,8 @@ pub fn use_drag_end(
         let active_graph = workspace.read().active_tab;
         let tabs = workspace.read().tabs.read().clone();
         if let Some(graph_state) = tabs.get(&*active_graph.read()) {
-            let editor_status = graph_state.read().editor_state;
-            let graph_store = graph_state.read().graph_store;
+            let editor_status = graph_state.editor_state();
+            let graph_store = graph_state.graph_store();
             let drag_status = workspace.read().drag_status.read().clone();
             let droppable_groups = *workspace.read().drop_in_group.read();
             match drag_status {
@@ -268,11 +279,9 @@ pub fn use_drag_end(
                         let selected_nodes = graph_store().selected_nodes();
                         for node_id in selected_nodes.keys() {
                             if let Some(pos) = graph_store
-                                .read()
                                 .nodes()
-                                .read()
-                                .get(node_id)
-                                .map(NodeElement::pos)
+                                .get(*node_id)
+                                .map(|n| n.read().pos())
                             {
                                 workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition {
                                     pos,
@@ -291,11 +300,10 @@ pub fn use_drag_end(
                 }
                 DragStatus::SelectionBox(_) => {
                     let active_graph_id = *active_graph.read();
-                    let graph_store_read = graph_store.read();
 
                     if let Some(nodes_in_selection) = &nodes_in_selection {
-                        let current_selection = graph_store_read
-                            .node_selection
+                        let current_selection = graph_store
+                            .node_selection()
                             .read()
                             .all_nodes
                             .read()
@@ -311,7 +319,7 @@ pub fn use_drag_end(
                             .iter()
                             .filter(|id| !current_selection.contains_key(id))
                             .map(|id| {
-                                let node = graph_store_read.nodes().read()[id].clone();
+                                let node = graph_store.nodes().read()[id].clone();
                                 let is_optical = matches!(node.node_type(), NodeType::Optical(_));
                                 (*id, is_optical)
                             })
@@ -358,18 +366,20 @@ pub fn use_drag_end(
                         );
                         workspace_processor.send(GraphsWorkspaceAction::AddEdge {
                             new_edge,
-                            graph_id: graph_state.read().graph_info.id,
+                            graph_id: graph_state.graph_info().read().id,
                         });
                     }
                     workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
-                        graph_id: graph_state.read().graph_info.id,
+                        graph_id: graph_state.graph_info().read().id,
                         edge_in_creation: None,
                     });
                 }
                 _ => {}
             }
 
-            workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(DragStatus::None));
+            if drag_status != DragStatus::None{
+                workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(DragStatus::None));
+            }
         }
     }
 }
