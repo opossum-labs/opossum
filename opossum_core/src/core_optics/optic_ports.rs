@@ -24,6 +24,7 @@ use crate::{
     validated, validated_type,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use std::{collections::BTreeMap, fmt::Display};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 
@@ -92,7 +93,7 @@ impl Display for PortConfig {
     }
 }
 /// Type of an [`OpticPorts`]
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize, Deserialize, ToSchema)]
 pub enum PortType {
     /// input port, receiving [`LightData`](crate::lightdata::LightData)
     Input,

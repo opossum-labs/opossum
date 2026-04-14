@@ -35,7 +35,7 @@ use crate::{app_state::AppState, error::BackEndErrorResponse};
 ///
 /// Nodes that cannot be resolved are silently ignored.
 #[allow(clippy::significant_drop_tightening)]
-pub(super) fn collect_node_refs_and_pos(
+pub fn collect_node_refs_and_pos(
     data: &web::Data<AppState>,
     nodes_to_convert: &[Uuid],
 ) -> (Vec<OpticRef>, Point2<f64>) {
@@ -72,7 +72,7 @@ pub(super) fn collect_node_refs_and_pos(
 ///
 /// This function will return an error if the `group_id` was not found.
 #[allow(clippy::significant_drop_tightening)]
-pub(super) fn collect_group_connections(
+pub fn collect_group_connections(
     data: &web::Data<AppState>,
     group_id: Uuid,
 ) -> OpmResult<Vec<ConnectionInfo>> {
@@ -105,7 +105,7 @@ pub(super) fn collect_group_connections(
 ///
 /// Missing node attributes are treated as non-reference nodes.
 #[allow(clippy::significant_drop_tightening)]
-pub(super) fn split_sort_connections(
+pub fn split_sort_connections(
     data: &web::Data<AppState>,
     connections: &[ConnectionInfo],
     nodes: &[Uuid],
@@ -182,7 +182,7 @@ pub struct ConnectionSplit {
 /// - Adding a node reference fails
 /// - Creating internal connections fails
 /// - Mapping input or output ports fails
-pub(super) fn build_new_group_from_refs_and_conns(
+pub fn build_new_group_from_refs_and_conns(
     node_refs: Vec<OpticRef>,
     connections: &ConnectionSplit,
 ) -> OpmResult<NodeGroup> {
@@ -224,7 +224,7 @@ pub(super) fn build_new_group_from_refs_and_conns(
 /// # Errors
 ///
 /// This function will return an error if the connection cannot be created.
-pub(super) fn connect_from_info(group: &mut NodeGroup, conn: &ConnectInfo) -> OpmResult<()> {
+pub fn connect_from_info(group: &mut NodeGroup, conn: &ConnectInfo) -> OpmResult<()> {
     group.connect_nodes(
         conn.src_uuid(),
         conn.src_port(),
@@ -261,7 +261,7 @@ pub(super) fn connect_from_info(group: &mut NodeGroup, conn: &ConnectInfo) -> Op
 /// - The new group cannot be inserted
 /// - Reconnecting external connections fails
 #[allow(clippy::significant_drop_tightening)]
-pub(super) fn add_converted_group_to_scenery(
+pub fn add_converted_group_to_scenery(
     data: &web::Data<AppState>,
     group_id: Uuid,
     mut nodes_to_convert: Vec<Uuid>,
@@ -316,7 +316,7 @@ pub(super) fn add_converted_group_to_scenery(
 /// This function will return an error if the node cannot be resolved
 /// or if its data cannot be accessed.
 #[allow(clippy::significant_drop_tightening)]
-pub(super) fn create_new_group_node_info(
+pub fn create_new_group_node_info(
     data: &web::Data<AppState>,
     new_group_id: Uuid,
     pos: Point2<f64>,

@@ -16,6 +16,9 @@ impl BackEndErrorResponse {
     pub fn error_response(&self) -> ErrorResponse {
         self.0.clone()
     }
+    pub fn not_found() -> Self {
+        Self(ErrorResponse::not_found())
+    }
 }
 impl std::fmt::Display for BackEndErrorResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

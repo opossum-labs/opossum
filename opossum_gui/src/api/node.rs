@@ -6,7 +6,7 @@ use opossum_core::{
     nodes::fluence_detector::Fluence,
     opm_document::AnalyzerInfo,
     prelude::*,
-    types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
+    types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
 };
 use uuid::Uuid;
 
@@ -246,10 +246,14 @@ pub async fn update_node_name(
     node_id: Uuid,
     node_name: String,
 ) -> Result<HashMap<Uuid, String>, String> {
+    let update_request = UpdateNodeRequest {
+        name: Some(node_name.clone()),
+        ..Default::default()
+    };
     HTTP_API_CLIENT()
-        .post::<String, HashMap<Uuid, String>>(
-            &format!("/api/scenery/name/{}", node_id.as_simple()),
-            node_name,
+        .post::<UpdateNodeRequest, HashMap<Uuid, String>>(
+            &format!("/api/scenery/node/{}", node_id.as_simple()),
+            update_request,
         )
         .await
 }

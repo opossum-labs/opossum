@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{nodes::ConnectionInfo, opm_document::AnalyzerInfo, prelude::AnalyzerType};
+use crate::{nodes::ConnectionInfo, opm_document::AnalyzerInfo, prelude::{AnalyzerType, Isometry}};
 
 /// Structure holding the version information
 #[derive(ToSchema, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -265,6 +265,47 @@ impl NewAnalyzerInfo {
             gui_position,
         }
     }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
+pub struct UpdateNodeRequest {
+    /// The new name of the node
+    #[schema(example = "Lens 1")]
+    pub name: Option<String>,
+
+    /// The new inverted status of the node
+    #[schema(example = true)]
+    pub inverted: Option<bool>,
+
+    /// The new base isometry (position and rotation in 3D space)
+    #[schema(value_type = Option<Object>)]
+    pub isometry: Option<Option<Isometry>>, // Option<Option> erlaubt explizites Null-Setzen!
+
+    /// The new alignment isometry (local decenter and tilt)
+    #[schema(value_type = Option<Object>)]
+    pub alignment: Option<Isometry>,
+
+    /// The GUI position on the 2D canvas
+    #[schema(example = json!([100.5, 200.0]))]
+    pub gui_position: Option<Option<(f64, f64)>>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ConvertToGroupRequest {
+    /// Uuid of the group in which the nodes are currently contained
+    pub group_id: Uuid,
+    /// List of node uuids that should be converted into a new group node
+    pub nodes_to_convert: Vec<Uuid>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MoveNodesRequest {
+    /// UUID of the source group from which the nodes will be removed
+    pub source_group_id: Uuid,
+    /// UUID of the destination group where nodes will be inserted
+    pub target_group_id: Uuid,
+    /// List of node UUIDs to move
+    pub nodes_to_move: Vec<Uuid>,
 }
 
 /// Structure holding an error mesaage

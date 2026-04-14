@@ -1,8 +1,5 @@
-use std::collections::{HashMap, HashSet};
-
 use crate::{
-    app_state::{AppState, NodeCacheItem},
-    error::BackEndErrorResponse,
+    app_state::AppState, error::BackEndErrorResponse, groups::RemovePortMapQuery,
     utils::update_node_attr,
 };
 use actix_web::{
@@ -14,21 +11,82 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    analyzers::AnalyzerType,
     core_optics::{NodeAttr, OpticRef, PortType},
     error::OpossumError,
     meter,
-    nodes::{ConnectionInfo, NodeGroup, NodeReference, create_node_ref, fluence_detector::Fluence},
-    opm_document::AnalyzerInfo,
+    nodes::{NodeReference, create_node_ref},
     prelude::{OpmDocument, OpticNode, PortMap},
     properties::Proptype,
-    types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo},
+    types::api_types::{ConnectInfo, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
     utils::{LockExt, geom_transformation::Isometry},
 };
 use parking_lot::MutexGuard;
+use serde::Deserialize;
 use uom::si::length::meter;
+use utoipa::IntoParams;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct DeleteConnectionQuery {
+    /// UUID of the source node
+    pub src_uuid: Uuid,
+    /// Name of the source port
+    pub src_port: String,
+}
+
+/// Update optical node properties
+///
+/// Modifies the standard properties (name, inversion, isometries, GUI position) of an optical node
+/// specified by its UUID. Only the fields provided in the request body will be updated.
+#[utoipa::path(
+    tag = "node",
+    request_body = UpdateNodeRequest,
+    responses(
+        (status = OK, description = "Node properties successfully updated"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found or invalid data")
+    )
+)]
+#[patch("/{uuid}")] // URL: /api/nodes/{uuid}
+async fn patch_node(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    update: web::Json<UpdateNodeRequest>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let update = update.into_inner();
+    let mut document = data.document.lock();
+
+    let result = document
+        .scenery_mut()
+        .with_node_attr_mut(uuid, |node_attr| {
+            if let Some(name) = update.name {
+                node_attr.set_name(&name);
+            }
+            if let Some(inverted) = update.inverted {
+                node_attr.set_inverted(inverted);
+            }
+            if let Some(iso_opt) = update.isometry {
+                node_attr.set_isometry_option(iso_opt);
+            }
+            if let Some(align) = update.alignment {
+                node_attr.set_alignment(align);
+            }
+            if let Some(gui_pos_opt) = update.gui_position {
+                let pos = gui_pos_opt.map(|(x, y)| Point2::new(x, y));
+                node_attr.set_gui_position(pos);
+            }
+        });
+
+    match result {
+        Ok(_) => Ok(HttpResponse::Ok().finish()),
+        Err(_) => Err(BackEndErrorResponse::new(
+            404,
+            "Opossum",
+            "Node UUID not found",
+        )),
+    }
+}
 
 /// helper function for checking the ACCEPT header.
 fn wants_ron_guard(ctx: &GuardContext<'_>) -> bool {
@@ -50,7 +108,7 @@ fn wants_ron_guard(ctx: &GuardContext<'_>) -> bool {
         ("uuid" = Uuid, Path, description = "UUID of the group node"),
     ),
     responses(
-        (status = OK, description = "get all nodes of the group", content_type="application/json"),
+        (status = OK, description = "get all nodes of the group", body= Vec<NodeInfo>, content_type="application/json"),
         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
     )
 )]
@@ -131,581 +189,9 @@ pub async fn get_connections(
     Ok(Json(connect_infos))
 }
 
-fn upper_left_corner_of_nodes(
-    nodes: &[NodeCacheItem],
-) -> Result<Point2<f64>, BackEndErrorResponse> {
-    let mut corner = Point2::new(f64::INFINITY, f64::INFINITY);
-
-    for node in nodes {
-        let pos = match node {
-            NodeCacheItem::Optical(optical_node) => {
-                let node = optical_node.optical_ref.lock_opm()?;
-                node.gui_position().unwrap_or_else(Point2::origin)
-            }
-            NodeCacheItem::Analyzer(analyzer) => {
-                analyzer.gui_position().unwrap_or_else(Point2::origin)
-            }
-        };
-
-        corner.x = corner.x.min(pos.x);
-        corner.y = corner.y.min(pos.y);
-    }
-
-    Ok(corner)
-}
-
-pub fn copy_from_optic_ref(
-    scenery: &NodeGroup,
-    optic_ref: &OpticRef,
-) -> Result<(OpticRef, Uuid), BackEndErrorResponse> {
-    let node_to_copy_from = optic_ref.optical_ref.lock_opm()?;
-    let old_node_id = node_to_copy_from.node_attr().uuid();
-
-    let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
-    let mut node = new_node_ref.optical_ref.lock_opm()?;
-
-    if let Ok(Proptype::Uuid(ref_uuid)) = node_to_copy_from
-        .node_attr()
-        .properties()
-        .get("reference id")
-        && let Ok(ref_node) = node.as_refnode_mut()
-    {
-        let (referenced_node, _) = scenery.node_recursive(*ref_uuid)?;
-        ref_node.assign_reference(&referenced_node);
-    }
-
-    let node_attr = node.node_attr_mut();
-    node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
-
-    drop(node_to_copy_from);
-    drop(node);
-
-    Ok((new_node_ref, old_node_id))
-}
-
-pub fn get_shifted_pos_of_ref(
-    optic_ref: &OpticRef,
-    shift: Point2<f64>,
-) -> Result<(f64, f64), BackEndErrorResponse> {
-    let node_to_copy_from = optic_ref.optical_ref.lock_opm()?;
-    let old_pos = node_to_copy_from
-        .gui_position()
-        .unwrap_or_else(Point2::origin);
-    let new_pos = (old_pos.x + shift.x, old_pos.y + shift.y);
-    drop(node_to_copy_from);
-    Ok(new_pos)
-}
-
-pub fn copy_optical_node(
-    scenery: &mut NodeGroup,
-    group_id: Uuid,
-    group_id_to_copy: Uuid,
-    shift: Point2<f64>,
-    optic_ref: &OpticRef,
-    node_id_link: &mut HashMap<Uuid, Uuid>,
-    grouped_connect_info: &mut HashMap<Uuid, HashMap<Uuid, Vec<ConnectionInfo>>>,
-) -> Result<NodeInfo, BackEndErrorResponse> {
-    let (new_node_ref, old_node_id) = copy_from_optic_ref(scenery, optic_ref)?;
-
-    let new_pos = get_shifted_pos_of_ref(optic_ref, shift)?;
-
-    let mut node = new_node_ref.optical_ref.lock_opm()?;
-    let node_attr = node.node_attr_mut();
-    node_attr.set_gui_position(Some(Point2::new(new_pos.0, new_pos.1)));
-
-    drop(node);
-
-    let new_node_uuid =
-        scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
-
-    node_id_link.insert(old_node_id, new_node_uuid);
-
-    scenery.with_group_node(group_id_to_copy, |group: &NodeGroup| {
-        let connect = group
-            .graph()
-            .clone()
-            .get_outgoing_connection_info_of_node(old_node_id);
-
-        if let Some(c_info_map) = grouped_connect_info.get_mut(&group_id) {
-            c_info_map.insert(old_node_id, connect);
-        }
-    })?;
-
-    let node = new_node_ref.optical_ref.lock_opm()?;
-    Ok(NodeInfo::new(
-        new_node_uuid,
-        node.name(),
-        node.inverted(),
-        node.node_type(),
-        node.ports().names(&PortType::Input),
-        node.ports().names(&PortType::Output),
-        Some(new_pos),
-    ))
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn copy_optical_nodes_recursive(
-    scenery: &mut NodeGroup,
-    group_id_to_insert: Uuid,
-    group_id_to_copy: Uuid,
-    shift: Point2<f64>,
-    copied_optical_nodes: &[OpticRef],
-    node_id_link: &mut HashMap<Uuid, Uuid>,
-    grouped_connect_info: &mut HashMap<Uuid, HashMap<Uuid, Vec<ConnectionInfo>>>,
-    grouped_node_infos: &mut HashMap<Uuid, Vec<NodeInfo>>,
-    input_port_maps: &mut HashMap<Uuid, PortMap>,
-    output_port_maps: &mut HashMap<Uuid, PortMap>,
-) -> Result<(), BackEndErrorResponse> {
-    let mut optical_nodes = Vec::new();
-    grouped_connect_info.insert(
-        group_id_to_insert,
-        HashMap::<Uuid, Vec<ConnectionInfo>>::new(),
-    );
-    for node in copied_optical_nodes {
-        let node_id = node.uuid();
-        let group_nodes_opt = node.optical_ref.lock_opm()?.as_group().map_or_else(
-            |_| None,
-            |group| {
-                input_port_maps.insert(node_id, group.graph().port_map(&PortType::Input).clone());
-                output_port_maps.insert(node_id, group.graph().port_map(&PortType::Output).clone());
-                Some(
-                    group
-                        .nodes()
-                        .iter()
-                        .copied()
-                        .cloned()
-                        .collect::<Vec<OpticRef>>(),
-                )
-            },
-        );
-        let copied_node = copy_optical_node(
-            scenery,
-            group_id_to_insert,
-            group_id_to_copy,
-            shift,
-            node,
-            node_id_link,
-            grouped_connect_info,
-        )?;
-
-        let copied_node_id = copied_node.uuid();
-        optical_nodes.push(copied_node);
-
-        if let Some(nodes_in_group) = group_nodes_opt {
-            copy_optical_nodes_recursive(
-                scenery,
-                copied_node_id,
-                node.uuid(),
-                Point2::origin(),
-                &nodes_in_group,
-                node_id_link,
-                grouped_connect_info,
-                grouped_node_infos,
-                input_port_maps,
-                output_port_maps,
-            )?;
-        }
-    }
-    grouped_node_infos.insert(group_id_to_insert, optical_nodes);
-    Ok(())
-}
-
-fn copy_analyzer(
-    data: &web::Data<AppState>,
-    shift: Point2<f64>,
-    analyzer: &AnalyzerInfo,
-) -> AnalyzerInfo {
-    let old_pos = analyzer.gui_position().unwrap();
-
-    let new_pos = Point2::new(old_pos.x + shift.x, old_pos.y + shift.y);
-
-    let new_analyzer = AnalyzerInfo::new(analyzer.analyzer_type().clone(), Uuid::new_v4(), new_pos);
-
-    let mut document = data.document.lock();
-    document.add_analyzer_info(&new_analyzer);
-
-    new_analyzer
-}
-
-fn remap_connections(
-    connections: &mut HashMap<Uuid, Vec<ConnectionInfo>>,
-    node_id_link: &HashMap<Uuid, Uuid>,
-) {
-    for connect in connections.values_mut() {
-        connect.retain(|c| {
-            node_id_link.contains_key(&c.src_id) && node_id_link.contains_key(&c.target_id)
-        });
-
-        for c in connect {
-            if let Some(id) = node_id_link.get(&c.src_id) {
-                c.src_id = *id;
-            }
-            if let Some(id) = node_id_link.get(&c.target_id) {
-                c.target_id = *id;
-            }
-        }
-    }
-}
-
-fn set_copied_connections(
-    scenery: &mut NodeGroup,
-    group_id: Uuid,
-    connections: &HashMap<Uuid, Vec<ConnectionInfo>>,
-) -> Result<Vec<ConnectInfo>, BackEndErrorResponse> {
-    let mut result = Vec::new();
-
-    for conns in connections.values() {
-        let enriched: Vec<_> = conns
-            .iter()
-            .map(|c| {
-                let is_reference = scenery
-                    .with_node_attr(c.target_id, |attr| {
-                        attr.properties().get("reference id").is_ok()
-                    })
-                    .unwrap_or(false);
-
-                (c, is_reference)
-            })
-            .collect();
-
-        scenery
-            .with_group_node_mut(group_id, |group| -> Result<(), BackEndErrorResponse> {
-                for (c, is_reference) in enriched {
-                    group.connect_nodes(
-                        c.src_id,
-                        &c.src_port,
-                        c.target_id,
-                        &c.target_port,
-                        c.distance,
-                    )?;
-
-                    result.push(ConnectInfo::new(
-                        c.src_id,
-                        c.src_port.clone(),
-                        c.target_id,
-                        c.target_port.clone(),
-                        c.distance.value,
-                        is_reference,
-                    ));
-                }
-                Ok(())
-            })
-            .map_err(|e| {
-                BackEndErrorResponse::new(404, "Opossum", &format!("Could not paste nodes: {e}"))
-            })??;
-    }
-
-    Ok(result)
-}
-
-#[allow(clippy::significant_drop_tightening)]
-fn resolve_references(
-    scenery: &mut NodeGroup,
-    node_id_link: &HashMap<Uuid, Uuid>,
-) -> Result<(), BackEndErrorResponse> {
-    for new_id in node_id_link.values() {
-        let old_ref_id_opt: Option<Uuid> = scenery
-            .with_node_attr(*new_id, |attr| {
-                match attr.properties().get("reference id") {
-                    Ok(Proptype::Uuid(uuid)) => Some(*uuid),
-                    _ => None,
-                }
-            })
-            .ok()
-            .flatten();
-
-        let new_ref_id_opt = old_ref_id_opt
-            .map(|old_ref_id| node_id_link.get(&old_ref_id).copied().unwrap_or(old_ref_id));
-
-        let referenced_node_opt = new_ref_id_opt.map_or_else(
-            || None,
-            |new_ref_id| {
-                scenery
-                    .node_recursive(new_ref_id)
-                    .ok()
-                    .map(|(node, _)| node)
-            },
-        );
-
-        if let Some(referenced_node) = referenced_node_opt {
-            scenery.with_node_mut(*new_id, |node| {
-                if let Ok(ref_node) = node.as_refnode_mut() {
-                    ref_node.assign_reference(&referenced_node);
-                }
-            })?;
-        }
-    }
-
-    Ok(())
-}
-
-/// Paste copied nodes
-///
-/// This function sends already copied nodes to the frontend
-#[utoipa::path(tag = "node",
-    request_body(content = (Uuid, (f64, f64)),
-        description = "Uuid of the group node to be pasted in, the position at which the node should be pasted",
-        content_type = "application/json",
-    ),
-    responses(
-        (status = OK, body= NodeInfo, description = "Node successfully pasted", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[allow(clippy::significant_drop_tightening)]
-#[post("/paste_nodes")]
-async fn post_paste_nodes(
-    data: web::Data<AppState>,
-    node_paste_info: web::Json<(Uuid, (f64, f64))>,
-) -> Result<
-    Json<(
-        HashMap<Uuid, Vec<NodeInfo>>,
-        Vec<AnalyzerInfo>,
-        HashMap<Uuid, Vec<ConnectInfo>>,
-    )>,
-    BackEndErrorResponse,
-> {
-    let (group_id, node_pos) = node_paste_info.into_inner();
-    let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == group_id;
-
-    let copied_nodes = data.node_copy_cache.lock();
-    let min_pos = upper_left_corner_of_nodes(&copied_nodes)?;
-    drop(copied_nodes);
-    let shift = Point2::new(node_pos.0 - min_pos.x, node_pos.1 - min_pos.y);
-
-    let mut copied_optical_nodes = Vec::<OpticRef>::new();
-    let mut copied_analyzer_nodes = Vec::<AnalyzerInfo>::new();
-
-    for cache in data.node_copy_cache.lock().iter() {
-        match cache {
-            NodeCacheItem::Optical(optic_ref) => copied_optical_nodes.push(optic_ref.clone()),
-            NodeCacheItem::Analyzer(analyzer_info) => {
-                copied_analyzer_nodes.push(analyzer_info.clone());
-            }
-        }
-    }
-
-    let mut analyzers = Vec::new();
-    if paste_in_scenery {
-        for analyzer in &copied_analyzer_nodes {
-            analyzers.push(copy_analyzer(&data, shift, analyzer));
-        }
-    }
-
-    let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
-    let mut grouped_node_infos = HashMap::<Uuid, Vec<NodeInfo>>::new();
-    let mut grouped_connect_info = HashMap::<Uuid, Vec<ConnectInfo>>::new();
-    let mut grouped_connections = HashMap::<Uuid, HashMap<Uuid, Vec<ConnectionInfo>>>::new();
-    let mut node_id_link = HashMap::<Uuid, Uuid>::new();
-    let mut input_port_maps = HashMap::<Uuid, PortMap>::new();
-    let mut output_port_maps = HashMap::<Uuid, PortMap>::new();
-    copy_optical_nodes_recursive(
-        scenery,
-        group_id,
-        group_id,
-        shift,
-        &copied_optical_nodes,
-        &mut node_id_link,
-        &mut grouped_connections,
-        &mut grouped_node_infos,
-        &mut input_port_maps,
-        &mut output_port_maps,
-    )?;
-
-    resolve_references(scenery, &node_id_link)?;
-
-    reconfigure_ports(
-        scenery,
-        &input_port_maps,
-        &output_port_maps,
-        &node_id_link,
-        &mut grouped_node_infos,
-    )?;
-
-    for (g_id, connections) in &mut grouped_connections {
-        remap_connections(connections, &node_id_link);
-        let connect_info = set_copied_connections(scenery, *g_id, connections)?;
-        grouped_connect_info.insert(*g_id, connect_info);
-    }
-    Ok(Json((grouped_node_infos, analyzers, grouped_connect_info)))
-}
-
-/// Delete all nodes that have been cut out previously and
-///
-/// This function sends already copied nodes to the frontend
-#[utoipa::path(tag = "node",
-    responses(
-        (status = OK, body= NodeInfo, description = "Cut-out nodes successfully  removed and cache cleared", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[allow(clippy::significant_drop_tightening)]
-#[delete("/cut_nodes")]
-async fn delete_cut_nodes(
-    data: web::Data<AppState>,
-    paste_in_group_id: web::Json<Uuid>,
-) -> Result<Json<(Vec<Uuid>, Uuid)>, BackEndErrorResponse> {
-    let paste_in_group_id = paste_in_group_id.into_inner();
-    let mut nodes_to_delete = vec![];
-    let mut analyzers_to_delete = vec![];
-    let mut node_cache = data.node_copy_cache.lock();
-    while let Some(cache) = node_cache.pop() {
-        match cache {
-            NodeCacheItem::Optical(optic_ref) => {
-                nodes_to_delete.push(optic_ref.uuid());
-            }
-            NodeCacheItem::Analyzer(analyzer_info) => {
-                analyzers_to_delete.push(analyzer_info.id());
-            }
-        }
-    }
-    drop(node_cache);
-
-    let mut document = data.document.lock();
-    let mut deleted_nodes = vec![];
-    let scenery = document.scenery();
-    let scenery_id = scenery.node_attr().uuid();
-
-    let group_id = if analyzers_to_delete.is_empty()
-        && let Some(id) = nodes_to_delete.first()
-    {
-        let (_, group_id) = scenery.node_recursive(*id)?;
-        group_id
-    } else {
-        scenery_id
-    };
-
-    if scenery_id == paste_in_group_id {
-        for analyzer in &analyzers_to_delete {
-            deleted_nodes.push(*analyzer);
-            document.remove_analyzer(*analyzer)?;
-        }
-    }
-
-    let scenery = document.scenery_mut();
-
-    for node in &nodes_to_delete {
-        deleted_nodes.extend(scenery.delete_node(*node)?);
-    }
-
-    Ok(Json((deleted_nodes, group_id)))
-}
-
-fn reconfigure_ports(
-    scenery: &mut NodeGroup,
-    input_port_maps: &HashMap<Uuid, PortMap>,
-    output_port_maps: &HashMap<Uuid, PortMap>,
-    node_id_link: &HashMap<Uuid, Uuid>,
-    grouped_node_infos: &mut HashMap<Uuid, Vec<NodeInfo>>,
-) -> Result<(), BackEndErrorResponse> {
-    //output port maps
-    for (old_group_id, output_port_map) in output_port_maps {
-        for (external_port_name, (input_node, internal_port_name)) in output_port_map {
-            if let (Some(new_group_id), Some(new_mapped_node_id)) =
-                (node_id_link.get(old_group_id), node_id_link.get(input_node))
-            {
-                scenery.with_group_node_mut(*new_group_id, |new_group| {
-                    new_group.map_output_port(
-                        *new_mapped_node_id,
-                        internal_port_name,
-                        external_port_name,
-                    )?;
-                    Ok::<(), BackEndErrorResponse>(())
-                })??;
-            }
-        }
-    }
-
-    //input port maps
-    for (old_group_id, input_port_map) in input_port_maps {
-        for (external_port_name, (input_node, internal_port_name)) in input_port_map {
-            if let (Some(new_group_id), Some(new_mapped_node_id)) =
-                (node_id_link.get(old_group_id), node_id_link.get(input_node))
-            {
-                scenery.with_group_node_mut(*new_group_id, |new_group| {
-                    new_group.map_input_port(
-                        *new_mapped_node_id,
-                        internal_port_name,
-                        external_port_name,
-                    )?;
-                    Ok::<(), BackEndErrorResponse>(())
-                })??;
-            }
-        }
-    }
-
-    let inverted_node_link: HashMap<Uuid, Uuid> =
-        node_id_link.iter().map(|(k, v)| (*v, *k)).collect();
-
-    //set ports
-    for node_info in grouped_node_infos.values_mut() {
-        for n in node_info {
-            if n.node_type() == "group"
-                && let Some(old_node_id) = inverted_node_link.get(&n.uuid())
-            {
-                scenery.with_group_node(*old_node_id, |g| {
-                    n.set_input_ports(g.ports().ports(&PortType::Input).keys().cloned().collect());
-                    n.set_output_ports(
-                        g.ports().ports(&PortType::Output).keys().cloned().collect(),
-                    );
-                })?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Copy existing nodes
-///
-/// This function copies a single or multiple already existing nodes
-#[utoipa::path(tag = "node",
-    request_body(content = HashSet<Uuid>,
-        description = "List of Uuids of the nodes to be copied",
-        content_type = "application/json",
-    ),
-    responses(
-        (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/nodes_copy")]
-async fn post_copy_nodes(
-    data: web::Data<AppState>,
-    node_id: web::Json<HashSet<Uuid>>,
-) -> Result<(), BackEndErrorResponse> {
-    let mut all_nodes_found = true;
-    let node_ids_to_copy = node_id.into_inner();
-    //get optic ref of nde that should be copied
-    let document = data.document.lock();
-    let mut copied_nodes_set = data.node_copy_cache.lock();
-    copied_nodes_set.clear();
-    for id in &node_ids_to_copy {
-        if let Ok((node_ref_to_copy, _)) = document.scenery().node_recursive(*id) {
-            copied_nodes_set.push(NodeCacheItem::Optical(node_ref_to_copy));
-        } else if let Some(analyzer) = document.analyzers().get(id).cloned() {
-            copied_nodes_set.push(NodeCacheItem::Analyzer(analyzer));
-        } else {
-            all_nodes_found = false;
-        }
-    }
-    drop(copied_nodes_set);
-    drop(document);
-    if all_nodes_found {
-        Ok(())
-    } else {
-        Err(BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "Some nodes could not be copied as they were not found in the document",
-        ))
-    }
-}
-
 /// Add a new node to a group node
 ///
 /// This function adds a new optical node to a group node specified by its UUID.
-/// - **Note**: If the `nil` UUID is given (`00000000-0000-0000-0000-000000000000`), the node is added to the toplevel group.
 /// - The node type as well as the coordinates of the corresponding GUI element must be given.
 #[utoipa::path(tag = "node",
     params(
@@ -826,166 +312,166 @@ async fn post_subreference(
     Ok(Json(node_info))
 }
 /// Update the GUI position of an optical or analyzer node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "UUID of the optical or analyzer node"),
-    ),
-    request_body(content = (f64,f64),
-        description = "updated GUI position",
-        content_type = "application/json",
-        example= "[1.0, 2.0]"
-    ),
-    responses(
-        (status = OK, description = "Node position successfully updated"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/position/{uuid}")]
-async fn post_node_position(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    position: web::Json<(f64, f64)>,
-) -> Result<(), BackEndErrorResponse> {
-    let uuid = path.into_inner();
-    let position = position.into_inner();
-    let position = Point2::new(position.0, position.1);
-    let mut document = data.document.lock();
-    match document
-        .scenery_mut()
-        .with_node_attr_mut(uuid, |node_attr| node_attr.set_gui_position(Some(position)))
-    {
-        Ok(()) => Ok(()),
-        _ => document.analyzers_mut().get_mut(&uuid).map_or_else(
-            || {
-                Err(BackEndErrorResponse::new(
-                    404,
-                    "Opossum",
-                    "uuid not found in nodes or analyzers",
-                ))
-            },
-            |analyzer| {
-                analyzer.set_gui_position(Some(position));
-                Ok(())
-            },
-        ),
-    }
-}
+// #[utoipa::path(tag = "node",
+//     params(
+//         ("uuid" = Uuid, Path, description = "UUID of the optical or analyzer node"),
+//     ),
+//     request_body(content = (f64,f64),
+//         description = "updated GUI position",
+//         content_type = "application/json",
+//         example= "[1.0, 2.0]"
+//     ),
+//     responses(
+//         (status = OK, description = "Node position successfully updated"),
+//         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+//     )
+// )]
+// #[post("/position/{uuid}")]
+// async fn post_node_position(
+//     data: web::Data<AppState>,
+//     path: web::Path<Uuid>,
+//     position: web::Json<(f64, f64)>,
+// ) -> Result<(), BackEndErrorResponse> {
+//     let uuid = path.into_inner();
+//     let position = position.into_inner();
+//     let position = Point2::new(position.0, position.1);
+//     let mut document = data.document.lock();
+//     match document
+//         .scenery_mut()
+//         .with_node_attr_mut(uuid, |node_attr| node_attr.set_gui_position(Some(position)))
+//     {
+//         Ok(()) => Ok(()),
+//         _ => document.analyzers_mut().get_mut(&uuid).map_or_else(
+//             || {
+//                 Err(BackEndErrorResponse::new(
+//                     404,
+//                     "Opossum",
+//                     "uuid not found in nodes or analyzers",
+//                 ))
+//             },
+//             |analyzer| {
+//                 analyzer.set_gui_position(Some(position));
+//                 Ok(())
+//             },
+//         ),
+//     }
+// }
 
 /// Update the GUI name of an optical node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "name of the optical node"),
-    ),
-    request_body(content = String,
-        description = "updated name of node",
-        content_type = "application/json",
-        example= "Lens 1"
-    ),
-    responses(
-        (status = OK, description = "Node name successfully updated"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/name/{uuid}")]
-async fn post_node_name(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    name: web::Json<String>,
-) -> Result<Json<HashMap<Uuid, String>>, BackEndErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let name = name.into_inner();
-    let mut document = data.document.lock();
-    let mut processed_names = HashMap::<Uuid, String>::new();
-    let scenery = document.scenery_mut();
-    if scenery.node_attr().uuid() == uuid {
-        scenery.node_attr_mut().set_name(&name);
-        processed_names.insert(uuid, name);
-    } else {
-        let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid)?;
-        for node_uuid in &nodes_to_rename {
-            scenery
-                .with_node_attr_mut(*node_uuid, |node_attr| {
-                    let name = if node_attr.node_type() == "reference" {
-                        format!("ref ({name})")
-                    } else {
-                        name.clone()
-                    };
-                    node_attr.set_name(&name);
-                    processed_names.insert(*node_uuid, name);
-                })
-                .map_err(|_| {
-                    BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes")
-                })?;
-        }
-    }
-    drop(document);
-    Ok(Json(processed_names))
-}
+// #[utoipa::path(tag = "node",
+//     params(
+//         ("uuid" = Uuid, Path, description = "name of the optical node"),
+//     ),
+//     request_body(content = String,
+//         description = "updated name of node",
+//         content_type = "application/json",
+//         example= "Lens 1"
+//     ),
+//     responses(
+//         (status = OK, description = "Node name successfully updated"),
+//         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+//     )
+// )]
+// #[post("/name/{uuid}")]
+// async fn post_node_name(
+//     data: web::Data<AppState>,
+//     path: web::Path<Uuid>,
+//     name: web::Json<String>,
+// ) -> Result<Json<HashMap<Uuid, String>>, BackEndErrorResponse> {
+//     let uuid: Uuid = path.into_inner();
+//     let name = name.into_inner();
+//     let mut document = data.document.lock();
+//     let mut processed_names = HashMap::<Uuid, String>::new();
+//     let scenery = document.scenery_mut();
+//     if scenery.node_attr().uuid() == uuid {
+//         scenery.node_attr_mut().set_name(&name);
+//         processed_names.insert(uuid, name);
+//     } else {
+//         let nodes_to_rename = scenery.graph().find_all_nodes_referring_to_uuid(uuid)?;
+//         for node_uuid in &nodes_to_rename {
+//             scenery
+//                 .with_node_attr_mut(*node_uuid, |node_attr| {
+//                     let name = if node_attr.node_type() == "reference" {
+//                         format!("ref ({name})")
+//                     } else {
+//                         name.clone()
+//                     };
+//                     node_attr.set_name(&name);
+//                     processed_names.insert(*node_uuid, name);
+//                 })
+//                 .map_err(|_| {
+//                     BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes")
+//                 })?;
+//         }
+//     }
+//     drop(document);
+//     Ok(Json(processed_names))
+// }
 /// Update the laser-induced damage threshold (LIDT) of an optical node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "lidt of the optical node"),
-    ),
-    request_body(content = String,
-        description = "updated lidt of node in J/cm²",
-        content_type = "application/json",
-        example= "1.56"
-    ),
-    responses(
-        (status = OK, description = "Node LIDT successfully updated"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/lidt/{uuid}")]
-async fn post_node_lidt(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    port_name: web::Json<String>,
-    lidt: web::Json<Fluence>,
-) -> Result<(), BackEndErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let lidt = lidt.into_inner();
-    let port_name = port_name.into_inner();
-    let mut document = data.document.lock();
-    document
-        .scenery_mut()
-        .with_node_attr_mut(uuid, |node_attr| {
-            node_attr
-                .ports_mut()
-                .set_lidt(&PortType::Input, &port_name, lidt)
-                .map_err(|e| BackEndErrorResponse::new(404, "Opossum", &e.to_string()))
-        })
-        .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?
-}
+// #[utoipa::path(tag = "node",
+//     params(
+//         ("uuid" = Uuid, Path, description = "lidt of the optical node"),
+//     ),
+//     request_body(content = String,
+//         description = "updated lidt of node in J/cm²",
+//         content_type = "application/json",
+//         example= "1.56"
+//     ),
+//     responses(
+//         (status = OK, description = "Node LIDT successfully updated"),
+//         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+//     )
+// )]
+// #[post("/lidt/{uuid}")]
+// async fn post_node_lidt(
+//     data: web::Data<AppState>,
+//     path: web::Path<Uuid>,
+//     port_name: web::Json<String>,
+//     lidt: web::Json<Fluence>,
+// ) -> Result<(), BackEndErrorResponse> {
+//     let uuid: Uuid = path.into_inner();
+//     let lidt = lidt.into_inner();
+//     let port_name = port_name.into_inner();
+//     let mut document = data.document.lock();
+//     document
+//         .scenery_mut()
+//         .with_node_attr_mut(uuid, |node_attr| {
+//             node_attr
+//                 .ports_mut()
+//                 .set_lidt(&PortType::Input, &port_name, lidt)
+//                 .map_err(|e| BackEndErrorResponse::new(404, "Opossum", &e.to_string()))
+//         })
+//         .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))?
+// }
 
 /// Update the alignment isometry of an optical node
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "alignment isometry of the optical node"),
-    ),
-    request_body(content = String,
-        description = "updated alignment isometry of node",
-        content_type = "application/json",
-    ),
-    responses(
-        (status = OK, description = "Node alignment isometry successfully updated"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[post("/alignmentisometry/{uuid}")]
-async fn post_node_alignment_isometry(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-    isometry_from_gui: web::Json<Isometry>,
-) -> Result<(), BackEndErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let isometry = isometry_from_gui.into_inner();
-    let mut document = data.document.lock();
-    document
-        .scenery_mut()
-        .with_node_attr_mut(uuid, |node_attr| node_attr.set_alignment(isometry))
-        .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))
-}
+// #[utoipa::path(tag = "node",
+//     params(
+//         ("uuid" = Uuid, Path, description = "alignment isometry of the optical node"),
+//     ),
+//     request_body(content = String,
+//         description = "updated alignment isometry of node",
+//         content_type = "application/json",
+//     ),
+//     responses(
+//         (status = OK, description = "Node alignment isometry successfully updated"),
+//         (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+//     )
+// )]
+// #[post("/alignmentisometry/{uuid}")]
+// async fn post_node_alignment_isometry(
+//     data: web::Data<AppState>,
+//     path: web::Path<Uuid>,
+//     isometry_from_gui: web::Json<Isometry>,
+// ) -> Result<(), BackEndErrorResponse> {
+//     let uuid: Uuid = path.into_inner();
+//     let isometry = isometry_from_gui.into_inner();
+//     let mut document = data.document.lock();
+//     document
+//         .scenery_mut()
+//         .with_node_attr_mut(uuid, |node_attr| node_attr.set_alignment(isometry))
+//         .map_err(|_| BackEndErrorResponse::new(404, "Opossum", "uuid not found in nodes"))
+// }
 
 /// Update a property of an optical node
 #[utoipa::path(tag = "node",
@@ -1131,6 +617,34 @@ async fn post_node_inversion(
     }
 }
 
+/// Get the port mappings of a group node
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "Uuid of a group whose portmaps should be sent"),
+    ),
+    responses(
+        (status = OK, description = "Node portmaps successfully sent!"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/port_mappings")]
+pub async fn get_group_portmap(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<(PortMap, PortMap)>, BackEndErrorResponse> {
+    let group_id = path.into_inner();
+    let port_maps = data
+        .document
+        .lock()
+        .scenery_mut()
+        .with_group_node_mut(group_id, |g| {
+            (
+                g.graph().port_map(&PortType::Input).clone(),
+                g.graph().port_map(&PortType::Output).clone(),
+            )
+        })?;
+    Ok(Json(port_maps))
+}
 /// Delete a node
 ///
 /// This function deletes a node. It also deletes reference nodes which refer to this node.
@@ -1225,21 +739,6 @@ fn get_nested_referenced_node_from_state(
         Ok(optic_ref)
     }
 }
-
-// Helper function to contain the core logic
-fn get_node_analyzer_attr_from_state(
-    uuid: Uuid,
-    data: &web::Data<AppState>,
-) -> Result<AnalyzerInfo, BackEndErrorResponse> {
-    let document = data.document.lock().clone();
-    let analyzer_info = document
-        .analyzers()
-        .get(&uuid)
-        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?
-        .clone();
-    Ok(analyzer_info)
-}
-
 /// Get all properties of the specified node in either JSON or RON format.
 ///
 /// Return all properties (`NodeAttr`) of the node specified by its UUID.
@@ -1326,60 +825,6 @@ async fn get_properties_json(
     let node_attr = get_node_attr_from_state(path.into_inner(), &data)?;
     Ok(Json(node_attr))
 }
-/// Get all info of the specified analyzer node in either JSON or RON format.
-///
-/// Return all info (`AnalyzerInfo`) of the analyzer node specified by its UUID.
-/// The format is determined by the `Accept` header.
-/// Defaults to `application/json` if the header is missing or doesn't specify
-/// `application/ron`.
-///
-/// # Important
-///
-/// Due to the fact that numeric properties can have values such as `nan` or `inf` it is possible to read
-/// the data as RON. The standard JSON format does **not** support encoding of these values. They are simply
-/// returned as `null` values.
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "UUID of the analyzer node"),
-    ),
-    responses(
-        (status = OK, description = "get all analyzer information", content(("application/json"),("application/ron"))),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[get("/{uuid}/analyzer_info", guard = "wants_ron_guard")]
-async fn get_analyzer_info_ron(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-) -> Result<impl Responder, BackEndErrorResponse> {
-    let analyzer_info = get_node_analyzer_attr_from_state(path.into_inner(), &data)?;
-
-    let body =
-        ron::ser::to_string_pretty(&analyzer_info, ron::ser::PrettyConfig::new().new_line("\n"))
-            .map_err(|e| OpossumError::Other(format!("RON Serialization Error: {e}")))?;
-
-    Ok(HttpResponse::Ok()
-        .content_type("application/ron")
-        .body(body))
-}
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "UUID of the analyzer node"),
-    ),
-    responses(
-        (status = OK, description = "get all analyzer information", content(("application/json"),("application/ron"))),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[get("/{uuid}/analyzer_info")]
-async fn get_analyzer_info_json(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-) -> Result<Json<AnalyzerInfo>, BackEndErrorResponse> {
-    let analyzer_info = get_node_analyzer_attr_from_state(path.into_inner(), &data)?;
-    Ok(Json(analyzer_info))
-}
-
 /// Modify node properties
 ///
 /// Modify the properties (`NodeAttr`) of a node specified by its UUID.
@@ -1459,26 +904,38 @@ async fn post_connection(
     Ok(Json(connect_info))
 }
 /// Disconnect two nodes
-#[utoipa::path(tag = "node",
+///
+/// Removes the connection originating from the specified source node and port.
+#[utoipa::path(
+    tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the group containing the connection"),
+        DeleteConnectionQuery // <-- Utoipa zaubert daraus automatisch Query-Parameter für Swagger!
+    ),
     responses(
-        (status = OK, description = "node connection deleted", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "group UUID not found", content_type="application/json")
-))]
+        (status = OK, description = "node connection successfully deleted"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "group UUID not found or disconnection failed", content_type="application/json")
+    )
+)]
 #[delete("/{uuid}/connection")]
 async fn delete_connection(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    connect_info: Json<ConnectInfo>,
-) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
+    query: web::Query<DeleteConnectionQuery>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
+    let query = query.into_inner();
+
     let mut document = data.document.lock();
     document
         .scenery_mut()
         .with_group_node_mut(group_uuid, |group| {
-            group.disconnect_nodes(connect_info.src_uuid(), connect_info.src_port())
+            group.disconnect_nodes(query.src_uuid, &query.src_port)
         })??;
     drop(document);
-    Ok(connect_info)
+
+    // Einfach ein leeres "200 OK" zurückgeben, da die Verbindung nun weg ist.
+    Ok(HttpResponse::Ok().finish())
 }
 /// Update a connection distance
 #[utoipa::path(tag = "node",
@@ -1506,78 +963,131 @@ async fn update_distance(
     drop(document);
     Ok(connect_info)
 }
-
-/// Update the analyzer config of an analyzer node
+/// Map a port of an internal node to a port of the group node, effectively exposing it as an external port of the group.
 #[utoipa::path(tag = "node",
     params(
-        ("uuid" = Uuid, Path, description = "Update an analyzer config of the analyzer node"),
+        ("uuid" = Uuid, Path, description = "Uuid of a group whose port shouldbe mapped to a port of an internal node"),
     ),
     request_body(content = String,
-        description = "updated config of analyzer",
-        content_type = "application/ron",
-        example= "\"analyzer_type\""
+        description = "Node uuid of internal node, tuple of internal port name of node and external port name pof group and the port type",
+        content_type = "application/json",
     ),
     responses(
-        (status = OK, description = "Analyzer config successfully updated"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/ron")
+        (status = OK, description = "Node port successfully mapped to group port"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
-#[post("/analyzer/{uuid}")]
-async fn post_analyzer_config(
+#[post("/{uuid}/port_mappings")]
+pub async fn post_port_mapping(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    body: String,
-) -> Result<HttpResponse, BackEndErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let analyzer_type: AnalyzerType = match ron::de::from_str(body.as_str()) {
-        Ok(analyzer_type) => analyzer_type,
-        Err(e) => {
-            return Err(BackEndErrorResponse::new(
-                400,
-                "Opossum",
-                &format!("Failed to deserialize property value: {e}"),
-            ));
-        }
-    };
-    let mut document = data.document.lock();
-    if let Some(analyzer_info) = document.analyzer_mut(uuid) {
-        analyzer_info.set_analyzer_type(&analyzer_type);
-        drop(document);
-    } else {
-        return Err(BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "uuid not found in analyzers",
-        ));
-    }
-    Ok(HttpResponse::Ok()
-        .content_type("application/ron")
-        .body(ron::ser::to_string("").unwrap()))
-}
+    port_map_info: web::Json<(Uuid, (String, String), PortType)>,
+) -> Result<Json<(Vec<String>, Vec<String>)>, BackEndErrorResponse> {
+    let group_id = path.into_inner();
+    let (node_id_to_map, (internal_port_name, external_port_name), port_type) =
+        port_map_info.into_inner();
 
+    let ports = data
+        .document
+        .lock()
+        .scenery_mut()
+        .with_group_node_mut(group_id, |g| {
+            match port_type {
+                PortType::Input => {
+                    g.map_input_port(node_id_to_map, &internal_port_name, &external_port_name)
+                }
+                PortType::Output => {
+                    g.map_output_port(node_id_to_map, &internal_port_name, &external_port_name)
+                }
+            }?;
+            let ports = g.ports();
+            let inputs = ports
+                .ports(&PortType::Input)
+                .keys()
+                .cloned()
+                .collect::<Vec<String>>();
+            let outputs = ports
+                .ports(&PortType::Output)
+                .keys()
+                .cloned()
+                .collect::<Vec<String>>();
+            Ok::<(Vec<String>, Vec<String>), BackEndErrorResponse>((inputs, outputs))
+        })??;
+
+    Ok(Json(ports))
+}
+/// Remove a port mapping from a group
+#[utoipa::path(
+    tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "Uuid of a group whose port-map should be removed"),
+        RemovePortMapQuery
+    ),
+    responses(
+        (status = OK, description = "Node port successfully removed from group"),
+        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[allow(clippy::significant_drop_tightening)]
+#[delete("/{uuid}/port_mappings")]
+pub async fn remove_port_map(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    query: web::Query<RemovePortMapQuery>,
+) -> Result<Json<(bool, Vec<ConnectInfo>, Uuid)>, BackEndErrorResponse> {
+    let group_id = path.into_inner();
+
+    // Entpacke die Query-Parameter
+    let RemovePortMapQuery {
+        external_port_name,
+        port_type,
+    } = query.into_inner();
+
+    let mut document = data.document.lock();
+    let scenery = document.scenery_mut();
+
+    // get parent of node
+    let (_, parent_group) = scenery.node_recursive(group_id)?;
+
+    // get connections
+    let connections = scenery.with_group_node_mut(parent_group, |g| {
+        let c = g.graph().get_connection_info_of_node(group_id);
+
+        // does not matter if it is a reference, as the connections are just removed
+        c.iter()
+            .map(|c| ConnectInfo::from_connection_info(c, false))
+            .collect::<Vec<ConnectInfo>>()
+    })?;
+
+    // remove connections first before removing the mapping
+    scenery.with_group_node_mut(parent_group, |g| {
+        for c in &connections {
+            g.disconnect_nodes(c.src_uuid(), c.src_port())?;
+        }
+        Ok::<(), BackEndErrorResponse>(())
+    })??;
+
+    let port_removed = scenery.with_group_node_mut(group_id, |g| {
+        g.remove_mapped_port(&external_port_name, port_type)
+    })?;
+
+    Ok(Json((port_removed, connections, parent_group)))
+}
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_subnodes);
     cfg.service(post_subnode);
     cfg.service(post_subreference);
     cfg.service(delete_subnode);
-    cfg.service(post_node_position);
-    cfg.service(post_node_name);
-    cfg.service(post_copy_nodes);
-    cfg.service(post_paste_nodes);
-    cfg.service(delete_cut_nodes);
-    cfg.service(post_node_lidt);
-    cfg.service(post_node_alignment_isometry);
     cfg.service(post_node_property);
-    cfg.service(post_node_isometry);
-    cfg.service(post_node_inversion);
-    cfg.service(post_analyzer_config);
-
     cfg.service(get_properties_ron);
     cfg.service(get_properties_json);
-    cfg.service(get_analyzer_info_ron);
-    cfg.service(get_analyzer_info_json);
     cfg.service(get_node_hierarchy);
     cfg.service(patch_properties);
+    cfg.service(patch_node);
+
+    cfg.service(post_port_mapping);
+    cfg.service(get_group_portmap);
+    cfg.service(remove_port_map);
 
     cfg.service(post_connection);
     cfg.service(delete_connection);

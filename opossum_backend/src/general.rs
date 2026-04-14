@@ -76,9 +76,9 @@ async fn get_version() -> impl Responder {
     })
 }
 
-/// Return a (aplhabetically sorted) list of all available node types of OPOSSUM
+/// Return a list of all available optical node types
 ///
-/// Return a list of strings of available node types from the OPOSSUM library.
+/// Return an alphabetically sorted list of strings of all available node types present in the OPOSSUM library.
 #[utoipa::path(get, responses((status = OK, description = "success", body = Vec<NodeType>)), tag="general")]
 #[get("/node_types")]
 async fn get_node_types() -> Result<Json<Vec<NodeType>>, BackEndErrorResponse> {

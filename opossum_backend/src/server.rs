@@ -4,16 +4,17 @@ use actix_cors::Cors;
 use actix_web::{
     App, HttpResponse, HttpServer, dev::Server, http::StatusCode, middleware::Logger, web,
 };
-use opossum_core::types::api_types::ErrorResponse;
 use std::net::Ipv4Addr;
 use utoipa::OpenApi;
 use utoipa_actix_web::AppExt;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{app_state::AppState, pages, routes, sse_logger::init_logger};
+use crate::{
+    app_state::AppState, error::BackEndErrorResponse, pages, routes, sse_logger::init_logger,
+};
 
 async fn not_found() -> HttpResponse {
-    let error = ErrorResponse::not_found();
+    let error = BackEndErrorResponse::not_found();
     let mut res = actix_web::HttpResponseBuilder::new(StatusCode::NOT_FOUND);
     res.json(error)
 }
@@ -33,8 +34,9 @@ pub fn start() -> Server {
         ),
         tags(
             (name = "general", description = "general endpoints."),
-            (name = "scenery", description = "endpoints dealing with the toplevel scenery."),
             (name = "node", description = "endpoints dealing with handling of optical nodes."),
+            (name = "document", description = "endpoints dealing with handling of the overall document (OPM model)."),
+            (name = "analyzer", description = "endpoints dealing with handling of analyzers."),
         ),
     )]
     pub struct ApiDocs;

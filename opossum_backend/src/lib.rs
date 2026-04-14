@@ -1,11 +1,13 @@
+mod analyzers;
 mod app_state;
+mod document;
 mod error;
 mod general;
 mod groups;
 mod nodes;
+mod operations;
 mod pages;
 mod routes;
-mod scenery;
 pub mod server;
 mod sse_logger;
 mod utils;
