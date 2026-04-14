@@ -1,28 +1,4 @@
-use actix_web::{
-    delete, get,
-    web::{self, Json, PathConfig},
-};
-use opossum_core::{
-    prelude::{PortMap, PortType},
-    types::api_types::ConnectInfo,
-};
-use utoipa_actix_web::service_config::ServiceConfig;
-use uuid::Uuid;
-
-use crate::{app_state::AppState, error::BackEndErrorResponse};
-
 pub mod helper_functions;
-
-use serde::Deserialize;
-use utoipa::IntoParams;
-
-#[derive(Debug, Deserialize, IntoParams)]
-pub struct RemovePortMapQuery {
-    /// External port name of the group port mapping
-    pub external_port_name: String,
-    /// Type of the port (e.g., Input or Output)
-    pub port_type: PortType,
-}
 
 // #[utoipa::path(tag = "group",
 //     params(
@@ -60,10 +36,3 @@ pub struct RemovePortMapQuery {
 //         })??;
 //     Ok(Json(ports))
 // }
-
-pub fn config(cfg: &mut ServiceConfig<'_>) {
-    // cfg.service(get_group_ports);
-    cfg.app_data(PathConfig::default().error_handler(|err, _req| {
-        BackEndErrorResponse::new(400, "parse error", &err.to_string()).into()
-    }));
-}
