@@ -335,5 +335,7 @@ pub fn create_new_group_node_info(
         new_group_node.ports().names(&PortType::Input),
         new_group_node.ports().names(&PortType::Output),
         Some((pos.x, pos.y)),
+        new_group_node.alignment(),
+        new_group_node.isometry(),
     ))
 }

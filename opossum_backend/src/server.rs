@@ -2,7 +2,7 @@
 
 use actix_cors::Cors;
 use actix_web::{
-    App, HttpResponse, HttpServer, dev::Server, http::StatusCode, middleware::Logger, web,
+    App, HttpResponse, HttpServer, ResponseError, dev::Server, middleware::Logger, web,
 };
 use std::net::Ipv4Addr;
 use utoipa::OpenApi;
@@ -14,9 +14,7 @@ use crate::{
 };
 
 async fn not_found() -> HttpResponse {
-    let error = BackEndErrorResponse::not_found();
-    let mut res = actix_web::HttpResponseBuilder::new(StatusCode::NOT_FOUND);
-    res.json(error)
+    BackEndErrorResponse::not_found().error_response()
 }
 
 /// Start the API server.

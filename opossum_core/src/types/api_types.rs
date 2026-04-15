@@ -1,10 +1,12 @@
-use std::fmt::Display;
+use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{nodes::ConnectionInfo, opm_document::AnalyzerInfo, prelude::{AnalyzerType, Isometry}};
+use crate::{
+    core_optics::optic_ports::PortConfig, nodes::ConnectionInfo, opm_document::AnalyzerInfo, prelude::{AnalyzerType, Isometry}
+};
 
 /// Structure holding the version information
 #[derive(ToSchema, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -50,13 +52,18 @@ impl Display for NodeType {
 
 #[derive(Serialize, Deserialize, ToSchema, Clone, Debug, PartialEq)]
 pub struct NodeInfo {
-    uuid: Uuid,
-    name: String,
-    inverted: bool,
-    node_type: String,
-    input_ports: Vec<String>,
-    output_ports: Vec<String>,
-    gui_position: Option<(f64, f64)>,
+    pub uuid: Uuid,
+    pub name: String,
+    pub node_type: String,
+    pub inverted: bool,
+    pub gui_position: Option<(f64, f64)>,
+    #[schema(value_type = Option<Object>)]
+    pub isometry: Option<Isometry>,
+    #[schema(value_type = Option<Object>)]
+    pub alignment: Option<Isometry>,
+    // Optional: Die Port-Namen als reine Liste (für die GUI-Verbindungen praktisch)
+    pub input_ports: Vec<String>,
+    pub output_ports: Vec<String>,
 }
 
 impl NodeInfo {
@@ -69,6 +76,8 @@ impl NodeInfo {
         input_ports: Vec<String>,
         output_ports: Vec<String>,
         gui_position: Option<(f64, f64)>,
+        alignment: Option<Isometry>,
+        isometry: Option<Isometry>,
     ) -> Self {
         Self {
             uuid,
@@ -78,6 +87,8 @@ impl NodeInfo {
             input_ports,
             output_ports,
             gui_position,
+            alignment,
+            isometry,
         }
     }
     #[must_use]
@@ -114,6 +125,14 @@ impl NodeInfo {
     pub fn set_output_ports(&mut self, outputs: Vec<String>) {
         self.output_ports = outputs;
     }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NodePortsResponse {
+    /// The input ports of the node (accounts for node inversion)
+    pub inputs: BTreeMap<String, PortConfig>,
+    /// The output ports of the node (accounts for node inversion)
+    pub outputs: BTreeMap<String, PortConfig>,
 }
 #[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
 pub struct NewRefNode {
@@ -308,52 +327,18 @@ pub struct MoveNodesRequest {
     pub nodes_to_move: Vec<Uuid>,
 }
 
-/// Structure holding an error mesaage
-#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ErrorResponse {
-    /// HTTP status
-    #[schema(example = "400")]
-    status: u16,
-    /// Error category (normally corresponds to `OpossumError` enum)
-    #[schema(example = "OpticScenery")]
-    category: String,
-    /// Description message of the error
-    message: String,
+    pub status: u16,
+    pub category: String,
+    pub message: String,
 }
+
 impl ErrorResponse {
-    #[must_use]
     pub fn new(status: u16, category: &str, message: &str) -> Self {
-        Self {
-            status,
-            category: category.to_string(),
-            message: message.to_string(),
-        }
+        Self { status, category: category.to_string(), message: message.to_string() }
     }
-    #[must_use]
     pub fn not_found() -> Self {
-        Self {
-            status: 404, // StatusCode::NOT_FOUND,
-            category: "api not found".to_string(),
-            message: "the OPOSSUM API endpoint was not found".to_string(),
-        }
-    }
-    #[must_use]
-    pub const fn status(&self) -> u16 {
-        self.status
-    }
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn category(&self) -> &str {
-        &self.category
-    }
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-}
-impl std::fmt::Display for ErrorResponse {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
+        Self::new(404, "General", "Resource not found")
     }
 }

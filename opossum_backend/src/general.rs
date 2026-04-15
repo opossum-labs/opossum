@@ -7,7 +7,6 @@ use actix_web::{
 };
 use opossum_core::{
     analyzers::AnalyzerType,
-    reporting::analysis_report::AnalysisReport,
     types::api_types::{NodeType, VersionInfo},
 };
 use semver::Version;
@@ -16,7 +15,7 @@ use utoipa_actix_web::service_config::ServiceConfig;
 
 /// Return a welcome message
 ///
-/// Simply return the text `OPOSSUM backend`. This is mostly for checking that the client is communication with the correct server.
+/// Simply return the text `OPOSSUM backend`. This is meant for checking the communication with the correct server.
 #[utoipa::path(get, path="/", responses((status = OK, description = "Fixed answer string", body = str, example = "OPOSSUM backend")), tag="general")]
 #[get("/")]
 async fn get_hello() -> &'static str {
@@ -66,7 +65,6 @@ async fn get_version() -> impl Responder {
             update_available = github_ver > local_ver;
         }
     }
-
     Json(VersionInfo {
         backend_version,
         opossum_version,
@@ -115,28 +113,12 @@ async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
     HttpResponse::NoContent().finish()
 }
 
-/// Analyze current setup and eturn a vector of analysisreports
-#[utoipa::path(get, responses(
-    (status = OK, description = "success", content_type="application/json"),
-    (status = BAD_REQUEST, body = BackEndErrorResponse, description = "Error during analysis", content_type="application/json")
-
-), tag="general")]
-#[get("/analyze")]
-async fn get_analyze(
-    data: web::Data<AppState>,
-) -> Result<Json<Vec<AnalysisReport>>, BackEndErrorResponse> {
-    let mut document = data.document.lock();
-    let reports = document.analyze()?;
-    drop(document);
-    Ok(Json(reports))
-}
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_version);
     cfg.service(get_hello);
     cfg.service(get_node_types);
     cfg.service(get_analyzer_types);
     cfg.service(post_terminate);
-    cfg.service(get_analyze);
 }
 #[cfg(test)]
 mod test {

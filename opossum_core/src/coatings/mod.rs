@@ -12,8 +12,9 @@ pub use constant_r::ConstantR;
 pub use fresnel::Fresnel;
 pub use ideal_ar::IdealAR;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Default, Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, ToSchema)]
 /// Enum for different types of optical coatings
 pub enum CoatingType {
     /// Perfect anti-reflective coating. Reflectivity is always 0.0

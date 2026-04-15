@@ -11,6 +11,7 @@ use log::{error, info, warn};
 use opossum_core::{
     core_optics::{OpticNode, SceneryResources},
     opm_document::OpmDocument,
+    types::api_types::ErrorResponse,
 };
 use std::{path::PathBuf, str::FromStr};
 use tokio::sync::mpsc;
@@ -85,7 +86,7 @@ async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackE
     content_type = "text/plain",
 ),
     responses((status = 200, description = "OPM file sucessfully parsed"),
-    (status = 400, description = "Error parsing OPM file"))
+    (status = 400, description = "Error parsing OPM file", body = ErrorResponse))
 )]
 /// Load a document from an OPM file string
 ///
@@ -166,6 +167,7 @@ async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Respond
             }),
         )
 }
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_document);
     cfg.service(put_document);
@@ -177,7 +179,6 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_root_uuid);
 
     // cfg.service(simulate);
-    //cfg.configure(nodes::config);
 }
 #[cfg(test)]
 mod test {

@@ -24,9 +24,9 @@ use crate::{
     validated, validated_type,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 use std::{collections::BTreeMap, fmt::Display};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
+use utoipa::ToSchema;
 
 /// Helper function to provide the default LIDT value for Serde deserialization.
 /// We need this because Serde's `#[serde(default)]` attribute requires a function path
@@ -46,11 +46,13 @@ const fn is_default_lidt(lidt: &validated_type!(Fluence, AllPositive && AllNotNa
     lidt.get().value.is_infinite()
 }
 
+/// Ein Type-Alias, um das Makro vor dem Utoipa-Parser zu verstecken.
+pub type ValidatedLidt = validated_type!(Fluence, AllPositive && AllNotNan);
 /// Configuration of an optical port containing user-adjustable parameters.
 ///
 /// This struct is purely for configuration (State) and is serialized.
 /// It does NOT contain geometric runtime data like `GeoSurface` or `HitMap`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PortConfig {
     /// The aperture of the port, defining the spatial transmission.
     #[serde(default)] //, skip_serializing_if = "Aperture::is_none")]
@@ -59,8 +61,9 @@ pub struct PortConfig {
     #[serde(default, skip_serializing_if = "is_ideal_ar")]
     pub coating: CoatingType,
     /// The Laser Induced Damage Threshold (LIDT) specific to this port.
+    #[schema(value_type = f64, example = 1.5)]
     #[serde(default = "default_lidt", skip_serializing_if = "is_default_lidt")]
-    pub lidt: validated_type!(Fluence, AllPositive && AllNotNan),
+    pub lidt: ValidatedLidt,
 }
 
 impl PortConfig {

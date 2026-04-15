@@ -4,8 +4,10 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    error::OpossumError, opm_document::AnalyzerInfo, prelude::AnalyzerType,
-    types::api_types::NewAnalyzerInfo,
+    error::OpossumError,
+    opm_document::AnalyzerInfo,
+    prelude::AnalyzerType,
+    types::api_types::{ErrorResponse, NewAnalyzerInfo},
 };
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -34,7 +36,7 @@ use crate::{app_state::AppState, error::BackEndErrorResponse};
         ),
         (
             status = BAD_REQUEST,
-            body = BackEndErrorResponse,
+            body = ErrorResponse,
             description = "UUID not found", 
             content_type = "application/json"
         )
@@ -152,7 +154,7 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
     ),
     responses(
         (status = OK, description = "Analyzer config successfully updated"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/ron")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/ron")
     )
 )]
 #[patch("/{uuid}")]

@@ -46,6 +46,7 @@ pub use gaussian::GaussianShape;
 pub use polygon::PolygonConfig;
 pub use rectangle::RectangleShape;
 pub use stack::StackShape;
+use utoipa::ToSchema;
 
 /// The apodization type of an [`Aperture`].
 ///
@@ -60,7 +61,7 @@ pub enum ApertureType {
 }
 
 /// Different aperture types
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum Aperture {
     /// completely transparent aperture. This is the default.
     #[default]

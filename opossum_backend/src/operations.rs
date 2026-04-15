@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     app_state::{AppState, NodeCacheItem},
     error::BackEndErrorResponse,
-    groups::helper_functions::{
+    helper_functions::{
         add_converted_group_to_scenery, build_new_group_from_refs_and_conns,
         collect_group_connections, collect_node_refs_and_pos, connect_from_info,
         create_new_group_node_info, split_sort_connections,
@@ -19,7 +19,9 @@ use opossum_core::{
     nodes::{ConnectionInfo, NodeGroup, create_node_ref},
     opm_document::AnalyzerInfo,
     prelude::{OpticNode, PortMap, PortType, Proptype},
-    types::api_types::{ConnectInfo, ConvertToGroupRequest, MoveNodesRequest, NodeInfo},
+    types::api_types::{
+        ConnectInfo, ConvertToGroupRequest, ErrorResponse, MoveNodesRequest, NodeInfo,
+    },
     utils::LockExt,
 };
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -35,7 +37,7 @@ use uuid::Uuid;
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/copy_nodes")]
@@ -76,7 +78,7 @@ async fn post_copy_nodes(
 #[utoipa::path(tag = "operations",
     responses(
         (status = OK, body= NodeInfo, description = "Cut-out nodes successfully  removed and cache cleared", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[allow(clippy::significant_drop_tightening)]
@@ -140,7 +142,7 @@ async fn post_cut_nodes(
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully pasted", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[allow(clippy::significant_drop_tightening)]
@@ -535,6 +537,8 @@ fn copy_optical_node(
         node.ports().names(&PortType::Input),
         node.ports().names(&PortType::Output),
         Some(new_pos),
+        node.alignment(),
+        node.isometry(),
     ))
 }
 fn copy_from_optic_ref(
@@ -593,7 +597,7 @@ fn get_shifted_pos_of_ref(
     ),
     responses(
         (status = OK, description = "Nodes successfully converted to group"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/convert_to_group")]
@@ -647,7 +651,7 @@ pub async fn post_convert_nodes_to_group(
     ),
     responses(
         (status = OK, description = "Nodes successfully transferred to group"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/move_nodes")]

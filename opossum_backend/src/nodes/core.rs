@@ -7,7 +7,7 @@ use opossum_core::{
     core_optics::OpticRef,
     nodes::{NodeReference, create_node_ref},
     prelude::{OpmDocument, OpticNode, PortType, Proptype},
-    types::api_types::{NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
+    types::api_types::{ErrorResponse, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
     utils::LockExt,
 };
 use parking_lot::MutexGuard;
@@ -25,7 +25,7 @@ use crate::{app_state::AppState, error::BackEndErrorResponse};
     ),
     responses(
         (status = OK, description = "get all nodes of the group", content((Vec<NodeInfo> = "application/json"))),
-        (status = BAD_REQUEST, description = "UUID not found or not a group node", content((BackEndErrorResponse = "application/json")))
+        (status = BAD_REQUEST, description = "UUID not found or not a group node", content((ErrorResponse = "application/json")))
     )
 )]
 #[get("/{uuid}/children")]
@@ -48,6 +48,8 @@ async fn get_children(
                 let input_ports = node.ports().names(&PortType::Input);
                 let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = node.gui_position().map(|position| (position.x, position.y));
+                let alignment = node.alignment();
+                let isometry = node.isometry();
                 drop(node);
                 NodeInfo::new(
                     n.uuid(),
@@ -57,6 +59,8 @@ async fn get_children(
                     input_ports,
                     output_ports,
                     gui_position,
+                    alignment,
+                    isometry,
                 )
             })
             .collect::<Vec<NodeInfo>>()
@@ -78,7 +82,7 @@ async fn get_children(
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "Node of the given type not found, UUID not found, no group node", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "Node of the given type not found, UUID not found, no group node", content_type="application/json")
     )
 )]
 #[post("/{uuid}/children")]
@@ -114,10 +118,50 @@ async fn post_children(
         node.ports().names(&PortType::Input),
         node.ports().names(&PortType::Output),
         gui_position,
+        node.isometry(),
+        node.alignment(),
     );
     drop(node);
     Ok(Json(node_info))
 }
+/// Get optical node properties
+///
+/// This function retrieves the properties of an optical node specified by its UUID. It also searches for the node recursively in the whole scenery.
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
+    ),
+    responses(
+        (status = OK, description = "get all node properties", content((NodeInfo = "application/json"),(NodeInfo ="application/ron"))),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}")]
+async fn get_node(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<NodeInfo>, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let document = data.document.lock();
+    let node_info = document.scenery().with_node_attr(uuid, |node_attr| {
+        NodeInfo::new(
+            uuid,
+            node_attr.name(),
+            node_attr.inverted(),
+            node_attr.node_type(),
+            node_attr.ports().names(&PortType::Input),
+            node_attr.ports().names(&PortType::Output),
+            node_attr
+                .gui_position()
+                .map(|position| (position.x, position.y)),
+            node_attr.alignment().clone(),
+            node_attr.isometry(),
+        )
+    })?;
+    Ok(Json(node_info))
+}
+/// Helper function to check if a node is a reference node
+
 /// Update optical node properties
 ///
 /// Modifies the standard properties (name, inversion, isometries, GUI position) of an optical node
@@ -127,7 +171,7 @@ async fn post_children(
     request_body = UpdateNodeRequest,
     responses(
         (status = OK, description = "Node properties successfully updated"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found or invalid data")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or invalid data")
     )
 )]
 #[patch("/{uuid}")]
@@ -177,7 +221,7 @@ async fn patch_node(
 #[utoipa::path(tag = "node",
 responses(
     (status = OK, body= Vec<Uuid>, description = "UUIDs of the deleted nodes", content_type="application/json"),
-    (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+    (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
 ))]
 #[delete("/{uuid}")]
 async fn delete_node(
@@ -191,7 +235,6 @@ async fn delete_node(
     drop(document);
     Ok(web::Json(deleted_nodes))
 }
-
 /// Add a new reference node to a group node
 ///
 /// Adds a new reference node to the specified group node, identified by its UUID (provided in the path).
@@ -219,7 +262,7 @@ async fn delete_node(
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found, no group node", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found, no group node", content_type="application/json")
     )
 )]
 #[post("/{uuid}/references")]
@@ -256,9 +299,36 @@ async fn post_reference(
         node_reference.ports().names(&PortType::Input),
         node_reference.ports().names(&PortType::Output),
         Some(ref_node_info.gui_position()),
+        node_reference.isometry(),
+        node_reference.alignment(),
     );
     Ok(Json(node_info))
 }
+
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the node"),
+    ),
+    responses(
+        (status = OK, description = "get the group hierarchy of a node", content(("application/json"))),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "node with UUID not found", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/hierarchy")]
+async fn get_node_hierarchy(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<Vec<(Uuid, String)>>, BackEndErrorResponse> {
+    let node_id = path.into_inner();
+    let document = data.document.lock();
+    let scenery = document.scenery();
+    let mut group_hierarchy = scenery.get_node_hierarchy_bottom_up(node_id)?;
+    drop(document);
+    group_hierarchy.reverse();
+
+    Ok(Json(group_hierarchy))
+}
+
 fn get_nested_referenced_node_from_state(
     uuid: Uuid,
     document: &MutexGuard<'_, OpmDocument>,

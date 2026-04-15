@@ -1,0 +1,125 @@
+use crate::{app_state::AppState, error::BackEndErrorResponse};
+use actix_web::{HttpResponse, get, patch, web};
+use opossum_core::{
+    coatings::CoatingType,
+    core_optics::{PortType, optic_ports::ValidatedLidt},
+    prelude::Aperture,
+    types::api_types::{ErrorResponse, NodePortsResponse},
+    utils::LockExt,
+};
+use serde::Deserialize;
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+/// Request-Objekt für partielle Updates eines Ports
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdatePortRequest {
+    /// The new aperture of the port (optional)
+    pub aperture: Option<Aperture>,
+
+    /// The new coating of the port (optional)
+    pub coating: Option<CoatingType>,
+
+    /// The new Laser Induced Damage Threshold (optional)
+    #[schema(value_type = Option<f64>)] // Swagger-Trick für den Type-Alias
+    pub lidt: Option<ValidatedLidt>,
+}
+
+/// Get all port configurations of an optical node
+///
+/// Returns the port configurations (Aperture, Coating, LIDT).
+/// Note: If the node is inverted, the physical inputs and outputs are automatically swapped in the response.
+#[utoipa::path(
+    tag = "node",
+    params(("uuid" = Uuid, Path, description = "UUID of the node")),
+    responses(
+        (status = OK, description = "Port configurations retrieved", body = NodePortsResponse, content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found")
+    )
+)]
+#[get("/{uuid}/ports")]
+pub async fn get_ports(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<web::Json<NodePortsResponse>, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let document = data.document.lock();
+
+    // Node holen
+    let node_attr = document
+        .scenery()
+        .node_recursive(uuid)?
+        .0
+        .optical_ref
+        .lock_opm()?
+        .node_attr()
+        .clone();
+
+    let ports = node_attr.ports();
+
+    // HIER IST DIE MAGIE: Wir nutzen .ports(), was die Invertierung berücksichtigt!
+    let response = NodePortsResponse {
+        inputs: ports.ports(&PortType::Input).clone(),
+        outputs: ports.ports(&PortType::Output).clone(),
+    };
+
+    Ok(web::Json(response))
+}
+
+/// Update a specific port configuration (Aperture, Coating, LIDT)
+///
+/// Modifies only the provided properties of a port. Omitted fields remain unchanged.
+#[utoipa::path(
+    tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the node"),
+        ("port_type" = PortType, Path, description = "Type of the port (Input or Output)"),
+        ("port_name" = String, Path, description = "Name of the port (e.g. 'input_1')")
+    ),
+    request_body(
+        content = UpdatePortRequest,
+        description = "The properties to update",
+        content_type = "application/json"
+    ),
+    responses(
+        (status = OK, description = "Port successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID or Port not found")
+    )
+)]
+#[patch("/{uuid}/ports/{port_type}/{port_name}")]
+pub async fn patch_port(
+    data: web::Data<AppState>,
+    path: web::Path<(Uuid, PortType, String)>,
+    update: web::Json<UpdatePortRequest>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let (uuid, port_type, port_name) = path.into_inner();
+    let update_data = update.into_inner();
+
+    let mut document = data.document.lock();
+    document
+        .scenery_mut()
+        .with_node_attr_mut(uuid, |node_attr| {
+            // Hole den richtigen Port (und berücksichtige die Invertierung)
+            let port_map = node_attr.ports_mut().ports_mut(&port_type);
+
+            if let Some(port) = port_map.get_mut(&port_name) {
+                // HIER IST DIE MAGIE: Nur das updaten, was der Client geschickt hat
+                if let Some(new_aperture) = update_data.aperture {
+                    port.aperture = new_aperture;
+                }
+                if let Some(new_coating) = update_data.coating {
+                    port.coating = new_coating;
+                }
+                if let Some(new_lidt) = update_data.lidt {
+                    port.lidt = new_lidt;
+                }
+                Ok(())
+            } else {
+                Err(opossum_core::error::OpossumError::Other(format!(
+                    "{} port '{}' not found",
+                    port_type, port_name
+                )))
+            }
+        })??;
+    Ok(HttpResponse::Ok().finish())
+}

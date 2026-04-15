@@ -2,7 +2,10 @@ use actix_web::{
     HttpResponse, delete, get, post, put,
     web::{self, Json},
 };
-use opossum_core::{meter, types::api_types::ConnectInfo};
+use opossum_core::{
+    meter,
+    types::api_types::{ConnectInfo, ErrorResponse},
+};
 use serde::Deserialize;
 use uom::si::length::meter;
 use utoipa::IntoParams;
@@ -24,7 +27,7 @@ pub struct DeleteConnectionQuery {
     ),
     responses(
         (status = OK, description = "all connections of the group", body= Vec<ConnectInfo>, content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
     )
 )]
 #[allow(clippy::significant_drop_tightening)]
@@ -65,7 +68,7 @@ pub async fn get_connections(
 #[utoipa::path(tag = "node",
     responses(
         (status = OK, description = "node connection created", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "group UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found", content_type="application/json")
     )
 )]
 #[post("/{uuid}/connections")]
@@ -102,7 +105,7 @@ async fn post_connection(
 #[utoipa::path(tag = "node",
     responses(
         (status = OK, description = "node connection updated", content_type="application/json"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "group UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found", content_type="application/json")
 ))]
 #[put("/{uuid}/connections")]
 async fn update_connection(
@@ -136,7 +139,7 @@ async fn update_connection(
     ),
     responses(
         (status = OK, description = "node connection successfully deleted"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "group UUID not found or disconnection failed", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found or disconnection failed", content_type="application/json")
     )
 )]
 #[delete("/{uuid}/connections")]

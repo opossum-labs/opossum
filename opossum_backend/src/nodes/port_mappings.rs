@@ -5,7 +5,7 @@ use actix_web::{
 };
 use opossum_core::{
     prelude::{OpticNode, PortMap, PortType},
-    types::api_types::ConnectInfo,
+    types::api_types::{ConnectInfo, ErrorResponse},
 };
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
@@ -34,7 +34,7 @@ pub struct RemovePortMapQuery {
     ),
     responses(
         (status = OK, description = "Node portmaps successfully sent!"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[get("/{uuid}/port_mappings")]
@@ -66,7 +66,7 @@ pub async fn get_port_mappings(
     ),
     responses(
         (status = OK, description = "Node port successfully mapped to group port"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[post("/{uuid}/port_mappings")]
@@ -119,7 +119,7 @@ pub async fn post_port_mapping(
     ),
     responses(
         (status = OK, description = "Node port successfully removed from group"),
-        (status = BAD_REQUEST, body = BackEndErrorResponse, description = "UUID not found", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 #[allow(clippy::significant_drop_tightening)]
