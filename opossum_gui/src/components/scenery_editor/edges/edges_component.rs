@@ -1,6 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
-    EditorStateStoreExt, GraphState, GraphStore,
+    EditorStateStoreExt, GraphState,
     constants::EDGE_BEZIER_OFFSET,
     edges::{define_bezier_path, edge_component::EdgeComponent},
     graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},

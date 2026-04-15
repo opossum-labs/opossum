@@ -24,7 +24,7 @@ use crate::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
         },
         graph_workspace::{
-            EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState,
+            EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
             WorkSpaceSignalHandlers,
             workspace_action::GraphsWorkspaceAction,
             workspace_state::{GraphInfo, optimize_layout_and_sync},
@@ -34,7 +34,7 @@ use crate::{
 };
 #[allow(clippy::too_many_lines)]
 pub fn use_workspace_processor(
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     root_graph_id: Memo<Uuid>,
     workspace_handlers: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
@@ -150,7 +150,7 @@ pub fn use_workspace_processor(
                         workspace_handlers.workspace.set_nodes_cut(true);
                     }
                     GraphsWorkspaceAction::PasteNode { pos, graph_id } => {
-                        let nodes_cut = workspace.read().nodes_cut;
+                        let nodes_cut = *workspace.nodes_cut().read();
                         process_paste_nodes(pos, workspace_handlers, graph_id, nodes_cut).await;
                     }
                     GraphsWorkspaceAction::SyncNodePosition { node_id, pos } => {
@@ -172,7 +172,7 @@ pub fn use_workspace_processor(
                         group_name,
                     } => {
                         let group_tab_already_open =
-                            workspace.read().tabs.read().contains_key(&group_id);
+                            workspace.tabs().contains_key(&group_id);
                         if group_tab_already_open {
                             workspace_handlers.workspace.set_active_tab(group_id);
                         } else {
@@ -335,10 +335,10 @@ pub fn use_workspace_processor(
 }
 
 async fn process_get_editor_area(
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
-    let element_id = format!("editor_{}", *workspace.read().active_tab.read().as_simple());
+    let element_id = format!("editor_{}", workspace.active_tab().read().as_simple());
     let js = format!(
         r"
         let el = document.getElementById('{element_id}');
@@ -371,13 +371,13 @@ async fn process_get_editor_area(
 
 async fn process_jump_to_mapped_port(
     root_scenery_id: ReadSignal<Uuid>,
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
     mapped_node_id: Uuid,
     parent_id: Uuid,
     parent_name: String,
 ) {
-    let group_tab_already_open = workspace.read().tabs.read().contains_key(&parent_id);
+    let group_tab_already_open = workspace.tabs().contains_key(&parent_id);
     if group_tab_already_open {
         ws_handler.workspace.set_active_tab(parent_id);
     } else {
@@ -404,12 +404,12 @@ async fn process_add_edge(
 
 async fn process_delete_node(
     node_id: Uuid,
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
     let node_type_to_delete = {
-        let graph = workspace.read().tabs.read().get(&graph_id).copied();
+        let graph = workspace.tabs().get(graph_id);
 
         let Some(graph) = graph else {
             OPOSSUM_UI_LOGS.write().add_log(&format!(
@@ -563,15 +563,12 @@ async fn process_update_edge(
 }
 
 async fn process_optimize_layout(
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
     let Some(edges) = workspace
-        .peek()
-        .tabs
-        .peek()
-        .get(&graph_id)
+        .tabs().get(graph_id)
         .map(|g| g.graph_store().edges().read().clone())
     else {
         OPOSSUM_UI_LOGS.write().add_log(&format!(
@@ -593,13 +590,13 @@ async fn process_optimize_layout(
 
 async fn process_add_analyzer(
     analyzer_type: AnalyzerType,
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
     // ----- READ PHASE -----
     let new_analyzer_info = {
-        let graph = workspace.peek().tabs.peek().get(&graph_id).copied();
+        let graph = workspace.tabs().get(graph_id);
 
         let Some(graph) = graph else {
             OPOSSUM_UI_LOGS.write().add_log(&format!(
@@ -614,7 +611,7 @@ async fn process_add_analyzer(
 
         let zoom = *editor_state.zoom().peek();
         let shift = *editor_state.shift().peek();
-        let center = workspace.read().get_view_port_center();
+        let center = workspace.get_view_port_center();
 
         let proposed_pos = ((center.x - shift.x) / zoom, (center.y - shift.y) / zoom);
 
@@ -654,15 +651,14 @@ async fn process_add_reference_node(
 
 async fn process_add_optic_node(
     new_node_type_string: &str,
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
     // ----- READ PHASE -----
     let new_node_info = {
-        let workspace_ref = workspace.peek();
-        let editor_state_opt = workspace_ref.get_editor_state(graph_id);
-        let graph_store_opt = workspace_ref.get_graph_store(graph_id);
+        let editor_state_opt = workspace.tabs().get(graph_id).map(|g| g.editor_state());
+        let graph_store_opt = workspace.tabs().get(graph_id).map(|g| g.graph_store());
 
         let (Some(graph_store), Some(editor_state)) = (graph_store_opt, editor_state_opt) else {
             OPOSSUM_UI_LOGS.write().add_log(&format!(
@@ -675,7 +671,7 @@ async fn process_add_optic_node(
         let zoom = *editor_state.zoom().peek();
 
         let shift = *editor_state.shift().peek();
-        let center = workspace.read().get_view_port_center();
+        let center = workspace.get_view_port_center();
         let proposed_pos = (
             (center.x - shift.x - NODE_WIDTH / 2.) / zoom,
             (center.y - shift.y - f64::midpoint(MIN_NODE_BODY_HEIGHT, HEADER_HEIGHT)) / zoom,
@@ -911,7 +907,7 @@ async fn process_fill_graph_of_group(
 }
 
 async fn process_load_from_file(
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     path: PathBuf,
     scenery_id_sig: Memo<Uuid>,
     ws_handler: WorkSpaceSignalHandlers,
@@ -976,7 +972,7 @@ async fn process_save_root_scenery_to_file(
 }
 
 async fn process_add_root_scenery_tab(
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
     name: String,
 ) {

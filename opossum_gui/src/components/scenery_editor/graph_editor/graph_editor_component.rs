@@ -8,7 +8,7 @@ use crate::components::{
             hooks::{use_drag_end, use_on_key_down, use_on_key_up},
         },
         graph_workspace::{
-            GraphStateStoreExt, GraphsWorkspaceAction, GraphsWorkspaceState,
+            GraphStateStoreExt, GraphsWorkspaceAction, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt,
             WorkSpaceSignalHandlers, use_workspace_processor,
             workspace_action::node_editor_command,
         },
@@ -29,14 +29,14 @@ pub fn GraphEditor(
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     root_tab_open_handler: EventHandler<bool>,
 ) -> Element {
-    let workspace = use_signal(GraphsWorkspaceState::default);
-    use_context_provider(|| ReadSignal::from(workspace));
-    let root_graph_id = use_memo(move || *workspace.read().root_scenery_id.read());
+    let workspace = use_store(GraphsWorkspaceState::default);
+    use_context_provider(|| ReadStore::from(workspace));
+    let root_graph_id = use_memo(move || *workspace.root_scenery_id().read());
 
     let workspace_handlers = WorkSpaceSignalHandlers::new(workspace);
 
     let graph_editor_container_class =
-        use_memo(move || match *workspace.peek().drag_status.read() {
+        use_memo(move || match *workspace.drag_status().read() {
             DragStatus::Graph => "col px-0 graph-editor-container dragging".to_string(),
             _ => "col px-0 graph-editor-container".to_string(),
         });
@@ -48,7 +48,7 @@ pub fn GraphEditor(
         model_file_path_handler,
     );
 
-    let active_tab = use_memo(move || *workspace.read().active_tab.read());
+    let active_tab = use_memo(move || *workspace.active_tab().read());
 
     use_effect(move || {
         node_editor_command(
@@ -76,7 +76,7 @@ pub fn GraphEditor(
     });
 
     use_effect(move || {
-        root_tab_open_handler.call(*root_graph_id.peek() == *workspace.peek().active_tab.read());
+        root_tab_open_handler.call(*root_graph_id.peek() == *workspace.active_tab().read());
     });
 
     use_effect(move || {
@@ -99,19 +99,22 @@ pub fn GraphEditor(
     let shift_pressed = use_signal(|| false);
 
     use_effect(move || {
-        let is_unsaved = *workspace.read().needs_saving.read();
+        let is_unsaved = *workspace.needs_saving().read();
         if *model_modified_sig.peek() != is_unsaved {
             model_modified_handler.call(is_unsaved);
         }
     });
 
     let selected_nodes_memo = use_memo(move || {
-        let read_workspace = workspace.read();
-        read_workspace
-            .get_graph_store_read(active_tab())
-            .map_or(Vec::<SelectedNode>::new(), |g| {
-                g.read().get_selected_nodes(active_tab())
+        workspace.tabs().get(active_tab()).map_or(Vec::<SelectedNode>::new(), |g| {
+                g.graph_store().read().get_selected_nodes(active_tab())
             })
+        // let read_workspace = workspace.read();
+        // read_workspace
+        //     .get_graph_store_read(active_tab())
+        //     .map_or(Vec::<SelectedNode>::new(), |g| {
+        //         g.read().get_selected_nodes(active_tab())
+        //     })
     });
     let onmouseleave_handler = use_drag_end(workspace.into(), None);
     let onkeydownhandler = use_on_key_down(
@@ -148,12 +151,11 @@ pub fn GraphEditor(
                         }
                     },
                     {
-                        let tabs = workspace.read().tabs.read().clone();
-                        let tab_order = workspace.read().tab_order.read().clone();
+                        let tab_order = workspace.tab_order().read().clone();
                         rsx! {
                             TabList { class: "editor-tab-list",
                                 for (i , id) in tab_order.iter().enumerate() {
-                                    if let Some(graph_state) = tabs.get(id) {
+                                    if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabTrigger {
                                             key: "{id.as_simple().to_string()}",
                                             value: id.as_simple().to_string(),
@@ -185,7 +187,7 @@ pub fn GraphEditor(
                                 class: "graph-editor-tab-content",
                                 onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea()),
                                 for (i , id) in tab_order.iter().enumerate() {
-                                    if let Some(graph_state) = tabs.get(id) {
+                                    if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabContent {
                                             key: "{id.as_simple().to_string()}",
                                             class: "tab-content",
@@ -197,7 +199,7 @@ pub fn GraphEditor(
                                                 model_file_path_sig,
                                                 model_file_path_handler,
                                                 current_mouse_pos: current_mouse_in_editor_pos,
-                                                graph_state: *graph_state,
+                                                graph_state,
                                                 ctrl_pressed,
                                                 shift_pressed,
                                             }

@@ -1,6 +1,6 @@
 use crate::components::scenery_editor::graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt};
 use crate::components::scenery_editor::{
-    EditorState, GraphState, GraphStore, GraphsWorkspaceState,
+    GraphState, GraphsWorkspaceState,
     constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
     node::NodeElement,
     ports::{
@@ -60,7 +60,7 @@ pub fn NodePort(
     let graph_state = use_context::<ReadStore<GraphState>>();
     let editor_status = graph_state.editor_state();
     let graph_store = graph_state.graph_store();
-    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
 
     let rel_port_position = node.rel_port_position(port_type, &port_name);
     let abs_port_position = node.abs_port_position(port_type, &port_name);
@@ -116,7 +116,7 @@ pub fn NodePort(
                 on_context_menu_handler,
                 rel_port_position,
                 port_type,
-                external_port
+                external_port,
             }
         }
     }

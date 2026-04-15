@@ -1,6 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
-    DragStatus, EditorStateStoreExt, GraphsWorkspaceState, NodeType, SelectionBoxComponent,
+    DragStatus, EditorStateStoreExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, NodeType, SelectionBoxComponent,
     constants::{HEADER_HEIGHT, NODE_WIDTH},
     edges::edges_component::{EdgeCreationComponent, EdgesComponent},
     graph_editor::{
@@ -30,7 +30,7 @@ pub fn GraphViewEditor(
 ) -> Element {
     println!("GraphViewEditor rerender");
 
-    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
     let graph_id = graph_state.graph_info().read().id;
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
@@ -47,7 +47,7 @@ pub fn GraphViewEditor(
     );
 
     let nodes_in_selection = use_memo(move || {
-        let selection_box = *workspace.peek().selection_box.read();
+        let selection_box = *workspace.selection_box().read();
         let nodes = graph_store.nodes().peek().clone();
 
         selection_box.map_or_else(HashSet::<Uuid>::new, |select_box| {
@@ -69,7 +69,7 @@ pub fn GraphViewEditor(
     let zoom = use_memo(move || *editor_state.zoom().read());
 
     let mouse_pos_in_editor = use_memo(move || {
-        let editor_origin = workspace.peek().editor_area.peek().origin;
+        let editor_origin = workspace.editor_area().peek().origin;
         Point2D::new(
             (current_mouse_pos.read().x - editor_origin.x - shift.peek().x) / *zoom.peek(),
             (current_mouse_pos.read().y - editor_origin.y - shift.peek().y) / *zoom.peek(),
@@ -78,9 +78,8 @@ pub fn GraphViewEditor(
 
     use_effect(move || {
         let mouse = mouse_pos_in_editor.read();
-        let drag_status = workspace.read().drag_status.read().clone();
 
-        if drag_status != DragStatus::Nodes {
+        if *workspace.drag_status().read() != DragStatus::Nodes {
             return;
         }
 
@@ -151,7 +150,7 @@ pub fn GraphViewEditor(
                         shift().y,
                         zoom(),
                     ),
-                    for (_, node) in graph_store.nodes().iter() {
+                    for (_ , node) in graph_store.nodes().iter() {
                         {
                             rsx! {
                                 Node {
@@ -159,7 +158,7 @@ pub fn GraphViewEditor(
                                     ctrl_pressed,
                                     shift_pressed,
                                     mouse_pos_in_editor,
-                                    nodes_in_selection
+                                    nodes_in_selection,
                                 }
                             }
                         }

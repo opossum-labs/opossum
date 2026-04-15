@@ -1,5 +1,5 @@
-use crate::components::scenery_editor::graph_workspace::{
-    EditorStateStoreExt, GraphsWorkspaceState,
+use crate::components::scenery_editor::graph_workspace::{GraphsWorkspaceStateStoreImplExt,
+    EditorStateStoreExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt,
     workspace_handlers::helper_functions::with_editor_state,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -14,7 +14,7 @@ pub struct ViewHandlers {
 }
 
 impl ViewHandlers {
-    pub fn new(workspace: Signal<GraphsWorkspaceState>) -> Self {
+    pub fn new(workspace: Store<GraphsWorkspaceState>) -> Self {
         Self {
             center_graph: center_graph_handler(workspace),
             zoom_to_fit: zoom_to_fit_handler(workspace),
@@ -38,36 +38,34 @@ impl ViewHandlers {
 }
 
 fn set_shift_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Point2D<f64>)> {
     EventHandler::new(move |(graph_id, shift)| {
         with_editor_state(workspace, graph_id, false, |e| e.shift().set(shift));
     })
 }
 
-fn set_zoom_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(Uuid, f64)> {
+fn set_zoom_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<(Uuid, f64)> {
     EventHandler::new(move |(graph_id, zoom)| {
         with_editor_state(workspace, graph_id, false, |e| e.zoom().set(zoom));
     })
 }
-fn center_graph_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(Uuid, bool)> {
+fn center_graph_handler(mut workspace: Store<GraphsWorkspaceState>) -> EventHandler<(Uuid, bool)> {
     EventHandler::new(move |(graph_id, save)| {
-        let mut ws = workspace.write();
-        ws.center_graph(graph_id);
+        workspace.center_graph(graph_id);
 
         if save {
-            ws.needs_saving.set(true);
+            workspace.needs_saving().set(true);
         }
     })
 }
 
-fn zoom_to_fit_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(Uuid, bool)> {
+fn zoom_to_fit_handler(mut workspace: Store<GraphsWorkspaceState>) -> EventHandler<(Uuid, bool)> {
     EventHandler::new(move |(graph_id, save)| {
-        let mut ws = workspace.write();
-        ws.zoom_to_fit(graph_id);
+        workspace.zoom_to_fit(graph_id);
 
         if save {
-            ws.needs_saving.set(true);
+            workspace.needs_saving().set(true);
         }
     })
 }

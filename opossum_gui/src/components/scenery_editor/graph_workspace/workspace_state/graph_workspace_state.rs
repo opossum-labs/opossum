@@ -4,15 +4,13 @@ use dioxus::{
     html::geometry::euclid::default::{Point2D, Rect, Size2D},
     prelude::*,
 };
-use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
 use crate::components::scenery_editor::{
     DragStatus, NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
     graph_workspace::{
-        EditorState, EditorStateStoreExt, GraphState, GraphStateStoreExt, GraphStore,
-        GraphStoreStoreExt,
+        EditorStateStoreExt, GraphState, GraphStateStoreExt,
     },
 };
 
@@ -23,120 +21,113 @@ pub struct SelectedNode {
     pub node_type: NodeType,
 }
 
-#[derive(Clone, Eq, PartialEq, Default)]
+#[derive(Clone, PartialEq, Default, Store)]
 pub struct GraphsWorkspaceState {
-    pub tabs: Signal<HashMap<Uuid, Store<GraphState>>>,
-    pub tab_order: Signal<Vec<Uuid>>,
-    pub active_tab: Signal<Uuid>,
-    pub root_scenery_id: Signal<Uuid>,
-    pub editor_area: Signal<Rect<f64>>,
-    pub needs_saving: Signal<bool>,
-    pub drag_status: Signal<DragStatus>,
-    pub selection_box: Signal<Option<Rect<f64>>>,
-    pub drop_in_group: Signal<Option<(Uuid, usize)>>,
-    pub nodes_cut: bool,
+    tabs: HashMap<Uuid, GraphState>,
+    tab_order: Vec<Uuid>,
+    active_tab: Uuid,
+    root_scenery_id: Uuid,
+    editor_area: Rect<f64>,
+    needs_saving: bool,
+    drag_status: DragStatus,
+    selection_box: Option<Rect<f64>>,
+    drop_in_group: Option<(Uuid, usize)>,
+    nodes_cut: bool,
 }
 
-impl GraphsWorkspaceState {
-    pub(in super::super) fn get_graph_store(&self, graph_id: Uuid) -> Option<Store<GraphStore>> {
-        self.tabs
-            .read()
-            .get(&graph_id)
-            .copied()
-            .map(|g| g.graph_store().into())
-    }
-    pub(in super::super) fn get_graph_state(&self, graph_id: Uuid) -> Option<Store<GraphState>> {
-        self.tabs.read().get(&graph_id).copied()
-    }
-    pub(in super::super) fn get_tab(&self, graph_id: Uuid) -> Option<Store<GraphState>> {
-        self.tabs.read().get(&graph_id).copied()
-    }
-    pub fn get_graph_store_read(&self, graph_id: Uuid) -> Option<ReadStore<GraphStore>> {
-        self.tabs
-            .read()
-            .get(&graph_id)
-            .map(|g| g.graph_store().into())
-    }
-    pub(in super::super) fn get_editor_state(&self, graph_id: Uuid) -> Option<Store<EditorState>> {
-        self.tabs
-            .read()
-            .get(&graph_id)
-            .map(|g| g.editor_state().into())
-    }
-    pub(in super::super) fn get_graph_edges_mut(
-        &self,
-        graph_id: Uuid,
-    ) -> Option<Store<Vec<ConnectInfo>, impl Writable<Target = Vec<ConnectInfo>>>> {
-        self.tabs
-            .read()
-            .get(&graph_id)
-            .map(|g| g.graph_store().edges())
-    }
-    pub fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64>> {
-        self.tabs
-            .read()
-            .get(&graph_id)
+#[store(pub)]
+impl<Lens> Store<GraphsWorkspaceState, Lens>{
+    // pub(in super::super) fn get_graph_store(&self, graph_id: Uuid) -> Option<Store<GraphStore>> {
+    //     self.tabs
+    //         .get(&graph_id)
+    //         .copied()
+    //         .map(|g| g.graph_store().into())
+    // }
+    // pub(in super::super) fn get_graph_state(&self, graph_id: Uuid) -> Option<Store<GraphState>> {
+    //     self.tabs.get(&graph_id).copied()
+    // }
+    // pub(in super::super) fn get_tab(&self, graph_id: Uuid) -> Option<Store<GraphState>> {
+    //     self.tabs.get(&graph_id).copied()
+    // }
+    // pub fn get_graph_store_read(&self, graph_id: Uuid) -> Option<GraphStore> {
+    //     self.tabs
+    //         .get(graph_id)
+    //         .map(|g| g.graph_store())
+    // }
+    // pub(in super::super) fn get_editor_state(&self, graph_id: Uuid) -> Option<Store<EditorState>> {
+    //     self.tabs
+    //         .get(&graph_id)
+    //         .map(|g| g.editor_state().into())
+    // }
+    // pub(in super::super) fn get_graph_edges_mut(
+    //     &self,
+    //     graph_id: Uuid,
+    // ) -> Option<Store<Vec<ConnectInfo>, impl Writable<Target = Vec<ConnectInfo>>>> {
+    //     self.tabs
+    //         .get(&graph_id)
+    //         .map(|g| g.graph_store().edges())
+    // }
+    fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64>> {
+        self.tabs()
+            .get(graph_id)
             .map(|g| g.graph_store().read().get_bounding_box())
     }
 
-    pub(in super::super) fn center_graph(&self, graph_id: Uuid) {
+    fn center_graph(&mut self, graph_id: Uuid) {
         let bounding_box_opt = self.get_graph_bounding_box(graph_id);
         let view_center = self.get_view_port_center();
-        if let (Some(editor), Some(bounding_box)) =
-            (self.get_editor_state(graph_id), bounding_box_opt)
+        if let (Some(graph), Some(bounding_box)) =
+            (self.tabs().get(graph_id), bounding_box_opt)
         {
             let center = bounding_box.center();
-            let zoom = *editor.zoom().read();
-            editor.shift().set(Point2D::new(
+            let zoom = *graph.editor_state().zoom().read();
+            graph.editor_state().shift().set(Point2D::new(
                 center.x.mul_add(-zoom, view_center.x),
                 center.y.mul_add(-zoom, view_center.y),
             ));
         }
     }
 
-    pub(in super::super) fn remove_tabs(&mut self, tab_ids: &Vec<Uuid>) {
+    fn remove_tabs(&mut self, tab_ids: &Vec<Uuid>) {
         for id in tab_ids {
-            self.tabs.write().remove(id);
-            self.tab_order.write().retain(|x| x != id);
+            self.tabs().write().remove(id);
+            self.tab_order().write().retain(|x| x != id);
         }
-
-        let act_tab = *self.active_tab.read();
+        let act_tab=*self.active_tab().read();
         if tab_ids.contains(&act_tab) {
-            let root_id = *self.root_scenery_id.read();
-            self.active_tab.set(root_id);
+            self.active_tab().set(*self.root_scenery_id().read());
         }
     }
 
-    pub(in super::super) fn zoom_to_fit(&self, graph_id: Uuid) {
+    fn zoom_to_fit(&mut self, graph_id: Uuid) {
         let bounding_box_opt = self.get_graph_bounding_box(graph_id);
         let view_box = self.get_view_port_size();
         let view_center = self.get_view_port_center();
-
-        if let (Some(mut editor), Some(bounding_box)) =
-            (self.get_editor_state(graph_id), bounding_box_opt)
+        
+        if let (Some(graph), Some(bounding_box)) =
+            (self.tabs().get(graph_id), bounding_box_opt)
         {
             let padding_fac = 0.95;
-            let zoom = *editor.zoom().read();
+            let zoom = *graph.editor_state().zoom().read();
             let height_fac = view_box.height * padding_fac / zoom / bounding_box.height();
             let width_fac = view_box.width * padding_fac / zoom / bounding_box.width();
-            editor
-                .zoom()
-                .set((zoom * width_fac.min(height_fac)).clamp(MIN_ZOOM, MAX_ZOOM));
+            graph.editor_state().zoom().set((zoom * width_fac.min(height_fac)).clamp(MIN_ZOOM, MAX_ZOOM));
+
 
             let center = bounding_box.center();
-            let zoom = *editor.zoom().read();
-            editor.shift().set(Point2D::new(
+            let zoom = *graph.editor_state().zoom().read();
+            graph.editor_state().shift().set(Point2D::new(
                 center.x.mul_add(-zoom, view_center.x),
                 center.y.mul_add(-zoom, view_center.y),
             ));
         }
     }
 
-    pub fn get_view_port_center(&self) -> Point2D<f64> {
-        let editor_size = *self.editor_area.read();
+    fn get_view_port_center(&self) -> Point2D<f64> {
+        let editor_size = *self.editor_area().read();
         Point2D::new(editor_size.width() / 2., editor_size.height() / 2.)
     }
-    pub fn get_view_port_size(&self) -> Size2D<f64> {
-        self.editor_area.read().size
+    fn get_view_port_size(&self) -> Size2D<f64> {
+        self.editor_area().read().size
     }
 }

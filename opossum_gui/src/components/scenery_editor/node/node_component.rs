@@ -4,8 +4,8 @@ use std::collections::HashSet;
 use super::NodeElement;
 use crate::CONTEXT_MENU;
 use crate::components::scenery_editor::constants::HEADER_HEIGHT;
-use crate::components::scenery_editor::graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt};
-use crate::components::scenery_editor::{DragStatus, GraphStore};
+use crate::components::scenery_editor::graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt};
+use crate::components::scenery_editor::DragStatus;
 use crate::components::scenery_editor::{GraphState, GraphsWorkspaceState};
 use crate::components::{
     context_menu::cx_menu::{CxMenu, CxtCommand},
@@ -16,7 +16,7 @@ use crate::components::{
         {GraphsWorkspaceAction, NodeType},
     },
 };
-use dioxus::html::geometry::euclid::default::{Point2D, Rect, Size2D};
+use dioxus::html::geometry::euclid::default::Point2D;
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 use opossum_core::types::api_types::NewRefNode;
@@ -34,8 +34,7 @@ pub fn Node(
     let graph_state = use_context::<ReadStore<GraphState>>();
     let graph_store = graph_state.graph_store();
     let graph_id = graph_state.graph_info().read().id;
-    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
-    let drag_status = workspace.peek().drag_status;
+    let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let position = node.pos();
     let node_height = node.node_body_height() + HEADER_HEIGHT;
@@ -108,17 +107,15 @@ pub fn Node(
                 }
             },
             onmousemove: move |_| {
-                let drag_status = workspace.read().drag_status.read().clone();
-                if drag_status == DragStatus::NodeInit {
+                if *workspace.drag_status().read() == DragStatus::NodeInit {
                     workspace_processor
                         .send(GraphsWorkspaceAction::SetDragStatus(DragStatus::Nodes));
                 }
             },
             onmouseup: {
                 move |_| {
-                    let drag_status = workspace.read().drag_status.read().clone();
-
-                    if drag_status == DragStatus::NodeInit && !ctrl_pressed() {
+                    if *workspace.drag_status().read() == DragStatus::NodeInit && !ctrl_pressed()
+                    {
                         workspace_processor
                             .send(GraphsWorkspaceAction::SetNodeActive {
                                 graph_id,

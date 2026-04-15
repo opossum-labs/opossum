@@ -15,7 +15,7 @@ use crate::{
             DragStatus, EditorState, EditorStateStoreExt, GraphState, GraphStore,
             GraphsWorkspaceAction, GraphsWorkspaceState,
             edges::edges_component::{EdgePort, NewEdgeCreationStart},
-            graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt, workspace_state::GraphInfo},
+            graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt, workspace_state::GraphInfo},
         },
     },
 };
@@ -102,7 +102,7 @@ pub fn use_on_mouse_enter(
 }
 
 pub fn use_on_context_menu(
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     graph_store: Store<GraphStore, impl Readable<Target = GraphStore> + 'static>,
     graph_info: GraphInfo,
     node_id: Uuid,
@@ -116,7 +116,7 @@ pub fn use_on_context_menu(
         let x_coord = event.page_coordinates().x;
         let y_coord = event.page_coordinates().y;
 
-        let root_tab = *workspace.read().root_scenery_id.read();
+        let root_tab = *workspace.root_scenery_id().read();
         if graph_info.id != root_tab {
             let mut cx_menu = CxMenu::new(x_coord, y_coord, vec![]);
 
@@ -135,12 +135,10 @@ pub fn use_on_context_menu(
                 cx_menu.add_entry(remove_entry);
 
                 let parent = graph_info.get_parent().unwrap_or_else(|| {
-                    let root_id = *workspace.read().root_scenery_id.read();
+                    let root_id = *workspace.root_scenery_id().read();
                     let root_name = workspace
-                        .read()
-                        .tabs
-                        .read()
-                        .get(&root_id)
+                        .tabs()
+                        .get(root_id)
                         .unwrap()
                         .graph_info()
                         .read()

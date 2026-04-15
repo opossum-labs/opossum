@@ -6,17 +6,17 @@ use std::{
 use crate::{
     CONTEXT_MENU,
     components::scenery_editor::{
-        GraphState, NodeElement, NodeType,
+        GraphState, NodeType,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
         graph_workspace::{
-            DragStatus, EditorState, EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt,
+            DragStatus, EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
             GraphsWorkspaceAction, GraphsWorkspaceState,
         },
     },
 };
 use dioxus::{
     html::{
-        geometry::euclid::default::{Point2D, Rect, Size2D},
+        geometry::euclid::default::Point2D,
         input_data::MouseButton,
     },
     prelude::*,
@@ -27,13 +27,13 @@ use uuid::Uuid;
 pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let graph_state = use_context::<ReadStore<GraphState>>();
     let editor_status = graph_state.editor_state();
-    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
     move |wheel_event| {
         let current_graph_zoom = *editor_status.zoom().read();
         let current_graph_shift = *editor_status.shift().read();
-        let rect = *workspace.read().editor_area.read();
+        let rect = *workspace.editor_area().read();
         let client_pos = wheel_event.data.client_coordinates();
         let mouse_pos = Point2D::new(client_pos.x - rect.min_x(), client_pos.y - rect.min_y());
         let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
@@ -47,7 +47,7 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         let new_shift_x = mouse_on_graph_x.mul_add(-new_graph_zoom, mouse_pos.x);
         let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
 
-        let graph_id = *workspace.read().active_tab.read();
+        let graph_id = *workspace.active_tab().read();
         workspace_processor.send(GraphsWorkspaceAction::SetZoom {
             graph_id,
             zoom: new_graph_zoom,
@@ -70,7 +70,7 @@ pub fn use_on_mouse_down(
     let editor_status = graph_state.editor_state();
     let graph_store = graph_state.graph_store();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
 
     move |event: MouseEvent| {
         event.stop_propagation();
@@ -88,7 +88,7 @@ pub fn use_on_mouse_down(
                     let mouse_pos =
                         Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
 
-                    let editor_origin = workspace().editor_area.read().origin;
+                    let editor_origin = workspace.editor_area().read().origin;
                     let current_shift = *editor_status.shift().read();
                     let current_zoom = *editor_status.zoom().read();
 
@@ -116,7 +116,7 @@ pub fn use_on_mouse_down(
                     if let Some(t0) = t0_opt
                         && now.duration_since(t0) < dc_time
                     {
-                        let graph_id = *workspace.read().active_tab.read();
+                        let graph_id = *workspace.active_tab().read();
                         workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
                             graph_id,
                             save_changes: true,
@@ -133,7 +133,7 @@ pub fn use_on_mouse_down(
 pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(MouseEvent) {
     let graph_state = use_context::<ReadStore<GraphState>>();
     let editor_status = graph_state.editor_state();
-    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+    let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let graph_id = graph_state.graph_info().read().id;
 
@@ -152,7 +152,7 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
 
         workspace_processor.send(GraphsWorkspaceAction::ApplyDrag {
             graph_id,
-            drag_status: workspace.read().drag_status.read().clone(),
+            drag_status: workspace.drag_status().read().clone(),
             relative_shift,
             current_zoom: *editor_status.zoom().read(),
             mouse_to_graph_shift,
@@ -176,14 +176,14 @@ pub fn use_on_key_up(
 
 pub fn use_on_key_down(
     mouse_pos: Signal<Point2D<f64>>,
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     mut ctrl_pressed: Signal<bool>,
     mut shift_pressed: Signal<bool>,
 ) -> impl FnMut(KeyboardEvent) {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     move |event| {
-        let active_graph = workspace.read().active_tab;
-        if let Some(graph_state) = workspace.read().tabs.read().get(&*active_graph.read()) {
+        let active_graph = *workspace.active_tab().read();
+        if let Some(graph_state) = workspace.tabs().get(active_graph) {
             let editor_status = graph_state.editor_state();
             let graph_store = graph_state.graph_store();
             if !event.is_auto_repeating() {
@@ -218,7 +218,7 @@ pub fn use_on_key_down(
                     && !modifiers.shift()
                     && event.data().key() == Key::Character("v".to_string())
                 {
-                    let rect = *workspace().editor_area.read();
+                    let rect = *workspace.editor_area().read();
                     let mouse = *mouse_pos.read();
                     if mouse.x > rect.min_x()
                         && mouse.x < rect.max_x()
@@ -255,18 +255,17 @@ pub fn use_on_key_down(
 
 #[allow(clippy::too_many_lines)]
 pub fn use_drag_end(
-    workspace: ReadSignal<GraphsWorkspaceState>,
+    workspace: ReadStore<GraphsWorkspaceState>,
     nodes_in_selection: Option<HashSet<Uuid>>,
 ) -> impl FnMut(MouseEvent) {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     move |_| {
-        let active_graph = workspace.read().active_tab;
-        let tabs = workspace.read().tabs.read().clone();
-        if let Some(graph_state) = tabs.get(&*active_graph.read()) {
+        let active_graph = *workspace.active_tab().read();
+        if let Some(graph_state) = workspace.tabs().get(active_graph) {
             let editor_status = graph_state.editor_state();
             let graph_store = graph_state.graph_store();
-            let drag_status = workspace.read().drag_status.read().clone();
-            let droppable_groups = *workspace.read().drop_in_group.read();
+            let drag_status = workspace.drag_status().read().clone();
+            let droppable_groups = *workspace.drop_in_group().read();
             match drag_status {
                 DragStatus::Nodes => {
                     if droppable_groups.is_none() {
@@ -285,14 +284,12 @@ pub fn use_drag_end(
                         let selected_optical_nodes = graph_store().selected_optical_nodes();
                         workspace_processor.send(GraphsWorkspaceAction::DropNodesIntoGroup {
                             nodes: selected_optical_nodes.iter().copied().collect(),
-                            from_graph_id: *active_graph.read(),
+                            from_graph_id: active_graph,
                             to_graph_id,
                         });
                     }
                 }
                 DragStatus::SelectionBox(_) => {
-                    let active_graph_id = *active_graph.read();
-
                     if let Some(nodes_in_selection) = &nodes_in_selection {
                         let current_selection =
                             graph_store.node_selection().read().all_nodes.read().clone();
@@ -315,7 +312,7 @@ pub fn use_drag_end(
 
                         for (node_id, is_optical) in nodes_to_add {
                             workspace_processor.send(GraphsWorkspaceAction::AddToNodeSelection {
-                                graph_id: active_graph_id,
+                                graph_id: active_graph,
                                 node_id,
                                 is_optical,
                             });
@@ -324,7 +321,7 @@ pub fn use_drag_end(
                         for node_id in nodes_to_remove {
                             workspace_processor.send(
                                 GraphsWorkspaceAction::RemoveFromNodeSelection {
-                                    graph_id: active_graph_id,
+                                    graph_id: active_graph,
                                     node_id,
                                 },
                             );

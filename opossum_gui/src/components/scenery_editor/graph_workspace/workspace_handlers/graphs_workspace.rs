@@ -16,7 +16,7 @@ pub struct WorkSpaceSignalHandlers {
 }
 
 impl WorkSpaceSignalHandlers {
-    pub fn new(workspace: Signal<GraphsWorkspaceState>) -> Self {
+    pub fn new(workspace: Store<GraphsWorkspaceState>) -> Self {
         Self {
             workspace: WorkspaceHandlers::new(workspace),
             nodes: NodeHandlers::new(workspace),
