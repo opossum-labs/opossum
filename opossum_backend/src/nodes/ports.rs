@@ -1,29 +1,11 @@
 use crate::{app_state::AppState, error::BackEndErrorResponse};
 use actix_web::{HttpResponse, get, patch, web};
 use opossum_core::{
-    coatings::CoatingType,
-    core_optics::{PortType, optic_ports::ValidatedLidt},
-    prelude::Aperture,
-    types::api_types::{ErrorResponse, NodePortsResponse},
+    core_optics::PortType,
+    types::api_types::{ErrorResponse, NodePortsResponse, UpdatePortRequest},
     utils::LockExt,
 };
-use serde::Deserialize;
-use utoipa::ToSchema;
 use uuid::Uuid;
-
-/// Request-Objekt für partielle Updates eines Ports
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct UpdatePortRequest {
-    /// The new aperture of the port (optional)
-    pub aperture: Option<Aperture>,
-
-    /// The new coating of the port (optional)
-    pub coating: Option<CoatingType>,
-
-    /// The new Laser Induced Damage Threshold (optional)
-    #[schema(value_type = Option<f64>)] // Swagger-Trick für den Type-Alias
-    pub lidt: Option<ValidatedLidt>,
-}
 
 /// Get all port configurations of an optical node
 ///

@@ -2,22 +2,12 @@ use crate::{app_state::AppState, error::BackEndErrorResponse};
 use actix_web::{HttpRequest, HttpResponse, get, patch, web};
 use opossum_core::{
     core_optics::NodeAttr,
-    prelude::{OpmDocument, Properties, Proptype},
-    types::api_types::ErrorResponse,
+    prelude::{OpmDocument, Proptype},
+    types::api_types::{ErrorResponse, NodePropertiesResponse},
     utils::LockExt,
 };
 use parking_lot::MutexGuard;
-use serde::Serialize;
-use utoipa::ToSchema;
 use uuid::Uuid;
-
-/// Das einheitliche Antwort-Format für die Properties (inklusive der Referenz-Info für die GUI)
-#[derive(Debug, Serialize, ToSchema)]
-pub struct NodePropertiesResponse {
-    #[schema(value_type = Object)] // Versteckt die interne Properties-Struktur vor Utoipa
-    pub properties: Properties,
-    pub is_reference: bool,
-}
 
 /// Get all custom properties of an optical node
 ///

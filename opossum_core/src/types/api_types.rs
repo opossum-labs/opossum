@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    core_optics::optic_ports::PortConfig, nodes::ConnectionInfo, opm_document::AnalyzerInfo, prelude::{AnalyzerType, Isometry}
+    coatings::CoatingType, core_optics::optic_ports::{PortConfig, ValidatedLidt}, nodes::ConnectionInfo, opm_document::AnalyzerInfo, prelude::{AnalyzerType, Aperture, Isometry, Properties}
 };
 
 /// Structure holding the version information
@@ -341,4 +341,24 @@ impl ErrorResponse {
     pub fn not_found() -> Self {
         Self::new(404, "General", "Resource not found")
     }
+}
+/// Das einheitliche Antwort-Format für die Properties (inklusive der Referenz-Info für die GUI)
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NodePropertiesResponse {
+    #[schema(value_type = Object)] // Versteckt die interne Properties-Struktur vor Utoipa
+    pub properties: Properties,
+    pub is_reference: bool,
+}
+/// Request-Objekt für partielle Updates eines Ports
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdatePortRequest {
+    /// The new aperture of the port (optional)
+    pub aperture: Option<Aperture>,
+
+    /// The new coating of the port (optional)
+    pub coating: Option<CoatingType>,
+
+    /// The new Laser Induced Damage Threshold (optional)
+    #[schema(value_type = Option<f64>)] // Swagger-Trick für den Type-Alias
+    pub lidt: Option<ValidatedLidt>,
 }
