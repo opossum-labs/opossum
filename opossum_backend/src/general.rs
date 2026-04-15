@@ -1,5 +1,4 @@
 //! General endpoints
-
 use crate::{app_state::AppState, error::BackEndErrorResponse};
 use actix_web::{
     HttpResponse, Responder, get, post,
@@ -16,7 +15,12 @@ use utoipa_actix_web::service_config::ServiceConfig;
 /// Return a welcome message
 ///
 /// Simply return the text `OPOSSUM backend`. This is meant for checking the communication with the correct server.
-#[utoipa::path(get, path="/", responses((status = OK, description = "Fixed answer string", body = str, example = "OPOSSUM backend")), tag="general")]
+#[utoipa::path(
+    get,
+    path="/",
+    responses((status = OK, description = "Fixed answer string", body = str, example = "OPOSSUM backend")),
+    tag="general"
+)]
 #[get("/")]
 async fn get_hello() -> &'static str {
     "OPOSSUM backend"
@@ -31,7 +35,11 @@ struct GitHubRelease {
 /// Return a version information
 ///
 /// Return the version numbers of the OPOSSUM library and the backend server including a check for updates on GitHub.
-#[utoipa::path(get, responses((status = OK, description = "success", body = VersionInfo)), tag="general")]
+#[utoipa::path(
+    get,
+    responses((status = OK, description = "success", body = VersionInfo)),
+    tag="general"
+)]
 #[get("/version")]
 async fn get_version() -> impl Responder {
     let backend_version = env!("CARGO_PKG_VERSION").to_string();
@@ -42,7 +50,10 @@ async fn get_version() -> impl Responder {
     let mut update_available = false;
 
     // Try to call GitHub API
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .unwrap();
     let res = client
         .get("https://api.github.com/repos/opossum-labs/opossum/releases/latest")
         .header("User-Agent", "OPOSSUM-Backend")
@@ -77,7 +88,13 @@ async fn get_version() -> impl Responder {
 /// Return a list of all available optical node types
 ///
 /// Return an alphabetically sorted list of strings of all available node types present in the OPOSSUM library.
-#[utoipa::path(get, responses((status = OK, description = "success", body = Vec<NodeType>)), tag="general")]
+#[utoipa::path(
+    get, 
+    responses(
+        (status = OK, description = "List of node types successfully retrieved", body = Vec<NodeType>)
+    ), 
+    tag="general"
+)]
 #[get("/node_types")]
 async fn get_node_types() -> Result<Json<Vec<NodeType>>, BackEndErrorResponse> {
     let types = opossum_core::nodes::node_types();
@@ -94,7 +111,11 @@ async fn get_node_types() -> Result<Json<Vec<NodeType>>, BackEndErrorResponse> {
 /// Return a list of available analyzer types of OPOSSUM
 ///
 /// Return a list of all available analyzer types from the OPOSSUM library.
-#[utoipa::path(get, responses((status = OK, description = "success", body = Vec<AnalyzerType>)), tag="general")]
+#[utoipa::path(
+    get, 
+    responses((status = OK, description = "List of analyzer types successfully retrieved", body = Vec<AnalyzerType>)),
+    tag="general"
+)]
 #[get("/analyzer_types")]
 async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, BackEndErrorResponse> {
     let analyzer_types = opossum_core::analyzers::AnalyzerType::analyzer_types();
@@ -105,12 +126,22 @@ async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, BackEndErrorRes
 /// This terminates the OPOSSUM backend server. This is a (probably temporary) endpoint which is used to kill the server
 /// when the GUI is closed. It might be removed in the future. **Note**: After sending this call you can no longer communicate as
 /// the server is closed.
-#[utoipa::path(post, responses((status = 204, description = "success")), tag="general")]
+#[utoipa::path(
+    post, 
+    responses(
+        (status = NO_CONTENT, description = "Server successfully terminated"),
+        (status = INTERNAL_SERVER_ERROR, description = "Server handle not found, termination failed", body = String)
+    ), 
+    tag="general"
+)]
 #[post("/terminate")]
 async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
-    let server_handle = data.server_handle.lock().clone();
-    server_handle.unwrap().stop(true).await;
-    HttpResponse::NoContent().finish()
+    if let Some(handle) = data.server_handle.lock().as_ref() {
+        handle.stop(true).await;
+        HttpResponse::NoContent().finish()
+    } else {
+        HttpResponse::InternalServerError().body("Server handle not found")
+    }
 }
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {

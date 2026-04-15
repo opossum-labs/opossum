@@ -81,7 +81,7 @@ async fn get_children(
         example ="{\"node_type\": \"dummy\", \"gui_position\": [0.0,0.0]}"
     ),
     responses(
-        (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
+        (status = CREATED, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "Node of the given type not found, UUID not found, no group node", content_type="application/json")
     )
 )]
@@ -90,7 +90,7 @@ async fn post_children(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     node_type: web::Json<NewNode>,
-) -> Result<Json<NodeInfo>, BackEndErrorResponse> {
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let new_node_info = node_type.into_inner();
     let new_node_ref = create_node_ref(new_node_info.node_type())?;
     let mut node = new_node_ref.optical_ref.lock_opm()?;
@@ -122,7 +122,7 @@ async fn post_children(
         node.alignment(),
     );
     drop(node);
-    Ok(Json(node_info))
+    Ok(HttpResponse::Created().json(node_info))
 }
 /// Get optical node properties
 ///
@@ -261,7 +261,7 @@ async fn delete_node(
         example ="{\"referring_node\": \"3fa85f64-5717-4562-b3fc-2c963f66afa6\", \"gui_position\": [0.0,0.0]}"
     ),
     responses(
-        (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
+        (status = CREATED, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found, no group node", content_type="application/json")
     )
 )]
@@ -270,7 +270,7 @@ async fn post_reference(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     ref_node_info: web::Json<NewRefNode>,
-) -> Result<Json<NodeInfo>, BackEndErrorResponse> {
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
     let ref_node_info = ref_node_info.into_inner();
 
@@ -302,7 +302,7 @@ async fn post_reference(
         node_reference.isometry(),
         node_reference.alignment(),
     );
-    Ok(Json(node_info))
+    Ok(HttpResponse::Created().json(node_info))
 }
 
 #[utoipa::path(tag = "node",

@@ -1,5 +1,5 @@
 use actix_web::{
-    HttpResponse, delete, get, post, put,
+    HttpResponse, delete, get, patch, post,
     web::{self, Json},
 };
 use opossum_core::{
@@ -107,7 +107,7 @@ async fn post_connection(
         (status = OK, description = "node connection updated", content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found", content_type="application/json")
 ))]
-#[put("/{uuid}/connections")]
+#[patch("/{uuid}/connections")]
 async fn update_connection(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
@@ -138,7 +138,7 @@ async fn update_connection(
         DeleteConnectionQuery // <-- Utoipa zaubert daraus automatisch Query-Parameter für Swagger!
     ),
     responses(
-        (status = OK, description = "node connection successfully deleted"),
+        (status = NO_CONTENT, description = "node connection successfully deleted"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found or disconnection failed", content_type="application/json")
     )
 )]
@@ -158,7 +158,5 @@ async fn delete_connection(
             group.disconnect_nodes(query.src_uuid, &query.src_port)
         })??;
     drop(document);
-
-    // Einfach ein leeres "200 OK" zurückgeben, da die Verbindung nun weg ist.
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::NoContent().finish())
 }

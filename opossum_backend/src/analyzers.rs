@@ -1,6 +1,6 @@
 use actix_web::{
     HttpRequest, HttpResponse, Responder, delete, get, patch, post,
-    web::{self, Json},
+    web::{self},
 };
 use nalgebra::Point2;
 use opossum_core::{
@@ -88,7 +88,7 @@ fn get_node_analyzer_attr_from_state(
     content_type = "application/json",
     example ="{\"analyzer_type\": \"Energy\", \"gui_position\": [0,0,0]}"
 ),
-    responses((status = 200, body = Uuid, )))]
+    responses((status = CREATED, body = Uuid, )))]
 /// Add an analyzer to the model
 ///
 /// This function adds an analyzer to the model.
@@ -96,16 +96,16 @@ fn get_node_analyzer_attr_from_state(
 async fn post_analyzer(
     data: web::Data<AppState>,
     analyzer: web::Json<NewAnalyzerInfo>,
-) -> impl Responder {
+) -> HttpResponse {
     let new_analyzer_info = analyzer.into_inner();
     let uuid = data.document.lock().add_analyzer_with_position(
         new_analyzer_info.analyzer_type,
         Some(new_analyzer_info.gui_position),
     );
-    Json(uuid)
+    HttpResponse::Created().json(uuid)
 }
 #[utoipa::path(tag = "analyzer",
-    responses((status = 200, description = "Analyzer deleted"),
+    responses((status = NO_CONTENT, description = "Analyzer deleted"),
     (status = 404, description = "Analyzer not found"))
 )]
 /// Delete an analyzer
@@ -115,10 +115,10 @@ async fn post_analyzer(
 async fn delete_analyzer(
     data: web::Data<AppState>,
     index: web::Path<Uuid>,
-) -> Result<Json<Uuid>, BackEndErrorResponse> {
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = index.into_inner();
     data.document.lock().remove_analyzer(uuid)?;
-    Ok(Json(uuid))
+    Ok(HttpResponse::NoContent().finish())
 }
 #[utoipa::path(tag = "analyzer",
     responses((status = 200, description = "List of analyzers", body = Vec<AnalyzerInfo>)),

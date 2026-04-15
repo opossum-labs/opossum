@@ -1,6 +1,6 @@
 use crate::{app_state::AppState, error::BackEndErrorResponse};
 use actix_web::{
-    delete, get, post,
+    HttpResponse, delete, get, post,
     web::{self, Json},
 };
 use opossum_core::{
@@ -65,7 +65,7 @@ pub async fn get_port_mappings(
         content_type = "application/json",
     ),
     responses(
-        (status = OK, description = "Node port successfully mapped to group port"),
+        (status = CREATED, description = "Node port successfully mapped to group port"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
@@ -74,7 +74,7 @@ pub async fn post_port_mapping(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     port_mapping_request: web::Json<AddPortMappingRequest>,
-) -> Result<Json<(Vec<String>, Vec<String>)>, BackEndErrorResponse> {
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_id = path.into_inner();
     let pmap_inf = port_mapping_request.into_inner();
     let ports = data
@@ -108,7 +108,7 @@ pub async fn post_port_mapping(
             Ok::<(Vec<String>, Vec<String>), BackEndErrorResponse>((inputs, outputs))
         })??;
 
-    Ok(Json(ports))
+    Ok(HttpResponse::Created().json(ports))
 }
 /// Remove a port mapping from a group
 #[utoipa::path(
@@ -164,6 +164,5 @@ pub async fn remove_port_map(
     let port_removed = scenery.with_group_node_mut(group_id, |g| {
         g.remove_mapped_port(&external_port_name, port_type)
     })?;
-
     Ok(Json((port_removed, connections, parent_group)))
 }

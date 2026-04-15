@@ -1,9 +1,7 @@
 //! Routes for managing the document
 use crate::{app_state::AppState, error::BackEndErrorResponse, sse_logger::SENDER};
 use actix_web::{
-    Error, HttpResponse, Responder, delete, get,
-    http::StatusCode,
-    patch, post, put,
+    Error, HttpResponse, Responder, delete, get, patch, post, put,
     web::{self, Json},
 };
 use futures_util::StreamExt;
@@ -21,13 +19,13 @@ use utoipa_actix_web::service_config::ServiceConfig;
 const RON_MEDIA_TYPE: &str = "application/ron";
 
 /// Delete the current document and create new (empty) one
-#[utoipa::path(responses((status = 200, description = "document deleted and new one sucessfully created")), tag="document")]
+#[utoipa::path(responses((status = NO_CONTENT, description = "document deleted and new one sucessfully created")), tag="document")]
 #[delete("/")]
 async fn delete_document(data: web::Data<AppState>) -> impl Responder {
     let mut document = data.document.lock();
     *document = OpmDocument::default();
     drop(document);
-    HttpResponse::new(StatusCode::OK)
+    HttpResponse::NoContent().finish()
 }
 #[utoipa::path(tag = "document",
     responses((status = 200, description = "Global configuration", body = SceneryResources))

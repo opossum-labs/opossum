@@ -2,7 +2,7 @@
 
 use actix_cors::Cors;
 use actix_web::{
-    App, HttpResponse, HttpServer, ResponseError, dev::Server, middleware::Logger, web,
+    App, HttpResponse, HttpServer, dev::Server, middleware::Logger, web,
 };
 use std::net::Ipv4Addr;
 use utoipa::OpenApi;
@@ -13,42 +13,82 @@ use crate::{
     app_state::AppState, error::BackEndErrorResponse, pages, routes, sse_logger::init_logger,
 };
 
+/// Catch-All Handler für unbekannte Routen.
+/// Gibt einen sauberen 404 Fehler im standardisierten API-Format zurück.
 async fn not_found() -> HttpResponse {
+    use actix_web::ResponseError; // Für die .error_response() Methode
     BackEndErrorResponse::not_found().error_response()
 }
 
-/// Start the API server.
+/// Initializes and starts the OPOSSUM Actix web server.
+///
+/// This function sets up the entire backend infrastructure:
+/// - Initializes the global application state (`AppState`).
+/// - Configures the Server-Sent Events (SSE) logger.
+/// - Sets up the OpenAPI specification and Swagger UI.
+/// - Configures Cross-Origin Resource Sharing (CORS).
+/// - Registers all API endpoints via `routes::root_config`.
+///
+/// The server binds to the port specified by the `OPOSSUM_PORT` environment variable,
+/// or defaults to `8001` if not set.
 ///
 /// # Panics
 ///
-/// Panics if the server could not be bind to a port.
+/// Panics if the server cannot bind to the specified network interface and port.
 pub fn start() -> Server {
     #[derive(OpenApi)]
     #[openapi(
-        info(title = "OPOSSUM API", description = "Description blah blah...", contact(name="Udo Eisenbarth", email="u.eisenbarth@gsi.de"), license(name="GPL3")),
+        info(
+            title = "OPOSSUM API", 
+            description = "The REST API backend for the OPOSSUM optical simulation framework. It provides endpoints for creating, analyzing, and modifying optical models.", 
+            contact(name="Udo Eisenbarth", email="u.eisenbarth@gsi.de"), 
+            license(name="GPL-3.0")
+        ),
         servers(
-            (url= "http://localhost:8001", description = "local development server"),
-            (url="https://example.com", description ="production server")
+            (url = "http://localhost:8001", description = "Local desktop server"),
+            (url = "https://example.com", description = "Production server (Optional)")
         ),
         tags(
-            (name = "general", description = "general endpoints."),
-            (name = "node", description = "endpoints dealing with handling of optical nodes."),
-            (name = "document", description = "endpoints dealing with handling of the overall document (OPM model)."),
-            (name = "analyzer", description = "endpoints dealing with handling of analyzers."),
+            (name = "general", description = "General server endpoints (version, types, termination)."),
+            (name = "node", description = "Endpoints for handling optical nodes, properties, and ports."),
+            (name = "document", description = "Endpoints for managing the overall OPM model and global config."),
+            (name = "analyzer", description = "Endpoints for managing simulation analyzers."),
+            (name = "operations", description = "Complex macro-operations (e.g., copy, paste, grouping)."),
         ),
     )]
     pub struct ApiDocs;
 
     init_logger();
     let app_state = web::Data::new(AppState::default());
+    
+    // Read OPOSSUM_PORT from environment variables, default to 8001 if not set.
+    let port: u16 = std::env::var("OPOSSUM_PORT")
+        .unwrap_or_else(|_| "8001".to_string())
+        .parse()
+        .expect("OPOSSUM_PORT must be a valid port number");
+
+    // Read OPOSSUM_WORKERS from environment variables, default to 2 if not set.
+    let workers: usize = std::env::var("OPOSSUM_WORKERS")
+        .unwrap_or_else(|_| "2".to_string())
+        .parse()
+        .expect("OPOSSUM_WORKERS must be a valid number of workers");
+
     let srv = HttpServer::new({
         let app_state = app_state.clone();
         move || {
+            // CORS Configuration: Fix later for production use.
+            // Optional: Limit e.g. with .allowed_origin("http://localhost:8080") 
+            let cors = Cors::default()
+                .allow_any_origin() 
+                .allow_any_method()
+                .allow_any_header()
+                .max_age(3600);
+
             App::new()
                 .into_utoipa_app()
                 .openapi(ApiDocs::openapi())
                 .map(|app| app.wrap(Logger::default()))
-                .map(|app| app.wrap(Cors::permissive())) // change this in production !!!
+                .map(|app| app.wrap(cors)) 
                 .app_data(app_state.clone())
                 .configure(routes::root_config)
                 .openapi_service(|api| {
@@ -59,8 +99,9 @@ pub fn start() -> Server {
                 .into_app()
         }
     })
-    .bind((Ipv4Addr::UNSPECIFIED, 8001))
-    .expect("Failed to bind server")
+    .workers(workers)
+    .bind((Ipv4Addr::UNSPECIFIED, port))
+    .unwrap_or_else(|e| panic!("Failed to bind server to port {}: {}", port, e))
     .run();
 
     app_state.register_server_handle(srv.handle());
