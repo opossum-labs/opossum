@@ -1,7 +1,10 @@
 use crate::components::scenery_editor::{
-    GraphsWorkspaceStateStoreExt, edges::edges_component::EdgeCreation, graph_workspace::{
-        GraphStoreStoreExt, EditorStateStoreExt, GraphStateStoreExt, GraphsWorkspaceState, workspace_handlers::helper_functions::{with_edges, with_editor_state}
-    }
+    GraphsWorkspaceStateStoreExt,
+    edges::edges_component::EdgeCreation,
+    graph_workspace::{
+        EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState,
+        workspace_handlers::helper_functions::{with_edges, with_editor_state},
+    },
 };
 use dioxus::prelude::*;
 use opossum_core::types::api_types::ConnectInfo;
@@ -87,10 +90,9 @@ fn update_edge_handler(
 ) -> EventHandler<(ConnectInfo, Uuid)> {
     EventHandler::new(move |(ci, graph_id): (ConnectInfo, Uuid)| {
         with_edges(workspace, graph_id, true, |edges| {
-            if let Some(mut e) = edges
-                .iter()
-                .find(|e| e.read().src_uuid() == ci.src_uuid() && e.read().target_uuid() == ci.target_uuid())
-            {
+            if let Some(mut e) = edges.iter().find(|e| {
+                e.read().src_uuid() == ci.src_uuid() && e.read().target_uuid() == ci.target_uuid()
+            }) {
                 e.set(ci);
             }
         });
@@ -101,7 +103,11 @@ fn update_edges_handler(
     workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Vec<ConnectInfo>, Uuid)> {
     EventHandler::new(move |(connections, graph_id)| {
-        if let Some(mut edges) = workspace.tabs().get(graph_id).map(|g|g.graph_store().edges()) {
+        if let Some(mut edges) = workspace
+            .tabs()
+            .get(graph_id)
+            .map(|g| g.graph_store().edges())
+        {
             edges.set(connections);
         }
 
@@ -113,7 +119,11 @@ fn add_group_edges_handler(
     workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Vec<ConnectInfo>)> {
     EventHandler::new(move |(group_id, edges)| {
-        if let Some(mut graph_edges) = workspace.tabs().get(group_id).map(|g|g.graph_store().edges()) {
+        if let Some(mut graph_edges) = workspace
+            .tabs()
+            .get(group_id)
+            .map(|g| g.graph_store().edges())
+        {
             graph_edges.set(edges);
         }
     })

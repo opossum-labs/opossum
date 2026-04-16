@@ -9,16 +9,13 @@ use crate::{
         GraphState, NodeType,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
         graph_workspace::{
-            DragStatus, EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
-            GraphsWorkspaceAction, GraphsWorkspaceState,
+            DragStatus, EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt,
+            GraphsWorkspaceAction, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt,
         },
     },
 };
 use dioxus::{
-    html::{
-        geometry::euclid::default::Point2D,
-        input_data::MouseButton,
-    },
+    html::{geometry::euclid::default::Point2D, input_data::MouseButton},
     prelude::*,
 };
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};

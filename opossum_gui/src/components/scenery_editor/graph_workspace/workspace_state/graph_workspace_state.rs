@@ -9,9 +9,7 @@ use uuid::Uuid;
 use crate::components::scenery_editor::{
     DragStatus, NodeType,
     constants::{MAX_ZOOM, MIN_ZOOM},
-    graph_workspace::{
-        EditorStateStoreExt, GraphState, GraphStateStoreExt,
-    },
+    graph_workspace::{EditorStateStoreExt, GraphState, GraphStateStoreExt},
 };
 
 #[derive(Clone, PartialEq)]
@@ -36,37 +34,7 @@ pub struct GraphsWorkspaceState {
 }
 
 #[store(pub)]
-impl<Lens> Store<GraphsWorkspaceState, Lens>{
-    // pub(in super::super) fn get_graph_store(&self, graph_id: Uuid) -> Option<Store<GraphStore>> {
-    //     self.tabs
-    //         .get(&graph_id)
-    //         .copied()
-    //         .map(|g| g.graph_store().into())
-    // }
-    // pub(in super::super) fn get_graph_state(&self, graph_id: Uuid) -> Option<Store<GraphState>> {
-    //     self.tabs.get(&graph_id).copied()
-    // }
-    // pub(in super::super) fn get_tab(&self, graph_id: Uuid) -> Option<Store<GraphState>> {
-    //     self.tabs.get(&graph_id).copied()
-    // }
-    // pub fn get_graph_store_read(&self, graph_id: Uuid) -> Option<GraphStore> {
-    //     self.tabs
-    //         .get(graph_id)
-    //         .map(|g| g.graph_store())
-    // }
-    // pub(in super::super) fn get_editor_state(&self, graph_id: Uuid) -> Option<Store<EditorState>> {
-    //     self.tabs
-    //         .get(&graph_id)
-    //         .map(|g| g.editor_state().into())
-    // }
-    // pub(in super::super) fn get_graph_edges_mut(
-    //     &self,
-    //     graph_id: Uuid,
-    // ) -> Option<Store<Vec<ConnectInfo>, impl Writable<Target = Vec<ConnectInfo>>>> {
-    //     self.tabs
-    //         .get(&graph_id)
-    //         .map(|g| g.graph_store().edges())
-    // }
+impl<Lens> Store<GraphsWorkspaceState, Lens> {
     fn get_graph_bounding_box(&self, graph_id: Uuid) -> Option<Rect<f64>> {
         self.tabs()
             .get(graph_id)
@@ -76,9 +44,7 @@ impl<Lens> Store<GraphsWorkspaceState, Lens>{
     fn center_graph(&mut self, graph_id: Uuid) {
         let bounding_box_opt = self.get_graph_bounding_box(graph_id);
         let view_center = self.get_view_port_center();
-        if let (Some(graph), Some(bounding_box)) =
-            (self.tabs().get(graph_id), bounding_box_opt)
-        {
+        if let (Some(graph), Some(bounding_box)) = (self.tabs().get(graph_id), bounding_box_opt) {
             let center = bounding_box.center();
             let zoom = *graph.editor_state().zoom().read();
             graph.editor_state().shift().set(Point2D::new(
@@ -93,9 +59,10 @@ impl<Lens> Store<GraphsWorkspaceState, Lens>{
             self.tabs().write().remove(id);
             self.tab_order().write().retain(|x| x != id);
         }
-        let act_tab=*self.active_tab().read();
+        let act_tab = *self.active_tab().read();
+        let root_tab = *self.root_scenery_id().read();
         if tab_ids.contains(&act_tab) {
-            self.active_tab().set(*self.root_scenery_id().read());
+            self.active_tab().set(root_tab);
         }
     }
 
@@ -103,16 +70,16 @@ impl<Lens> Store<GraphsWorkspaceState, Lens>{
         let bounding_box_opt = self.get_graph_bounding_box(graph_id);
         let view_box = self.get_view_port_size();
         let view_center = self.get_view_port_center();
-        
-        if let (Some(graph), Some(bounding_box)) =
-            (self.tabs().get(graph_id), bounding_box_opt)
-        {
+
+        if let (Some(graph), Some(bounding_box)) = (self.tabs().get(graph_id), bounding_box_opt) {
             let padding_fac = 0.95;
             let zoom = *graph.editor_state().zoom().read();
             let height_fac = view_box.height * padding_fac / zoom / bounding_box.height();
             let width_fac = view_box.width * padding_fac / zoom / bounding_box.width();
-            graph.editor_state().zoom().set((zoom * width_fac.min(height_fac)).clamp(MIN_ZOOM, MAX_ZOOM));
-
+            graph
+                .editor_state()
+                .zoom()
+                .set((zoom * width_fac.min(height_fac)).clamp(MIN_ZOOM, MAX_ZOOM));
 
             let center = bounding_box.center();
             let zoom = *graph.editor_state().zoom().read();

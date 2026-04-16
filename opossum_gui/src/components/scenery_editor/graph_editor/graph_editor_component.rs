@@ -8,8 +8,8 @@ use crate::components::{
             hooks::{use_drag_end, use_on_key_down, use_on_key_up},
         },
         graph_workspace::{
-            GraphStateStoreExt, GraphsWorkspaceAction, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt,
-            WorkSpaceSignalHandlers, use_workspace_processor,
+            GraphStateStoreExt, GraphsWorkspaceAction, GraphsWorkspaceState,
+            GraphsWorkspaceStateStoreExt, WorkSpaceSignalHandlers, use_workspace_processor,
             workspace_action::node_editor_command,
         },
     },
@@ -35,11 +35,10 @@ pub fn GraphEditor(
 
     let workspace_handlers = WorkSpaceSignalHandlers::new(workspace);
 
-    let graph_editor_container_class =
-        use_memo(move || match *workspace.drag_status().read() {
-            DragStatus::Graph => "col px-0 graph-editor-container dragging".to_string(),
-            _ => "col px-0 graph-editor-container".to_string(),
-        });
+    let graph_editor_container_class = use_memo(move || match *workspace.drag_status().read() {
+        DragStatus::Graph => "col px-0 graph-editor-container dragging".to_string(),
+        _ => "col px-0 graph-editor-container".to_string(),
+    });
 
     let workspace_processor = use_workspace_processor(
         workspace.into(),
@@ -106,7 +105,10 @@ pub fn GraphEditor(
     });
 
     let selected_nodes_memo = use_memo(move || {
-        workspace.tabs().get(active_tab()).map_or(Vec::<SelectedNode>::new(), |g| {
+        workspace
+            .tabs()
+            .get(active_tab())
+            .map_or(Vec::<SelectedNode>::new(), |g| {
                 g.graph_store().read().get_selected_nodes(active_tab())
             })
         // let read_workspace = workspace.read();

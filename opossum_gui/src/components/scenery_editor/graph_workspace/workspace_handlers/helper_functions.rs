@@ -5,7 +5,8 @@ use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
 use crate::components::scenery_editor::{
-    EditorState, GraphState, GraphStore, GraphsWorkspaceStateStoreExt, graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState}
+    EditorState, GraphState, GraphStore, GraphsWorkspaceStateStoreExt,
+    graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState},
 };
 
 pub(super) fn with_graph_store<F>(
@@ -14,10 +15,20 @@ pub(super) fn with_graph_store<F>(
     mark_dirty: bool,
     f: F,
 ) where
-    F: FnOnce(&mut Store<GraphStore, MappedMutSignal<GraphStore,GetWrite<Uuid, MappedMutSignal<HashMap<Uuid, GraphState>, WriteSignal<GraphsWorkspaceState>>>>>),
-
-{   
-    if let Some(mut graph_store) = workspace.tabs().get(graph_id).map(|g|g.graph_store()) {
+    F: FnOnce(
+        &mut Store<
+            GraphStore,
+            MappedMutSignal<
+                GraphStore,
+                GetWrite<
+                    Uuid,
+                    MappedMutSignal<HashMap<Uuid, GraphState>, WriteSignal<GraphsWorkspaceState>>,
+                >,
+            >,
+        >,
+    ),
+{
+    if let Some(mut graph_store) = workspace.tabs().get(graph_id).map(|g| g.graph_store()) {
         f(&mut graph_store);
     }
 
@@ -32,7 +43,15 @@ pub(super) fn with_tab<F>(
     mark_dirty: bool,
     f: F,
 ) where
-    F: FnOnce(&mut Store<GraphState, GetWrite<Uuid, MappedMutSignal<HashMap<Uuid, GraphState>, WriteSignal<GraphsWorkspaceState>>>>),
+    F: FnOnce(
+        &mut Store<
+            GraphState,
+            GetWrite<
+                Uuid,
+                MappedMutSignal<HashMap<Uuid, GraphState>, WriteSignal<GraphsWorkspaceState>>,
+            >,
+        >,
+    ),
 {
     if let Some(mut tab) = workspace.tabs().get(tab_id) {
         f(&mut tab);
@@ -42,16 +61,19 @@ pub(super) fn with_tab<F>(
         workspace.needs_saving().set(true);
     }
 }
-pub(super) fn for_each_tab<F>(
-    workspace: Store<GraphsWorkspaceState>,
-    mark_dirty: bool,
-    mut f: F,
-) where
-    F: FnMut(&mut Store<GraphState, GetWrite<Uuid, MappedMutSignal<HashMap<Uuid, GraphState>, WriteSignal<GraphsWorkspaceState>>>>),
+pub(super) fn for_each_tab<F>(workspace: Store<GraphsWorkspaceState>, mark_dirty: bool, mut f: F)
+where
+    F: FnMut(
+        &mut Store<
+            GraphState,
+            GetWrite<
+                Uuid,
+                MappedMutSignal<HashMap<Uuid, GraphState>, WriteSignal<GraphsWorkspaceState>>,
+            >,
+        >,
+    ),
 {
-    workspace.tabs()
-        .values()
-        .for_each(|mut tab| f(&mut tab));
+    workspace.tabs().values().for_each(|mut tab| f(&mut tab));
 
     if mark_dirty {
         workspace.needs_saving().set(true);
@@ -64,9 +86,20 @@ pub(super) fn with_editor_state<F>(
     mark_dirty: bool,
     f: F,
 ) where
-    F: FnOnce(&mut Store<EditorState, MappedMutSignal<EditorState,GetWrite<Uuid, MappedMutSignal<HashMap<Uuid, GraphState>, WriteSignal<GraphsWorkspaceState>>>>>),
+    F: FnOnce(
+        &mut Store<
+            EditorState,
+            MappedMutSignal<
+                EditorState,
+                GetWrite<
+                    Uuid,
+                    MappedMutSignal<HashMap<Uuid, GraphState>, WriteSignal<GraphsWorkspaceState>>,
+                >,
+            >,
+        >,
+    ),
 {
-    if let Some(mut editor_state) = workspace.tabs().get(graph_id).map(|g|g.editor_state()) {
+    if let Some(mut editor_state) = workspace.tabs().get(graph_id).map(|g| g.editor_state()) {
         f(&mut editor_state);
     }
 
@@ -81,9 +114,30 @@ pub(super) fn with_edges<F>(
     mark_dirty: bool,
     f: F,
 ) where
-    F: FnOnce(&mut Store<Vec<ConnectInfo>, MappedMutSignal<Vec<ConnectInfo>, MappedMutSignal<GraphStore,GetWrite<Uuid, MappedMutSignal<HashMap<Uuid, GraphState>, WriteSignal<GraphsWorkspaceState>>>>>>),
+    F: FnOnce(
+        &mut Store<
+            Vec<ConnectInfo>,
+            MappedMutSignal<
+                Vec<ConnectInfo>,
+                MappedMutSignal<
+                    GraphStore,
+                    GetWrite<
+                        Uuid,
+                        MappedMutSignal<
+                            HashMap<Uuid, GraphState>,
+                            WriteSignal<GraphsWorkspaceState>,
+                        >,
+                    >,
+                >,
+            >,
+        >,
+    ),
 {
-    if let Some(mut edges) = workspace.tabs().get(graph_id).map(|g|g.graph_store().edges()) {
+    if let Some(mut edges) = workspace
+        .tabs()
+        .get(graph_id)
+        .map(|g| g.graph_store().edges())
+    {
         f(&mut edges);
     }
 

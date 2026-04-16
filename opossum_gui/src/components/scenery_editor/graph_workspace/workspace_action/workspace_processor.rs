@@ -24,7 +24,8 @@ use crate::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
         },
         graph_workspace::{
-            EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
+            EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState,
+            GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
             WorkSpaceSignalHandlers,
             workspace_action::GraphsWorkspaceAction,
             workspace_state::{GraphInfo, optimize_layout_and_sync},
@@ -171,8 +172,7 @@ pub fn use_workspace_processor(
                         group_id,
                         group_name,
                     } => {
-                        let group_tab_already_open =
-                            workspace.tabs().contains_key(&group_id);
+                        let group_tab_already_open = workspace.tabs().contains_key(&group_id);
                         if group_tab_already_open {
                             workspace_handlers.workspace.set_active_tab(group_id);
                         } else {
@@ -568,7 +568,8 @@ async fn process_optimize_layout(
     graph_id: Uuid,
 ) {
     let Some(edges) = workspace
-        .tabs().get(graph_id)
+        .tabs()
+        .get(graph_id)
         .map(|g| g.graph_store().edges().read().clone())
     else {
         OPOSSUM_UI_LOGS.write().add_log(&format!(

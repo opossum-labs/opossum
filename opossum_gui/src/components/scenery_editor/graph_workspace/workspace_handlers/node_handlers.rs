@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::components::scenery_editor::graph_workspace::{
-    GraphStateStoreExt, GraphsWorkspaceState, GraphStoreStoreImplExt, GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
+    GraphStateStoreExt, GraphStoreStoreImplExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt,
+    GraphsWorkspaceStateStoreImplExt,
     workspace_handlers::helper_functions::{for_each_tab, with_graph_store, with_tab},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -209,17 +210,23 @@ fn remove_group_port_handler(
             let root_id = *workspace.root_scenery_id().read();
 
             let parent_id_opt = if let Some(graph_state) = workspace.tabs().get(group_id) {
-                Some(graph_state
-                    .graph_info()
-                    .read()
-                    .get_parent_id().unwrap_or(root_id))
-                    
-                }
-                else{None};
-                if let Some(p_id) = parent_id_opt && let Some(graph_state) = workspace.tabs().get(p_id) {
-                            graph_state.graph_store()
-                                    .remove_port_of_node(group_id, &removed_port, port_type);
-                        }
+                Some(
+                    graph_state
+                        .graph_info()
+                        .read()
+                        .get_parent_id()
+                        .unwrap_or(root_id),
+                )
+            } else {
+                None
+            };
+            if let Some(p_id) = parent_id_opt
+                && let Some(graph_state) = workspace.tabs().get(p_id)
+            {
+                graph_state
+                    .graph_store()
+                    .remove_port_of_node(group_id, &removed_port, port_type);
+            }
         },
     )
 }
@@ -234,12 +241,15 @@ fn update_group_ports_handler(
                 let hierarchy = &graph_info.read().hierarchy;
                 let parent_hierarchy_pos = hierarchy.len() - 2;
                 Some(hierarchy[parent_hierarchy_pos].0)
-            }else{
+            } else {
                 None
             };
-            if let Some(parent_id) = parent_id_opt && let Some(graph_state) = workspace.tabs().get(parent_id){
-                graph_state.graph_store()
-                        .update_ports_of_node(group_id, input_ports, output_ports);
+            if let Some(parent_id) = parent_id_opt
+                && let Some(graph_state) = workspace.tabs().get(parent_id)
+            {
+                graph_state
+                    .graph_store()
+                    .update_ports_of_node(group_id, input_ports, output_ports);
             }
         },
     )
@@ -272,9 +282,7 @@ fn add_analyzer_node_handler(
         });
     })
 }
-fn invert_node_handler(
-    workspace: Store<GraphsWorkspaceState>,
-) -> EventHandler<(Uuid, bool, Uuid)> {
+fn invert_node_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<(Uuid, bool, Uuid)> {
     EventHandler::new(move |(node_id, inverted, graph_id)| {
         with_graph_store(workspace, graph_id, true, |store| {
             store.set_node_inverted(node_id, inverted);
@@ -285,7 +293,7 @@ fn remove_nodes_handler(
     mut workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Vec<Uuid>, Uuid)> {
     EventHandler::new(move |(node_ids, graph_id)| {
-        if let Some(mut graph_store) = workspace.tabs().get(graph_id).map(|g|g.graph_store()) {
+        if let Some(mut graph_store) = workspace.tabs().get(graph_id).map(|g| g.graph_store()) {
             graph_store.remove_nodes_by_id(&node_ids);
         }
 

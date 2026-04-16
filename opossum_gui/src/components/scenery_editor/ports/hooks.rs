@@ -15,7 +15,10 @@ use crate::{
             DragStatus, EditorState, EditorStateStoreExt, GraphState, GraphStore,
             GraphsWorkspaceAction, GraphsWorkspaceState,
             edges::edges_component::{EdgePort, NewEdgeCreationStart},
-            graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt, workspace_state::GraphInfo},
+            graph_workspace::{
+                GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
+                workspace_state::GraphInfo,
+            },
         },
     },
 };

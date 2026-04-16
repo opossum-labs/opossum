@@ -3,8 +3,11 @@ use crate::{
     components::scenery_editor::{
         DragStatus, EditorState, GraphState, GraphStore,
         edges::edges_component::EdgeCreation,
-        graph_workspace::{GraphsWorkspaceStateStoreImplExt,GraphStoreStoreImplExt,
-            EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, workspace_handlers::helper_functions::{with_editor_state, with_graph_store}, workspace_state::GraphInfo
+        graph_workspace::{
+            EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphStoreStoreImplExt,
+            GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
+            workspace_handlers::helper_functions::{with_editor_state, with_graph_store},
+            workspace_state::GraphInfo,
         },
     },
 };
@@ -203,10 +206,7 @@ fn apply_drag_handler(
                     // ✅ jetzt wird wirklich aktiviert
                     let rect = Rect::new(start, Size2D::new(0.0, 0.0));
 
-                    workspace
-                        
-                        .drag_status()
-                        .set(DragStatus::SelectionBox(rect));
+                    workspace.drag_status().set(DragStatus::SelectionBox(rect));
                 }
                 DragStatus::SelectionBox(rect) => {
                     let editor_origin = workspace.editor_area().read().origin;
@@ -268,17 +268,13 @@ fn set_drop_in_group_handler(
         workspace.drop_in_group().set(drop_in_group);
     })
 }
-fn set_drag_status_handler(
-    workspace: Store<GraphsWorkspaceState>,
-) -> EventHandler<DragStatus> {
+fn set_drag_status_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<DragStatus> {
     EventHandler::new(move |drag_status| {
         workspace.drag_status().set(drag_status);
     })
 }
 
-fn remove_port_map_handler(
-    workspace: Store<GraphsWorkspaceState>,
-) -> EventHandler<(Uuid, String)> {
+fn remove_port_map_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<(Uuid, String)> {
     EventHandler::new(move |(group_id, group_port_name): (Uuid, String)| {
         if let Some(graph_store) = workspace.tabs().get(group_id).map(|g| g.graph_store())
             && !graph_store
@@ -314,9 +310,7 @@ fn add_port_map_handler(
     )
 }
 
-fn add_new_group_tab_handler(
-    workspace: Store<GraphsWorkspaceState>,
-) -> EventHandler<GraphInfo> {
+fn add_new_group_tab_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<GraphInfo> {
     EventHandler::new(move |graph_info: GraphInfo| {
         let id = graph_info.id;
         let graph_state =

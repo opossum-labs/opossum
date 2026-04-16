@@ -1,6 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
-    DragStatus, EditorStateStoreExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, NodeType, SelectionBoxComponent,
+    DragStatus, EditorStateStoreExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, NodeType,
+    SelectionBoxComponent,
     constants::{HEADER_HEIGHT, NODE_WIDTH},
     edges::edges_component::{EdgeCreationComponent, EdgesComponent},
     graph_editor::{
@@ -94,7 +95,9 @@ pub fn GraphViewEditor(
 
                 let rect = Rect::new(
                     node_read.pos(),
-                    Size2D::new(NODE_WIDTH, node_read.node_body_height() + HEADER_HEIGHT),
+                    Size2D::new(
+                        NODE_WIDTH, 
+                        node_read.node_body_height() + HEADER_HEIGHT),
                 );
 
                 if rect.contains(*mouse) {

@@ -79,7 +79,7 @@ pub struct GraphStore {
 }
 
 #[store(pub)]
-impl<Lens> Store<GraphStore, Lens>{
+impl<Lens> Store<GraphStore, Lens> {
     fn shift_node_position(&mut self, node_id: Uuid, shift: Point2D<f64>) {
         if let Some(mut node) = self.nodes().get(node_id) {
             node.write().shift_position(shift);
@@ -89,7 +89,11 @@ impl<Lens> Store<GraphStore, Lens>{
         self.node_selection().write().all_nodes.write().clear();
     }
     fn add_to_node_selection(&mut self, id: Uuid, is_optical: bool) {
-        self.node_selection().write().all_nodes.write().insert(id, is_optical);
+        self.node_selection()
+            .write()
+            .all_nodes
+            .write()
+            .insert(id, is_optical);
     }
     fn remove_from_node_selection(&mut self, id: Uuid) {
         self.node_selection().write().all_nodes.write().remove(&id);
@@ -101,7 +105,11 @@ impl<Lens> Store<GraphStore, Lens>{
     fn set_node_active(&mut self, id: Uuid, z_index: usize, is_optical: bool) {
         self.set_z_level_to_top(id, z_index);
         self.clear_selected_nodes();
-        self.node_selection().write().all_nodes.write().insert(id, is_optical);
+        self.node_selection()
+            .write()
+            .all_nodes
+            .write()
+            .insert(id, is_optical);
     }
     fn update_node_positions(&mut self, new_positions: HashMap<Uuid, Point2D<f64>>) {
         for (id, pos) in new_positions {
@@ -111,11 +119,13 @@ impl<Lens> Store<GraphStore, Lens>{
         }
     }
     fn add_nodes(&mut self, nodes: &[NodeInfo]) {
-        self.nodes().write()
+        self.nodes()
+            .write()
             .extend(nodes.iter().map(|node| (node.uuid(), node.into())));
     }
     fn add_analyzers(&mut self, analyzers: &[AnalyzerInfo]) {
-        self.nodes().write()
+        self.nodes()
+            .write()
             .extend(analyzers.iter().map(|node| (node.id(), node.into())));
     }
     fn set_name_of_node(&mut self, node_id: Uuid, name: String) {
@@ -123,12 +133,7 @@ impl<Lens> Store<GraphStore, Lens>{
             node.write().set_name(name);
         }
     }
-    fn remove_port_of_node(
-        &mut self,
-        node_id: Uuid,
-        remove_port: &String,
-        port_type: PortType,
-    ) {
+    fn remove_port_of_node(&mut self, node_id: Uuid, remove_port: &String, port_type: PortType) {
         if let Some(mut node) = self.nodes().get(node_id) {
             node.write().remove_port(remove_port, port_type);
         }
@@ -150,7 +155,8 @@ impl<Lens> Store<GraphStore, Lens>{
     }
     fn renumber_z_levels(&mut self) {
         let mut node_elements: Vec<(Uuid, usize)> = self
-            .nodes().read()
+            .nodes()
+            .read()
             .iter()
             .map(|n| (n.1.id(), n.1.z_index()))
             .collect();
@@ -206,7 +212,8 @@ impl<Lens> Store<GraphStore, Lens>{
         for node_id in node_ids {
             self.nodes().remove(node_id);
             self.renumber_z_levels();
-            self.edges().write()
+            self.edges()
+                .write()
                 .retain_mut(|e| e.src_uuid() != *node_id && e.target_uuid() != *node_id);
         }
         self.set_active_node_none();
@@ -299,7 +306,7 @@ impl GraphStore {
         }
         selected_nodes
     }
-    
+
     pub fn get_bounding_box(&self) -> Rect<f64> {
         if self.nodes.is_empty() {
             return Rect::new(Point2D::zero(), Size2D::zero());
@@ -313,7 +320,6 @@ impl GraphStore {
         }
         rect
     }
-    
 }
 
 pub async fn optimize_layout_and_sync(
