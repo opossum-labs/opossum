@@ -5,6 +5,7 @@ use actix_web::{
 use nalgebra::Point2;
 use opossum_core::{
     core_optics::OpticRef,
+    error::OpossumError,
     nodes::{NodeReference, create_node_ref},
     prelude::{OpmDocument, OpticNode, PortType, Proptype},
     types::api_types::{ErrorResponse, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
@@ -37,21 +38,23 @@ async fn get_children(
     let scenery = document.scenery().clone();
     drop(document);
     let uuid = path.into_inner();
+
+    // HIER: Wir sammeln ein Result auf und nutzen ?? (Doppel-Fragezeichen)
     let nodes_info = scenery.with_group_node(uuid, |g| {
         g.nodes()
             .iter()
             .map(|n| {
-                let node = n.optical_ref.lock_opm().unwrap();
+                let node = n.optical_ref.lock_opm()?; // <- Kein unwrap() mehr!
                 let name = node.name();
                 let node_type = node.node_type();
                 let inverted = node.inverted();
                 let input_ports = node.ports().names(&PortType::Input);
                 let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = node.gui_position().map(|position| (position.x, position.y));
-                let alignment = node.alignment();
+                let alignment = node.alignment().clone();
                 let isometry = node.isometry();
-                drop(node);
-                NodeInfo::new(
+
+                Ok(NodeInfo::new(
                     n.uuid(),
                     name,
                     inverted,
@@ -61,10 +64,10 @@ async fn get_children(
                     gui_position,
                     alignment,
                     isometry,
-                )
+                ))
             })
-            .collect::<Vec<NodeInfo>>()
-    })?;
+            .collect::<Result<Vec<NodeInfo>, OpossumError>>()
+    })??;
     Ok(Json(nodes_info))
 }
 /// Add a new node to a group node
@@ -160,8 +163,6 @@ async fn get_node(
     })?;
     Ok(Json(node_info))
 }
-/// Helper function to check if a node is a reference node
-
 /// Update optical node properties
 ///
 /// Modifies the standard properties (name, inversion, isometries, GUI position) of an optical node
@@ -170,7 +171,7 @@ async fn get_node(
     tag = "node",
     request_body = UpdateNodeRequest,
     responses(
-        (status = OK, description = "Node properties successfully updated"),
+        (status = NO_CONTENT, description = "Node properties successfully updated"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or invalid data")
     )
 )]
@@ -184,7 +185,8 @@ async fn patch_node(
     let update = update.into_inner();
     let mut document = data.document.lock();
 
-    let result = document
+    // HIER: Wir vertrauen auf unser BackendErrorResponse::from(OpossumError) Trait!
+    document
         .scenery_mut()
         .with_node_attr_mut(uuid, |node_attr| {
             if let Some(name) = update.name {
@@ -200,19 +202,12 @@ async fn patch_node(
                 node_attr.set_alignment(align);
             }
             if let Some(gui_pos_opt) = update.gui_position {
-                let pos = gui_pos_opt.map(|(x, y)| Point2::new(x, y));
-                node_attr.set_gui_position(pos);
+                node_attr.set_gui_position(gui_pos_opt.map(|(x, y)| Point2::new(x, y)));
             }
-        });
+            Ok::<(), OpossumError>(()) // Wir geben explizit Ok zurück, damit das Closure ein Result liefert
+        })??; // Automatisches Error-Mapping!
 
-    match result {
-        Ok(_) => Ok(HttpResponse::Ok().finish()),
-        Err(_) => Err(BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "Node UUID not found",
-        )),
-    }
+    Ok(HttpResponse::NoContent().finish())
 }
 /// Delete a node
 ///
@@ -240,7 +235,6 @@ async fn delete_node(
 /// Adds a new reference node to the specified group node, identified by its UUID (provided in the path).
 /// The reference node will refer to another node, specified by its UUID in the request body.
 ///
-/// - **Note**: If the `nil` UUID (`00000000-0000-0000-0000-000000000000`) is provided as the group UUID, the reference node is added to the toplevel group.
 /// - The UUID of the node to be referenced, as well as the coordinates of the corresponding GUI element, must be provided.
 /// - The function returns information about the newly created reference node.
 ///
