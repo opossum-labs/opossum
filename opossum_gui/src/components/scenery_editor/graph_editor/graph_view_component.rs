@@ -84,10 +84,19 @@ pub fn GraphViewEditor(
             return;
         }
 
+        let selected_nodes = graph_store
+        .node_selection().read()
+        .all_nodes
+        .read()
+        .clone();
+
         let mut best_match = None;
 
         for (_, node) in graph_store.nodes().iter() {
             let node_read = node.read();
+            if selected_nodes.contains_key(&node_read.id()) {
+                continue;
+            }
             if let NodeType::Optical(t) = node_read.node_type() {
                 if t != "group" {
                     continue;
