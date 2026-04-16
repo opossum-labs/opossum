@@ -199,7 +199,6 @@ pub fn get_shifted_pos_of_ref(
 pub fn copy_optical_node(
     scenery: &mut NodeGroup,
     group_id: Uuid,
-    group_id_to_copy: Uuid,
     shift: Point2<f64>,
     optic_ref: &OpticRef,
     node_id_link: &mut HashMap<Uuid, Uuid>,
@@ -220,16 +219,17 @@ pub fn copy_optical_node(
 
     node_id_link.insert(old_node_id, new_node_uuid);
 
-    scenery.with_group_node(group_id_to_copy, |group: &NodeGroup| {
-        let connect = group
-            .graph()
-            .clone()
-            .get_outgoing_connection_info_of_node(old_node_id);
+    let parent_group_id = scenery.node_recursive(old_node_id)?.1;
 
-        if let Some(c_info_map) = grouped_connect_info.get_mut(&group_id) {
-            c_info_map.insert(old_node_id, connect);
-        }
+    let connect = scenery.with_group_node(parent_group_id, |group| {
+        group
+            .graph()
+            .get_outgoing_connection_info_of_node(old_node_id)
     })?;
+
+    if let Some(c_info_map) = grouped_connect_info.get_mut(&group_id) {
+        c_info_map.insert(old_node_id, connect);
+    }
 
     let node = new_node_ref.optical_ref.lock_opm()?;
     Ok(NodeInfo::new(
@@ -247,7 +247,6 @@ pub fn copy_optical_node(
 pub fn copy_optical_nodes_recursive(
     scenery: &mut NodeGroup,
     group_id_to_insert: Uuid,
-    group_id_to_copy: Uuid,
     shift: Point2<f64>,
     copied_optical_nodes: &[OpticRef],
     node_id_link: &mut HashMap<Uuid, Uuid>,
@@ -281,7 +280,6 @@ pub fn copy_optical_nodes_recursive(
         let copied_node = copy_optical_node(
             scenery,
             group_id_to_insert,
-            group_id_to_copy,
             shift,
             node,
             node_id_link,
@@ -295,7 +293,6 @@ pub fn copy_optical_nodes_recursive(
             copy_optical_nodes_recursive(
                 scenery,
                 copied_node_id,
-                node.uuid(),
                 Point2::origin(),
                 &nodes_in_group,
                 node_id_link,
@@ -502,7 +499,6 @@ async fn post_paste_nodes(
     let mut output_port_maps = HashMap::<Uuid, PortMap>::new();
     copy_optical_nodes_recursive(
         scenery,
-        group_id,
         group_id,
         shift,
         &copied_optical_nodes,

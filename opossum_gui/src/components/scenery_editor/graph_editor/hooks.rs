@@ -307,13 +307,15 @@ pub fn use_drag_end(
                             .copied()
                             .collect();
 
+                        let nodes = graph_store_read.nodes().read().clone();
                         let nodes_to_add: HashMap<Uuid, bool> = nodes_in_selection
                             .iter()
                             .filter(|id| !current_selection.contains_key(id))
-                            .map(|id| {
-                                let node = graph_store_read.nodes().read()[id].clone();
+                            .filter_map(|id| {
+                                let node = nodes.get(id)?;
+
                                 let is_optical = matches!(node.node_type(), NodeType::Optical(_));
-                                (*id, is_optical)
+                                Some((*id, is_optical))
                             })
                             .collect();
 
