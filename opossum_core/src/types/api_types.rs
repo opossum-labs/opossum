@@ -12,18 +12,22 @@ use crate::{
     prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
 };
 
+// ============================================================================
+// GENERAL TYPES & ERRORS
+// ============================================================================
+
 /// Structure holding the version information
 #[derive(ToSchema, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct VersionInfo {
-    /// version of the OPOSSUM API backend
+    /// Version of the OPOSSUM API backend
     #[schema(example = "0.1.0")]
     pub backend_version: String,
-    /// version of the OPOSSUM library (possibly including the git hash)
+    /// Version of the OPOSSUM library (possibly including the git hash)
     #[schema(example = "0.6.0-18-g80cb67f (2025/02/19 15:29)")]
     pub opossum_version: String,
     /// Most current software version on GitHub (`None`, if not accessible)
     pub latest_github_version: Option<String>,
-    /// URL of the release informateion (`None`, if not accessible)
+    /// URL of the release information (`None`, if not accessible)
     pub release_url: Option<String>,
     /// True, if GitHub Version is newer than the local one
     pub update_available: bool,
@@ -45,28 +49,74 @@ impl VersionInfo {
 /// Structure holding information about an (optical) node type
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct NodeType {
+    /// The internal identifier of the node type
+    #[schema(example = "Lens")]
     pub node_type: String,
+    /// A human-readable description of the node type
     pub description: String,
 }
+
 impl Display for NodeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.node_type)
     }
 }
 
+/// Standardized error response for API failures
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct ErrorResponse {
+    /// HTTP status code
+    #[schema(example = 400)]
+    pub status: u16,
+    /// High-level category of the error (e.g., 'Parse Error', 'OpticScenery')
+    #[schema(example = "OpticScenery")]
+    pub category: String,
+    /// Detailed error message
+    #[schema(example = "UUID not found in the current model")]
+    pub message: String,
+}
+
+impl ErrorResponse {
+    #[must_use]
+    pub fn new(status: u16, category: &str, message: &str) -> Self {
+        Self {
+            status,
+            category: category.to_string(),
+            message: message.to_string(),
+        }
+    }
+    #[must_use]
+    pub fn not_found() -> Self {
+        Self::new(404, "General", "Resource not found")
+    }
+}
+
+// ============================================================================
+// NODES & PROPERTIES
+// ============================================================================
+
+/// Comprehensive information about an optical node in the scenery
 #[derive(Serialize, Deserialize, ToSchema, Clone, Debug, PartialEq)]
 pub struct NodeInfo {
     pub uuid: Uuid,
+    #[schema(example = "Main Focusing Lens")]
     pub name: String,
+    #[schema(example = "Lens")]
     pub node_type: String,
+    /// Indicates if the node is physically inverted in the optical path
     pub inverted: bool,
+    /// The 2D coordinates on the frontend canvas
+    #[schema(example = json!([100.0, 200.0]))]
     pub gui_position: Option<(f64, f64)>,
+    /// Global 3D position and rotation
     #[schema(value_type = Option<Object>)]
     pub isometry: Option<Isometry>,
+    /// Local alignment (decenter and tilt)
     #[schema(value_type = Option<Object>)]
     pub alignment: Option<Isometry>,
-    // Optional: Die Port-Namen als reine Liste (für die GUI-Verbindungen praktisch)
+    /// List of available input port names
     pub input_ports: Vec<String>,
+    /// List of available output port names
     pub output_ports: Vec<String>,
 }
 
@@ -107,18 +157,42 @@ impl NodeInfo {
     }
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-pub struct NodePortsResponse {
-    /// The input ports of the node (accounts for node inversion)
-    pub inputs: BTreeMap<String, PortConfig>,
-    /// The output ports of the node (accounts for node inversion)
-    pub outputs: BTreeMap<String, PortConfig>,
-}
-#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
-pub struct NewRefNode {
-    referring_node: Uuid,
+/// Request payload to create a standard optical node
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
+pub struct NewNode {
+    #[schema(example = "Lens")]
+    node_type: String,
+    #[schema(example = json!([0.0, 0.0]))]
     gui_position: (f64, f64),
 }
+
+impl NewNode {
+    #[must_use]
+    pub const fn new(node_type: String, gui_position: (f64, f64)) -> Self {
+        Self {
+            node_type,
+            gui_position,
+        }
+    }
+    #[must_use]
+    pub fn node_type(&self) -> &str {
+        &self.node_type
+    }
+    #[must_use]
+    pub const fn gui_position(&self) -> (f64, f64) {
+        self.gui_position
+    }
+}
+
+/// Request payload to create a reference node pointing to an existing node
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
+pub struct NewRefNode {
+    /// UUID of the optical node this reference points to
+    referring_node: Uuid,
+    #[schema(example = json!([50.0, -20.0]))]
+    gui_position: (f64, f64),
+}
+
 impl NewRefNode {
     #[must_use]
     pub const fn new(referring_node: Uuid, gui_position: (f64, f64)) -> Self {
@@ -136,20 +210,61 @@ impl NewRefNode {
         self.referring_node
     }
 }
-/// Connection Information
+
+/// Request payload for partial updates of a node's properties
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
+pub struct UpdateNodeRequest {
+    /// The new name of the node
+    #[schema(example = "Lens 1")]
+    pub name: Option<String>,
+
+    /// The new inverted status of the node
+    #[schema(example = true)]
+    pub inverted: Option<bool>,
+
+    /// The new base isometry (position and rotation in 3D space)
+    #[schema(value_type = Option<Object>)]
+    pub isometry: Option<Option<Isometry>>, // Option<Option> erlaubt explizites Null-Setzen!
+
+    /// The new alignment isometry (local decenter and tilt)
+    #[schema(value_type = Option<Object>)]
+    pub alignment: Option<Isometry>,
+
+    /// The GUI position on the 2D canvas
+    #[schema(example = json!([100.5, 200.0]))]
+    pub gui_position: Option<Option<(f64, f64)>>,
+}
+
+/// Response payload containing the physical and custom properties of a node
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NodePropertiesResponse {
+    #[schema(value_type = Object)] // Hides internal Properties structure from Utoipa
+    pub properties: Properties,
+    /// True if the properties belong to a reference node
+    pub is_reference: bool,
+}
+
+// ============================================================================
+// CONNECTIONS
+// ============================================================================
+
+/// Information about a connection between two optical ports
 #[derive(ToSchema, Clone, PartialEq, Serialize, Deserialize, Debug)]
 pub struct ConnectInfo {
     /// UUID of the source node
     src_uuid: Uuid,
-    /// name of the (outgoing) source port
+    /// Name of the (outgoing) source port
+    #[schema(example = "output_1")]
     src_port: String,
     /// UUID of the target node
     target_uuid: Uuid,
-    /// name of the (incoming) target port
+    /// Name of the (incoming) target port
+    #[schema(example = "input_1")]
     target_port: String,
-    /// geometric distance between nodes (optical axis) in meters.
+    /// Geometric distance between nodes (optical axis) in meters
+    #[schema(example = 0.05)]
     distance: f64,
-    /// Flag for reference-node indication. true if target node is a reference node.
+    /// True if the target node is a reference node
     target_is_reference: bool,
 }
 
@@ -216,31 +331,87 @@ impl ConnectInfo {
         self.target_is_reference
     }
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
-pub struct NewNode {
-    node_type: String,
-    gui_position: (f64, f64),
+
+// ============================================================================
+// PORTS & PORT MAPPINGS
+// ============================================================================
+
+/// Response payload containing port configurations (Aperture, Coating, LIDT)
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NodePortsResponse {
+    /// The input ports of the node (accounts for node inversion)
+    pub inputs: BTreeMap<String, PortConfig>,
+    /// The output ports of the node (accounts for node inversion)
+    pub outputs: BTreeMap<String, PortConfig>,
 }
-impl NewNode {
-    #[must_use]
-    pub const fn new(node_type: String, gui_position: (f64, f64)) -> Self {
-        Self {
-            node_type,
-            gui_position,
-        }
-    }
-    #[must_use]
-    pub fn node_type(&self) -> &str {
-        &self.node_type
-    }
-    #[must_use]
-    pub const fn gui_position(&self) -> (f64, f64) {
-        self.gui_position
-    }
+
+/// Request payload for partial updates of a specific port
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct UpdatePortRequest {
+    /// The new aperture of the port
+    pub aperture: Option<Aperture>,
+    /// The new coating of the port
+    pub coating: Option<CoatingType>,
+    /// The new Laser Induced Damage Threshold
+    #[schema(value_type = Option<f64>)] // Swagger trick for the type alias
+    pub lidt: Option<ValidatedLidt>,
 }
+
+/// Request payload to expose an internal node's port to a parent group
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AddPortMappingRequest {
+    pub internal_node_id: Uuid,
+    #[schema(example = "input_1")]
+    pub internal_port_name: String,
+    #[schema(example = "group_in_1")]
+    pub external_port_name: String,
+    pub port_type: PortType,
+}
+
+/// Query parameters to remove a port mapping
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
+pub struct RemovePortMapQuery {
+    /// External port name of the group port mapping
+    #[schema(example = "group_in_1")]
+    pub external_port_name: String,
+    /// Type of the port (Input or Output)
+    pub port_type: PortType,
+}
+
+/// Response payload containing the internal-to-external port mappings of a group
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PortMappingsResponse {
+    pub inputs: PortMap,
+    pub outputs: PortMap,
+}
+
+/// Response payload containing lists of available mapped port names
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PortNamesResponse {
+    pub inputs: Vec<String>,
+    pub outputs: Vec<String>,
+}
+
+/// Response payload after removing a port map, containing affected connections
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RemovePortMapResponse {
+    /// True if a mapping was actually found and removed
+    pub port_removed: bool,
+    /// Connections that were disconnected as a result
+    pub connections: Vec<ConnectInfo>,
+    /// UUID of the parent group
+    pub parent_group_uuid: Uuid,
+}
+
+// ============================================================================
+// ANALYZERS
+// ============================================================================
+
+/// Request payload to create a new analyzer
 #[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct NewAnalyzerInfo {
     pub analyzer_type: AnalyzerType,
+    #[schema(example = json!([0.0, 0.0]))]
     pub gui_position: (f64, f64),
 }
 
@@ -266,37 +437,20 @@ impl NewAnalyzerInfo {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
-pub struct UpdateNodeRequest {
-    /// The new name of the node
-    #[schema(example = "Lens 1")]
-    pub name: Option<String>,
+// ============================================================================
+// MACRO OPERATIONS
+// ============================================================================
 
-    /// The new inverted status of the node
-    #[schema(example = true)]
-    pub inverted: Option<bool>,
-
-    /// The new base isometry (position and rotation in 3D space)
-    #[schema(value_type = Option<Object>)]
-    pub isometry: Option<Option<Isometry>>, // Option<Option> erlaubt explizites Null-Setzen!
-
-    /// The new alignment isometry (local decenter and tilt)
-    #[schema(value_type = Option<Object>)]
-    pub alignment: Option<Isometry>,
-
-    /// The GUI position on the 2D canvas
-    #[schema(example = json!([100.5, 200.0]))]
-    pub gui_position: Option<Option<(f64, f64)>>,
-}
-
+/// Request payload to group existing nodes into a new sub-group
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConvertToGroupRequest {
-    /// Uuid of the group in which the nodes are currently contained
+    /// UUID of the group in which the nodes are currently contained
     pub group_id: Uuid,
-    /// List of node uuids that should be converted into a new group node
+    /// List of node UUIDs that should be wrapped into a new group node
     pub nodes_to_convert: Vec<Uuid>,
 }
 
+/// Request payload to move nodes between different groups
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct MoveNodesRequest {
     /// UUID of the source group from which the nodes will be removed
@@ -305,80 +459,4 @@ pub struct MoveNodesRequest {
     pub target_group_id: Uuid,
     /// List of node UUIDs to move
     pub nodes_to_move: Vec<Uuid>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
-pub struct ErrorResponse {
-    pub status: u16,
-    pub category: String,
-    pub message: String,
-}
-
-impl ErrorResponse {
-    #[must_use]
-    pub fn new(status: u16, category: &str, message: &str) -> Self {
-        Self {
-            status,
-            category: category.to_string(),
-            message: message.to_string(),
-        }
-    }
-    #[must_use]
-    pub fn not_found() -> Self {
-        Self::new(404, "General", "Resource not found")
-    }
-}
-/// Das einheitliche Antwort-Format für die Properties (inklusive der Referenz-Info für die GUI)
-#[derive(Debug, Serialize, ToSchema)]
-pub struct NodePropertiesResponse {
-    #[schema(value_type = Object)] // Versteckt die interne Properties-Struktur vor Utoipa
-    pub properties: Properties,
-    pub is_reference: bool,
-}
-/// Request-Objekt für partielle Updates eines Ports
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct UpdatePortRequest {
-    /// The new aperture of the port (optional)
-    pub aperture: Option<Aperture>,
-
-    /// The new coating of the port (optional)
-    pub coating: Option<CoatingType>,
-
-    /// The new Laser Induced Damage Threshold (optional)
-    #[schema(value_type = Option<f64>)] // Swagger-Trick für den Type-Alias
-    pub lidt: Option<ValidatedLidt>,
-}
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct AddPortMappingRequest {
-    pub internal_node_id: Uuid,
-    pub internal_port_name: String,
-    pub external_port_name: String,
-    pub port_type: PortType,
-}
-
-#[derive(Debug, Deserialize, IntoParams)]
-pub struct RemovePortMapQuery {
-    /// External port name of the group port mapping
-    pub external_port_name: String,
-    /// Type of the port (e.g., Input or Output)
-    pub port_type: PortType,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct PortMappingsResponse {
-    pub inputs: PortMap,
-    pub outputs: PortMap,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct PortNamesResponse {
-    pub inputs: Vec<String>,
-    pub outputs: Vec<String>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct RemovePortMapResponse {
-    pub port_removed: bool,
-    pub connections: Vec<ConnectInfo>,
-    pub parent_group_uuid: Uuid,
 }
