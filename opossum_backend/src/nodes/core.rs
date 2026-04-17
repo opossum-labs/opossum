@@ -51,11 +51,11 @@ async fn get_children(
                 let input_ports = node.ports().names(&PortType::Input);
                 let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = node.gui_position().map(|position| (position.x, position.y));
-                let alignment = node.alignment().clone();
+                let alignment = node.alignment();
                 let isometry = node.isometry();
-
-                Ok(NodeInfo::new(
-                    n.uuid(),
+                drop(node);
+                Ok(NodeInfo {
+                    uuid: n.uuid(),
                     name,
                     inverted,
                     node_type,
@@ -64,7 +64,7 @@ async fn get_children(
                     gui_position,
                     alignment,
                     isometry,
-                ))
+                })
             })
             .collect::<Result<Vec<NodeInfo>, OpossumError>>()
     })??;
@@ -113,17 +113,17 @@ async fn post_children(
     drop(document);
     let node = new_node_ref.optical_ref.lock_opm()?;
     let gui_position = node.gui_position().map(|position| (position.x, position.y));
-    let node_info = NodeInfo::new(
-        new_node_uuid,
-        node.name(),
-        node.inverted(),
-        node.node_type(),
-        node.ports().names(&PortType::Input),
-        node.ports().names(&PortType::Output),
+    let node_info = NodeInfo {
+        uuid: new_node_uuid,
+        name: node.name(),
+        inverted: node.inverted(),
+        node_type: node.node_type(),
+        input_ports: node.ports().names(&PortType::Input),
+        output_ports: node.ports().names(&PortType::Output),
         gui_position,
-        node.isometry(),
-        node.alignment(),
-    );
+        isometry: node.isometry(),
+        alignment: node.alignment(),
+    };
     drop(node);
     Ok(HttpResponse::Created().json(node_info))
 }
@@ -145,22 +145,23 @@ async fn get_node(
     path: web::Path<Uuid>,
 ) -> Result<Json<NodeInfo>, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    let document = data.document.lock();
-    let node_info = document.scenery().with_node_attr(uuid, |node_attr| {
-        NodeInfo::new(
+    let node_info = data
+        .document
+        .lock()
+        .scenery()
+        .with_node_attr(uuid, |node_attr| NodeInfo {
             uuid,
-            node_attr.name(),
-            node_attr.inverted(),
-            node_attr.node_type(),
-            node_attr.ports().names(&PortType::Input),
-            node_attr.ports().names(&PortType::Output),
-            node_attr
+            name: node_attr.name(),
+            inverted: node_attr.inverted(),
+            node_type: node_attr.node_type(),
+            input_ports: node_attr.ports().names(&PortType::Input),
+            output_ports: node_attr.ports().names(&PortType::Output),
+            gui_position: node_attr
                 .gui_position()
                 .map(|position| (position.x, position.y)),
-            node_attr.alignment().clone(),
-            node_attr.isometry(),
-        )
-    })?;
+            alignment: *node_attr.alignment(),
+            isometry: node_attr.isometry(),
+        })?;
     Ok(Json(node_info))
 }
 /// Update optical node properties
@@ -183,10 +184,9 @@ async fn patch_node(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let update = update.into_inner();
-    let mut document = data.document.lock();
-
-    // HIER: Wir vertrauen auf unser BackendErrorResponse::from(OpossumError) Trait!
-    document
+    // let mut document = data.document.lock();
+    data.document
+        .lock()
         .scenery_mut()
         .with_node_attr_mut(uuid, |node_attr| {
             if let Some(name) = update.name {
@@ -285,17 +285,17 @@ async fn post_reference(
         scenery.with_group_node_mut(group_uuid, |g| g.add_node(node_reference.clone()))??;
 
     drop(document);
-    let node_info = NodeInfo::new(
-        new_node_uuid,
-        node_reference.name(),
-        node_reference.inverted(),
-        node_reference.node_type(),
-        node_reference.ports().names(&PortType::Input),
-        node_reference.ports().names(&PortType::Output),
-        Some(ref_node_info.gui_position()),
-        node_reference.isometry(),
-        node_reference.alignment(),
-    );
+    let node_info = NodeInfo {
+        uuid: new_node_uuid,
+        name: node_reference.name(),
+        inverted: node_reference.inverted(),
+        node_type: node_reference.node_type(),
+        input_ports: node_reference.ports().names(&PortType::Input),
+        output_ports: node_reference.ports().names(&PortType::Output),
+        gui_position: Some(ref_node_info.gui_position()),
+        isometry: node_reference.isometry(),
+        alignment: node_reference.alignment(),
+    };
     Ok(HttpResponse::Created().json(node_info))
 }
 

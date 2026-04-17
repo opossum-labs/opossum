@@ -23,7 +23,7 @@ async fn not_found() -> HttpResponse {
 /// This function sets up the entire backend infrastructure:
 /// - Initializes the global application state (`AppState`).
 /// - Configures the Server-Sent Events (SSE) logger.
-/// - Sets up the OpenAPI specification and Swagger UI.
+/// - Sets up the `OpenAPI` specification and Swagger UI.
 /// - Configures Cross-Origin Resource Sharing (CORS).
 /// - Registers all API endpoints via `routes::root_config`.
 ///
@@ -99,7 +99,7 @@ pub fn start() -> Server {
     })
     .workers(workers)
     .bind((Ipv4Addr::UNSPECIFIED, port))
-    .unwrap_or_else(|e| panic!("Failed to bind server to port {}: {}", port, e))
+    .unwrap_or_else(|e| panic!("Failed to bind server to port {port}: {e}"))
     .run();
 
     app_state.register_server_handle(srv.handle());

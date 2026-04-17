@@ -4,8 +4,8 @@
 //! The `PortMap` struct represents a mapping between externally visible port names and internal node-port pairs within a [`NodeGroup`](super::NodeGroup). It allows to associate an external port name (e.g., `input_1`) with a specific internal port name on a specific node (identified by a [`Uuid`]) within the optical graph of a node group.
 use crate::error::{OpmResult, OpossumError};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 use std::collections::HashMap;
+use utoipa::ToSchema;
 use uuid::Uuid;
 /// Represents a mapping between externally visible port names and internal node-port pairs.
 ///

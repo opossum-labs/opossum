@@ -1,5 +1,5 @@
 use actix_web::{
-    HttpRequest, HttpResponse, Responder, delete, get, patch, post,
+    HttpRequest, HttpResponse, delete, get, patch, post, put,
     web::{self},
 };
 use nalgebra::Point2;
@@ -19,31 +19,17 @@ use crate::{app_state::AppState, error::BackEndErrorResponse};
 /// Returns all information (`AnalyzerInfo`) of the analyzer specified by its UUID.
 /// The format is determined by the `Accept` header (`application/ron` or `application/json`).
 /// Defaults to JSON.
-///
-/// # Important
-/// Due to the fact that numeric properties can have values such as `NaN` or `Inf`,
-/// the RON format is supported and often preferred. JSON simply returns these as `null`.
 #[utoipa::path(
     tag = "analyzer",
-    params(
-        ("uuid" = Uuid, Path, description = "UUID of the analyzer"),
-    ),
+    params(("uuid" = Uuid, Path, description = "UUID of the analyzer")),
     responses(
-        (
-            status = OK,
-            description = "Analyzer information successfully retrieved", 
-            content((AnalyzerInfo = "application/json"),( AnalyzerInfo="application/ron"))
-        ),
-        (
-            status = BAD_REQUEST,
-            body = ErrorResponse,
-            description = "UUID not found", 
-            content_type = "application/json"
-        )
+        (status = OK, description = "Analyzer information successfully retrieved", content((AnalyzerInfo = "application/json"),( AnalyzerInfo="application/ron"))),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type = "application/json")
     )
 )]
 #[get("/{uuid}")]
-async fn get_analyzer(
+#[allow(clippy::future_not_send)]
+pub async fn get_analyzer(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     req: HttpRequest,
@@ -54,7 +40,8 @@ async fn get_analyzer(
         .headers()
         .get(actix_web::http::header::ACCEPT)
         .and_then(|h| h.to_str().ok())
-        .map_or(false, |s| s.contains("application/ron"));
+        .is_some_and(|s| s.contains("application/ron"));
+
     if wants_ron {
         let body = ron::ser::to_string_pretty(
             &analyzer_info,
@@ -66,11 +53,10 @@ async fn get_analyzer(
             .content_type("application/ron")
             .body(body))
     } else {
-        // Actix nimmt uns die JSON-Serialisierung automatisch ab
         Ok(HttpResponse::Ok().json(analyzer_info))
     }
 }
-// Helper function to contain the core logic
+
 fn get_node_analyzer_attr_from_state(
     uuid: Uuid,
     data: &web::Data<AppState>,
@@ -83,17 +69,15 @@ fn get_node_analyzer_attr_from_state(
         .clone();
     Ok(analyzer_info)
 }
-#[utoipa::path(tag = "analyzer", request_body(content = NewAnalyzerInfo,
-    description = "type and GUI position of node the analyzer to be created",
-    content_type = "application/json",
-    example ="{\"analyzer_type\": \"Energy\", \"gui_position\": [0,0,0]}"
-),
-    responses((status = CREATED, body = Uuid, )))]
+
 /// Add an analyzer to the model
-///
-/// This function adds an analyzer to the model.
+#[utoipa::path(
+    tag = "analyzer", 
+    request_body(content = NewAnalyzerInfo, description = "type and GUI position of the analyzer to be created", content_type = "application/json", example ="{\"analyzer_type\": \"Energy\", \"gui_position\": [0,0,0]}"),
+    responses((status = CREATED, body = Uuid, description = "Analyzer successfully created"))
+)]
 #[post("/")]
-async fn post_analyzer(
+pub async fn post_analyzer(
     data: web::Data<AppState>,
     analyzer: web::Json<NewAnalyzerInfo>,
 ) -> HttpResponse {
@@ -102,35 +86,37 @@ async fn post_analyzer(
         new_analyzer_info.analyzer_type,
         Some(new_analyzer_info.gui_position),
     );
-    HttpResponse::Created().json(uuid)
+    HttpResponse::Created().json(uuid) // 201 Created
 }
-#[utoipa::path(tag = "analyzer",
-    responses((status = NO_CONTENT, description = "Analyzer deleted"),
-    (status = 404, description = "Analyzer not found"))
-)]
+
 /// Delete an analyzer
-///
-/// This function deletes the analyzer with the given index.
+#[utoipa::path(
+    tag = "analyzer",
+    params(("uuid" = Uuid, Path, description = "UUID of the analyzer to delete")),
+    responses(
+        (status = NO_CONTENT, description = "Analyzer deleted"),
+        (status = NOT_FOUND, body = ErrorResponse, description = "Analyzer not found")
+    )
+)]
 #[delete("/{uuid}")]
-async fn delete_analyzer(
+pub async fn delete_analyzer(
     data: web::Data<AppState>,
-    index: web::Path<Uuid>,
+    path: web::Path<Uuid>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
-    let uuid = index.into_inner();
+    let uuid = path.into_inner();
     data.document.lock().remove_analyzer(uuid)?;
     Ok(HttpResponse::NoContent().finish())
 }
-#[utoipa::path(tag = "analyzer",
-    responses((status = 200, description = "List of analyzers", body = Vec<AnalyzerInfo>)),
-)]
+
 /// Get a list of all analyzers of this model
-///
-/// This function returns a list of all analyzers of this model. Use the index to get a specific
-/// analyzer.
+#[utoipa::path(
+    tag = "analyzer",
+    responses((status = OK, description = "List of analyzers", body = Vec<AnalyzerInfo>)),
+)]
 #[get("/")]
-async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
-    let analyzers = data.document.lock().analyzers();
-    let analyzers: Vec<AnalyzerInfo> = analyzers
+pub async fn get_analyzers(data: web::Data<AppState>) -> HttpResponse {
+    let analyzers_map = data.document.lock().analyzers();
+    let analyzers: Vec<AnalyzerInfo> = analyzers_map
         .values()
         .map(|a| {
             AnalyzerInfo::new(
@@ -140,59 +126,168 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
             )
         })
         .collect();
-    web::Json(analyzers)
+    HttpResponse::Ok().json(analyzers)
 }
+
 /// Update the analyzer config of an analyzer node
-#[utoipa::path(tag = "analyzer",
-    params(
-        ("uuid" = Uuid, Path, description = "Update an analyzer config of the analyzer node"),
-    ),
-    request_body(content = String,
-        description = "updated config of analyzer",
-        content_type = "application/ron",
-        example= "\"analyzer_type\""
-    ),
+#[utoipa::path(
+    tag = "analyzer",
+    params(("uuid" = Uuid, Path, description = "UUID of the analyzer")),
+    request_body(content = String, description = "updated config of analyzer", content_type = "application/ron", example= "\"analyzer_type\""),
     responses(
-        (status = OK, description = "Analyzer config successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/ron")
+        (status = NO_CONTENT, description = "Analyzer config successfully updated"), // <-- HIER: 204 No Content
+        (status = BAD_REQUEST, body = ErrorResponse, description = "Invalid RON or UUID not found", content_type="application/json")
     )
 )]
 #[patch("/{uuid}")]
-async fn patch_analyzer(
+pub async fn patch_analyzer(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     body: String,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
-    let uuid: Uuid = path.into_inner();
-    let analyzer_type: AnalyzerType = match ron::de::from_str(body.as_str()) {
-        Ok(analyzer_type) => analyzer_type,
-        Err(e) => {
-            return Err(BackEndErrorResponse::new(
-                400,
-                "Opossum",
-                &format!("Failed to deserialize property value: {e}"),
-            ));
-        }
-    };
-    let mut document = data.document.lock();
-    if let Some(analyzer_info) = document.analyzer_mut(uuid) {
+    let uuid = path.into_inner();
+    let analyzer_type: AnalyzerType = ron::de::from_str(&body).map_err(|e| {
+        BackEndErrorResponse::new(
+            400,
+            "Parse Error",
+            &format!("Failed to deserialize AnalyzerType: {e}"),
+        )
+    })?;
+    if let Some(analyzer_info) = data.document.lock().analyzer_mut(uuid) {
         analyzer_info.set_analyzer_type(&analyzer_type);
-        drop(document);
     } else {
         return Err(BackEndErrorResponse::new(
             404,
             "Opossum",
-            "uuid not found in analyzers",
+            "UUID not found in analyzers",
         ));
     }
-    Ok(HttpResponse::Ok()
-        .content_type("application/ron")
-        .body(ron::ser::to_string("").unwrap()))
+    Ok(HttpResponse::NoContent().finish())
 }
+
+/// Map a `SourcePort` node to a light definition in an analyzer
+///
+/// Adds or updates the light definition (e.g. `RayDataBuilder` or `EnergyDataBuilder`)
+/// for a specific `SourcePort` node inside this analyzer's configuration.
+#[utoipa::path(
+    tag = "analyzer",
+    params(
+        ("analyzer_uuid" = Uuid, Path, description = "UUID of the analyzer"),
+        ("node_uuid" = Uuid, Path, description = "UUID of the SourcePort node")
+    ),
+    request_body(content = String, description = "Source configuration as RON string", content_type = "application/ron"),
+    responses(
+        (status = NO_CONTENT, description = "Source mapping successfully created/updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "Invalid RON format or UUID not found", content_type="application/json")
+    )
+)]
+#[put("/{analyzer_uuid}/sources/{node_uuid}")]
+pub async fn put_analyzer_source(
+    data: web::Data<AppState>,
+    path: web::Path<(Uuid, Uuid)>,
+    body: String,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let (analyzer_uuid, node_uuid) = path.into_inner();
+    let mut document = data.document.lock();
+
+    let analyzer_info = document
+        .analyzer_mut(analyzer_uuid)
+        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "Analyzer UUID not found"))?;
+
+    let mut a_type = analyzer_info.analyzer_type().clone();
+
+    // Dynamisches Parsen basierend auf dem Analyzer-Typ
+    match &mut a_type {
+        AnalyzerType::Energy(config) => {
+            let builder: opossum_core::light::lightdata::energy_data_builder::EnergyDataBuilder =
+                ron::from_str(&body).map_err(|e| {
+                    BackEndErrorResponse::new(
+                        400,
+                        "Parse Error",
+                        &format!("Failed to parse EnergyDataBuilder: {e}"),
+                    )
+                })?;
+            config.map_source(node_uuid, builder);
+        }
+        AnalyzerType::RayTrace(config) => {
+            let builder: opossum_core::light::lightdata::ray_data_builder::RayDataBuilder =
+                ron::from_str(&body).map_err(|e| {
+                    BackEndErrorResponse::new(
+                        400,
+                        "Parse Error",
+                        &format!("Failed to parse RayDataBuilder: {e}"),
+                    )
+                })?;
+            config.map_source(node_uuid, builder);
+        }
+        AnalyzerType::GhostFocus(config) => {
+            let builder: opossum_core::light::lightdata::ray_data_builder::RayDataBuilder =
+                ron::from_str(&body).map_err(|e| {
+                    BackEndErrorResponse::new(
+                        400,
+                        "Parse Error",
+                        &format!("Failed to parse RayDataBuilder for GhostFocus: {e}"),
+                    )
+                })?;
+            config.map_source(node_uuid, builder);
+        }
+    }
+    analyzer_info.set_analyzer_type(&a_type);
+    drop(document);
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Remove a `SourcePort` mapping from an analyzer
+///
+/// Removes the specific `SourcePort` light definition from this analyzer's configuration.
+#[utoipa::path(
+    tag = "analyzer",
+    params(
+        ("analyzer_uuid" = Uuid, Path, description = "UUID of the analyzer"),
+        ("node_uuid" = Uuid, Path, description = "UUID of the SourcePort node to remove")
+    ),
+    responses(
+        (status = NO_CONTENT, description = "Source mapping successfully removed"),
+        (status = NOT_FOUND, body = ErrorResponse, description = "Analyzer UUID not found", content_type="application/json")
+    )
+)]
+#[delete("/{analyzer_uuid}/sources/{node_uuid}")]
+pub async fn delete_analyzer_source(
+    data: web::Data<AppState>,
+    path: web::Path<(Uuid, Uuid)>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let (analyzer_uuid, node_uuid) = path.into_inner();
+    let mut document = data.document.lock();
+
+    let analyzer_info = document
+        .analyzer_mut(analyzer_uuid)
+        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "Analyzer UUID not found"))?;
+
+    let mut a_type = analyzer_info.analyzer_type().clone();
+
+    match &mut a_type {
+        AnalyzerType::Energy(config) => {
+            let _ = config.remove_source(&node_uuid);
+        }
+        AnalyzerType::RayTrace(config) => {
+            let _ = config.remove_source(&node_uuid);
+        }
+        AnalyzerType::GhostFocus(config) => {
+            let _ = config.remove_source(&node_uuid);
+        }
+    }
+    analyzer_info.set_analyzer_type(&a_type);
+    drop(document);
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_analyzers);
     cfg.service(get_analyzer);
     cfg.service(post_analyzer);
     cfg.service(patch_analyzer);
     cfg.service(delete_analyzer);
+    cfg.service(put_analyzer_source);
+    cfg.service(delete_analyzer_source);
 }

@@ -135,8 +135,9 @@ async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, BackEndErrorRes
     tag="general"
 )]
 #[post("/terminate")]
-async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
-    if let Some(handle) = data.server_handle.lock().as_ref() {
+pub async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
+    let handle_opt = data.server_handle.lock().clone();
+    if let Some(handle) = handle_opt {
         handle.stop(true).await;
         HttpResponse::NoContent().finish()
     } else {

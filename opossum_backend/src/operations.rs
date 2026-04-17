@@ -529,17 +529,17 @@ fn copy_optical_node(
     })?;
 
     let node = new_node_ref.optical_ref.lock_opm()?;
-    Ok(NodeInfo::new(
-        new_node_uuid,
-        node.name(),
-        node.inverted(),
-        node.node_type(),
-        node.ports().names(&PortType::Input),
-        node.ports().names(&PortType::Output),
-        Some(new_pos),
-        node.alignment(),
-        node.isometry(),
-    ))
+    Ok(NodeInfo {
+        uuid: new_node_uuid,
+        name: node.name(),
+        inverted: node.inverted(),
+        node_type: node.node_type(),
+        input_ports: node.ports().names(&PortType::Input),
+        output_ports: node.ports().names(&PortType::Output),
+        gui_position: Some(new_pos),
+        alignment: node.alignment(),
+        isometry: node.isometry(),
+    })
 }
 fn copy_from_optic_ref(
     scenery: &NodeGroup,

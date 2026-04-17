@@ -5,7 +5,10 @@ use actix_web::{
 use opossum_core::{
     error::OpossumError,
     prelude::{OpticNode, PortType},
-    types::api_types::{AddPortMappingRequest, ConnectInfo, ErrorResponse, PortMappingsResponse, PortNamesResponse, RemovePortMapQuery, RemovePortMapResponse},
+    types::api_types::{
+        AddPortMappingRequest, ConnectInfo, ErrorResponse, PortMappingsResponse, PortNamesResponse,
+        RemovePortMapQuery, RemovePortMapResponse,
+    },
 };
 use uuid::Uuid;
 

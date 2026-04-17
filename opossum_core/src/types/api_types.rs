@@ -72,30 +72,6 @@ pub struct NodeInfo {
 
 impl NodeInfo {
     #[must_use]
-    pub const fn new(
-        uuid: Uuid,
-        name: String,
-        inverted: bool,
-        node_type: String,
-        input_ports: Vec<String>,
-        output_ports: Vec<String>,
-        gui_position: Option<(f64, f64)>,
-        alignment: Option<Isometry>,
-        isometry: Option<Isometry>,
-    ) -> Self {
-        Self {
-            uuid,
-            name,
-            inverted,
-            node_type,
-            input_ports,
-            output_ports,
-            gui_position,
-            alignment,
-            isometry,
-        }
-    }
-    #[must_use]
     pub const fn uuid(&self) -> Uuid {
         self.uuid
     }

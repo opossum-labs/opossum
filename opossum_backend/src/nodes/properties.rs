@@ -26,6 +26,7 @@ use uuid::Uuid;
     )
 )]
 #[get("/{uuid}/properties")]
+#[allow(clippy::future_not_send)]
 pub async fn get_properties(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
@@ -47,7 +48,7 @@ pub async fn get_properties(
         .headers()
         .get(actix_web::http::header::ACCEPT)
         .and_then(|h| h.to_str().ok())
-        .map_or(false, |s| s.contains("application/ron"));
+        .is_some_and(|s| s.contains("application/ron"));
 
     if wants_ron {
         let body = ron::ser::to_string_pretty(
@@ -97,16 +98,14 @@ pub async fn patch_property(
         BackEndErrorResponse::new(
             400,
             "Parse Error",
-            &format!(
-                "Failed to parse RON value for property '{}': {}",
-                prop_name, e
-            ),
+            &format!("Failed to parse RON value for property '{prop_name}': {e}"),
         )
     })?;
 
     // 2. Wende den neuen Wert auf das Modell an
-    let mut document = data.document.lock();
-    document
+    // let mut document = data.document.lock();
+    data.document
+        .lock()
         .scenery_mut()
         .with_node_attr_mut(uuid, |node_attr| {
             node_attr.set_property(&prop_name, new_value)

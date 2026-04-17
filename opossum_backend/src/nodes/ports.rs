@@ -24,7 +24,8 @@ use uuid::Uuid;
 pub async fn get_ports(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<HttpResponse, BackEndErrorResponse> { // <-- Konsistente HttpResponse
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    // <-- Konsistente HttpResponse
     let uuid = path.into_inner();
     let document = data.document.lock();
 
@@ -76,8 +77,8 @@ pub async fn patch_port(
     let (uuid, port_type, port_name) = path.into_inner();
     let update_data = update.into_inner();
 
-    let mut document = data.document.lock();
-    document
+    data.document
+        .lock()
         .scenery_mut()
         .with_node_attr_mut(uuid, |node_attr| {
             let port_map = node_attr.ports_mut().ports_mut(&port_type);
@@ -95,12 +96,11 @@ pub async fn patch_port(
                 Ok::<(), OpossumError>(()) // <-- Expliziter Typ für den Compiler
             } else {
                 Err(OpossumError::Other(format!(
-                    "{} port '{}' not found",
-                    port_type, port_name
+                    "{port_type} port '{port_name}' not found"
                 )))
             }
         })??;
-        
+
     Ok(HttpResponse::NoContent().finish()) // <-- REST-konformer Abschluss
 }
 

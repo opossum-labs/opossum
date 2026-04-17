@@ -41,7 +41,7 @@ pub async fn get_connections(
 
     let uuid = path.into_inner();
     let connections = scenery.with_group_node(uuid, opossum_core::nodes::NodeGroup::connections)?;
-    
+
     let connect_infos = connections
         .iter()
         .map(|c| {
@@ -51,7 +51,7 @@ pub async fn get_connections(
                     prop.get("reference id").is_ok()
                 })
                 .unwrap_or(false);
-                
+
             ConnectInfo::new(
                 c.src_id,
                 c.src_port.clone(),
@@ -62,7 +62,7 @@ pub async fn get_connections(
             )
         })
         .collect::<Vec<ConnectInfo>>();
-        
+
     Ok(Json(connect_infos))
 }
 
@@ -87,7 +87,7 @@ pub async fn post_connection(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
     let mut document = data.document.lock();
-    
+
     document
         .scenery_mut()
         .with_group_node_mut(group_uuid, |group| {
@@ -99,17 +99,17 @@ pub async fn post_connection(
                 meter!(connect_info.distance()),
             )
         })??;
-        
+
     let is_ref_node = document
         .scenery()
         .with_node_attr(connect_info.target_uuid(), |n| {
             n.properties().get("reference id").is_ok()
         })?;
-        
+
     let mut connect_info = connect_info.into_inner();
     connect_info.set_is_reference(is_ref_node);
     drop(document);
-    
+
     Ok(HttpResponse::Created().json(connect_info)) // <-- REST Standard
 }
 
@@ -131,7 +131,7 @@ pub async fn update_connection(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
     let mut document = data.document.lock();
-    
+
     document
         .scenery_mut()
         .with_group_node_mut(group_uuid, |group| {
@@ -141,7 +141,7 @@ pub async fn update_connection(
                 meter!(connect_info.distance()),
             )
         })??;
-        
+
     drop(document);
     Ok(HttpResponse::Ok().json(connect_info.into_inner()))
 }
@@ -175,7 +175,7 @@ pub async fn delete_connection(
         .with_group_node_mut(group_uuid, |group| {
             group.disconnect_nodes(query.src_uuid, &query.src_port)
         })??;
-        
+
     drop(document);
     Ok(HttpResponse::NoContent().finish())
 }
@@ -205,10 +205,15 @@ mod test {
     #[actix_web::test]
     async fn test_delete_connection_invalid_uuid() {
         let app_state = create_test_state();
-        let app = test::init_service(App::new().app_data(app_state).service(delete_connection)).await;
+        let app =
+            test::init_service(App::new().app_data(app_state).service(delete_connection)).await;
 
         let req = test::TestRequest::delete()
-            .uri(&format!("/{}/connections?src_uuid={}&src_port=out", Uuid::new_v4(), Uuid::new_v4()))
+            .uri(&format!(
+                "/{}/connections?src_uuid={}&src_port=out",
+                Uuid::new_v4(),
+                Uuid::new_v4()
+            ))
             .to_request();
 
         let resp = app.call(req).await.unwrap();
