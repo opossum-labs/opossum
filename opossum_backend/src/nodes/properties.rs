@@ -29,7 +29,7 @@ use uuid::Uuid;
 pub async fn get_properties(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    req: HttpRequest, // Wir lesen den Header direkt hier aus!
+    req: HttpRequest,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let document = data.document.lock();
@@ -42,7 +42,7 @@ pub async fn get_properties(
         is_reference,
     };
 
-    // Content Negotiation (ersetzt den alten wants_ron_guard)
+    // Content Negotiation
     let wants_ron = req
         .headers()
         .get(actix_web::http::header::ACCEPT)
@@ -80,7 +80,7 @@ pub async fn get_properties(
         content_type = "application/ron"
     ),
     responses(
-        (status = OK, description = "Property successfully updated"),
+        (status = NO_CONTENT, description = "Property successfully updated"), // <-- HIER: NO_CONTENT
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID/Property not found or invalid RON format", content_type="application/json")
     )
 )]
@@ -110,15 +110,13 @@ pub async fn patch_property(
         .scenery_mut()
         .with_node_attr_mut(uuid, |node_attr| {
             node_attr.set_property(&prop_name, new_value)
-        })??; // Double unwrap: Erstes Result vom Closure, zweites Result von with_node_attr_mut
+        })??;
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::NoContent().finish()) // <-- HIER: NoContent()
 }
 
 // --- Helper Functions ---
 
-/// Retrieve the node attributes of a node, resolving references if necessary.
-/// Returns a tuple of the `NodeAttr` and a boolean indicating if it was a reference.
 fn get_referenced_node_attr_from_state(
     mut is_reference: bool,
     uuid: Uuid,
@@ -137,7 +135,6 @@ fn get_referenced_node_attr_from_state(
         is_reference = true;
         let ref_node_props = node_attr.properties();
         if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id") {
-            // Rekursiver Aufruf, um die echte Node zu finden
             get_referenced_node_attr_from_state(is_reference, *ref_uuid, document)
         } else {
             Err(BackEndErrorResponse::new(
@@ -148,5 +145,46 @@ fn get_referenced_node_attr_from_state(
         }
     } else {
         Ok((node_attr, is_reference))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+
+    fn create_test_state() -> Data<AppState> {
+        Data::new(AppState::default())
+    }
+
+    #[actix_web::test]
+    async fn test_get_properties_invalid_uuid() {
+        let app_state = create_test_state();
+        let app = test::init_service(App::new().app_data(app_state).service(get_properties)).await;
+
+        let req = test::TestRequest::get()
+            .uri(&format!("/{}/properties", Uuid::new_v4()))
+            .to_request();
+
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_web::test]
+    async fn test_patch_property_invalid_ron() {
+        let app_state = create_test_state();
+        let app = test::init_service(App::new().app_data(app_state).service(patch_property)).await;
+
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{}/properties/focal_length", Uuid::new_v4()))
+            .set_payload("INVALID_RON")
+            .insert_header(("Content-Type", "application/ron"))
+            .to_request();
+
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let error_body: ErrorResponse = test::read_body_json(resp).await;
+        assert_eq!(error_body.category, "Parse Error");
     }
 }

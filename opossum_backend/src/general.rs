@@ -89,10 +89,10 @@ async fn get_version() -> impl Responder {
 ///
 /// Return an alphabetically sorted list of strings of all available node types present in the OPOSSUM library.
 #[utoipa::path(
-    get, 
+    get,
     responses(
         (status = OK, description = "List of node types successfully retrieved", body = Vec<NodeType>)
-    ), 
+    ),
     tag="general"
 )]
 #[get("/node_types")]
@@ -112,7 +112,7 @@ async fn get_node_types() -> Result<Json<Vec<NodeType>>, BackEndErrorResponse> {
 ///
 /// Return a list of all available analyzer types from the OPOSSUM library.
 #[utoipa::path(
-    get, 
+    get,
     responses((status = OK, description = "List of analyzer types successfully retrieved", body = Vec<AnalyzerType>)),
     tag="general"
 )]
@@ -127,11 +127,11 @@ async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, BackEndErrorRes
 /// when the GUI is closed. It might be removed in the future. **Note**: After sending this call you can no longer communicate as
 /// the server is closed.
 #[utoipa::path(
-    post, 
+    post,
     responses(
         (status = NO_CONTENT, description = "Server successfully terminated"),
         (status = INTERNAL_SERVER_ERROR, description = "Server handle not found, termination failed", body = String)
-    ), 
+    ),
     tag="general"
 )]
 #[post("/terminate")]

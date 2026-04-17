@@ -41,6 +41,7 @@ pub async fn get_connections(
 
     let uuid = path.into_inner();
     let connections = scenery.with_group_node(uuid, opossum_core::nodes::NodeGroup::connections)?;
+    
     let connect_infos = connections
         .iter()
         .map(|c| {
@@ -50,6 +51,7 @@ pub async fn get_connections(
                     prop.get("reference id").is_ok()
                 })
                 .unwrap_or(false);
+                
             ConnectInfo::new(
                 c.src_id,
                 c.src_port.clone(),
@@ -60,25 +62,32 @@ pub async fn get_connections(
             )
         })
         .collect::<Vec<ConnectInfo>>();
+        
     Ok(Json(connect_infos))
 }
+
 /// Connect two nodes
 ///
-/// Connect to optical nodes by the given connection info.
+/// Connect two optical nodes by the given connection info.
 #[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the group node"), // <-- Fehlte!
+    ),
+    request_body = ConnectInfo,
     responses(
-        (status = OK, description = "node connection created", content_type="application/json"),
+        (status = CREATED, description = "node connection created", body = ConnectInfo, content_type="application/json"), // <-- 201 Created
         (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found", content_type="application/json")
     )
 )]
 #[post("/{uuid}/connections")]
-async fn post_connection(
+pub async fn post_connection(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     connect_info: Json<ConnectInfo>,
-) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
     let mut document = data.document.lock();
+    
     document
         .scenery_mut()
         .with_group_node_mut(group_uuid, |group| {
@@ -90,31 +99,39 @@ async fn post_connection(
                 meter!(connect_info.distance()),
             )
         })??;
+        
     let is_ref_node = document
         .scenery()
         .with_node_attr(connect_info.target_uuid(), |n| {
             n.properties().get("reference id").is_ok()
         })?;
+        
     let mut connect_info = connect_info.into_inner();
     connect_info.set_is_reference(is_ref_node);
     drop(document);
-    Ok(Json(connect_info))
+    
+    Ok(HttpResponse::Created().json(connect_info)) // <-- REST Standard
 }
 
 /// Update a connection distance
 #[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the group node"), // <-- Fehlte!
+    ),
+    request_body = ConnectInfo,
     responses(
-        (status = OK, description = "node connection updated", content_type="application/json"),
+        (status = OK, description = "node connection updated", body = ConnectInfo, content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found", content_type="application/json")
 ))]
 #[patch("/{uuid}/connections")]
-async fn update_connection(
+pub async fn update_connection(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     connect_info: Json<ConnectInfo>,
-) -> Result<Json<ConnectInfo>, BackEndErrorResponse> {
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
     let mut document = data.document.lock();
+    
     document
         .scenery_mut()
         .with_group_node_mut(group_uuid, |group| {
@@ -124,8 +141,9 @@ async fn update_connection(
                 meter!(connect_info.distance()),
             )
         })??;
+        
     drop(document);
-    Ok(connect_info)
+    Ok(HttpResponse::Ok().json(connect_info.into_inner()))
 }
 
 /// Disconnect two nodes
@@ -135,7 +153,7 @@ async fn update_connection(
     tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "UUID of the group containing the connection"),
-        DeleteConnectionQuery // <-- Utoipa zaubert daraus automatisch Query-Parameter für Swagger!
+        DeleteConnectionQuery
     ),
     responses(
         (status = NO_CONTENT, description = "node connection successfully deleted"),
@@ -143,7 +161,7 @@ async fn update_connection(
     )
 )]
 #[delete("/{uuid}/connections")]
-async fn delete_connection(
+pub async fn delete_connection(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     query: web::Query<DeleteConnectionQuery>,
@@ -157,6 +175,43 @@ async fn delete_connection(
         .with_group_node_mut(group_uuid, |group| {
             group.disconnect_nodes(query.src_uuid, &query.src_port)
         })??;
+        
     drop(document);
     Ok(HttpResponse::NoContent().finish())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+
+    fn create_test_state() -> Data<AppState> {
+        Data::new(AppState::default())
+    }
+
+    #[actix_web::test]
+    async fn test_get_connections_invalid_uuid() {
+        let app_state = create_test_state();
+        let app = test::init_service(App::new().app_data(app_state).service(get_connections)).await;
+
+        let req = test::TestRequest::get()
+            .uri(&format!("/{}/connections", Uuid::new_v4()))
+            .to_request();
+
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_web::test]
+    async fn test_delete_connection_invalid_uuid() {
+        let app_state = create_test_state();
+        let app = test::init_service(App::new().app_data(app_state).service(delete_connection)).await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{}/connections?src_uuid={}&src_port=out", Uuid::new_v4(), Uuid::new_v4()))
+            .to_request();
+
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
 }

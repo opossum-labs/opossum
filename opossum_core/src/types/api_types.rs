@@ -1,11 +1,15 @@
 use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    coatings::CoatingType, core_optics::optic_ports::{PortConfig, ValidatedLidt}, nodes::ConnectionInfo, opm_document::AnalyzerInfo, prelude::{AnalyzerType, Aperture, Isometry, Properties}
+    coatings::CoatingType,
+    core_optics::optic_ports::{PortConfig, ValidatedLidt},
+    nodes::ConnectionInfo,
+    opm_document::AnalyzerInfo,
+    prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
 };
 
 /// Structure holding the version information
@@ -335,9 +339,15 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
+    #[must_use]
     pub fn new(status: u16, category: &str, message: &str) -> Self {
-        Self { status, category: category.to_string(), message: message.to_string() }
+        Self {
+            status,
+            category: category.to_string(),
+            message: message.to_string(),
+        }
     }
+    #[must_use]
     pub fn not_found() -> Self {
         Self::new(404, "General", "Resource not found")
     }
@@ -350,7 +360,7 @@ pub struct NodePropertiesResponse {
     pub is_reference: bool,
 }
 /// Request-Objekt für partielle Updates eines Ports
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct UpdatePortRequest {
     /// The new aperture of the port (optional)
     pub aperture: Option<Aperture>,
@@ -361,4 +371,38 @@ pub struct UpdatePortRequest {
     /// The new Laser Induced Damage Threshold (optional)
     #[schema(value_type = Option<f64>)] // Swagger-Trick für den Type-Alias
     pub lidt: Option<ValidatedLidt>,
+}
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AddPortMappingRequest {
+    pub internal_node_id: Uuid,
+    pub internal_port_name: String,
+    pub external_port_name: String,
+    pub port_type: PortType,
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct RemovePortMapQuery {
+    /// External port name of the group port mapping
+    pub external_port_name: String,
+    /// Type of the port (e.g., Input or Output)
+    pub port_type: PortType,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PortMappingsResponse {
+    pub inputs: PortMap,
+    pub outputs: PortMap,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PortNamesResponse {
+    pub inputs: Vec<String>,
+    pub outputs: Vec<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RemovePortMapResponse {
+    pub port_removed: bool,
+    pub connections: Vec<ConnectInfo>,
+    pub parent_group_uuid: Uuid,
 }

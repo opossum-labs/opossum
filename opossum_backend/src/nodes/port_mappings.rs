@@ -1,31 +1,15 @@
-use crate::{app_state::AppState, error::BackEndErrorResponse};
 use actix_web::{
     HttpResponse, delete, get, post,
-    web::{self, Json},
+    web::{self},
 };
 use opossum_core::{
-    prelude::{OpticNode, PortMap, PortType},
-    types::api_types::{ConnectInfo, ErrorResponse},
+    error::OpossumError,
+    prelude::{OpticNode, PortType},
+    types::api_types::{AddPortMappingRequest, ConnectInfo, ErrorResponse, PortMappingsResponse, PortNamesResponse, RemovePortMapQuery, RemovePortMapResponse},
 };
-use serde::Deserialize;
-use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct AddPortMappingRequest {
-    pub internal_node_id: Uuid,
-    pub internal_port_name: String,
-    pub external_port_name: String,
-    pub port_type: PortType,
-}
-
-#[derive(Debug, Deserialize, IntoParams)]
-pub struct RemovePortMapQuery {
-    /// External port name of the group port mapping
-    pub external_port_name: String,
-    /// Type of the port (e.g., Input or Output)
-    pub port_type: PortType,
-}
+use crate::{app_state::AppState, error::BackEndErrorResponse};
 
 /// Get the port mappings of a group node
 #[utoipa::path(tag = "node",
@@ -33,7 +17,7 @@ pub struct RemovePortMapQuery {
         ("uuid" = Uuid, Path, description = "Uuid of a group whose portmaps should be sent"),
     ),
     responses(
-        (status = OK, description = "Node portmaps successfully sent!"),
+        (status = OK, description = "Node portmaps successfully sent!", body = PortMappingsResponse, content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
@@ -41,31 +25,31 @@ pub struct RemovePortMapQuery {
 pub async fn get_port_mappings(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<Json<(PortMap, PortMap)>, BackEndErrorResponse> {
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_id = path.into_inner();
-    let port_maps = data
-        .document
-        .lock()
-        .scenery_mut()
-        .with_group_node_mut(group_id, |g| {
-            (
-                g.graph().port_map(&PortType::Input).clone(),
-                g.graph().port_map(&PortType::Output).clone(),
-            )
-        })?;
-    Ok(Json(port_maps))
+    let (inputs, outputs) =
+        data.document
+            .lock()
+            .scenery_mut()
+            .with_group_node_mut(group_id, |g| {
+                (
+                    g.graph().port_map(&PortType::Input).clone(),
+                    g.graph().port_map(&PortType::Output).clone(),
+                )
+            })?;
+
+    let response = PortMappingsResponse { inputs, outputs };
+    Ok(HttpResponse::Ok().json(response))
 }
-/// Map a port of an internal node to a port of the group node, effectively exposing it as an external port of the group.
+
+/// Map a port of an internal node to a port of the group node.
 #[utoipa::path(tag = "node",
     params(
-        ("uuid" = Uuid, Path, description = "Uuid of a group whose port shouldbe mapped to a port of an internal node"),
+        ("uuid" = Uuid, Path, description = "Uuid of a group whose port should be mapped"),
     ),
-    request_body(content = String,
-        description = "Node uuid of internal node, tuple of internal port name of node and external port name pof group and the port type",
-        content_type = "application/json",
-    ),
+    request_body = AddPortMappingRequest, // <-- Swagger Fix: Utoipa liest das JSON-Schema nun korrekt aus
     responses(
-        (status = CREATED, description = "Node port successfully mapped to group port"),
+        (status = CREATED, description = "Node port successfully mapped", body = PortNamesResponse, content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
@@ -77,39 +61,36 @@ pub async fn post_port_mapping(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_id = path.into_inner();
     let pmap_inf = port_mapping_request.into_inner();
-    let ports = data
-        .document
-        .lock()
-        .scenery_mut()
-        .with_group_node_mut(group_id, |g| {
-            match pmap_inf.port_type {
-                PortType::Input => g.map_input_port(
-                    pmap_inf.internal_node_id,
-                    &pmap_inf.internal_port_name,
-                    &pmap_inf.external_port_name,
-                ),
-                PortType::Output => g.map_output_port(
-                    pmap_inf.internal_node_id,
-                    &pmap_inf.internal_port_name,
-                    &pmap_inf.external_port_name,
-                ),
-            }?;
-            let ports = g.ports();
-            let inputs = ports
-                .ports(&PortType::Input)
-                .keys()
-                .cloned()
-                .collect::<Vec<String>>();
-            let outputs = ports
-                .ports(&PortType::Output)
-                .keys()
-                .cloned()
-                .collect::<Vec<String>>();
-            Ok::<(Vec<String>, Vec<String>), BackEndErrorResponse>((inputs, outputs))
-        })??;
 
-    Ok(HttpResponse::Created().json(ports))
+    let (inputs, outputs) =
+        data.document
+            .lock()
+            .scenery_mut()
+            .with_group_node_mut(group_id, |g| {
+                match pmap_inf.port_type {
+                    PortType::Input => g.map_input_port(
+                        pmap_inf.internal_node_id,
+                        &pmap_inf.internal_port_name,
+                        &pmap_inf.external_port_name,
+                    ),
+                    PortType::Output => g.map_output_port(
+                        pmap_inf.internal_node_id,
+                        &pmap_inf.internal_port_name,
+                        &pmap_inf.external_port_name,
+                    ),
+                }?;
+
+                let ports = g.ports();
+                let inputs: Vec<String> = ports.ports(&PortType::Input).keys().cloned().collect();
+                let outputs: Vec<String> = ports.ports(&PortType::Output).keys().cloned().collect();
+
+                Ok::<(Vec<String>, Vec<String>), OpossumError>((inputs, outputs)) // <-- OpossumError statt BackEndErrorResponse!
+            })??;
+
+    let response = PortNamesResponse { inputs, outputs };
+    Ok(HttpResponse::Created().json(response)) // 201 Created
 }
+
 /// Remove a port mapping from a group
 #[utoipa::path(
     tag = "node",
@@ -118,7 +99,7 @@ pub async fn post_port_mapping(
         RemovePortMapQuery
     ),
     responses(
-        (status = OK, description = "Node port successfully removed from group"),
+        (status = OK, description = "Node port successfully removed", body = RemovePortMapResponse, content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
@@ -128,10 +109,8 @@ pub async fn remove_port_map(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     query: web::Query<RemovePortMapQuery>,
-) -> Result<Json<(bool, Vec<ConnectInfo>, Uuid)>, BackEndErrorResponse> {
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_id = path.into_inner();
-
-    // Entpacke die Query-Parameter
     let RemovePortMapQuery {
         external_port_name,
         port_type,
@@ -140,29 +119,72 @@ pub async fn remove_port_map(
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
 
-    // get parent of node
     let (_, parent_group) = scenery.node_recursive(group_id)?;
 
-    // get connections
     let connections = scenery.with_group_node_mut(parent_group, |g| {
         let c = g.graph().get_connection_info_of_node(group_id);
-
-        // does not matter if it is a reference, as the connections are just removed
         c.iter()
             .map(|c| ConnectInfo::from_connection_info(c, false))
             .collect::<Vec<ConnectInfo>>()
     })?;
 
-    // remove connections first before removing the mapping
+    // Disconnect (idiomatisches Error-Handling mit OpossumError)
     scenery.with_group_node_mut(parent_group, |g| {
         for c in &connections {
             g.disconnect_nodes(c.src_uuid(), c.src_port())?;
         }
-        Ok::<(), BackEndErrorResponse>(())
+        Ok::<(), OpossumError>(())
     })??;
 
     let port_removed = scenery.with_group_node_mut(group_id, |g| {
         g.remove_mapped_port(&external_port_name, port_type)
     })?;
-    Ok(Json((port_removed, connections, parent_group)))
+
+    let response = RemovePortMapResponse {
+        port_removed,
+        connections,
+        parent_group_uuid: parent_group,
+    };
+
+    Ok(HttpResponse::Ok().json(response)) // 200 OK (Daten werden zurückgegeben)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+
+    fn create_test_state() -> Data<AppState> {
+        Data::new(AppState::default())
+    }
+
+    #[actix_web::test]
+    async fn test_get_port_mappings_invalid_uuid() {
+        let app_state = create_test_state();
+        let app =
+            test::init_service(App::new().app_data(app_state).service(get_port_mappings)).await;
+
+        let req = test::TestRequest::get()
+            .uri(&format!("/{}/port_mappings", Uuid::new_v4()))
+            .to_request();
+
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_web::test]
+    async fn test_remove_port_map_invalid_uuid() {
+        let app_state = create_test_state();
+        let app = test::init_service(App::new().app_data(app_state).service(remove_port_map)).await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!(
+                "/{}/port_mappings?external_port_name=out&port_type=Output",
+                Uuid::new_v4()
+            ))
+            .to_request();
+
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
 }

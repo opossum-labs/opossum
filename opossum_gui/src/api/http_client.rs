@@ -250,9 +250,7 @@ impl HTTPClient {
                 |err_res| {
                     Err(format!(
                         "Error {}: {} - {}",
-                        err_res.status,
-                        err_res.category,
-                        err_res.message
+                        err_res.status, err_res.category, err_res.message
                     ))
                 },
             )
@@ -302,9 +300,7 @@ impl HTTPClient {
                 |err_res| {
                     Err(format!(
                         "Error {}: {} - {}",
-                        err_res.status,
-                        err_res.category,
-                        err_res.message
+                        err_res.status, err_res.category, err_res.message
                     ))
                 },
             )

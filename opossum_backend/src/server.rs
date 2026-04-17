@@ -1,9 +1,7 @@
 #![allow(clippy::needless_for_each)] // This is necessary because of linter errors for #[derive(OpenApi)]
 
 use actix_cors::Cors;
-use actix_web::{
-    App, HttpResponse, HttpServer, dev::Server, middleware::Logger, web,
-};
+use actix_web::{App, HttpResponse, HttpServer, dev::Server, middleware::Logger, web};
 use std::net::Ipv4Addr;
 use utoipa::OpenApi;
 use utoipa_actix_web::AppExt;
@@ -60,7 +58,7 @@ pub fn start() -> Server {
 
     init_logger();
     let app_state = web::Data::new(AppState::default());
-    
+
     // Read OPOSSUM_PORT from environment variables, default to 8001 if not set.
     let port: u16 = std::env::var("OPOSSUM_PORT")
         .unwrap_or_else(|_| "8001".to_string())
@@ -77,9 +75,9 @@ pub fn start() -> Server {
         let app_state = app_state.clone();
         move || {
             // CORS Configuration: Fix later for production use.
-            // Optional: Limit e.g. with .allowed_origin("http://localhost:8080") 
+            // Optional: Limit e.g. with .allowed_origin("http://localhost:8080")
             let cors = Cors::default()
-                .allow_any_origin() 
+                .allow_any_origin()
                 .allow_any_method()
                 .allow_any_header()
                 .max_age(3600);
@@ -88,7 +86,7 @@ pub fn start() -> Server {
                 .into_utoipa_app()
                 .openapi(ApiDocs::openapi())
                 .map(|app| app.wrap(Logger::default()))
-                .map(|app| app.wrap(cors)) 
+                .map(|app| app.wrap(cors))
                 .app_data(app_state.clone())
                 .configure(routes::root_config)
                 .openapi_service(|api| {

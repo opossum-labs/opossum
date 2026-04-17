@@ -344,3 +344,55 @@ fn get_nested_referenced_node_from_state(
         Ok(optic_ref)
     }
 }
+#[cfg(test)]
+mod test {
+    use super::*;
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+    use opossum_core::types::api_types::ErrorResponse;
+
+    // Hilfsfunktion: Baut einen leeren AppState für die Tests
+    fn create_test_state() -> Data<AppState> {
+        Data::new(AppState::default())
+    }
+
+    #[actix_web::test]
+    async fn test_get_node_not_found() {
+        let app_state = create_test_state();
+        let app = test::init_service(App::new().app_data(app_state).service(get_node)).await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/{}", Uuid::nil()))
+            .to_request();
+
+        let resp = app.call(req).await.unwrap();
+
+        // Sollte fehlschlagen, da die Node nicht existiert
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        // Prüfen, ob unser Error-DTO sauber ankommt
+        let error_body: ErrorResponse = test::read_body_json(resp).await;
+        assert_eq!(error_body.category, "OpticScenery");
+    }
+
+    #[actix_web::test]
+    async fn test_patch_node_not_found() {
+        let app_state = create_test_state();
+        let app = test::init_service(App::new().app_data(app_state).service(patch_node)).await;
+
+        let random_uuid = Uuid::new_v4();
+        let update_req = UpdateNodeRequest {
+            name: Some("Test Name".to_string()),
+            inverted: None,
+            gui_position: None,
+            isometry: None,
+            alignment: None,
+        };
+
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{}", random_uuid))
+            .set_json(&update_req)
+            .to_request();
+
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+}
