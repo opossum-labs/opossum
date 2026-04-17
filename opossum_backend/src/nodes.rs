@@ -158,26 +158,41 @@ pub fn copy_from_optic_ref(
     scenery: &NodeGroup,
     optic_ref: &OpticRef,
 ) -> Result<(OpticRef, Uuid), BackEndErrorResponse> {
-    let node_to_copy_from = optic_ref.optical_ref.lock_opm()?;
-    let old_node_id = node_to_copy_from.node_attr().uuid();
+    let (old_node_id, reference_uuid_opt, node_type, node_attr_clone) = {
+        let node = optic_ref.optical_ref.lock_opm()?;
 
-    let new_node_ref = create_node_ref(&node_to_copy_from.node_type())?;
+        let old_node_id = node.node_attr().uuid();
+        let reference_uuid_opt = node
+            .node_attr()
+            .properties()
+            .get("reference id")
+            .ok()
+            .and_then(|p| match p {
+                Proptype::Uuid(id) => Some(*id),
+                _ => None,
+            });
+
+        let node_type = node.node_type();
+        let node_attr_clone = node.node_attr().clone();
+
+        (old_node_id, reference_uuid_opt, node_type, node_attr_clone)
+    };
+
+    let referenced_node_opt = if let Some(ref_uuid) = reference_uuid_opt {
+        Some(scenery.node_recursive(ref_uuid)?.0)
+    } else {
+        None
+    };
+
+    let new_node_ref = create_node_ref(&node_type)?;
     let mut node = new_node_ref.optical_ref.lock_opm()?;
-
-    if let Ok(Proptype::Uuid(ref_uuid)) = node_to_copy_from
-        .node_attr()
-        .properties()
-        .get("reference id")
-        && let Ok(ref_node) = node.as_refnode_mut()
-    {
-        let (referenced_node, _) = scenery.node_recursive(*ref_uuid)?;
-        ref_node.assign_reference(&referenced_node);
+    if let Some(referenced_node) = referenced_node_opt {
+        node.as_refnode_mut()?.assign_reference(&referenced_node);
     }
 
     let node_attr = node.node_attr_mut();
-    node_attr.replace_from_node_attr(node_to_copy_from.node_attr());
+    node_attr.replace_from_node_attr(&node_attr_clone);
 
-    drop(node_to_copy_from);
     drop(node);
 
     Ok((new_node_ref, old_node_id))
@@ -196,14 +211,14 @@ pub fn get_shifted_pos_of_ref(
     Ok(new_pos)
 }
 
-pub fn copy_optical_node(
+pub fn collect_optical_node_to_copy(
     scenery: &mut NodeGroup,
     group_id: Uuid,
     shift: Point2<f64>,
     optic_ref: &OpticRef,
     node_id_link: &mut HashMap<Uuid, Uuid>,
-    grouped_connect_info: &mut HashMap<Uuid, HashMap<Uuid, Vec<ConnectionInfo>>>,
-) -> Result<NodeInfo, BackEndErrorResponse> {
+    grouped_connect_info: &mut HashMap<Uuid, (HashMap<Uuid, Vec<ConnectionInfo>>, bool)>,
+) -> Result<OpticRef, BackEndErrorResponse> {
     let (new_node_ref, old_node_id) = copy_from_optic_ref(scenery, optic_ref)?;
 
     let new_pos = get_shifted_pos_of_ref(optic_ref, shift)?;
@@ -214,10 +229,7 @@ pub fn copy_optical_node(
 
     drop(node);
 
-    let new_node_uuid =
-        scenery.with_group_node_mut(group_id, |g| g.add_node_ref(new_node_ref.clone()))??;
-
-    node_id_link.insert(old_node_id, new_node_uuid);
+    node_id_link.insert(old_node_id, new_node_ref.uuid());
 
     let parent_group_id = scenery.node_recursive(old_node_id)?.1;
 
@@ -227,57 +239,47 @@ pub fn copy_optical_node(
             .get_outgoing_connection_info_of_node(old_node_id)
     })?;
 
-    if let Some(c_info_map) = grouped_connect_info.get_mut(&group_id) {
+    if let Some((c_info_map, _)) = grouped_connect_info.get_mut(&group_id) {
         c_info_map.insert(old_node_id, connect);
     }
 
-    let node = new_node_ref.optical_ref.lock_opm()?;
-    Ok(NodeInfo::new(
-        new_node_uuid,
-        node.name(),
-        node.inverted(),
-        node.node_type(),
-        node.ports().names(&PortType::Input),
-        node.ports().names(&PortType::Output),
-        Some(new_pos),
-    ))
+    Ok(new_node_ref)
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn copy_optical_nodes_recursive(
+pub fn collect_optical_nodes_to_copy_recursive(
     scenery: &mut NodeGroup,
     group_id_to_insert: Uuid,
     shift: Point2<f64>,
     copied_optical_nodes: &[OpticRef],
     node_id_link: &mut HashMap<Uuid, Uuid>,
-    grouped_connect_info: &mut HashMap<Uuid, HashMap<Uuid, Vec<ConnectionInfo>>>,
-    grouped_node_infos: &mut HashMap<Uuid, Vec<NodeInfo>>,
+    grouped_connect_info: &mut HashMap<Uuid, (HashMap<Uuid, Vec<ConnectionInfo>>, bool)>,
+    grouped_node_infos: &mut Vec<(Uuid, Vec<OpticRef>, bool)>,
     input_port_maps: &mut HashMap<Uuid, PortMap>,
     output_port_maps: &mut HashMap<Uuid, PortMap>,
+    is_root_group: bool,
 ) -> Result<(), BackEndErrorResponse> {
     let mut optical_nodes = Vec::new();
     grouped_connect_info.insert(
         group_id_to_insert,
-        HashMap::<Uuid, Vec<ConnectionInfo>>::new(),
+        (HashMap::<Uuid, Vec<ConnectionInfo>>::new(), is_root_group),
     );
     for node in copied_optical_nodes {
         let node_id = node.uuid();
-        let group_nodes_opt = node.optical_ref.lock_opm()?.as_group().map_or_else(
-            |_| None,
-            |group| {
+        
+        let group_nodes_opt = {
+            let guard = node.optical_ref.lock_opm()?;
+
+            if let Ok(group) = guard.as_group() {
                 input_port_maps.insert(node_id, group.graph().port_map(&PortType::Input).clone());
                 output_port_maps.insert(node_id, group.graph().port_map(&PortType::Output).clone());
-                Some(
-                    group
-                        .nodes()
-                        .iter()
-                        .copied()
-                        .cloned()
-                        .collect::<Vec<OpticRef>>(),
-                )
-            },
-        );
-        let copied_node = copy_optical_node(
+
+                Some(group.nodes().iter().copied().cloned().collect::<Vec<_>>())
+            } else {
+                None
+            }
+        }; 
+        let copied_node = collect_optical_node_to_copy(
             scenery,
             group_id_to_insert,
             shift,
@@ -286,13 +288,12 @@ pub fn copy_optical_nodes_recursive(
             grouped_connect_info,
         )?;
 
-        let copied_node_id = copied_node.uuid();
         optical_nodes.push(copied_node);
 
         if let Some(nodes_in_group) = group_nodes_opt {
-            copy_optical_nodes_recursive(
+            collect_optical_nodes_to_copy_recursive(
                 scenery,
-                copied_node_id,
+                node_id,
                 Point2::origin(),
                 &nodes_in_group,
                 node_id_link,
@@ -300,10 +301,11 @@ pub fn copy_optical_nodes_recursive(
                 grouped_node_infos,
                 input_port_maps,
                 output_port_maps,
+                false,
             )?;
         }
     }
-    grouped_node_infos.insert(group_id_to_insert, optical_nodes);
+    grouped_node_infos.push((group_id_to_insert, optical_nodes, is_root_group));
     Ok(())
 }
 
@@ -462,8 +464,8 @@ async fn post_paste_nodes(
     )>,
     BackEndErrorResponse,
 > {
-    let (group_id, node_pos) = node_paste_info.into_inner();
-    let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == group_id;
+    let (paste_group_id, node_pos) = node_paste_info.into_inner();
+    let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == paste_group_id;
 
     let copied_nodes = data.node_copy_cache.lock();
     let min_pos = upper_left_corner_of_nodes(&copied_nodes)?;
@@ -489,28 +491,67 @@ async fn post_paste_nodes(
         }
     }
 
+    println!("collect nodes");
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
+    let mut grouped_node_refs = Vec::<(Uuid, Vec<OpticRef>, bool)>::new();
     let mut grouped_node_infos = HashMap::<Uuid, Vec<NodeInfo>>::new();
     let mut grouped_connect_info = HashMap::<Uuid, Vec<ConnectInfo>>::new();
-    let mut grouped_connections = HashMap::<Uuid, HashMap<Uuid, Vec<ConnectionInfo>>>::new();
+    let mut grouped_connections =
+        HashMap::<Uuid, (HashMap<Uuid, Vec<ConnectionInfo>>, bool)>::new();
     let mut node_id_link = HashMap::<Uuid, Uuid>::new();
     let mut input_port_maps = HashMap::<Uuid, PortMap>::new();
     let mut output_port_maps = HashMap::<Uuid, PortMap>::new();
-    copy_optical_nodes_recursive(
+    // node_id_link.insert(paste_group_id, paste_group_id);
+    collect_optical_nodes_to_copy_recursive(
         scenery,
-        group_id,
+        paste_group_id,
         shift,
         &copied_optical_nodes,
         &mut node_id_link,
         &mut grouped_connections,
-        &mut grouped_node_infos,
+        &mut grouped_node_refs,
         &mut input_port_maps,
         &mut output_port_maps,
+        true,
     )?;
 
+    println!("apply copy nodes");
+    for (group_id, node_refs, is_root_group) in grouped_node_refs.iter().rev() {
+        // if let Some(mapped_group_id) = node_id_link.get(group_id){
+
+        let mapped_group_id_opt = if *is_root_group {
+            Some(*group_id)
+        } else {
+            node_id_link.get(group_id).copied()
+        };
+        if let Some(mapped_group_id) = mapped_group_id_opt {
+            println!("old id: {}", group_id.as_simple());
+            println!("mapped_group_id: {}", mapped_group_id.as_simple());
+            let mut node_info = Vec::new();
+            for node_ref in node_refs {
+                scenery
+                    .with_group_node_mut(mapped_group_id, |g| g.add_node_ref(node_ref.clone()))??;
+                let node = node_ref.optical_ref.lock_opm()?;
+                node_info.push(NodeInfo::new(
+                    node.node_attr().uuid(),
+                    node.name(),
+                    node.inverted(),
+                    node.node_type(),
+                    node.ports().names(&PortType::Input),
+                    node.ports().names(&PortType::Output),
+                    node.node_attr().gui_position().map(|p| (p.x, p.y)),
+                ));
+                drop(node)
+            }
+            grouped_node_infos.insert(mapped_group_id, node_info);
+        }
+    }
+
+    println!("resolve refs");
     resolve_references(scenery, &node_id_link)?;
 
+    println!("reconv ports");
     reconfigure_ports(
         scenery,
         &input_port_maps,
@@ -519,10 +560,18 @@ async fn post_paste_nodes(
         &mut grouped_node_infos,
     )?;
 
-    for (g_id, connections) in &mut grouped_connections {
-        remap_connections(connections, &node_id_link);
-        let connect_info = set_copied_connections(scenery, *g_id, connections)?;
-        grouped_connect_info.insert(*g_id, connect_info);
+    println!("apply connections");
+    for (group_id, (connections, is_root_group)) in &mut grouped_connections {
+        let mapped_group_id_opt = if *is_root_group {
+            Some(*group_id)
+        } else {
+            node_id_link.get(group_id).copied()
+        };
+        if let Some(mapped_group_id) = mapped_group_id_opt {
+            remap_connections(connections, &node_id_link);
+            let connect_info = set_copied_connections(scenery, mapped_group_id, connections)?;
+            grouped_connect_info.insert(mapped_group_id, connect_info);
+        }
     }
     Ok(Json((grouped_node_infos, analyzers, grouped_connect_info)))
 }
