@@ -1,5 +1,4 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use std::any::Any;
 use std::collections::HashSet;
 
 use super::NodeElement;
