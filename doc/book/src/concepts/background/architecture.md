@@ -18,7 +18,7 @@ The server then asks the Core Library to run the input data and shows you the re
 
 The Backend server is the bridge, it not only transfer the data from GUI to the core library but it can also be connected to large industrial machines.
 
-2.CLI (Command Line Interface). It is a direct door to the core Library. Becuase CLI works with `Rust` Programming language , it talks directly to the core lobrary without needing a server in the middle.
+2. CLI (Command Line Interface). It is a direct door to the core Library. Becuase CLI works with `Rust` Programming language , it talks directly to the core lobrary without needing a server in the middle.
 
 A topmost-level view could look like this:
 
