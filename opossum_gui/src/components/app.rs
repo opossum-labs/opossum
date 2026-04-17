@@ -1,6 +1,6 @@
 // --- Common imports ---
 use crate::{
-    api::delete_scenery,
+    api::delete_document,
     components::{
         alert_dialog::{
             AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
@@ -54,7 +54,7 @@ pub fn App() -> Element {
 
     use_effect(|| {
         spawn(async move {
-            let _ = delete_scenery().await;
+            let _ = delete_document().await;
         });
     });
 

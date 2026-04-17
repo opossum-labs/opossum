@@ -4,17 +4,17 @@ use crate::HTTP_API_CLIENT;
 use opossum_core::{opm_document::AnalyzerInfo, types::api_types::NewAnalyzerInfo};
 use uuid::Uuid;
 
-/// Send a request to delete the current scenery.
-///
-/// # Errors
-///
-/// This function will return an error if
-/// - the request fails (e.g. the scenery is not valid)
-pub async fn delete_scenery() -> Result<String, String> {
-    HTTP_API_CLIENT()
-        .delete::<String, String>("/api/scenery/", String::new())
-        .await
-}
+// /// Send a request to delete the current scenery.
+// ///
+// /// # Errors
+// ///
+// /// This function will return an error if
+// /// - the request fails (e.g. the scenery is not valid)
+// pub async fn delete_scenery() -> Result<String, String> {
+//     HTTP_API_CLIENT()
+//         .delete::<String, String>("/api/scenery/", String::new())
+//         .await
+// }
 /// Send a request to add an analyzer to the scenery.
 ///
 /// # Errors
@@ -70,8 +70,4 @@ pub async fn post_opm_file(opm_string: String) -> Result<String, String> {
     HTTP_API_CLIENT()
         .post_string("/api/scenery/opmfile", opm_string)
         .await
-}
-
-pub async fn get_scenery_uuid() -> Result<Uuid, String> {
-    HTTP_API_CLIENT().get("/api/scenery/scenery_uuid").await
 }

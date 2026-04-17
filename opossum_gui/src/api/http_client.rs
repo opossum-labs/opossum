@@ -127,19 +127,19 @@ impl HTTPClient {
     ///
     /// - the request fails (e.g. the route is not reachable)
     /// - the response cannot be deserialized into the expected type
-    pub async fn patch<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
+    pub async fn patch<B: Serialize + DeserializeOwned>(
         &self,
         route: &str,
         body: B,
-    ) -> Result<R, String> {
+    ) -> Result<(), String> {
         let res = self
             .client()
             .patch(self.url(route))
             .json(&body)
             .send()
             .await;
-        if let Ok(response) = res {
-            self.process_response::<R>(response).await
+        if let Ok(_response) = res {
+            Ok(())
         } else {
             Err(format!("Error on patch request on route: \"{route}\""))
         }

@@ -21,7 +21,7 @@ use crate::HTTP_API_CLIENT;
 /// - the response cannot be deserialized into a vector of [`NodeInfo`] structs
 pub async fn get_nodes(group_id: Uuid) -> Result<Vec<NodeInfo>, String> {
     HTTP_API_CLIENT()
-        .get::<Vec<NodeInfo>>(&format!("/api/scenery/{}/nodes", group_id.as_simple()))
+        .get::<Vec<NodeInfo>>(&format!("/api/nodes/{}/children", group_id.as_simple()))
         .await
 }
 /// Get a list of all connections (edges) of the given node group.
@@ -245,14 +245,14 @@ pub async fn update_gui_position(
 pub async fn update_node_name(
     node_id: Uuid,
     node_name: String,
-) -> Result<HashMap<Uuid, String>, String> {
+) -> Result<(), String> {
     let update_request = UpdateNodeRequest {
         name: Some(node_name.clone()),
         ..Default::default()
     };
     HTTP_API_CLIENT()
-        .post::<UpdateNodeRequest, HashMap<Uuid, String>>(
-            &format!("/api/scenery/node/{}", node_id.as_simple()),
+        .patch::<UpdateNodeRequest>(
+            &format!("/api/nodes/{}", node_id.as_simple()),
             update_request,
         )
         .await

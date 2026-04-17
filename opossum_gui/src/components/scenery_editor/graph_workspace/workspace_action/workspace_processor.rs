@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     OPOSSUM_UI_LOGS,
-    api::{self, eval_action_run},
+    api::{self, delete_document, eval_action_run},
     components::scenery_editor::{
         NodeType,
         constants::{
@@ -939,7 +939,7 @@ async fn process_delete_root_scenery(
     set_file_path_handler: EventHandler<Option<PathBuf>>,
 ) {
     eval_action_run(
-        api::delete_scenery().await,
+        delete_document().await,
         Some(move |_| {
             workspace_handlers.workspace.clear_workspace();
             set_file_path_handler.call(None);
@@ -976,7 +976,7 @@ async fn process_add_root_scenery_tab(
     ws_handler: WorkSpaceSignalHandlers,
     name: String,
 ) {
-    match api::get_scenery_uuid().await {
+    match api::get_document_root_uuid().await {
         Ok(id) => {
             ws_handler.workspace.set_root_scenery_id(id);
             ws_handler.workspace.add_new_group_tab(GraphInfo {
