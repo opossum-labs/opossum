@@ -1,5 +1,5 @@
 use actix_web::{
-    HttpResponse, delete, get, patch, post,
+    HttpRequest, HttpResponse, delete, get, patch, post,
     web::{self, Json},
 };
 use nalgebra::Point2;
@@ -130,6 +130,8 @@ async fn post_children(
 /// Get optical node properties
 ///
 /// This function retrieves the properties of an optical node specified by its UUID. It also searches for the node recursively in the whole scenery.
+/// Supports Content Negotiation: Use `Accept: application/ron` for RON format,
+/// otherwise defaults to `application/json`.
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "UUID of the optical node"),
@@ -140,11 +142,14 @@ async fn post_children(
     )
 )]
 #[get("/{uuid}")]
+#[allow(clippy::future_not_send)]
 async fn get_node(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<Json<NodeInfo>, BackEndErrorResponse> {
+    req: HttpRequest,
+) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
+    // Retrieve the node info
     let node_info = data
         .document
         .lock()
@@ -162,7 +167,29 @@ async fn get_node(
             alignment: *node_attr.alignment(),
             isometry: node_attr.isometry(),
         })?;
-    Ok(Json(node_info))
+
+    // Content Negotiation
+    let wants_ron = req
+        .headers()
+        .get(actix_web::http::header::ACCEPT)
+        .and_then(|h| h.to_str().ok())
+        .is_some_and(|s| s.contains("application/ron"));
+
+    if wants_ron {
+        // Serialize to RON using pretty formatting
+        let body =
+            ron::ser::to_string_pretty(&node_info, ron::ser::PrettyConfig::new().new_line("\n"))
+                .map_err(|e| {
+                    BackEndErrorResponse::new(500, "Serialization Error", &e.to_string())
+                })?;
+
+        Ok(HttpResponse::Ok()
+            .content_type("application/ron")
+            .body(body))
+    } else {
+        // Fallback to JSON
+        Ok(HttpResponse::Ok().json(node_info))
+    }
 }
 /// Update optical node properties
 ///
@@ -184,7 +211,6 @@ async fn patch_node(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let update = update.into_inner();
-    // let mut document = data.document.lock();
     data.document
         .lock()
         .scenery_mut()

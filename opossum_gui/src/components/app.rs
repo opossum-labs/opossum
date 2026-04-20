@@ -1,20 +1,17 @@
 // --- Common imports ---
-use crate::{
-    api::delete_document,
-    components::{
-        alert_dialog::{
-            AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
-            AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
-        },
-        context_menu::cx_menu::{ContextMenu, CxtCommand},
-        logger::logger_component::Logger,
-        menu_bar::{
-            menu_bar_component::{AppCommand, MenuBar},
-            project_helper::{select_folder_path, select_open_path, select_save_path},
-        },
-        scenery_editor::{GraphEditor, NodeEditorCommand},
-        short_cuts::{PendingAction, get_action_from_event},
+use crate::components::{
+    alert_dialog::{
+        AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
+        AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
     },
+    context_menu::cx_menu::{ContextMenu, CxtCommand},
+    logger::logger_component::Logger,
+    menu_bar::{
+        menu_bar_component::{AppCommand, MenuBar},
+        project_helper::{select_folder_path, select_open_path, select_save_path},
+    },
+    scenery_editor::{GraphEditor, NodeEditorCommand},
+    short_cuts::{PendingAction, get_action_from_event},
 };
 use dioxus::prelude::*;
 use std::path::PathBuf;
@@ -51,12 +48,6 @@ pub fn App() -> Element {
     // status for "Unsaved Changes" dialog
     let mut pending_action = use_signal(|| Option::<PendingAction>::None);
     let mut show_alert = use_signal(|| false);
-
-    use_effect(|| {
-        spawn(async move {
-            let _ = delete_document().await;
-        });
-    });
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
@@ -140,6 +131,7 @@ pub fn App() -> Element {
             }
         }
     };
+
     let mut execute_immediate_for_alert = execute_immediate.clone();
     let mut process_command = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {

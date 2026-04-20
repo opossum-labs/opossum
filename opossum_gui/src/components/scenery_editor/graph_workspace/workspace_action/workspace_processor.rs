@@ -9,8 +9,10 @@ use dioxus::{
 use futures_util::StreamExt;
 use opossum_core::{
     opm_document::AnalyzerInfo,
-    prelude::{AnalyzerType, PortMap, PortType},
-    types::api_types::{ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo},
+    prelude::{AnalyzerType, PortType},
+    types::api_types::{
+        ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, PortMappingsResponse, UpdateConnectionRequest,
+    },
 };
 use serde_json::Value;
 use uuid::Uuid;
@@ -155,7 +157,7 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::SyncNodePosition { node_id, pos } => {
                         eval_action_run(
                             api::update_gui_position(node_id, pos).await,
-                            Some(move |_| {
+                            Some(move |()| {
                                 workspace_handlers.workspace.set_needs_saving(true);
                             }),
                         );
@@ -475,30 +477,28 @@ async fn process_paste_nodes(
             for group_id in pasted_groups {
                 eval_action_run(
                     api::get_port_maps_of_group(group_id).await,
-                    Some(
-                        move |(input_port_maps, output_port_maps): (PortMap, PortMap)| {
-                            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
-                                &input_port_maps
-                            {
-                                ws_handler.workspace.add_port_map(
-                                    group_id,
-                                    group_port_name.clone(),
-                                    mapped_node_port_name.clone(),
-                                    *mapped_node_id,
-                                );
-                            }
-                            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
-                                &output_port_maps
-                            {
-                                ws_handler.workspace.add_port_map(
-                                    group_id,
-                                    group_port_name.clone(),
-                                    mapped_node_port_name.clone(),
-                                    *mapped_node_id,
-                                );
-                            }
-                        },
-                    ),
+                    Some(move |port_mappings_response: PortMappingsResponse| {
+                        for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
+                            &port_mappings_response.inputs
+                        {
+                            ws_handler.workspace.add_port_map(
+                                group_id,
+                                group_port_name.clone(),
+                                mapped_node_port_name.clone(),
+                                *mapped_node_id,
+                            );
+                        }
+                        for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
+                            &port_mappings_response.outputs
+                        {
+                            ws_handler.workspace.add_port_map(
+                                group_id,
+                                group_port_name.clone(),
+                                mapped_node_port_name.clone(),
+                                *mapped_node_id,
+                            );
+                        }
+                    }),
                 );
                 eval_action_run(
                     api::get_ports_of_group(group_id).await,
@@ -538,7 +538,6 @@ async fn process_paste_nodes(
 async fn process_copy_nodes(nodes: HashSet<Uuid>) {
     eval_action_run(api::post_copy_nodes(nodes).await, None::<fn(String)>);
 }
-
 async fn process_delete_edge(
     connect_info: ConnectInfo,
     ws_handler: WorkSpaceSignalHandlers,
@@ -546,21 +545,24 @@ async fn process_delete_edge(
 ) {
     eval_action_run(
         api::delete_connection(connect_info.clone(), graph_id).await,
-        Some(move |_| ws_handler.edges.delete_edge(connect_info, graph_id)),
+        Some(move |()| ws_handler.edges.delete_edge(connect_info, graph_id)),
     );
 }
-
 async fn process_update_edge(
     connect_info: ConnectInfo,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
+    let update_connection_request = UpdateConnectionRequest {
+        src_uuid: connect_info.src_uuid(),
+        src_port: connect_info.src_port().to_string(),
+        distance: connect_info.distance(),
+    };
     eval_action_run(
-        api::update_distance(connect_info, graph_id).await,
-        Some(move |ci: ConnectInfo| ws_handler.edges.update_edge(ci, graph_id)),
+        api::update_distance(update_connection_request, graph_id).await,
+        Some(move |()| ws_handler.edges.update_edge(connect_info, graph_id)),
     );
 }
-
 async fn process_optimize_layout(
     workspace: ReadSignal<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
@@ -868,8 +870,10 @@ async fn process_fill_graph_of_group(
 
     eval_action_run(
         api::get_port_maps_of_group(group_id).await,
-        Some(move |(input_ports, output_ports): (PortMap, PortMap)| {
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in &input_ports {
+        Some(move |port_mappings_response: PortMappingsResponse| {
+            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
+                &port_mappings_response.inputs
+            {
                 ws_handler.workspace.add_port_map(
                     group_id,
                     group_port_name.clone(),
@@ -877,7 +881,9 @@ async fn process_fill_graph_of_group(
                     *mapped_node_id,
                 );
             }
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in &output_ports {
+            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
+                &port_mappings_response.outputs
+            {
                 ws_handler.workspace.add_port_map(
                     group_id,
                     group_port_name.clone(),
@@ -921,7 +927,7 @@ async fn process_load_from_file(
             return;
         }
     };
-    match api::post_opm_file(opm_string).await {
+    match api::put_document(opm_string).await {
         Ok(name) => {
             process_add_root_scenery_tab(workspace, ws_handler, name).await;
             set_file_path_handler.call(Some(path));
@@ -958,7 +964,7 @@ async fn process_save_root_scenery_to_file(
     {
         process_rename_root_scenery(ws_handler, fname.to_string(), root_id, false).await;
         eval_action_run(
-            api::get_opm_file().await,
+            api::get_document().await,
             Some(move |opm_string| {
                 if let Err(err_str) = fs::write(&path, opm_string) {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
@@ -978,6 +984,7 @@ async fn process_add_root_scenery_tab(
 ) {
     match api::get_document_root_uuid().await {
         Ok(id) => {
+            ws_handler.workspace.clear_workspace();
             ws_handler.workspace.set_root_scenery_id(id);
             ws_handler.workspace.add_new_group_tab(GraphInfo {
                 name: name.clone(),
@@ -1001,7 +1008,7 @@ async fn process_rename_root_scenery(
 ) {
     eval_action_run(
         api::update_node_name(root_id, name.clone()).await,
-        Some(move |_| {
+        Some(move |()| {
             ws_handler
                 .nodes
                 .set_node_name(name, root_id, root_id, needs_saving);

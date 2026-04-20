@@ -68,7 +68,7 @@ pub struct ErrorResponse {
     /// HTTP status code
     #[schema(example = 400)]
     pub status: u16,
-    /// High-level category of the error (e.g., 'Parse Error', 'OpticScenery')
+    /// High-level category of the error (e.g., `Parse Error`, `OpticScenery`)
     #[schema(example = "OpticScenery")]
     pub category: String,
     /// Detailed error message
@@ -96,7 +96,7 @@ impl ErrorResponse {
 // ============================================================================
 
 /// Comprehensive information about an optical node in the scenery
-#[derive(Serialize, Deserialize, ToSchema, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, ToSchema, Clone, Debug, PartialEq)]
 pub struct NodeInfo {
     pub uuid: Uuid,
     #[schema(example = "Main Focusing Lens")]
@@ -332,6 +332,18 @@ impl ConnectInfo {
     }
 }
 
+/// Request payload to update the distance of an existing connection
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct UpdateConnectionRequest {
+    /// UUID of the source node (used to identify the connection)
+    pub src_uuid: Uuid,
+    /// Name of the source port (used to identify the connection)
+    #[schema(example = "output_1")]
+    pub src_port: String,
+    /// The new geometric distance in meters
+    #[schema(example = 0.15)]
+    pub distance: f64,
+}
 // ============================================================================
 // PORTS & PORT MAPPINGS
 // ============================================================================
@@ -379,14 +391,14 @@ pub struct RemovePortMapQuery {
 }
 
 /// Response payload containing the internal-to-external port mappings of a group
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PortMappingsResponse {
     pub inputs: PortMap,
     pub outputs: PortMap,
 }
 
 /// Response payload containing lists of available mapped port names
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PortNamesResponse {
     pub inputs: Vec<String>,
     pub outputs: Vec<String>,

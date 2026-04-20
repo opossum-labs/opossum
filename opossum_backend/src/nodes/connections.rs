@@ -4,7 +4,7 @@ use actix_web::{
 };
 use opossum_core::{
     meter,
-    types::api_types::{ConnectInfo, ErrorResponse},
+    types::api_types::{ConnectInfo, ErrorResponse, UpdateConnectionRequest},
 };
 use serde::Deserialize;
 use uom::si::length::meter;
@@ -114,36 +114,44 @@ pub async fn post_connection(
 }
 
 /// Update a connection distance
-#[utoipa::path(tag = "node",
+///
+/// Updates only the geometric distance of an existing connection identified by its source node and port.
+#[utoipa::path(
+    tag = "node",
     params(
-        ("uuid" = Uuid, Path, description = "UUID of the group node"), // <-- Fehlte!
+        ("uuid" = Uuid, Path, description = "UUID of the group node"),
     ),
-    request_body = ConnectInfo,
+    request_body = UpdateConnectionRequest,
     responses(
-        (status = OK, description = "node connection updated", body = ConnectInfo, content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found", content_type="application/json")
-))]
+        (status = NO_CONTENT, description = "Node connection successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "Group UUID not found or connection invalid", content_type="application/json")
+    )
+)]
 #[patch("/{uuid}/connections")]
 pub async fn update_connection(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    connect_info: Json<ConnectInfo>,
+    req_body: Json<UpdateConnectionRequest>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
+    let update_req = req_body.into_inner();
+
     let mut document = data.document.lock();
 
     document
         .scenery_mut()
         .with_group_node_mut(group_uuid, |group| {
             group.update_connection_distance(
-                connect_info.src_uuid(),
-                connect_info.src_port(),
-                meter!(connect_info.distance()),
+                update_req.src_uuid,
+                &update_req.src_port,
+                meter!(update_req.distance),
             )
         })??;
 
     drop(document);
-    Ok(HttpResponse::Ok().json(connect_info.into_inner()))
+
+    // HIER: REST-Standard für erfolgreiche Updates ohne Rückgabedaten
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Disconnect two nodes

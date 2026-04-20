@@ -91,12 +91,12 @@ impl HTTPClient {
     /// # Errors
     ///
     /// This function will return an error if the request fails or if the response cannot be deserialized into the expected type.
-    pub async fn post_string(&self, route: &str, body: String) -> Result<String, String> {
-        let res = self.client().post(self.url(route)).body(body).send().await;
+    pub async fn put_string(&self, route: &str, body: String) -> Result<String, String> {
+        let res = self.client().put(self.url(route)).body(body).send().await;
         if let Ok(response) = res {
             self.process_response::<String>(response).await
         } else {
-            Err(format!("Error on post request on route: \"{route}\""))
+            Err(format!("Error on put request on route: \"{route}\""))
         }
     }
     /// Send a PUT request to the given route with the provided body.
@@ -138,13 +138,33 @@ impl HTTPClient {
             .json(&body)
             .send()
             .await;
-        if let Ok(_response) = res {
-            Ok(())
-        } else {
-            Err(format!("Error on patch request on route: \"{route}\""))
-        }
+        res.map_or_else(
+            |_| Err(format!("Error on patch request on route: \"{route}\"")),
+            |_response| Ok(()),
+        )
     }
 
+    pub async fn patch_ron<B: Serialize + DeserializeOwned>(
+        &self,
+        route: &str,
+        body: B,
+    ) -> Result<(), String> {
+        if let Ok(serialized) = ron::ser::to_string(&body) {
+            let res = self
+                .client()
+                .patch(self.url(route))
+                .header("Content-Type", "application/ron")
+                .body(serialized)
+                .send()
+                .await;
+            res.map_or_else(
+                |_| Err(format!("Error on patch request on route: \"{route}\"")),
+                |_response| Ok(()),
+            )
+        } else {
+            Err("Error serializing body using ron".to_string())
+        }
+    }
     /// Send a DELETE request to the given route with the provided body.
     ///
     /// # Errors
@@ -169,6 +189,35 @@ impl HTTPClient {
         } else {
             Err(format!("Error on delete request from route: \"{route}\""))
         }
+    }
+
+    /// Send a DELETE request to the given route without a body, expecting no content (204).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the request fails (e.g. the route is not reachable)
+    /// - the response status indicates an error
+    pub async fn delete_no_content(&self, route: &str) -> Result<(), String> {
+        // Send the request without a .json() body
+        let res = self.client().delete(self.url(route)).send().await;
+
+        res.map_or_else(
+            |_| Err(format!("Error on delete request from route: \"{route}\"")),
+            |response| {
+                if response.status().is_success() {
+                    // 204 No Content is a success status, so we return an empty Ok(())
+                    Ok(())
+                } else {
+                    // If it fails, we try to parse your ErrorResponse struct as a fallback
+                    // assuming you have an ErrorResponse similar to your process_response_ron method
+                    Err(format!(
+                        "Delete request failed with status: {}",
+                        response.status()
+                    ))
+                }
+            },
+        )
     }
 
     /// Send a GET request to the given route.

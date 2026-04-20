@@ -76,7 +76,7 @@ fn get_node_analyzer_attr_from_state(
     request_body(content = NewAnalyzerInfo, description = "type and GUI position of the analyzer to be created", content_type = "application/json", example ="{\"analyzer_type\": \"Energy\", \"gui_position\": [0,0,0]}"),
     responses((status = CREATED, body = Uuid, description = "Analyzer successfully created"))
 )]
-#[post("/")]
+#[post("")]
 pub async fn post_analyzer(
     data: web::Data<AppState>,
     analyzer: web::Json<NewAnalyzerInfo>,
@@ -113,7 +113,7 @@ pub async fn delete_analyzer(
     tag = "analyzer",
     responses((status = OK, description = "List of analyzers", body = Vec<AnalyzerInfo>)),
 )]
-#[get("/")]
+#[get("")]
 pub async fn get_analyzers(data: web::Data<AppState>) -> HttpResponse {
     let analyzers_map = data.document.lock().analyzers();
     let analyzers: Vec<AnalyzerInfo> = analyzers_map
@@ -282,6 +282,45 @@ pub async fn delete_analyzer_source(
     Ok(HttpResponse::NoContent().finish())
 }
 
+/// Update the GUI position of an analyzer
+///
+/// This endpoint is used by the frontend to update the 2D canvas coordinates 
+/// of an analyzer node after a drag-and-drop operation.
+#[utoipa::path(
+    tag = "analyzer",
+    params(("uuid" = Uuid, Path, description = "UUID of the analyzer")),
+    request_body(
+        content = inline((f64, f64)), 
+        description = "New X and Y coordinates as a simple JSON array", 
+        content_type = "application/json", 
+        example = json!([150.5, -20.0])
+    ),
+    responses(
+        (status = NO_CONTENT, description = "GUI position successfully updated"),
+        (status = NOT_FOUND, body = ErrorResponse, description = "Analyzer UUID not found", content_type="application/json")
+    )
+)]
+#[put("/{uuid}/gui_position")]
+pub async fn put_analyzer_gui_position(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    gui_position: web::Json<(f64, f64)>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let pos = gui_position.into_inner();
+    
+    let mut document = data.document.lock();
+    
+    if let Some(analyzer_info) = document.analyzer_mut(uuid) {
+        // Wir konvertieren das Tuple in den von OPOSSUM erwarteten Point2
+        analyzer_info.set_gui_position(Some(nalgebra::Point2::new(pos.0, pos.1)));
+    } else {
+        return Err(BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"));
+    }
+    
+    Ok(HttpResponse::NoContent().finish())
+}
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_analyzers);
     cfg.service(get_analyzer);
@@ -290,4 +329,5 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_analyzer);
     cfg.service(put_analyzer_source);
     cfg.service(delete_analyzer_source);
+    cfg.service(put_analyzer_gui_position);
 }

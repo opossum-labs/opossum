@@ -1,21 +1,21 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-mod grating_alignment;
+// mod grating_alignment;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::{AccordionItem, ElementList},
         inputs::input_components::{LabeledSelect, NodeConfigUnitInput, RowedElements},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
-        optical_node_editor::UINodeAttr,
     },
 };
 use approx::relative_ne;
 use dioxus::prelude::*;
-use grating_alignment::GratingAlignmentInputs;
+// use grating_alignment::GratingAlignmentInputs;
 use opossum_core::{
     degree, meter,
     prelude::{Isometry, Properties},
+    types::api_types::NodeInfo,
     utils::geom_transformation::{RotationAxis, TranslationAxis},
 };
 use strum::IntoEnumIterator;
@@ -28,18 +28,18 @@ use uuid::Uuid;
 #[component]
 pub fn AlignmentEditor(
     node_id: Memo<Uuid>,
-    node_attr: ReadSignal<UINodeAttr>,
+    node_info: ReadSignal<NodeInfo>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let node_prop_memo = use_memo(move || node_attr.read().properties.clone());
-    let accordion_content = if node_attr.read().node_id == *node_id.read() {
+    // let node_prop_memo = use_memo(move || node_info.read().properties.clone());
+    let accordion_content = if node_info.read().uuid == *node_id.read() {
         vec![rsx! {
             AlignmentInputs {
                 node_id,
-                alignment: node_attr.read().alignment.unwrap_or_default(),
-                node_properties: node_prop_memo,
-                node_type: node_attr.read().node_type.clone(),
+                alignment: node_info.read().alignment.unwrap_or_default(),
+                // node_properties: node_prop_memo,
+                node_type: node_info.read().node_type.clone(),
                 on_change,
                 readonly
             }
@@ -62,7 +62,7 @@ pub fn AlignmentEditor(
 pub fn AlignmentInputs(
     node_id: Memo<Uuid>,
     alignment: Isometry,
-    node_properties: ReadSignal<Properties>,
+    // node_properties: ReadSignal<Properties>,
     // node_properties_sig: Signal<Properties>,
     node_type: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -78,15 +78,7 @@ pub fn AlignmentInputs(
     });
 
     if node_type == "reflective grating" {
-        rsx! {
-            GratingAlignmentInputs {
-                alignment_sig_outside: alignment_sig,
-                node_properties,
-                on_save,
-                node_id,
-                readonly,
-            }
-        }
+        rsx! {}
     } else {
         rsx! {
             RotationAlignmentInputs {
@@ -153,19 +145,19 @@ pub fn on_new_rotation(
 #[component]
 pub fn PositioningEditor(
     node_id: Memo<Uuid>,
-    node_attr: ReadSignal<UINodeAttr>,
+    node_info: ReadSignal<NodeInfo>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let accordion_content = if node_attr.read().node_id == *node_id.read() {
-        let position_opt = node_attr.read().position;
+    let accordion_content = if node_info.read().uuid == *node_id.read() {
+        let position_opt = node_info.read().gui_position;
         vec![rsx! {
-            PositioningInputs{
-                position_opt,
-                on_change,
-                node_id,
-                readonly
-            }
+            // PositioningInputs{
+            //     position_opt,
+            //     on_change,
+            //     node_id,
+            //     readonly
+            // }
         }]
     } else {
         vec![]

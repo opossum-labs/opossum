@@ -20,7 +20,7 @@ const RON_MEDIA_TYPE: &str = "application/ron";
 
 /// Delete the current document and create new (empty) one
 #[utoipa::path(responses((status = NO_CONTENT, description = "document deleted and new one sucessfully created")), tag="document")]
-#[delete("/")]
+#[delete("")]
 async fn delete_document(data: web::Data<AppState>) -> impl Responder {
     let mut document = data.document.lock();
     *document = OpmDocument::default();
@@ -72,7 +72,7 @@ async fn get_root_uuid(data: web::Data<AppState>) -> impl Responder {
 #[utoipa::path(tag = "document", 
     responses((status = 200, description = "OPM file", body = String, content_type=RON_MEDIA_TYPE))
 )]
-#[get("/")]
+#[get("")]
 async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackEndErrorResponse> {
     let document = data.document.lock();
     Ok(HttpResponse::Ok()
@@ -90,7 +90,7 @@ async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackE
 ///
 /// This function reads a OPM model from the given OPM file string and replaces the current
 /// document.
-#[put("/")]
+#[put("")]
 async fn put_document(
     data: web::Data<AppState>,
     opm_file_string: String,

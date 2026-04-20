@@ -81,6 +81,7 @@ inventory::submit! {
 pub struct NodeGroup {
     #[serde(flatten)]
     node_attr: NodeAttr,
+    #[serde(default, skip_serializing_if = "OpticGraph::is_empty")]
     graph: OpticGraph,
     #[serde(skip)]
     input_port_distances: BTreeMap<String, Length>,

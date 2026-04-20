@@ -6,7 +6,6 @@ use crate::components::scenery_editor::{GraphsWorkspaceAction, NodeType, Selecte
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use opossum_core::nodes::fluence_detector::Fluence;
 use opossum_core::prelude::{AnalyzerType, Isometry, Proptype};
 use uuid::Uuid;
 
@@ -19,7 +18,7 @@ pub struct NodeChangeEvent {
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChangeAction {
     Name { name: String, graph_id: Uuid },
-    Lidt(Fluence),
+    // Lidt(Fluence),
     Alignment(Isometry),
     Inverted { inverted: bool, graph_id: Uuid },
     Property(String, Proptype),
@@ -125,21 +124,14 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
 
                 let result: Result<(), String> = match event.action {
                     NodeChangeAction::Name { name, graph_id } => {
-                        api::update_node_name(uuid, name.clone())
-                            .await
-                            // .map(|names| {
-                            //     for (uuid, name) in &names {
-                            //         workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
-                            //             name: name.clone(),
-                            //             graph_id,
-                            //             node_id: *uuid,
-                            //             needs_saving: true,
-                            //         });
-                            //     }
-                            // })
-                    }
-                    NodeChangeAction::Lidt(lidt_new) => {
-                        api::update_node_lidt(uuid, lidt_new).await.map(|_| ())
+                        api::update_node_name(uuid, name.clone()).await.map(|()| {
+                            workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
+                                name,
+                                graph_id,
+                                node_id: uuid,
+                                needs_saving: true,
+                            });
+                        })
                     }
                     NodeChangeAction::Alignment(iso) => {
                         api::update_node_alignment(uuid, iso).await.map(|_| ())
@@ -154,11 +146,12 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                     }
                     NodeChangeAction::Inverted { inverted, graph_id } => {
                         match api::update_node_inversion(uuid, inverted).await {
-                            Ok(connections) => {
-                                workspace_processor.send(GraphsWorkspaceAction::UpdateEdges {
-                                    connections,
-                                    graph_id,
-                                });
+                            Ok(()) => {
+                                // FIX THIS !!!!
+                                // workspace_processor.send(GraphsWorkspaceAction::UpdateEdges {
+                                //     connections,
+                                //     graph_id,
+                                // });
                                 workspace_processor.send(GraphsWorkspaceAction::InvertNode {
                                     inverted,
                                     graph_id,

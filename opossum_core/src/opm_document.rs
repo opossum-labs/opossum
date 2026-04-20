@@ -80,7 +80,7 @@ pub struct OpmDocument {
     scenery: NodeGroup,
     #[serde(default, rename = "global")]
     global_conf: Arc<Mutex<SceneryResources>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     analyzers: HashMap<Uuid, AnalyzerInfo>,
 }
 impl Default for OpmDocument {

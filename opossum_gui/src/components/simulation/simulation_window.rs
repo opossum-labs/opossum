@@ -65,7 +65,7 @@ pub fn SimulationWindow(
                         let temp_model_file = temp_dir.path().join("temp-opossum.opm");
                         let temp_model_file_clone = temp_model_file.clone();
                         eval_action_run(
-                            api::get_opm_file().await,
+                            api::get_document().await,
                             Some(move |opm_string| {
                                 if let Err(err_str) = fs::write(temp_model_file, opm_string) {
                                     OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());

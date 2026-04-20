@@ -88,6 +88,7 @@ pub fn GraphEditor(
             } else {
                 "unsaved".to_string()
             };
+            workspace_processor.send(GraphsWorkspaceAction::DeleteRootScenery);
             workspace_processor
                 .send(GraphsWorkspaceAction::AddRootSceneryTab { name: scenery_name });
         }
