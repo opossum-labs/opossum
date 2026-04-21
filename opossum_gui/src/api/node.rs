@@ -11,7 +11,7 @@ use opossum_core::{
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use crate::{HTTP_API_CLIENT, api::update_analyzer_position_ron};
+use crate::HTTP_API_CLIENT;
 
 /// Get all child nodes of the current node group
 ///

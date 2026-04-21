@@ -6,7 +6,7 @@ use std::{
 use crate::{
     CONTEXT_MENU,
     components::scenery_editor::{
-        GraphState, NodeElement, NodeType,
+        GraphState, NodeType,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
         graph_workspace::{DragStatus, EditorState, GraphsWorkspaceAction, GraphsWorkspaceState},
     },
