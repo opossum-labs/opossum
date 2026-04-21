@@ -370,7 +370,7 @@ pub struct UpdatePortRequest {
 }
 
 /// Request payload to expose an internal node's port to a parent group
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct AddPortMappingRequest {
     pub internal_node_id: Uuid,
     #[schema(example = "input_1")]
@@ -405,7 +405,7 @@ pub struct PortNamesResponse {
 }
 
 /// Response payload after removing a port map, containing affected connections
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RemovePortMapResponse {
     /// True if a mapping was actually found and removed
     pub port_removed: bool,
@@ -454,7 +454,7 @@ impl NewAnalyzerInfo {
 // ============================================================================
 
 /// Request payload to group existing nodes into a new sub-group
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ConvertToGroupRequest {
     /// UUID of the group in which the nodes are currently contained
     pub group_id: Uuid,
@@ -463,7 +463,7 @@ pub struct ConvertToGroupRequest {
 }
 
 /// Request payload to move nodes between different groups
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct MoveNodesRequest {
     /// UUID of the source group from which the nodes will be removed
     pub source_group_id: Uuid,

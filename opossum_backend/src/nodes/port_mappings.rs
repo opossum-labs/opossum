@@ -46,11 +46,15 @@ pub async fn get_port_mappings(
 }
 
 /// Map a port of an internal node to a port of the group node.
+///
+/// This will create a new port on the group node and connect it to the internal node's port. The new port will be named as specified in the request.
+/// If a port with the same name already exists on the group node, an error will be returned. This function will also return the updated lists of mapped
+/// input and output ports of the group node, which can be used to update the UI accordingly.
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "Uuid of a group whose port should be mapped"),
     ),
-    request_body = AddPortMappingRequest, // <-- Swagger Fix: Utoipa liest das JSON-Schema nun korrekt aus
+    request_body = AddPortMappingRequest,
     responses(
         (status = CREATED, description = "Node port successfully mapped", body = PortNamesResponse, content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")

@@ -134,15 +134,15 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                         })
                     }
                     NodeChangeAction::Alignment(iso) => {
-                        api::update_node_alignment(uuid, iso).await.map(|_| ())
+                        api::update_node_alignment(uuid, iso).await.map(|()| ())
                     }
                     NodeChangeAction::Property(key, prop) => {
                         api::update_node_property(uuid, (key.clone(), prop.clone()))
                             .await
-                            .map(|_| ())
+                            .map(|()| ())
                     }
                     NodeChangeAction::Isometry(iso) => {
-                        api::update_node_isometry(uuid, iso).await.map(|_| ())
+                        api::update_node_isometry(uuid, iso).await.map(|()| ())
                     }
                     NodeChangeAction::Inverted { inverted, graph_id } => {
                         match api::update_node_inversion(uuid, inverted).await {

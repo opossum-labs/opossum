@@ -140,7 +140,7 @@ impl HTTPClient {
             .await;
         res.map_or_else(
             |_| Err(format!("Error on patch request on route: \"{route}\"")),
-            |_response| Ok(()),
+            |_| Ok(()),
         )
     }
 
@@ -159,7 +159,7 @@ impl HTTPClient {
                 .await;
             res.map_or_else(
                 |_| Err(format!("Error on patch request on route: \"{route}\"")),
-                |_response| Ok(()),
+                |_| Ok(()),
             )
         } else {
             Err("Error serializing body using ron".to_string())

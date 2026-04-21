@@ -519,7 +519,7 @@ async fn process_paste_nodes(
 
             if cut_nodes {
                 eval_action_run(
-                    api::delete_cut_nodes(graph_id).await,
+                    api::post_cut_nodes(graph_id).await,
                     Some(move |(deleted_nodes, cut_from_graph_id)| {
                         ws_handler
                             .nodes
@@ -734,11 +734,13 @@ async fn process_remove_port_map(
     ws_handler: WorkSpaceSignalHandlers,
 ) {
     match api::remove_port_map(group_port_name.clone(), group_id, port_type).await {
-        Ok((removed_port, removed_connections, parent_group_id)) => {
-            for edge in &removed_connections {
-                ws_handler.edges.delete_edge(edge.clone(), parent_group_id);
+        Ok(response) => {
+            for edge in &response.connections {
+                ws_handler
+                    .edges
+                    .delete_edge(edge.clone(), response.parent_group_uuid);
             }
-            if removed_port {
+            if response.port_removed {
                 ws_handler
                     .workspace
                     .remove_port_map(group_id, group_port_name.clone());
@@ -774,7 +776,7 @@ async fn process_add_port_map(
     )
     .await
     {
-        Ok((input_ports, output_ports)) => {
+        Ok(response) => {
             ws_handler.workspace.add_port_map(
                 group_id,
                 group_port_name,
@@ -783,7 +785,7 @@ async fn process_add_port_map(
             );
             ws_handler
                 .nodes
-                .update_group_ports(input_ports, output_ports, group_id);
+                .update_group_ports(response.inputs, response.outputs, group_id);
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
