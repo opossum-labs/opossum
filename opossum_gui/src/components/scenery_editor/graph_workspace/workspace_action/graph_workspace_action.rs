@@ -1,3 +1,4 @@
+use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 use dioxus::html::geometry::euclid::default::{Point2D, Rect};
 use opossum_core::{
     prelude::{AnalyzerType, PortType},
@@ -5,7 +6,6 @@ use opossum_core::{
 };
 use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
-use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 
 pub enum GraphsWorkspaceAction {
     ClearSelectedNodes {

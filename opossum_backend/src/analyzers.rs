@@ -284,13 +284,13 @@ pub async fn delete_analyzer_source(
 
 /// Update the GUI position of an analyzer
 ///
-/// This endpoint is used by the frontend to update the 2D canvas coordinates 
+/// This endpoint is used by the frontend to update the 2D canvas coordinates
 /// of an analyzer node after a drag-and-drop operation.
 #[utoipa::path(
     tag = "analyzer",
     params(("uuid" = Uuid, Path, description = "UUID of the analyzer")),
     request_body(
-        content = inline((f64, f64)), 
+        content = inline((f64, f64)),
         description = "New X and Y coordinates as a simple JSON array", 
         content_type = "application/json", 
         example = json!([150.5, -20.0])
@@ -308,16 +308,17 @@ pub async fn put_analyzer_gui_position(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let pos = gui_position.into_inner();
-    
-    let mut document = data.document.lock();
-    
-    if let Some(analyzer_info) = document.analyzer_mut(uuid) {
+
+    if let Some(analyzer_info) = data.document.lock().analyzer_mut(uuid) {
         // Wir konvertieren das Tuple in den von OPOSSUM erwarteten Point2
         analyzer_info.set_gui_position(Some(nalgebra::Point2::new(pos.0, pos.1)));
     } else {
-        return Err(BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"));
+        return Err(BackEndErrorResponse::new(
+            404,
+            "Opossum",
+            "UUID not found in analyzers",
+        ));
     }
-    
     Ok(HttpResponse::NoContent().finish())
 }
 

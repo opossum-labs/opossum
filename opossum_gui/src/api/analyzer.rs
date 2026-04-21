@@ -64,18 +64,12 @@ pub async fn update_analyzer_config_ron(
     analyzer_type: AnalyzerType,
 ) -> Result<String, String> {
     HTTP_API_CLIENT()
-        .post_ron::<AnalyzerType, String>(
-            &format!("/api/analyzers/{node_id}"),
-            analyzer_type,
-        )
+        .post_ron::<AnalyzerType, String>(&format!("/api/analyzers/{node_id}"), analyzer_type)
         .await
 }
 pub async fn update_analyzer_position(node_id: Uuid, position: (f64, f64)) -> Result<(), String> {
     HTTP_API_CLIENT()
-        .put::<(f64,f64), ()>(
-            &format!("/api/analyzers/{node_id}/gui_position"),
-            position,
-        )
+        .put::<(f64, f64), ()>(&format!("/api/analyzers/{node_id}/gui_position"), position)
         .await
 }
 /// Get the information about an analyzer node.

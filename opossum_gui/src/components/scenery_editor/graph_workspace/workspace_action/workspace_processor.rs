@@ -11,7 +11,8 @@ use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, PortType},
     types::api_types::{
-        ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, PortMappingsResponse, UpdateConnectionRequest,
+        ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, PortMappingsResponse,
+        UpdateConnectionRequest,
     },
 };
 use serde_json::Value;
