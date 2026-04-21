@@ -167,14 +167,6 @@ pub fn GraphViewEditor(
                             }
                         }
                     }
-                    // Nodes {
-                    //     graph_store,
-                    //     // graph_id,
-                    //     // ctrl_pressed,
-                    //     // shift_pressed,
-                    //     // mouse_pos_in_editor,
-                    //     // nodes_in_selection
-                    // }
                     svg {
                         width: "100%",
                         height: "100%",

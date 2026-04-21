@@ -181,7 +181,7 @@ pub fn GraphEditor(
                             div {
                                 id: "graphEditorContentContainer",
                                 class: "graph-editor-tab-content",
-                                onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea()),
+                                onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea),
                                 for (i , id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabContent {
