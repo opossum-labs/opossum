@@ -111,12 +111,6 @@ pub fn GraphEditor(
             .map_or(Vec::<SelectedNode>::new(), |g| {
                 g.graph_store().read().get_selected_nodes(active_tab())
             })
-        // let read_workspace = workspace.read();
-        // read_workspace
-        //     .get_graph_store_read(active_tab())
-        //     .map_or(Vec::<SelectedNode>::new(), |g| {
-        //         g.read().get_selected_nodes(active_tab())
-        //     })
     });
     let onmouseleave_handler = use_drag_end(workspace.into(), None);
     let onkeydownhandler = use_on_key_down(

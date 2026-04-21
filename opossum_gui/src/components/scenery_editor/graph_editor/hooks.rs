@@ -94,6 +94,7 @@ pub fn use_on_mouse_down(
                         (mouse_pos.y - editor_origin.y - current_shift.y) / current_zoom,
                     );
 
+                    println!("armed selection");
                     let drag_status = DragStatus::ArmedSelection(rect_origin);
                     workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(drag_status));
                 }
@@ -136,24 +137,23 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
     let drag_status = workspace.drag_status();
 
     move |event| {
-        if *drag_status.read() == DragStatus::NodeInit || *drag_status.read() == DragStatus::None{
-            return;
-        }
+        
         let current_shift = *editor_status.shift().read();
         let relative_shift = Point2D::new(
             event.client_coordinates().x - current_mouse_pos().x,
             event.client_coordinates().y - current_mouse_pos().y,
         );
-
         let mouse_pos = Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
         current_mouse_pos.set(mouse_pos);
-
+        
+        if *drag_status.read() == DragStatus::NodeInit || *drag_status.read() == DragStatus::None{
+            return;
+        }
         let mouse_to_graph_shift =
             Point2D::new(mouse_pos.x - current_shift.x, mouse_pos.y - current_shift.y);
 
         workspace_processor.send(GraphsWorkspaceAction::ApplyDrag {
             graph_id,
-            drag_status: workspace.drag_status().read().clone(),
             relative_shift,
             current_zoom: *editor_status.zoom().read(),
             mouse_to_graph_shift,
@@ -267,6 +267,10 @@ pub fn use_drag_end(
             let graph_store = graph_state.graph_store();
             let drag_status = workspace.drag_status().read().clone();
             let droppable_groups = *workspace.drop_in_group().read();
+                        println!("drag status in use_drag_end: {:?}", drag_status);
+
+            
+
             match drag_status {
                 DragStatus::Nodes => {
                     if droppable_groups.is_none() {

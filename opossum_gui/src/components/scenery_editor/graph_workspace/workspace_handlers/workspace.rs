@@ -34,7 +34,7 @@ pub struct WorkspaceHandlers {
     set_editor_area: EventHandler<Rect<f64>>,
     clear_selected_nodes: EventHandler<Uuid>,
     #[allow(clippy::type_complexity)]
-    apply_drag: EventHandler<(Uuid, DragStatus, Point2D<f64>, f64, Point2D<f64>)>,
+    apply_drag: EventHandler<(Uuid, Point2D<f64>, f64, Point2D<f64>)>,
     set_nodes_cut: EventHandler<bool>,
 }
 
@@ -64,14 +64,12 @@ impl WorkspaceHandlers {
     pub fn apply_drag(
         &self,
         graph_id: Uuid,
-        drag_status: DragStatus,
         relative_shift: Point2D<f64>,
         current_zoom: f64,
         mouse_to_graph_shift: Point2D<f64>,
     ) {
         self.apply_drag.call((
             graph_id,
-            drag_status,
             relative_shift,
             current_zoom,
             mouse_to_graph_shift,
@@ -142,20 +140,22 @@ fn set_nodes_cut_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler
 #[allow(clippy::type_complexity)]
 fn apply_drag_handler(
     workspace: Store<GraphsWorkspaceState>,
-) -> EventHandler<(Uuid, DragStatus, Point2D<f64>, f64, Point2D<f64>)> {
+) -> EventHandler<(Uuid, Point2D<f64>, f64, Point2D<f64>)> {
+    let drag_status = workspace.drag_status();
     EventHandler::new(
-        move |(graph_id, drag_status, relative_shift, current_zoom, mouse_to_graph_shift): (
+        move |(graph_id, relative_shift, current_zoom, mouse_to_graph_shift): (
             Uuid,
-            DragStatus,
             Point2D<f64>,
             f64,
             Point2D<f64>,
         )| {
+            let drag_status = drag_status.read().clone();
             let node_edge_shift = Point2D::new(
                 relative_shift.x / current_zoom,
                 relative_shift.y / current_zoom,
             );
 
+            println!("drag status in apply_drag_handler: {:?}", drag_status);
             match drag_status {
                 DragStatus::Graph => {
                     with_editor_state(workspace, graph_id, false, |e| {
@@ -202,8 +202,6 @@ fn apply_drag_handler(
                     if dist_sq < 25.0 {
                         return;
                     }
-
-                    // ✅ jetzt wird wirklich aktiviert
                     let rect = Rect::new(start, Size2D::new(0.0, 0.0));
 
                     workspace.drag_status().set(DragStatus::SelectionBox(rect));
@@ -269,7 +267,9 @@ fn set_drop_in_group_handler(
     })
 }
 fn set_drag_status_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<DragStatus> {
+    
     EventHandler::new(move |drag_status| {
+        println!("set drag_status: {:?}", drag_status);
         workspace.drag_status().set(drag_status);
     })
 }

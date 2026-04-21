@@ -252,13 +252,11 @@ pub fn use_workspace_processor(
                         .set_edge_in_creation(edge_in_creation, graph_id),
                     GraphsWorkspaceAction::ApplyDrag {
                         graph_id,
-                        drag_status,
                         relative_shift,
                         current_zoom,
                         mouse_to_graph_shift,
                     } => workspace_handlers.workspace.apply_drag(
                         graph_id,
-                        drag_status,
                         relative_shift,
                         current_zoom,
                         mouse_to_graph_shift,

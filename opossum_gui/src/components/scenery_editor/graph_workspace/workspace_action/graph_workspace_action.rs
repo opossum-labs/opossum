@@ -56,7 +56,6 @@ pub enum GraphsWorkspaceAction {
     },
     ApplyDrag {
         graph_id: Uuid,
-        drag_status: DragStatus,
         relative_shift: Point2D<f64>,
         current_zoom: f64,
         mouse_to_graph_shift: Point2D<f64>,
