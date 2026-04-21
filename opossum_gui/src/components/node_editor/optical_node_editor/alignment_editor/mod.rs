@@ -150,14 +150,14 @@ pub fn PositioningEditor(
     readonly: bool,
 ) -> Element {
     let accordion_content = if node_info.read().uuid == *node_id.read() {
-        let position_opt = node_info.read().gui_position;
+        let position_opt = node_info.read().isometry;
         vec![rsx! {
-            // PositioningInputs{
-            //     position_opt,
-            //     on_change,
-            //     node_id,
-            //     readonly
-            // }
+            PositioningInputs{
+                position_opt,
+                on_change,
+                node_id,
+                readonly
+            }
         }]
     } else {
         vec![]

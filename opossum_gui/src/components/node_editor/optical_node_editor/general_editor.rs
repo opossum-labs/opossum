@@ -2,15 +2,13 @@
 use crate::components::{
     node_editor::{
         accordion::AccordionItem,
-        inputs::input_components::{
-            FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput,
-        },
+        inputs::input_components::{FlushableTextInput, LabeledCheckboxInput, LabeledInput},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
     scenery_editor::SelectedNode,
 };
 use dioxus::prelude::*;
-use opossum_core::{J_per_cm2, types::api_types::NodeInfo};
+use opossum_core::types::api_types::NodeInfo;
 
 #[component]
 pub fn GeneralEditor(
@@ -23,7 +21,6 @@ pub fn GeneralEditor(
         let node_id = node_info.read().uuid;
         let node_type = node_info.read().node_type.clone();
         let name = node_info.read().name.clone();
-        // let lidt = node_attr.read().lidt;
         let inverted = node_info.read().inverted;
         vec![
             rsx! {
@@ -46,24 +43,6 @@ pub fn GeneralEditor(
                     },
                 }
             },
-            // rsx! {
-            //     NodeConfigUnitInput {
-            //             id: format!("nodeLidt_{}", node_id),
-            //             label: "Damage Threshold".to_string(),
-            //             // DUMMY: FIX THIS !!!!
-            //             value: J_per_cm2!(1.0).value,
-            //             base_unit: "J/cm²",
-            //             readonly,
-            //             onchange: move |new_lidt: f64| {
-            //             if new_lidt >= 0.0 {
-            //                     on_change.call(NodeChangeEvent {
-            //                         node_id,
-            //                         action: NodeChangeAction::Lidt(J_per_cm2!(new_lidt)),
-            //                     });
-            //                 }
-            //         }
-            //         }
-            // },
             rsx! {
                 // no readonly here even for a reference!
                 NodeInvertedInput {

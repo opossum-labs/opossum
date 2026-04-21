@@ -229,10 +229,7 @@ pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result
         ..Default::default()
     };
     HTTP_API_CLIENT()
-        .patch::<UpdateNodeRequest>(
-            &format!("/api/nodes{}", node_id.as_simple()),
-            update_node_request,
-        )
+        .patch::<UpdateNodeRequest>(&format!("/api/nodes{node_id}"), update_node_request)
         .await
 }
 
@@ -243,7 +240,7 @@ pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result
 /// This function will return an error if the `group_id` was not found.
 pub async fn get_group_hierarchy(group_id: Uuid) -> Result<Vec<(Uuid, String)>, String> {
     HTTP_API_CLIENT()
-        .get::<Vec<(Uuid, String)>>(&format!("/api/nodes/{}/hierarchy", group_id.as_simple()))
+        .get::<Vec<(Uuid, String)>>(&format!("/api/nodes/{group_id}/hierarchy"))
         .await
 }
 
