@@ -29,8 +29,6 @@ pub fn GraphViewEditor(
     ctrl_pressed: ReadSignal<bool>,
     shift_pressed: ReadSignal<bool>,
 ) -> Element {
-    println!("GraphViewEditor rerender");
-
     let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
     let graph_id = graph_state.graph_info().read().id;
     let last_auxiliary_click = use_signal(|| Option::<Instant>::None);

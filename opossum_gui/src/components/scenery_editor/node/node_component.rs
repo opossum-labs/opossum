@@ -39,7 +39,6 @@ pub fn Node(
     let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let position = node.pos();
-    let node_height = node.node_body_height() + HEADER_HEIGHT;
     let active_node_ids = graph_store().selected_node_ids();
     let active_optical_node_ids = graph_store().selected_optical_nodes();
     let node_id = node.id();
@@ -49,8 +48,6 @@ pub fn Node(
     } else {
         ""
     };
-
-    println!("node rerender: {}", node.id().as_simple());
 
     let in_selection_box_class = use_memo(move || {
         let in_selection = nodes_in_selection.read().contains(&node_id);
