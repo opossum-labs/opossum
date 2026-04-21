@@ -155,9 +155,15 @@ pub fn use_workspace_processor(
                         let nodes_cut = workspace.read().nodes_cut;
                         process_paste_nodes(pos, workspace_handlers, graph_id, nodes_cut).await;
                     }
-                    GraphsWorkspaceAction::SyncNodePosition { node_id, pos } => {
+                    GraphsWorkspaceAction::SyncNodePosition { node_id, pos, is_optical } => {
+                        let res = if is_optical{
+                            api::update_node_position(node_id, pos).await
+                        }
+                        else{
+                            api::update_analyzer_position_ron(node_id, pos).await
+                        };
                         eval_action_run(
-                            api::update_gui_position(node_id, pos).await,
+                            res,
                             Some(move |()| {
                                 workspace_handlers.workspace.set_needs_saving(true);
                             }),

@@ -427,6 +427,18 @@ pub struct NewAnalyzerInfo {
     pub gui_position: (f64, f64),
 }
 
+/// Request payload for partial updates of an analyzer's properties
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
+pub struct UpdateAnalyzerInfo{
+    // The new Analyzertype including its configuration
+    #[schema(value_type = Option<Object>)]
+    pub analyzer_type: Option<AnalyzerType>,
+
+    // The new position of the analyzer
+    #[schema(example = json!([0.0, 0.0]))]
+    pub gui_position: Option<Option<(f64, f64)>>,
+}
+
 impl From<AnalyzerInfo> for NewAnalyzerInfo {
     fn from(value: AnalyzerInfo) -> Self {
         let pos = value

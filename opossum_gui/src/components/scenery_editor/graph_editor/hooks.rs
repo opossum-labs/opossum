@@ -267,16 +267,17 @@ pub fn use_drag_end(
                     if droppable_groups.is_none() {
                         let selected_nodes = graph_store().selected_nodes();
                         for node_id in selected_nodes.keys() {
-                            if let Some(pos) = graph_store
+                            if let Some((pos, is_optical)) = graph_store
                                 .read()
                                 .nodes()
                                 .read()
                                 .get(node_id)
-                                .map(NodeElement::pos)
+                                .map(|n| (n.pos(), n.is_optical_node()))
                             {
                                 workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition {
                                     pos,
                                     node_id: *node_id,
+                                    is_optical
                                 });
                             }
                         }

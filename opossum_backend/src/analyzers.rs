@@ -7,7 +7,7 @@ use opossum_core::{
     error::OpossumError,
     opm_document::AnalyzerInfo,
     prelude::AnalyzerType,
-    types::api_types::{ErrorResponse, NewAnalyzerInfo},
+    types::api_types::{ErrorResponse, NewAnalyzerInfo, UpdateAnalyzerInfo},
 };
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -146,15 +146,21 @@ pub async fn patch_analyzer(
     body: String,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    let analyzer_type: AnalyzerType = ron::de::from_str(&body).map_err(|e| {
+    let analyzer_update: UpdateAnalyzerInfo = ron::de::from_str(&body).map_err(|e| {
         BackEndErrorResponse::new(
             400,
             "Parse Error",
-            &format!("Failed to deserialize AnalyzerType: {e}"),
+            &format!("Failed to deserialize UpdateAnalyzerInfo: {e}"),
         )
     })?;
     if let Some(analyzer_info) = data.document.lock().analyzer_mut(uuid) {
-        analyzer_info.set_analyzer_type(&analyzer_type);
+        if let Some(analyzer_type) = analyzer_update.analyzer_type {
+            analyzer_info.set_analyzer_type(&analyzer_type);
+        }
+        if let Some(gui_position) = analyzer_update.gui_position {
+            let pos = gui_position.map(|(x, y)| Point2::new(x, y));
+            analyzer_info.set_gui_position(pos);
+        }
     } else {
         return Err(BackEndErrorResponse::new(
             404,

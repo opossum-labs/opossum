@@ -1,8 +1,9 @@
 //! Scenery api calls
 
 use crate::HTTP_API_CLIENT;
+use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
-    opm_document::AnalyzerInfo, prelude::AnalyzerType, types::api_types::NewAnalyzerInfo,
+    opm_document::AnalyzerInfo, prelude::AnalyzerType, types::api_types::{NewAnalyzerInfo, UpdateAnalyzerInfo},
 };
 use uuid::Uuid;
 
@@ -67,9 +68,14 @@ pub async fn update_analyzer_config_ron(
         .post_ron::<AnalyzerType, String>(&format!("/api/analyzers/{node_id}"), analyzer_type)
         .await
 }
-pub async fn update_analyzer_position(node_id: Uuid, position: (f64, f64)) -> Result<(), String> {
+pub async fn update_analyzer_position_ron(node_id: Uuid, gui_position: Point2D<f64>) -> Result<(), String> {
+    let position = (gui_position.x, gui_position.y);
+    let update_analyzer_request = UpdateAnalyzerInfo {
+        gui_position: Some(Some(position)),
+        ..Default::default()
+    };
     HTTP_API_CLIENT()
-        .put::<(f64, f64), ()>(&format!("/api/analyzers/{node_id}/gui_position"), position)
+        .patch_ron::<UpdateAnalyzerInfo>(&format!("/api/analyzers/{node_id}"), update_analyzer_request)
         .await
 }
 /// Get the information about an analyzer node.

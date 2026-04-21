@@ -154,6 +154,7 @@ pub enum GraphsWorkspaceAction {
     SyncNodePosition {
         pos: Point2D<f64>,
         node_id: Uuid,
+        is_optical: bool
     },
     DeleteNode {
         node_id: Uuid,

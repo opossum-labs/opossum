@@ -11,7 +11,7 @@ use opossum_core::{
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use crate::HTTP_API_CLIENT;
+use crate::{HTTP_API_CLIENT, api::update_analyzer_position_ron};
 
 /// Get all child nodes of the current node group
 ///
@@ -193,7 +193,7 @@ pub async fn update_distance(
 /// # Errors
 ///
 /// This function will return an error if the `node_id` was not found.
-pub async fn update_gui_position(node_id: Uuid, gui_position: Point2D<f64>) -> Result<(), String> {
+pub async fn update_node_position(node_id: Uuid, gui_position: Point2D<f64>) -> Result<(), String> {
     let position = (gui_position.x, gui_position.y);
     let update_node_request = UpdateNodeRequest {
         gui_position: Some(Some(position)),
