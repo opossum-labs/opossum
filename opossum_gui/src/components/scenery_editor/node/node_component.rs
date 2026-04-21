@@ -4,7 +4,6 @@ use std::collections::HashSet;
 use super::NodeElement;
 use crate::CONTEXT_MENU;
 use crate::components::scenery_editor::DragStatus;
-use crate::components::scenery_editor::constants::HEADER_HEIGHT;
 use crate::components::scenery_editor::graph_workspace::{
     GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
 };

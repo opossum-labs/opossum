@@ -133,8 +133,12 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
     let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let graph_id = graph_state.graph_info().read().id;
+    let drag_status = workspace.drag_status();
 
     move |event| {
+        if *drag_status.read() == DragStatus::NodeInit || *drag_status.read() == DragStatus::None{
+            return;
+        }
         let current_shift = *editor_status.shift().read();
         let relative_shift = Point2D::new(
             event.client_coordinates().x - current_mouse_pos().x,
