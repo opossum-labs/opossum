@@ -72,6 +72,9 @@ pub fn Node(
     let z_index = node.z_index();
     use_effect({
         move || {
+            if graph_state.peek().graph_info.id != *workspace.peek().active_tab.peek() {
+                return;
+            }
             let mouse_pos = *mouse_pos_in_editor.read();
             let mut droppable_group = *workspace.peek().drop_in_group.read();
             let selected_nodes = graph_store
