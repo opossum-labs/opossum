@@ -49,6 +49,12 @@ pub fn Node(
         ""
     };
 
+    let is_drop_group = if let Some((id,_)) = *workspace.drop_in_group().read() && id == node_id{
+        "drop-group"
+    } else {
+        ""
+    };
+
     let in_selection_box_class = use_memo(move || {
         let in_selection = nodes_in_selection.read().contains(&node_id);
         let already_selected = graph_store
@@ -77,7 +83,7 @@ pub fn Node(
         div {
             id: format!("node_container_{}", node_id.as_simple()),
             tabindex: 0, // necessary to allow to receive keyboard focus
-            class: "node {is_active} {in_selection_box_class}",
+            class: "node {is_active} {in_selection_box_class} {is_drop_group}",
             draggable: false,
             style: format!(
                 "left: {}px; top: {}px; transform: translate({}px, {}px); z-index: {z_index}; border-width:{}px",

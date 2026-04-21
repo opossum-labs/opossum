@@ -344,6 +344,11 @@ body {
     box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87c5f8;
 }
 
+.drop-group {
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87f8a3;
+}
+
+
 .node.node-selection{
     box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87c5f8;
 }
