@@ -68,12 +68,8 @@ impl WorkspaceHandlers {
         current_zoom: f64,
         mouse_to_graph_shift: Point2D<f64>,
     ) {
-        self.apply_drag.call((
-            graph_id,
-            relative_shift,
-            current_zoom,
-            mouse_to_graph_shift,
-        ));
+        self.apply_drag
+            .call((graph_id, relative_shift, current_zoom, mouse_to_graph_shift));
     }
 
     pub fn clear_selected_nodes(&self, graph_id: Uuid) {
@@ -155,7 +151,6 @@ fn apply_drag_handler(
                 relative_shift.y / current_zoom,
             );
 
-            println!("drag status in apply_drag_handler: {:?}", drag_status);
             match drag_status {
                 DragStatus::Graph => {
                     with_editor_state(workspace, graph_id, false, |e| {
@@ -267,9 +262,7 @@ fn set_drop_in_group_handler(
     })
 }
 fn set_drag_status_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<DragStatus> {
-    
     EventHandler::new(move |drag_status| {
-        println!("set drag_status: {:?}", drag_status);
         workspace.drag_status().set(drag_status);
     })
 }

@@ -82,11 +82,7 @@ pub fn GraphViewEditor(
             return;
         }
 
-        let selected_nodes = graph_store
-        .node_selection().read()
-        .all_nodes
-        .read()
-        .clone();
+        let selected_nodes = graph_store.node_selection().read().all_nodes.read().clone();
 
         let mut best_match = None;
 
@@ -102,9 +98,7 @@ pub fn GraphViewEditor(
 
                 let rect = Rect::new(
                     node_read.pos(),
-                    Size2D::new(
-                        NODE_WIDTH, 
-                        node_read.node_body_height() + HEADER_HEIGHT),
+                    Size2D::new(NODE_WIDTH, node_read.node_body_height() + HEADER_HEIGHT),
                 );
 
                 if rect.contains(*mouse) {

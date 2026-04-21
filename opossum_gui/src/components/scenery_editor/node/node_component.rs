@@ -48,7 +48,9 @@ pub fn Node(
         ""
     };
 
-    let is_drop_group = if let Some((id,_)) = *workspace.drop_in_group().read() && id == node_id{
+    let is_drop_group = if let Some((id, _)) = *workspace.drop_in_group().read()
+        && id == node_id
+    {
         "drop-group"
     } else {
         ""
