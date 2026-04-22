@@ -120,7 +120,6 @@ pub struct NodeInfo {
 }
 
 impl NodeInfo {
-
     /// Create a NodeInfo struct from this [`OpticNode`]
     pub fn from_analyzable(node: &dyn Analyzable, node_id: Option<Uuid>, gui_position: Option<Option<(f64, f64)>>) -> Self{
         Self {

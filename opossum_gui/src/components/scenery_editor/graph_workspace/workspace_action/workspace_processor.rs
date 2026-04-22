@@ -703,7 +703,7 @@ async fn process_add_optic_node(
     // ----- WRITE PHASE -----
     eval_action_run(
         result,
-        Some(move |node_info| {
+        Some(move |node_info: NodeInfo| {
             ws_handler.nodes.add_optical_node(node_info, graph_id);
         }),
     );

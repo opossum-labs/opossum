@@ -21,7 +21,6 @@ use crate::components::node_editor::{
     accordion::AccordionItem,
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::{
-        UINodeAttr,
         properties_editor::{
             angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
             f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
@@ -36,17 +35,17 @@ use crate::components::node_editor::{
     },
 };
 use dioxus::prelude::*;
-use opossum_core::prelude::{Property, Proptype};
+use opossum_core::{prelude::{Property, Proptype}, types::api_types::NodeInfo};
 use uuid::Uuid;
 
 #[component]
 pub fn PropertiesEditor(
     node_id: Memo<Uuid>,
-    node_attr: ReadSignal<UINodeAttr>,
+    node_attr: ReadSignal<NodeInfo>,
     on_change_property: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let editor_inputs = if node_attr.read().node_id == *node_id.read() {
+    let editor_inputs = if node_attr.read().uuid == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
         for (property_key, property) in &node_attr.read().properties {
             if let Some(editor) = get_editor(

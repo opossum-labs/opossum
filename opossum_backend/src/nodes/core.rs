@@ -127,8 +127,10 @@ async fn get_node(
         .document
         .lock();
     // Retrieve the node info
-    let scenery = document.scenery();
-    let node_info = NodeInfo::from_analyzable(scenery, Some(uuid), None);
+    let node_ref = document.scenery().node_recursive(uuid)?.0;
+    let node = node_ref.optical_ref.lock_opm()?;
+    let node_info = NodeInfo::from_analyzable(&*node, Some(uuid), None);
+    drop(node);
     drop(document);
     // Content Negotiation
     let wants_ron = req

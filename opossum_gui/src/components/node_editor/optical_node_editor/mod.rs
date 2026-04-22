@@ -9,7 +9,7 @@ pub(super) use alignment_editor::{
 
 use crate::components::{
     node_editor::{
-        node_config_editor::NodeChangeEvent,
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::{
             alignment_editor::{AlignmentEditor, PositioningEditor},
             general_editor::GeneralEditor,
@@ -35,6 +35,7 @@ pub fn OpticalNodeEditor(
         let node_id = active_node.read().node_id;
         match api::get_node_properties(node_id).await {
             Ok(node_info) => {
+                println!("{:?}", node_info.properties);
                 readonly.set(node_info.node_type == "reference");
                 ui_node_info_sig.set(node_info.clone());
                 Some(node_info)
@@ -48,12 +49,12 @@ pub fn OpticalNodeEditor(
 
     let on_change_property = EventHandler::new(move |evt: NodeChangeEvent| {
         // if let NodeChangeAction::Property(ref key, ref proptype) = evt.action {
-        //     let _ = ui_node_attr_sig
+        //     let _ = ui_node_info_sig
         //         .write()
         //         .properties
         //         .set(key, proptype.clone());
         // }
-        // on_change.call(evt);
+        on_change.call(evt);
     });
 
     if let Some(Some(node_attr)) = &*resource_future.read_unchecked()
