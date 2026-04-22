@@ -5,7 +5,12 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
-    analyzers::Analyzable, coatings::CoatingType, core_optics::optic_ports::{PortConfig, ValidatedLidt}, nodes::ConnectionInfo, opm_document::AnalyzerInfo, prelude::{AnalyzerType, Aperture, Isometry, OpticNode, PortMap, PortType, Properties}
+    analyzers::Analyzable,
+    coatings::CoatingType,
+    core_optics::optic_ports::{PortConfig, ValidatedLidt},
+    nodes::ConnectionInfo,
+    opm_document::AnalyzerInfo,
+    prelude::{AnalyzerType, Aperture, Isometry, OpticNode, PortMap, PortType, Properties},
 };
 
 // ============================================================================
@@ -118,7 +123,10 @@ pub struct NodeInfo {
 
 impl NodeInfo {
     /// Create a NodeInfo struct from this [`OpticNode`]
-    pub fn from_analyzable(node: &dyn Analyzable, gui_position: Option<Option<(f64, f64)>>) -> Self{
+    pub fn from_analyzable(
+        node: &dyn Analyzable,
+        gui_position: Option<Option<(f64, f64)>>,
+    ) -> Self {
         Self {
             uuid: node.node_attr().uuid(),
             name: node.name(),
@@ -440,7 +448,7 @@ pub struct NewAnalyzerInfo {
 
 /// Request payload for partial updates of an analyzer's properties
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
-pub struct UpdateAnalyzerInfo{
+pub struct UpdateAnalyzerInfo {
     // The new Analyzertype including its configuration
     #[schema(value_type = Option<Object>)]
     pub analyzer_type: Option<AnalyzerType>,

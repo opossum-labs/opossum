@@ -32,31 +32,32 @@ pub fn OpticalNodeEditor(
     let mut node_info_sig = use_signal(NodeInfo::default);
     let mut node_properties_sig = use_signal(Properties::default);
     let mut readonly = use_signal(|| false);
-    let resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> = use_resource(move || async move {
-        let node_id = active_node.read().node_id;
-        let node_info = match api::get_node_info(node_id).await {
-            Ok(node_info) => {
-                readonly.set(node_info.node_type == "reference");
-                node_info_sig.set(node_info.clone());
-                Some(node_info)
-            }
-            Err(err_str) => {
-                OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                None
-            }
-        };
-        let properties = match api::get_node_properties(node_id).await {
-            Ok(properties_res) => {
-                node_properties_sig.set(properties_res.properties.clone());
-                Some(properties_res.properties)
-            }
-            Err(err_str) => {
-                OPOSSUM_UI_LOGS.write().add_log(&err_str);
-                None
-            }
-        };
-        (node_info, properties)
-    });
+    let resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
+        use_resource(move || async move {
+            let node_id = active_node.read().node_id;
+            let node_info = match api::get_node_info(node_id).await {
+                Ok(node_info) => {
+                    readonly.set(node_info.node_type == "reference");
+                    node_info_sig.set(node_info.clone());
+                    Some(node_info)
+                }
+                Err(err_str) => {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                    None
+                }
+            };
+            let properties = match api::get_node_properties(node_id).await {
+                Ok(properties_res) => {
+                    node_properties_sig.set(properties_res.properties.clone());
+                    Some(properties_res.properties)
+                }
+                Err(err_str) => {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                    None
+                }
+            };
+            (node_info, properties)
+        });
 
     let on_change_property = EventHandler::new(move |evt: NodeChangeEvent| {
         // if let NodeChangeAction::Property(ref key, ref proptype) = evt.action {

@@ -20,22 +20,22 @@ mod vec2_editor;
 use crate::components::node_editor::{
     accordion::AccordionItem,
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::{
-        properties_editor::{
-            angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
-            f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
-            fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
-            isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
-            length_option_editor::LengthOptionEditor, light_data_editor::LightDataEditor,
-            linear_density_editor::LinearDensityEditor,
-            refractive_index_editor::RefractiveIndexEditor,
-            splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
-            vec2_editor::Vec2Editor,
-        },
+    optical_node_editor::properties_editor::{
+        angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
+        f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
+        fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
+        isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
+        length_option_editor::LengthOptionEditor, light_data_editor::LightDataEditor,
+        linear_density_editor::LinearDensityEditor, refractive_index_editor::RefractiveIndexEditor,
+        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
+        vec2_editor::Vec2Editor,
     },
 };
 use dioxus::prelude::*;
-use opossum_core::{prelude::{Properties, Property, Proptype}, types::api_types::NodeInfo};
+use opossum_core::{
+    prelude::{Properties, Property, Proptype},
+    types::api_types::NodeInfo,
+};
 use uuid::Uuid;
 
 #[component]

@@ -3,7 +3,9 @@ use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::*,
     types::api_types::{
-        AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, MoveNodesRequest, NewNode, NewRefNode, NodeInfo, NodePropertiesResponse, PortMappingsResponse, PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest
+        AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, MoveNodesRequest, NewNode,
+        NewRefNode, NodeInfo, NodePropertiesResponse, PortMappingsResponse, PortNamesResponse,
+        RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest,
     },
 };
 use std::collections::{HashMap, HashSet};

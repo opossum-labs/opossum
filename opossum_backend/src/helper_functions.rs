@@ -327,5 +327,8 @@ pub fn create_new_group_node_info(
     let (new_group_ref, _) = scenery.node_recursive(new_group_id)?;
     let new_group_node = new_group_ref.optical_ref.lock_opm()?;
 
-    Ok(NodeInfo::from_analyzable(&*new_group_node, Some(Some((pos.x, pos.y)))))
+    Ok(NodeInfo::from_analyzable(
+        &*new_group_node,
+        Some(Some((pos.x, pos.y))),
+    ))
 }

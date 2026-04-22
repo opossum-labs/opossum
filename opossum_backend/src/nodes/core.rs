@@ -89,8 +89,7 @@ async fn post_children(
     let uuid = path.into_inner();
     let scenery = document.scenery_mut();
 
-    let _ =
-        scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
+    let _ = scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     drop(document);
     let node = new_node_ref.optical_ref.lock_opm()?;
@@ -120,9 +119,7 @@ async fn get_node(
     req: HttpRequest,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    let document = data
-        .document
-        .lock();
+    let document = data.document.lock();
     // Retrieve the node info
     let node_ref = document.scenery().node_recursive(uuid)?.0;
     let node = node_ref.optical_ref.lock_opm()?;
@@ -191,8 +188,8 @@ async fn patch_node(
             if let Some(gui_pos_opt) = update.gui_position {
                 node_attr.set_gui_position(gui_pos_opt.map(|(x, y)| Point2::new(x, y)));
             }
-            Ok::<(), OpossumError>(()) 
-        })??; 
+            Ok::<(), OpossumError>(())
+        })??;
 
     Ok(HttpResponse::NoContent().finish())
 }
@@ -268,8 +265,7 @@ async fn post_reference(
         )));
 
     let scenery = document.scenery_mut();
-    let _ =
-        scenery.with_group_node_mut(group_uuid, |g| g.add_node(node_reference.clone()))??;
+    let _ = scenery.with_group_node_mut(group_uuid, |g| g.add_node(node_reference.clone()))??;
 
     drop(document);
     let node_info = NodeInfo::from_analyzable(&node_reference, None);

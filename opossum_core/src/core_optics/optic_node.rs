@@ -6,10 +6,22 @@ use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
 use crate::{
-    analyzers::{Analyzable, propagation_strategy::PropagationStrategy}, apertures::Aperture, coatings::CoatingType, core_optics::{
+    analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
+    apertures::Aperture,
+    coatings::CoatingType,
+    core_optics::{
         NodeAttr, OpticPorts, PortType, SceneryResources, hit_map::HitMap,
         optic_surface::OpticSurface,
-    }, error::{OpmResult, OpossumError}, geometry::{Plane, geo_surface::GeoSurfaceRef}, light::{LightData, LightResult, Rays}, nodes::{NodeGroup, NodeReference, fluence_detector::Fluence}, properties::{Properties, Proptype}, refractive_index::RefractiveIndexType, reporting::{Dottable, node_report::NodeReport}, types::api_types::NodeInfo, utils::{LockExt, geom_transformation::Isometry}
+    },
+    error::{OpmResult, OpossumError},
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    light::{LightData, LightResult, Rays},
+    nodes::{NodeGroup, NodeReference, fluence_detector::Fluence},
+    properties::{Properties, Proptype},
+    refractive_index::RefractiveIndexType,
+    reporting::{Dottable, node_report::NodeReport},
+    types::api_types::NodeInfo,
+    utils::{LockExt, geom_transformation::Isometry},
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

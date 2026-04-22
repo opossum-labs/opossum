@@ -280,7 +280,7 @@ pub fn use_drag_end(
                                 workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition {
                                     pos,
                                     node_id: *node_id,
-                                    is_optical
+                                    is_optical,
                                 });
                             }
                         }
