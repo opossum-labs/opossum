@@ -45,26 +45,10 @@ async fn get_children(
             .iter()
             .map(|n| {
                 let node = n.optical_ref.lock_opm()?; // <- Kein unwrap() mehr!
-                let name = node.name();
-                let node_type = node.node_type();
-                let inverted = node.inverted();
-                let input_ports = node.ports().names(&PortType::Input);
-                let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = node.gui_position().map(|position| (position.x, position.y));
-                let alignment = node.alignment();
-                let isometry = node.isometry();
+                let node_info = NodeInfo::from_analyzable(&*node, Some(n.uuid()), Some(gui_position));
                 drop(node);
-                Ok(NodeInfo {
-                    uuid: n.uuid(),
-                    name,
-                    inverted,
-                    node_type,
-                    input_ports,
-                    output_ports,
-                    gui_position,
-                    alignment,
-                    isometry,
-                })
+                Ok(node_info)
             })
             .collect::<Result<Vec<NodeInfo>, OpossumError>>()
     })??;
@@ -113,17 +97,7 @@ async fn post_children(
     drop(document);
     let node = new_node_ref.optical_ref.lock_opm()?;
     let gui_position = node.gui_position().map(|position| (position.x, position.y));
-    let node_info = NodeInfo {
-        uuid: new_node_uuid,
-        name: node.name(),
-        inverted: node.inverted(),
-        node_type: node.node_type(),
-        input_ports: node.ports().names(&PortType::Input),
-        output_ports: node.ports().names(&PortType::Output),
-        gui_position,
-        isometry: node.isometry(),
-        alignment: node.alignment(),
-    };
+    let node_info = NodeInfo::from_analyzable(&*node, Some(new_node_uuid), Some(gui_position));
     drop(node);
     Ok(HttpResponse::Created().json(node_info))
 }
@@ -149,25 +123,13 @@ async fn get_node(
     req: HttpRequest,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    // Retrieve the node info
-    let node_info = data
+    let document = data
         .document
-        .lock()
-        .scenery()
-        .with_node_attr(uuid, |node_attr| NodeInfo {
-            uuid,
-            name: node_attr.name(),
-            inverted: node_attr.inverted(),
-            node_type: node_attr.node_type(),
-            input_ports: node_attr.ports().names(&PortType::Input),
-            output_ports: node_attr.ports().names(&PortType::Output),
-            gui_position: node_attr
-                .gui_position()
-                .map(|position| (position.x, position.y)),
-            alignment: *node_attr.alignment(),
-            isometry: node_attr.isometry(),
-        })?;
-
+        .lock();
+    // Retrieve the node info
+    let scenery = document.scenery();
+    let node_info = NodeInfo::from_analyzable(scenery, Some(uuid), None);
+    drop(document);
     // Content Negotiation
     let wants_ron = req
         .headers()
@@ -311,17 +273,7 @@ async fn post_reference(
         scenery.with_group_node_mut(group_uuid, |g| g.add_node(node_reference.clone()))??;
 
     drop(document);
-    let node_info = NodeInfo {
-        uuid: new_node_uuid,
-        name: node_reference.name(),
-        inverted: node_reference.inverted(),
-        node_type: node_reference.node_type(),
-        input_ports: node_reference.ports().names(&PortType::Input),
-        output_ports: node_reference.ports().names(&PortType::Output),
-        gui_position: Some(ref_node_info.gui_position()),
-        isometry: node_reference.isometry(),
-        alignment: node_reference.alignment(),
-    };
+    let node_info = NodeInfo::from_analyzable(&node_reference, Some(new_node_uuid), Some(Some(ref_node_info.gui_position())));
     Ok(HttpResponse::Created().json(node_info))
 }
 

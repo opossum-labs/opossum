@@ -327,15 +327,5 @@ pub fn create_new_group_node_info(
     let (new_group_ref, _) = scenery.node_recursive(new_group_id)?;
     let new_group_node = new_group_ref.optical_ref.lock_opm()?;
 
-    Ok(NodeInfo {
-        uuid: new_group_id,
-        name: new_group_node.name(),
-        inverted: new_group_node.inverted(),
-        node_type: new_group_node.node_type(),
-        input_ports: new_group_node.ports().names(&PortType::Input),
-        output_ports: new_group_node.ports().names(&PortType::Output),
-        gui_position: Some((pos.x, pos.y)),
-        alignment: new_group_node.alignment(),
-        isometry: new_group_node.isometry(),
-    })
+    Ok(NodeInfo::from_analyzable(&*new_group_node, Some(new_group_id), Some(Some((pos.x, pos.y)))))
 }
