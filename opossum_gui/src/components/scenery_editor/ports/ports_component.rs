@@ -1,5 +1,6 @@
+use crate::components::scenery_editor::graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt};
 use crate::components::scenery_editor::{
-    EditorState, GraphState, GraphStore, GraphsWorkspaceState,
+    GraphState, GraphsWorkspaceState,
     constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
     node::NodeElement,
     ports::{
@@ -28,10 +29,10 @@ impl Ports {
     pub fn set_output_ports(&mut self, ports: Vec<String>) {
         self.output_ports = ports;
     }
-    pub fn remove_input_port(&mut self, remove: &String) {
+    pub fn remove_input_port(&mut self, remove: &str) {
         self.input_ports.retain(|p| p != remove);
     }
-    pub fn remove_output_port(&mut self, remove: &String) {
+    pub fn remove_output_port(&mut self, remove: &str) {
         self.output_ports.retain(|p| p != remove);
     }
     #[must_use]
@@ -56,11 +57,10 @@ pub fn NodePort(
     port_type: PortType,
     inverted_node: bool,
 ) -> Element {
-    let editor_status = use_context::<ReadSignal<EditorState>>();
-    let graph_store = use_context::<ReadSignal<GraphStore>>();
-    let graph_state = use_context::<ReadSignal<GraphState>>();
-
-    let workspace = use_context::<ReadSignal<GraphsWorkspaceState>>();
+    let graph_state = use_context::<ReadStore<GraphState>>();
+    let editor_status = graph_state.editor_state();
+    let graph_store = graph_state.graph_store();
+    let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
 
     let rel_port_position = node.rel_port_position(port_type, &port_name);
     let abs_port_position = node.abs_port_position(port_type, &port_name);
@@ -68,8 +68,7 @@ pub fn NodePort(
     let port_class = get_port_class(inverted_node, port_type);
 
     let external_port_opt = graph_store
-        .read()
-        .mapped_ports
+        .mapped_ports()
         .read()
         .external_port_of_mapped_port(node.id(), &port_name);
 
@@ -86,7 +85,7 @@ pub fn NodePort(
     let on_context_menu_handler = use_on_context_menu(
         workspace,
         graph_store,
-        graph_state.read().graph_info.clone(),
+        graph_state.graph_info().read().clone(),
         node_id,
         port_name.clone(),
         port_type,
@@ -117,7 +116,7 @@ pub fn NodePort(
                 on_context_menu_handler,
                 rel_port_position,
                 port_type,
-                external_port
+                external_port,
             }
         }
     }

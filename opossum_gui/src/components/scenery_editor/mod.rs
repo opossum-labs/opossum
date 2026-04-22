@@ -4,14 +4,13 @@ mod constants;
 mod edges;
 mod graph_workspace;
 mod node;
-mod nodes;
 mod ports;
 mod selection_box;
 
 pub use graph_editor::GraphEditor;
 pub use graph_workspace::{
-    DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction, GraphsWorkspaceState,
-    NodeEditorCommand, SelectedNode,
+    DragStatus, EditorState, EditorStateStoreExt, GraphState, GraphStore, GraphsWorkspaceAction,
+    GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, NodeEditorCommand, SelectedNode,
 };
 pub use node::{NodeElement, NodeType};
 pub use selection_box::SelectionBoxComponent;

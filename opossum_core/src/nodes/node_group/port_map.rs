@@ -11,7 +11,7 @@ use uuid::Uuid;
 /// The `PortMap` stores associations where an external port name (e.g., `input_1`)
 /// maps to a specific internal port name on a specific node (identified by a [`Uuid`])
 /// within a the optical graph.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PortMap(HashMap<String, (Uuid, String)>);
 
 impl PortMap {
