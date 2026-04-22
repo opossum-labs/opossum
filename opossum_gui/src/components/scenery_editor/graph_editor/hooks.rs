@@ -272,7 +272,6 @@ pub fn use_drag_end(
                         let selected_nodes = graph_store().selected_nodes();
                         for node_id in selected_nodes.keys() {
                             if let Some((pos, is_optical)) = graph_store
-                                .read()
                                 .nodes()
                                 .read()
                                 .get(node_id)

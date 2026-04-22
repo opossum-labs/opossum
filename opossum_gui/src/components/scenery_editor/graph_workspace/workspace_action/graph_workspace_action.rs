@@ -7,7 +7,6 @@ use opossum_core::{
 use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
 
-use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 /// Represents all possible user or system actions within the graphs workspace.
 /// These actions drive state updates such as selection, navigation, editing,
 /// layout changes, and persistence.
