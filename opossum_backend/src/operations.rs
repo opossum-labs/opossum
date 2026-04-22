@@ -223,7 +223,7 @@ async fn post_paste_nodes(
                 scenery
                     .with_group_node_mut(mapped_group_id, |g| g.add_node_ref(node_ref.clone()))??;
                 let node = node_ref.optical_ref.lock_opm()?;
-                node_info.push(NodeInfo::from_analyzable(&*node, None, None));
+                node_info.push(NodeInfo::from_analyzable(&*node, None));
                 drop(node);
             }
             grouped_node_infos.insert(mapped_group_id, node_info);

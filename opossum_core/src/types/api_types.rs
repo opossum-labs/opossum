@@ -121,16 +121,16 @@ pub struct NodeInfo {
 
 impl NodeInfo {
     /// Create a NodeInfo struct from this [`OpticNode`]
-    pub fn from_analyzable(node: &dyn Analyzable, node_id: Option<Uuid>, gui_position: Option<Option<(f64, f64)>>) -> Self{
+    pub fn from_analyzable(node: &dyn Analyzable, gui_position: Option<Option<(f64, f64)>>) -> Self{
         Self {
-            uuid: node_id.unwrap_or(node.node_attr().uuid()),
+            uuid: node.node_attr().uuid(),
             name: node.name(),
             inverted: node.inverted(),
             node_type: node.node_type(),
             properties: node.properties().clone(),
             input_ports: node.ports().names(&PortType::Input),
             output_ports: node.ports().names(&PortType::Output),
-            gui_position: gui_position.unwrap_or(node.node_attr().gui_position().map(|p| (p.x, p.y))),
+            gui_position: gui_position.unwrap_or(node.gui_position().map(|p| (p.x, p.y))),
             isometry: node.isometry(),
             alignment: node.alignment(),
         }

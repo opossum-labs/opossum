@@ -39,14 +39,12 @@ async fn get_children(
     drop(document);
     let uuid = path.into_inner();
 
-    // HIER: Wir sammeln ein Result auf und nutzen ?? (Doppel-Fragezeichen)
     let nodes_info = scenery.with_group_node(uuid, |g| {
         g.nodes()
             .iter()
             .map(|n| {
                 let node = n.optical_ref.lock_opm()?; // <- Kein unwrap() mehr!
-                let gui_position = node.gui_position().map(|position| (position.x, position.y));
-                let node_info = NodeInfo::from_analyzable(&*node, Some(n.uuid()), Some(gui_position));
+                let node_info = NodeInfo::from_analyzable(&*node, None);
                 drop(node);
                 Ok(node_info)
             })
@@ -91,13 +89,12 @@ async fn post_children(
     let uuid = path.into_inner();
     let scenery = document.scenery_mut();
 
-    let new_node_uuid =
+    let _ =
         scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     drop(document);
     let node = new_node_ref.optical_ref.lock_opm()?;
-    let gui_position = node.gui_position().map(|position| (position.x, position.y));
-    let node_info = NodeInfo::from_analyzable(&*node, Some(new_node_uuid), Some(gui_position));
+    let node_info = NodeInfo::from_analyzable(&*node, None);
     drop(node);
     Ok(HttpResponse::Created().json(node_info))
 }
@@ -129,7 +126,7 @@ async fn get_node(
     // Retrieve the node info
     let node_ref = document.scenery().node_recursive(uuid)?.0;
     let node = node_ref.optical_ref.lock_opm()?;
-    let node_info = NodeInfo::from_analyzable(&*node, Some(uuid), None);
+    let node_info = NodeInfo::from_analyzable(&*node, None);
     drop(node);
     drop(document);
     // Content Negotiation
@@ -271,11 +268,11 @@ async fn post_reference(
         )));
 
     let scenery = document.scenery_mut();
-    let new_node_uuid =
+    let _ =
         scenery.with_group_node_mut(group_uuid, |g| g.add_node(node_reference.clone()))??;
 
     drop(document);
-    let node_info = NodeInfo::from_analyzable(&node_reference, Some(new_node_uuid), Some(Some(ref_node_info.gui_position())));
+    let node_info = NodeInfo::from_analyzable(&node_reference, None);
     Ok(HttpResponse::Created().json(node_info))
 }
 
