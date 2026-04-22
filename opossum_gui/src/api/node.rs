@@ -229,7 +229,7 @@ pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result
         ..Default::default()
     };
     HTTP_API_CLIENT()
-        .patch::<UpdateNodeRequest>(&format!("/api/nodes{node_id}"), update_node_request)
+        .patch::<UpdateNodeRequest>(&format!("/api/nodes/{node_id}"), update_node_request)
         .await
 }
 
