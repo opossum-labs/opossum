@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::components::scenery_editor::graph_workspace::{
-    GraphsWorkspaceState,
+    GraphStateStoreExt, GraphStoreStoreImplExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt,
+    GraphsWorkspaceStateStoreImplExt,
     workspace_handlers::helper_functions::{for_each_tab, with_graph_store, with_tab},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -33,7 +34,7 @@ pub struct NodeHandlers {
 }
 
 impl NodeHandlers {
-    pub fn new(workspace: Signal<GraphsWorkspaceState>) -> Self {
+    pub fn new(workspace: Store<GraphsWorkspaceState>) -> Self {
         Self {
             add_optical_node: add_optical_node_handler(workspace),
             add_reference_node: add_reference_node_handler(workspace),
@@ -141,7 +142,7 @@ impl NodeHandlers {
 }
 
 fn add_to_node_selection_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Uuid, bool)> {
     EventHandler::new(
         move |(graph_id, node_id, is_optical_node): (Uuid, Uuid, bool)| {
@@ -153,7 +154,7 @@ fn add_to_node_selection_handler(
 }
 
 fn remove_from_node_selection_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Uuid)> {
     EventHandler::new(move |(graph_id, node_id): (Uuid, Uuid)| {
         with_graph_store(workspace, graph_id, false, |g| {
@@ -163,7 +164,7 @@ fn remove_from_node_selection_handler(
 }
 
 fn set_node_active_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Uuid, bool, usize)> {
     EventHandler::new(
         move |(graph_id, node_id, is_optical_node, z_index): (Uuid, Uuid, bool, usize)| {
@@ -175,7 +176,7 @@ fn set_node_active_handler(
 }
 
 fn node_click_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Uuid, bool, usize, bool)> {
     EventHandler::new(
         move |(graph_id, node_id, is_optical_node, z_index, ctrl_pressed): (
@@ -186,13 +187,14 @@ fn node_click_handler(
             bool,
         )| {
             with_graph_store(workspace, graph_id, false, |g| {
+                let selected_nodes = g.read().selected_nodes();
                 if ctrl_pressed {
-                    if g.selected_nodes().contains_key(&node_id) {
+                    if selected_nodes.contains_key(&node_id) {
                         g.remove_from_node_selection(node_id);
                     } else {
                         g.add_to_node_selection(node_id, is_optical_node);
                     }
-                } else if !g.selected_nodes().contains_key(&node_id) {
+                } else if !selected_nodes.contains_key(&node_id) {
                     g.set_node_active(node_id, z_index, is_optical_node);
                 }
             });
@@ -201,52 +203,54 @@ fn node_click_handler(
 }
 
 fn remove_group_port_handler(
-    mut workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(String, Uuid, PortType)> {
     EventHandler::new(
         move |(removed_port, group_id, port_type): (String, Uuid, PortType)| {
-            let root_id = *workspace.read().root_scenery_id.read();
-            let ws = workspace.write();
+            let root_id = *workspace.root_scenery_id().read();
 
-            if let Some(graph_state) = ws.get_graph_state(group_id) {
-                let parent_id = graph_state
+            let parent_id_opt = workspace.tabs().get(group_id).map(|graph_state| {
+                graph_state
+                    .graph_info()
                     .read()
-                    .graph_info
                     .get_parent_id()
-                    .unwrap_or(root_id);
-                if let Some(mut graph_store) = ws.get_graph_store(parent_id) {
-                    graph_store
-                        .write()
-                        .remove_port_of_node(group_id, &removed_port, port_type);
-                }
+                    .unwrap_or(root_id)
+            });
+            if let Some(p_id) = parent_id_opt
+                && let Some(graph_state) = workspace.tabs().get(p_id)
+            {
+                graph_state
+                    .graph_store()
+                    .remove_port_of_node(group_id, &removed_port, port_type);
             }
         },
     )
 }
 
 fn update_group_ports_handler(
-    mut workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Vec<String>, Vec<String>, Uuid)> {
     EventHandler::new(
         move |(input_ports, output_ports, group_id): (Vec<String>, Vec<String>, Uuid)| {
-            let ws = workspace.write();
-
-            if let Some(graph_state) = ws.get_graph_state(group_id) {
-                let parent_hierarchy_pos = graph_state.read().graph_info.hierarchy.len() - 2;
-                let (parent_id, _) = graph_state.read().graph_info.hierarchy[parent_hierarchy_pos];
-
-                if let Some(mut graph_store) = ws.get_graph_store(parent_id) {
-                    graph_store
-                        .write()
-                        .update_ports_of_node(group_id, input_ports, output_ports);
-                }
+            let parent_id_opt = workspace.tabs().get(group_id).map(|graph_state| {
+                let graph_info = graph_state.graph_info();
+                let hierarchy = &graph_info.read().hierarchy;
+                let parent_hierarchy_pos = hierarchy.len() - 2;
+                hierarchy[parent_hierarchy_pos].0
+            });
+            if let Some(parent_id) = parent_id_opt
+                && let Some(graph_state) = workspace.tabs().get(parent_id)
+            {
+                graph_state
+                    .graph_store()
+                    .update_ports_of_node(group_id, input_ports, output_ports);
             }
         },
     )
 }
 
 fn add_optical_node_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(NodeInfo, Uuid)> {
     EventHandler::new(move |(node_info, graph_id)| {
         with_graph_store(workspace, graph_id, true, |store| {
@@ -255,7 +259,7 @@ fn add_optical_node_handler(
     })
 }
 fn add_reference_node_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(NodeInfo, Uuid)> {
     EventHandler::new(move |(node_info, graph_id)| {
         with_graph_store(workspace, graph_id, true, |store| {
@@ -264,7 +268,7 @@ fn add_reference_node_handler(
     })
 }
 fn add_analyzer_node_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(NewAnalyzerInfo, Uuid, Uuid)> {
     EventHandler::new(move |(info, analyzer_id, graph_id)| {
         with_graph_store(workspace, graph_id, true, |store| {
@@ -272,9 +276,7 @@ fn add_analyzer_node_handler(
         });
     })
 }
-fn invert_node_handler(
-    workspace: Signal<GraphsWorkspaceState>,
-) -> EventHandler<(Uuid, bool, Uuid)> {
+fn invert_node_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<(Uuid, bool, Uuid)> {
     EventHandler::new(move |(node_id, inverted, graph_id)| {
         with_graph_store(workspace, graph_id, true, |store| {
             store.set_node_inverted(node_id, inverted);
@@ -282,21 +284,19 @@ fn invert_node_handler(
     })
 }
 fn remove_nodes_handler(
-    mut workspace: Signal<GraphsWorkspaceState>,
+    mut workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Vec<Uuid>, Uuid)> {
-    EventHandler::new(move |(node_ids, graph_id)| {
-        let mut ws = workspace.write();
-
-        if let Some(mut graph_store) = ws.get_graph_store(graph_id) {
-            graph_store.write().remove_nodes_by_id(&node_ids);
+    EventHandler::new(move |(node_ids, graph_id): (Vec<Uuid>, Uuid)| {
+        if let Some(mut graph_store) = workspace.tabs().get(graph_id).map(|g| g.graph_store()) {
+            graph_store.remove_nodes_by_id(&node_ids);
         }
 
-        ws.remove_tabs(&node_ids);
-        ws.needs_saving.set(true);
+        workspace.remove_tabs(&node_ids);
+        workspace.needs_saving().set(true);
     })
 }
 fn update_node_positions_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(HashMap<Uuid, Point2D<f64>>, Uuid)> {
     EventHandler::new(move |(positions, graph_id)| {
         with_graph_store(workspace, graph_id, true, |store| {
@@ -305,7 +305,7 @@ fn update_node_positions_handler(
     })
 }
 fn set_node_name_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(String, Uuid, Uuid, bool)> {
     EventHandler::new(
         move |(name, node_id, graph_id, needs_saving): (String, Uuid, Uuid, bool)| {
@@ -313,11 +313,12 @@ fn set_node_name_handler(
                 store.set_name_of_node(node_id, name.clone());
             });
             with_tab(workspace, node_id, needs_saving, |tab| {
-                tab.graph_info.name.clone_from(&name);
+                tab.graph_info().write().name.clone_from(&name);
             });
             for_each_tab(workspace, needs_saving, |tab| {
                 if let Some((_, h_name)) = tab
-                    .graph_info
+                    .graph_info()
+                    .write()
                     .hierarchy
                     .iter_mut()
                     .find(|(h_id, _)| *h_id == node_id)
@@ -329,7 +330,7 @@ fn set_node_name_handler(
     )
 }
 fn add_group_nodes_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Vec<NodeInfo>)> {
     EventHandler::new(move |(group_id, nodes): (Uuid, Vec<NodeInfo>)| {
         with_graph_store(workspace, group_id, false, |store| {
@@ -338,7 +339,7 @@ fn add_group_nodes_handler(
     })
 }
 fn add_group_analyzers_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Vec<AnalyzerInfo>)> {
     EventHandler::new(move |(group_id, analyzers): (Uuid, Vec<AnalyzerInfo>)| {
         with_graph_store(workspace, group_id, false, |store| {
@@ -347,8 +348,8 @@ fn add_group_analyzers_handler(
     })
 }
 
-fn remove_droppable_group_handler(mut workspace: Signal<GraphsWorkspaceState>) -> EventHandler<()> {
+fn remove_droppable_group_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<()> {
     EventHandler::new(move |()| {
-        workspace.write().drop_in_group.set(None);
+        workspace.drop_in_group().set(None);
     })
 }

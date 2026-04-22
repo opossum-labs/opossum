@@ -5,5 +5,7 @@ pub(super) mod workspace_state;
 pub use workspace_action::{GraphsWorkspaceAction, NodeEditorCommand, use_workspace_processor};
 pub use workspace_handlers::WorkSpaceSignalHandlers;
 pub use workspace_state::{
-    DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceState, SelectedNode,
+    DragStatus, EditorState, EditorStateStoreExt, GraphState, GraphStateStoreExt, GraphStore,
+    GraphStoreStoreExt, GraphStoreStoreImplExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt,
+    GraphsWorkspaceStateStoreImplExt, SelectedNode,
 };

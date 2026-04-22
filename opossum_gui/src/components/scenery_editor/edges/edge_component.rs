@@ -6,17 +6,19 @@ use crate::components::{
         GraphState, GraphsWorkspaceAction,
         constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
         edges::define_bezier_path,
+        graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
     },
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 
 #[component]
-pub fn EdgeComponent(edge: ConnectInfo) -> Element {
-    let graph_state = use_context::<ReadSignal<GraphState>>();
-    let graph_store = graph_state.read().graph_store;
+pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
+    let edge = edge();
+    let graph_state = use_context::<ReadStore<GraphState>>();
+    let graph_store = graph_state.graph_store();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-
+    let graph_id = graph_state.graph_info().read().id;
     // Memoize the start and end positions. This will only re-read the node
     // positions and re-calculate when the `edge` prop itself changes.
     // Dioxus's signal system will ensure this only triggers a re-render if
@@ -25,11 +27,12 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
         let edge = edge.clone();
         move || {
             graph_store
-                .read()
                 .nodes()
-                .read()
-                .get(&edge.src_uuid())
-                .map(|n| n.abs_port_position(PortType::Output, edge.src_port()))
+                .get(edge.src_uuid())
+                .map(|n| {
+                    n.read()
+                        .abs_port_position(PortType::Output, edge.src_port())
+                })
                 .unwrap_or_default()
         }
     });
@@ -38,11 +41,12 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
         let edge = edge.clone();
         move || {
             graph_store
-                .peek()
                 .nodes()
-                .read()
-                .get(&edge.target_uuid())
-                .map(|n| n.abs_port_position(PortType::Input, edge.target_port()))
+                .get(edge.target_uuid())
+                .map(|n| {
+                    n.read()
+                        .abs_port_position(PortType::Input, edge.target_port())
+                })
                 .unwrap_or_default()
         }
     });
@@ -65,7 +69,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                         workspace_processor
                             .send(GraphsWorkspaceAction::DeleteEdge {
                                 connection: edge.clone(),
-                                graph_id: graph_state.read().graph_info.id,
+                                graph_id,
                             });
                     }
                     event.stop_propagation();
@@ -85,7 +89,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                 pointer_events: "auto",
                 class: "input-with-unit",
                 style: "display: flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; box-sizing: border-box;",
-                onmousedown: move |e: MouseEvent| {e.stop_propagation(); workspace_processor.send(GraphsWorkspaceAction::ClearSelectedNodes { graph_id: graph_state.read().graph_info.id });},
+                onmousedown: move |e: MouseEvent| {e.stop_propagation(); workspace_processor.send(GraphsWorkspaceAction::ClearSelectedNodes { graph_id });},
                 UnitInput {
                     id: format!(
                         "distance-{}{}",
@@ -105,7 +109,7 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
                             workspace_processor
                                 .send(GraphsWorkspaceAction::UpdateEdge {
                                     connection: edge,
-                                    graph_id: graph_state.read().graph_info.id,
+                                    graph_id,
                                 });
                         }
                     },

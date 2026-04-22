@@ -1,7 +1,8 @@
 use crate::components::scenery_editor::{
+    GraphsWorkspaceStateStoreExt,
     edges::edges_component::EdgeCreation,
     graph_workspace::{
-        GraphsWorkspaceState,
+        EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState,
         workspace_handlers::helper_functions::{with_edges, with_editor_state},
     },
 };
@@ -20,7 +21,7 @@ pub struct EdgeHandlers {
 }
 
 impl EdgeHandlers {
-    pub fn new(workspace: Signal<GraphsWorkspaceState>) -> Self {
+    pub fn new(workspace: Store<GraphsWorkspaceState>) -> Self {
         Self {
             add_edge: add_edge_handler(workspace),
             delete_edge: delete_edge_handler(workspace),
@@ -57,16 +58,16 @@ impl EdgeHandlers {
 }
 
 fn set_edge_in_creation_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Option<EdgeCreation>, Uuid)> {
     EventHandler::new(move |(edge_in_creation, graph_id)| {
         with_editor_state(workspace, graph_id, false, |e| {
-            e.edge_in_creation.set(edge_in_creation);
+            e.edge_in_creation().set(edge_in_creation);
         });
     })
 }
 
-fn add_edge_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(ConnectInfo, Uuid)> {
+fn add_edge_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<(ConnectInfo, Uuid)> {
     EventHandler::new(move |(edge, graph_id)| {
         with_edges(workspace, graph_id, true, |edges| {
             edges.push(edge);
@@ -75,7 +76,7 @@ fn add_edge_handler(workspace: Signal<GraphsWorkspaceState>) -> EventHandler<(Co
 }
 
 fn delete_edge_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(ConnectInfo, Uuid)> {
     EventHandler::new(move |(edge, graph_id)| {
         with_edges(workspace, graph_id, true, |edges| {
@@ -85,39 +86,44 @@ fn delete_edge_handler(
 }
 
 fn update_edge_handler(
-    workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(ConnectInfo, Uuid)> {
     EventHandler::new(move |(ci, graph_id): (ConnectInfo, Uuid)| {
         with_edges(workspace, graph_id, true, |edges| {
-            if let Some(e) = edges
-                .iter_mut()
-                .find(|e| e.src_uuid() == ci.src_uuid() && e.target_uuid() == ci.target_uuid())
-            {
-                *e = ci;
+            if let Some(mut e) = edges.iter().find(|e| {
+                e.read().src_uuid() == ci.src_uuid() && e.read().target_uuid() == ci.target_uuid()
+            }) {
+                e.set(ci);
             }
         });
     })
 }
 
 fn update_edges_handler(
-    mut workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Vec<ConnectInfo>, Uuid)> {
     EventHandler::new(move |(connections, graph_id)| {
-        let mut ws = workspace.write();
-
-        if let Some(mut edges) = ws.get_graph_edges_mut(graph_id) {
+        if let Some(mut edges) = workspace
+            .tabs()
+            .get(graph_id)
+            .map(|g| g.graph_store().edges())
+        {
             edges.set(connections);
         }
 
-        ws.needs_saving.set(true);
+        workspace.needs_saving().set(true);
     })
 }
 
 fn add_group_edges_handler(
-    mut workspace: Signal<GraphsWorkspaceState>,
+    workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Vec<ConnectInfo>)> {
     EventHandler::new(move |(group_id, edges)| {
-        if let Some(mut graph_edges) = workspace.write().get_graph_edges_mut(group_id) {
+        if let Some(mut graph_edges) = workspace
+            .tabs()
+            .get(group_id)
+            .map(|g| g.graph_store().edges())
+        {
             graph_edges.set(edges);
         }
     })
