@@ -35,19 +35,20 @@ use crate::components::node_editor::{
     },
 };
 use dioxus::prelude::*;
-use opossum_core::{prelude::{Property, Proptype}, types::api_types::NodeInfo};
+use opossum_core::{prelude::{Properties, Property, Proptype}, types::api_types::NodeInfo};
 use uuid::Uuid;
 
 #[component]
 pub fn PropertiesEditor(
     node_id: Memo<Uuid>,
-    node_attr: ReadSignal<NodeInfo>,
+    node_properties_sig: ReadSignal<Properties>,
+    node_info_sig: ReadSignal<NodeInfo>,
     on_change_property: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let editor_inputs = if node_attr.read().uuid == *node_id.read() {
+    let editor_inputs = if node_info_sig.read().uuid == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
-        for (property_key, property) in &node_attr.read().properties {
+        for (property_key, property) in node_properties_sig.read().iter() {
             if let Some(editor) = get_editor(
                 node_id,
                 property,

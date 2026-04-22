@@ -99,9 +99,6 @@ pub struct NodeInfo {
     pub name: String,
     #[schema(example = "Lens")]
     pub node_type: String,
-    /// The properties of this node, e.g., radius of curvature, refractive index etc.
-    #[schema(value_type = Object)]
-    pub properties: Properties,
     /// Indicates if the node is physically inverted in the optical path
     pub inverted: bool,
     /// The 2D coordinates on the frontend canvas
@@ -127,7 +124,6 @@ impl NodeInfo {
             name: node.name(),
             inverted: node.inverted(),
             node_type: node.node_type(),
-            properties: node.properties().clone(),
             input_ports: node.ports().names(&PortType::Input),
             output_ports: node.ports().names(&PortType::Output),
             gui_position: gui_position.unwrap_or(node.gui_position().map(|p| (p.x, p.y))),
@@ -251,7 +247,7 @@ pub struct UpdateNodeRequest {
 }
 
 /// Response payload containing the physical and custom properties of a node
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, ToSchema, Deserialize)]
 pub struct NodePropertiesResponse {
     #[schema(value_type = Object)] // Hides internal Properties structure from Utoipa
     pub properties: Properties,
