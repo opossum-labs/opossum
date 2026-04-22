@@ -29,10 +29,10 @@ impl Ports {
     pub fn set_output_ports(&mut self, ports: Vec<String>) {
         self.output_ports = ports;
     }
-    pub fn remove_input_port(&mut self, remove: &String) {
+    pub fn remove_input_port(&mut self, remove: &str) {
         self.input_ports.retain(|p| p != remove);
     }
-    pub fn remove_output_port(&mut self, remove: &String) {
+    pub fn remove_output_port(&mut self, remove: &str) {
         self.output_ports.retain(|p| p != remove);
     }
     #[must_use]

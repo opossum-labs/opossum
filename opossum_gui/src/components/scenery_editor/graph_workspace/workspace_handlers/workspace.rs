@@ -192,7 +192,7 @@ fn apply_drag_handler(
                     let dx = graph_pos.x - start.x;
                     let dy = graph_pos.y - start.y;
 
-                    let dist_sq = dx * dx + dy * dy;
+                    let dist_sq = dx.mul_add(dx, dy * dy);
 
                     if dist_sq < 25.0 {
                         return;
@@ -322,7 +322,7 @@ fn set_root_scenery_id_handler(workspace: Store<GraphsWorkspaceState>) -> EventH
 }
 
 fn remove_tabs_handler(mut workspace: Store<GraphsWorkspaceState>) -> EventHandler<Vec<Uuid>> {
-    EventHandler::new(move |ids| {
+    EventHandler::new(move |ids: Vec<Uuid>| {
         workspace.remove_tabs(&ids);
     })
 }

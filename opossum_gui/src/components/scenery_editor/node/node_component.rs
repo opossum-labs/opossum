@@ -169,7 +169,6 @@ pub fn Node(
                 }
             },
             ondoubleclick: {
-                let node = node;
                 move |_| {
                     if let NodeType::Optical(node_type) = node.node_type()
                         && node_type == "group"

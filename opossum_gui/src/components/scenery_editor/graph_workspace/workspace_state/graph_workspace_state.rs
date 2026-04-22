@@ -54,7 +54,7 @@ impl<Lens> Store<GraphsWorkspaceState, Lens> {
         }
     }
 
-    fn remove_tabs(&mut self, tab_ids: &Vec<Uuid>) {
+    fn remove_tabs(&mut self, tab_ids: &[Uuid]) {
         for id in tab_ids {
             self.tabs().write().remove(id);
             self.tab_order().write().retain(|x| x != id);

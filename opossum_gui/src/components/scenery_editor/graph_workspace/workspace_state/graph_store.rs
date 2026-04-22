@@ -29,7 +29,11 @@ pub struct GraphState {
 }
 
 impl GraphState {
-    pub fn new(graph_store: GraphStore, editor_state: EditorState, graph_info: GraphInfo) -> Self {
+    pub const fn new(
+        graph_store: GraphStore,
+        editor_state: EditorState,
+        graph_info: GraphInfo,
+    ) -> Self {
         Self {
             graph_store,
             editor_state,
@@ -133,7 +137,7 @@ impl<Lens> Store<GraphStore, Lens> {
             node.write().set_name(name);
         }
     }
-    fn remove_port_of_node(&mut self, node_id: Uuid, remove_port: &String, port_type: PortType) {
+    fn remove_port_of_node(&mut self, node_id: Uuid, remove_port: &str, port_type: PortType) {
         if let Some(mut node) = self.nodes().get(node_id) {
             node.write().remove_port(remove_port, port_type);
         }
@@ -208,7 +212,7 @@ impl<Lens> Store<GraphStore, Lens> {
     /// removes each node from the store, and updates the edges accordingly.
     /// # Arguments:
     /// * `deleted_ids`: A vector of `Uuid` representing the IDs of the nodes to be removed.
-    fn remove_nodes_by_id(&mut self, node_ids: &Vec<Uuid>) {
+    fn remove_nodes_by_id(&mut self, node_ids: &[Uuid]) {
         for node_id in node_ids {
             self.nodes().remove(node_id);
             self.renumber_z_levels();

@@ -13,10 +13,10 @@ use crate::components::scenery_editor::{DragStatus, edges::edges_component::Edge
 pub enum GraphsWorkspaceAction {
     /// Clears all currently selected nodes in the given graph.
     ClearSelectedNodes {
-         /// The ID of the graph.
+        /// The ID of the graph.
         graph_id: Uuid,
     },
-    
+
     /// Navigates to a port that is mapped to a node within a group.
     JumpToMappedPort {
         /// The ID of the mapped node.
@@ -142,7 +142,7 @@ pub enum GraphsWorkspaceAction {
         /// Name of the scenery
         name: String,
     },
-     /// Maps a group-level port to a specific node port.
+    /// Maps a group-level port to a specific node port.
     MapNodePort {
         /// The type of the port (e.g. input or output).
         port_type: PortType,

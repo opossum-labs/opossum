@@ -209,17 +209,13 @@ fn remove_group_port_handler(
         move |(removed_port, group_id, port_type): (String, Uuid, PortType)| {
             let root_id = *workspace.root_scenery_id().read();
 
-            let parent_id_opt = if let Some(graph_state) = workspace.tabs().get(group_id) {
-                Some(
-                    graph_state
-                        .graph_info()
-                        .read()
-                        .get_parent_id()
-                        .unwrap_or(root_id),
-                )
-            } else {
-                None
-            };
+            let parent_id_opt = workspace.tabs().get(group_id).map(|graph_state| {
+                graph_state
+                    .graph_info()
+                    .read()
+                    .get_parent_id()
+                    .unwrap_or(root_id)
+            });
             if let Some(p_id) = parent_id_opt
                 && let Some(graph_state) = workspace.tabs().get(p_id)
             {
@@ -236,14 +232,12 @@ fn update_group_ports_handler(
 ) -> EventHandler<(Vec<String>, Vec<String>, Uuid)> {
     EventHandler::new(
         move |(input_ports, output_ports, group_id): (Vec<String>, Vec<String>, Uuid)| {
-            let parent_id_opt = if let Some(graph_state) = workspace.tabs().get(group_id) {
+            let parent_id_opt = workspace.tabs().get(group_id).map(|graph_state| {
                 let graph_info = graph_state.graph_info();
                 let hierarchy = &graph_info.read().hierarchy;
                 let parent_hierarchy_pos = hierarchy.len() - 2;
-                Some(hierarchy[parent_hierarchy_pos].0)
-            } else {
-                None
-            };
+                hierarchy[parent_hierarchy_pos].0
+            });
             if let Some(parent_id) = parent_id_opt
                 && let Some(graph_state) = workspace.tabs().get(parent_id)
             {
@@ -292,7 +286,7 @@ fn invert_node_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<(
 fn remove_nodes_handler(
     mut workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Vec<Uuid>, Uuid)> {
-    EventHandler::new(move |(node_ids, graph_id)| {
+    EventHandler::new(move |(node_ids, graph_id): (Vec<Uuid>, Uuid)| {
         if let Some(mut graph_store) = workspace.tabs().get(graph_id).map(|g| g.graph_store()) {
             graph_store.remove_nodes_by_id(&node_ids);
         }
