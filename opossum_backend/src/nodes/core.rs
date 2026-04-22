@@ -194,8 +194,8 @@ async fn patch_node(
             if let Some(gui_pos_opt) = update.gui_position {
                 node_attr.set_gui_position(gui_pos_opt.map(|(x, y)| Point2::new(x, y)));
             }
-            Ok::<(), OpossumError>(()) // Wir geben explizit Ok zurück, damit das Closure ein Result liefert
-        })??; // Automatisches Error-Mapping!
+            Ok::<(), OpossumError>(()) 
+        })??; 
 
     Ok(HttpResponse::NoContent().finish())
 }

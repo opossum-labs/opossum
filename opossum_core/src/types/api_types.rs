@@ -123,7 +123,7 @@ impl NodeInfo {
     /// Create a NodeInfo struct from this [`OpticNode`]
     pub fn from_analyzable(node: &dyn Analyzable, node_id: Option<Uuid>, gui_position: Option<Option<(f64, f64)>>) -> Self{
         Self {
-            uuid: node_id.unwrap_or(Uuid::new_v4()),
+            uuid: node_id.unwrap_or(node.node_attr().uuid()),
             name: node.name(),
             inverted: node.inverted(),
             node_type: node.node_type(),
