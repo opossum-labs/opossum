@@ -14,7 +14,7 @@ use dioxus::prelude::*;
 // use grating_alignment::GratingAlignmentInputs;
 use opossum_core::{
     degree, meter,
-    prelude::{Isometry, Properties},
+    prelude::Isometry,
     types::api_types::NodeInfo,
     utils::geom_transformation::{RotationAxis, TranslationAxis},
 };
@@ -62,8 +62,6 @@ pub fn AlignmentEditor(
 pub fn AlignmentInputs(
     node_id: Memo<Uuid>,
     alignment: Isometry,
-    // node_properties: ReadSignal<Properties>,
-    // node_properties_sig: Signal<Properties>,
     node_type: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,

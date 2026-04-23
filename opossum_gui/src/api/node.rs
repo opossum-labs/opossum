@@ -134,7 +134,7 @@ pub async fn delete_node(id: Uuid) -> Result<Vec<Uuid>, String> {
         .delete::<String, Vec<Uuid>>(&format!("/api/nodes/{id}"), String::new())
         .await
 }
-/// Get the NodeInfo of an optical node.
+/// Get the `NodeInfo` of an optical node.
 ///
 /// # Errors
 ///

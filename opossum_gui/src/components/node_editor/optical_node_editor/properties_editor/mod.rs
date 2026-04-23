@@ -43,19 +43,15 @@ pub fn PropertiesEditor(
     node_id: Memo<Uuid>,
     node_properties_sig: ReadSignal<Properties>,
     node_info_sig: ReadSignal<NodeInfo>,
-    on_change_property: EventHandler<NodeChangeEvent>,
+    on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     let editor_inputs = if node_info_sig.read().uuid == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
         for (property_key, property) in node_properties_sig.read().iter() {
-            if let Some(editor) = get_editor(
-                node_id,
-                property,
-                property_key.clone(),
-                on_change_property,
-                readonly,
-            ) {
+            if let Some(editor) =
+                get_editor(node_id, property, property_key.clone(), on_change, readonly)
+            {
                 editor_inputs.push(editor);
             }
         }

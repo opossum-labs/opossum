@@ -105,15 +105,7 @@ pub async fn patch_property(
         .scenery_mut()
         .with_node_attr_mut(uuid, |node_attr| {
             node_attr.set_property(&prop_name, new_value)
-        }).and_then(|inner| inner)
-        
-        .map_err(|e| {
-        BackEndErrorResponse::new(
-            400,
-            "Parse Error",
-            &format!("Failed to set property for '{prop_name}': {e}"),
-        )
-    })?;
+        })??;
 
     Ok(HttpResponse::NoContent().finish())
 }

@@ -7,7 +7,6 @@ use opossum_core::{
     error::OpmResult,
     meter,
     nodes::{ConnectionInfo, NodeGroup},
-    prelude::PortType,
     types::api_types::{ConnectInfo, NodeInfo},
     utils::LockExt,
 };

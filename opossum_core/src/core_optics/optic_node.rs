@@ -20,7 +20,6 @@ use crate::{
     properties::{Properties, Proptype},
     refractive_index::RefractiveIndexType,
     reporting::{Dottable, node_report::NodeReport},
-    types::api_types::NodeInfo,
     utils::{LockExt, geom_transformation::Isometry},
 };
 use std::collections::HashMap;

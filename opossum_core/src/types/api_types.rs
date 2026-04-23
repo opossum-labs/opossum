@@ -10,7 +10,7 @@ use crate::{
     core_optics::optic_ports::{PortConfig, ValidatedLidt},
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
-    prelude::{AnalyzerType, Aperture, Isometry, OpticNode, PortMap, PortType, Properties},
+    prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
 };
 
 // ============================================================================
@@ -122,7 +122,7 @@ pub struct NodeInfo {
 }
 
 impl NodeInfo {
-    /// Create a NodeInfo struct from this [`OpticNode`]
+    /// Create a `NodeInfo` struct from this [`OpticNode`]
     pub fn from_analyzable(
         node: &dyn Analyzable,
         gui_position: Option<Option<(f64, f64)>>,
@@ -134,7 +134,7 @@ impl NodeInfo {
             node_type: node.node_type(),
             input_ports: node.ports().names(&PortType::Input),
             output_ports: node.ports().names(&PortType::Output),
-            gui_position: gui_position.unwrap_or(node.gui_position().map(|p| (p.x, p.y))),
+            gui_position: gui_position.unwrap_or_else(|| node.gui_position().map(|p| (p.x, p.y))),
             isometry: node.isometry(),
             alignment: node.alignment(),
         }

@@ -9,7 +9,7 @@ pub(super) use alignment_editor::{
 
 use crate::components::{
     node_editor::{
-        node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        node_config_editor::NodeChangeEvent,
         optical_node_editor::{
             alignment_editor::{AlignmentEditor, PositioningEditor},
             general_editor::GeneralEditor,
@@ -59,16 +59,6 @@ pub fn OpticalNodeEditor(
             (node_info, properties)
         });
 
-    let on_change_property = EventHandler::new(move |evt: NodeChangeEvent| {
-        // if let NodeChangeAction::Property(ref key, ref proptype) = evt.action {
-        //     let _ = ui_node_info_sig
-        //         .write()
-        //         .properties
-        //         .set(key, proptype.clone());
-        // }
-        on_change.call(evt);
-    });
-
     if let Some((Some(node_info), Some(_))) = &*resource_future.read_unchecked()
         && node_info.uuid == node_info_sig.read().uuid
     {
@@ -89,7 +79,7 @@ pub fn OpticalNodeEditor(
                         node_id,
                         node_properties_sig,
                         node_info_sig,
-                        on_change_property,
+                        on_change,
                         readonly: readonly(),
                     }
                     PositioningEditor {

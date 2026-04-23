@@ -7,7 +7,7 @@ use opossum_core::{
     core_optics::OpticRef,
     error::OpossumError,
     nodes::{NodeReference, create_node_ref},
-    prelude::{OpmDocument, OpticNode, PortType, Proptype},
+    prelude::{OpmDocument, OpticNode, Proptype},
     types::api_types::{ErrorResponse, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
     utils::LockExt,
 };
