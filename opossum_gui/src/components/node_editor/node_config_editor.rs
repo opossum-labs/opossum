@@ -163,6 +163,7 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                     }
                 };
 
+                println!("{result:?}");
                 match result {
                     Ok(()) => {
                         is_modified_handler.call(true);

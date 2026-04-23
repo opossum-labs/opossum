@@ -156,11 +156,15 @@ impl HTTPClient {
                 .header("Content-Type", "application/ron")
                 .body(serialized)
                 .send()
-                .await;
-            res.map_or_else(
-                |_| Err(format!("Error on patch request on route: \"{route}\"")),
-                |_| Ok(()),
-            )
+                .await.map_err(|_| format!("Error on patch request on route: \"{route}\""))?;
+            
+           if res.status().is_success() {
+                Ok(())
+            } else {
+                let status = res.status();
+                let text = res.text().await.unwrap_or_else(|_| "<failed to read body>".into());
+                Err(format!("HTTP {} on \"{route}\": {}", status, text))
+            }
         } else {
             Err("Error serializing body using ron".to_string())
         }
