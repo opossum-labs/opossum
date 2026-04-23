@@ -5,6 +5,7 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
+    analyzers::Analyzable,
     coatings::CoatingType,
     core_optics::optic_ports::{PortConfig, ValidatedLidt},
     nodes::ConnectionInfo,
@@ -121,6 +122,24 @@ pub struct NodeInfo {
 }
 
 impl NodeInfo {
+    /// Create a `NodeInfo` struct from this [`OpticNode`]
+    pub fn from_analyzable(
+        node: &dyn Analyzable,
+        gui_position: Option<Option<(f64, f64)>>,
+    ) -> Self {
+        Self {
+            uuid: node.node_attr().uuid(),
+            name: node.name(),
+            inverted: node.inverted(),
+            node_type: node.node_type(),
+            input_ports: node.ports().names(&PortType::Input),
+            output_ports: node.ports().names(&PortType::Output),
+            gui_position: gui_position.unwrap_or_else(|| node.gui_position().map(|p| (p.x, p.y))),
+            isometry: node.isometry(),
+            alignment: node.alignment(),
+        }
+    }
+
     #[must_use]
     pub const fn uuid(&self) -> Uuid {
         self.uuid
@@ -236,7 +255,7 @@ pub struct UpdateNodeRequest {
 }
 
 /// Response payload containing the physical and custom properties of a node
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, ToSchema, Deserialize)]
 pub struct NodePropertiesResponse {
     #[schema(value_type = Object)] // Hides internal Properties structure from Utoipa
     pub properties: Properties,
@@ -429,7 +448,7 @@ pub struct NewAnalyzerInfo {
 
 /// Request payload for partial updates of an analyzer's properties
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
-pub struct UpdateAnalyzerInfo{
+pub struct UpdateAnalyzerInfo {
     // The new Analyzertype including its configuration
     #[schema(value_type = Option<Object>)]
     pub analyzer_type: Option<AnalyzerType>,

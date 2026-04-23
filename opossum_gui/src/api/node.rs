@@ -4,8 +4,8 @@ use opossum_core::{
     prelude::*,
     types::api_types::{
         AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, MoveNodesRequest, NewNode,
-        NewRefNode, NodeInfo, PortMappingsResponse, PortNamesResponse, RemovePortMapResponse,
-        UpdateConnectionRequest, UpdateNodeRequest,
+        NewRefNode, NodeInfo, NodePropertiesResponse, PortMappingsResponse, PortNamesResponse,
+        RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -134,6 +134,18 @@ pub async fn delete_node(id: Uuid) -> Result<Vec<Uuid>, String> {
         .delete::<String, Vec<Uuid>>(&format!("/api/nodes/{id}"), String::new())
         .await
 }
+/// Get the `NodeInfo` of an optical node.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the provided [`Uuid`] cannot be serialized or found
+pub async fn get_node_info(uuid: Uuid) -> Result<NodeInfo, String> {
+    HTTP_API_CLIENT()
+        .get_ron::<NodeInfo>(&format!("/api/nodes/{uuid}"))
+        .await
+}
+
 /// Get the properties of an optical node.
 ///
 /// # Errors
@@ -141,9 +153,9 @@ pub async fn delete_node(id: Uuid) -> Result<Vec<Uuid>, String> {
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized or found
 /// - the properties cannot be deserialized into the [`NodeInfo`] struct
-pub async fn get_node_properties(uuid: Uuid) -> Result<NodeInfo, String> {
+pub async fn get_node_properties(uuid: Uuid) -> Result<NodePropertiesResponse, String> {
     HTTP_API_CLIENT()
-        .get_ron::<NodeInfo>(&format!("/api/nodes/{uuid}"))
+        .get_ron::<NodePropertiesResponse>(&format!("/api/nodes/{uuid}/properties"))
         .await
 }
 
@@ -229,7 +241,7 @@ pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result
         ..Default::default()
     };
     HTTP_API_CLIENT()
-        .patch::<UpdateNodeRequest>(&format!("/api/nodes{node_id}"), update_node_request)
+        .patch::<UpdateNodeRequest>(&format!("/api/nodes/{node_id}"), update_node_request)
         .await
 }
 

@@ -35,7 +35,6 @@ pub async fn get_properties(
     let uuid = path.into_inner();
     let document = data.document.lock();
 
-    // Löst die Node auf und prüft, ob es eine Referenz ist
     let (node_attr, is_reference) = get_referenced_node_attr_from_state(false, uuid, &document)?;
 
     let response_data = NodePropertiesResponse {
@@ -93,7 +92,6 @@ pub async fn patch_property(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let (uuid, prop_name) = path.into_inner();
 
-    // 1. Deserialisiere den gesendeten RON-String sicher in ein `Proptype` Enum
     let new_value: Proptype = ron::from_str(&body).map_err(|e| {
         BackEndErrorResponse::new(
             400,
@@ -102,8 +100,6 @@ pub async fn patch_property(
         )
     })?;
 
-    // 2. Wende den neuen Wert auf das Modell an
-    // let mut document = data.document.lock();
     data.document
         .lock()
         .scenery_mut()
@@ -111,7 +107,7 @@ pub async fn patch_property(
             node_attr.set_property(&prop_name, new_value)
         })??;
 
-    Ok(HttpResponse::NoContent().finish()) // <-- HIER: NoContent()
+    Ok(HttpResponse::NoContent().finish())
 }
 
 // --- Helper Functions ---
