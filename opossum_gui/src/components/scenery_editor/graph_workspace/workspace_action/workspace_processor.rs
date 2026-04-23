@@ -1018,11 +1018,11 @@ async fn process_rename_root_scenery(
     needs_saving: bool,
 ) {
     eval_action_run(
-        api::update_node_name(root_id, name.clone()).await,
+        api::update_node_name(root_id, &name).await,
         Some(move |()| {
             ws_handler
                 .nodes
-                .set_node_name(name, root_id, root_id, needs_saving);
+                .set_node_name(name.to_string(), root_id, root_id, needs_saving);
         }),
     );
 }

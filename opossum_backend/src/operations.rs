@@ -210,8 +210,6 @@ async fn post_paste_nodes(
     )?;
 
     for (group_id, node_refs, is_root_group) in grouped_node_refs.iter().rev() {
-        // if let Some(mapped_group_id) = node_id_link.get(group_id){
-
         let mapped_group_id_opt = if *is_root_group {
             Some(*group_id)
         } else {

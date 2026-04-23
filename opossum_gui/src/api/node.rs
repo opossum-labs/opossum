@@ -221,13 +221,19 @@ pub async fn update_node_position(node_id: Uuid, gui_position: Point2D<f64>) -> 
 /// # Errors
 ///
 /// This function will return an error if the `node_id` was not found.
-pub async fn update_node_name(node_id: Uuid, node_name: String) -> Result<(), String> {
+pub async fn update_node_name(node_id: Uuid, node_name: &str) -> Result<(), String> {
     let update_request = UpdateNodeRequest {
-        name: Some(node_name.clone()),
+        name: Some(node_name.to_string()),
         ..Default::default()
     };
     HTTP_API_CLIENT()
         .patch::<UpdateNodeRequest>(&format!("/api/nodes/{node_id}"), update_request)
+        .await
+}
+
+pub async fn get_node_references(node_id: Uuid) -> Result<HashMap<Uuid, Vec<Uuid>>, String> {
+    HTTP_API_CLIENT()
+        .get::<HashMap<Uuid, Vec<Uuid>>>(&format!("/api/nodes/{node_id}/references"))
         .await
 }
 

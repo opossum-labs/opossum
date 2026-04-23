@@ -17,7 +17,7 @@ pub struct NodeChangeEvent {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeChangeAction {
-    Name { name: String, graph_id: Uuid },
+    Name(String),
     // Lidt(Fluence),
     Alignment(Isometry),
     Inverted { inverted: bool, graph_id: Uuid },
@@ -123,16 +123,32 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                 let uuid = event.node_id;
 
                 let result: Result<(), String> = match event.action {
-                    NodeChangeAction::Name { name, graph_id } => {
-                        api::update_node_name(uuid, name.clone()).await.map(|()| {
-                            workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
-                                name,
-                                graph_id,
-                                node_id: uuid,
-                                needs_saving: true,
-                            });
-                        })
-                    }
+                    NodeChangeAction::Name(name) => match api::get_node_references(uuid).await {
+                        Ok(node_refs_grouped) => {
+                            let ref_name = format!("ref ({name})");
+                            for (group_id, ref_ids) in node_refs_grouped.iter() {
+                                for ref_id in ref_ids {
+                                    let new_name = if uuid == *ref_id { &name } else { &ref_name };
+                                    if let Err(e) =
+                                        api::update_node_name(*ref_id, new_name).await.map(|()| {
+                                            workspace_processor.send(
+                                                GraphsWorkspaceAction::SetNodeName {
+                                                    name: new_name.clone(),
+                                                    graph_id: *group_id,
+                                                    node_id: *ref_id,
+                                                    needs_saving: true,
+                                                },
+                                            );
+                                        })
+                                    {
+                                        OPOSSUM_UI_LOGS.write().add_log(&e);
+                                    }
+                                }
+                            }
+                            Ok(())
+                        }
+                        Err(e) => Err(e),
+                    },
                     NodeChangeAction::Alignment(iso) => api::update_node_alignment(uuid, iso).await,
                     NodeChangeAction::Property(key, prop) => {
                         api::update_node_property(uuid, (key.clone(), prop.clone())).await

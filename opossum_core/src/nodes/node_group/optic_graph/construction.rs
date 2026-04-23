@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
@@ -198,17 +198,35 @@ impl OpticGraph {
     /// - Accessing a node by index fails
     /// - Locking a node’s `OpticRef` fails
     /// - Any recursive group traversal fails
-    pub fn find_all_nodes_referring_to_uuid(&self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
-        let mut nodes_indices = Vec::<Uuid>::new();
+    pub fn find_all_nodes_referring_to_uuid(
+        &self,
+        node_id: Uuid,
+        group_id: Uuid,
+    ) -> OpmResult<HashMap<Uuid, Vec<Uuid>>> {
+        let mut nodes_indices = HashMap::<Uuid, Vec<Uuid>>::new();
         for node_idx in self.g.node_indices() {
             let node_ref = self.node_by_idx(node_idx)?;
             if node_ref.uuid() == node_id {
-                nodes_indices.push(node_id);
+                if let Some(node_refs) = nodes_indices.get_mut(&group_id) {
+                    node_refs.push(node_id);
+                } else {
+                    nodes_indices.insert(group_id, vec![node_id]);
+                }
             }
             let node = node_ref.optical_ref.lock_opm()?;
             let node_attrs = node.node_attr().clone();
             if let Ok(group) = node.as_group() {
-                nodes_indices.extend(group.graph().find_all_nodes_referring_to_uuid(node_id)?);
+                let ref_nodes_map = group
+                    .graph()
+                    .find_all_nodes_referring_to_uuid(node_id, group.node_attr.uuid())?;
+                for (group_id, ref_nodes) in ref_nodes_map.iter() {
+                    if let Some(node_refs) = nodes_indices.get_mut(group_id) {
+                        node_refs.extend(ref_nodes);
+                    } else {
+                        nodes_indices.insert(*group_id, ref_nodes.clone());
+                    }
+                }
+                // nodes_indices.extend(group.graph().find_all_nodes_referring_to_uuid(node_id, group.node_attr.uuid())?);
             }
             drop(node);
             if node_attrs.node_type() == "reference" {
@@ -216,7 +234,12 @@ impl OpticGraph {
                 if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id")
                     && *ref_uuid == node_id
                 {
-                    nodes_indices.push(node_attrs.uuid());
+                    if let Some(node_refs) = nodes_indices.get_mut(&group_id) {
+                        node_refs.push(node_attrs.uuid());
+                    } else {
+                        nodes_indices.insert(group_id, vec![node_attrs.uuid()]);
+                    }
+                    // nodes_indices.push(node_attrs.uuid());
                 }
             }
         }
