@@ -35,10 +35,10 @@ pub fn GeneralEditor(
                     input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
                     label_class: "form-label text-secondary".to_string(),
                     readonly,
-                    on_save: move |new_val: String| {
+                    on_save: move |new_name: String| {
                         on_change.call(NodeChangeEvent {
                             node_id,
-                            action: NodeChangeAction::Name{name: new_val, graph_id: active_node.read().graph_id},
+                            action: NodeChangeAction::Name(new_name),
                         });
                     },
                 }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use actix_web::{
     HttpRequest, HttpResponse, delete, get, patch, post,
     web::{self, Json},
@@ -213,6 +215,29 @@ async fn delete_node(
     let deleted_nodes = scenery.delete_node(uuid)?;
     drop(document);
     Ok(web::Json(deleted_nodes))
+}
+
+/// Get nodes that reference a certain node uuid
+///
+/// A list of UUIDs of the nodes that reference the passed uuid is returned.
+#[utoipa::path(tag = "node",
+responses(
+    (status = OK, body= HashMap<Uuid, Vec<Uuid>>, description = "UUIDs of the reference nodes, sorted by the group in which they are contained", content_type="application/json"),
+    (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+))]
+#[get("/{uuid}/references")]
+async fn get_reference_nodes(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<HashMap<Uuid, Vec<Uuid>>>, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let document = data.document.lock();
+    let scenery = document.scenery();
+    let references = scenery
+        .graph()
+        .find_all_nodes_referring_to_uuid(uuid, scenery.node_attr().uuid())?;
+    drop(document);
+    Ok(web::Json(references))
 }
 /// Add a new reference node to a group node
 ///
