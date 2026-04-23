@@ -221,9 +221,9 @@ pub async fn update_node_position(node_id: Uuid, gui_position: Point2D<f64>) -> 
 /// # Errors
 ///
 /// This function will return an error if the `node_id` was not found.
-pub async fn update_node_name(node_id: Uuid, node_name: String) -> Result<(), String> {
+pub async fn update_node_name(node_id: Uuid, node_name: &str) -> Result<(), String> {
     let update_request = UpdateNodeRequest {
-        name: Some(node_name.clone()),
+        name: Some(node_name.to_string()),
         ..Default::default()
     };
     HTTP_API_CLIENT()

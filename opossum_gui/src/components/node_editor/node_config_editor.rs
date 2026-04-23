@@ -129,11 +129,11 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                             for (group_id, ref_ids) in node_refs_grouped.iter() {
                                 for ref_id in ref_ids {
                                     let new_name = if uuid == *ref_id {
-                                        name.clone()
+                                        &name
                                     } else {
-                                        ref_name.clone()
+                                        &ref_name
                                     };
-                                    if let Err(e) = api::update_node_name(*ref_id, new_name.clone())
+                                    if let Err(e) = api::update_node_name(*ref_id, new_name)
                                         .await
                                         .map(|()| {
                                             workspace_processor.send(
