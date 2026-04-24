@@ -11,8 +11,8 @@ use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, PortType},
     types::api_types::{
-        ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, PortMappingsResponse,
-        UpdateConnectionRequest,
+        ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, NodePortsResponse,
+        PortMappingsResponse, UpdateConnectionRequest,
     },
 };
 use serde_json::Value;
@@ -157,11 +157,14 @@ pub fn use_workspace_processor(
                         let nodes_cut = *workspace.nodes_cut().read();
                         process_paste_nodes(pos, workspace_handlers, graph_id, nodes_cut).await;
                     }
-                    GraphsWorkspaceAction::SyncNodePosition { node_id, pos, is_optical } => {
-                        let res = if is_optical{
+                    GraphsWorkspaceAction::SyncNodePosition {
+                        node_id,
+                        pos,
+                        is_optical,
+                    } => {
+                        let res = if is_optical {
                             api::update_node_position(node_id, pos).await
-                        }
-                        else{
+                        } else {
                             api::update_analyzer_position_ron(node_id, pos).await
                         };
                         eval_action_run(
@@ -508,7 +511,17 @@ async fn process_paste_nodes(
                 );
                 eval_action_run(
                     api::get_ports_of_group(group_id).await,
-                    Some(move |(input_ports, output_ports)| {
+                    Some(move |ports_config: NodePortsResponse| {
+                        let input_ports = ports_config
+                            .inputs
+                            .into_iter()
+                            .map(|(name, _)| name)
+                            .collect();
+                        let output_ports = ports_config
+                            .outputs
+                            .into_iter()
+                            .map(|(name, _)| name)
+                            .collect();
                         ws_handler
                             .nodes
                             .update_group_ports(input_ports, output_ports, group_id);

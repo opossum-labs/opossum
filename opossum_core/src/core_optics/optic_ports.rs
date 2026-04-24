@@ -52,7 +52,7 @@ pub type ValidatedLidt = validated_type!(Fluence, AllPositive && AllNotNan);
 ///
 /// This struct is purely for configuration (State) and is serialized.
 /// It does NOT contain geometric runtime data like `GeoSurface` or `HitMap`.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
 pub struct PortConfig {
     /// The aperture of the port, defining the spatial transmission.
     #[serde(default)] //, skip_serializing_if = "Aperture::is_none")]
@@ -332,7 +332,7 @@ impl Display for OpticPorts {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::coatings::CoatingType;
+    use crate::coatings::{CoatingConstantR, CoatingType};
     #[test]
     fn new() {
         let ports = OpticPorts::new();
@@ -466,13 +466,14 @@ mod test {
             ports.coating(&PortType::Input, "test1").unwrap(),
             CoatingType::IdealAR
         ));
-        let coating = CoatingType::ConstantR { reflectivity: 0.5 };
+        let coating = CoatingConstantR::new(0.5).unwrap();
         ports
-            .set_coating(&PortType::Input, "test1", &coating)
+            .set_coating(&PortType::Input, "test1", &coating.into())
             .unwrap();
-        assert!(matches!(
-            ports.coating(&PortType::Input, "test1").unwrap(),
-            CoatingType::ConstantR { reflectivity: 0.5 }
-        ));
+        if let CoatingType::ConstantR(conf) = ports.coating(&PortType::Input, "test1").unwrap() {
+            assert_eq!(conf.reflectivity(), 0.5);
+        } else {
+            panic!("Coating type is not ConstantR");
+        }
     }
 }

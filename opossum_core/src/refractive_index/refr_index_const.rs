@@ -26,12 +26,12 @@ pub fn refr_index_vaccuum() -> RefractiveIndexType {
     RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap())
 }
 
-type ValidatedRefIndCOnst = validated_type!(f64, AllFinite && AllInRange::<f64>);
+type ValidatedRefIndConst = validated_type!(f64, AllFinite && AllInRange::<f64>);
 
 /// Constant refractive index model
 #[derive(Clone, Serialize, ToSchema, Debug, PartialEq, Copy, EnsureValidated)]
 pub struct RefrIndexConst {
-    refractive_index: ValidatedRefIndCOnst,
+    refractive_index: ValidatedRefIndConst,
 }
 
 impl<'de> serde::Deserialize<'de> for RefrIndexConst {
@@ -47,7 +47,7 @@ impl<'de> serde::Deserialize<'de> for RefrIndexConst {
     }
 }
 
-fn default_ref_ind_const() -> ValidatedRefIndCOnst {
+fn default_ref_ind_const() -> ValidatedRefIndConst {
     validated!(
         1.5,
         AllFinite && (AllInRange::new(1.0, f64::INFINITY, true).unwrap())

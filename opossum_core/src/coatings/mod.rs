@@ -1,32 +1,29 @@
 #![warn(missing_docs)]
 //! Module for handling optical surface coatings
 
-use crate::{error::OpmResult, light::Ray};
+use crate::{error::OpmResult, light::Ray, utils::default_from_name::DefaultFromName};
 use nalgebra::Vector3;
-
+use std::fmt::Display;
 mod constant_r;
 mod fresnel;
 mod ideal_ar;
 
-pub use constant_r::ConstantR;
+pub use constant_r::CoatingConstantR;
 pub use fresnel::Fresnel;
 pub use ideal_ar::IdealAR;
 use serde::{Deserialize, Serialize};
+use strum::{EnumIter, IntoEnumIterator};
 use utoipa::ToSchema;
 
-#[derive(Default, Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, ToSchema, PartialEq, EnumIter)]
 /// Enum for different types of optical coatings
 pub enum CoatingType {
     /// Perfect anti-reflective coating. Reflectivity is always 0.0
     #[default]
     IdealAR,
     /// Ideal coating with a constant given reflectivity
-    ConstantR {
-        /// Reflectivity of the coating. Must be in the range [0.0, 1.0] where 0.0 means
-        /// no reflection and 1.0 means full reflection.
-        reflectivity: f64,
-    },
-    /// Fesnel reflection (e.g. uncaoted surface)
+    ConstantR(CoatingConstantR),
+    /// Fesnel reflection (e.g. uncoated surface)
     Fresnel,
 }
 impl CoatingType {
@@ -47,15 +44,39 @@ impl CoatingType {
                 let c = IdealAR;
                 Ok(c.calc_reflectivity(incoming_ray, surface_normal, n2))
             }
-            Self::ConstantR { reflectivity } => {
-                let c = ConstantR::new(*reflectivity)?;
-                Ok(c.calc_reflectivity(incoming_ray, surface_normal, n2))
+            Self::ConstantR(refl_config) => {
+                Ok(refl_config.calc_reflectivity(incoming_ray, surface_normal, n2))
             }
             Self::Fresnel => {
                 let c = Fresnel;
                 Ok(c.calc_reflectivity(incoming_ray, surface_normal, n2))
             }
         }
+    }
+}
+impl Display for CoatingType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ConstantR { .. } => write!(f, "Constant Reflectivity"),
+            Self::IdealAR => write!(f, "Ideal AR"),
+            Self::Fresnel => write!(f, "uncoated (Fresnel)"),
+        }
+    }
+}
+impl DefaultFromName for CoatingType {
+    fn default_from_name(name: &str) -> Option<Self> {
+        for ct in Self::iter() {
+            if name == format!("{ct}") {
+                match ct {
+                    Self::ConstantR { .. } => {
+                        return Some(Self::ConstantR(CoatingConstantR::default()));
+                    }
+                    Self::IdealAR => return Some(Self::IdealAR),
+                    Self::Fresnel => return Some(Self::Fresnel),
+                }
+            }
+        }
+        None
     }
 }
 /// Trait for optical coatings

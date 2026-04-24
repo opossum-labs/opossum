@@ -4,8 +4,8 @@ use opossum_core::{
     prelude::*,
     types::api_types::{
         AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, MoveNodesRequest, NewNode,
-        NewRefNode, NodeInfo, PortMappingsResponse, PortNamesResponse, RemovePortMapResponse,
-        UpdateConnectionRequest, UpdateNodeRequest,
+        NewRefNode, NodeInfo, NodePortsResponse, PortMappingsResponse, PortNamesResponse,
+        RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest, UpdatePortRequest,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -43,9 +43,27 @@ pub async fn get_port_maps_of_group(group_id: Uuid) -> Result<PortMappingsRespon
         .await
 }
 
-pub async fn get_ports_of_group(group_id: Uuid) -> Result<(Vec<String>, Vec<String>), String> {
+pub async fn get_ports_of_group(group_id: Uuid) -> Result<NodePortsResponse, String> {
     HTTP_API_CLIENT()
-        .get::<(Vec<String>, Vec<String>)>(&format!("/api/nodes/{group_id}/ports"))
+        .get::<NodePortsResponse>(&format!("/api/nodes/{group_id}/ports"))
+        .await
+}
+
+pub async fn patch_node_port_config(
+    node_id: Uuid,
+    port_name: String,
+    port_type: PortType,
+    req: UpdatePortRequest,
+) -> Result<(), String> {
+    let port_type_str = match port_type {
+        PortType::Input => "Input",
+        PortType::Output => "Output",
+    };
+    HTTP_API_CLIENT()
+        .patch::<UpdatePortRequest>(
+            &format!("/api/nodes/{node_id}/ports/{port_type_str}/{port_name}"),
+            req,
+        )
         .await
 }
 /// Send a request to add a node to a node group.

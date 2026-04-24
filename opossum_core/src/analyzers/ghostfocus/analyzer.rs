@@ -224,7 +224,7 @@ mod test_ghost_focus_analyzer {
     use super::*;
     use crate::{
         analyzers::Analyzer,
-        coatings::CoatingType,
+        coatings::CoatingConstantR,
         core_optics::{
             PortType,
             optic_node::{Alignable, OpticNode},
@@ -251,13 +251,13 @@ mod test_ghost_focus_analyzer {
         lens.set_coating(
             &PortType::Input,
             "input_1",
-            &CoatingType::ConstantR { reflectivity: 0.2 },
+            &CoatingConstantR::new(0.2).unwrap().into(),
         )
         .unwrap();
         lens.set_coating(
             &PortType::Output,
             "output_1",
-            &CoatingType::ConstantR { reflectivity: 0.2 },
+            &CoatingConstantR::new(0.2).unwrap().into(),
         )
         .unwrap();
         let i_l = scenery.add_node(lens).unwrap();
@@ -309,7 +309,7 @@ mod test_ghost_focus_analyzer {
 mod test_ghost_analysis_nested_groups_inversion {
     use crate::{
         analyzers::ghostfocus::config::GhostFocusConfig,
-        coatings::CoatingType,
+        coatings::CoatingConstantR,
         distributions::{position::Hexapolar, spectral::LaserLines},
         joule, millimeter, nanometer,
         nodes::{Lens, NodeGroup, SourcePort},
@@ -340,14 +340,14 @@ mod test_ghost_analysis_nested_groups_inversion {
             .set_coating(
                 &PortType::Input,
                 "input_1",
-                &CoatingType::ConstantR { reflectivity: 0.01 },
+                &CoatingConstantR::new(0.01).unwrap().into(),
             )
             .unwrap();
         lens_01
             .set_coating(
                 &PortType::Output,
                 "output_1",
-                &CoatingType::ConstantR { reflectivity: 0.01 },
+                &CoatingConstantR::new(0.01).unwrap().into(),
             )
             .unwrap();
 
@@ -363,14 +363,14 @@ mod test_ghost_analysis_nested_groups_inversion {
             .set_coating(
                 &PortType::Input,
                 "input_1",
-                &CoatingType::ConstantR { reflectivity: 0.01 },
+                &CoatingConstantR::new(0.01).unwrap().into(),
             )
             .unwrap();
         lens_02
             .set_coating(
                 &PortType::Output,
                 "output_1",
-                &CoatingType::ConstantR { reflectivity: 0.01 },
+                &CoatingConstantR::new(0.01).unwrap().into(),
             )
             .unwrap();
 
@@ -392,14 +392,14 @@ mod test_ghost_analysis_nested_groups_inversion {
             .set_coating(
                 &PortType::Input,
                 "input_1",
-                &CoatingType::ConstantR { reflectivity: 0.01 },
+                &CoatingConstantR::new(0.01).unwrap().into(),
             )
             .unwrap();
         lens_1
             .set_coating(
                 &PortType::Output,
                 "output_1",
-                &CoatingType::ConstantR { reflectivity: 0.01 },
+                &CoatingConstantR::new(0.01).unwrap().into(),
             )
             .unwrap();
 
@@ -419,14 +419,14 @@ mod test_ghost_analysis_nested_groups_inversion {
             .set_coating(
                 &PortType::Input,
                 "input_1",
-                &CoatingType::ConstantR { reflectivity: 0.01 },
+                &CoatingConstantR::new(0.01).unwrap().into(),
             )
             .unwrap();
         lens_2
             .set_coating(
                 &PortType::Output,
                 "output_1",
-                &CoatingType::ConstantR { reflectivity: 0.01 },
+                &CoatingConstantR::new(0.01).unwrap().into(),
             )
             .unwrap();
         let mut group_2 = NodeGroup::new("Group 2");
@@ -445,14 +445,14 @@ mod test_ghost_analysis_nested_groups_inversion {
             .set_coating(
                 &PortType::Input,
                 "input_1",
-                &CoatingType::ConstantR { reflectivity: 0.01 },
+                &CoatingConstantR::new(0.01).unwrap().into(),
             )
             .unwrap();
         lens_3
             .set_coating(
                 &PortType::Output,
                 "output_1",
-                &CoatingType::ConstantR { reflectivity: 0.01 },
+                &CoatingConstantR::new(0.01).unwrap().into(),
             )
             .unwrap();
         let mut group_3 = NodeGroup::new("Group 3");

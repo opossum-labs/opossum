@@ -3,7 +3,7 @@ use crate::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
-    coatings::CoatingType,
+    coatings::CoatingConstantR,
     core_optics::{NodeAttr, OpticNode, PortType},
     degree,
     error::{OpmResult, OpossumError},
@@ -105,7 +105,7 @@ impl Default for ParabolicMirror {
             .set_coating(
                 &PortType::Input,
                 "input_1",
-                &CoatingType::ConstantR { reflectivity: 1.0 },
+                &CoatingConstantR::new(1.0).unwrap().into(),
             )
             .unwrap();
 
@@ -114,7 +114,7 @@ impl Default for ParabolicMirror {
             .set_coating(
                 &PortType::Output,
                 "output_1",
-                &CoatingType::ConstantR { reflectivity: 1.0 },
+                &CoatingConstantR::new(1.0).unwrap().into(),
             )
             .unwrap();
         parabola

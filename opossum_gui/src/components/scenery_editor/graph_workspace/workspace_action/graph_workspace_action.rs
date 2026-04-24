@@ -306,7 +306,7 @@ pub enum GraphsWorkspaceAction {
         pos: Point2D<f64>,
         /// The ID of the node to update.
         node_id: Uuid,
-        is_optical: bool
+        is_optical: bool,
     },
 
     /// Deletes a node from the graph.

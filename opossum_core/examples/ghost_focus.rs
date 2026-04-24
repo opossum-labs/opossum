@@ -1,3 +1,4 @@
+use opossum_core::coatings::CoatingConstantR;
 use opossum_core::prelude::*;
 use opossum_core::{
     coatings::CoatingType, core_optics::PortType, distributions::energy::General2DGaussian,
@@ -12,12 +13,12 @@ fn main() -> OpmResult<()> {
     lens.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.05 },
+        &CoatingConstantR::new(0.05)?.into(),
     )?;
     lens.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingType::ConstantR { reflectivity: 0.05 },
+        &CoatingConstantR::new(0.05)?.into(),
     )?;
     let i_l = scenery.add_node(lens)?;
 
@@ -25,12 +26,12 @@ fn main() -> OpmResult<()> {
     lens2.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.2 },
+        &CoatingConstantR::new(0.2)?.into(),
     )?;
     lens2.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingType::ConstantR { reflectivity: 0.2 },
+        &CoatingConstantR::new(0.2)?.into(),
     )?;
     lens2.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
     lens2.set_coating(&PortType::Output, "output_1", &CoatingType::Fresnel)?;

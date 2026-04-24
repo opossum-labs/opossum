@@ -1,5 +1,5 @@
 use core::f64;
-use opossum_core::coatings::CoatingType;
+use opossum_core::coatings::CoatingConstantR;
 use opossum_core::prelude::*;
 use std::path::Path;
 
@@ -21,12 +21,12 @@ fn main() -> OpmResult<()> {
     lens_01.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.01 },
+        &CoatingConstantR::new(0.01)?.into(),
     )?;
     lens_01.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingType::ConstantR { reflectivity: 0.01 },
+        &CoatingConstantR::new(0.01)?.into(),
     )?;
 
     let mut lens_02 = Lens::new(
@@ -39,12 +39,12 @@ fn main() -> OpmResult<()> {
     lens_02.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.01 },
+        &CoatingConstantR::new(0.01)?.into(),
     )?;
     lens_02.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingType::ConstantR { reflectivity: 0.01 },
+        &CoatingConstantR::new(0.01)?.into(),
     )?;
 
     let src = scenery.add_node(SourcePort::new("Collimated Source"))?;
@@ -61,12 +61,12 @@ fn main() -> OpmResult<()> {
     lens_1.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.01 },
+        &CoatingConstantR::new(0.01)?.into(),
     )?;
     lens_1.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingType::ConstantR { reflectivity: 0.01 },
+        &CoatingConstantR::new(0.01)?.into(),
     )?;
 
     let mut group_1 = NodeGroup::new("Group 1");
@@ -83,12 +83,12 @@ fn main() -> OpmResult<()> {
     lens_2.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.01 },
+        &CoatingConstantR::new(0.01)?.into(),
     )?;
     lens_2.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingType::ConstantR { reflectivity: 0.01 },
+        &CoatingConstantR::new(0.01)?.into(),
     )?;
     let mut group_2 = NodeGroup::new("Group 2");
     group_2.set_expand_view(true)?;
@@ -104,12 +104,12 @@ fn main() -> OpmResult<()> {
     lens_3.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.01 },
+        &CoatingConstantR::new(0.01)?.into(),
     )?;
     lens_3.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingType::ConstantR { reflectivity: 0.01 },
+        &CoatingConstantR::new(0.01)?.into(),
     )?;
     let mut group_3 = NodeGroup::new("Group 3");
     group_3.set_expand_view(true)?;

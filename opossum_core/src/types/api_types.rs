@@ -349,7 +349,7 @@ pub struct UpdateConnectionRequest {
 // ============================================================================
 
 /// Response payload containing port configurations (Aperture, Coating, LIDT)
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct NodePortsResponse {
     /// The input ports of the node (accounts for node inversion)
     pub inputs: BTreeMap<String, PortConfig>,
@@ -358,7 +358,7 @@ pub struct NodePortsResponse {
 }
 
 /// Request payload for partial updates of a specific port
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
 pub struct UpdatePortRequest {
     /// The new aperture of the port
     pub aperture: Option<Aperture>,
@@ -429,7 +429,7 @@ pub struct NewAnalyzerInfo {
 
 /// Request payload for partial updates of an analyzer's properties
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
-pub struct UpdateAnalyzerInfo{
+pub struct UpdateAnalyzerInfo {
     // The new Analyzertype including its configuration
     #[schema(value_type = Option<Object>)]
     pub analyzer_type: Option<AnalyzerType>,

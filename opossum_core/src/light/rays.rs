@@ -1816,19 +1816,16 @@ impl<'a> IntoIterator for &'a Rays {
 
 #[cfg(test)]
 mod test {
-    use core::f64;
-    use std::f64::consts::PI;
-
     use super::*;
-    use crate::distributions::energy::General2DGaussian;
-    use crate::distributions::position::FibonacciEllipse;
-    use crate::distributions::position::FibonacciRectangle;
-    use crate::distributions::position::Random;
     use crate::{
         apertures::{ApertureType, CircleShape},
         centimeter,
-        coatings::CoatingType,
+        coatings::CoatingConstantR,
         core_optics::optic_surface::OpticSurface,
+        distributions::{
+            energy::General2DGaussian,
+            position::{FibonacciEllipse, FibonacciRectangle, Random},
+        },
         joule, meter, millimeter, nanometer,
         nodes::SplittingConfig,
         radian,
@@ -1836,8 +1833,10 @@ mod test {
         utils::test_helper::test_helper::check_logs,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use core::f64;
     use itertools::izip;
     use nalgebra::Vector3;
+    use std::f64::consts::PI;
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
 
@@ -2479,7 +2478,7 @@ mod test {
                 .unwrap(),
         );
         let mut s = OpticSurface::default();
-        s.set_coating(CoatingType::ConstantR { reflectivity: 0.2 });
+        s.set_coating(CoatingConstantR::new(0.2).unwrap().into());
         let reflected = rays
             .refract_on_surface(
                 &mut s,

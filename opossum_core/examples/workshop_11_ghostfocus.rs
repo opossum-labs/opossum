@@ -1,3 +1,4 @@
+use opossum_core::coatings::CoatingConstantR;
 use opossum_core::prelude::*;
 use opossum_core::{
     J_per_cm2, coatings::CoatingType, distributions::energy::General2DGaussian,
@@ -19,12 +20,12 @@ fn main() -> OpmResult<()> {
     lens.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.05 },
+        &CoatingConstantR::new(0.05)?.into(),
     )?;
     lens.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingType::ConstantR { reflectivity: 0.05 },
+        &CoatingConstantR::new(0.05)?.into(),
     )?;
     lens.set_lidt(&PortType::Input, "input_1", J_per_cm2!(2.0))?;
     lens.set_lidt(&PortType::Output, "output_1", J_per_cm2!(2.0))?;
@@ -37,12 +38,12 @@ fn main() -> OpmResult<()> {
     lens2.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.2 },
+        &CoatingConstantR::new(0.2)?.into(),
     )?;
     lens2.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingType::ConstantR { reflectivity: 0.2 },
+        &CoatingConstantR::new(0.2)?.into(),
     )?;
     lens2.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
     lens2.set_coating(&PortType::Output, "output_1", &CoatingType::Fresnel)?;

@@ -826,7 +826,7 @@ mod test {
     use super::*;
     use crate::{
         J_per_cm2,
-        coatings::CoatingType,
+        coatings::CoatingConstantR,
         degree, joule,
         light::Spectrum,
         millimeter, nanometer,
@@ -1162,7 +1162,7 @@ mod test {
         .unwrap();
         let mut s = OpticSurface::default();
         s.set_isometry(isometry);
-        s.set_coating(CoatingType::ConstantR { reflectivity });
+        s.set_coating(CoatingConstantR::new(reflectivity).unwrap().into());
         assert!(
             ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
                 .is_err()
