@@ -14,23 +14,33 @@ pub struct Fresnel;
 impl Coating for Fresnel {
     /// Formulas taken from [german wikipedia](https://de.wikipedia.org/wiki/Fresnelsche_Formeln).
     fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: Vector3<f64>, n2: f64) -> f64 {
-        // Note: invert surface normal, since it is the "output_1" direction.
-        let alpha = incoming_ray.direction().angle(&(-1.0 * surface_normal));
         let n1 = incoming_ray.refractive_index();
-        let beta = f64::acos(
-            f64::sqrt(
-                n1.powi(2)
-                    .mul_add(-f64::powi(f64::sin(alpha), 2), n2.powi(2)),
-            ) / n2,
-        );
-        // s-polarization
-        let r_s = n1.mul_add(f64::cos(alpha), -(n2 * f64::cos(beta)))
-            / n1.mul_add(f64::cos(alpha), n2 * f64::cos(beta));
-        // p-polarization
-        let r_p = n2.mul_add(f64::cos(alpha), -(n1 * f64::cos(beta)))
-            / n2.mul_add(f64::cos(alpha), n1 * f64::cos(beta));
-        // so far, we assume unpolarized (50/50) rays -> take average
-        r_p.mul_add(r_p, r_s.powi(2)) / 2.
+        
+        // Fix: Explicitly normalize the direction to ensure the dot product 
+        // represents the actual cosine of the angle.
+        let direction = incoming_ray.direction().normalize();
+        
+        // The cosine of the angle of incidence. 
+        // We use .abs() to handle rays hitting from "behind" if necessary, 
+        // and clamp to avoid precision issues with sqrt later.
+        let cos_alpha = direction.dot(&(-1.0 * surface_normal)).abs().clamp(0.0, 1.0);
+        
+        let n1_over_n2 = n1 / n2;
+        let sin2_alpha = (1.0 - cos_alpha * cos_alpha).max(0.0);
+        let sin2_beta = n1_over_n2 * n1_over_n2 * sin2_alpha;
+
+        // Total Internal Reflection (TIR)
+        if sin2_beta >= 1.0 {
+            return 1.0;
+        }
+
+        let cos_beta = (1.0 - sin2_beta).sqrt();
+
+        // Fresnel equations for unpolarized light
+        let rs = (n1 * cos_alpha - n2 * cos_beta) / (n1 * cos_alpha + n2 * cos_beta);
+        let rp = (n2 * cos_alpha - n1 * cos_beta) / (n2 * cos_alpha + n1 * cos_beta);
+
+        (rs * rs + rp * rp) / 2.0
     }
 }
 impl From<Fresnel> for CoatingType {

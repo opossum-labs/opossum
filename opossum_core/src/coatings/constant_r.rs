@@ -22,7 +22,8 @@ impl Default for ValidatedReflectivity {
 ///
 /// The simple model represents an ideal coating with a given constant reflectivity independent from
 /// the incoming wavelength, angle of incidence, or refractive index of the following medium.
-#[derive(Default, Serialize, Debug, Clone, ToSchema, PartialEq)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, ToSchema, PartialEq)]
+#[serde(try_from = "NonValidatedCoatingConstantR")]
 pub struct CoatingConstantR {
     reflectivity: ValidatedReflectivity,
 }
@@ -47,16 +48,11 @@ impl CoatingConstantR {
     }
 }
 
-impl<'de> serde::Deserialize<'de> for CoatingConstantR {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        //deserialize non validated struct
-        let helper = NonValidatedCoatingConstantR::deserialize(deserializer)?;
+impl TryFrom<NonValidatedCoatingConstantR> for CoatingConstantR {
+    type Error = String;
 
-        //get correct validators from default
-        Self::new(helper.reflectivity).map_err(serde::de::Error::custom)
+    fn try_from(helper: NonValidatedCoatingConstantR) -> Result<Self, Self::Error> {
+        Self::new(helper.reflectivity).map_err(|e| e.to_string())
     }
 }
 

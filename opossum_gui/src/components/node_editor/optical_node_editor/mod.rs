@@ -22,7 +22,7 @@ use crate::components::{
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_core::{core_optics::optic_ports::PortConfig, types::api_types::NodeInfo};
+use opossum_core::types::api_types::NodeInfo;
 
 #[component]
 pub fn OpticalNodeEditor(
