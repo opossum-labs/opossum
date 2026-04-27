@@ -10,7 +10,7 @@ use crate::components::node_editor::{
         select_options_from_enum_iterator,
     },
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::{aperture_editor::rectangular_aperture::RectApertureParam, properties_editor::
+    optical_node_editor::{aperture_editor::{circular_aperture::CircularApertureParam, rectangular_aperture::RectApertureParam}, properties_editor::
         on_save_proptype_handler}
     ,
 };
@@ -80,7 +80,7 @@ fn get_aperture_input_data(
         //     AirParam::to_input_data_vec(ref_ind, on_save, readonly)
         // }
         ApertureShape::Open => vec![],
-        ApertureShape::BinaryCircle(circle_shape) => vec![],
+        ApertureShape::BinaryCircle(circle_shape) => CircularApertureParam::to_input_data_vec(circle_shape, on_save, readonly),
         ApertureShape::BinaryRectangle(rectangle_shape) => RectApertureParam::to_input_data_vec(rectangle_shape, on_save, readonly),
         ApertureShape::BinaryPolygon(polygon_config) => vec![],
         ApertureShape::Gaussian(gaussian_shape) => vec![],

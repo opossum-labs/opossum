@@ -1,5 +1,5 @@
 use super::Shape;
-use crate::{error::OpmResult, millimeter, generic_validators::ValidateTrait, types::validated_type_definitions::{ValidatedCenter, ValidatedRadius}};
+use crate::{error::OpmResult, generic_validators::ValidateTrait, millimeter, prelude::ApertureShape, types::validated_type_definitions::{ValidatedCenter, ValidatedRadius}};
 use nalgebra::{Isometry2, Point2};
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,12 @@ pub struct CircleShape {
     radius: ValidatedRadius,
     #[schema(value_type = Object)]
     center: ValidatedCenter
+}
+
+impl From<CircleShape> for ApertureShape {
+    fn from(value: CircleShape) -> Self {
+        Self::BinaryCircle(value)
+    }
 }
 
 impl CircleShape {
@@ -36,6 +42,21 @@ impl CircleShape {
     #[must_use]
     pub fn center(&self) -> Point2<Length> {
         *self.center.get()
+    }
+
+    pub fn set_radius(&mut self, radius: Length) -> OpmResult<()> {
+        self.radius.set(radius)?;
+        Ok(())
+    }
+
+    pub fn set_center_x(&mut self, center_x: Length) -> OpmResult<()> {
+        self.center.set(Point2::new(center_x, self.center().y))?;
+        Ok(())
+    }
+
+    pub fn set_center_y(&mut self, center_y: Length) -> OpmResult<()> {
+        self.center.set(Point2::new(self.center().x, center_y))?;
+        Ok(())
     }
 }
 impl Shape for CircleShape {
