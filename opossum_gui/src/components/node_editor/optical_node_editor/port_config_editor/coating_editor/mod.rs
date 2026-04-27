@@ -25,8 +25,8 @@ pub fn CoatingEditor(
     let mut element_list: Vec<Result<VNode, RenderError>> = vec![rsx! {
         CoatingTypeSelector {coating_type, on_change: on_coating_changed }
     }];
-    match &*coating_type.read() {
-        CoatingType::ConstantR(conf) => element_list.push(rsx! {
+    if let CoatingType::ConstantR(conf) = &*coating_type.read() {
+        element_list.push(rsx! {
             NodeConfigPlainF64Input {
                 id: "coatingReflectivityInput",
                 label: "Reflectivity",
@@ -42,8 +42,7 @@ pub fn CoatingEditor(
                 },
                 readonly,
             }
-        }),
-        _ => {}
+        });
     }
     rsx! {
         div { class: "form-floating border-start",

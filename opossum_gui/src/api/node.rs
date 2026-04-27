@@ -4,8 +4,9 @@ use opossum_core::{
     prelude::*,
     types::api_types::{
         AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, MoveNodesRequest, NewNode,
-        NewRefNode, NodeInfo, NodePortsResponse, PortMappingsResponse, PortNamesResponse,
-        RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest, UpdatePortRequest,
+        NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse, PortMappingsResponse,
+        PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest,
+        UpdatePortRequest,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -152,6 +153,18 @@ pub async fn delete_node(id: Uuid) -> Result<Vec<Uuid>, String> {
         .delete::<String, Vec<Uuid>>(&format!("/api/nodes/{id}"), String::new())
         .await
 }
+/// Get the `NodeInfo` of an optical node.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the provided [`Uuid`] cannot be serialized or found
+pub async fn get_node_info(uuid: Uuid) -> Result<NodeInfo, String> {
+    HTTP_API_CLIENT()
+        .get_ron::<NodeInfo>(&format!("/api/nodes/{uuid}"))
+        .await
+}
+
 /// Get the properties of an optical node.
 ///
 /// # Errors
@@ -159,9 +172,9 @@ pub async fn delete_node(id: Uuid) -> Result<Vec<Uuid>, String> {
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized or found
 /// - the properties cannot be deserialized into the [`NodeInfo`] struct
-pub async fn get_node_properties(uuid: Uuid) -> Result<NodeInfo, String> {
+pub async fn get_node_properties(uuid: Uuid) -> Result<NodePropertiesResponse, String> {
     HTTP_API_CLIENT()
-        .get_ron::<NodeInfo>(&format!("/api/nodes/{uuid}"))
+        .get_ron::<NodePropertiesResponse>(&format!("/api/nodes/{uuid}/properties"))
         .await
 }
 
@@ -227,13 +240,19 @@ pub async fn update_node_position(node_id: Uuid, gui_position: Point2D<f64>) -> 
 /// # Errors
 ///
 /// This function will return an error if the `node_id` was not found.
-pub async fn update_node_name(node_id: Uuid, node_name: String) -> Result<(), String> {
+pub async fn update_node_name(node_id: Uuid, node_name: &str) -> Result<(), String> {
     let update_request = UpdateNodeRequest {
-        name: Some(node_name.clone()),
+        name: Some(node_name.to_string()),
         ..Default::default()
     };
     HTTP_API_CLIENT()
         .patch::<UpdateNodeRequest>(&format!("/api/nodes/{node_id}"), update_request)
+        .await
+}
+
+pub async fn get_node_references(node_id: Uuid) -> Result<HashMap<Uuid, Vec<Uuid>>, String> {
+    HTTP_API_CLIENT()
+        .get::<HashMap<Uuid, Vec<Uuid>>>(&format!("/api/nodes/{node_id}/references"))
         .await
 }
 
@@ -247,7 +266,7 @@ pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result
         ..Default::default()
     };
     HTTP_API_CLIENT()
-        .patch::<UpdateNodeRequest>(&format!("/api/nodes{node_id}"), update_node_request)
+        .patch::<UpdateNodeRequest>(&format!("/api/nodes/{node_id}"), update_node_request)
         .await
 }
 

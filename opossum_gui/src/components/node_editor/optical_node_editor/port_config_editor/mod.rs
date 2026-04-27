@@ -29,16 +29,19 @@ pub fn PortConfigEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
+    let current_node_id = *node_id.read();
     let mut ports_resource =
-        use_resource(move || async move { get_ports_of_group(*node_id.read()).await });
+        use_resource(move || async move { get_ports_of_group(current_node_id).await });
 
     let ports_data = ports_resource.read_unchecked().clone();
 
-    match ports_data {
-        None => rsx! {
-            div { "Loading port configuration..." }
+    ports_data.map_or_else(
+        || {
+            rsx! {
+                div { "Loading port configuration..." }
+            }
         },
-        Some(result) => match result {
+        |result| match result {
             Ok(ports) => {
                 let handle_port_update =
                     move |(p_name, p_type, req): (String, PortType, UpdatePortRequest)| {
@@ -47,7 +50,7 @@ pub fn PortConfigEditor(
                         // Wir starten einen asynchronen Task
                         spawn(async move {
                             match patch_node_port_config(n_id, p_name, p_type, req).await {
-                                Ok(_) => {
+                                Ok(()) => {
                                     // Nach erfolgreichem API-Call die Resource neu laden,
                                     // damit das UI die aktuellen Werte vom Server zeigt.
                                     ports_resource.restart();
@@ -55,7 +58,7 @@ pub fn PortConfigEditor(
                                 Err(err) => {
                                     OPOSSUM_UI_LOGS
                                         .write()
-                                        .add_log(&format!("API Error: {}", err));
+                                        .add_log(&format!("API Error: {err}"));
                                 }
                             }
                         });
@@ -102,7 +105,7 @@ pub fn PortConfigEditor(
                 rsx![]
             }
         },
-    }
+    )
 }
 #[component]
 pub fn SinglePortConfigEditor(
@@ -138,7 +141,7 @@ pub fn SinglePortConfigEditor(
                     new_fluence
                         .set(Fluence::new::<joule_per_square_centimeter>(value))
                         .unwrap_or_else(|err| {
-                            OPOSSUM_UI_LOGS.write().add_log(&format!("Invalid LIDT value: {}", err));
+                            OPOSSUM_UI_LOGS.write().add_log(&format!("Invalid LIDT value: {err}"));
                         });
                     update_port_request.lidt = Some(new_fluence);
                     on_change.call(update_port_request);

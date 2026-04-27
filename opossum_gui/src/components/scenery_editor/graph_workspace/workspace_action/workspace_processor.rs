@@ -512,16 +512,8 @@ async fn process_paste_nodes(
                 eval_action_run(
                     api::get_ports_of_group(group_id).await,
                     Some(move |ports_config: NodePortsResponse| {
-                        let input_ports = ports_config
-                            .inputs
-                            .into_iter()
-                            .map(|(name, _)| name)
-                            .collect();
-                        let output_ports = ports_config
-                            .outputs
-                            .into_iter()
-                            .map(|(name, _)| name)
-                            .collect();
+                        let input_ports = ports_config.inputs.into_keys().collect();
+                        let output_ports = ports_config.outputs.into_keys().collect();
                         ws_handler
                             .nodes
                             .update_group_ports(input_ports, output_ports, group_id);
@@ -716,7 +708,7 @@ async fn process_add_optic_node(
     // ----- WRITE PHASE -----
     eval_action_run(
         result,
-        Some(move |node_info| {
+        Some(move |node_info: NodeInfo| {
             ws_handler.nodes.add_optical_node(node_info, graph_id);
         }),
     );
@@ -1028,11 +1020,11 @@ async fn process_rename_root_scenery(
     needs_saving: bool,
 ) {
     eval_action_run(
-        api::update_node_name(root_id, name.clone()).await,
+        api::update_node_name(root_id, &name).await,
         Some(move |()| {
             ws_handler
                 .nodes
-                .set_node_name(name, root_id, root_id, needs_saving);
+                .set_node_name(name.clone(), root_id, root_id, needs_saving);
         }),
     );
 }

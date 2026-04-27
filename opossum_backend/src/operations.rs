@@ -210,8 +210,6 @@ async fn post_paste_nodes(
     )?;
 
     for (group_id, node_refs, is_root_group) in grouped_node_refs.iter().rev() {
-        // if let Some(mapped_group_id) = node_id_link.get(group_id){
-
         let mapped_group_id_opt = if *is_root_group {
             Some(*group_id)
         } else {
@@ -223,17 +221,7 @@ async fn post_paste_nodes(
                 scenery
                     .with_group_node_mut(mapped_group_id, |g| g.add_node_ref(node_ref.clone()))??;
                 let node = node_ref.optical_ref.lock_opm()?;
-                node_info.push(NodeInfo {
-                    uuid: node.node_attr().uuid(),
-                    name: node.name(),
-                    inverted: node.inverted(),
-                    node_type: node.node_type(),
-                    input_ports: node.ports().names(&PortType::Input),
-                    output_ports: node.ports().names(&PortType::Output),
-                    gui_position: node.node_attr().gui_position().map(|p| (p.x, p.y)),
-                    isometry: node.node_attr().isometry(),
-                    alignment: *node.node_attr().alignment(),
-                });
+                node_info.push(NodeInfo::from_analyzable(&*node, None));
                 drop(node);
             }
             grouped_node_infos.insert(mapped_group_id, node_info);
