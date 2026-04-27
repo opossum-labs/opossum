@@ -6,7 +6,7 @@ use crate::{
     types::validated_type_definitions::ValidatedPolygonPoints,
 };
 use earcutr::earcut;
-use nalgebra::Point2;
+use nalgebra::{Point2, Point3};
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
@@ -68,7 +68,7 @@ impl PolygonConfig {
     /// # Panics
     /// This function panics if the triangulation fails
     #[must_use]
-    pub fn in_polygon(&self, point: &Point2<Length>) -> bool {
+    pub fn in_polygon(&self, point: &Point3<Length>) -> bool {
         let mut in_polygon = false;
         for tri in &self.triangle_indices {
             let p1 = self.points[tri[0]];
@@ -101,7 +101,7 @@ impl PolygonConfig {
     }
 }
 impl Shape for PolygonConfig {
-    fn transmission_factor(&self, point: &Point2<Length>) -> f64 {
+    fn transmission_factor(&self, point: &Point3<Length>) -> f64 {
         if self.in_polygon(point) { 1.0 } else { 0.0 }
     }
 }
@@ -136,12 +136,12 @@ mod test {
             meter!(1.0, 1.0),
         ])
         .unwrap();
-        assert_eq!(poly.transmission_factor(&meter!(0.0, 0.0)), 1.0);
-        assert_eq!(poly.transmission_factor(&meter!(2.0, 0.0)), 1.0);
-        assert_eq!(poly.transmission_factor(&meter!(1.0, 1.0)), 1.0);
-        assert_eq!(poly.transmission_factor(&meter!(1.0, 0.0)), 0.0);
-        assert_eq!(poly.transmission_factor(&meter!(2.0, 1.0)), 0.0);
-        assert_eq!(poly.transmission_factor(&meter!(0.0, 1.0)), 0.0);
+        assert_eq!(poly.transmission_factor(&meter!(0.0, 0.0, 0.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(2.0, 0.0, 0.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(1.0, 1.0, 0.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(1.0, 0.0, 0.0)), 0.0);
+        assert_eq!(poly.transmission_factor(&meter!(2.0, 1.0, 0.0)), 0.0);
+        assert_eq!(poly.transmission_factor(&meter!(0.0, 1.0, 0.0)), 0.0);
     }
     #[test]
     fn test_non_convex_u_shape() {
@@ -159,13 +159,13 @@ mod test {
         let poly = PolygonConfig::new(points).unwrap();
 
         // Inside the "arms"
-        assert_eq!(poly.transmission_factor(&meter!(0.5, 2.0)), 1.0);
-        assert_eq!(poly.transmission_factor(&meter!(2.5, 2.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(0.5, 2.0, 0.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(2.5, 2.0, 0.0)), 1.0);
 
         // In the "gap" of the U (should be outside/0.0)
-        assert_eq!(poly.transmission_factor(&meter!(1.5, 2.0)), 0.0);
+        assert_eq!(poly.transmission_factor(&meter!(1.5, 2.0, 0.0)), 0.0);
 
         // Bottom bar
-        assert_eq!(poly.transmission_factor(&meter!(1.5, 0.5)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(1.5, 0.5, 0.0)), 1.0);
     }
 }

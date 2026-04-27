@@ -7,7 +7,7 @@ use crate::{
     utils::math_distribution_functions::ellipse,
     validated_vec, validated_vec_type,
 };
-use nalgebra::{Matrix2xX, Point2};
+use nalgebra::{Matrix2xX, Point2, Point3};
 use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
@@ -51,7 +51,7 @@ impl StackShape {
     }
 }
 impl Shape for StackShape {
-    fn transmission_factor(&self, point: &Point2<Length>) -> f64 {
+    fn transmission_factor(&self, point: &Point3<Length>) -> f64 {
         let mut transmission = 1.0;
         for a in &self.apertures {
             transmission *= a.apodize(point);
@@ -103,12 +103,12 @@ mod test {
         let c_ap = Aperture::new(ApertureShape::BinaryCircle(c), ApertureType::Hole, None);
         let s = StackShape::new(vec![r_ap, c_ap]).unwrap();
         let s_ap = Aperture::new(ApertureShape::Stack(s), ApertureType::Hole, None);
-        assert_eq!(s_ap.apodize(&meter!(0.0, 0.0)), 1.0);
-        assert_eq!(s_ap.apodize(&meter!(1.0, 0.0)), 1.0);
-        assert_eq!(s_ap.apodize(&meter!(0.0, 1.0)), 1.0);
-        assert_eq!(s_ap.apodize(&meter!(1.0, 1.0)), 0.0);
-        assert_eq!(s_ap.apodize(&meter!(-1.0, 0.0)), 0.0);
-        assert_eq!(s_ap.apodize(&meter!(0.0, -1.0)), 0.0);
+        assert_eq!(s_ap.apodize(&meter!(0.0, 0.0, 0.0)), 1.0);
+        assert_eq!(s_ap.apodize(&meter!(1.0, 0.0, 0.0)), 1.0);
+        assert_eq!(s_ap.apodize(&meter!(0.0, 1.0, 0.0)), 1.0);
+        assert_eq!(s_ap.apodize(&meter!(1.0, 1.0, 0.0)), 0.0);
+        assert_eq!(s_ap.apodize(&meter!(-1.0, 0.0, 0.0)), 0.0);
+        assert_eq!(s_ap.apodize(&meter!(0.0, -1.0, 0.0)), 0.0);
     }
     #[test]
     fn test_stack_transmission_factor() {
@@ -129,7 +129,7 @@ mod test {
         // Point (0.5, 0.0): Inside BOTH circle and rectangle
         // Expected: 1.0 * 1.0 = 1.0
         assert_abs_diff_eq!(
-            stack.transmission_factor(&meter!(0.5, 0.0)),
+            stack.transmission_factor(&meter!(0.5, 0.0, 0.0)),
             1.0,
             epsilon = 1e-12
         );
@@ -137,7 +137,7 @@ mod test {
         // Point (-0.5, 0.0): Inside circle, but OUTSIDE rectangle (x < 0)
         // Expected: 1.0 * 0.0 = 0.0
         assert_abs_diff_eq!(
-            stack.transmission_factor(&meter!(-0.5, 0.0)),
+            stack.transmission_factor(&meter!(-0.5, 0.0, 0.0)),
             0.0,
             epsilon = 1e-12
         );
@@ -145,7 +145,7 @@ mod test {
         // Point (1.5, 0.0): Outside circle, but INSIDE rectangle
         // Expected: 0.0 * 1.0 = 0.0
         assert_abs_diff_eq!(
-            stack.transmission_factor(&meter!(1.5, 0.0)),
+            stack.transmission_factor(&meter!(1.5, 0.0, 0.0)),
             0.0,
             epsilon = 1e-12
         );
@@ -153,7 +153,7 @@ mod test {
         // Point (5.0, 5.0): Outside BOTH
         // Expected: 0.0 * 0.0 = 0.0
         assert_abs_diff_eq!(
-            stack.transmission_factor(&meter!(5.0, 5.0)),
+            stack.transmission_factor(&meter!(5.0, 5.0, 0.0)),
             0.0,
             epsilon = 1e-12
         );

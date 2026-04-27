@@ -5,7 +5,7 @@ use crate::{
     millimeter,
     types::validated_type_definitions::{ValidatedCenter, ValidatedSideLengths},
 };
-use nalgebra::Point2;
+use nalgebra::{Point2, Point3};
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, ratio::ratio};
@@ -47,7 +47,7 @@ impl GaussianShape {
     }
 }
 impl Shape for GaussianShape {
-    fn transmission_factor(&self, point: &Point2<Length>) -> f64 {
+    fn transmission_factor(&self, point: &Point3<Length>) -> f64 {
         let x_c = self.center.get().x;
         let y_c = self.center.get().y;
         let x = point.x;
@@ -93,9 +93,9 @@ mod test {
     #[test]
     fn transmission_factor() {
         let g = GaussianShape::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
-        assert_eq!(g.transmission_factor(&meter!(1.0, 1.0)), 1.0);
+        assert_eq!(g.transmission_factor(&meter!(1.0, 1.0, 0.0)), 1.0);
         assert_eq!(
-            g.transmission_factor(&meter!(0.0, 0.0)),
+            g.transmission_factor(&meter!(0.0, 0.0, 0.0)),
             1.0 / 1.0_f64.exp()
         );
     }
@@ -106,14 +106,14 @@ mod test {
         let g = GaussianShape::new((sigma_x, sigma_y), meter!(0.0, 0.0)).unwrap();
 
         // Center (0 sigma)
-        assert_eq!(g.transmission_factor(&meter!(0.0, 0.0)), 1.0);
+        assert_eq!(g.transmission_factor(&meter!(0.0, 0.0, 0.0)), 1.0);
 
         // 1 sigma in X: exp(-0.5 * (1/1)^2) = exp(-0.5)
-        let t_1sigma_x = g.transmission_factor(&meter!(1.0, 0.0));
+        let t_1sigma_x = g.transmission_factor(&meter!(1.0, 0.0, 0.0));
         assert_abs_diff_eq!(t_1sigma_x, (-0.5_f64).exp(), epsilon = 1e-12);
 
         // 1 sigma in Y: exp(-0.5 * (2/2)^2) = exp(-0.5)
-        let t_1sigma_y = g.transmission_factor(&meter!(0.0, 2.0));
+        let t_1sigma_y = g.transmission_factor(&meter!(0.0, 2.0, 0.0));
         assert_abs_diff_eq!(t_1sigma_y, (-0.5_f64).exp(), epsilon = 1e-12);
     }
 }

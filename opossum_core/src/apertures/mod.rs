@@ -30,10 +30,10 @@ mod rectangle;
 mod stack;
 
 use crate::{
-    error::OpmResult, generic_validators::ValidateTrait, prelude::Isometry, properties::Proptype, reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable}, utils::{default_from_name::DefaultFromName, math_distribution_functions::ellipse}
+    error::OpmResult, generic_validators::ValidateTrait, meter, prelude::Isometry, properties::Proptype, reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable}, utils::{default_from_name::DefaultFromName, math_distribution_functions::ellipse}
 };
 use core::f64;
-use nalgebra::{Matrix2xX, MatrixXx2, Point2};
+use nalgebra::{Matrix2xX, MatrixXx2, Point2, Point3};
 use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
@@ -88,8 +88,9 @@ impl Aperture {
             isometry: isometry.unwrap_or_else(Isometry::identity)
         }
     }
-    pub fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let base_transmission = self.shape.apodize(point);
+    pub fn apodize(&self, point: &Point3<Length>) -> f64 {
+        let transformed_point = self.isometry.inverse_transform_point(point);
+        let base_transmission = self.shape.apodize(&transformed_point);
         if matches!(self.aperture_type, ApertureType::Obstruction) {
             1.0 - base_transmission
         } else {
@@ -233,7 +234,7 @@ impl ApertureShape {
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.
     #[must_use]
-    fn apodize(&self, point: &Point2<Length>) -> f64 {
+    fn apodize(&self, point: &Point3<Length>) -> f64 {
         // Resolve both transmission and type in a single match for clarity and correctness
         match self {
             Self::Open => (1.0),
@@ -263,7 +264,7 @@ impl From<RectangleShape> for ApertureShape {
 /// Trait for the calculation of the transmission factor for each shape.
 pub trait Shape {
     /// Calculate the transmission factor (always treated as aperture type `hole`).
-    fn transmission_factor(&self, point: &Point2<Length>) -> f64;
+    fn transmission_factor(&self, point: &Point3<Length>) -> f64;
 }
 
 impl Plottable for Aperture {
@@ -466,8 +467,8 @@ mod test {
         let block =
             Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Obstruction, None).unwrap();
 
-        let p_inside = meter!(0.5, 0.0);
-        let p_outside = meter!(2.0, 0.0);
+        let p_inside = meter!(0.5, 0.0, 0.0);
+        let p_outside = meter!(2.0, 0.0, 0.0);
 
         assert_eq!(hole.apodize(&p_inside), 1.0);
         assert_eq!(hole.apodize(&p_outside), 0.0);

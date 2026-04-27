@@ -6,7 +6,7 @@ use crate::{
     prelude::ApertureShape,
     types::validated_type_definitions::{ValidatedCenter, ValidatedRadius},
 };
-use nalgebra::{Isometry2, Point2};
+use nalgebra::{Isometry2, Point2, Point3};
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
@@ -69,17 +69,10 @@ impl CircleShape {
     }
 }
 impl Shape for CircleShape {
-    fn transmission_factor(&self, point: &Point2<Length>) -> f64 {
-        let translation = Isometry2::translation(
-            self.center().x.get::<meter>(),
-            self.center().y.get::<meter>(),
-        );
-
-        let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
-        let point_transformed = translation.inverse_transform_point(&point_meter);
-        if point_transformed
-            .y
-            .mul_add(point_transformed.y, point_transformed.x.powi(2))
+    fn transmission_factor(&self, point: &Point3<Length>) -> f64 {
+        if point
+            .y.value
+            .mul_add(point.y.value, point.x.value.powi(2))
             <= self.radius().get::<meter>().powi(2)
         {
             1.0
@@ -112,13 +105,13 @@ mod test {
     #[test]
     fn transmission_factor() {
         let c = CircleShape::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
-        assert_eq!(c.transmission_factor(&meter!(1.0, 1.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(1.0, 0.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(1.0, 2.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(2.0, 1.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(0.0, 1.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(0.0, 0.0)), 0.0);
-        assert_eq!(c.transmission_factor(&meter!(2.0, 2.0)), 0.0);
+        assert_eq!(c.transmission_factor(&meter!(1.0, 1.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(1.0, 0.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(1.0, 2.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(2.0, 1.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(0.0, 1.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(0.0, 0.0, 0.0)), 0.0);
+        assert_eq!(c.transmission_factor(&meter!(2.0, 2.0, 0.0)), 0.0);
     }
     #[test]
     fn test_boundary_conditions() {
@@ -127,10 +120,10 @@ mod test {
 
         // Point exactly on the boundary (x^2 + y^2 == r^2)
         // Floating point precision might be tricky, but 1.0^2 is exact.
-        assert_eq!(c.transmission_factor(&meter!(1.0, 0.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(0.0, 1.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(1.0, 0.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(0.0, 1.0, 0.0)), 1.0);
 
         // Slightly outside
-        assert_eq!(c.transmission_factor(&meter!(1.000001, 0.0)), 0.0);
+        assert_eq!(c.transmission_factor(&meter!(1.000001, 0.0, 0.0)), 0.0);
     }
 }

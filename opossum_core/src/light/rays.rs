@@ -575,7 +575,7 @@ impl Rays {
         let mut beams_invalided = false;
         for ray in &mut self.ray_bundle {
             if ray.valid() {
-                let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position().xy());
+                let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position());
                 if ap_factor > 0.0 {
                     ray.filter_energy(&FilterType::Constant(ap_factor))?;
                 } else {
@@ -2555,6 +2555,7 @@ mod test {
         let aperture = Aperture::new(
             ApertureShape::BinaryCircle(circle_config),
             ApertureType::Hole,
+            None
         );
         rays.apodize(&aperture, &Isometry::identity()).unwrap();
         assert_eq!(rays.total_energy(), joule!(1.0));

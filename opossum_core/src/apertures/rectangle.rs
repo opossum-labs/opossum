@@ -1,4 +1,4 @@
-use nalgebra::{Isometry2, Point2, Vector2};
+use nalgebra::{Isometry2, Point2, Point3, Vector2};
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
 use utoipa::ToSchema;
@@ -75,17 +75,10 @@ impl RectangleShape {
     }
 }
 impl Shape for RectangleShape {
-    fn transmission_factor(&self, point: &Point2<Length>) -> f64 {
-        let translation = Isometry2::translation(
-            self.center.get().x.get::<meter>(),
-            self.center.get().y.get::<meter>(),
-        );
-        let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
-        let point_transformed = translation.inverse_transform_point(&point_meter);
-
+    fn transmission_factor(&self, point: &Point3<Length>) -> f64 {
         let q = Vector2::new(
-            point_transformed.x.abs() - self.side_length.get().x.get::<meter>() / 2.,
-            point_transformed.y.abs() - self.side_length.get().y.get::<meter>() / 2.,
+            point.x.value.abs() - self.side_length.get().x.get::<meter>() / 2.,
+            point.y.value.abs() - self.side_length.get().y.get::<meter>() / 2.,
         );
         let mut q_max = q;
         q_max.iter_mut().for_each(|x: &mut f64| *x = x.max(0.0));
@@ -126,12 +119,12 @@ mod test {
     #[test]
     fn transmission_factor() {
         let r = RectangleShape::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
-        assert_eq!(r.transmission_factor(&meter!(1.0, 1.0)), 1.0);
-        assert_eq!(r.transmission_factor(&meter!(1.5, 1.0)), 1.0);
-        assert_eq!(r.transmission_factor(&meter!(1.5, 2.0)), 1.0);
-        assert_eq!(r.transmission_factor(&meter!(0.5, 2.0)), 1.0);
-        assert_eq!(r.transmission_factor(&meter!(0.5, 0.0)), 1.0);
-        assert_eq!(r.transmission_factor(&meter!(0.0, 0.0)), 0.0);
-        assert_eq!(r.transmission_factor(&meter!(1.0, 2.1)), 0.0);
+        assert_eq!(r.transmission_factor(&meter!(1.0, 1.0, 0.)), 1.0);
+        assert_eq!(r.transmission_factor(&meter!(1.5, 1.0, 0.)), 1.0);
+        assert_eq!(r.transmission_factor(&meter!(1.5, 2.0, 0.)), 1.0);
+        assert_eq!(r.transmission_factor(&meter!(0.5, 2.0, 0.)), 1.0);
+        assert_eq!(r.transmission_factor(&meter!(0.5, 0.0, 0.)), 1.0);
+        assert_eq!(r.transmission_factor(&meter!(0.0, 0.0, 0.)), 0.0);
+        assert_eq!(r.transmission_factor(&meter!(1.0, 2.1, 0.)), 0.0);
     }
 }
