@@ -1,8 +1,13 @@
 #![warn(missing_docs)]
 use super::{Coating, CoatingType};
-use crate::generic_validators::AllInRange;
-use crate::{error::OpmResult, light::Ray, validated, validated_type};
+use crate::{
+    error::OpmResult,
+    generic_validators::{AllInRange, ValidateTrait},
+    light::Ray,
+    validated, validated_type,
+};
 use nalgebra::Vector3;
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -10,6 +15,14 @@ use utoipa::ToSchema;
 struct NonValidatedCoatingConstantR {
     pub reflectivity: f64,
 }
+
+impl TryFrom<NonValidatedCoatingConstantR> for CoatingConstantR {
+    type Error = String;
+    fn try_from(helper: NonValidatedCoatingConstantR) -> Result<Self, Self::Error> {
+        Self::new(helper.reflectivity).map_err(|e| e.to_string())
+    }
+}
+
 /// Ein Type-Alias, um das Makro vor dem Utoipa-Parser zu verstecken.
 pub type ValidatedReflectivity = validated_type!(f64, AllInRange<f64>);
 impl Default for ValidatedReflectivity {
@@ -22,7 +35,7 @@ impl Default for ValidatedReflectivity {
 ///
 /// The simple model represents an ideal coating with a given constant reflectivity independent from
 /// the incoming wavelength, angle of incidence, or refractive index of the following medium.
-#[derive(Default, Deserialize, Serialize, Debug, Clone, ToSchema, PartialEq)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, ToSchema, PartialEq, EnsureValidated)]
 #[serde(try_from = "NonValidatedCoatingConstantR")]
 pub struct CoatingConstantR {
     reflectivity: ValidatedReflectivity,
@@ -45,14 +58,6 @@ impl CoatingConstantR {
     #[must_use]
     pub const fn reflectivity(&self) -> f64 {
         *self.reflectivity.get()
-    }
-}
-
-impl TryFrom<NonValidatedCoatingConstantR> for CoatingConstantR {
-    type Error = String;
-
-    fn try_from(helper: NonValidatedCoatingConstantR) -> Result<Self, Self::Error> {
-        Self::new(helper.reflectivity).map_err(|e| e.to_string())
     }
 }
 
@@ -85,9 +90,9 @@ mod test {
         assert!(CoatingConstantR::new(f64::NAN).is_err());
         assert!(CoatingConstantR::new(f64::INFINITY).is_err());
         assert!(CoatingConstantR::new(f64::NEG_INFINITY).is_err());
+        assert!(CoatingConstantR::new(0.0).is_ok());
         assert!(CoatingConstantR::new(1.0).is_ok());
-        assert!(CoatingConstantR::new(1.0).is_ok());
-        assert!(CoatingConstantR::new(1.1).is_err());
+        assert!(CoatingConstantR::new(1.01).is_err());
     }
     #[test]
     fn from() {

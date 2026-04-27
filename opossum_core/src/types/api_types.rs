@@ -365,7 +365,7 @@ pub struct UpdatePortRequest {
     /// The new coating of the port
     pub coating: Option<CoatingType>,
     /// The new Laser Induced Damage Threshold
-    #[schema(value_type = Option<f64>)] // Swagger trick for the type alias
+    #[schema(value_type = Option<f64>)]
     pub lidt: Option<ValidatedLidt>,
 }
 

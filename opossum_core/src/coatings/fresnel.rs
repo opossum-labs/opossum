@@ -15,16 +15,19 @@ impl Coating for Fresnel {
     /// Formulas taken from [german wikipedia](https://de.wikipedia.org/wiki/Fresnelsche_Formeln).
     fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: Vector3<f64>, n2: f64) -> f64 {
         let n1 = incoming_ray.refractive_index();
-        
-        // Fix: Explicitly normalize the direction to ensure the dot product 
+
+        // Fix: Explicitly normalize the direction to ensure the dot product
         // represents the actual cosine of the angle.
         let direction = incoming_ray.direction().normalize();
-        
-        // The cosine of the angle of incidence. 
-        // We use .abs() to handle rays hitting from "behind" if necessary, 
+
+        // The cosine of the angle of incidence.
+        // We use .abs() to handle rays hitting from "behind" if necessary,
         // and clamp to avoid precision issues with sqrt later.
-        let cos_alpha = direction.dot(&(-1.0 * surface_normal)).abs().clamp(0.0, 1.0);
-        
+        let cos_alpha = direction
+            .dot(&(-1.0 * surface_normal))
+            .abs()
+            .clamp(0.0, 1.0);
+
         let n1_over_n2 = n1 / n2;
         let sin2_alpha = (1.0 - cos_alpha * cos_alpha).max(0.0);
         let sin2_beta = n1_over_n2 * n1_over_n2 * sin2_alpha;
@@ -37,10 +40,10 @@ impl Coating for Fresnel {
         let cos_beta = (1.0 - sin2_beta).sqrt();
 
         // Fresnel equations for unpolarized light
-        let rs = (n1 * cos_alpha - n2 * cos_beta) / (n1 * cos_alpha + n2 * cos_beta);
-        let rp = (n2 * cos_alpha - n1 * cos_beta) / (n2 * cos_alpha + n1 * cos_beta);
+        let rs = n1.mul_add(cos_alpha, -(n2 * cos_beta)) / n1.mul_add(cos_alpha, n2 * cos_beta);
+        let rp = n2.mul_add(cos_alpha, -(n1 * cos_beta)) / n2.mul_add(cos_alpha, n1 * cos_beta);
 
-        (rs * rs + rp * rp) / 2.0
+        f64::midpoint(rs * rs, rp * rp)
     }
 }
 impl From<Fresnel> for CoatingType {
