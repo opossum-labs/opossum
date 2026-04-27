@@ -18,8 +18,10 @@ mod pass;
 mod path_valid;
 mod positive;
 mod second_larger;
+mod min_entries;
 
 pub use finite::{AllFinite, XFinite, YFinite};
+pub use min_entries::Min3Entries;
 pub use in_range::AllInRange;
 pub use logical_combinations::{
     AndValidator, AndValidatorVec, NotValidator, NotValidatorVec, OrValidator, OrValidatorVec,

@@ -1,7 +1,7 @@
 // Re-export the most common items
 pub use super::{
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
-    apertures::{Aperture, ApertureType},
+    apertures::{Aperture, ApertureShape, ApertureType},
     centimeter,
     core_optics::{Alignable, OpticNode, PortType},
     degree,

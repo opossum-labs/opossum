@@ -1,15 +1,20 @@
 use super::Shape;
-use crate::error::{OpmResult, OpossumError};
+use crate::{error::OpmResult, millimeter, generic_validators::ValidateTrait, types::validated_type_definitions::{ValidatedCenter, ValidatedRadius}};
 use nalgebra::{Isometry2, Point2};
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
+use utoipa::ToSchema;
 
 /// Configuration data for a circular aperture.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated, Default)]
 pub struct CircleShape {
-    radius: Length,
-    center: Point2<Length>,
+    #[schema(value_type = f64)]
+    radius: ValidatedRadius,
+    #[schema(value_type = Object)]
+    center: ValidatedCenter
 }
+
 impl CircleShape {
     /// Create a new [`CircleShape`] from a given radius and a center point.
     ///
@@ -17,28 +22,27 @@ impl CircleShape {
     ///
     /// This function will return an error if the given radius of negative, `NaN` or `Infinity`.
     pub fn new(radius: Length, center: Point2<Length>) -> OpmResult<Self> {
-        if radius.is_normal() && radius.is_sign_positive() {
-            Ok(Self { radius, center })
-        } else {
-            Err(OpossumError::Other("radius must be positive".into()))
-        }
+        let validated_radius = ValidatedRadius::try_new(radius)?;
+        let validated_center = ValidatedCenter::try_new(center)?;
+        Ok(Self { radius: validated_radius, center: validated_center })
     }
+    
     /// Returns the radius of this [`CircleShape`]
     #[must_use]
     pub fn radius(&self) -> Length {
-        self.radius
+        *self.radius.get()
     }
     /// Returns the center of this [`CircleShape`].
     #[must_use]
     pub fn center(&self) -> Point2<Length> {
-        self.center
+        *self.center.get()
     }
 }
 impl Shape for CircleShape {
     fn transmission_factor(&self, point: &Point2<Length>) -> f64 {
         let translation = Isometry2::translation(
-            self.center.coords[0].get::<meter>(),
-            self.center.coords[1].get::<meter>(),
+            self.center().x.get::<meter>(),
+            self.center().y.get::<meter>(),
         );
 
         let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
@@ -46,7 +50,7 @@ impl Shape for CircleShape {
         if point_transformed
             .y
             .mul_add(point_transformed.y, point_transformed.x.powi(2))
-            <= self.radius.get::<meter>().powi(2)
+            <= self.radius().get::<meter>().powi(2)
         {
             1.0
         } else {

@@ -33,12 +33,16 @@ use crate::{
     error::OpmResult,
     properties::Proptype,
     reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
-    utils::math_distribution_functions::ellipse,
+    utils::{default_from_name::DefaultFromName, math_distribution_functions::ellipse},
+    generic_validators::ValidateTrait
 };
 use core::f64;
+use std::fmt::Display;
 use nalgebra::{Matrix2xX, MatrixXx2, Point2};
+use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 use uom::si::{f64::Length, length::millimeter};
 
 pub use circle::CircleShape;
@@ -51,7 +55,7 @@ use utoipa::ToSchema;
 /// The apodization type of an [`Aperture`].
 ///
 /// Each aperture can act as a "hole" or "obstruction"
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, EnumIter, EnsureValidated)]
 pub enum ApertureType {
     /// the [`Aperture`] shape acts as a hole. The inner part of the shape is transparent.
     #[default]
@@ -60,26 +64,31 @@ pub enum ApertureType {
     Obstruction,
 }
 
-/// Different aperture types
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
-pub enum Aperture {
-    /// completely transparent aperture. This is the default.
-    #[default]
-    Open,
-    /// binary (either transparent or opaque) circular aperture defined by a radius and center point
-    BinaryCircle(CircleShape, ApertureType),
-    /// binary (either transparent or opaque) rectangular aperture defined by width and height as well as its center point
-    BinaryRectangle(RectangleShape, ApertureType),
-    /// binary (either transparent or opaque) polygonial aperture defined by a set of 2D points. This polygon can also be
-    /// non-convex but should not intersect.
-    BinaryPolygon(PolygonConfig, ApertureType),
-    /// variable transmission aperture using a 2D Gaussian function.
-    Gaussian(GaussianShape, ApertureType),
-    /// a stack of an arbitrary number of the above apertures. The transmission factor at a given point is the
-    /// product of all indiviual aperture on the stack (subtractive apodization).
-    Stack(StackShape, ApertureType),
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated)]
+pub struct Aperture{
+    shape: ApertureShape,
+    aperture_type: ApertureType
+    // isometry: Isometry
 }
+
 impl Aperture {
+    pub fn new(shape: ApertureShape, aperture_type: ApertureType) -> Self {
+        Self { shape, aperture_type }
+    }
+    pub fn apodize(&self, point: &Point2<Length>) -> f64 {
+        let base_transmission = self.shape.apodize(point);
+        if matches!(self.aperture_type, ApertureType::Obstruction) {
+            1.0 - base_transmission
+        } else {
+            base_transmission
+        }
+    }
+    pub fn shape(&self) -> &ApertureShape {
+        &self.shape
+    }
+    pub fn aperture_type(&self) -> &ApertureType {
+        &self.aperture_type
+    }
     /// Create a new circular aperture.
     ///
     /// # Errors
@@ -91,7 +100,7 @@ impl Aperture {
         aperture_type: ApertureType,
     ) -> OpmResult<Self> {
         let config = CircleShape::new(radius, center)?;
-        Ok(Self::BinaryCircle(config, aperture_type))
+        Ok(Self::new(ApertureShape::BinaryCircle(config), aperture_type))
     }
     /// Create a new retangular aperture.
     ///
@@ -105,7 +114,7 @@ impl Aperture {
         aperture_type: ApertureType,
     ) -> OpmResult<Self> {
         let config = RectangleShape::new(width, height, center)?;
-        Ok(Self::BinaryRectangle(config, aperture_type))
+        Ok(Self::new(ApertureShape::BinaryRectangle(config), aperture_type))
     }
     /// Create a new Gaussian aperture.
     ///
@@ -118,7 +127,7 @@ impl Aperture {
         aperture_type: ApertureType,
     ) -> OpmResult<Self> {
         let config = GaussianShape::new(sigma, center)?;
-        Ok(Self::Gaussian(config, aperture_type))
+        Ok(Self::new(ApertureShape::Gaussian(config), aperture_type))
     }
     /// Create a new polygon aperture.
     ///
@@ -130,49 +139,90 @@ impl Aperture {
         aperture_type: ApertureType,
     ) -> OpmResult<Self> {
         let config = PolygonConfig::new(points)?;
-        Ok(Self::BinaryPolygon(config, aperture_type))
+        Ok(Self::new(ApertureShape::BinaryPolygon(config), aperture_type))
     }
     /// Create a new stack aperture.
     #[must_use]
-    pub const fn new_stack(apertures: Vec<Self>, aperture_type: ApertureType) -> Self {
-        let config = StackShape::new(apertures);
-        Self::Stack(config, aperture_type)
+    pub fn new_stack(apertures: Vec<Self>, aperture_type: ApertureType) -> OpmResult<Self> {
+        let config = StackShape::new(apertures)?;
+        Ok(Self::new(ApertureShape::Stack(config), aperture_type))
     }
+
+    /// Check if the aperture-shape is [`ApertureShape::Open`]
+    pub fn is_none(&self) -> bool {
+        self.shape.is_none()
+    }
+}
+
+/// Different aperture types
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnumIter, EnsureValidated)]
+pub enum ApertureShape {
+    /// completely transparent aperture. This is the default.
+    #[default]
+    Open,
+    /// binary (either transparent or opaque) circular aperture defined by a radius and center point
+    BinaryCircle(CircleShape),
+    /// binary (either transparent or opaque) rectangular aperture defined by width and height as well as its center point
+    BinaryRectangle(RectangleShape),
+    /// binary (either transparent or opaque) polygonial aperture defined by a set of 2D points. This polygon can also be
+    /// non-convex but should not intersect.
+    BinaryPolygon(PolygonConfig),
+    /// variable transmission aperture using a 2D Gaussian function.
+    Gaussian(GaussianShape),
+    /// a stack of an arbitrary number of the above apertures. The transmission factor at a given point is the
+    /// product of all indiviual aperture on the stack (subtractive apodization).
+    Stack(StackShape),
+}
+impl DefaultFromName for ApertureShape {}
+
+impl Display for ApertureShape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ApertureShape::Open => write!(f, "Open"),
+            ApertureShape::BinaryCircle(_) => write!(f, "Circle"),
+            ApertureShape::BinaryRectangle(_) => write!(f, "Rectangle"),
+            ApertureShape::BinaryPolygon(_) => write!(f, "Polygon"),
+            ApertureShape::Gaussian(_) => write!(f, "Gaussian"),
+            ApertureShape::Stack(_) => write!(f, "Stacked apertures"),
+        }
+    }
+}
+
+impl ApertureShape {
+
     #[must_use]
-    /// Check if the aperture is [`Aperture::None`]
+    /// Check if the aperture is [`ApertureShape::Open`]
     pub const fn is_none(&self) -> bool {
         matches!(self, Self::Open)
     }
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.
     #[must_use]
-    pub fn apodize(&self, point: &Point2<Length>) -> f64 {
+    fn apodize(&self, point: &Point2<Length>) -> f64 {
         // Resolve both transmission and type in a single match for clarity and correctness
-        let (base_transmission, aperture_type) = match self {
-            Self::Open => (1.0, &ApertureType::Hole),
-            Self::BinaryCircle(shape, at) => (shape.transmission_factor(point), at),
-            Self::BinaryRectangle(shape, at) => (shape.transmission_factor(point), at),
-            Self::BinaryPolygon(shape, at) => (shape.transmission_factor(point), at),
-            Self::Gaussian(shape, at) => (shape.transmission_factor(point), at),
-            Self::Stack(apertures, at) => (
+        match self {
+            Self::Open => (1.0),
+            Self::BinaryCircle(shape) => shape.transmission_factor(point),
+            Self::BinaryRectangle(shape) => shape.transmission_factor(point),
+            Self::BinaryPolygon(shape) => shape.transmission_factor(point),
+            Self::Gaussian(shape) => shape.transmission_factor(point),
+            Self::Stack(apertures) => 
                 apertures
                     .apertures()
                     .iter()
                     .fold(1.0, |acc, ap| acc * ap.apodize(point)),
-                at,
-            ),
-        };
-
-        if matches!(aperture_type, ApertureType::Obstruction) {
-            1.0 - base_transmission
-        } else {
-            base_transmission
         }
     }
 }
-impl From<Aperture> for Proptype {
-    fn from(value: Aperture) -> Self {
+impl From<ApertureShape> for Proptype {
+    fn from(value: ApertureShape) -> Self {
         Self::Aperture(value)
+    }
+}
+
+impl From<RectangleShape> for ApertureShape {
+    fn from(rect: RectangleShape) -> Self {
+        Self::BinaryRectangle(rect)
     }
 }
 
@@ -189,10 +239,10 @@ impl Plottable for Aperture {
         legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let plt_series_opt = match plt_type {
-            PlotType::Line2D(_) | PlotType::Scatter2D(_) => match self {
-                Self::Open => None,
-                Self::BinaryCircle(conf, _) => Some(stack::plot_circle(conf)),
-                Self::BinaryRectangle(conf, _) => {
+            PlotType::Line2D(_) | PlotType::Scatter2D(_) => match &self.shape {
+                ApertureShape::Open => None,
+                ApertureShape::BinaryCircle(conf) => Some(stack::plot_circle(conf)),
+                ApertureShape::BinaryRectangle(conf) => {
                     let center_x = conf.center().x.get::<millimeter>();
                     let center_y = conf.center().y.get::<millimeter>();
                     let half_width = conf.width().get::<millimeter>() / 2.;
@@ -222,7 +272,7 @@ impl Plottable for Aperture {
                         series_label,
                     )])
                 }
-                Self::BinaryPolygon(conf, _) => {
+                ApertureShape::BinaryPolygon(conf) => {
                     let mut xy_data = MatrixXx2::from_element(conf.points().len(), 0.);
                     for (row, p) in conf.points().iter().enumerate() {
                         xy_data[(row, 0)] = p.x.get::<millimeter>();
@@ -234,7 +284,7 @@ impl Plottable for Aperture {
                         Some("Aperture".to_owned()),
                     )])
                 }
-                Self::Gaussian(conf, _) => {
+                ApertureShape::Gaussian(conf) => {
                     let circle_points = ellipse(
                         (
                             conf.center().x.get::<millimeter>(),
@@ -259,7 +309,7 @@ impl Plottable for Aperture {
                         Some("Gaussian Aperture 2-sigma".to_owned()),
                     )])
                 }
-                Self::Stack(conf, _) => {
+                ApertureShape::Stack(conf) => {
                     let mut aperture_series_vec =
                         Vec::<PlotSeries>::with_capacity(conf.apertures().len());
                     for aperture in conf.apertures() {
@@ -296,7 +346,7 @@ mod test {
     use crate::meter;
     #[test]
     fn default() {
-        assert!(matches!(Aperture::default(), Aperture::Open));
+        assert!(matches!(ApertureShape::default(), ApertureShape::Open));
     }
     #[test]
     fn test_new_circle() {
@@ -356,11 +406,11 @@ mod test {
         .unwrap();
 
         // Stack returns Self directly, not OpmResult
-        let stack = Aperture::new_stack(vec![circle, rect], ApertureType::Obstruction);
+        let stack = Aperture::new_stack(vec![circle, rect], ApertureType::Obstruction).unwrap();
 
-        if let Aperture::Stack(config, at) = stack {
+        if let ApertureShape::Stack(config) = stack.shape {
             assert_eq!(config.apertures().len(), 2);
-            assert_eq!(at, ApertureType::Obstruction);
+            assert_eq!(stack.aperture_type, ApertureType::Obstruction);
         } else {
             panic!("Expected Aperture::Stack variant");
         }
@@ -368,7 +418,7 @@ mod test {
 
     #[test]
     fn test_is_none() {
-        assert!(Aperture::Open.is_none());
+        assert!(ApertureShape::Open.is_none());
         let circle =
             Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
         assert!(!circle.is_none());

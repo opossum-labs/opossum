@@ -2,6 +2,7 @@
 pub mod alignment_editor;
 pub mod general_editor;
 pub mod properties_editor;
+pub mod aperture_editor;
 
 pub(super) use alignment_editor::{
     RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation, on_new_translation,
@@ -11,16 +12,14 @@ use crate::components::{
     node_editor::{
         node_config_editor::NodeChangeEvent,
         optical_node_editor::{
-            alignment_editor::{AlignmentEditor, PositioningEditor},
-            general_editor::GeneralEditor,
-            properties_editor::PropertiesEditor,
+            alignment_editor::{AlignmentEditor, PositioningEditor}, aperture_editor::ApertureEditor, general_editor::GeneralEditor, properties_editor::PropertiesEditor
         },
     },
     scenery_editor::SelectedNode,
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_core::{prelude::Properties, types::api_types::NodeInfo};
+use opossum_core::{prelude::{Aperture, ApertureShape, Properties}, types::api_types::NodeInfo};
 
 #[component]
 pub fn OpticalNodeEditor(
@@ -91,6 +90,12 @@ pub fn OpticalNodeEditor(
                     AlignmentEditor {
                         node_id,
                         node_info: node_info_sig,
+                        on_change,
+                        readonly: readonly(),
+                    }
+                    ApertureEditor{
+                        node_id,
+                        aperture: Aperture::default(),
                         on_change,
                         readonly: readonly(),
                     }

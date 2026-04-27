@@ -1,10 +1,11 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
+use crate::apertures::Aperture;
 use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
 use crate::{
     J_per_cm2,
     analyzers::propagation_strategy::MissedSurfaceStrategy,
-    apertures::Aperture,
+    apertures::ApertureShape,
     centimeter,
     core_optics::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
     degree,
@@ -2551,7 +2552,7 @@ mod test {
         rays.add_ray(ray1);
         assert_eq!(rays.total_energy(), joule!(2.0));
         let circle_config = CircleShape::new(millimeter!(0.5), millimeter!(0.0, 0.0)).unwrap();
-        let aperture = Aperture::BinaryCircle(circle_config, ApertureType::Hole);
+        let aperture = Aperture::new(ApertureShape::BinaryCircle(circle_config), ApertureType::Hole);
         rays.apodize(&aperture, &Isometry::identity()).unwrap();
         assert_eq!(rays.total_energy(), joule!(1.0));
     }

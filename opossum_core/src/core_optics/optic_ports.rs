@@ -16,7 +16,7 @@
 //! ```
 use crate::{
     J_per_cm2,
-    apertures::Aperture,
+    apertures::{Aperture, ApertureShape},
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
     generic_validators::{AllNotNan, AllPositive},
@@ -77,7 +77,7 @@ impl PortConfig {
 impl Default for PortConfig {
     fn default() -> Self {
         Self {
-            aperture: Aperture::Open,
+            aperture: Aperture::default(),
             coating: CoatingType::IdealAR,
             lidt: default_lidt(),
         }

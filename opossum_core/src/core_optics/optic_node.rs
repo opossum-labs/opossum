@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
-    apertures::Aperture,
+    apertures::{Aperture, ApertureShape},
     coatings::CoatingType,
     core_optics::{
         NodeAttr, OpticPorts, PortType, SceneryResources, hit_map::HitMap,
