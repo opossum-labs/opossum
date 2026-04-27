@@ -382,10 +382,8 @@ mod test {
         );
 
         let aperture = Aperture::new(
-            ApertureShape::BinaryCircle(
-                CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap()
-            ),
-            ApertureType::Hole,
+            ApertureShape::BinaryCircle(CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap()),
+            ApertureType::Hole, None
         );
         let os = OpticSurface::new(
             GeoSurfaceRef(Arc::new(Mutex::new(

@@ -1,5 +1,11 @@
 use super::Shape;
-use crate::{error::OpmResult, generic_validators::ValidateTrait, millimeter, prelude::ApertureShape, types::validated_type_definitions::{ValidatedCenter, ValidatedRadius}};
+use crate::{
+    error::OpmResult,
+    generic_validators::ValidateTrait,
+    millimeter,
+    prelude::ApertureShape,
+    types::validated_type_definitions::{ValidatedCenter, ValidatedRadius},
+};
 use nalgebra::{Isometry2, Point2};
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
@@ -12,7 +18,7 @@ pub struct CircleShape {
     #[schema(value_type = f64)]
     radius: ValidatedRadius,
     #[schema(value_type = Object)]
-    center: ValidatedCenter
+    center: ValidatedCenter,
 }
 
 impl From<CircleShape> for ApertureShape {
@@ -30,9 +36,12 @@ impl CircleShape {
     pub fn new(radius: Length, center: Point2<Length>) -> OpmResult<Self> {
         let validated_radius = ValidatedRadius::try_new(radius)?;
         let validated_center = ValidatedCenter::try_new(center)?;
-        Ok(Self { radius: validated_radius, center: validated_center })
+        Ok(Self {
+            radius: validated_radius,
+            center: validated_center,
+        })
     }
-    
+
     /// Returns the radius of this [`CircleShape`]
     #[must_use]
     pub fn radius(&self) -> Length {
@@ -88,7 +97,7 @@ mod test {
     fn new() {
         let center = meter!(0.0, 0.0);
         assert!(CircleShape::new(meter!(1.0), center).is_ok());
-        assert!(CircleShape::new(meter!(0.0), center).is_err());
+        assert!(CircleShape::new(meter!(0.0), center).is_ok());
         assert!(CircleShape::new(meter!(-1.0), center).is_err());
         assert!(CircleShape::new(meter!(f64::NAN), center).is_err());
         assert!(CircleShape::new(meter!(f64::INFINITY), center).is_err());

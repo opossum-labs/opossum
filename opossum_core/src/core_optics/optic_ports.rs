@@ -433,7 +433,7 @@ mod test {
         ports.add(&PortType::Output, "test2").unwrap();
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
+            "inputs:\n  <test1> aperture: Aperture { shape: Open, aperture_type: Hole }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Aperture { shape: Open, aperture_type: Hole }, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
         );
     }
     #[test]
@@ -445,7 +445,7 @@ mod test {
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test2> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
+            "inputs:\n  <test2> aperture: Aperture { shape: Open, aperture_type: Hole }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Aperture { shape: Open, aperture_type: Hole }, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
         );
     }
     #[test]

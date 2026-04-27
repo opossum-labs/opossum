@@ -1,5 +1,10 @@
 use super::Shape;
-use crate::{error::{OpmResult, OpossumError}, millimeter, types::validated_type_definitions::ValidatedPolygonPoints, generic_validators::ValidateTrait};
+use crate::{
+    error::{OpmResult, OpossumError},
+    generic_validators::ValidateTrait,
+    millimeter,
+    types::validated_type_definitions::ValidatedPolygonPoints,
+};
 use earcutr::earcut;
 use nalgebra::Point2;
 use opm_macros_lib::EnsureValidated;
@@ -16,13 +21,14 @@ pub struct PolygonConfig {
     triangle_indices: Vec<Vec<usize>>,
 }
 
-impl Default for PolygonConfig{
+impl Default for PolygonConfig {
     fn default() -> Self {
         let points = vec![
             Point2::new(millimeter!(-12.5), millimeter!(-12.5)),
             Point2::new(millimeter!(12.5), millimeter!(-12.5)),
             Point2::new(millimeter!(12.5), millimeter!(12.5)),
-            Point2::new(millimeter!(-12.5), millimeter!(12.5))];
+            Point2::new(millimeter!(-12.5), millimeter!(12.5)),
+        ];
         Self::new(points).unwrap()
     }
 }

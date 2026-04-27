@@ -11,7 +11,9 @@ pub struct Min3Entries;
 impl<T: Clone> ValidateVec<T> for Min3Entries {
     fn validate_vec(&self, values: &[T]) -> OpmResult<()> {
         if values.len() < 3 {
-            Err(OpossumError::Other("Vector must have at least 3 entries!".to_string()))
+            Err(OpossumError::Other(
+                "Vector must have at least 3 entries!".to_string(),
+            ))
         } else {
             Ok(())
         }
@@ -37,7 +39,11 @@ mod tests {
         let validator = Min3Entries;
         assert!(
             validator
-                .validate_vec(&vec![Length::new::<meter>(1.0), Length::new::<meter>(2.0), Length::new::<meter>(3.0)])
+                .validate_vec(&vec![
+                    Length::new::<meter>(1.0),
+                    Length::new::<meter>(2.0),
+                    Length::new::<meter>(3.0)
+                ])
                 .is_ok()
         );
         assert!(validator.validate_vec(&Vec::<Length>::new()).is_err());
@@ -48,7 +54,11 @@ mod tests {
         let validator = Min3Entries;
         assert!(
             validator
-                .validate_vec(&vec![Angle::new::<radian>(1.0), Angle::new::<radian>(2.0), Angle::new::<radian>(3.0)])
+                .validate_vec(&vec![
+                    Angle::new::<radian>(1.0),
+                    Angle::new::<radian>(2.0),
+                    Angle::new::<radian>(3.0)
+                ])
                 .is_ok()
         );
         assert!(validator.validate_vec(&Vec::<Angle>::new()).is_err());

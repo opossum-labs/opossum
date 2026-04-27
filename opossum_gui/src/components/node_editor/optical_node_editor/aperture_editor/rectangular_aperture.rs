@@ -4,7 +4,7 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    apertures::RectangleShape, meter, prelude::ApertureShape, utils::try_f64_to_usize
+    apertures::RectangleShape, meter, prelude::ApertureShape, utils::try_f64_to_usize,
 };
 use strum::EnumIter;
 
@@ -13,9 +13,8 @@ pub enum RectApertureParam {
     Width,
     Height,
     CenterX,
-    CenterY
+    CenterY,
 }
-
 
 impl From<RectApertureParam> for InputParam {
     fn from(value: RectApertureParam) -> Self {
@@ -72,7 +71,7 @@ impl IntoInputData<f64, RectangleShape, ApertureShape> for RectApertureParam {
             Self::CenterY => move |obj: &mut RectangleShape, val: f64| {
                 obj.set_center_y(meter!(val))
                     .log_err_with_context("`set_center_y` of rectangle");
-            },            
+            },
         }
     }
 }

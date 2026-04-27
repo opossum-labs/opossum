@@ -6,6 +6,7 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
         millimeter!(7.13),
         millimeter!(0., 0.),
         ApertureType::Hole,
+        None
     )?;
 
     let mut cb = NodeGroup::new("CamBox 1w");

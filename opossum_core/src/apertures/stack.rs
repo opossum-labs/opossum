@@ -1,6 +1,11 @@
 use super::{ApertureShape, Shape};
 use crate::{
-    apertures::{Aperture, CircleShape}, error::OpmResult, generic_validators::{AllNotEmpty, Pass, ValidateTrait}, reporting::plottable::{PlotData, PlotSeries}, utils::math_distribution_functions::ellipse, validated_vec, validated_vec_type
+    apertures::{Aperture, CircleShape},
+    error::OpmResult,
+    generic_validators::{AllNotEmpty, Pass, ValidateTrait},
+    reporting::plottable::{PlotData, PlotSeries},
+    utils::math_distribution_functions::ellipse,
+    validated_vec, validated_vec_type,
 };
 use nalgebra::{Matrix2xX, Point2};
 use opm_macros_lib::EnsureValidated;
@@ -9,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::millimeter};
 use utoipa::ToSchema;
 
-type ValidatedApertureStack = validated_vec_type!(Vec<Aperture>, Pass,AllNotEmpty);
+type ValidatedApertureStack = validated_vec_type!(Vec<Aperture>, Pass, AllNotEmpty);
 /// Configuration of an aperture stack
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, ToSchema)]
 pub struct StackShape {
@@ -17,9 +22,11 @@ pub struct StackShape {
     apertures: ValidatedApertureStack,
 }
 
-impl Default for StackShape{
+impl Default for StackShape {
     fn default() -> Self {
-        Self { apertures: validated_vec!(vec![Aperture::default()], Pass,AllNotEmpty).unwrap()}
+        Self {
+            apertures: validated_vec!(vec![Aperture::default()], Pass, AllNotEmpty).unwrap(),
+        }
     }
 }
 impl StackShape {
@@ -84,18 +91,18 @@ pub fn plot_circle(conf: &CircleShape) -> Vec<PlotSeries> {
 mod test {
     use approx::assert_abs_diff_eq;
 
-    use super::super::{ApertureType, Aperture, CircleShape, RectangleShape};
+    use super::super::{Aperture, ApertureType, CircleShape, RectangleShape};
     use super::*;
     use crate::meter;
 
     #[test]
     fn stack() {
         let r = RectangleShape::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5)).unwrap();
-        let r_ap = Aperture::new(ApertureShape::BinaryRectangle(r), ApertureType::Hole);
+        let r_ap = Aperture::new(ApertureShape::BinaryRectangle(r), ApertureType::Hole, None);
         let c = CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
-        let c_ap = Aperture::new(ApertureShape::BinaryCircle(c), ApertureType::Hole);
+        let c_ap = Aperture::new(ApertureShape::BinaryCircle(c), ApertureType::Hole, None);
         let s = StackShape::new(vec![r_ap, c_ap]).unwrap();
-        let s_ap = Aperture::new(ApertureShape::Stack(s), ApertureType::Hole);
+        let s_ap = Aperture::new(ApertureShape::Stack(s), ApertureType::Hole, None);
         assert_eq!(s_ap.apodize(&meter!(0.0, 0.0)), 1.0);
         assert_eq!(s_ap.apodize(&meter!(1.0, 0.0)), 1.0);
         assert_eq!(s_ap.apodize(&meter!(0.0, 1.0)), 1.0);
@@ -108,12 +115,12 @@ mod test {
         // 1. Create a circle at (0,0) with radius 1.0
         let circle = CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
         let circle_ap = ApertureShape::BinaryCircle(circle);
-        let circle_ap = Aperture::new(circle_ap, ApertureType::Hole);
+        let circle_ap = Aperture::new(circle_ap, ApertureType::Hole, None);
         // 2. Create a rectangle at (1,0) with width 2.0 and height 2.0
         // This rectangle covers x from 0.0 to 2.0 and y from -1.0 to 1.0
         let rect = RectangleShape::new(meter!(2.0), meter!(2.0), meter!(1.0, 0.0)).unwrap();
         let rect_ap = ApertureShape::BinaryRectangle(rect);
-        let rect_ap = Aperture::new(rect_ap, ApertureType::Hole);
+        let rect_ap = Aperture::new(rect_ap, ApertureType::Hole, None);
         // 3. Create the stack
         let stack = StackShape::new(vec![circle_ap, rect_ap]).unwrap();
 

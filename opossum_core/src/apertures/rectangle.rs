@@ -4,7 +4,12 @@ use uom::si::{f64::Length, length::meter};
 use utoipa::ToSchema;
 
 use super::Shape;
-use crate::{error::OpmResult, generic_validators::ValidateTrait, millimeter, types::validated_type_definitions::{ValidatedCenter, ValidatedSideLengths}, validated
+use crate::{
+    error::OpmResult,
+    generic_validators::ValidateTrait,
+    millimeter,
+    types::validated_type_definitions::{ValidatedCenter, ValidatedSideLengths},
+    validated,
 };
 use opm_macros_lib::EnsureValidated;
 /// Configuration data for a rectangular aperture.
@@ -58,12 +63,14 @@ impl RectangleShape {
     }
     /// Sets the x-center of this [`RectangleShape`].
     pub fn set_center_x(&mut self, center_x: Length) -> OpmResult<()> {
-        self.center.set(Point2::new(center_x, self.center.get().y))?;
+        self.center
+            .set(Point2::new(center_x, self.center.get().y))?;
         Ok(())
     }
     /// Sets the y-center of this [`RectangleShape`].
     pub fn set_center_y(&mut self, center_y: Length) -> OpmResult<()> {
-        self.center.set(Point2::new(self.center.get().x, center_y))?;
+        self.center
+            .set(Point2::new(self.center.get().x, center_y))?;
         Ok(())
     }
 }

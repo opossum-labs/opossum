@@ -1,11 +1,15 @@
 use super::Shape;
-use crate::{error::{OpmResult, OpossumError}, millimeter, types::validated_type_definitions::{ValidatedCenter, ValidatedSideLengths}};
+use crate::generic_validators::ValidateTrait;
+use crate::{
+    error::{OpmResult, OpossumError},
+    millimeter,
+    types::validated_type_definitions::{ValidatedCenter, ValidatedSideLengths},
+};
 use nalgebra::Point2;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, ratio::ratio};
 use utoipa::ToSchema;
-use crate::{generic_validators::ValidateTrait};
 
 /// Configuration data for a Gaussian aperture.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated, Default)]
@@ -25,7 +29,10 @@ impl GaussianShape {
     pub fn new(sigma: (Length, Length), center: Point2<Length>) -> OpmResult<Self> {
         let sigma_validated = ValidatedSideLengths::try_new(Point2::new(sigma.0, sigma.1))?;
         let center_validated = ValidatedCenter::try_new(center)?;
-        Ok(Self { sigma: sigma_validated, center: center_validated })
+        Ok(Self {
+            sigma: sigma_validated,
+            center: center_validated,
+        })
     }
     /// Returns the sigma of this [`GaussianShape`].
     #[must_use]

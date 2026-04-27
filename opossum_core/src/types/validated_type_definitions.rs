@@ -1,8 +1,8 @@
+use crate::error::OpmResult;
+use crate::generic_validators::*;
+use crate::{millimeter, validated, validated_type, validated_vec, validated_vec_type};
 use nalgebra::Point2;
 use uom::si::f64::Length;
-use crate::error::OpmResult;
-use crate::{millimeter, validated, validated_type, validated_vec, validated_vec_type};
-use crate::generic_validators::*;
 
 /// A validated pair of side lengths represented as a 2D point.
 ///
@@ -82,12 +82,12 @@ impl Default for ValidatedRadius {
     }
 }
 
-pub type ValidatedPolygonPoints = validated_vec_type!(Vec<(Point2<Length>)>, AllFinite && AllNotNan, Min3Entries);
+pub type ValidatedPolygonPoints =
+    validated_vec_type!(Vec<(Point2<Length>)>, AllFinite && AllNotNan, Min3Entries);
 
 impl ValidatedPolygonPoints {
-    
     pub fn try_new(points: Vec<Point2<Length>>) -> OpmResult<Self> {
-        validated_vec!(points,  AllFinite && AllNotNan, Min3Entries)
+        validated_vec!(points, AllFinite && AllNotNan, Min3Entries)
     }
 }
 
@@ -97,7 +97,8 @@ impl Default for ValidatedPolygonPoints {
             Point2::new(millimeter!(-12.5), millimeter!(-12.5)),
             Point2::new(millimeter!(12.5), millimeter!(-12.5)),
             Point2::new(millimeter!(12.5), millimeter!(12.5)),
-            Point2::new(millimeter!(-12.5), millimeter!(12.5))
-        ]).unwrap()
+            Point2::new(millimeter!(-12.5), millimeter!(12.5)),
+        ])
+        .unwrap()
     }
 }

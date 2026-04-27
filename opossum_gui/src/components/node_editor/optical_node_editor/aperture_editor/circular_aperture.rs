@@ -3,16 +3,14 @@ use crate::components::{
     node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
-use opossum_core::{
-    apertures::CircleShape, meter, prelude::ApertureShape, 
-};
+use opossum_core::{apertures::CircleShape, meter, prelude::ApertureShape};
 use strum::EnumIter;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 pub enum CircularApertureParam {
     Radius,
     CenterX,
-    CenterY
+    CenterY,
 }
 
 impl From<CircularApertureParam> for InputParam {
@@ -63,7 +61,7 @@ impl IntoInputData<f64, CircleShape, ApertureShape> for CircularApertureParam {
             Self::CenterY => move |obj: &mut CircleShape, val: f64| {
                 obj.set_center_y(meter!(val))
                     .log_err_with_context("`set_center_y` of circular aperture");
-            },            
+            },
         }
     }
 }

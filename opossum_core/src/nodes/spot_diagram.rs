@@ -512,6 +512,7 @@ mod test {
             millimeter!(1.0),
             millimeter!(0.0, 0.0),
             ApertureType::Hole,
+            None
         )
         .unwrap();
 

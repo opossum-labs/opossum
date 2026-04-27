@@ -30,18 +30,14 @@ mod rectangle;
 mod stack;
 
 use crate::{
-    error::OpmResult,
-    properties::Proptype,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
-    utils::{default_from_name::DefaultFromName, math_distribution_functions::ellipse},
-    generic_validators::ValidateTrait
+    error::OpmResult, generic_validators::ValidateTrait, prelude::Isometry, properties::Proptype, reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable}, utils::{default_from_name::DefaultFromName, math_distribution_functions::ellipse}
 };
 use core::f64;
-use std::fmt::Display;
 use nalgebra::{Matrix2xX, MatrixXx2, Point2};
 use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use strum::EnumIter;
 use uom::si::{f64::Length, length::millimeter};
 
@@ -55,7 +51,18 @@ use utoipa::ToSchema;
 /// The apodization type of an [`Aperture`].
 ///
 /// Each aperture can act as a "hole" or "obstruction"
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, EnumIter, EnsureValidated)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    ToSchema,
+    EnumIter,
+    EnsureValidated,
+)]
 pub enum ApertureType {
     /// the [`Aperture`] shape acts as a hole. The inner part of the shape is transparent.
     #[default]
@@ -65,15 +72,21 @@ pub enum ApertureType {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated)]
-pub struct Aperture{
+pub struct Aperture {
     shape: ApertureShape,
-    aperture_type: ApertureType
-    // isometry: Isometry
+    aperture_type: ApertureType, 
+    #[validate(skip)]
+    #[schema(value_type = Object)]
+    isometry: Isometry
 }
 
 impl Aperture {
-    pub fn new(shape: ApertureShape, aperture_type: ApertureType) -> Self {
-        Self { shape, aperture_type }
+    pub fn new(shape: ApertureShape, aperture_type: ApertureType, isometry: Option<Isometry>) -> Self {
+        Self {
+            shape,
+            aperture_type,
+            isometry: isometry.unwrap_or_else(Isometry::identity)
+        }
     }
     pub fn apodize(&self, point: &Point2<Length>) -> f64 {
         let base_transmission = self.shape.apodize(point);
@@ -89,6 +102,9 @@ impl Aperture {
     pub fn aperture_type(&self) -> &ApertureType {
         &self.aperture_type
     }
+    pub fn isometry(&self) -> &Isometry {
+        &self.isometry
+    }
     /// Create a new circular aperture.
     ///
     /// # Errors
@@ -98,9 +114,15 @@ impl Aperture {
         radius: Length,
         center: Point2<Length>,
         aperture_type: ApertureType,
+        isometry: Option<Isometry>
     ) -> OpmResult<Self> {
         let config = CircleShape::new(radius, center)?;
-        Ok(Self::new(ApertureShape::BinaryCircle(config), aperture_type))
+        Ok(Self::new(
+            ApertureShape::BinaryCircle(config),
+            aperture_type,
+            isometry
+
+        ))
     }
     /// Create a new retangular aperture.
     ///
@@ -112,9 +134,14 @@ impl Aperture {
         height: Length,
         center: Point2<Length>,
         aperture_type: ApertureType,
+        isometry: Option<Isometry>
     ) -> OpmResult<Self> {
         let config = RectangleShape::new(width, height, center)?;
-        Ok(Self::new(ApertureShape::BinaryRectangle(config), aperture_type))
+        Ok(Self::new(
+            ApertureShape::BinaryRectangle(config),
+            aperture_type,
+            isometry
+        ))
     }
     /// Create a new Gaussian aperture.
     ///
@@ -125,9 +152,10 @@ impl Aperture {
         sigma: (Length, Length),
         center: Point2<Length>,
         aperture_type: ApertureType,
+        isometry: Option<Isometry>
     ) -> OpmResult<Self> {
         let config = GaussianShape::new(sigma, center)?;
-        Ok(Self::new(ApertureShape::Gaussian(config), aperture_type))
+        Ok(Self::new(ApertureShape::Gaussian(config), aperture_type, isometry))
     }
     /// Create a new polygon aperture.
     ///
@@ -137,15 +165,21 @@ impl Aperture {
     pub fn new_polygon(
         points: Vec<Point2<Length>>,
         aperture_type: ApertureType,
+        isometry: Option<Isometry>
     ) -> OpmResult<Self> {
         let config = PolygonConfig::new(points)?;
-        Ok(Self::new(ApertureShape::BinaryPolygon(config), aperture_type))
+        Ok(Self::new(
+            ApertureShape::BinaryPolygon(config),
+            aperture_type,
+            isometry
+
+        ))
     }
     /// Create a new stack aperture.
     #[must_use]
-    pub fn new_stack(apertures: Vec<Self>, aperture_type: ApertureType) -> OpmResult<Self> {
+    pub fn new_stack(apertures: Vec<Self>, aperture_type: ApertureType, isometry: Option<Isometry>) -> OpmResult<Self> {
         let config = StackShape::new(apertures)?;
-        Ok(Self::new(ApertureShape::Stack(config), aperture_type))
+        Ok(Self::new(ApertureShape::Stack(config), aperture_type, isometry))
     }
 
     /// Check if the aperture-shape is [`ApertureShape::Open`]
@@ -155,7 +189,9 @@ impl Aperture {
 }
 
 /// Different aperture types
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnumIter, EnsureValidated)]
+#[derive(
+    Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnumIter, EnsureValidated,
+)]
 pub enum ApertureShape {
     /// completely transparent aperture. This is the default.
     #[default]
@@ -189,7 +225,6 @@ impl Display for ApertureShape {
 }
 
 impl ApertureShape {
-
     #[must_use]
     /// Check if the aperture is [`ApertureShape::Open`]
     pub const fn is_none(&self) -> bool {
@@ -206,11 +241,10 @@ impl ApertureShape {
             Self::BinaryRectangle(shape) => shape.transmission_factor(point),
             Self::BinaryPolygon(shape) => shape.transmission_factor(point),
             Self::Gaussian(shape) => shape.transmission_factor(point),
-            Self::Stack(apertures) => 
-                apertures
-                    .apertures()
-                    .iter()
-                    .fold(1.0, |acc, ap| acc * ap.apodize(point)),
+            Self::Stack(apertures) => apertures
+                .apertures()
+                .iter()
+                .fold(1.0, |acc, ap| acc * ap.apodize(point)),
         }
     }
 }
@@ -352,9 +386,9 @@ mod test {
     fn test_new_circle() {
         let center = meter!(0.0, 0.0);
         // Valid radius
-        assert!(Aperture::new_circle(meter!(1.0), center, ApertureType::Hole).is_ok());
+        assert!(Aperture::new_circle(meter!(1.0), center, ApertureType::Hole, None).is_ok());
         // Invalid radius (negative)
-        assert!(Aperture::new_circle(meter!(-1.0), center, ApertureType::Hole).is_err());
+        assert!(Aperture::new_circle(meter!(-1.0), center, ApertureType::Hole, None).is_err());
     }
 
     #[test]
@@ -362,11 +396,11 @@ mod test {
         let center = meter!(0.0, 0.0);
         // Valid dimensions
         assert!(
-            Aperture::new_rectangle(meter!(1.0), meter!(1.0), center, ApertureType::Hole).is_ok()
+            Aperture::new_rectangle(meter!(1.0), meter!(1.0), center, ApertureType::Hole, None).is_ok()
         );
         // Invalid height
         assert!(
-            Aperture::new_rectangle(meter!(1.0), meter!(0.0), center, ApertureType::Hole).is_err()
+            Aperture::new_rectangle(meter!(1.0), meter!(0.0), center, ApertureType::Hole, None).is_err()
         );
     }
 
@@ -375,11 +409,11 @@ mod test {
         let center = meter!(0.0, 0.0);
         // Valid sigma
         assert!(
-            Aperture::new_gaussian((meter!(1.0), meter!(1.0)), center, ApertureType::Hole).is_ok()
+            Aperture::new_gaussian((meter!(1.0), meter!(1.0)), center, ApertureType::Hole, None).is_ok()
         );
         // Invalid sigma (zero)
         assert!(
-            Aperture::new_gaussian((meter!(0.0), meter!(1.0)), center, ApertureType::Hole).is_err()
+            Aperture::new_gaussian((meter!(0.0), meter!(1.0)), center, ApertureType::Hole, None).is_err()
         );
     }
 
@@ -387,26 +421,27 @@ mod test {
     fn test_new_polygon() {
         // Valid triangle
         let points = vec![meter!(0.0, 0.0), meter!(1.0, 0.0), meter!(0.0, 1.0)];
-        assert!(Aperture::new_polygon(points, ApertureType::Hole).is_ok());
+        assert!(Aperture::new_polygon(points, ApertureType::Hole, None).is_ok());
         // Invalid polygon (too few points)
         let points_too_few = vec![meter!(0.0, 0.0), meter!(1.0, 0.0)];
-        assert!(Aperture::new_polygon(points_too_few, ApertureType::Hole).is_err());
+        assert!(Aperture::new_polygon(points_too_few, ApertureType::Hole, None).is_err());
     }
 
     #[test]
     fn test_new_stack() {
         let circle =
-            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
+            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole, None).unwrap();
         let rect = Aperture::new_rectangle(
             meter!(1.0),
             meter!(1.0),
             meter!(0.0, 0.0),
             ApertureType::Hole,
+            None
         )
         .unwrap();
 
         // Stack returns Self directly, not OpmResult
-        let stack = Aperture::new_stack(vec![circle, rect], ApertureType::Obstruction).unwrap();
+        let stack = Aperture::new_stack(vec![circle, rect], ApertureType::Obstruction, None).unwrap();
 
         if let ApertureShape::Stack(config) = stack.shape {
             assert_eq!(config.apertures().len(), 2);
@@ -420,16 +455,16 @@ mod test {
     fn test_is_none() {
         assert!(ApertureShape::Open.is_none());
         let circle =
-            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
+            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole, None).unwrap();
         assert!(!circle.is_none());
     }
     #[test]
     fn test_obstruction_logic() {
         // A circle as a hole (default)
-        let hole = Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
+        let hole = Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole, None).unwrap();
         // A circle as an obstruction
         let block =
-            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Obstruction).unwrap();
+            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Obstruction, None).unwrap();
 
         let p_inside = meter!(0.5, 0.0);
         let p_outside = meter!(2.0, 0.0);
