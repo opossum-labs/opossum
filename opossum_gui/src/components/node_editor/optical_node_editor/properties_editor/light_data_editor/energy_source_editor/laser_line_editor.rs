@@ -4,7 +4,7 @@ use crate::{
         logger::LogResultExt,
         node_editor::inputs::{
             InputData, InputParam, IntoInputData, IntoInputDataStrings, format_si_with_base_unit,
-            input_components::{InputParamLabeledInput, RowedInputs},
+            input_components::{InputParamLabeledInput, RowedInputs, UnitHandling},
             parse_si_number, parse_unit_input_strict,
         },
     },
@@ -213,8 +213,22 @@ fn LaserLineList(
                     };
                     rsx! {
                         li { class,
-                            span { {format!("λ: {}", format_si_with_base_unit(line.0.value, "m", false))} }
-                            span { {format!("E: {}", format_si_with_base_unit(line.1.value, "J", false))} }
+                            span {
+                                {
+                                    format!(
+                                        "λ: {}",
+                                        format_si_with_base_unit(line.0.value, &UnitHandling::new("m", true), false),
+                                    )
+                                }
+                            }
+                            span {
+                                {
+                                    format!(
+                                        "E: {}",
+                                        format_si_with_base_unit(line.1.value, &UnitHandling::new("J", true), false),
+                                    )
+                                }
+                            }
                             a {
                                 class: if readonly { "ms-auto text-muted" } else { "text-danger ms-auto" },
                                 onclick: {

@@ -16,7 +16,8 @@ use crate::{
     OPOSSUM_UI_LOGS,
     api::{get_ports_of_group, patch_node_port_config},
     components::node_editor::{
-        accordion::AccordionItem, inputs::input_components::NodeConfigUnitInput,
+        accordion::AccordionItem,
+        inputs::input_components::{NodeConfigUnitInput, UnitHandling},
         node_config_editor::NodeChangeEvent,
         optical_node_editor::port_config_editor::coating_editor::CoatingEditor,
     },
@@ -133,7 +134,7 @@ pub fn SinglePortConfigEditor(
                 id: node_id.read().to_string(),
                 label: "LIDT",
                 value: port_config.lidt.get().get::<joule_per_square_centimeter>(),
-                base_unit: "J/cm²",
+                unit_config: UnitHandling::new("J/cm²", true),
                 onchange: move |value: f64| {
                     let mut update_port_request = UpdatePortRequest::default();
                     let old_fluence = port_config.lidt;

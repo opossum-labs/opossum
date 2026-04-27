@@ -9,7 +9,7 @@ use crate::{
     components::node_editor::{
         accordion::ElementList,
         inputs::{
-            input_components::{LabeledSelect, NodeConfigPlainF64Input},
+            input_components::{LabeledSelect, NodeConfigUnitInput, UnitHandling},
             select_options_from_enum_iterator,
         },
     },
@@ -27,12 +27,13 @@ pub fn CoatingEditor(
     }];
     if let CoatingType::ConstantR(conf) = &*coating_type.read() {
         element_list.push(rsx! {
-            NodeConfigPlainF64Input {
+            NodeConfigUnitInput {
                 id: "coatingReflectivityInput",
                 label: "Reflectivity",
-                value: conf.reflectivity(),
+                value: conf.reflectivity() * 100.0,
+                unit_config: UnitHandling::new("%", false),
                 onchange: move |val: f64| {
-                    if let Ok(new_conf) = CoatingConstantR::new(val) {
+                    if let Ok(new_conf) = CoatingConstantR::new(val / 100.0) {
                         on_change.call(new_conf.into());
                     } else {
                         OPOSSUM_UI_LOGS
