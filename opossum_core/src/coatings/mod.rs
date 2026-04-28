@@ -4,6 +4,7 @@
 use crate::{error::OpmResult, light::Ray, utils::default_from_name::DefaultFromName};
 use nalgebra::Vector3;
 use std::fmt::Display;
+use uom::si::f64::Ratio;
 mod constant_r;
 mod fresnel;
 mod ideal_ar;
@@ -38,7 +39,7 @@ impl CoatingType {
         incoming_ray: &Ray,
         surface_normal: Vector3<f64>,
         n2: f64,
-    ) -> OpmResult<f64> {
+    ) -> OpmResult<Ratio> {
         match self {
             Self::IdealAR => {
                 let c = IdealAR;
@@ -85,5 +86,6 @@ impl DefaultFromName for CoatingType {
 pub trait Coating {
     /// Calculate the reflectivity based on the concrete model for an incoming [`Ray`] on a surface with
     /// a given `surface_normal` at the intersection point and the refractive index of the following medium.
-    fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: Vector3<f64>, n2: f64) -> f64;
+    fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: Vector3<f64>, n2: f64)
+    -> Ratio;
 }

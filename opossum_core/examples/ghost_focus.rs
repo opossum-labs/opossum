@@ -1,8 +1,9 @@
-use opossum_core::coatings::CoatingConstantR;
-use opossum_core::prelude::*;
 use opossum_core::{
-    coatings::CoatingType, core_optics::PortType, distributions::energy::General2DGaussian,
-    distributions::position::HexagonalTiling, distributions::spectral::LaserLines,
+    coatings::{CoatingConstantR, CoatingType},
+    core_optics::PortType,
+    distributions::{energy::General2DGaussian, position::HexagonalTiling, spectral::LaserLines},
+    percent,
+    prelude::*,
 };
 use std::path::Path;
 
@@ -13,12 +14,12 @@ fn main() -> OpmResult<()> {
     lens.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingConstantR::new(0.05)?.into(),
+        &CoatingConstantR::new(percent!(5.0))?.into(),
     )?;
     lens.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingConstantR::new(0.05)?.into(),
+        &CoatingConstantR::new(percent!(5.0))?.into(),
     )?;
     let i_l = scenery.add_node(lens)?;
 
@@ -26,12 +27,12 @@ fn main() -> OpmResult<()> {
     lens2.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingConstantR::new(0.2)?.into(),
+        &CoatingConstantR::new(percent!(2.0))?.into(),
     )?;
     lens2.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingConstantR::new(0.2)?.into(),
+        &CoatingConstantR::new(percent!(2.0))?.into(),
     )?;
     lens2.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
     lens2.set_coating(&PortType::Output, "output_1", &CoatingType::Fresnel)?;

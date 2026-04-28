@@ -1,5 +1,5 @@
 use opossum_core::coatings::CoatingConstantR;
-use opossum_core::{J_per_cm2, prelude::*};
+use opossum_core::{J_per_cm2, percent, prelude::*};
 use opossum_core::{
     distributions::energy::General2DGaussian, distributions::position::HexagonalTiling,
     distributions::spectral::LaserLines, refractive_index::refr_index_schott::RefrIndexSchott,
@@ -35,7 +35,7 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
     // coatings
-    let ar_coating = &CoatingConstantR::new(0.01)?.into();
+    let ar_coating = &CoatingConstantR::new(percent!(1.0))?.into();
     // apertures
     let a_2inch = Aperture::new_circle(millimeter!(25.4), millimeter!(0., 0.), ApertureType::Hole)?;
 

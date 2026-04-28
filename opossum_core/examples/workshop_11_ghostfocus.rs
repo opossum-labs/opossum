@@ -1,9 +1,9 @@
 use opossum_core::coatings::CoatingConstantR;
-use opossum_core::prelude::*;
 use opossum_core::{
     J_per_cm2, coatings::CoatingType, distributions::energy::General2DGaussian,
     distributions::position::HexagonalTiling, distributions::spectral::LaserLines,
 };
+use opossum_core::{percent, prelude::*};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
@@ -20,12 +20,12 @@ fn main() -> OpmResult<()> {
     lens.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingConstantR::new(0.05)?.into(),
+        &CoatingConstantR::new(percent!(5.0))?.into(),
     )?;
     lens.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingConstantR::new(0.05)?.into(),
+        &CoatingConstantR::new(percent!(5.0))?.into(),
     )?;
     lens.set_lidt(&PortType::Input, "input_1", J_per_cm2!(2.0))?;
     lens.set_lidt(&PortType::Output, "output_1", J_per_cm2!(2.0))?;
@@ -38,12 +38,12 @@ fn main() -> OpmResult<()> {
     lens2.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingConstantR::new(0.2)?.into(),
+        &CoatingConstantR::new(percent!(20.0))?.into(),
     )?;
     lens2.set_coating(
         &PortType::Output,
         "output_1",
-        &CoatingConstantR::new(0.2)?.into(),
+        &CoatingConstantR::new(percent!(20.0))?.into(),
     )?;
     lens2.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
     lens2.set_coating(&PortType::Output, "output_1", &CoatingType::Fresnel)?;

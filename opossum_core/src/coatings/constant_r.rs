@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use super::{Coating, CoatingType};
+use crate::percent;
 use crate::{
     error::OpmResult,
     generic_validators::{AllInRange, ValidateTrait},
@@ -9,11 +10,12 @@ use crate::{
 use nalgebra::Vector3;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::Ratio;
 use utoipa::ToSchema;
 
 #[derive(Deserialize)]
 struct NonValidatedCoatingConstantR {
-    pub reflectivity: f64,
+    pub reflectivity: Ratio,
 }
 
 impl TryFrom<NonValidatedCoatingConstantR> for CoatingConstantR {
@@ -24,10 +26,14 @@ impl TryFrom<NonValidatedCoatingConstantR> for CoatingConstantR {
 }
 
 /// Ein Type-Alias, um das Makro vor dem Utoipa-Parser zu verstecken.
-pub type ValidatedReflectivity = validated_type!(f64, AllInRange<f64>);
+pub type ValidatedReflectivity = validated_type!(Ratio, AllInRange<Ratio>);
 impl Default for ValidatedReflectivity {
     fn default() -> Self {
-        validated!(0.01, AllInRange::new(0.0, 1.0, true).unwrap()).unwrap()
+        validated!(
+            percent!(1.0),
+            AllInRange::new(percent!(0.0), percent!(100.0), true).unwrap()
+        )
+        .unwrap()
     }
 }
 
@@ -38,6 +44,8 @@ impl Default for ValidatedReflectivity {
 #[derive(Default, Deserialize, Serialize, Debug, Clone, ToSchema, PartialEq, EnsureValidated)]
 #[serde(try_from = "NonValidatedCoatingConstantR")]
 pub struct CoatingConstantR {
+    /// The reflectivity of the coating in the range [0.0, 1.0].
+    #[schema(value_type = f64, example = 0.5)]
     reflectivity: ValidatedReflectivity,
 }
 
@@ -47,7 +55,7 @@ impl CoatingConstantR {
     /// # Errors
     ///
     /// This function returns an error if the given reflectivity is outside the interval [0.0,1.0] or not finite.
-    pub fn new(reflectivity: f64) -> OpmResult<Self> {
+    pub fn new(reflectivity: Ratio) -> OpmResult<Self> {
         let mut new_reflectivity = ValidatedReflectivity::default();
         new_reflectivity.set(reflectivity)?;
         Ok(Self {
@@ -56,7 +64,7 @@ impl CoatingConstantR {
     }
     /// Returns the reflectivity of this [`CoatingConstantR`].
     #[must_use]
-    pub const fn reflectivity(&self) -> f64 {
+    pub const fn reflectivity(&self) -> Ratio {
         *self.reflectivity.get()
     }
 }
@@ -67,7 +75,7 @@ impl Coating for CoatingConstantR {
         _incoming_ray: &Ray,
         _surface_normal: Vector3<f64>,
         _n2: f64,
-    ) -> f64 {
+    ) -> Ratio {
         *self.reflectivity.get()
     }
 }
@@ -86,28 +94,31 @@ mod test {
 
     #[test]
     fn new() {
-        assert!(CoatingConstantR::new(-0.1).is_err());
-        assert!(CoatingConstantR::new(f64::NAN).is_err());
-        assert!(CoatingConstantR::new(f64::INFINITY).is_err());
-        assert!(CoatingConstantR::new(f64::NEG_INFINITY).is_err());
-        assert!(CoatingConstantR::new(0.0).is_ok());
-        assert!(CoatingConstantR::new(1.0).is_ok());
-        assert!(CoatingConstantR::new(1.01).is_err());
+        assert!(CoatingConstantR::new(percent!(-0.1)).is_err());
+        assert!(CoatingConstantR::new(percent!(f64::NAN)).is_err());
+        assert!(CoatingConstantR::new(percent!(f64::INFINITY)).is_err());
+        assert!(CoatingConstantR::new(percent!(f64::NEG_INFINITY)).is_err());
+        assert!(CoatingConstantR::new(percent!(0.0)).is_ok());
+        assert!(CoatingConstantR::new(percent!(100.0)).is_ok());
+        assert!(CoatingConstantR::new(percent!(100.1)).is_err());
     }
     #[test]
     fn from() {
-        let coating = CoatingConstantR::new(0.5).unwrap();
+        let coating = CoatingConstantR::new(percent!(50.0)).unwrap();
         if let CoatingType::ConstantR(config) = coating.into() {
-            assert_eq!(*config.reflectivity.get(), 0.5);
+            assert_eq!(*config.reflectivity.get(), percent!(50.0));
         } else {
             panic!("Expected CoatingType::ConstantR variant");
         }
     }
     #[test]
     fn calc_refl() {
-        let coating = CoatingConstantR::new(0.5).unwrap();
+        let coating = CoatingConstantR::new(percent!(50.0)).unwrap();
         let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap();
         let surface_normal = vector![0.0, 0.0, -1.0];
-        assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.5), 0.5);
+        assert_eq!(
+            coating.calc_reflectivity(&ray, surface_normal, 1.5),
+            percent!(50.0)
+        );
     }
 }

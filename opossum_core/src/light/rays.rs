@@ -48,6 +48,7 @@ use nalgebra::{
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Range, path::Path};
+use uom::si::f64::Ratio;
 use uom::{
     num_traits::Zero,
     si::{
@@ -1756,9 +1757,9 @@ impl FluenceRays {
     ///
     /// # Errors
     /// This function errors if the factor is negative or not finite
-    pub fn change_effective_energy_by_factor(&mut self, factor: f64) -> OpmResult<()> {
+    pub fn change_effective_energy_by_factor(&mut self, factor: Ratio) -> OpmResult<()> {
         if factor.is_finite() && factor.is_sign_positive() {
-            self.effective_energy *= factor;
+            self.effective_energy = self.effective_energy * factor;
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -1828,7 +1829,7 @@ mod test {
         },
         joule, meter, millimeter, nanometer,
         nodes::SplittingConfig,
-        radian,
+        percent, radian,
         refractive_index::{RefrIndexConst, refr_index_vaccuum},
         utils::test_helper::test_helper::check_logs,
     };
@@ -2478,7 +2479,7 @@ mod test {
                 .unwrap(),
         );
         let mut s = OpticSurface::default();
-        s.set_coating(CoatingConstantR::new(0.2).unwrap().into());
+        s.set_coating(CoatingConstantR::new(percent!(20.0)).unwrap().into());
         let reflected = rays
             .refract_on_surface(
                 &mut s,
@@ -3100,7 +3101,7 @@ mod fluence_rays_test {
     use crate::{
         J_per_cm2, joule,
         light::{Ray, Rays},
-        meter, nanometer,
+        meter, nanometer, percent,
     };
 
     use super::FluenceRays;
@@ -3198,26 +3199,38 @@ mod fluence_rays_test {
         let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 1e-8);
 
-        assert!(fluence_rays.change_effective_energy_by_factor(-1.).is_err());
         assert!(
             fluence_rays
-                .change_effective_energy_by_factor(f64::NAN)
+                .change_effective_energy_by_factor(percent!(-100.0))
                 .is_err()
         );
         assert!(
             fluence_rays
-                .change_effective_energy_by_factor(f64::NEG_INFINITY)
+                .change_effective_energy_by_factor(percent!(f64::NAN))
                 .is_err()
         );
         assert!(
             fluence_rays
-                .change_effective_energy_by_factor(f64::INFINITY)
+                .change_effective_energy_by_factor(percent!(f64::NEG_INFINITY))
+                .is_err()
+        );
+        assert!(
+            fluence_rays
+                .change_effective_energy_by_factor(percent!(f64::INFINITY))
                 .is_err()
         );
 
-        assert!(fluence_rays.change_effective_energy_by_factor(2.).is_ok());
+        assert!(
+            fluence_rays
+                .change_effective_energy_by_factor(percent!(200.0))
+                .is_ok()
+        );
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 2e-8);
-        assert!(fluence_rays.change_effective_energy_by_factor(0.).is_ok());
+        assert!(
+            fluence_rays
+                .change_effective_energy_by_factor(percent!(0.0))
+                .is_ok()
+        );
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 0.);
     }
 }
