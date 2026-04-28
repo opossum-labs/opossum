@@ -1,5 +1,5 @@
-use opossum_core::coatings::CoatingType;
-use opossum_core::prelude::*;
+use opossum_core::coatings::CoatingConstantR;
+use opossum_core::{percent, prelude::*};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
@@ -9,7 +9,7 @@ fn main() -> OpmResult<()> {
     mirror1.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.5 },
+        &CoatingConstantR::new(percent!(50.0))?.into(),
     )?;
     let i_m1 = scenery.add_node(mirror1)?;
     let i_m2 = scenery.add_node(

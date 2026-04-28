@@ -1,6 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 pub mod alignment_editor;
 pub mod general_editor;
+pub mod port_config_editor;
 pub mod properties_editor;
 
 pub(super) use alignment_editor::{
@@ -13,6 +14,7 @@ use crate::components::{
         optical_node_editor::{
             alignment_editor::{AlignmentEditor, PositioningEditor},
             general_editor::GeneralEditor,
+            port_config_editor::PortConfigEditor,
             properties_editor::PropertiesEditor,
         },
     },
@@ -72,6 +74,12 @@ pub fn OpticalNodeEditor(
                     GeneralEditor {
                         node_info: node_info_sig,
                         active_node,
+                        on_change,
+                        readonly: readonly(),
+                    }
+                    PortConfigEditor {
+                        node_id,
+                        node_info: node_info_sig,
                         on_change,
                         readonly: readonly(),
                     }

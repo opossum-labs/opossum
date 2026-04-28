@@ -368,7 +368,7 @@ pub struct UpdateConnectionRequest {
 // ============================================================================
 
 /// Response payload containing port configurations (Aperture, Coating, LIDT)
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct NodePortsResponse {
     /// The input ports of the node (accounts for node inversion)
     pub inputs: BTreeMap<String, PortConfig>,
@@ -377,14 +377,14 @@ pub struct NodePortsResponse {
 }
 
 /// Request payload for partial updates of a specific port
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
 pub struct UpdatePortRequest {
     /// The new aperture of the port
     pub aperture: Option<Aperture>,
     /// The new coating of the port
     pub coating: Option<CoatingType>,
     /// The new Laser Induced Damage Threshold
-    #[schema(value_type = Option<f64>)] // Swagger trick for the type alias
+    #[schema(value_type = Option<f64>)]
     pub lidt: Option<ValidatedLidt>,
 }
 

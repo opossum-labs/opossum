@@ -9,7 +9,7 @@ use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::{
     energy::joule,
-    f64::{Energy, Length},
+    f64::{Energy, Length, Ratio},
     length::{meter, nanometer},
 };
 
@@ -24,6 +24,7 @@ use crate::{
     light::{FluenceRays, Rays},
     meter,
     nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
+    percent,
     utils::{LockExt, geom_transformation::Isometry},
 };
 
@@ -581,7 +582,7 @@ impl Ray {
                     - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
                 self.prev_dir = Some(self.dir);
                 self.dir = refract_dir;
-                self.e = input_energy * (1. - reflectivity);
+                self.e = input_energy * (percent!(100.0) - reflectivity);
                 reflected_ray.prev_dir = Some(reflected_ray.dir);
                 reflected_ray.dir = reflected_dir;
                 reflected_ray.e = input_energy * reflectivity;
@@ -609,7 +610,7 @@ impl Ray {
                             .inverse_transform_point(&intersection_point),
                         *helper_fluence,
                     )?));
-                    self.change_helper_fluence_by_factor(1. - reflectivity)?;
+                    self.change_helper_fluence_by_factor(percent!(100.0) - reflectivity)?;
                     reflected_ray.change_helper_fluence_by_factor(reflectivity)?;
                 }
 
@@ -630,7 +631,7 @@ impl Ray {
         }
     }
 
-    fn change_helper_fluence_by_factor(&mut self, factor: f64) -> OpmResult<()> {
+    fn change_helper_fluence_by_factor(&mut self, factor: Ratio) -> OpmResult<()> {
         self.helper_rays.as_mut().map_or(Ok(()), |helper_rays| {
             helper_rays.change_effective_energy_by_factor(factor)
         })
@@ -644,18 +645,11 @@ impl Ray {
     /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the interval `(0.0..=1.0)`
     pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
         let transmission = match filter {
-            FilterType::Constant(t) => {
-                if !(0.0..=1.0).contains(t) {
-                    return Err(OpossumError::Other(
-                        "transmission factor must be within (0.0..=1.0)".into(),
-                    ));
-                }
-                *t
-            }
+            FilterType::Constant(t) => *t.transmission(),
             FilterType::Spectrum(s) => {
                 let transmission = s.get_value(&self.wavelength());
                 if let Some(t) = transmission {
-                    t
+                    t.into()
                 } else {
                     return Err(OpossumError::Other(
                         "wavelength of ray outside filter spectrum".into(),
@@ -663,9 +657,7 @@ impl Ray {
                 }
             }
         };
-        self.e *= transmission;
-        // let mut new_ray = self.clone();
-        // new_ray.e *= transmission;
+        self.e = self.e * transmission;
         Ok(())
     }
     /// Split a ray with the given energy splitting ratio.
@@ -826,14 +818,15 @@ mod test {
     use super::*;
     use crate::{
         J_per_cm2,
-        coatings::CoatingType,
+        coatings::CoatingConstantR,
         degree, joule,
         light::Spectrum,
         millimeter, nanometer,
         nodes::{
             SplittingConfig,
-            ideal_filter::{EdgeFilter, EdgeFilterType},
+            ideal_filter::{EdgeFilter, EdgeFilterType, FilterConst},
         },
+        percent,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use core::f64;
@@ -1152,7 +1145,7 @@ mod test {
         let position = Point3::origin();
         let wvl = nanometer!(1054.0);
         let e = joule!(1.0);
-        let reflectivity = 0.2;
+        let reflectivity = percent!(20.0);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
         let plane_z_pos = millimeter!(10.0);
         let isometry = Isometry::new(
@@ -1162,7 +1155,7 @@ mod test {
         .unwrap();
         let mut s = OpticSurface::default();
         s.set_isometry(isometry);
-        s.set_coating(CoatingType::ConstantR { reflectivity });
+        s.set_coating(CoatingConstantR::new(reflectivity).unwrap().into());
         assert!(
             ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
                 .is_err()
@@ -1188,7 +1181,7 @@ mod test {
         assert_eq!(ray.path_length(), plane_z_pos);
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.number_of_refractions(), 1);
-        assert_eq!(ray.energy(), (1. - reflectivity) * e);
+        assert_eq!(ray.energy(), (percent!(100.0) - reflectivity) * e);
 
         // reflected ray
         assert_eq!(reflected_ray.pos, millimeter!(0., 0., 10.));
@@ -1343,15 +1336,15 @@ mod test {
         let position = millimeter!(0., 1., 0.);
         let wvl = nanometer!(1054.0);
         let mut ray = Ray::new_collimated(position, wvl, joule!(1.0)).unwrap();
-        let _ = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        let _ = ray
+            .filter_energy(&FilterType::Constant(
+                FilterConst::new(percent!(30.0)).unwrap(),
+            ))
+            .unwrap();
         assert_eq!(ray.pos, millimeter!(0., 1., 0.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.wvl, wvl);
         assert_eq!(ray.e, joule!(0.3));
-        let mut ray = Ray::new_collimated(position, wvl, joule!(1.0)).unwrap();
-        assert!(ray.filter_energy(&FilterType::Constant(-0.1)).is_err());
-        let mut ray = Ray::new_collimated(position, wvl, joule!(1.0)).unwrap();
-        assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
     }
     #[test]
     fn filter_spectrum() {
@@ -1784,23 +1777,29 @@ mod test {
             J_per_cm2!(1.),
         )
         .unwrap();
-        assert!(original_ray.change_helper_fluence_by_factor(-1.).is_err());
         assert!(
             original_ray
-                .change_helper_fluence_by_factor(f64::NAN)
+                .change_helper_fluence_by_factor(percent!(-100.0))
                 .is_err()
         );
         assert!(
             original_ray
-                .change_helper_fluence_by_factor(f64::NEG_INFINITY)
+                .change_helper_fluence_by_factor(percent!(f64::NAN))
                 .is_err()
         );
         assert!(
             original_ray
-                .change_helper_fluence_by_factor(f64::INFINITY)
+                .change_helper_fluence_by_factor(percent!(f64::NEG_INFINITY))
                 .is_err()
         );
-        original_ray.change_helper_fluence_by_factor(4.).unwrap();
+        assert!(
+            original_ray
+                .change_helper_fluence_by_factor(percent!(f64::INFINITY))
+                .is_err()
+        );
+        original_ray
+            .change_helper_fluence_by_factor(percent!(400.0))
+            .unwrap();
         assert_relative_eq!(
             original_ray.helper_ray_fluence().unwrap().value / 40000.,
             1.,
