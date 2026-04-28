@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
 use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
+use crate::nodes::ideal_filter::FilterConst;
 use crate::{
     J_per_cm2,
     analyzers::propagation_strategy::MissedSurfaceStrategy,
@@ -577,7 +578,7 @@ impl Rays {
             if ray.valid() {
                 let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position().xy());
                 if ap_factor > 0.0 {
-                    ray.filter_energy(&FilterType::Constant(ap_factor))?;
+                    ray.filter_energy(&FilterType::Constant(FilterConst::new(ap_factor.into())?))?;
                 } else {
                     ray.add_to_pos_hist(ray.position());
                     ray.set_invalid();
@@ -1208,18 +1209,11 @@ impl Rays {
     /// Filter a ray bundle by a given filter.
     ///
     /// Filter the energy of of all `valid` rays by a given [`FilterType`].
-    /// # Errors
     ///
-    /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the range `(0.0..=1.0)`.
+    /// # Errors
+    /// This function will return an error if the underlying function for filtering a single [`Ray`] with the given
+    /// [`FilterType`] fails for any of the rays in the bundle.
     pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
-        if let FilterType::Constant(t) = filter
-            && !(0.0..=1.0).contains(t)
-        {
-            return Err(OpossumError::Other(
-                "transmission value must be in the range [0.0;1.0]".into(),
-            ));
-        }
-
         for ray in &mut self.ray_bundle {
             if (*ray).valid() {
                 ray.filter_energy(filter)?;
@@ -2494,16 +2488,24 @@ mod test {
     #[test]
     fn filter_energy() {
         let mut rays = Rays::default();
-        assert!(rays.filter_energy(&FilterType::Constant(0.5)).is_ok());
-        let mut rays = Rays::default();
-        assert!(rays.filter_energy(&FilterType::Constant(-0.1)).is_err());
-        let mut rays = Rays::default();
-        assert!(rays.filter_energy(&FilterType::Constant(1.1)).is_err());
+        assert!(
+            rays.filter_energy(&FilterType::Constant(
+                FilterConst::new(percent!(50.0)).unwrap()
+            ))
+            .is_ok()
+        );
         let mut ray =
             Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1054.0), joule!(1.0)).unwrap();
         rays.add_ray(ray.clone());
-        let _ = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
-        rays.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        let _ = ray
+            .filter_energy(&FilterType::Constant(
+                FilterConst::new(percent!(30.0)).unwrap(),
+            ))
+            .unwrap();
+        rays.filter_energy(&FilterType::Constant(
+            FilterConst::new(percent!(30.0)).unwrap(),
+        ))
+        .unwrap();
         assert_eq!(rays.ray_bundle[0].position(), ray.position());
         assert_eq!(rays.ray_bundle[0].direction(), ray.direction());
         assert_eq!(rays.ray_bundle[0].wavelength(), ray.wavelength());

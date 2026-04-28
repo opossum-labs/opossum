@@ -645,18 +645,11 @@ impl Ray {
     /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the interval `(0.0..=1.0)`
     pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
         let transmission = match filter {
-            FilterType::Constant(t) => {
-                if !(0.0..=1.0).contains(t) {
-                    return Err(OpossumError::Other(
-                        "transmission factor must be within (0.0..=1.0)".into(),
-                    ));
-                }
-                *t
-            }
+            FilterType::Constant(t) => *t.transmission(),
             FilterType::Spectrum(s) => {
                 let transmission = s.get_value(&self.wavelength());
                 if let Some(t) = transmission {
-                    t
+                    t.into()
                 } else {
                     return Err(OpossumError::Other(
                         "wavelength of ray outside filter spectrum".into(),
@@ -664,9 +657,7 @@ impl Ray {
                 }
             }
         };
-        self.e *= transmission;
-        // let mut new_ray = self.clone();
-        // new_ray.e *= transmission;
+        self.e = self.e * transmission;
         Ok(())
     }
     /// Split a ray with the given energy splitting ratio.
@@ -833,7 +824,7 @@ mod test {
         millimeter, nanometer,
         nodes::{
             SplittingConfig,
-            ideal_filter::{EdgeFilter, EdgeFilterType},
+            ideal_filter::{EdgeFilter, EdgeFilterType, FilterConst},
         },
         percent,
     };
@@ -1345,15 +1336,15 @@ mod test {
         let position = millimeter!(0., 1., 0.);
         let wvl = nanometer!(1054.0);
         let mut ray = Ray::new_collimated(position, wvl, joule!(1.0)).unwrap();
-        let _ = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        let _ = ray
+            .filter_energy(&FilterType::Constant(
+                FilterConst::new(percent!(30.0)).unwrap(),
+            ))
+            .unwrap();
         assert_eq!(ray.pos, millimeter!(0., 1., 0.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.wvl, wvl);
         assert_eq!(ray.e, joule!(0.3));
-        let mut ray = Ray::new_collimated(position, wvl, joule!(1.0)).unwrap();
-        assert!(ray.filter_energy(&FilterType::Constant(-0.1)).is_err());
-        let mut ray = Ray::new_collimated(position, wvl, joule!(1.0)).unwrap();
-        assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
     }
     #[test]
     fn filter_spectrum() {
