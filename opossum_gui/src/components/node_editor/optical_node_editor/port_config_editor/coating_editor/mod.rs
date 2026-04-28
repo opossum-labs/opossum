@@ -1,8 +1,10 @@
 use dioxus::prelude::*;
 use opossum_core::{
     coatings::{CoatingConstantR, CoatingType},
+    percent,
     utils::default_from_name::DefaultFromName,
 };
+use uom::si::ratio::percent;
 
 use crate::{
     OPOSSUM_UI_LOGS,
@@ -30,10 +32,10 @@ pub fn CoatingEditor(
             NodeConfigUnitInput {
                 id: "coatingReflectivityInput",
                 label: "Reflectivity",
-                value: conf.reflectivity() * 100.0,
+                value: conf.reflectivity().get::<percent>(),
                 unit_config: UnitHandling::new("%", false),
                 onchange: move |val: f64| {
-                    if let Ok(new_conf) = CoatingConstantR::new(val / 100.0) {
+                    if let Ok(new_conf) = CoatingConstantR::new(percent!(val)) {
                         on_change.call(new_conf.into());
                     } else {
                         OPOSSUM_UI_LOGS

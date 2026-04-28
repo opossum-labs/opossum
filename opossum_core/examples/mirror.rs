@@ -1,4 +1,6 @@
-use opossum_core::{coatings::CoatingConstantR, nodes::round_collimated_ray_builder, prelude::*};
+use opossum_core::{
+    coatings::CoatingConstantR, nodes::round_collimated_ray_builder, percent, prelude::*,
+};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
@@ -8,7 +10,7 @@ fn main() -> OpmResult<()> {
     mirror1.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingConstantR::new(0.5)?.into(),
+        &CoatingConstantR::new(percent!(50.0))?.into(),
     )?;
     let i_m1 = scenery.add_node(mirror1)?;
     let i_m2 = scenery.add_node(

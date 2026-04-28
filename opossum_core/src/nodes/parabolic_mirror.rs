@@ -11,6 +11,7 @@ use crate::{
     light::{LightData, LightRays, LightResult, Rays},
     meter,
     nodes::NodeRegistration,
+    percent,
     properties::{Proptype, validator::Validator},
     radian,
     utils::geom_transformation::Isometry,
@@ -105,7 +106,7 @@ impl Default for ParabolicMirror {
             .set_coating(
                 &PortType::Input,
                 "input_1",
-                &CoatingConstantR::new(1.0).unwrap().into(),
+                &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
             )
             .unwrap();
 
@@ -114,7 +115,7 @@ impl Default for ParabolicMirror {
             .set_coating(
                 &PortType::Output,
                 "output_1",
-                &CoatingConstantR::new(1.0).unwrap().into(),
+                &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
             )
             .unwrap();
         parabola

@@ -332,7 +332,10 @@ impl Display for OpticPorts {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::coatings::{CoatingConstantR, CoatingType};
+    use crate::{
+        coatings::{CoatingConstantR, CoatingType},
+        percent,
+    };
     #[test]
     fn new() {
         let ports = OpticPorts::new();
@@ -466,12 +469,12 @@ mod test {
             ports.coating(&PortType::Input, "test1").unwrap(),
             CoatingType::IdealAR
         ));
-        let coating = CoatingConstantR::new(0.5).unwrap();
+        let coating = CoatingConstantR::new(percent!(50.0)).unwrap();
         ports
             .set_coating(&PortType::Input, "test1", &coating.into())
             .unwrap();
         if let CoatingType::ConstantR(conf) = ports.coating(&PortType::Input, "test1").unwrap() {
-            assert_eq!(conf.reflectivity(), 0.5);
+            assert_eq!(conf.reflectivity(), percent!(50.0));
         } else {
             panic!("Coating type is not ConstantR");
         }

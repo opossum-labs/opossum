@@ -2,6 +2,7 @@
 use super::{Coating, CoatingType};
 use crate::light::Ray;
 use nalgebra::Vector3;
+use uom::si::f64::Ratio;
 
 /// Simulation of a Fresnel reflection (e.g. uncaoted surface)
 ///
@@ -13,7 +14,12 @@ pub struct Fresnel;
 
 impl Coating for Fresnel {
     /// Formulas taken from [german wikipedia](https://de.wikipedia.org/wiki/Fresnelsche_Formeln).
-    fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: Vector3<f64>, n2: f64) -> f64 {
+    fn calc_reflectivity(
+        &self,
+        incoming_ray: &Ray,
+        surface_normal: Vector3<f64>,
+        n2: f64,
+    ) -> Ratio {
         let n1 = incoming_ray.refractive_index();
 
         // Fix: Explicitly normalize the direction to ensure the dot product
@@ -34,7 +40,7 @@ impl Coating for Fresnel {
 
         // Total Internal Reflection (TIR)
         if sin2_beta >= 1.0 {
-            return 1.0;
+            return 1.0.into();
         }
 
         let cos_beta = (1.0 - sin2_beta).sqrt();
@@ -43,7 +49,7 @@ impl Coating for Fresnel {
         let rs = n1.mul_add(cos_alpha, -(n2 * cos_beta)) / n1.mul_add(cos_alpha, n2 * cos_beta);
         let rp = n2.mul_add(cos_alpha, -(n1 * cos_beta)) / n2.mul_add(cos_alpha, n1 * cos_beta);
 
-        f64::midpoint(rs * rs, rp * rp)
+        f64::midpoint(rs * rs, rp * rp).into()
     }
 }
 impl From<Fresnel> for CoatingType {
@@ -54,7 +60,7 @@ impl From<Fresnel> for CoatingType {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{joule, nanometer};
+    use crate::{joule, nanometer, percent};
     use approx::assert_abs_diff_eq;
     use nalgebra::vector;
 
@@ -69,10 +75,16 @@ mod test {
         ray.set_refractive_index(1.0).unwrap();
         let surface_normal = vector![0.0, 0.0, -1.0];
         let coating = Fresnel;
-        assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.0), 0.0);
+        assert_eq!(
+            coating.calc_reflectivity(&ray, surface_normal, 1.0),
+            percent!(0.0)
+        );
 
         ray.set_refractive_index(2.0).unwrap();
-        assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 2.0), 0.0);
+        assert_eq!(
+            coating.calc_reflectivity(&ray, surface_normal, 2.0),
+            percent!(0.0)
+        );
     }
     #[test]
     fn calc_refl_glass_perpendicular() {
@@ -80,7 +92,10 @@ mod test {
         ray.set_refractive_index(1.0).unwrap();
         let surface_normal = vector![0.0, 0.0, -1.0];
         let coating = Fresnel;
-        assert_abs_diff_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.5), 0.04);
+        assert_abs_diff_eq!(
+            coating.calc_reflectivity(&ray, surface_normal, 1.5).value,
+            0.04
+        );
     }
     #[test]
     fn calc_refl_glass_45_deg() {
@@ -90,7 +105,7 @@ mod test {
         let surface_normal = vector![0.0, 0.0, -1.0];
         let coating = Fresnel;
         assert_abs_diff_eq!(
-            coating.calc_reflectivity(&ray, surface_normal, 1.5),
+            coating.calc_reflectivity(&ray, surface_normal, 1.5).value,
             0.05023991101223595
         );
     }
