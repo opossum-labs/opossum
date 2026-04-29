@@ -4,7 +4,6 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::{apertures::CircleShape, meter, prelude::ApertureShape};
-use opossum_core::{apertures::CircleShape, meter, prelude::ApertureShape};
 use strum::EnumIter;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]

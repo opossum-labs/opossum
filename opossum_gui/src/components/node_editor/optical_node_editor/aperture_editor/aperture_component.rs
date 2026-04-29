@@ -12,9 +12,8 @@ use crate::components::node_editor::{
     },
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::aperture_editor::{
-        circular_aperture::CircularApertureParam, gaussian_aperture::GaussianApertureParam,
-        polygon_aperture::PolygonApertureInput, rectangular_aperture::RectApertureParam,
-        stacked_aperture::StackedApertureInput,
+        CircularApertureParam, GaussianApertureParam, PolygonApertureInput, RectApertureParam,
+        StackedApertureInput,
     },
 };
 use uuid::Uuid;

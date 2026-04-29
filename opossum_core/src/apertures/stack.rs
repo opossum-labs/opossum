@@ -16,7 +16,6 @@ use uom::si::{f64::Length, length::millimeter};
 use utoipa::ToSchema;
 
 type ValidatedApertureStack = validated_vec_type!(Vec<Aperture>, Pass, AllNotEmpty);
-type ValidatedApertureStack = validated_vec_type!(Vec<Aperture>, Pass, AllNotEmpty);
 /// Configuration of an aperture stack
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, ToSchema)]
 pub struct StackShape {
@@ -25,11 +24,7 @@ pub struct StackShape {
 }
 
 impl Default for StackShape {
-impl Default for StackShape {
     fn default() -> Self {
-        Self {
-            apertures: validated_vec!(vec![Aperture::default()], Pass, AllNotEmpty).unwrap(),
-        }
         Self {
             apertures: validated_vec!(vec![Aperture::default()], Pass, AllNotEmpty).unwrap(),
         }
@@ -136,7 +131,6 @@ pub fn plot_circle(conf: CircleShape, isometry: &Isometry) -> Vec<PlotSeries> {
 mod test {
     use approx::assert_abs_diff_eq;
 
-    use super::super::{Aperture, ApertureType, CircleShape, RectangleShape};
     use super::super::{Aperture, ApertureType, CircleShape, RectangleShape};
     use super::*;
     use crate::meter;

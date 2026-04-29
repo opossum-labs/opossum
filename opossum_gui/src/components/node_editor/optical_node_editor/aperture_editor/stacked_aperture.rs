@@ -16,7 +16,7 @@ use crate::{
                 select_options_from_enum_iterator,
             },
             optical_node_editor::aperture_editor::{
-                aperture_component::get_aperture_input_data, polygon_aperture::PolygonApertureInput,
+                PolygonApertureInput, aperture_component::get_aperture_input_data,
             },
         },
     },
