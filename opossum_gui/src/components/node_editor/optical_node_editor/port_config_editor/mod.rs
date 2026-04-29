@@ -6,7 +6,7 @@ use opossum_core::{
     coatings::CoatingType,
     core_optics::optic_ports::PortConfig,
     nodes::fluence_detector::Fluence,
-    prelude::PortType,
+    prelude::{Aperture, PortType},
     types::api_types::{NodeInfo, UpdatePortRequest},
 };
 use uom::si::radiant_exposure::joule_per_square_centimeter;
@@ -19,7 +19,7 @@ use crate::{
         accordion::AccordionItem,
         inputs::input_components::{NodeConfigUnitInput, UnitHandling},
         node_config_editor::NodeChangeEvent,
-        optical_node_editor::port_config_editor::coating_editor::CoatingEditor,
+        optical_node_editor::{aperture_editor::ApertureEditor, port_config_editor::coating_editor::CoatingEditor},
     },
 };
 
@@ -92,13 +92,15 @@ pub fn PortConfigEditor(
                     }));
                 }
                 rsx! {
-                    AccordionItem {
-                        elements: editor_inputs,
-                        header: "Port Configuration",
-                        header_id: "portConfigHeading",
-                        parent_id: "portConfigAccordion",
-                        content_id: "portConfigCollapse",
-                    }
+
+                        AccordionItem {
+                            elements: editor_inputs,
+                            header: "Port Configuration",
+                            header_id: "portConfigHeading",
+                            parent_id: "accordionNodeConfig",
+                            content_id: "portConfigCollapse",
+                        }
+                    
                 }
             }
             Err(err_str) => {
@@ -116,10 +118,23 @@ pub fn SinglePortConfigEditor(
     on_change: EventHandler<UpdatePortRequest>,
     readonly: bool,
 ) -> Element {
-    rsx! {
-        div { class: "d-flex flex-column gap-2 border rounded p-2",
-            p { class: "small", "{port_name}" }
-            CoatingEditor {
+
+    let mut accordion_content = vec![];
+
+    accordion_content.push(rsx!{ApertureEditor {
+                        node_id,
+                        aperture: port_config.aperture.clone(),
+                        on_change: move |aperture: Aperture| {
+                    let update_port_request = UpdatePortRequest {
+                        aperture: Some(aperture),
+                        ..Default::default()
+                    };
+                    on_change.call(update_port_request);
+                },
+                        readonly,
+            }});
+
+    accordion_content.push(rsx!{CoatingEditor {
                 coating_type: port_config.coating.clone(),
                 on_change: move |coating_type: CoatingType| {
                     let update_port_request = UpdatePortRequest {
@@ -129,8 +144,8 @@ pub fn SinglePortConfigEditor(
                     on_change.call(update_port_request);
                 },
                 readonly,
-            }
-            NodeConfigUnitInput {
+            }});
+        accordion_content.push(rsx!{NodeConfigUnitInput {
                 id: node_id.read().to_string(),
                 label: "LIDT",
                 value: port_config.lidt.get().get::<joule_per_square_centimeter>(),
@@ -148,7 +163,19 @@ pub fn SinglePortConfigEditor(
                     on_change.call(update_port_request);
                 },
                 readonly,
-            }
+            }});
+
+    rsx! {
+                            div {
+                        class: "accordion accordion-borderless bg-dark border-start",
+                        id: "accordionPortConfig{port_name}",
+        AccordionItem {
+            elements: accordion_content,
+            header: "Port: {port_name}",
+            header_id: "singlePortHeading{port_name}",
+            parent_id: "accordionPortConfig{port_name}",
+            content_id: "singlePortCollapse{port_name}",
         }
+    }
     }
 }

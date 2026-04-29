@@ -107,12 +107,6 @@ pub fn OpticalNodeEditor(
                         on_change,
                         readonly: readonly(),
                     }
-                    ApertureEditor {
-                        node_id,
-                        aperture: Aperture::default(),
-                        on_change,
-                        readonly: readonly(),
-                    }
                 }
             }
         }

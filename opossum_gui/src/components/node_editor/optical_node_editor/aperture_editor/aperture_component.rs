@@ -22,7 +22,7 @@ use uuid::Uuid;
 pub fn ApertureEditor(
     node_id: Memo<Uuid>,
     aperture: Aperture,
-    on_change: EventHandler<NodeChangeEvent>,
+    on_change: EventHandler<Aperture>,
     readonly: bool,
 ) -> Element {
     let mut aperture_sig = use_signal(|| aperture.clone());
@@ -31,10 +31,7 @@ pub fn ApertureEditor(
         let ap_shape = aperture_sig.read().shape().clone();
         if aperture != ap_shape {
             aperture_sig.write().set_shape(aperture);
-            on_change.call(NodeChangeEvent {
-                node_id: *node_id.read(),
-                action: NodeChangeAction::Aperture(aperture_sig.read().clone()),
-            });
+            on_change.call(aperture_sig.read().clone());
         }
     });
 
@@ -42,10 +39,7 @@ pub fn ApertureEditor(
         let ap_type = *aperture_sig.read().aperture_type();
         if aperture_type != ap_type {
             aperture_sig.write().set_aperture_type(aperture_type);
-            on_change.call(NodeChangeEvent {
-                node_id: *node_id.read(),
-                action: NodeChangeAction::Aperture(aperture_sig.read().clone()),
-            });
+            on_change.call(aperture_sig.read().clone());
         }
     });
 
