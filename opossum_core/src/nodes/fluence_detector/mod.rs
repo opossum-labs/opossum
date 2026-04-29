@@ -25,7 +25,7 @@ inventory::submit! {
 
 /// A fluence monitor
 ///
-/// It simply calculates the fluence (spatial energy distribution) of an incoming [`Ray`](crate::ray::Ray) bundle. The used algorithm
+/// It simply calculates the fluence (spatial energy distribution) of an incoming [`Ray`](crate::light::Ray) bundle. The used algorithm
 /// for calculating a fluence map is specified with the property `fluence estimator`. By default, the Voronoi estimator is
 /// used ([`FluenceEstimator::Voronoi`]). See [`FluenceEstimator`] for further options.
 ///

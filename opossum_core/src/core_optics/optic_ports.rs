@@ -3,7 +3,7 @@
 //!
 //! The optical ports represent an interface of an optical element. The ports define the way how nodes can be connected to each other.
 //! For example, a simple filter contains one input and one output port. Each port has a unique name, an [`Aperture`] (set to
-//! [`Aperture::None`] by default), and a [`CoatingType`] ([`CoatingType::IdealAR`] by default). Furthermore, [`OpticPorts`] can be
+//! [`Aperture::Open`] by default), and a [`CoatingType`] ([`CoatingType::IdealAR`] by default). Furthermore, [`OpticPorts`] can be
 //! inverted (see inverted optic nodes). In this case input and output ports are swapped.
 //! ```rust
 //! use opossum_core::prelude::*;
@@ -94,9 +94,9 @@ impl Display for PortConfig {
 /// Type of an [`OpticPorts`]
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub enum PortType {
-    /// input port, receiving [`LightData`](crate::lightdata::LightData)
+    /// input port, receiving [`LightData`](crate::light::LightData)
     Input,
-    /// ouput port, sending [`LightData`](crate::lightdata::LightData)
+    /// ouput port, sending [`LightData`](crate::light::LightData)
     Output,
 }
 
@@ -109,7 +109,7 @@ impl Display for PortType {
     }
 }
 
-/// Structure defining the optical ports (input / output terminals) of an [`OpticNode`](crate::optic_node::OpticNode).
+/// Structure defining the optical ports (input / output terminals) of an [`OpticNode`](crate::core_optics::OpticNode).
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct OpticPorts {
     inputs: BTreeMap<String, PortConfig>,
@@ -151,6 +151,12 @@ impl OpticPorts {
     }
 
     /// Returns a reference to the input / output port configurations of this [`OpticPorts`].
+    ///
+    /// **Note**: If the ports are marked as `inverted`, the input and output ports are swapped in the returned reference.
+    /// This means that if you request input ports while `inverted` is `true`, you will actually get a reference to the output ports,
+    /// and vice versa. This allows for flexible handling of port configurations in cases where the optical element's
+    /// behavior is reversed. If you need access to the orirginal input or output ports regardless of the `inverted` state
+    /// use the function the [`ports_raw`](OpticPorts::ports_raw) method.
     #[must_use]
     pub const fn ports(&self, port_type: &PortType) -> &BTreeMap<String, PortConfig> {
         let (mut input_ports, mut output_ports) = (&self.inputs, &self.outputs);
@@ -160,6 +166,17 @@ impl OpticPorts {
         match port_type {
             PortType::Input => input_ports,
             PortType::Output => output_ports,
+        }
+    }
+    /// Returns a reference to the input / output port configurations of this [`OpticPorts`] without considering the `inverted` state.
+    ///
+    /// This function is necessary if you need access to the "physical" input or output ports in contrast to the "logical" ports returned
+    /// by the [`ports`](OpticPorts::ports) method, which considers the `inverted` state.
+    #[must_use]
+    pub const fn ports_raw(&self, port_type: &PortType) -> &BTreeMap<String, PortConfig> {
+        match port_type {
+            PortType::Input => &self.inputs,
+            PortType::Output => &self.outputs,
         }
     }
 

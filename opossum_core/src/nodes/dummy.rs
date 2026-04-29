@@ -31,9 +31,9 @@ inventory::submit! {
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - `front`
+///     - `input_1`
 ///   - Outputs
-///     - `rear`
+///     - `output_1`
 ///
 /// ## Properties
 ///   - `name`

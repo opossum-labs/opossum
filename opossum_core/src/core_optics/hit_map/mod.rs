@@ -1,16 +1,16 @@
-//! Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
-//! [`OpticSurface`](crate::surface::optic_surface::OpticSurface).
+//! Data structure for storing intersection points (and energies) of [`Rays`](crate::light::rays::Rays) hitting an
+//! [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface).
 //!
-//! A [`HitMap`] not only stores the hit points but also the number of bounces a [`Ray`](crate::ray::Ray) has
+//! A [`HitMap`] not only stores the hit points but also the number of bounces a [`Ray`](crate::light::ray::Ray) has
 //! undergone before hitting a surface and the [`Uuid`] of the ray bundle that caused the hit.
 //!
 //! The overall structure is a follows (in ascending hierarchy):
 //!
-//!  - The most basic structure is a [`HitPoint`] storing a [`Ray`s](crate::ray::Ray) intersection point with
+//!  - The most basic structure is a [`HitPoint`] storing a [`Ray`s](crate::light::ray::Ray) intersection point with
 //!    a surface and its energy.
 //!  - A [`RaysHitMap`] simply stores a vector of [`HitPoint`]s. It also implements functions for calculating a fluence
 //!    map (using either the Voronoi or the KDE method).
-//!  - A [`BouncedHitMap`] stores a [`RaysHitMap`] together with an [`Uuid`] of the ray bundle ([`Rays`](crate::rays::Rays)).
+//!  - A [`BouncedHitMap`] stores a [`RaysHitMap`] together with an [`Uuid`] of the ray bundle ([`Rays`](crate::light::rays::Rays)).
 //!  - A [`HitMap`] stores a vector of [`BouncedHitMap`]s. The vector index represents the number of ray bounces. So, the
 //!    first entry contains all [`BouncedHitMap`]s caused by rays wih zero bounces, the second entry all [`BouncedHitMap`]s
 //!    caused by rays wih one bounce, ...
@@ -95,8 +95,8 @@ impl BouncedHitMap {
     }
 }
 
-/// Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
-/// [`OpticSurface`](crate::surface::optic_surface::OpticSurface).
+/// Data structure for storing intersection points (and energies) of [`Rays`](crate::light::rays::Rays) hitting an
+/// [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface).
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HitMap {
     /// Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle
@@ -107,7 +107,7 @@ pub struct HitMap {
 impl HitMap {
     /// Returns a reference to the hit map of this [`HitMap`].
     ///
-    /// This function returns a vector of intersection points (with energies) of [`Rays`](crate::rays::Rays) that hit the surface.
+    /// This function returns a vector of intersection points (with energies) of [`Rays`](crate::light::rays::Rays) that hit the surface.
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn hit_map(&self) -> &[BouncedHitMap] {

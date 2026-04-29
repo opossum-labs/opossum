@@ -19,7 +19,7 @@ use crate::{
 /// Structure for storing an optical node.
 ///
 /// This structure stores a reference to an optical node (a structure implementing the
-/// [`OpticNode`](crate::optic_node::OpticNode) trait). This [`OpticRef`] is then stored
+/// [`OpticNode`] trait). This [`OpticRef`] is then stored
 /// as a node in a `NodeGroup`)[`crate::nodes::NodeGroup`].
 pub struct OpticRef {
     /// The underlying optical reference.

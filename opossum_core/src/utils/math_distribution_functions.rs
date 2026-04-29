@@ -23,7 +23,7 @@ use crate::error::OpmResult;
 /// # Remarks
 /// This function does not check the usefulness of the input arguments,
 /// meaning that passing values of NaN, Infinity, zero or negative numbers may result in an unexpected outcome of this function.
-/// To avoid non-useful input arguments see [`General"dGaussian`](crate::energy_distributions::general_gaussian::General2DGaussian).
+/// To avoid non-useful input arguments see [`General2DGaussian`](crate::distributions::energy::general_gaussian::General2DGaussian).
 #[must_use]
 pub fn general_2d_super_gaussian_points(
     points: &[Point2<f64>],

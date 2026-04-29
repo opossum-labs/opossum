@@ -681,7 +681,7 @@ impl Ray {
     /// ## [`SplittingConfig::Spectrum`]
     ///
     /// The splitting ratio is determined by the wavelength
-    /// of the ray and the given transmission / reflection spectrum. This [`Spectrum`](crate::spectrum::Spectrum) must contain values in the range (0.0..=1.0). A spectrum value
+    /// of the ray and the given transmission / reflection spectrum. This [`Spectrum`](crate::light::Spectrum) must contain values in the range (0.0..=1.0). A spectrum value
     /// of 1.0 means that all energy remains in the initial beam and the split beam has an energy of zero. A spectrum value of 0.0 corresponds to
     /// a fully reflected beam.
     ///

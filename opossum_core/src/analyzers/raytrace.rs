@@ -198,7 +198,7 @@ pub trait AnalysisRayTrace: OpticNode {
     /// Calculate the position of this [`OpticNode`] element.
     ///
     /// This function calculates the position of this [`OpticNode`] element in 3D space. This is based on the analysis of a single,
-    /// central [`Ray`](crate::ray::Ray) representing the optical axis. The default implementation is to use the normal `analyze`
+    /// central [`Ray`](crate::light::ray::Ray) representing the optical axis. The default implementation is to use the normal `analyze`
     /// function. For a [`NodeGroup`] however, this must be separately implemented in order to allow nesting.
     ///
     /// # Errors

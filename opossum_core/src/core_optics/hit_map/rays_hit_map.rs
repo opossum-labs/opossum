@@ -38,8 +38,8 @@ use super::fluence_estimator::FluenceEstimator;
 
 /// A hit point as part of a [`RaysHitMap`].
 ///
-/// It stores the position (intersection point) and the energy of a [`Ray`](crate::ray::Ray) that
-/// has hit an [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
+/// It stores the position (intersection point) and the energy of a [`Ray`](crate::light::ray::Ray) that
+/// has hit an [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EnergyHitPoint {
     /// position of the intersection point
@@ -81,8 +81,8 @@ impl EnergyHitPoint {
 
 /// A hit point as part of a [`RaysHitMap`].
 ///
-/// It stores the position (intersection point) and the energy of a [`Ray`](crate::ray::Ray) that
-/// has hit an [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
+/// It stores the position (intersection point) and the energy of a [`Ray`](crate::light::ray::Ray) that
+/// has hit an [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FluenceHitPoint {
     /// position of the intersection point

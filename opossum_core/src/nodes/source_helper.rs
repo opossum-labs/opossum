@@ -20,9 +20,9 @@ use uom::si::f64::{Angle, Energy, Length};
 
 /// Create a collimated [`RayDataBuilder`].
 ///
-/// This is a convenience function, which generates a [`RayDataBuilder`] consisting of collinear [`Ray`](crate::ray::Ray) bundle symmetrically around the optical axis
+/// This is a convenience function, which generates a [`RayDataBuilder`] consisting of collinear [`Ray`](crate::light::Ray) bundle symmetrically around the optical axis
 /// at 1000 nm and a given energy. The ray distribution is hexapolar with the given number of rings (see [`Hexapolar`] for details). If
-/// the `nr_of_rings` is zero, the function genereates a [`RayDataBuilder`] with a single [`Ray`](crate::ray::Ray) on the optical axis.
+/// the `nr_of_rings` is zero, the function genereates a [`RayDataBuilder`] with a single [`Ray`](crate::light::Ray) on the optical axis.
 ///
 /// # Errors
 /// This functions returns an error if
@@ -71,7 +71,7 @@ pub fn collimated_line_ray_builder(
 /// Create a point [`RayDataBuilder`] on the optical axis with a given cone angle.
 ///
 /// This is a convenience function, which generates a [`RayDataBuilder`] containing a hexapolar, cone-shaped ray bundle at 1000 nm
-/// and a given energy. The origin of all [`Rays`](crate::rays::Rays) is at the origin of optical axis (0.0, 0.0, 0.0). The direction of the cone
+/// and a given energy. The origin of all [`Rays`](crate::light::Rays) is at the origin of optical axis `(0.0, 0.0, 0.0)`. The direction of the cone
 /// is symmetric along the optical axis in positive direction (z-axis). If the given `cone_angle` is zero, this function generates a
 /// a single ray along the optical axis.
 ///

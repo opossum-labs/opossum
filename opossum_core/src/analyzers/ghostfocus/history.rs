@@ -243,7 +243,7 @@ impl From<Vec<HashMap<Uuid, Rays>>> for GhostFocusHistory {
 
 impl From<(&Vec<HashMap<Uuid, Rays>>, Uuid, usize)> for GhostFocusHistory {
     /// value contains :
-    /// 0: a vector of Hashmaps that contain Rays. Same structure as the `accumulated_rays` in [`NodeGroup`]
+    /// 0: a vector of Hashmaps that contain Rays. Same structure as the `accumulated_rays` in [`NodeGroup`](crate::nodes::NodeGroup)
     /// 1: the uuid of a ray bundle within field 0
     /// 2: the index of the position in the ray position history up to which it should be displayed
     fn from(value: (&Vec<HashMap<Uuid, Rays>>, Uuid, usize)) -> Self {

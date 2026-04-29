@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Data structures containing the light information flowing between [`OpticNode`s](crate::optic_node::OpticNode).
+//! Data structures containing the light information flowing between [`OpticNode`s](crate::core_optics::OpticNode).
 
 pub mod energy_data_builder;
 pub mod light_data_builder;

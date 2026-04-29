@@ -23,7 +23,7 @@ use crate::{
 use core::fmt::Debug;
 
 /// This struct represents an optical surface, which consists of the geometric surface shape
-/// ([`GeoSurface`](super::geo_surface::GeoSurface)) and further properties such as the [`CoatingType`].
+/// ([`GeoSurface`](crate::geometry::geo_surface::GeoSurface)) and further properties such as the [`CoatingType`].
 #[derive(Serialize, Deserialize, Clone)]
 pub struct OpticSurface {
     #[serde(skip)]

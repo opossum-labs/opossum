@@ -8,10 +8,9 @@ fn test_unconnected_node_reporting() {
     // 1. Create a NodeGroup
     let mut scenery = NodeGroup::new("test_scenery");
 
-    // 2. Add a connected node (simulated by just adding it, but we need another one to connect to to avoid "single tree" check failing solely on it if we want to distinguish)
-    // Actually, a single node is a single tree.
+    // 2. Add a connected node (simulated by just adding it, but we need another one to connect to to avoid "single tree" check
+    // failing solely on it if we want to distinguish). Actually, a single node is a single tree.
     // If we have two nodes and no connection, we have two trees.
-
     let node1 = Dummy::new("node1");
     let _uuid1 = scenery.add_node(node1).expect("Failed to add node1");
 
@@ -25,8 +24,6 @@ fn test_unconnected_node_reporting() {
     // Dummy nodes are not sources.
 
     // Let's add a Source node to make it more realistic, but maybe sticking to Dummies is enough to trigger "unconnected".
-    // If I look at `is_stale_node` logic (I viewed `inspection.rs` earlier), it likely traversal-based.
-
     let report = scenery.toplevel_report().expect("Analysis failed");
 
     // 4. Verify Notes

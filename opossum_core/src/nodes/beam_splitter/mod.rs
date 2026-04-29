@@ -86,7 +86,7 @@ impl DefaultFromName for SplittingConfigBuilder {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
-/// Configuration for splitting a [`Ray`](crate::ray::Ray) into multiple parts.
+/// Configuration for splitting a [`Ray`](crate::light::Ray) into multiple parts.
 ///
 /// This enum defines how a ray is split, either by a fixed ratio or by a wavelength-dependent spectrum.
 pub enum SplittingConfig {

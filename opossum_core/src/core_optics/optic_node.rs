@@ -60,7 +60,7 @@ pub trait OpticNode: Dottable {
 
     /// Update the surfaces of nodes with a single interacting surface. E.g. detectors
     /// # Errors
-    /// This function errors if the function `add_optic_surface` fails
+    /// This function errors if the function [`OpticNode::update_surface`] fails
     fn update_flat_single_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
@@ -77,7 +77,6 @@ pub trait OpticNode: Dottable {
             Isometry::identity(),
             &PortType::Output,
         )?;
-
         Ok(())
     }
     /// Finds a surface by its name and guides the ray bundle through it.
@@ -361,20 +360,23 @@ pub trait OpticNode: Dottable {
         anchor_point_iso: Isometry,
         port_type: &PortType,
     ) -> OpmResult<()> {
-        // Hole die gespeicherte Konfiguration aus OpticPorts (oder erstelle Default, falls neu)
-        let config = {
-            // Wir erzeugen einen expliziten Scope, damit wir den mutablen borrow
-            // von node_attr_mut() direkt wieder loswerden.
-            let mut ports = self.ports();
-            // Stelle sicher, dass der Portnamen registriert ist
-            if ports.ports(port_type).get(surf_name).is_none() {
-                let _ = ports.add(port_type, surf_name);
-                self.node_attr_mut().set_ports(ports.clone());
-            }
-            ports.ports(port_type).get(surf_name).cloned().unwrap()
-        };
-
-        // Prüfe, ob die Surface schon im Runtime-Speicher existiert
+        let config =
+            {
+                let mut ports = self.ports();
+                if ports.ports(port_type).get(surf_name).is_none() {
+                    let _ = ports.add(port_type, surf_name);
+                    self.node_attr_mut().set_ports(ports.clone());
+                }
+                // Use `ports_raw` here to get the "original" port config regardless of a potential `inverted` state, since we want
+                // to update the config of the "physical" port.
+                ports.ports_raw(port_type).get(surf_name).cloned().ok_or_else(|| {
+                OpossumError::Other(format!(
+                    "Port config for surface {port_type}/{surf_name} of node '{}' not found.",
+                    self.name()
+                ))
+            })?
+            };
+        // Check, if already availabe in runtime cache
         if let Some(optic_surf) = self.get_optic_surface_mut(surf_name) {
             optic_surf.set_geo_surface(geo_surface);
             optic_surf.set_anchor_point_iso(anchor_point_iso);
@@ -383,7 +385,7 @@ pub trait OpticNode: Dottable {
             optic_surf.set_coating(config.coating);
             optic_surf.set_lidt(*config.lidt.get())?;
         } else {
-            // Neu erstellen, Geometrie mit Config verheiraten
+            // Create new optic surface and add to runtime cache
             let mut optic_surf = OpticSurface::new(
                 geo_surface,
                 config.coating,

@@ -138,7 +138,7 @@ impl Aperture {
         Self::Stack(config, aperture_type)
     }
     #[must_use]
-    /// Check if the aperture is [`Aperture::None`]
+    /// Check if the aperture is [`Aperture::Open`]
     pub const fn is_none(&self) -> bool {
         matches!(self, Self::Open)
     }
