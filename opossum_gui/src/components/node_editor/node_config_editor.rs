@@ -6,7 +6,7 @@ use crate::components::scenery_editor::{GraphsWorkspaceAction, NodeType, Selecte
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use opossum_core::prelude::{AnalyzerType, Aperture, ApertureShape, Isometry, Proptype};
+use opossum_core::prelude::{AnalyzerType, Aperture, Isometry, Proptype};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]

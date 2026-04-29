@@ -382,9 +382,12 @@ mod test {
         );
 
         let aperture = Aperture::new(
-            ApertureShape::BinaryCircle(CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap()),
+            ApertureShape::BinaryCircle(CircleShape::new(meter!(1.0)).unwrap()),
             ApertureType::Hole,
-        );
+            Some(meter!(0.0, 0.0)),
+            None,
+        )
+        .unwrap();
         let os = OpticSurface::new(
             GeoSurfaceRef(Arc::new(Mutex::new(
                 Sphere::new(meter!(1.0), Isometry::identity()).unwrap(),

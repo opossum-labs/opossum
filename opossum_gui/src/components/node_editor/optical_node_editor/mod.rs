@@ -25,7 +25,7 @@ use crate::components::{
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_core::{
-    prelude::{Aperture, ApertureShape, Properties},
+    prelude::{Aperture, Properties},
     types::api_types::NodeInfo,
 };
 
@@ -107,7 +107,7 @@ pub fn OpticalNodeEditor(
                         on_change,
                         readonly: readonly(),
                     }
-                    ApertureEditor{
+                    ApertureEditor {
                         node_id,
                         aperture: Aperture::default(),
                         on_change,

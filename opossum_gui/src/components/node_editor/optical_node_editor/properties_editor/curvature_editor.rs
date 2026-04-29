@@ -71,8 +71,7 @@ pub fn CurvatureEditor(
                     property_key,
                     readonly,
                     on_is_curved_change: move |is_finite| {
-                        let new_val =
-                        if is_finite {
+                        let new_val = if is_finite {
                             *last_finite_curvature.read()
                         } else {
                             meter!(f64::INFINITY)

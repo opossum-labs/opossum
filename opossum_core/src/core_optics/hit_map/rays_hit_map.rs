@@ -520,15 +520,13 @@ impl RaysHitMap {
             HitPoints::Energy(vec) => {
                 vec.retain(|hp| {
                     let local_point_3d = surface_iso.inverse_transform_point(&hp.position);
-                    let local_point_2d = Point2::new(local_point_3d.x, local_point_3d.y);
-                    aperture.apodize(&local_point_2d) > 0.0
+                    aperture.apodize(&local_point_3d) > 0.0
                 });
             }
             HitPoints::Fluence(vec) => {
                 vec.retain(|hp| {
                     let local_point_3d = surface_iso.inverse_transform_point(&hp.position);
-                    let local_point_2d = Point2::new(local_point_3d.x, local_point_3d.y);
-                    aperture.apodize(&local_point_2d) > 0.0
+                    aperture.apodize(&local_point_3d) > 0.0
                 });
             }
         }

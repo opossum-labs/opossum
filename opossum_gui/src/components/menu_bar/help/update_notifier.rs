@@ -9,26 +9,26 @@ pub fn UpdateNotifier(version_info: VersionInfo) -> Element {
             (version_info.latest_github_version, version_info.release_url)
     {
         return rsx! {
-          div { class: "alert alert-info mt-3", role: "alert",
-            strong { "New update available! " }
-            br {}
-            "Version "
-            {latest_version}
-            " available on GitHub."
-            br {}
-            a {
-              href: "{url}",
-              target: "_blank",
-              rel: "noopener noreferrer",
-              class: "btn btn-sm btn-primary mt-2",
-              "Show Release"
+            div { class: "alert alert-info mt-3", role: "alert",
+                strong { "New update available! " }
+                br {}
+                "Version "
+                {latest_version}
+                " available on GitHub."
+                br {}
+                a {
+                    href: "{url}",
+                    target: "_blank",
+                    rel: "noopener noreferrer",
+                    class: "btn btn-sm btn-primary mt-2",
+                    "Show Release"
+                }
             }
-          }
         };
     }
 
     // Do not render anything if no new version or offline
     rsx! {
-      div { display: "none" }
+        div { display: "none" }
     }
 }
