@@ -1,6 +1,11 @@
 use super::{ApertureShape, Shape};
 use crate::{
-    apertures::{Aperture, CircleShape}, error::OpmResult, generic_validators::{AllNotEmpty, Pass, ValidateTrait}, reporting::plottable::{PlotData, PlotSeries}, utils::math_distribution_functions::ellipse, validated_vec, validated_vec_type
+    apertures::{Aperture, CircleShape},
+    error::OpmResult,
+    generic_validators::{AllNotEmpty, Pass, ValidateTrait},
+    reporting::plottable::{PlotData, PlotSeries},
+    utils::math_distribution_functions::ellipse,
+    validated_vec, validated_vec_type,
 };
 use nalgebra::{Matrix2xX, Point2};
 use opm_macros_lib::EnsureValidated;
@@ -9,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::millimeter};
 use utoipa::ToSchema;
 
-type ValidatedApertureStack = validated_vec_type!(Vec<Aperture>, Pass,AllNotEmpty);
+type ValidatedApertureStack = validated_vec_type!(Vec<Aperture>, Pass, AllNotEmpty);
 /// Configuration of an aperture stack
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, ToSchema)]
 pub struct StackShape {
@@ -17,9 +22,11 @@ pub struct StackShape {
     apertures: ValidatedApertureStack,
 }
 
-impl Default for StackShape{
+impl Default for StackShape {
     fn default() -> Self {
-        Self { apertures: validated_vec!(vec![Aperture::default()], Pass,AllNotEmpty).unwrap()}
+        Self {
+            apertures: validated_vec!(vec![Aperture::default()], Pass, AllNotEmpty).unwrap(),
+        }
     }
 }
 impl StackShape {
@@ -84,7 +91,7 @@ pub fn plot_circle(conf: &CircleShape) -> Vec<PlotSeries> {
 mod test {
     use approx::assert_abs_diff_eq;
 
-    use super::super::{ApertureType, Aperture, CircleShape, RectangleShape};
+    use super::super::{Aperture, ApertureType, CircleShape, RectangleShape};
     use super::*;
     use crate::meter;
 

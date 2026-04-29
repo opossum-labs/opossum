@@ -1,9 +1,9 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 pub mod alignment_editor;
+pub mod aperture_editor;
 pub mod general_editor;
 pub mod port_config_editor;
 pub mod properties_editor;
-pub mod aperture_editor;
 
 pub(super) use alignment_editor::{
     RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation, on_new_translation,
@@ -13,16 +13,21 @@ use crate::components::{
     node_editor::{
         node_config_editor::NodeChangeEvent,
         optical_node_editor::{
+            alignment_editor::{AlignmentEditor, PositioningEditor},
+            aperture_editor::ApertureEditor,
+            general_editor::GeneralEditor,
             port_config_editor::PortConfigEditor,
-            alignment_editor::{AlignmentEditor, PositioningEditor}, 
-            aperture_editor::ApertureEditor, general_editor::GeneralEditor, properties_editor::PropertiesEditor
+            properties_editor::PropertiesEditor,
         },
     },
     scenery_editor::SelectedNode,
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_core::{prelude::{Aperture, ApertureShape, Properties}, types::api_types::NodeInfo};
+use opossum_core::{
+    prelude::{Aperture, ApertureShape, Properties},
+    types::api_types::NodeInfo,
+};
 
 #[component]
 pub fn OpticalNodeEditor(

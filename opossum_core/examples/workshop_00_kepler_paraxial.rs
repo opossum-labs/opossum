@@ -1,4 +1,4 @@
-use opossum_core::{prelude::*};
+use opossum_core::prelude::*;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

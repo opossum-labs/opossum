@@ -24,7 +24,7 @@ pub enum NodeChangeAction {
     Property(String, Proptype),
     Isometry(Option<Isometry>),
     AnalyzerType(AnalyzerType),
-    Aperture(Aperture)
+    Aperture(Aperture),
 }
 
 #[component]
@@ -183,7 +183,7 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                         // todo!
                         // api::update_aperture_config_ron(uuid, aperture)
                         //     .await
-                    },
+                    }
                 };
 
                 match result {

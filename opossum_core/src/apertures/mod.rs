@@ -31,17 +31,17 @@ mod stack;
 
 use crate::{
     error::OpmResult,
+    generic_validators::ValidateTrait,
     properties::Proptype,
     reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{default_from_name::DefaultFromName, math_distribution_functions::ellipse},
-    generic_validators::ValidateTrait
 };
 use core::f64;
-use std::fmt::Display;
 use nalgebra::{Matrix2xX, MatrixXx2, Point2};
 use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use strum::EnumIter;
 use uom::si::{f64::Length, length::millimeter};
 
@@ -55,7 +55,18 @@ use utoipa::ToSchema;
 /// The apodization type of an [`Aperture`].
 ///
 /// Each aperture can act as a "hole" or "obstruction"
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, EnumIter, EnsureValidated)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    ToSchema,
+    EnumIter,
+    EnsureValidated,
+)]
 pub enum ApertureType {
     /// the [`Aperture`] shape acts as a hole. The inner part of the shape is transparent.
     #[default]
@@ -65,15 +76,17 @@ pub enum ApertureType {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated)]
-pub struct Aperture{
+pub struct Aperture {
     shape: ApertureShape,
-    aperture_type: ApertureType
-    // isometry: Isometry
+    aperture_type: ApertureType, // isometry: Isometry
 }
 
 impl Aperture {
     pub fn new(shape: ApertureShape, aperture_type: ApertureType) -> Self {
-        Self { shape, aperture_type }
+        Self {
+            shape,
+            aperture_type,
+        }
     }
     pub fn apodize(&self, point: &Point2<Length>) -> f64 {
         let base_transmission = self.shape.apodize(point);
@@ -100,7 +113,10 @@ impl Aperture {
         aperture_type: ApertureType,
     ) -> OpmResult<Self> {
         let config = CircleShape::new(radius, center)?;
-        Ok(Self::new(ApertureShape::BinaryCircle(config), aperture_type))
+        Ok(Self::new(
+            ApertureShape::BinaryCircle(config),
+            aperture_type,
+        ))
     }
     /// Create a new retangular aperture.
     ///
@@ -114,7 +130,10 @@ impl Aperture {
         aperture_type: ApertureType,
     ) -> OpmResult<Self> {
         let config = RectangleShape::new(width, height, center)?;
-        Ok(Self::new(ApertureShape::BinaryRectangle(config), aperture_type))
+        Ok(Self::new(
+            ApertureShape::BinaryRectangle(config),
+            aperture_type,
+        ))
     }
     /// Create a new Gaussian aperture.
     ///
@@ -139,7 +158,10 @@ impl Aperture {
         aperture_type: ApertureType,
     ) -> OpmResult<Self> {
         let config = PolygonConfig::new(points)?;
-        Ok(Self::new(ApertureShape::BinaryPolygon(config), aperture_type))
+        Ok(Self::new(
+            ApertureShape::BinaryPolygon(config),
+            aperture_type,
+        ))
     }
     /// Create a new stack aperture.
     #[must_use]
@@ -155,7 +177,9 @@ impl Aperture {
 }
 
 /// Different aperture types
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnumIter, EnsureValidated)]
+#[derive(
+    Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnumIter, EnsureValidated,
+)]
 pub enum ApertureShape {
     /// completely transparent aperture. This is the default.
     #[default]
@@ -189,7 +213,6 @@ impl Display for ApertureShape {
 }
 
 impl ApertureShape {
-
     #[must_use]
     /// Check if the aperture is [`ApertureShape::Open`]
     pub const fn is_none(&self) -> bool {
@@ -206,11 +229,10 @@ impl ApertureShape {
             Self::BinaryRectangle(shape) => shape.transmission_factor(point),
             Self::BinaryPolygon(shape) => shape.transmission_factor(point),
             Self::Gaussian(shape) => shape.transmission_factor(point),
-            Self::Stack(apertures) => 
-                apertures
-                    .apertures()
-                    .iter()
-                    .fold(1.0, |acc, ap| acc * ap.apodize(point)),
+            Self::Stack(apertures) => apertures
+                .apertures()
+                .iter()
+                .fold(1.0, |acc, ap| acc * ap.apodize(point)),
         }
     }
 }

@@ -2554,7 +2554,10 @@ mod test {
         rays.add_ray(ray1);
         assert_eq!(rays.total_energy(), joule!(2.0));
         let circle_config = CircleShape::new(millimeter!(0.5), millimeter!(0.0, 0.0)).unwrap();
-        let aperture = Aperture::new(ApertureShape::BinaryCircle(circle_config), ApertureType::Hole);
+        let aperture = Aperture::new(
+            ApertureShape::BinaryCircle(circle_config),
+            ApertureType::Hole,
+        );
         rays.apodize(&aperture, &Isometry::identity()).unwrap();
         assert_eq!(rays.total_energy(), joule!(1.0));
     }
