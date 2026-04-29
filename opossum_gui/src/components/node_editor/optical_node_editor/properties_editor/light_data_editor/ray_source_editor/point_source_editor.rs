@@ -1,5 +1,6 @@
 use crate::components::{
-    logger::LogResultExt, node_editor::inputs::input_components::NodeConfigUnitInput,
+    logger::LogResultExt,
+    node_editor::inputs::input_components::{NodeConfigUnitInput, UnitHandling},
 };
 use dioxus::prelude::*;
 use opossum_core::{meter, prelude::PointSrc};
@@ -15,7 +16,7 @@ pub fn ReferenceLengthEditor(
             id: "pointsrcRefLength",
             label: "Reference Length",
             value: point_src.reference_length().value,
-            base_unit: "m",
+            unit_config: UnitHandling::new("m", true),
             readonly,
             onchange: move |new_length: f64| {
                 let mut point_src = point_src.clone();

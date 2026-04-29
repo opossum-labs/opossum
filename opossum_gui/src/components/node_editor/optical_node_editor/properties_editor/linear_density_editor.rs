@@ -1,5 +1,6 @@
 use crate::components::node_editor::{
-    inputs::input_components::NodeConfigUnitInput, node_config_editor::NodeChangeEvent,
+    inputs::input_components::{NodeConfigUnitInput, UnitHandling},
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use dioxus::prelude::*;
@@ -30,7 +31,7 @@ pub fn LinearDensityEditor(
             id: format!("linearDensityProperty{property_key}").to_camel_case(),
             label: property_key.to_sentence_case(),
             value: linear_density_sig.read().value,
-            base_unit: "m⁻¹",
+            unit_config: UnitHandling::new("m⁻¹", true),
             reciprocal: true,
             readonly,
             onchange: move |new_linear_density: f64| {

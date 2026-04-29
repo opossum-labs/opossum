@@ -1,7 +1,7 @@
 use core::f64;
 
 use crate::components::{
-    node_editor::inputs::input_components::UnitInput,
+    node_editor::inputs::input_components::{UnitHandling, UnitInput},
     scenery_editor::{
         GraphState, GraphsWorkspaceAction,
         constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
@@ -105,7 +105,7 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
                     label: String::new(),
                     value: edge.distance(),
                     readonly: edge.targets_reference(),
-                    base_unit: "m",
+                    unit_config: UnitHandling::new("m", true),
                     onchange: {
                         let edge = edge.clone();
                         move |new_distance: f64| {

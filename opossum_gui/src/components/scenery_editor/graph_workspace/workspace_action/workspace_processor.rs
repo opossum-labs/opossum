@@ -11,8 +11,8 @@ use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, PortType},
     types::api_types::{
-        ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, PortMappingsResponse,
-        UpdateConnectionRequest,
+        ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, NodePortsResponse,
+        PortMappingsResponse, UpdateConnectionRequest,
     },
 };
 use serde_json::Value;
@@ -511,7 +511,9 @@ async fn process_paste_nodes(
                 );
                 eval_action_run(
                     api::get_ports_of_group(group_id).await,
-                    Some(move |(input_ports, output_ports)| {
+                    Some(move |ports_config: NodePortsResponse| {
+                        let input_ports = ports_config.inputs.into_keys().collect();
+                        let output_ports = ports_config.outputs.into_keys().collect();
                         ws_handler
                             .nodes
                             .update_group_ports(input_ports, output_ports, group_id);

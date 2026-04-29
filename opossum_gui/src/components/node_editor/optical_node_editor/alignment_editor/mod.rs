@@ -5,7 +5,9 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::{AccordionItem, ElementList},
-        inputs::input_components::{LabeledSelect, NodeConfigUnitInput, RowedElements},
+        inputs::input_components::{
+            LabeledSelect, NodeConfigUnitInput, RowedElements, UnitHandling,
+        },
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
 };
@@ -281,7 +283,7 @@ pub fn TranslationAlignmentInputs(
                     ),
                     label: format!("{} translation", TranslationAxis::X),
                     value: x_sig,
-                    base_unit: "m",
+                    unit_config: UnitHandling::new("m", true),
                     readonly,
                     onchange: move |new_trans: f64| {
                         on_new_translation.call((meter!(new_trans), TranslationAxis::X));
@@ -293,7 +295,7 @@ pub fn TranslationAlignmentInputs(
                     id: format!("{id_add_on}{}", TranslationAxis::Y),
                     label: format!("{} translation", TranslationAxis::Y),
                     value: y_sig,
-                    base_unit: "m",
+                    unit_config: UnitHandling::new("m", true),
                     readonly,
                     onchange: move |new_trans: f64| {
                         on_new_translation.call((meter!(new_trans), TranslationAxis::Y));
@@ -305,7 +307,7 @@ pub fn TranslationAlignmentInputs(
             id: format!("{id_add_on}{}", TranslationAxis::Z),
             label: format!("{} translation", TranslationAxis::Z),
             value: z_sig,
-            base_unit: "m",
+            unit_config: UnitHandling::new("m", true),
             readonly,
             onchange: move |new_trans: f64| {
                 on_new_translation.call((meter!(new_trans), TranslationAxis::Z));
@@ -369,7 +371,7 @@ pub fn RotationInput(
             id,
             label: format!("{} rotation", axis),
             value: value_memo,
-            base_unit: "°",
+            unit_config: UnitHandling::new("°", true),
             readonly,
             onchange: move |new_rot: f64| {
                 on_new_rotation.call((degree!(new_rot), axis));
