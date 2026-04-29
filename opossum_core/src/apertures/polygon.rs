@@ -34,6 +34,8 @@ impl Default for PolygonConfig {
             Point2::new(millimeter!(12.5), millimeter!(12.5)),
             Point2::new(millimeter!(-12.5), millimeter!(12.5)),
         ];
+            Point2::new(millimeter!(-12.5), millimeter!(12.5)),
+        ];
         Self::new(points).unwrap()
     }
 }

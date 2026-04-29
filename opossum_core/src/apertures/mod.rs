@@ -45,6 +45,7 @@ use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use std::fmt::Display;
 use strum::EnumIter;
 use uom::si::{
     f64::{Angle, Length},
@@ -95,6 +96,7 @@ impl Display for ApertureType {
 
 /// An [`Aperture`] defines the shape and type of an optical aperture. The shape is defined by the enum [`ApertureShape`] and the type is defined by the enum [`ApertureType`].
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated)]
+pub struct Aperture {
 pub struct Aperture {
     shape: ApertureShape,
     a_type: ApertureType,
@@ -298,6 +300,9 @@ impl Aperture {
 #[derive(
     Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnumIter, EnsureValidated,
 )]
+#[derive(
+    Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnumIter, EnsureValidated,
+)]
 pub enum ApertureShape {
     /// completely transparent aperture. This is the default.
     #[default]
@@ -347,6 +352,10 @@ impl ApertureShape {
             Self::BinaryRectangle(shape) => shape.transmission_factor(point),
             Self::BinaryPolygon(shape) => shape.transmission_factor(point),
             Self::Gaussian(shape) => shape.transmission_factor(point),
+            Self::Stack(apertures) => apertures
+                .apertures()
+                .iter()
+                .fold(1.0, |acc, ap| acc * ap.apodize(point)),
             Self::Stack(apertures) => apertures
                 .apertures()
                 .iter()

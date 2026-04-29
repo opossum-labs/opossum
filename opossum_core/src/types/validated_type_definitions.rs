@@ -118,6 +118,7 @@ impl ValidatedPolygonPoints2D {
     /// Returns an error if any point is non-finite, contains NaN, or if there are fewer than 3 points.
     pub fn try_new(points: Vec<Point2<Length>>) -> OpmResult<Self> {
         validated_vec!(points, AllFinite && AllNotNan, Min3Entries)
+        validated_vec!(points, AllFinite && AllNotNan, Min3Entries)
     }
 }
 
@@ -130,5 +131,9 @@ impl Default for ValidatedPolygonPoints2D {
             Point2::new(millimeter!(-12.5), millimeter!(12.5)),
         ])
         .unwrap()
+            Point2::new(millimeter!(-12.5), millimeter!(12.5)),
+        ])
+        .unwrap()
     }
 }
+
