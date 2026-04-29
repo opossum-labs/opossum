@@ -4,7 +4,8 @@ use crate::{
         logger::LogResultExt,
         node_editor::inputs::{
             InputParam, IntoInputData, IntoInputDataStrings, format_si_with_base_unit,
-            input_components::{RowedInputs, UnitHandling}, parse_si_number, parse_unit_input_strict,
+            input_components::{RowedInputs, UnitHandling},
+            parse_si_number, parse_unit_input_strict,
         },
     },
 };
