@@ -4,7 +4,7 @@ use crate::{
         logger::LogResultExt,
         node_editor::inputs::{
             InputParam, IntoInputData, IntoInputDataStrings, format_si_with_base_unit,
-            input_components::RowedInputs, parse_si_number, parse_unit_input_strict,
+            input_components::{RowedInputs, UnitHandling}, parse_si_number, parse_unit_input_strict,
         },
     },
 };
@@ -163,8 +163,8 @@ fn PolygonPointList(
                     };
                     rsx! {
                         li { class,
-                            span { {format!("x: {}", format_si_with_base_unit(point.x.value, "m", false))} }
-                            span { {format!("y: {}", format_si_with_base_unit(point.y.value, "m", false))} }
+                            span { {format!("x: {}", format_si_with_base_unit(point.x.value, &UnitHandling { base_unit: "m".to_string(), handle_prefix: true }, false))} }
+                            span { {format!("y: {}", format_si_with_base_unit(point.y.value, &UnitHandling { base_unit: "m".to_string(), handle_prefix: true }, false))} }
                             a {
                                 class: if readonly { "ms-auto text-muted" } else { "text-danger ms-auto" },
                                 onclick: {
