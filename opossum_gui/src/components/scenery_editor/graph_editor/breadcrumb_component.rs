@@ -19,6 +19,7 @@ pub fn BreadCrumbs(
                             "{name}"
                         }
 
+
                         if i < bread_crumbs.len() - 1 {
                             span { class: "breadcrumb-sep", " › " }
                         }

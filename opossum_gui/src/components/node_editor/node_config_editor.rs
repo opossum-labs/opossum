@@ -6,7 +6,7 @@ use crate::components::scenery_editor::{GraphsWorkspaceAction, NodeType, Selecte
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use opossum_core::prelude::{AnalyzerType, Aperture, ApertureShape, Isometry, Proptype};
+use opossum_core::prelude::{AnalyzerType, Aperture, Isometry, Proptype};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -127,7 +127,7 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                     NodeChangeAction::Name(name) => match api::get_node_references(uuid).await {
                         Ok(node_refs_grouped) => {
                             let ref_name = format!("ref ({name})");
-                            for (group_id, ref_ids) in node_refs_grouped.iter() {
+                            for (group_id, ref_ids) in &node_refs_grouped {
                                 for ref_id in ref_ids {
                                     let new_name = if uuid == *ref_id { &name } else { &ref_name };
                                     if let Err(e) =

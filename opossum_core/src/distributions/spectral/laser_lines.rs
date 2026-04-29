@@ -150,6 +150,21 @@ impl LaserLines {
         self.lines.remove(index)?;
         Ok(())
     }
+
+    /// Set a line at a given index in this [`LaserLines`].
+    /// # Errors
+    /// This function will return an error if the index is out of bounds or if the new line is invalid.
+    pub fn set_line(&mut self, index: usize, new_line: (Length, f64)) -> OpmResult<()> {
+        self.lines.replace(index, new_line)?;
+        Ok(())
+    }
+
+    /// Returns a reference to a line at a given index from this [`LaserLines`].
+    /// # Errors
+    /// This function will return an error if the index is out of bounds.
+    pub fn get_line(&self, index: usize) -> OpmResult<&(Length, f64)> {
+        self.lines.get_at_index(index)
+    }
 }
 
 impl Default for LaserLines {

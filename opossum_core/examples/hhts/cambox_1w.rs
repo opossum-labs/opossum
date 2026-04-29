@@ -4,9 +4,9 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let cam_aperture = Aperture::new_rectangle(
         millimeter!(11.33),
         millimeter!(7.13),
-        millimeter!(0., 0.),
         ApertureType::Hole,
-        None
+        None,
+        None,
     )?;
 
     let mut cb = NodeGroup::new("CamBox 1w");

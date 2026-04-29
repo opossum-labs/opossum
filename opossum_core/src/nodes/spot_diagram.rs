@@ -510,9 +510,9 @@ mod test {
         let aperture = Aperture::new_rectangle(
             millimeter!(1.0),
             millimeter!(1.0),
-            millimeter!(0.0, 0.0),
             ApertureType::Hole,
-            None
+            None,
+            None,
         )
         .unwrap();
 

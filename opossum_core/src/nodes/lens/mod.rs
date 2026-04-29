@@ -312,7 +312,7 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        apertures::{ApertureShape, ApertureType},
+        apertures::ApertureShape,
         distributions::position::Hexapolar,
         joule,
         light::{LightData, LightResult, Rays},

@@ -9,9 +9,9 @@ fn main() -> OpmResult<()> {
     let aperture = Aperture::new_rectangle(
         millimeter!(15.),
         millimeter!(15.),
-        millimeter!(0.0, 0.0),
         ApertureType::Hole,
-        None
+        None,
+        None,
     )?;
 
     dummy.set_aperture(&PortType::Input, "input_1", &aperture)?;
@@ -23,9 +23,9 @@ fn main() -> OpmResult<()> {
     let sd_aperture = Aperture::new_rectangle(
         millimeter!(1.0),
         millimeter!(5.0),
-        millimeter!(0.0, 0.0),
         ApertureType::Hole,
-        None
+        None,
+        None,
     )?;
     sd.set_aperture(&PortType::Input, "input_1", &sd_aperture)?;
     let i_sd = scenery.add_node(sd)?;

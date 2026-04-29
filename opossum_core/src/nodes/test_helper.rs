@@ -74,11 +74,17 @@ pub mod test_helper {
         testing_logger::setup();
         let mut node = T::default();
         node.set_isometry(Isometry::identity()).unwrap();
-        let config = CircleShape::new(millimeter!(1.0), millimeter!(0.0, 0.0)).unwrap();
+        let config = CircleShape::new(millimeter!(1.0)).unwrap();
         node.set_aperture(
             &PortType::Input,
             "input_1",
-            &Aperture::new(ApertureShape::BinaryCircle(config), ApertureType::Hole, None),
+            &Aperture::new(
+                ApertureShape::BinaryCircle(config),
+                ApertureType::Hole,
+                None,
+                None,
+            )
+            .unwrap(),
         )
         .unwrap();
         let mut input = LightResult::default();

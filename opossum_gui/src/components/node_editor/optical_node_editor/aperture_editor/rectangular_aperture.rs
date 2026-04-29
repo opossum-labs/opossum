@@ -3,17 +3,13 @@ use crate::components::{
     node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
-use opossum_core::{
-    apertures::RectangleShape, meter, prelude::ApertureShape, utils::try_f64_to_usize,
-};
+use opossum_core::{apertures::RectangleShape, meter, prelude::ApertureShape};
 use strum::EnumIter;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 pub enum RectApertureParam {
     Width,
     Height,
-    CenterX,
-    CenterY,
 }
 
 impl From<RectApertureParam> for InputParam {
@@ -21,8 +17,6 @@ impl From<RectApertureParam> for InputParam {
         match value {
             RectApertureParam::Width => Self::SIUnit("Width".into(), "m".into()),
             RectApertureParam::Height => Self::SIUnit("Height".into(), "m".into()),
-            RectApertureParam::CenterX => Self::SIUnit("Center X".into(), "m".into()),
-            RectApertureParam::CenterY => Self::SIUnit("Center Y".into(), "m".into()),
         }
     }
 }
@@ -32,8 +26,6 @@ impl IntoInputDataStrings<RectangleShape> for RectApertureParam {
         let id_str = match self {
             Self::Width => "Width",
             Self::Height => "Height",
-            Self::CenterX => "CenterX",
-            Self::CenterY => "CenterY",
         };
         format!("Grid{id_str}Input")
     }
@@ -42,8 +34,6 @@ impl IntoInputDataStrings<RectangleShape> for RectApertureParam {
         match self {
             Self::Width => format!("{}", obj.width().value),
             Self::Height => format!("{}", obj.height().value),
-            Self::CenterX => format!("{}", obj.center().x.value),
-            Self::CenterY => format!("{}", obj.center().y.value),
         }
     }
 }
@@ -63,14 +53,6 @@ impl IntoInputData<f64, RectangleShape, ApertureShape> for RectApertureParam {
             Self::Height => move |obj: &mut RectangleShape, val: f64| {
                 obj.set_height(meter!(val))
                     .log_err_with_context("`set_height` of rectangle");
-            },
-            Self::CenterX => move |obj: &mut RectangleShape, val: f64| {
-                obj.set_center_x(meter!(val))
-                    .log_err_with_context("`set_center_x` of rectangle");
-            },
-            Self::CenterY => move |obj: &mut RectangleShape, val: f64| {
-                obj.set_center_y(meter!(val))
-                    .log_err_with_context("`set_center_y` of rectangle");
             },
         }
     }

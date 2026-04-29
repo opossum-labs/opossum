@@ -1022,7 +1022,7 @@ async fn process_rename_root_scenery(
         Some(move |()| {
             ws_handler
                 .nodes
-                .set_node_name(name.to_string(), root_id, root_id, needs_saving);
+                .set_node_name(name.clone(), root_id, root_id, needs_saving);
         }),
     );
 }

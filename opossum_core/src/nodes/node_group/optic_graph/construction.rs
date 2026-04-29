@@ -219,7 +219,7 @@ impl OpticGraph {
                 let ref_nodes_map = group
                     .graph()
                     .find_all_nodes_referring_to_uuid(node_id, group.node_attr.uuid())?;
-                for (group_id, ref_nodes) in ref_nodes_map.iter() {
+                for (group_id, ref_nodes) in &ref_nodes_map {
                     if let Some(node_refs) = nodes_indices.get_mut(group_id) {
                         node_refs.extend(ref_nodes);
                     } else {

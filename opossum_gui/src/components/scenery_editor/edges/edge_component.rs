@@ -89,7 +89,13 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
                 pointer_events: "auto",
                 class: "input-with-unit",
                 style: "display: flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; box-sizing: border-box;",
-                onmousedown: move |e: MouseEvent| {e.stop_propagation(); workspace_processor.send(GraphsWorkspaceAction::ClearSelectedNodes { graph_id });},
+                onmousedown: move |e: MouseEvent| {
+                    e.stop_propagation();
+                    workspace_processor
+                        .send(GraphsWorkspaceAction::ClearSelectedNodes {
+                            graph_id,
+                        });
+                },
                 UnitInput {
                     id: format!(
                         "distance-{}{}",

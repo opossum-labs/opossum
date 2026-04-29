@@ -3,7 +3,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     generic_validators::ValidateTrait,
     millimeter,
-    types::validated_type_definitions::ValidatedPolygonPoints,
+    prelude::ApertureShape,
+    types::validated_type_definitions::ValidatedPolygonPoints2D,
 };
 use earcutr::earcut;
 use nalgebra::{Point2, Point3};
@@ -16,11 +17,15 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, ToSchema)]
 pub struct PolygonConfig {
     #[schema(value_type = Object)]
-    points: ValidatedPolygonPoints,
+    points: ValidatedPolygonPoints2D,
     #[validate(skip)]
     triangle_indices: Vec<Vec<usize>>,
 }
-
+impl From<PolygonConfig> for ApertureShape {
+    fn from(value: PolygonConfig) -> Self {
+        Self::BinaryPolygon(value)
+    }
+}
 impl Default for PolygonConfig {
     fn default() -> Self {
         let points = vec![
@@ -42,9 +47,9 @@ impl PolygonConfig {
     ///
     /// This function will return an error if the number of points is less than three, so that no polygon can be created.
     pub fn new(points: Vec<Point2<Length>>) -> OpmResult<Self> {
-        let validated_points = ValidatedPolygonPoints::try_new(points)?;
+        let validated_points = ValidatedPolygonPoints2D::try_new(points)?;
         Ok(Self {
-            triangle_indices: Self::triangulate(&validated_points.get())?,
+            triangle_indices: Self::triangulate(validated_points.get())?,
             points: validated_points,
         })
     }
@@ -98,6 +103,25 @@ impl PolygonConfig {
     #[must_use]
     pub fn points(&self) -> &[Point2<Length>] {
         self.points.get()
+    }
+
+    /// Add new points to this [`PolygonConfig`]. The new points are added to the end of the existing points.
+    /// The order of the points must follow the outline of the polygon. Otherwise intersections may occur.
+    /// # Errors
+    /// This function will return an error if the new points are invalid, e.g. if they are indefinite.
+    pub fn add_points(&mut self, new_points: &[Point2<Length>]) -> OpmResult<()> {
+        for p in new_points {
+            self.points.push(*p)?;
+        }
+        Ok(())
+    }
+
+    /// Delete a point at a given index from this [`PolygonConfig`].
+    /// # Errors
+    /// This function will return an error if the index is out of bounds.
+    pub fn delete_point(&mut self, index: usize) -> OpmResult<()> {
+        self.points.remove(index)?;
+        Ok(())
     }
 }
 impl Shape for PolygonConfig {
