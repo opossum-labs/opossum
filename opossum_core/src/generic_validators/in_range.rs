@@ -231,13 +231,11 @@ impl<T: NumLike> YInRange<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::generic_validators::Validate;
-
     use super::*;
+    use crate::generic_validators::Validate;
+    use crate::meter;
     use nalgebra::Point2;
-    use uom::si::angle::radian;
-    use uom::si::f64::{Angle, Length};
-    use uom::si::length::meter;
+    use uom::si::{angle::radian, f64::Angle};
 
     fn make_all_in_range() -> AllInRange<f64> {
         AllInRange {
@@ -358,65 +356,67 @@ mod tests {
     }
 
     #[test]
-    fn test_is_in_range_f64_inclusive() {
-        let validator = AllInRange::new(1.0, 5.0, true).unwrap();
+    fn test_is_in_range_f64_inclusive() -> OpmResult<()> {
+        let validator = AllInRange::new(1.0, 5.0, true)?;
 
         assert!(validator.validate(&1.0).is_ok());
         assert!(validator.validate(&5.0).is_ok());
         assert!(validator.validate(&3.0).is_ok());
         assert!(validator.validate(&0.0).is_err());
         assert!(validator.validate(&6.0).is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_is_in_range_f64_exclusive() {
-        let validator = AllInRange::new(1.0, 5.0, false).unwrap();
+    fn test_is_in_range_f64_exclusive() -> OpmResult<()> {
+        let validator = AllInRange::new(1.0, 5.0, false)?;
 
         assert!(validator.validate(&1.0).is_err());
         assert!(validator.validate(&5.0).is_err());
         assert!(validator.validate(&3.0).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_is_in_range_length() {
-        let validator =
-            AllInRange::new(Length::new::<meter>(1.0), Length::new::<meter>(5.0), true).unwrap();
+    fn test_is_in_range_length() -> OpmResult<()> {
+        let validator = AllInRange::new(meter!(1.0), meter!(5.0), true)?;
 
-        assert!(validator.validate(&Length::new::<meter>(1.0)).is_ok());
-        assert!(validator.validate(&Length::new::<meter>(5.0)).is_ok());
-        assert!(validator.validate(&Length::new::<meter>(0.5)).is_err());
+        assert!(validator.validate(&meter!(1.0)).is_ok());
+        assert!(validator.validate(&meter!(5.0)).is_ok());
+        assert!(validator.validate(&meter!(0.5)).is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_is_in_range_angle() {
+    fn test_is_in_range_angle() -> OpmResult<()> {
         let validator =
-            AllInRange::new(Angle::new::<radian>(0.0), Angle::new::<radian>(3.14), true).unwrap();
+            AllInRange::new(Angle::new::<radian>(0.0), Angle::new::<radian>(3.14), true)?;
 
         assert!(validator.validate(&Angle::new::<radian>(0.0)).is_ok());
         assert!(validator.validate(&Angle::new::<radian>(3.14)).is_ok());
         assert!(validator.validate(&Angle::new::<radian>(-1.0)).is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_is_in_range_point2_f64() {
-        let validator = AllInRange::new(1.0, 5.0, true).unwrap();
+    fn test_is_in_range_point2_f64() -> OpmResult<()> {
+        let validator = AllInRange::new(1.0, 5.0, true)?;
         let p_valid = Point2::new(2.0, 3.0);
         let p_invalid = Point2::new(0.0, 4.0);
 
         assert!(validator.validate(&p_valid).is_ok());
         assert!(validator.validate(&p_invalid).is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_is_in_range_point2_length() {
-        let validator =
-            AllInRange::new(Length::new::<meter>(1.0), Length::new::<meter>(5.0), true).unwrap();
-
-        let p_valid = Point2::new(Length::new::<meter>(2.0), Length::new::<meter>(3.0));
-        let p_invalid = Point2::new(Length::new::<meter>(0.5), Length::new::<meter>(4.0));
-
+    fn test_is_in_range_point2_length() -> OpmResult<()> {
+        let validator = AllInRange::new(meter!(1.0), meter!(5.0), true)?;
+        let p_valid = meter!(2.0, 3.0);
+        let p_invalid = meter!(0.5, 4.0);
         assert!(validator.validate(&p_valid).is_ok());
         assert!(validator.validate(&p_invalid).is_err());
+        Ok(())
     }
 
     #[test]

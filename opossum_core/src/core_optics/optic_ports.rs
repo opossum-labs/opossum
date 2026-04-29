@@ -320,24 +320,24 @@ impl OpticPorts {
 }
 impl Display for OpticPorts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "inputs:").unwrap();
+        writeln!(f, "inputs:")?;
         if self.inputs.is_empty() {
-            writeln!(f, "  None").unwrap();
+            writeln!(f, "  None")?;
         } else {
             for (port_name, port_config) in self.ports(&PortType::Input) {
-                writeln!(f, "  <{port_name}> {port_config}").unwrap();
+                writeln!(f, "  <{port_name}> {port_config}")?;
             }
         }
-        writeln!(f, "output:").unwrap();
+        writeln!(f, "output:")?;
         if self.outputs.is_empty() {
-            writeln!(f, "  None").unwrap();
+            writeln!(f, "  None")?;
         } else {
             for (port_name, port_config) in self.ports(&PortType::Output) {
-                writeln!(f, "  <{port_name}> {port_config}").unwrap();
+                writeln!(f, "  <{port_name}> {port_config}")?;
             }
         }
         if self.inverted {
-            writeln!(f, "ports are inverted").unwrap();
+            writeln!(f, "ports are inverted")?;
         }
         Ok(())
     }
@@ -380,50 +380,54 @@ mod test {
         assert_eq!(ports.outputs.len(), 1);
     }
     #[test]
-    fn inputs() {
+    fn inputs() -> OpmResult<()> {
         let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "Test1").unwrap();
-        ports.add(&PortType::Input, "Test2").unwrap();
-        ports.add(&PortType::Output, "Test3").unwrap();
-        ports.add(&PortType::Output, "Test4").unwrap();
+        ports.add(&PortType::Input, "Test1")?;
+        ports.add(&PortType::Input, "Test2")?;
+        ports.add(&PortType::Output, "Test3")?;
+        ports.add(&PortType::Output, "Test4")?;
         let mut v = ports.names(&PortType::Input);
         v.sort();
         assert_eq!(v, vec!["Test1".to_string(), "Test2".to_string()]);
+        Ok(())
     }
     #[test]
-    fn inputs_inverted() {
+    fn inputs_inverted() -> OpmResult<()> {
         let mut ports = OpticPorts::new();
         ports.set_inverted(true);
-        ports.add(&PortType::Input, "Test1").unwrap();
-        ports.add(&PortType::Input, "Test2").unwrap();
-        ports.add(&PortType::Output, "Test3").unwrap();
-        ports.add(&PortType::Output, "Test4").unwrap();
+        ports.add(&PortType::Input, "Test1")?;
+        ports.add(&PortType::Input, "Test2")?;
+        ports.add(&PortType::Output, "Test3")?;
+        ports.add(&PortType::Output, "Test4")?;
         let mut v = ports.names(&PortType::Input);
         v.sort();
         assert_eq!(v, vec!["Test3".to_string(), "Test4".to_string()]);
+        Ok(())
     }
     #[test]
-    fn outputs() {
+    fn outputs() -> OpmResult<()> {
         let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "Test1").unwrap();
-        ports.add(&PortType::Input, "Test2").unwrap();
-        ports.add(&PortType::Output, "Test3").unwrap();
-        ports.add(&PortType::Output, "Test4").unwrap();
+        ports.add(&PortType::Input, "Test1")?;
+        ports.add(&PortType::Input, "Test2")?;
+        ports.add(&PortType::Output, "Test3")?;
+        ports.add(&PortType::Output, "Test4")?;
         let mut v = ports.names(&PortType::Output);
         v.sort();
         assert_eq!(v, vec!["Test3".to_string(), "Test4".to_string()]);
+        Ok(())
     }
     #[test]
-    fn outputs_inverted() {
+    fn outputs_inverted() -> OpmResult<()> {
         let mut ports = OpticPorts::new();
         ports.set_inverted(true);
-        ports.add(&PortType::Input, "Test1").unwrap();
-        ports.add(&PortType::Input, "Test2").unwrap();
-        ports.add(&PortType::Output, "Test3").unwrap();
-        ports.add(&PortType::Output, "Test4").unwrap();
+        ports.add(&PortType::Input, "Test1")?;
+        ports.add(&PortType::Input, "Test2")?;
+        ports.add(&PortType::Output, "Test3")?;
+        ports.add(&PortType::Output, "Test4")?;
         let mut v = ports.names(&PortType::Output);
         v.sort();
         assert_eq!(v, vec!["Test1".to_string(), "Test2".to_string()]);
+        Ok(())
     }
     #[test]
     fn set_inverted() {
@@ -440,52 +444,60 @@ mod test {
         );
     }
     #[test]
-    fn display_entries() {
+    fn display_entries() -> OpmResult<()> {
         let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "test1").unwrap();
-        ports.add(&PortType::Output, "test2").unwrap();
+        ports.add(&PortType::Input, "test1")?;
+        ports.add(&PortType::Output, "test2")?;
         assert_eq!(
             ports.to_string(),
             "inputs:\n  <test1> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
         );
+        Ok(())
     }
     #[test]
-    fn display_entries_inverted() {
+    fn display_entries_inverted() -> OpmResult<()> {
         let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "test1").unwrap();
+        ports.add(&PortType::Input, "test1")?;
 
-        ports.add(&PortType::Output, "test2").unwrap();
+        ports.add(&PortType::Output, "test2")?;
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
             "inputs:\n  <test2> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
         );
+        Ok(())
     }
     #[test]
-    fn coating() {
+    fn coating() -> OpmResult<()> {
         let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "test1").unwrap();
+        ports.add(&PortType::Input, "test1")?;
         assert!(matches!(
-            ports.coating(&PortType::Input, "test1").unwrap(),
+            ports
+                .coating(&PortType::Input, "test1")
+                .ok_or(OpossumError::OpticPort("Could not get port".to_string()))?,
             CoatingType::IdealAR
         ));
         assert!(ports.coating(&PortType::Input, "wrong").is_none());
+        Ok(())
     }
     #[test]
-    fn set_coating() {
+    fn set_coating() -> OpmResult<()> {
         let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "test1").unwrap();
+        ports.add(&PortType::Input, "test1")?;
         assert!(matches!(
-            ports.coating(&PortType::Input, "test1").unwrap(),
+            ports
+                .coating(&PortType::Input, "test1")
+                .ok_or(OpossumError::OpticPort("Could not get port".to_string()))?,
             CoatingType::IdealAR
         ));
         let coating = CoatingType::ConstantR { reflectivity: 0.5 };
-        ports
-            .set_coating(&PortType::Input, "test1", &coating)
-            .unwrap();
+        ports.set_coating(&PortType::Input, "test1", &coating)?;
         assert!(matches!(
-            ports.coating(&PortType::Input, "test1").unwrap(),
+            ports
+                .coating(&PortType::Input, "test1")
+                .ok_or(OpossumError::OpticPort("Could not get port".to_string()))?,
             CoatingType::ConstantR { reflectivity: 0.5 }
         ));
+        Ok(())
     }
 }

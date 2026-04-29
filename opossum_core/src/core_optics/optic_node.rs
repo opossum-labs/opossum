@@ -659,33 +659,39 @@ mod tests {
     use approx::assert_abs_diff_eq;
 
     use super::*;
-    use crate::{degree, millimeter, nodes::Dummy};
+    use crate::{degree, error::assert_err, millimeter, nodes::Dummy};
 
     #[test]
-    fn set_alignment() {
+    fn set_alignment() -> OpmResult<()> {
         let mut node = Dummy::default();
         let decenter = millimeter!(1.0, 2.0, 3.0);
         let tilt = degree!(0.1, 0.2, 0.3);
         assert!(node.set_alignment(decenter, tilt).is_ok());
-        let alignment = node.node_attr().alignment().clone().unwrap();
+        let alignment = node
+            .node_attr()
+            .alignment()
+            .clone()
+            .ok_or_else(|| OpossumError::Other("Error getting alignment".to_string()))?;
         assert_abs_diff_eq!(alignment.translation().x.value, decenter.x.value);
         assert_abs_diff_eq!(alignment.translation().y.value, decenter.y.value);
         assert_abs_diff_eq!(alignment.translation().z.value, decenter.z.value);
         assert_abs_diff_eq!(alignment.rotation().x.value, tilt.x.value);
         assert_abs_diff_eq!(alignment.rotation().y.value, tilt.y.value);
         assert_abs_diff_eq!(alignment.rotation().z.value, tilt.z.value);
+        Ok(())
     }
     #[test]
-    fn effective_node_iso() {
+    fn effective_node_iso() -> OpmResult<()> {
         let mut node = Dummy::default();
         let decenter = millimeter!(1.0, 2.0, 3.0);
         let tilt = degree!(0.0, 0.0, 0.0);
-        let iso = Isometry::new(decenter, tilt).unwrap();
-        node.set_isometry(iso).unwrap();
+        let iso = Isometry::new(decenter, tilt)?;
+        node.set_isometry(iso)?;
         let local_trans = millimeter!(4.0, 5.0, 6.0);
-        node.set_alignment(local_trans, degree!(0.0, 0.0, 0.0))
-            .unwrap();
-        let iso = node.effective_node_iso().unwrap();
+        node.set_alignment(local_trans, degree!(0.0, 0.0, 0.0))?;
+        let iso = node.effective_node_iso().ok_or(OpossumError::OpmDocument(
+            "Error getting effective iso".to_string(),
+        ))?;
         assert_abs_diff_eq!(
             iso.translation().x.value,
             decenter.x.value + local_trans.x.value
@@ -698,27 +704,28 @@ mod tests {
             iso.translation().z.value,
             decenter.z.value + local_trans.z.value
         );
+        Ok(())
     }
     #[test]
-    fn effective_surface_iso() {
+    fn effective_surface_iso() -> OpmResult<()> {
         let mut node = Dummy::default();
         let decenter = millimeter!(1.0, 2.0, 3.0);
         let tilt = degree!(0.1, 0.2, 0.3);
-        node.set_alignment(decenter, tilt).unwrap();
-        let msg = node.effective_surface_iso("input_1").unwrap_err();
-        assert_eq!(
-            msg.to_string(),
-            "Opossum Error:Other:no effective node iso defined"
+        node.set_alignment(decenter, tilt)?;
+        assert_err(
+            node.effective_surface_iso("input_1"),
+            OpossumError::Other("no effective node iso defined".to_string()),
         );
-        node.set_isometry(Isometry::identity()).unwrap();
-        let msg = node.effective_surface_iso("wrong").unwrap_err();
-        assert_eq!(
-            msg.to_string(),
-            "Opossum Error:Other:no surface with name wrong defined"
+
+        node.set_isometry(Isometry::identity())?;
+        assert_err(
+            node.effective_surface_iso("wrong"),
+            OpossumError::Other("no surface with name wrong defined".to_string()),
         );
-        let iso = node.effective_surface_iso("input_1").unwrap();
+        let iso = node.effective_surface_iso("input_1")?;
         assert_abs_diff_eq!(iso.translation().x.value, decenter.x.value);
         assert_abs_diff_eq!(iso.translation().y.value, decenter.y.value);
         assert_abs_diff_eq!(iso.translation().z.value, decenter.z.value);
+        Ok(())
     }
 }

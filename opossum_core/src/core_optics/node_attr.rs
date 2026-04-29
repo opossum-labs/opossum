@@ -324,7 +324,7 @@ mod test {
     }
 
     #[test]
-    fn deserialize_name_sanitization() {
+    fn deserialize_name_sanitization() -> OpmResult<()> {
         let ron_str = r#"
             (
                 node_type: "test",
@@ -337,7 +337,9 @@ mod test {
                 lidt: 1.0
             )
         "#;
-        let attr: NodeAttr = ron::from_str(ron_str).unwrap();
+        let attr: NodeAttr =
+            ron::from_str(ron_str).map_err(|e| OpossumError::OpmDocument(e.to_string()))?;
         assert_eq!(attr.name(), ".._malicious");
+        Ok(())
     }
 }

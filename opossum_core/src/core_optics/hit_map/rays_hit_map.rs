@@ -330,7 +330,6 @@ impl RaysHitMap {
                 if vec.len() < 2 {
                     return;
                 }
-
                 // Sort points primarily by X, then Y, then Z to group close points together
                 vec.sort_by(|a, b| {
                     a.position
@@ -1002,6 +1001,7 @@ mod test_hitpoint {
     use crate::{
         J_per_cm2,
         core_optics::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
+        error::OpmResult,
         joule, meter,
     };
     use core::f64;
@@ -1054,20 +1054,22 @@ mod test_hitpoint {
         assert!(EnergyHitPoint::new(meter!(1.0, 1.0, f64::NEG_INFINITY), joule!(1.0)).is_err());
     }
     #[test]
-    fn getters_fluence_hit_point() {
-        let hm = FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0)).unwrap();
+    fn getters_fluence_hit_point() -> OpmResult<()> {
+        let hm = FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0))?;
         assert_eq!(hm.position().x, meter!(1.0));
         assert_eq!(hm.position().y, meter!(2.0));
         assert_eq!(hm.position().z, meter!(3.0));
         assert_eq!(hm.value(), J_per_cm2!(4.0));
+        Ok(())
     }
     #[test]
-    fn getters_energ_hit_point() {
-        let hm = EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(4.0)).unwrap();
+    fn getters_energ_hit_point() -> OpmResult<()> {
+        let hm = EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(4.0))?;
         assert_eq!(hm.position().x, meter!(1.0));
         assert_eq!(hm.position().y, meter!(2.0));
         assert_eq!(hm.position().z, meter!(3.0));
         assert_eq!(hm.value(), joule!(4.0));
+        Ok(())
     }
 }
 #[cfg(test)]
@@ -1076,34 +1078,36 @@ mod test_hitpoints {
     use crate::{
         J_per_cm2,
         core_optics::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
+        error::OpmResult,
         joule, meter,
     };
 
     #[test]
-    fn len() {
+    fn len() -> OpmResult<()> {
         let hp = HitPoints::Energy(vec![]);
         assert!(hp.is_empty());
         let hp = HitPoints::Fluence(vec![]);
         assert!(hp.is_empty());
 
-        let hp = HitPoints::Energy(vec![
-            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(4.0)).unwrap(),
-        ]);
+        let hp = HitPoints::Energy(vec![EnergyHitPoint::new(
+            meter!(1.0, 2.0, 3.0),
+            joule!(4.0),
+        )?]);
         assert!(!hp.is_empty());
         assert!(hp.len() == 1);
-
         let hp = HitPoints::Fluence(vec![
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0)).unwrap(),
-            FluenceHitPoint::new(meter!(2.0, 3.0, 4.0), J_per_cm2!(5.0)).unwrap(),
+            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0))?,
+            FluenceHitPoint::new(meter!(2.0, 3.0, 4.0), J_per_cm2!(5.0))?,
         ]);
         assert!(!hp.is_empty());
         assert!(hp.len() == 2);
+        Ok(())
     }
     #[test]
-    fn positions() {
+    fn positions() -> OpmResult<()> {
         let hp = HitPoints::Fluence(vec![
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0)).unwrap(),
-            FluenceHitPoint::new(meter!(2.0, 3.0, 4.0), J_per_cm2!(5.0)).unwrap(),
+            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0))?,
+            FluenceHitPoint::new(meter!(2.0, 3.0, 4.0), J_per_cm2!(5.0))?,
         ]);
         let pos = hp.positions();
         assert_eq!(pos[0].x.value, 1.);
@@ -1112,6 +1116,7 @@ mod test_hitpoints {
         assert_eq!(pos[1].x.value, 2.);
         assert_eq!(pos[1].y.value, 3.);
         assert_eq!(pos[1].z.value, 4.);
+        Ok(())
     }
 }
 #[cfg(test)]
@@ -1123,6 +1128,7 @@ mod test_rays_hit_map {
             HitMap,
             rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint, HitPoints},
         },
+        error::OpmResult,
         joule, meter,
     };
     use uuid::Uuid;
@@ -1142,133 +1148,142 @@ mod test_rays_hit_map {
     }
     use core::f64;
     #[test]
-    fn lims() {
+    fn lims() -> OpmResult<()> {
         let hp = HitPoints::Fluence(vec![
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0)).unwrap(),
-            FluenceHitPoint::new(meter!(2.0, 3.0, 4.0), J_per_cm2!(5.0)).unwrap(),
+            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0))?,
+            FluenceHitPoint::new(meter!(2.0, 3.0, 4.0), J_per_cm2!(5.0))?,
         ]);
         let rhm = RaysHitMap::new(hp);
         assert_eq!(rhm.x_lims.0.value, 1.0);
         assert_eq!(rhm.x_lims.1.value, 2.0);
         assert_eq!(rhm.y_lims.0.value, 2.0);
         assert_eq!(rhm.y_lims.1.value, 3.0);
+        Ok(())
     }
     #[test]
-    fn new_energy_hit_point() {
+    fn new_energy_hit_point() -> OpmResult<()> {
         let rhm = RaysHitMap::new(HitPoints::Energy(vec![]));
         assert_eq!(rhm.hit_points.len(), 0);
 
-        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap();
+        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
         let rhm = RaysHitMap::new(HitPoints::Energy(vec![hp]));
         assert_eq!(rhm.hit_points.len(), 1);
+        Ok(())
     }
     #[test]
-    fn new_fluence_hit_point() {
+    fn new_fluence_hit_point() -> OpmResult<()> {
         let rhm = RaysHitMap::new(HitPoints::Fluence(vec![]));
         assert_eq!(rhm.hit_points.len(), 0);
 
-        let hp = FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap();
+        let hp = FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0))?;
         let rhm = RaysHitMap::new(HitPoints::Fluence(vec![hp]));
         assert_eq!(rhm.hit_points.len(), 1);
+        Ok(())
     }
     #[test]
-    fn add_to_hitmap_energy_hit_point() {
+    fn add_to_hitmap_energy_hit_point() -> OpmResult<()> {
         let mut rhm = RaysHitMap::default();
         assert_eq!(rhm.hit_points.len(), 0);
-        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap();
-        rhm.add_hit_point(HitPoint::Energy(hp)).unwrap();
+        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
+        rhm.add_hit_point(HitPoint::Energy(hp))?;
         assert_eq!(rhm.hit_points.len(), 1);
+        Ok(())
     }
     #[test]
-    fn add_energy_to_hitmap_fluence_hit_point() {
+    fn add_energy_to_hitmap_fluence_hit_point() -> OpmResult<()> {
         let mut rhm = RaysHitMap::default();
         assert_eq!(rhm.hit_points.len(), 0);
-        let hp = FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap();
+        let hp = FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0))?;
         assert!(rhm.add_hit_point(HitPoint::Fluence(hp)).is_err());
+        Ok(())
     }
     #[test]
-    fn merge_energy_hit_point() {
-        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap();
+    fn merge_energy_hit_point() -> OpmResult<()> {
+        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
         let mut rhm = RaysHitMap::new(HitPoints::Energy(vec![hp]));
-        let hp2 = EnergyHitPoint::new(meter!(1.0, 1.0, 1.0), joule!(1.0)).unwrap();
+        let hp2 = EnergyHitPoint::new(meter!(1.0, 1.0, 1.0), joule!(1.0))?;
         let rhm2 = RaysHitMap::new(HitPoints::Energy(vec![hp2]));
-        rhm.merge(&rhm2).unwrap();
+        rhm.merge(&rhm2)?;
         assert_eq!(rhm.hit_points.len(), 2);
+        Ok(())
     }
     #[test]
-    fn merge_fluence_hit_point() {
-        let hp = FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap();
+    fn merge_fluence_hit_point() -> OpmResult<()> {
+        let hp = FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0))?;
         let mut rhm = RaysHitMap::new(HitPoints::Fluence(vec![hp]));
-        let hp2 = FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(1.0)).unwrap();
+        let hp2 = FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(1.0))?;
         let rhm2 = RaysHitMap::new(HitPoints::Fluence(vec![hp2]));
-        rhm.merge(&rhm2).unwrap();
+        rhm.merge(&rhm2)?;
         assert_eq!(rhm.hit_points.len(), 2);
+        Ok(())
     }
     #[test]
-    fn merge_fluence_to_energy() {
-        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap();
+    fn merge_fluence_to_energy() -> OpmResult<()> {
+        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
         let mut rhm = RaysHitMap::new(HitPoints::Energy(vec![hp]));
-        let hp2 = FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(1.0)).unwrap();
+        let hp2 = FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(1.0))?;
         let mut rhm2 = RaysHitMap::new(HitPoints::Fluence(vec![hp2]));
         assert!(rhm.merge(&rhm2).is_err());
         assert!(rhm2.merge(&rhm).is_err());
+        Ok(())
     }
     #[test]
-    fn calc_2d_bounding_box() {
+    fn calc_2d_bounding_box() -> OpmResult<()> {
         let mut rhm = RaysHitMap::default();
         assert!(rhm.calc_2d_bounding_box(meter!(0.0)).is_err());
 
-        rhm.add_hit_point(HitPoint::Energy(
-            EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
-        ))
-        .unwrap();
+        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
+            meter!(0.0, 0.0, 0.0),
+            joule!(1.0),
+        )?))?;
         assert_eq!(
-            rhm.calc_2d_bounding_box(meter!(0.0)).unwrap(),
+            rhm.calc_2d_bounding_box(meter!(0.0))?,
             (meter!(0.0), meter!(0.0), meter!(0.0), meter!(0.0))
         );
-        rhm.add_hit_point(HitPoint::Energy(
-            EnergyHitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0)).unwrap(),
-        ))
-        .unwrap();
+        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
+            meter!(-1.0, 1.0, 0.0),
+            joule!(1.0),
+        )?))?;
         assert_eq!(
-            rhm.calc_2d_bounding_box(meter!(0.0)).unwrap(),
+            rhm.calc_2d_bounding_box(meter!(0.0))?,
             (meter!(-1.0), meter!(0.0), meter!(1.0), meter!(0.0))
         );
-        rhm.add_hit_point(HitPoint::Energy(
-            EnergyHitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0)).unwrap(),
-        ))
-        .unwrap();
+        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
+            meter!(-1.0, 1.0, 0.0),
+            joule!(1.0),
+        )?))?;
         assert_eq!(
-            rhm.calc_2d_bounding_box(meter!(0.5)).unwrap(),
+            rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(0.5), meter!(1.5), meter!(-0.5))
         );
-        rhm.add_hit_point(HitPoint::Energy(
-            EnergyHitPoint::new(meter!(-1.0, -1.0, 0.0), joule!(1.0)).unwrap(),
-        ))
-        .unwrap();
+        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
+            meter!(-1.0, -1.0, 0.0),
+            joule!(1.0),
+        )?))?;
         assert_eq!(
-            rhm.calc_2d_bounding_box(meter!(0.5)).unwrap(),
+            rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(0.5), meter!(1.5), meter!(-1.5))
         );
-        rhm.add_hit_point(HitPoint::Energy(
-            EnergyHitPoint::new(meter!(-1.0, 2.0, 0.0), joule!(1.0)).unwrap(),
-        ))
-        .unwrap();
+        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
+            meter!(-1.0, 2.0, 0.0),
+            joule!(1.0),
+        )?))?;
         assert_eq!(
-            rhm.calc_2d_bounding_box(meter!(0.5)).unwrap(),
+            rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(0.5), meter!(2.5), meter!(-1.5))
         );
-        rhm.add_hit_point(HitPoint::Energy(
-            EnergyHitPoint::new(meter!(1.0, 2.0, 0.0), joule!(1.0)).unwrap(),
-        ))
-        .unwrap();
+        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
+            meter!(1.0, 2.0, 0.0),
+            joule!(1.0),
+        )?))?;
         assert_eq!(
-            rhm.calc_2d_bounding_box(meter!(0.5)).unwrap(),
+            rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(1.5), meter!(2.5), meter!(-1.5))
         );
         assert!(rhm.calc_2d_bounding_box(meter!(f64::NAN)).is_err());
         assert!(rhm.calc_2d_bounding_box(meter!(f64::INFINITY)).is_err());
         assert!(rhm.calc_2d_bounding_box(meter!(f64::NEG_INFINITY)).is_err());
+        Ok(())
     }
 
     #[test]
@@ -1379,13 +1394,13 @@ mod test_rays_hit_map {
         assert!(mat[(0, 0)] < mat[(2, 2)]);
     }
     #[test]
-    fn consolidate_energy() {
+    fn consolidate_energy() -> OpmResult<()> {
         // Create hitmap with 3 identical points and 1 distinct point
         let mut rhm = RaysHitMap::new(HitPoints::Energy(vec![
-            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(1.0)).unwrap(),
-            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(2.0)).unwrap(),
-            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(3.0)).unwrap(),
-            EnergyHitPoint::new(meter!(5.0, 5.0, 5.0), joule!(4.0)).unwrap(),
+            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(1.0))?,
+            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(2.0))?,
+            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(3.0))?,
+            EnergyHitPoint::new(meter!(5.0, 5.0, 5.0), joule!(4.0))?,
         ]));
 
         assert_eq!(rhm.hit_points.len(), 4, "Initial length should be 4");
@@ -1411,16 +1426,16 @@ mod test_rays_hit_map {
         } else {
             panic!("Expected Energy hit points!");
         }
+        Ok(())
     }
 
     #[test]
-    fn consolidate_fluence_with_float_inaccuracy() {
+    fn consolidate_fluence_with_float_inaccuracy() -> OpmResult<()> {
         // Create hitmap with 2 nearly identical points (float inaccuracy) and 1 distinct point
         let mut rhm = RaysHitMap::new(HitPoints::Fluence(vec![
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(1.5)).unwrap(),
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0 + core::f64::EPSILON), J_per_cm2!(2.5))
-                .unwrap(),
-            FluenceHitPoint::new(meter!(5.0, 5.0, 5.0), J_per_cm2!(4.0)).unwrap(),
+            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(1.5))?,
+            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0 + core::f64::EPSILON), J_per_cm2!(2.5))?,
+            FluenceHitPoint::new(meter!(5.0, 5.0, 5.0), J_per_cm2!(4.0))?,
         ]));
 
         assert_eq!(rhm.hit_points.len(), 3, "Initial length should be 3");
@@ -1446,5 +1461,6 @@ mod test_rays_hit_map {
         } else {
             panic!("Expected Fluence hit points!");
         }
+        Ok(())
     }
 }

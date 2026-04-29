@@ -97,34 +97,35 @@ mod test {
         assert!(PolygonConfig::new(too_little_points).is_err());
     }
     #[test]
-    fn getters() {
+    fn getters() -> OpmResult<()> {
         let points = vec![
             meter!(0.0, 0.0),
             meter!(1.0, 0.5),
             meter!(2.0, 0.0),
             meter!(1.0, 1.0),
         ];
-        let poly = PolygonConfig::new(points.clone()).unwrap();
+        let poly = PolygonConfig::new(points.clone())?;
         assert_eq!(poly.points(), points.as_slice());
+        Ok(())
     }
     #[test]
-    fn transmission_factor() {
+    fn transmission_factor() -> OpmResult<()> {
         let poly = PolygonConfig::new(vec![
             meter!(0.0, 0.0),
             meter!(1.0, 0.5),
             meter!(2.0, 0.0),
             meter!(1.0, 1.0),
-        ])
-        .unwrap();
+        ])?;
         assert_eq!(poly.transmission_factor(&meter!(0.0, 0.0)), 1.0);
         assert_eq!(poly.transmission_factor(&meter!(2.0, 0.0)), 1.0);
         assert_eq!(poly.transmission_factor(&meter!(1.0, 1.0)), 1.0);
         assert_eq!(poly.transmission_factor(&meter!(1.0, 0.0)), 0.0);
         assert_eq!(poly.transmission_factor(&meter!(2.0, 1.0)), 0.0);
         assert_eq!(poly.transmission_factor(&meter!(0.0, 1.0)), 0.0);
+        Ok(())
     }
     #[test]
-    fn test_non_convex_u_shape() {
+    fn test_non_convex_u_shape() -> OpmResult<()> {
         // A U-shaped polygon
         let points = vec![
             meter!(0.0, 0.0),
@@ -136,7 +137,7 @@ mod test {
             meter!(1.0, 3.0),
             meter!(0.0, 3.0),
         ];
-        let poly = PolygonConfig::new(points).unwrap();
+        let poly = PolygonConfig::new(points)?;
 
         // Inside the "arms"
         assert_eq!(poly.transmission_factor(&meter!(0.5, 2.0)), 1.0);
@@ -147,5 +148,6 @@ mod test {
 
         // Bottom bar
         assert_eq!(poly.transmission_factor(&meter!(1.5, 0.5)), 1.0);
+        Ok(())
     }
 }

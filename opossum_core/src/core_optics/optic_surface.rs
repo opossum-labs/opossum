@@ -305,15 +305,20 @@ impl OpticSurface {
 
 impl Debug for OpticSurface {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OpticSurface")
-            .field("aperture", &self.aperture)
-            .field("coating", &self.coating)
-            .field("geometric surface", &self.geo_surface.0.lock_opm().unwrap())
-            .field("lidt", &self.lidt)
-            .finish_non_exhaustive()
+        let mut ds = f.debug_struct("OpticSurface");
+        ds.field("aperture", &self.aperture);
+        ds.field("coating", &self.coating);
+
+        // Try to lock, if it fails, provide a descriptive string instead
+        match self.geo_surface.0.lock_opm() {
+            Ok(guard) => ds.field("geometric surface", &*guard),
+            Err(_) => ds.field("geometric surface", &"<Locked/Poisoned>"),
+        };
+
+        ds.field("lidt", &self.lidt);
+        ds.finish_non_exhaustive()
     }
 }
-
 #[cfg(test)]
 mod test {
     use super::OpticSurface;
@@ -321,6 +326,7 @@ mod test {
         J_per_cm2,
         apertures::{Aperture, ApertureType, CircleShape},
         coatings::CoatingType,
+        error::{OpmResult, OpossumError},
         geometry::{Sphere, geo_surface::GeoSurfaceRef},
         joule,
         light::{Ray, Rays},
@@ -342,7 +348,7 @@ mod test {
         assert_eq!(os.lidt, J_per_cm2!(1.0));
     }
     #[test]
-    fn new() {
+    fn new() -> OpmResult<()> {
         let gs = GeoSurfaceRef::default();
         assert!(
             OpticSurface::new(
@@ -382,21 +388,22 @@ mod test {
         );
 
         let aperture = Aperture::BinaryCircle(
-            CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap(),
+            CircleShape::new(meter!(1.0), meter!(0.0, 0.0))?,
             ApertureType::Hole,
         );
         let os = OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(
-                Sphere::new(meter!(1.0), Isometry::identity()).unwrap(),
-            ))),
+            GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
+                meter!(1.0),
+                Isometry::identity(),
+            )?))),
             CoatingType::Fresnel,
             aperture,
             J_per_cm2!(2.0),
-        )
-        .unwrap();
+        )?;
         assert_eq!(os.lidt, J_per_cm2!(2.0));
         assert!(matches!(os.coating, CoatingType::Fresnel));
         assert!(matches!(os.aperture, _aperture));
+        Ok(())
     }
     #[test]
     fn set_lidt() {
@@ -411,64 +418,80 @@ mod test {
         assert_eq!(*os.lidt(), J_per_cm2!(2.5));
     }
     #[test]
-    fn add_to_rays_cache() {
+    fn add_to_rays_cache() -> OpmResult<()> {
         let mut os = OpticSurface::default();
-        let rays = Rays::from(
-            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap(),
-        );
+        let rays = Rays::from(Ray::new_collimated(
+            meter!(0.0, 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         os.add_to_rays_cache(rays.clone(), true);
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 1);
         os.add_to_rays_cache(rays.clone(), false);
         assert_eq!(os.backward_rays_cache.len(), 1);
         assert_eq!(os.forward_rays_cache.len(), 1);
+        Ok(())
     }
     #[test]
-    fn set_backwards_rays_cache() {
+    fn set_backwards_rays_cache() -> OpmResult<()> {
         let mut os = OpticSurface::default();
-        let rays = Rays::from(
-            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap(),
-        );
+        let rays = Rays::from(Ray::new_collimated(
+            meter!(0.0, 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         os.set_backwards_rays_cache(vec![rays]);
         assert_eq!(os.backward_rays_cache.len(), 1);
         assert_eq!(os.forward_rays_cache.len(), 0);
         os.set_backwards_rays_cache(vec![]);
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 0);
+        Ok(())
     }
     #[test]
-    fn set_forwards_rays_cache() {
+    fn set_forwards_rays_cache() -> OpmResult<()> {
         let mut os = OpticSurface::default();
-        let rays = Rays::from(
-            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap(),
-        );
+        let rays = Rays::from(Ray::new_collimated(
+            meter!(0.0, 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         os.set_forward_rays_cache(vec![rays]);
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 1);
         os.set_forward_rays_cache(vec![]);
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 0);
+        Ok(())
     }
     #[test]
-    fn add_critical_fluence() {
+    fn add_critical_fluence() -> OpmResult<()> {
         let mut os = OpticSurface::default();
         let uuid = Uuid::new_v4();
         os.add_critical_fluence(uuid, 1, J_per_cm2!(1.0), 2);
         let hit_map = os.hit_map();
         assert!(hit_map.critical_fluences().get(&Uuid::nil()).is_none());
-        let critical_fluence = hit_map.critical_fluences().get(&uuid).unwrap();
+        let critical_fluence = hit_map
+            .critical_fluences()
+            .get(&uuid)
+            .ok_or(OpossumError::Other("Error getting critical fluence".into()))?;
         assert_eq!(critical_fluence.0, J_per_cm2!(1.0));
         assert_eq!(critical_fluence.1, 1);
         assert_eq!(critical_fluence.2, 2);
+        Ok(())
     }
     #[test]
-    fn get_rays_cache() {
+    fn get_rays_cache() -> OpmResult<()> {
         let mut os = OpticSurface::default();
-        let rays = Rays::from(
-            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap(),
-        );
+        let rays = Rays::from(Ray::new_collimated(
+            meter!(0.0, 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         os.add_to_rays_cache(rays.clone(), true);
         assert_eq!(os.get_rays_cache(true).len(), 0);
         assert_eq!(os.get_rays_cache(false).len(), 1);
+        Ok(())
     }
 }

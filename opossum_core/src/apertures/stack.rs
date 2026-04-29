@@ -70,13 +70,14 @@ mod test {
 
     use super::super::{ApertureType, CircleShape, RectangleShape};
     use super::*;
+    use crate::error::OpmResult;
     use crate::meter;
 
     #[test]
-    fn stack() {
-        let r = RectangleShape::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5)).unwrap();
+    fn stack() -> OpmResult<()> {
+        let r = RectangleShape::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5))?;
         let r_ap = Aperture::BinaryRectangle(r, ApertureType::Hole);
-        let c = CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
+        let c = CircleShape::new(meter!(1.0), meter!(0.0, 0.0))?;
         let c_ap = Aperture::BinaryCircle(c, ApertureType::Hole);
         let s = StackShape::new(vec![r_ap, c_ap]);
         let s_ap = Aperture::Stack(s, ApertureType::Hole);
@@ -86,16 +87,17 @@ mod test {
         assert_eq!(s_ap.apodize(&meter!(1.0, 1.0)), 0.0);
         assert_eq!(s_ap.apodize(&meter!(-1.0, 0.0)), 0.0);
         assert_eq!(s_ap.apodize(&meter!(0.0, -1.0)), 0.0);
+        Ok(())
     }
     #[test]
-    fn test_stack_transmission_factor() {
+    fn test_stack_transmission_factor() -> OpmResult<()> {
         // 1. Create a circle at (0,0) with radius 1.0
-        let circle = CircleShape::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
+        let circle = CircleShape::new(meter!(1.0), meter!(0.0, 0.0))?;
         let circle_ap = Aperture::BinaryCircle(circle, ApertureType::Hole);
 
         // 2. Create a rectangle at (1,0) with width 2.0 and height 2.0
         // This rectangle covers x from 0.0 to 2.0 and y from -1.0 to 1.0
-        let rect = RectangleShape::new(meter!(2.0), meter!(2.0), meter!(1.0, 0.0)).unwrap();
+        let rect = RectangleShape::new(meter!(2.0), meter!(2.0), meter!(1.0, 0.0))?;
         let rect_ap = Aperture::BinaryRectangle(rect, ApertureType::Hole);
 
         // 3. Create the stack
@@ -134,5 +136,6 @@ mod test {
             0.0,
             epsilon = 1e-12
         );
+        Ok(())
     }
 }

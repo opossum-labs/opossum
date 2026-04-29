@@ -177,33 +177,36 @@ mod test {
         assert!(Random::new(millimeter!(1.), millimeter!(1.0), 1).is_ok());
     }
     #[test]
-    fn set_ok() {
-        let mut random = Random::new(millimeter!(1.0), Length::zero(), 1).unwrap();
+    fn set_ok() -> OpmResult<()> {
+        let mut random = Random::new(millimeter!(1.0), Length::zero(), 1)?;
 
         assert!(random.set_nr_of_points(10).is_ok());
         assert!(random.set_nr_of_points(100).is_ok());
         assert!(random.set_side_length_x(millimeter!(10.)).is_ok());
         assert!(random.set_side_length_y(millimeter!(10.)).is_ok());
         assert!(random.set_side_length_x(millimeter!(0.)).is_ok());
+        Ok(())
     }
     #[test]
-    fn set_err() {
-        let mut random = Random::new(millimeter!(1.0), Length::zero(), 1).unwrap();
+    fn set_err() -> OpmResult<()> {
+        let mut random = Random::new(millimeter!(1.0), Length::zero(), 1)?;
 
         assert!(random.set_nr_of_points(0).is_err());
         assert!(random.set_side_length_x(millimeter!(-10.)).is_err());
         assert!(random.set_side_length_y(millimeter!(-10.)).is_err());
         assert!(random.set_side_length_x(millimeter!(0.)).is_err());
 
-        let mut random = Random::new(Length::zero(), millimeter!(1.0), 1).unwrap();
+        let mut random = Random::new(Length::zero(), millimeter!(1.0), 1)?;
         assert!(random.set_nr_of_points(0).is_err());
         assert!(random.set_side_length_x(millimeter!(-10.)).is_err());
         assert!(random.set_side_length_y(millimeter!(-10.)).is_err());
         assert!(random.set_side_length_y(millimeter!(0.)).is_err());
+        Ok(())
     }
     #[test]
-    fn generate() {
-        let strategy = Random::new(millimeter!(1.0), millimeter!(1.0), 10).unwrap();
+    fn generate() -> OpmResult<()> {
+        let strategy = Random::new(millimeter!(1.0), millimeter!(1.0), 10)?;
         assert_eq!(strategy.generate().len(), 10);
+        Ok(())
     }
 }

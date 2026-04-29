@@ -141,7 +141,12 @@ impl<'de> Deserialize<'de> for OpticRef {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{core_optics::OpticNode, nodes::Dummy, utils::LockExt};
+    use crate::{
+        core_optics::OpticNode,
+        error::{OpmResult, OpossumError},
+        nodes::Dummy,
+        utils::LockExt,
+    };
     use std::{fs::File, io::Read, path::PathBuf};
     use uuid::uuid;
     #[test]
@@ -155,17 +160,22 @@ mod test {
     #[test]
     fn serialize() {
         let optic_ref = OpticRef::new(Arc::new(Mutex::new(Dummy::default())), None);
-        let _ =
+        assert!(
             ron::ser::to_string_pretty(&optic_ref, ron::ser::PrettyConfig::new().new_line("\n"))
-                .unwrap();
+                .is_ok()
+        );
     }
     #[test]
-    fn deserialize() {
+    fn deserialize() -> OpmResult<()> {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("files_for_testing/opm/optic_ref.opm");
         let file_content = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content);
-        let optic_ref: OpticRef = ron::from_str(&file_content).unwrap();
+        let _ = File::open(path)
+            .map_err(|e| OpossumError::OpticScenery(format!("Error opening file: {e}")))?
+            .read_to_string(file_content);
+        let optic_ref: OpticRef = ron::from_str(&file_content).map_err(|e| {
+            OpossumError::OpmDocument(format!("Error parsing opm file string: {e}"))
+        })?;
         assert_eq!(
             optic_ref.uuid(),
             uuid!("a2534789-ec98-4e9b-a1da-315a59d9da43")
@@ -173,6 +183,7 @@ mod test {
         let optic_ref = optic_ref.optical_ref.lock_opm().unwrap();
         assert_eq!(optic_ref.node_type(), "dummy");
         assert_eq!(optic_ref.name(), "dummy1");
+        Ok(())
     }
     #[test]
     fn debug() {
