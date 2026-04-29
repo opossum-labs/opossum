@@ -1,5 +1,5 @@
 use crate::OPOSSUM_UI_LOGS;
-use crate::components::node_editor::inputs::input_components::NodeConfigUnitInput;
+use crate::components::node_editor::inputs::input_components::{NodeConfigUnitInput, UnitHandling};
 use crate::components::node_editor::{
     inputs::{
         input_components::{FlushableTextInput, LabeledSelect},
@@ -94,7 +94,7 @@ pub fn RayTraceEditor(
             id: "rayTraceMinEnergy".to_string(),
             label: "Minimum ray energy".to_string(),
             value: ray_trace_config_sig.read().min_energy_per_ray().value,
-            base_unit: "J",
+            unit_config: UnitHandling::new("J", true),
             onchange: move |val: f64| {
                 if val >= 0.0 {
                     min_ray_energy_handler.call(joule!(val));

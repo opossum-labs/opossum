@@ -1,5 +1,5 @@
 use crate::components::node_editor::{
-    inputs::input_components::{LabeledSelect, NodeConfigUnitInput},
+    inputs::input_components::{LabeledSelect, NodeConfigUnitInput, UnitHandling},
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
 };
@@ -53,7 +53,7 @@ pub fn LengthOptionEditor(
                                 id: format!("lengthOptionProperty{property_key}").to_camel_case().as_str(),
                                 label: property_key.to_sentence_case(),
                                 value: length.value,
-                                base_unit: "m",
+                                unit_config: UnitHandling::new("m", true),
                                 readonly,
                                 onchange: move |new_length: f64| {
                                     on_save.call(Some(meter!(new_length)));

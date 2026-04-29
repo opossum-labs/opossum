@@ -1,5 +1,6 @@
 use crate::components::node_editor::{
-    inputs::input_components::NodeConfigUnitInput, node_config_editor::NodeChangeEvent,
+    inputs::input_components::{NodeConfigUnitInput, UnitHandling},
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use approx::relative_ne;
@@ -26,7 +27,7 @@ pub fn LengthEditor(
             id: format!("lengthProperty{property_key}").to_camel_case().as_str(),
             label: property_key.to_sentence_case(),
             value: length_sig.read().value,
-            base_unit: "m",
+            unit_config: UnitHandling::new("m", true),
             readonly,
             onchange: move |new_length: f64| {
                 if relative_ne!(length_sig.read().value, new_length, epsilon = 0.0) {
