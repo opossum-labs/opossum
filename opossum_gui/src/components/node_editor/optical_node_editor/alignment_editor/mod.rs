@@ -1,6 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-// mod grating_alignment;
+mod grating_alignment;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
@@ -9,6 +9,7 @@ use crate::{
             LabeledSelect, NodeConfigUnitInput, RowedElements, UnitHandling,
         },
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        optical_node_editor::alignment_editor::grating_alignment::GratingAlignmentInputs,
     },
 };
 use approx::relative_ne;
@@ -16,7 +17,7 @@ use dioxus::prelude::*;
 // use grating_alignment::GratingAlignmentInputs;
 use opossum_core::{
     degree, meter,
-    prelude::Isometry,
+    prelude::{Isometry, Properties},
     types::api_types::NodeInfo,
     utils::geom_transformation::{RotationAxis, TranslationAxis},
 };
@@ -31,6 +32,7 @@ use uuid::Uuid;
 pub fn AlignmentEditor(
     node_id: Memo<Uuid>,
     node_info: ReadSignal<NodeInfo>,
+    node_properties_sig: ReadSignal<Properties>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
@@ -41,6 +43,7 @@ pub fn AlignmentEditor(
                 alignment: node_info.read().alignment.unwrap_or_default(),
                 node_type: node_info.read().node_type.clone(),
                 on_change,
+                node_properties_sig,
                 readonly
             }
         }]
@@ -64,6 +67,7 @@ pub fn AlignmentInputs(
     node_id: Memo<Uuid>,
     alignment: Isometry,
     node_type: String,
+    node_properties_sig: ReadSignal<Properties>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
@@ -77,7 +81,13 @@ pub fn AlignmentInputs(
     });
 
     if node_type == "reflective grating" {
-        rsx! {}
+        rsx! {GratingAlignmentInputs{
+            alignment_sig_outside: alignment_sig,
+            node_properties_sig,
+            on_save,
+            node_id,
+            readonly
+        }}
     } else {
         rsx! {
             RotationAlignmentInputs {
@@ -277,68 +287,6 @@ pub fn TranslationAlignmentInputs(
     rsx! {
         RowedElements { elements: trans_input_vec, num_per_row: 2 }
     }
-
-    // let x_sig = use_memo(move || {
-    //     alignment
-    //         .read()
-    //         .translation_of_axis(TranslationAxis::X)
-    //         .value
-    // });
-    // let y_sig = use_memo(move || {
-    //     alignment
-    //         .read()
-    //         .translation_of_axis(TranslationAxis::Y)
-    //         .value
-    // });
-    // let z_sig = use_memo(move || {
-    //     alignment
-    //         .read()
-    //         .translation_of_axis(TranslationAxis::Z)
-    //         .value
-    // });
-
-    // rsx! {
-    //     div { class: "row gy-1 gx-2",
-    //         div { class: "col-sm",
-    //             NodeConfigUnitInput {
-    //                 id: format!(
-    //                     "{id_add_on}{}{}",
-    //                     TranslationAxis::X,
-    //                     node_id.read().as_simple().to_string(),
-    //                 ),
-    //                 label: format!("{} translation", TranslationAxis::X),
-    //                 value: x_sig,
-    //                 unit_config: UnitHandling::new("m", true),
-    //                 readonly,
-    //                 onchange: move |new_trans: f64| {
-    //                     on_new_translation.call((meter!(new_trans), TranslationAxis::X));
-    //                 },
-    //             }
-    //         }
-    //         div { class: "col-sm",
-    //             NodeConfigUnitInput {
-    //                 id: format!("{id_add_on}{}", TranslationAxis::Y),
-    //                 label: format!("{} translation", TranslationAxis::Y),
-    //                 value: y_sig,
-    //                 unit_config: UnitHandling::new("m", true),
-    //                 readonly,
-    //                 onchange: move |new_trans: f64| {
-    //                     on_new_translation.call((meter!(new_trans), TranslationAxis::Y));
-    //                 },
-    //             }
-    //         }
-    //     }
-    //     NodeConfigUnitInput {
-    //         id: format!("{id_add_on}{}", TranslationAxis::Z),
-    //         label: format!("{} translation", TranslationAxis::Z),
-    //         value: z_sig,
-    //         unit_config: UnitHandling::new("m", true),
-    //         readonly,
-    //         onchange: move |new_trans: f64| {
-    //             on_new_translation.call((meter!(new_trans), TranslationAxis::Z));
-    //         },
-    //     }
-    // }
 }
 
 #[component]
