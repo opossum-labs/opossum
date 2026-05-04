@@ -158,8 +158,7 @@ pub fn MenuBar(
                                             }
                                         }
                                     }
-                                }
-                                else{
+                                } else {
                                     rsx! {}
                                 }
                             }
@@ -179,16 +178,13 @@ pub fn MenuBar(
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::Center,
                                 on_click: move |_| {
-                                    on_menu_action
-                                        .call(AppCommand::CenterGraph
-                                        );
+                                    on_menu_action.call(AppCommand::CenterGraph);
                                 },
                             }
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::ZoomToFit,
                                 on_click: move |_| {
-                                    on_menu_action
-                                        .call(AppCommand::ZoomToFit);
+                                    on_menu_action.call(AppCommand::ZoomToFit);
                                 },
                             }
                             MenuListItemShortCut {

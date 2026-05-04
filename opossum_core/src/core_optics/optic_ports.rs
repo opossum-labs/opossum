@@ -11,7 +11,7 @@
 //!
 //! let mut ports = OpticPorts::new();
 //! ports.add(&PortType::Input, "my input").unwrap();
-//! let aperture = Aperture::new_circle(millimeter!(1.5), millimeter!(1.0, 1.0), ApertureType::Hole).unwrap();
+//! let aperture = Aperture::new_circle(millimeter!(1.5), ApertureType::Hole, Some(millimeter!(1.0, 1.0))).unwrap();
 //! ports.set_aperture(&PortType::Input, "my input", &aperture).unwrap();
 //! ```
 use crate::{
@@ -77,7 +77,7 @@ impl PortConfig {
 impl Default for PortConfig {
     fn default() -> Self {
         Self {
-            aperture: Aperture::Open,
+            aperture: Aperture::default(),
             coating: CoatingType::IdealAR,
             lidt: default_lidt(),
         }
@@ -233,7 +233,7 @@ impl OpticPorts {
                 )))
             },
             |config| {
-                config.coating = coating.clone();
+                config.coating = *coating;
                 Ok(())
             },
         )
@@ -436,7 +436,7 @@ mod test {
         ports.add(&PortType::Output, "test2").unwrap();
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
+            "inputs:\n  <test1> aperture: Aperture { shape: Open, aperture_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Aperture { shape: Open, aperture_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
         );
     }
     #[test]
@@ -448,7 +448,7 @@ mod test {
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test2> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
+            "inputs:\n  <test2> aperture: Aperture { shape: Open, aperture_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Aperture { shape: Open, aperture_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
         );
     }
     #[test]

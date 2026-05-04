@@ -65,6 +65,7 @@ pub fn LightDataEditor(
                 header_id: "sourceHeading",
                 parent_id: "accordionLightDataConfig",
                 content_id: "sourceCollapse",
+                level: 2,
             }
         }
     }

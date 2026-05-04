@@ -39,6 +39,7 @@ pub fn IsometryOptionEditor(
         }
         TranslationAlignmentInputs {
             alignment: position_memo,
+            axes_skip: None,
             on_new_translation: on_new_translation(on_position_change, position_memo.into()),
             node_id,
             readonly,
@@ -55,6 +56,7 @@ pub fn IsometryOptionEditor(
                 header_id: "srcIsometryHeading",
                 parent_id: "accordionIsometryOptionConfig",
                 content_id: "srcIsometryCollapse",
+                level: 2,
             }
         }
     }

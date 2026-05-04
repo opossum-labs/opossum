@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
+use crate::apertures::Aperture;
 use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
 use crate::nodes::ideal_filter::FilterConst;
 use crate::{
     J_per_cm2,
     analyzers::propagation_strategy::MissedSurfaceStrategy,
-    apertures::Aperture,
     centimeter,
     core_optics::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
     degree,
@@ -576,7 +576,7 @@ impl Rays {
         let mut beams_invalided = false;
         for ray in &mut self.ray_bundle {
             if ray.valid() {
-                let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position().xy());
+                let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position());
                 if ap_factor > 0.0 {
                     ray.filter_energy(&FilterType::Constant(FilterConst::new(ap_factor.into())?))?;
                 } else {
@@ -1812,15 +1812,16 @@ impl<'a> IntoIterator for &'a Rays {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::distributions::energy::General2DGaussian;
+    use crate::distributions::position::FibonacciEllipse;
+    use crate::distributions::position::FibonacciRectangle;
+    use crate::distributions::position::Random;
+    use crate::prelude::ApertureShape;
     use crate::{
         apertures::{ApertureType, CircleShape},
         centimeter,
         coatings::CoatingConstantR,
         core_optics::optic_surface::OpticSurface,
-        distributions::{
-            energy::General2DGaussian,
-            position::{FibonacciEllipse, FibonacciRectangle, Random},
-        },
         joule, meter, millimeter, nanometer,
         nodes::SplittingConfig,
         percent, radian,
@@ -2552,8 +2553,14 @@ mod test {
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         assert_eq!(rays.total_energy(), joule!(2.0));
-        let circle_config = CircleShape::new(millimeter!(0.5), millimeter!(0.0, 0.0)).unwrap();
-        let aperture = Aperture::BinaryCircle(circle_config, ApertureType::Hole);
+        let circle_config = CircleShape::new(millimeter!(0.5)).unwrap();
+        let aperture = Aperture::new(
+            ApertureShape::BinaryCircle(circle_config),
+            ApertureType::Hole,
+            None,
+            None,
+        )
+        .unwrap();
         rays.apodize(&aperture, &Isometry::identity()).unwrap();
         assert_eq!(rays.total_energy(), joule!(1.0));
     }

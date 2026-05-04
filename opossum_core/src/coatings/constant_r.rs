@@ -25,7 +25,6 @@ impl TryFrom<NonValidatedCoatingConstantR> for CoatingConstantR {
     }
 }
 
-/// Ein Type-Alias, um das Makro vor dem Utoipa-Parser zu verstecken.
 pub type ValidatedReflectivity = validated_type!(Ratio, AllInRange<Ratio>);
 impl Default for ValidatedReflectivity {
     fn default() -> Self {
@@ -41,7 +40,9 @@ impl Default for ValidatedReflectivity {
 ///
 /// The simple model represents an ideal coating with a given constant reflectivity independent from
 /// the incoming wavelength, angle of incidence, or refractive index of the following medium.
-#[derive(Default, Deserialize, Serialize, Debug, Clone, ToSchema, PartialEq, EnsureValidated)]
+#[derive(
+    Default, Deserialize, Serialize, Debug, Clone, ToSchema, PartialEq, EnsureValidated, Copy,
+)]
 #[serde(try_from = "NonValidatedCoatingConstantR")]
 pub struct CoatingConstantR {
     /// The reflectivity of the coating in the range [0.0, 1.0].

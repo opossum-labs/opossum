@@ -1,16 +1,43 @@
 use super::Shape;
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    generic_validators::ValidateTrait,
+    millimeter,
+    prelude::ApertureShape,
+    types::validated_type_definitions::ValidatedPolygonPoints2D,
+};
 use earcutr::earcut;
-use nalgebra::Point2;
+use nalgebra::{Point2, Point3};
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
+use utoipa::ToSchema;
 
 /// Configuration of a polygonal aperture defined by a given set of points.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, ToSchema)]
 pub struct PolygonConfig {
-    points: Vec<Point2<Length>>,
+    #[schema(value_type = Object)]
+    points: ValidatedPolygonPoints2D,
+    #[validate(skip)]
     triangle_indices: Vec<Vec<usize>>,
 }
+impl From<PolygonConfig> for ApertureShape {
+    fn from(value: PolygonConfig) -> Self {
+        Self::BinaryPolygon(value)
+    }
+}
+impl Default for PolygonConfig {
+    fn default() -> Self {
+        let points = vec![
+            Point2::new(millimeter!(-12.5), millimeter!(-12.5)),
+            Point2::new(millimeter!(12.5), millimeter!(-12.5)),
+            Point2::new(millimeter!(12.5), millimeter!(12.5)),
+            Point2::new(millimeter!(-12.5), millimeter!(12.5)),
+        ];
+        Self::new(points).unwrap()
+    }
+}
+
 impl PolygonConfig {
     /// Create a new polygonal aperture configuration by a set of given 2D points.
     ///
@@ -20,12 +47,10 @@ impl PolygonConfig {
     ///
     /// This function will return an error if the number of points is less than three, so that no polygon can be created.
     pub fn new(points: Vec<Point2<Length>>) -> OpmResult<Self> {
-        if points.len() < 3 {
-            return Err(OpossumError::Other("less than 3 points given".into()));
-        }
+        let validated_points = ValidatedPolygonPoints2D::try_new(points)?;
         Ok(Self {
-            triangle_indices: Self::triangulate(&points)?,
-            points,
+            triangle_indices: Self::triangulate(validated_points.get())?,
+            points: validated_points,
         })
     }
 
@@ -48,7 +73,7 @@ impl PolygonConfig {
     /// # Panics
     /// This function panics if the triangulation fails
     #[must_use]
-    pub fn in_polygon(&self, point: &Point2<Length>) -> bool {
+    pub fn in_polygon(&self, point: &Point3<Length>) -> bool {
         let mut in_polygon = false;
         for tri in &self.triangle_indices {
             let p1 = self.points[tri[0]];
@@ -77,11 +102,30 @@ impl PolygonConfig {
     /// Returns a reference to the points of this [`PolygonConfig`].
     #[must_use]
     pub fn points(&self) -> &[Point2<Length>] {
-        &self.points
+        self.points.get()
+    }
+
+    /// Add new points to this [`PolygonConfig`]. The new points are added to the end of the existing points.
+    /// The order of the points must follow the outline of the polygon. Otherwise intersections may occur.
+    /// # Errors
+    /// This function will return an error if the new points are invalid, e.g. if they are indefinite.
+    pub fn add_points(&mut self, new_points: &[Point2<Length>]) -> OpmResult<()> {
+        for p in new_points {
+            self.points.push(*p)?;
+        }
+        Ok(())
+    }
+
+    /// Delete a point at a given index from this [`PolygonConfig`].
+    /// # Errors
+    /// This function will return an error if the index is out of bounds.
+    pub fn delete_point(&mut self, index: usize) -> OpmResult<()> {
+        self.points.remove(index)?;
+        Ok(())
     }
 }
 impl Shape for PolygonConfig {
-    fn transmission_factor(&self, point: &Point2<Length>) -> f64 {
+    fn transmission_factor(&self, point: &Point3<Length>) -> f64 {
         if self.in_polygon(point) { 1.0 } else { 0.0 }
     }
 }
@@ -116,12 +160,12 @@ mod test {
             meter!(1.0, 1.0),
         ])
         .unwrap();
-        assert_eq!(poly.transmission_factor(&meter!(0.0, 0.0)), 1.0);
-        assert_eq!(poly.transmission_factor(&meter!(2.0, 0.0)), 1.0);
-        assert_eq!(poly.transmission_factor(&meter!(1.0, 1.0)), 1.0);
-        assert_eq!(poly.transmission_factor(&meter!(1.0, 0.0)), 0.0);
-        assert_eq!(poly.transmission_factor(&meter!(2.0, 1.0)), 0.0);
-        assert_eq!(poly.transmission_factor(&meter!(0.0, 1.0)), 0.0);
+        assert_eq!(poly.transmission_factor(&meter!(0.0, 0.0, 0.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(2.0, 0.0, 0.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(1.0, 1.0, 0.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(1.0, 0.0, 0.0)), 0.0);
+        assert_eq!(poly.transmission_factor(&meter!(2.0, 1.0, 0.0)), 0.0);
+        assert_eq!(poly.transmission_factor(&meter!(0.0, 1.0, 0.0)), 0.0);
     }
     #[test]
     fn test_non_convex_u_shape() {
@@ -139,13 +183,13 @@ mod test {
         let poly = PolygonConfig::new(points).unwrap();
 
         // Inside the "arms"
-        assert_eq!(poly.transmission_factor(&meter!(0.5, 2.0)), 1.0);
-        assert_eq!(poly.transmission_factor(&meter!(2.5, 2.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(0.5, 2.0, 0.0)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(2.5, 2.0, 0.0)), 1.0);
 
         // In the "gap" of the U (should be outside/0.0)
-        assert_eq!(poly.transmission_factor(&meter!(1.5, 2.0)), 0.0);
+        assert_eq!(poly.transmission_factor(&meter!(1.5, 2.0, 0.0)), 0.0);
 
         // Bottom bar
-        assert_eq!(poly.transmission_factor(&meter!(1.5, 0.5)), 1.0);
+        assert_eq!(poly.transmission_factor(&meter!(1.5, 0.5, 0.0)), 1.0);
     }
 }

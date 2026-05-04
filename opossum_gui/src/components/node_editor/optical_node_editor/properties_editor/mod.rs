@@ -66,6 +66,7 @@ pub fn PropertiesEditor(
             header_id: "propertyHeading",
             parent_id: "accordionNodeConfig",
             content_id: "propertyCollapse",
+            level: 1,
         }
     }
 }

@@ -6,12 +6,13 @@ pub mod test_helper {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        apertures::{Aperture, ApertureType, CircleShape},
+        apertures::{ApertureShape, ApertureType, CircleShape},
         core_optics::{OpticNode, PortType},
         distributions::position::Hexapolar,
         joule,
         light::{LightData, LightResult, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
+        prelude::Aperture,
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     pub fn test_inverted<T: Default + OpticNode>() {
@@ -73,11 +74,17 @@ pub mod test_helper {
         testing_logger::setup();
         let mut node = T::default();
         node.set_isometry(Isometry::identity()).unwrap();
-        let config = CircleShape::new(millimeter!(1.0), millimeter!(0.0, 0.0)).unwrap();
+        let config = CircleShape::new(millimeter!(1.0)).unwrap();
         node.set_aperture(
             &PortType::Input,
             "input_1",
-            &crate::apertures::Aperture::BinaryCircle(config, ApertureType::Hole),
+            &Aperture::new(
+                ApertureShape::BinaryCircle(config),
+                ApertureType::Hole,
+                None,
+                None,
+            )
+            .unwrap(),
         )
         .unwrap();
         let mut input = LightResult::default();

@@ -1,52 +1,60 @@
 use super::Shape;
-use crate::error::{OpmResult, OpossumError};
-use nalgebra::{Isometry2, Point2};
+use crate::{
+    error::OpmResult, generic_validators::ValidateTrait, prelude::ApertureShape,
+    types::validated_type_definitions::ValidatedRadius,
+};
+use nalgebra::Point3;
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
+use utoipa::ToSchema;
 
 /// Configuration data for a circular aperture.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(
+    Copy, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated, Default,
+)]
 pub struct CircleShape {
-    radius: Length,
-    center: Point2<Length>,
+    #[schema(value_type = f64)]
+    radius: ValidatedRadius,
 }
+
+impl From<CircleShape> for ApertureShape {
+    fn from(value: CircleShape) -> Self {
+        Self::BinaryCircle(value)
+    }
+}
+
 impl CircleShape {
     /// Create a new [`CircleShape`] from a given radius and a center point.
     ///
     /// # Errors
     ///
     /// This function will return an error if the given radius of negative, `NaN` or `Infinity`.
-    pub fn new(radius: Length, center: Point2<Length>) -> OpmResult<Self> {
-        if radius.is_normal() && radius.is_sign_positive() {
-            Ok(Self { radius, center })
-        } else {
-            Err(OpossumError::Other("radius must be positive".into()))
-        }
+    pub fn new(radius: Length) -> OpmResult<Self> {
+        let validated_radius = ValidatedRadius::try_new(radius)?;
+        Ok(Self {
+            radius: validated_radius,
+        })
     }
+
     /// Returns the radius of this [`CircleShape`]
     #[must_use]
     pub fn radius(&self) -> Length {
-        self.radius
+        *self.radius.get()
     }
-    /// Returns the center of this [`CircleShape`].
-    #[must_use]
-    pub fn center(&self) -> Point2<Length> {
-        self.center
+
+    /// set the radius of this [`CircleShape`]
+    /// # Errors
+    /// This function will return an error if the given radius of negative, `NaN`
+    pub fn set_radius(&mut self, radius: Length) -> OpmResult<()> {
+        self.radius.set(radius)?;
+        Ok(())
     }
 }
 impl Shape for CircleShape {
-    fn transmission_factor(&self, point: &Point2<Length>) -> f64 {
-        let translation = Isometry2::translation(
-            self.center.coords[0].get::<meter>(),
-            self.center.coords[1].get::<meter>(),
-        );
-
-        let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
-        let point_transformed = translation.inverse_transform_point(&point_meter);
-        if point_transformed
-            .y
-            .mul_add(point_transformed.y, point_transformed.x.powi(2))
-            <= self.radius.get::<meter>().powi(2)
+    fn transmission_factor(&self, point: &Point3<Length>) -> f64 {
+        if point.y.value.mul_add(point.y.value, point.x.value.powi(2))
+            <= self.radius().get::<meter>().powi(2)
         {
             1.0
         } else {
@@ -61,42 +69,39 @@ mod test {
 
     #[test]
     fn new() {
-        let center = meter!(0.0, 0.0);
-        assert!(CircleShape::new(meter!(1.0), center).is_ok());
-        assert!(CircleShape::new(meter!(0.0), center).is_err());
-        assert!(CircleShape::new(meter!(-1.0), center).is_err());
-        assert!(CircleShape::new(meter!(f64::NAN), center).is_err());
-        assert!(CircleShape::new(meter!(f64::INFINITY), center).is_err());
+        assert!(CircleShape::new(meter!(1.0)).is_ok());
+        assert!(CircleShape::new(meter!(0.0)).is_ok());
+        assert!(CircleShape::new(meter!(-1.0)).is_err());
+        assert!(CircleShape::new(meter!(f64::NAN)).is_err());
+        assert!(CircleShape::new(meter!(f64::INFINITY)).is_err());
     }
     #[test]
     fn getters() {
-        let c = CircleShape::new(meter!(2.0), meter!(3.0, 4.0)).unwrap();
+        let c = CircleShape::new(meter!(2.0)).unwrap();
         assert_eq!(c.radius(), meter!(2.0));
-        assert_eq!(c.center().x, meter!(3.0));
-        assert_eq!(c.center().y, meter!(4.0));
     }
     #[test]
     fn transmission_factor() {
-        let c = CircleShape::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
-        assert_eq!(c.transmission_factor(&meter!(1.0, 1.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(1.0, 0.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(1.0, 2.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(2.0, 1.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(0.0, 1.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(0.0, 0.0)), 0.0);
-        assert_eq!(c.transmission_factor(&meter!(2.0, 2.0)), 0.0);
+        let c = CircleShape::new(meter!(1.0)).unwrap();
+        assert_eq!(c.transmission_factor(&meter!(0.0, 0.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(0.0, -1.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(0.0, 1.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(1.0, 0.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(-1.0, 0.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(-1.0, -1.0, 0.0)), 0.0);
+        assert_eq!(c.transmission_factor(&meter!(1.0, 1.0, 0.0)), 0.0);
     }
     #[test]
     fn test_boundary_conditions() {
         let radius = meter!(1.0);
-        let c = CircleShape::new(radius, meter!(0.0, 0.0)).unwrap();
+        let c = CircleShape::new(radius).unwrap();
 
         // Point exactly on the boundary (x^2 + y^2 == r^2)
         // Floating point precision might be tricky, but 1.0^2 is exact.
-        assert_eq!(c.transmission_factor(&meter!(1.0, 0.0)), 1.0);
-        assert_eq!(c.transmission_factor(&meter!(0.0, 1.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(1.0, 0.0, 0.0)), 1.0);
+        assert_eq!(c.transmission_factor(&meter!(0.0, 1.0, 0.0)), 1.0);
 
         // Slightly outside
-        assert_eq!(c.transmission_factor(&meter!(1.000001, 0.0)), 0.0);
+        assert_eq!(c.transmission_factor(&meter!(1.000001, 0.0, 0.0)), 0.0);
     }
 }

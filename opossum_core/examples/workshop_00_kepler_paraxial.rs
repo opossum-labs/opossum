@@ -5,8 +5,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Kepler paraxial");
     let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     let mut lens1 = ParaxialSurface::new("75 mm lens", millimeter!(75.0))?;
-    let aperture =
-        Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
+    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     let i_pl1 = scenery.add_node(lens1)?;
     let i_pl2 = scenery.add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0))?)?;

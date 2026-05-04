@@ -37,7 +37,7 @@ fn main() -> OpmResult<()> {
     // coatings
     let ar_coating = &CoatingConstantR::new(percent!(1.0))?.into();
     // apertures
-    let a_2inch = Aperture::new_circle(millimeter!(25.4), millimeter!(0., 0.), ApertureType::Hole)?;
+    let a_2inch = Aperture::new_circle(millimeter!(25.4), ApertureType::Hole, None)?;
 
     let mut scenery = NodeGroup::new("HHT Sensor Telescope T1");
     let src = scenery.add_node(SourcePort::new("Collimated Source"))?;

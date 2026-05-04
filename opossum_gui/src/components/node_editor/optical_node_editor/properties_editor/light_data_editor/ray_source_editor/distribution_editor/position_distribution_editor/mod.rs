@@ -114,6 +114,7 @@ pub fn PositionDistributionEditor(
             header_id: "sourcePositionDistHeading",
             parent_id: "accordionSourceDists",
             content_id: "sourcePositionDistCollapse",
+            level: 2,
         }
     }
 }

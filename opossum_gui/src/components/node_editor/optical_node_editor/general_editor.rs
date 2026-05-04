@@ -68,6 +68,7 @@ pub fn GeneralEditor(
             header_id: "generalHeading",
             parent_id: "accordionNodeConfig",
             content_id: "generalCollapse",
+            level: 1,
         }
     }
 }
