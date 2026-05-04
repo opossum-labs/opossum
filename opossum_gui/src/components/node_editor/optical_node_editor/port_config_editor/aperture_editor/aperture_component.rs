@@ -1,19 +1,25 @@
 use dioxus::prelude::*;
 use opossum_core::{
-    prelude::{Aperture, ApertureShape, ApertureType},
-    utils::default_from_name::DefaultFromName,
+    prelude::{Aperture, ApertureShape, ApertureType, Isometry},
+    utils::{
+        default_from_name::DefaultFromName,
+        geom_transformation::{RotationAxis, TranslationAxis},
+    },
 };
 
 use crate::components::node_editor::{
+    accordion::AccordionItem,
     inputs::{
         InputData, IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    optical_node_editor::aperture_editor::{
-        CircularApertureParam, GaussianApertureParam, PolygonApertureInput, RectApertureParam,
-        StackedApertureInput,
+    optical_node_editor::{
+        RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation, on_new_translation,
+        port_config_editor::aperture_editor::{
+            CircularApertureParam, GaussianApertureParam, PolygonApertureInput, RectApertureParam,
+            StackedApertureInput,
+        },
     },
 };
 use uuid::Uuid;
@@ -26,6 +32,15 @@ pub fn ApertureEditor(
     readonly: bool,
 ) -> Element {
     let mut aperture_sig = use_signal(|| aperture.clone());
+    let alignment_sig = use_memo(move || *aperture.isometry());
+
+    let on_alignment_change = EventHandler::new(move |alignment: Isometry| {
+        let ap_iso = *aperture_sig.read().isometry();
+        if alignment != ap_iso {
+            aperture_sig.write().set_isometry(alignment);
+            on_change.call(aperture_sig.read().clone());
+        }
+    });
 
     let on_shape_change = EventHandler::new(move |aperture: ApertureShape| {
         let ap_shape = aperture_sig.read().shape().clone();
@@ -42,6 +57,10 @@ pub fn ApertureEditor(
             on_change.call(aperture_sig.read().clone());
         }
     });
+
+    let mut aperture_inputs = vec![];
+
+    aperture_inputs.push(
 
     rsx! {
         LabeledSelect {
@@ -68,20 +87,27 @@ pub fn ApertureEditor(
                 }
             },
         }
-
         div { class: "accordion-content-wrapper-div border-start",
             {
                 if let ApertureShape::BinaryPolygon(polygon_config) = aperture_sig.read().shape()
                 {
                     rsx! {
-                        PolygonApertureInput { polygon_config: polygon_config.clone(), on_shape_change, readonly }
+                        PolygonApertureInput {
+                            polygon_config: polygon_config.clone(),
+                            on_shape_change,
+                            readonly,
+                        }
                     }
                 } else if let ApertureShape::Stack(stacked_aperture) = aperture_sig
                     .read()
                     .shape()
                 {
                     rsx! {
-                        StackedApertureInput { stacked_aperture: stacked_aperture.clone(), on_shape_change, readonly }
+                        StackedApertureInput {
+                            stacked_aperture: stacked_aperture.clone(),
+                            on_shape_change,
+                            readonly,
+                        }
                     }
                 } else {
                     rsx! {
@@ -90,7 +116,35 @@ pub fn ApertureEditor(
                 }
             }
         }
+        RotationAlignmentInputs {
+            alignment: alignment_sig,
+            axes_skip: Some(vec![RotationAxis::Pitch, RotationAxis::Yaw]),
+            on_new_rotation: on_new_rotation(on_alignment_change, alignment_sig.into()),
+            node_id,
+            readonly,
+        }
+        TranslationAlignmentInputs {
+            alignment: alignment_sig,
+            axes_skip: Some(vec![TranslationAxis::Z]),
+            on_new_translation: on_new_translation(on_alignment_change, alignment_sig.into()),
+            node_id,
+            readonly,
+        }
+    });
 
+    rsx! {
+        div {
+            class: "accordion accordion-borderless bg-dark noselect",
+            id: "accordionApertureConfig",
+            AccordionItem {
+                elements: aperture_inputs,
+                header: "Aperture Configuration",
+                header_id: "apertureConfigHeading",
+                parent_id: "accordionApertureConfig",
+                content_id: "apertureConfigCollapse",
+                level: 2,
+            }
+        }
     }
 }
 

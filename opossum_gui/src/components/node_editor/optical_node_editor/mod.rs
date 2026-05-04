@@ -1,6 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 pub mod alignment_editor;
-pub mod aperture_editor;
 pub mod general_editor;
 pub mod port_config_editor;
 pub mod properties_editor;
@@ -14,7 +13,6 @@ use crate::components::{
         node_config_editor::NodeChangeEvent,
         optical_node_editor::{
             alignment_editor::{AlignmentEditor, PositioningEditor},
-            aperture_editor::ApertureEditor,
             general_editor::GeneralEditor,
             port_config_editor::PortConfigEditor,
             properties_editor::PropertiesEditor,
@@ -24,10 +22,7 @@ use crate::components::{
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_core::{
-    prelude::{Aperture, Properties},
-    types::api_types::NodeInfo,
-};
+use opossum_core::{prelude::Properties, types::api_types::NodeInfo};
 
 #[component]
 pub fn OpticalNodeEditor(

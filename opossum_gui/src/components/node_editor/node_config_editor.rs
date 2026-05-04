@@ -6,7 +6,7 @@ use crate::components::scenery_editor::{GraphsWorkspaceAction, NodeType, Selecte
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use opossum_core::prelude::{AnalyzerType, Aperture, Isometry, Proptype};
+use opossum_core::prelude::{AnalyzerType, Isometry, Proptype};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -24,7 +24,6 @@ pub enum NodeChangeAction {
     Property(String, Proptype),
     Isometry(Option<Isometry>),
     AnalyzerType(AnalyzerType),
-    Aperture(Aperture),
 }
 
 #[component]
@@ -177,12 +176,6 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                         api::update_analyzer_config_ron(uuid, analyzer_type)
                             .await
                             .map(|_| ())
-                    }
-                    NodeChangeAction::Aperture(aperture) => {
-                        Ok(())
-                        // todo!
-                        // api::update_aperture_config_ron(uuid, aperture)
-                        //     .await
                     }
                 };
 

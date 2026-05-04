@@ -15,7 +15,7 @@ use crate::{
                 input_components::{LabeledSelect, RowedInputs},
                 select_options_from_enum_iterator,
             },
-            optical_node_editor::aperture_editor::{
+            optical_node_editor::port_config_editor::aperture_editor::{
                 PolygonApertureInput, aperture_component::get_aperture_input_data,
             },
         },
@@ -121,13 +121,8 @@ pub fn StackedApertureInput(
         }
         input {
             class: " border-start btn",
-            // r#type: "submit",
             id: "stackedApertureSubmit",
-            value: if editing_index.read().is_none() {
-                "Add Aperture to Stack"
-            } else {
-                "Update Aperture in Stack"
-            },
+            value: if editing_index.read().is_none() { "Add Aperture to Stack" } else { "Update Aperture in Stack" },
             readonly,
             disabled: readonly,
             onclick: {
@@ -138,16 +133,6 @@ pub fn StackedApertureInput(
                         let edit_index = *editing_index.read();
                         if let Some(i) = edit_index {
                             stacked_aperture
-                                // match stacked_aperture.add_aperture(current_aperture.clone()) {
-                                //     Ok(()) => on_save.call(stacked_aperture.clone()),
-                                //     Err(e) => {
-                                //         OPOSSUM_UI_LOGS
-                                //             .write()
-                                //             .add_log(
-                                //                 format!("Error adding aperture to stack: {e}").as_str(),
-                                //             )
-                                //     }
-                                // }
                                 .set_aperture(i, current_aperture.clone())
                                 .log_err_with_context("Updating aperture in stack failed");
                             on_editing_index_change.call(None);

@@ -10,10 +10,14 @@ pub fn DynamicListComponent(
 ) -> Element {
     let readonly = readonly || edit_index.read().is_some();
     rsx! {
-        ul { class: "list-group border-start dynamic-list", id: "stackedAperturesList",
+        ul {
+            class: "list-group border-start dynamic-list",
+            id: "stackedAperturesList",
             for (entry_index , entry) in list_entries.iter().enumerate() {
                 {
-                    let class = if let Some(editing_index) = *edit_index.read() && editing_index == entry_index {
+                    let class = if let Some(editing_index) = *edit_index.read()
+                        && editing_index == entry_index
+                    {
                         "d-flex list-group-item d-grid text-primary align-items-center border border-primary"
                     } else if entry_index % 2 == 0 {
                         "d-flex list-group-item d-grid text-secondary align-items-center"

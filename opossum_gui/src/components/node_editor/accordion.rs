@@ -8,12 +8,13 @@ pub fn AccordionItem(
     header_id: String,
     parent_id: String,
     content_id: String,
+    level: usize,
 ) -> Element {
     rsx! {
         div { class: "accordion-item bg-dark text-light",
             h6 { class: "accordion-header", id: &header_id,
                 button {
-                    class: "accordion-button collapsed bg-dark text-light",
+                    class: "accordion-button accordion-button-h{level} collapsed bg-dark text-light",
                     r#type: "button",
                     "data-mdb-collapse-init": "",
                     "data-mdb-target": format!("#{content_id}"),

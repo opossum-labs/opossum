@@ -175,6 +175,11 @@ impl Aperture {
     pub const fn set_aperture_type(&mut self, aperture_type: ApertureType) {
         self.a_type = aperture_type;
     }
+
+    /// Set the isometry of this [`Aperture`].
+    pub fn set_isometry(&mut self, iso: Isometry) {
+        self.isometry = iso;
+    }
     /// Create a new circular aperture.
     ///
     /// # Errors
@@ -193,23 +198,6 @@ impl Aperture {
             None,
         )
     }
-
-    // /// Returns the center of this [`CircleShape`].
-    // #[must_use]
-    // pub fn center(&self) -> Point2<Length> {
-    //     *self.center.get()
-    // }
-
-    // pub fn set_center_x(&mut self, center_x: Length) -> OpmResult<()> {
-    //     self.center.set(Point2::new(center_x, self.center().y))?;
-    //     Ok(())
-    // }
-
-    // pub fn set_center_y(&mut self, center_y: Length) -> OpmResult<()> {
-    //     self.center.set(Point2::new(self.center().x, center_y))?;
-    //     Ok(())
-    // }
-
     /// Create a new retangular aperture.
     ///
     /// # Errors

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use strum::{EnumIter, IntoEnumIterator};
 use utoipa::ToSchema;
 
-#[derive(Default, Serialize, Deserialize, Debug, Clone, ToSchema, PartialEq, EnumIter)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, ToSchema, PartialEq, EnumIter, Copy)]
 /// Enum for different types of optical coatings
 pub enum CoatingType {
     /// Perfect anti-reflective coating. Reflectivity is always 0.0

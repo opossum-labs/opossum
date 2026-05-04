@@ -83,6 +83,7 @@ pub fn GratingAlignmentInputs(
             }
             TranslationAlignmentInputs {
                 alignment: alignment_memo,
+                axes_skip: None,
                 on_new_translation: on_new_translation(on_save, alignment_memo.into()),
                 node_id,
                 readonly,
@@ -100,6 +101,7 @@ pub fn GratingAlignmentInputs(
             }
             TranslationAlignmentInputs {
                 alignment: alignment_memo,
+                axes_skip: None,
                 on_new_translation: on_new_translation(on_save, alignment_memo.into()),
                 node_id,
                 readonly,

@@ -95,7 +95,8 @@ pub fn PolygonApertureInput(
                                 ) {
                                     match pp.add_points(&[meter!(x, y)]) {
                                         Ok(()) => {
-                                            on_shape_change.call(ApertureShape::BinaryPolygon(pp.clone()));
+                                            on_shape_change
+                                                .call(ApertureShape::BinaryPolygon(pp.clone()));
                                         }
                                         Err(e) => {
                                             OPOSSUM_UI_LOGS
@@ -164,8 +165,36 @@ fn PolygonPointList(
                     };
                     rsx! {
                         li { class,
-                            span { {format!("x: {}", format_si_with_base_unit(point.x.value, &UnitHandling { base_unit: "m".to_string(), handle_prefix: true }, false))} }
-                            span { {format!("y: {}", format_si_with_base_unit(point.y.value, &UnitHandling { base_unit: "m".to_string(), handle_prefix: true }, false))} }
+                            span {
+                                {
+                                    format!(
+                                        "x: {}",
+                                        format_si_with_base_unit(
+                                            point.x.value,
+                                            &UnitHandling {
+                                                base_unit: "m".to_string(),
+                                                handle_prefix: true,
+                                            },
+                                            false,
+                                        ),
+                                    )
+                                }
+                            }
+                            span {
+                                {
+                                    format!(
+                                        "y: {}",
+                                        format_si_with_base_unit(
+                                            point.y.value,
+                                            &UnitHandling {
+                                                base_unit: "m".to_string(),
+                                                handle_prefix: true,
+                                            },
+                                            false,
+                                        ),
+                                    )
+                                }
+                            }
                             a {
                                 class: if readonly { "ms-auto text-muted" } else { "text-danger ms-auto" },
                                 onclick: {

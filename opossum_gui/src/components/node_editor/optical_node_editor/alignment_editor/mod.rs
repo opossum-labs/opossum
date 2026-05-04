@@ -34,13 +34,11 @@ pub fn AlignmentEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    // let node_prop_memo = use_memo(move || node_info.read().properties.clone());
     let accordion_content = if node_info.read().uuid == *node_id.read() {
         vec![rsx! {
             AlignmentInputs {
                 node_id,
                 alignment: node_info.read().alignment.unwrap_or_default(),
-                // node_properties: node_prop_memo,
                 node_type: node_info.read().node_type.clone(),
                 on_change,
                 readonly
@@ -56,6 +54,7 @@ pub fn AlignmentEditor(
             header_id: "alignmentHeading",
             parent_id: "accordionNodeConfig",
             content_id: "alignmentCollapse",
+            level: 1,
         }
     }
 }
@@ -90,6 +89,7 @@ pub fn AlignmentInputs(
             }
             TranslationAlignmentInputs {
                 alignment: alignment_sig,
+                axes_skip: None,
                 on_new_translation: on_new_translation(on_save, alignment_sig.into()),
                 node_id,
                 readonly,
@@ -169,6 +169,7 @@ pub fn PositioningEditor(
             header_id: "positionHeading",
             parent_id: "accordionNodeConfig",
             content_id: "positionCollapse",
+            level: 1,
         }
     }
 }
@@ -233,6 +234,7 @@ pub fn PositioningInputs(
             }
             TranslationAlignmentInputs {
                 alignment: position_memo,
+                axes_skip: None,
                 on_new_translation: on_new_translation(on_position_change, position_memo.into()),
                 node_id,
                 readonly,
@@ -247,70 +249,124 @@ pub fn PositioningInputs(
 #[component]
 pub fn TranslationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
+    axes_skip: Option<Vec<TranslationAxis>>,
     on_new_translation: EventHandler<(Length, TranslationAxis)>,
     node_id: Memo<Uuid>,
     readonly: bool,
 ) -> Element {
     let id_add_on = "inputNodeAlignmentTrans";
 
-    let x_sig = use_memo(move || {
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::X)
-            .value
-    });
-    let y_sig = use_memo(move || {
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::Y)
-            .value
-    });
-    let z_sig = use_memo(move || {
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::Z)
-            .value
+    let mut trans_input_vec = Vec::<Element>::new();
+
+    for trans_axis in TranslationAxis::iter() {
+        if let Some(ref axes_skip) = axes_skip
+            && axes_skip.contains(&trans_axis)
+        {
+            continue;
+        }
+        trans_input_vec.push(rsx! {
+            TranslationInput {
+                alignment,
+                axis: trans_axis,
+                id: format!("{id_add_on}{}{}", trans_axis, node_id.read().as_simple().to_string()),
+                on_new_translation,
+                readonly,
+            }
+        });
+    }
+    rsx! {
+        RowedElements { elements: trans_input_vec, num_per_row: 2 }
+    }
+
+    // let x_sig = use_memo(move || {
+    //     alignment
+    //         .read()
+    //         .translation_of_axis(TranslationAxis::X)
+    //         .value
+    // });
+    // let y_sig = use_memo(move || {
+    //     alignment
+    //         .read()
+    //         .translation_of_axis(TranslationAxis::Y)
+    //         .value
+    // });
+    // let z_sig = use_memo(move || {
+    //     alignment
+    //         .read()
+    //         .translation_of_axis(TranslationAxis::Z)
+    //         .value
+    // });
+
+    // rsx! {
+    //     div { class: "row gy-1 gx-2",
+    //         div { class: "col-sm",
+    //             NodeConfigUnitInput {
+    //                 id: format!(
+    //                     "{id_add_on}{}{}",
+    //                     TranslationAxis::X,
+    //                     node_id.read().as_simple().to_string(),
+    //                 ),
+    //                 label: format!("{} translation", TranslationAxis::X),
+    //                 value: x_sig,
+    //                 unit_config: UnitHandling::new("m", true),
+    //                 readonly,
+    //                 onchange: move |new_trans: f64| {
+    //                     on_new_translation.call((meter!(new_trans), TranslationAxis::X));
+    //                 },
+    //             }
+    //         }
+    //         div { class: "col-sm",
+    //             NodeConfigUnitInput {
+    //                 id: format!("{id_add_on}{}", TranslationAxis::Y),
+    //                 label: format!("{} translation", TranslationAxis::Y),
+    //                 value: y_sig,
+    //                 unit_config: UnitHandling::new("m", true),
+    //                 readonly,
+    //                 onchange: move |new_trans: f64| {
+    //                     on_new_translation.call((meter!(new_trans), TranslationAxis::Y));
+    //                 },
+    //             }
+    //         }
+    //     }
+    //     NodeConfigUnitInput {
+    //         id: format!("{id_add_on}{}", TranslationAxis::Z),
+    //         label: format!("{} translation", TranslationAxis::Z),
+    //         value: z_sig,
+    //         unit_config: UnitHandling::new("m", true),
+    //         readonly,
+    //         onchange: move |new_trans: f64| {
+    //             on_new_translation.call((meter!(new_trans), TranslationAxis::Z));
+    //         },
+    //     }
+    // }
+}
+
+#[component]
+pub fn TranslationInput(
+    alignment: ReadSignal<Isometry>,
+    axis: TranslationAxis,
+    id: String,
+    on_new_translation: EventHandler<(Length, TranslationAxis)>,
+    readonly: bool,
+) -> Element {
+    let value_memo = use_memo(move || {
+        let translation = alignment.read().translation_of_axis(axis);
+        if translation.value.abs() < f64::EPSILON {
+            0.
+        } else {
+            translation.value
+        }
     });
 
     rsx! {
-        div { class: "row gy-1 gx-2",
-            div { class: "col-sm",
-                NodeConfigUnitInput {
-                    id: format!(
-                        "{id_add_on}{}{}",
-                        TranslationAxis::X,
-                        node_id.read().as_simple().to_string(),
-                    ),
-                    label: format!("{} translation", TranslationAxis::X),
-                    value: x_sig,
-                    unit_config: UnitHandling::new("m", true),
-                    readonly,
-                    onchange: move |new_trans: f64| {
-                        on_new_translation.call((meter!(new_trans), TranslationAxis::X));
-                    },
-                }
-            }
-            div { class: "col-sm",
-                NodeConfigUnitInput {
-                    id: format!("{id_add_on}{}", TranslationAxis::Y),
-                    label: format!("{} translation", TranslationAxis::Y),
-                    value: y_sig,
-                    unit_config: UnitHandling::new("m", true),
-                    readonly,
-                    onchange: move |new_trans: f64| {
-                        on_new_translation.call((meter!(new_trans), TranslationAxis::Y));
-                    },
-                }
-            }
-        }
         NodeConfigUnitInput {
-            id: format!("{id_add_on}{}", TranslationAxis::Z),
-            label: format!("{} translation", TranslationAxis::Z),
-            value: z_sig,
+            id,
+            label: format!("{} translation", axis),
+            value: value_memo,
             unit_config: UnitHandling::new("m", true),
             readonly,
             onchange: move |new_trans: f64| {
-                on_new_translation.call((meter!(new_trans), TranslationAxis::Z));
+                on_new_translation.call((meter!(new_trans), axis));
             },
         }
     }
