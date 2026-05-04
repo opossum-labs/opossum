@@ -209,7 +209,7 @@ mod test {
         assert!(node.set_property("node_type", "other".into()).is_err());
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<ParaxialSurface>()
     }
     #[test]
@@ -223,7 +223,7 @@ mod test {
         test_set_aperture::<ParaxialSurface>("input_1", "output_1");
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<ParaxialSurface>()
     }
     #[test]

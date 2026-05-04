@@ -347,7 +347,8 @@ impl Default for EnergyLaserLines {
                 vec![(nanometer!(1054.), joule!(1.))],
                 AllPositive && XNormal && YFinite,
                 AllNotEmpty && YNotAllZero
-            ).unwrap(),
+            )
+            .unwrap(),
             spectral_resolution: validated!(nanometer!(0.1), AllNormal && AllPositive).unwrap(),
         }
     }
@@ -382,7 +383,9 @@ mod test {
     fn spectrum_file_deserialize() -> OpmResult<()> {
         let s = SpectrumFile::default();
         let serialized =
-            ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).map_err(|e| OpossumError::Spectrum(format!("failed to serialize spectrum: {e}")))?;
+            ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).map_err(
+                |e| OpossumError::Spectrum(format!("failed to serialize spectrum: {e}")),
+            )?;
         assert!(ron::from_str::<SpectrumFile>(&serialized).is_ok());
         Ok(())
     }
@@ -506,13 +509,12 @@ mod test {
         );
     }
     #[test]
-    fn energy_laser_lines_delete_line() -> OpmResult<()>{
+    fn energy_laser_lines_delete_line() -> OpmResult<()> {
         let mut ell = EnergyLaserLines::default();
         ell.set_lines(vec![
             (nanometer!(500.0), joule!(0.5)),
             (nanometer!(505.0), joule!(1.5)),
-        ])
-        ?;
+        ])?;
         assert!(
             ell.delete_line(2).is_err(),
             // "deleting out of bounds index is an error"
@@ -539,14 +541,14 @@ mod test {
         assert!(matches!(edb, EnergyDataBuilder::FromFile(_)));
     }
     #[test]
-    fn energy_data_builder_from_raw() -> OpmResult<()>{
+    fn energy_data_builder_from_raw() -> OpmResult<()> {
         let s = Spectrum::new(nanometer!(500.0)..nanometer!(550.0), nanometer!(1.0))?;
         let edb: EnergyDataBuilder = s.into();
         assert!(matches!(edb, EnergyDataBuilder::Raw(_)));
         Ok(())
     }
     #[test]
-    fn energy_data_builder_build_display() -> OpmResult<()>{
+    fn energy_data_builder_build_display() -> OpmResult<()> {
         let ell = EnergyLaserLines::default();
         let edb: EnergyDataBuilder = ell.into();
         assert!(edb.build().is_ok());
@@ -555,8 +557,7 @@ mod test {
             format!("{edb:?}"),
             "LaserLines([(1054.000 nm, 1.000 J)] resolution: 0.100 nm)"
         );
-        let sf = SpectrumFile::new("./files_for_testing/spectrum/spec_to_csv_test_01.csv".into())
-            ?;
+        let sf = SpectrumFile::new("./files_for_testing/spectrum/spec_to_csv_test_01.csv".into())?;
         let edb: EnergyDataBuilder = sf.into();
         assert!(edb.build().is_ok());
         assert_eq!(format!("{edb}"), "From File");

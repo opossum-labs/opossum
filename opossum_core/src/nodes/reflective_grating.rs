@@ -403,11 +403,11 @@ mod test {
         test_set_aperture::<ReflectiveGrating>("input_1", "output_1");
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<ReflectiveGrating>()
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<ReflectiveGrating>()
     }
     #[test]

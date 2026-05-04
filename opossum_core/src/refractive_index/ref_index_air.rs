@@ -326,14 +326,13 @@ mod test {
     }
 
     #[test]
-    fn test_new_valid() {
-        // Test within bounds
-        let n_air = RefrIndexAir::new(degree_celsius!(25.0), hectopascal!(1000.0), 30.0);
-        assert!(n_air.is_ok());
-        let n_air = n_air.unwrap();
+    fn test_new_valid() -> OpmResult<()> {
+        let n_air = RefrIndexAir::new(degree_celsius!(25.0), hectopascal!(1000.0), 30.0)?;
         assert_eq!(n_air.temperature(), degree_celsius!(25.0));
         assert_eq!(n_air.pressure(), hectopascal!(1000.0));
         assert_eq!(n_air.humidity(), 30.0);
+
+        Ok(())
     }
 
     #[test]
@@ -372,31 +371,33 @@ mod test {
     }
 
     #[test]
-    fn test_cache_consistency() {
+    fn test_cache_consistency() -> OpmResult<()> {
         // Ensure that using the cache produces the same result as a fresh calculation would
         // (verified via the regression tests below against known values)
-        let n_air = RefrIndexAir::new(degree_celsius!(20.0), hectopascal!(1013.25), 50.0).unwrap();
+        let n_air = RefrIndexAir::new(degree_celsius!(20.0), hectopascal!(1013.25), 50.0)?;
 
         // Check internal cache state (sanity check)
         assert!(n_air.dry_air_factor > 0.0);
         assert!(n_air.water_vapor_factor > 0.0);
+        Ok(())
     }
 
     #[test]
-    fn test_get_refractive_index_cached() {
+    fn test_get_refractive_index_cached() -> OpmResult<()> {
         // Same test cases as before, ensuring the optimized math holds up
-        let n_air = RefrIndexAir::new(degree_celsius!(15.0), hectopascal!(1013.25), 0.0).unwrap();
+        let n_air = RefrIndexAir::new(degree_celsius!(15.0), hectopascal!(1013.25), 0.0)?;
         assert_abs_diff_eq!(
-            n_air.get_refractive_index(nanometer!(633.0)).unwrap(),
+            n_air.get_refractive_index(nanometer!(633.0))?,
             1.000276529,
             epsilon = 1e-9
         );
 
-        let n_air = RefrIndexAir::new(degree_celsius!(20.0), hectopascal!(1013.25), 50.0).unwrap();
+        let n_air = RefrIndexAir::new(degree_celsius!(20.0), hectopascal!(1013.25), 50.0)?;
         assert_abs_diff_eq!(
-            n_air.get_refractive_index(nanometer!(633.0)).unwrap(),
+            n_air.get_refractive_index(nanometer!(633.0))?,
             1.000271374,
             epsilon = 1e-9
         );
+        Ok(())
     }
 }

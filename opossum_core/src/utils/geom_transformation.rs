@@ -851,20 +851,21 @@ mod test {
         }
     }
     #[test]
-    fn new_along_z() {
+    fn new_along_z() -> OpmResult<()> {
         assert!(Isometry::new_along_z(millimeter!(f64::NAN)).is_err());
         assert!(Isometry::new_along_z(millimeter!(f64::INFINITY)).is_err());
         assert!(Isometry::new_along_z(millimeter!(f64::NEG_INFINITY)).is_err());
-        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let i = Isometry::new_along_z(millimeter!(10.0))?;
         assert_eq!(i.transform.translation.x, 0.0);
         assert_eq!(i.transform.translation.y, 0.0);
         assert_eq!(i.transform.translation.z, 0.01);
         assert_eq!(i.transform.rotation.i, 0.0);
         assert_eq!(i.transform.rotation.j, 0.0);
         assert_eq!(i.transform.rotation.k, 0.0);
+        Ok(())
     }
     #[test]
-    fn new_translation() {
+    fn new_translation() -> OpmResult<()> {
         assert!(Isometry::new_translation(meter!(f64::NAN, 0.0, 0.0)).is_err());
         assert!(Isometry::new_translation(meter!(f64::NEG_INFINITY, 0.0, 0.0)).is_err());
         assert!(Isometry::new_translation(meter!(f64::INFINITY, 0.0, 0.0)).is_err());
@@ -877,11 +878,12 @@ mod test {
         assert!(Isometry::new_translation(meter!(0.0, 0.0, f64::NEG_INFINITY)).is_err());
         assert!(Isometry::new_translation(meter!(0.0, 0.0, f64::INFINITY)).is_err());
 
-        let i = Isometry::new_translation(meter!(1.0, 2.0, 3.0)).unwrap();
+        let i = Isometry::new_translation(meter!(1.0, 2.0, 3.0))?;
         assert_eq!(
             i.transform,
             Isometry3::<f64>::new(vector![1.0, 2.0, 3.0], vector![0.0, 0.0, 0.0])
         );
+        Ok(())
     }
     #[test]
     fn new_rotation() {
@@ -898,41 +900,46 @@ mod test {
         assert!(Isometry::new_rotation(degree!(0.0, 0.0, f64::INFINITY)).is_err());
     }
     #[test]
-    fn get_transform() {
-        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+    fn get_transform() -> OpmResult<()> {
+        let i = Isometry::new_along_z(millimeter!(10.0))?;
         assert_eq!(
             i.get_transform(),
             Isometry3::<f64>::new(vector!(0.0, 0.0, 0.01), vector!(0.0, 0.0, 0.0))
         );
+        Ok(())
     }
     #[test]
-    fn get_inv_transform() {
-        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+    fn get_inv_transform() -> OpmResult<()> {
+        let i = Isometry::new_along_z(millimeter!(10.0))?;
         assert_eq!(
             i.get_inv_transform(),
             Isometry3::<f64>::new(vector!(0.0, 0.0, -0.01), vector!(0.0, 0.0, 0.0))
         );
+        Ok(())
     }
     #[test]
-    fn translation_vec() {
-        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+    fn translation_vec() -> OpmResult<()> {
+        let i = Isometry::new_along_z(millimeter!(10.0))?;
         assert_eq!(
             i.translation_vec(),
             vector![millimeter!(0.0), millimeter!(0.0), millimeter!(10.0)]
         );
+        Ok(())
     }
     #[test]
-    fn translation() {
-        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+    fn translation() -> OpmResult<()> {
+        let i = Isometry::new_along_z(millimeter!(10.0))?;
         assert_eq!(i.translation(), millimeter!(0.0, 0.0, 10.0));
+        Ok(())
     }
     #[test]
-    fn rotation() {
-        let i = Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(10.0, 20.0, 30.0)).unwrap();
+    fn rotation() -> OpmResult<()> {
+        let i = Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(10.0, 20.0, 30.0))?;
         let rot = i.rotation();
         assert_abs_diff_eq!(rot[0].value, degree!(10.0).value);
         assert_abs_diff_eq!(rot[1].value, degree!(20.0).value);
         assert_abs_diff_eq!(rot[2].value, degree!(30.0).value);
+        Ok(())
     }
     #[test]
     fn identity() {
@@ -941,55 +948,53 @@ mod test {
         assert_eq!(i.inverse, nalgebra::Isometry::identity());
     }
     #[test]
-    fn append_z() {
-        let i1 = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let i2 = Isometry::new_along_z(millimeter!(20.0)).unwrap();
+    fn append_z() -> OpmResult<()> {
+        let i1 = Isometry::new_along_z(millimeter!(10.0))?;
+        let i2 = Isometry::new_along_z(millimeter!(20.0))?;
         let i = i1.append(&i2);
         assert_eq!(i.transform.translation.x, 0.0);
         assert_eq!(i.transform.translation.y, 0.0);
         assert_eq!(i.transform.translation.z, 0.03);
+        Ok(())
     }
     #[test]
-    fn append_with_rot() {
-        let i1 = Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 90.0, 0.0)).unwrap();
-        let i2 = Isometry::new_along_z(millimeter!(20.0)).unwrap();
+    fn append_with_rot() -> OpmResult<()> {
+        let i1 = Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 90.0, 0.0))?;
+        let i2 = Isometry::new_along_z(millimeter!(20.0))?;
         let i = i1.append(&i2);
         let new_point = i.transform_point_f64(&Point3::origin());
         assert_relative_eq!(new_point, Point3::new(0.02, 0.0, 0.01));
+        Ok(())
     }
     #[test]
-    fn define_plane_coordinate_axes_directions_test() {
+    fn define_plane_coordinate_axes_directions_test() -> OpmResult<()> {
         assert!(define_plane_coordinate_axes_directions(&Vector3::zeros()).is_err());
 
-        let (ax1, ax2) = define_plane_coordinate_axes_directions(&Vector3::x()).unwrap();
+        let (ax1, ax2) = define_plane_coordinate_axes_directions(&Vector3::x())?;
         assert_relative_eq!(ax1, Vector3::z());
         assert_relative_eq!(ax2, Vector3::y());
 
-        let (ax1, ax2) = define_plane_coordinate_axes_directions(&Vector3::y()).unwrap();
+        let (ax1, ax2) = define_plane_coordinate_axes_directions(&Vector3::y())?;
         assert_relative_eq!(ax1, Vector3::z());
         assert_relative_eq!(ax2, Vector3::x());
 
-        let (ax1, ax2) = define_plane_coordinate_axes_directions(&Vector3::z()).unwrap();
+        let (ax1, ax2) = define_plane_coordinate_axes_directions(&Vector3::z())?;
         assert_relative_eq!(ax1, Vector3::x());
         assert_relative_eq!(ax2, Vector3::y());
 
-        let (ax1, ax2) =
-            define_plane_coordinate_axes_directions(&Vector3::new(0., 1., 1.)).unwrap();
+        let (ax1, ax2) = define_plane_coordinate_axes_directions(&Vector3::new(0., 1., 1.))?;
         assert_relative_eq!(ax1, Vector3::x());
         assert_relative_eq!(ax2, Vector3::new(0., 1., 1.).cross(&Vector3::x()));
 
-        let (ax1, ax2) =
-            define_plane_coordinate_axes_directions(&Vector3::new(1., 0., 1.)).unwrap();
+        let (ax1, ax2) = define_plane_coordinate_axes_directions(&Vector3::new(1., 0., 1.))?;
         assert_relative_eq!(ax1, Vector3::y());
         assert_relative_eq!(ax2, Vector3::new(1., 0., 1.).cross(&Vector3::y()));
 
-        let (ax1, ax2) =
-            define_plane_coordinate_axes_directions(&Vector3::new(1., 1., 0.)).unwrap();
+        let (ax1, ax2) = define_plane_coordinate_axes_directions(&Vector3::new(1., 1., 0.))?;
         assert_relative_eq!(ax1, Vector3::z());
         assert_relative_eq!(ax2, Vector3::new(1., 1., 0.).cross(&Vector3::z()));
 
-        let (ax1, ax2) =
-            define_plane_coordinate_axes_directions(&Vector3::new(1., 0.1, 0.1)).unwrap();
+        let (ax1, ax2) = define_plane_coordinate_axes_directions(&Vector3::new(1., 0.1, 0.1))?;
         assert_relative_eq!(
             ax1,
             Vector3::new(0.9950371902099893, 0.09950371902099893, 0.0)
@@ -998,15 +1003,15 @@ mod test {
             ax2,
             Vector3::new(-0.009950371902099894, 0.09950371902099893, 0.0)
         );
+        Ok(())
     }
     #[test]
-    fn project_points_to_plane_test() {
+    fn project_points_to_plane_test() -> OpmResult<()> {
         let pos = project_points_to_plane(
             &Vector3::zeros(),
             &Vector3::z(),
             &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)],
-        )
-        .unwrap();
+        )?;
 
         assert_relative_eq!(pos[(0, 0)], 0.);
         assert_relative_eq!(pos[(0, 1)], 0.);
@@ -1075,9 +1080,10 @@ mod test {
             )
             .is_err()
         );
+        Ok(())
     }
     #[test]
-    fn project_pos_to_plane_with_base_vectors_test() {
+    fn project_pos_to_plane_with_base_vectors_test() -> OpmResult<()> {
         let projection = project_pos_to_plane_with_base_vectors(
             &Vector3::zeros(),
             &Vector3::z(),
@@ -1087,7 +1093,7 @@ mod test {
         );
         assert!(projection.is_ok());
 
-        let proj = projection.unwrap();
+        let proj = projection?;
         assert_relative_eq!(proj[(0, 0)], 0.);
         assert_relative_eq!(proj[(0, 1)], 0.);
         assert_relative_eq!(proj[(1, 0)], 10.);
@@ -1224,6 +1230,7 @@ mod test {
             )
             .is_err()
         );
+        Ok(())
     }
     #[test]
     fn from() {

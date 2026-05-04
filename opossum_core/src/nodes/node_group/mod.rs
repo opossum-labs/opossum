@@ -1078,7 +1078,7 @@ mod test {
         assert_eq!(node.name(), "test");
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<NodeGroup>()
     }
     #[test]

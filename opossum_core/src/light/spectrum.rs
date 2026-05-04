@@ -912,22 +912,23 @@ mod test {
         assert_abs_diff_eq!(s.data[11].1, 0.0);
     }
     #[test]
-    fn visible_spectrum() {
-        let s = create_visible_spec();
+    fn visible_spectrum() -> OpmResult<()> {
+        let s = create_visible_spec()?;
         assert_eq!(s.lambda_vec().first().unwrap(), &0.38);
         assert_abs_diff_eq!(s.lambda_vec().last().unwrap(), &0.750);
+        Ok(())
     }
     #[test]
-    fn nir_spec() {
-        assert_eq!(create_nir_spec().lambda_vec().first().unwrap(), &0.8);
+    fn nir_spec() -> OpmResult<()> {
+        assert_eq!(create_nir_spec()?.lambda_vec().first().unwrap(), &0.8);
+        Ok(())
     }
     #[test]
-    fn nd_glass_spec() {
-        let s = create_nd_glass_spec(1.0);
-        assert!(s.is_ok());
-        let s = s.unwrap();
+    fn nd_glass_spec() -> OpmResult<()> {
+        let s = create_nd_glass_spec(1.0)?;
         assert_eq!(s.lambda_vec().first().unwrap(), &0.8);
         assert!(create_nd_glass_spec(-1.0).is_err());
+        Ok(())
     }
     #[test]
     fn new_negative_resolution() {

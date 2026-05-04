@@ -323,11 +323,11 @@ mod test {
         );
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<CylindricLens>()
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<CylindricLens>()
     }
     #[test]

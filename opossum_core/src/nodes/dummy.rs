@@ -159,7 +159,7 @@ mod test {
         assert_eq!(node.name(), "Test1")
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<Dummy>()
     }
     #[test]
@@ -190,7 +190,7 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["input_1"]);
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<Dummy>()
     }
     #[test]

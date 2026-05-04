@@ -22,10 +22,17 @@ use crate::reporting::html_report::HtmlProperty;
 ///
 /// ## Example
 /// ```rust
-/// use opossum_core::properties::Properties;
+/// # use opossum_core::properties::Properties;
+/// # use opossum_core::error::OpmResult;
+/// # fn main() -> OpmResult<()> {
 /// let mut props = Properties::default();
-/// props.create("my float", "my floating point value", 3.14.into()).unwrap();
-/// props.set("my float", 2.71.into()).unwrap();
+///
+/// // We create a new property and set its value
+/// props.create("my float", "my floating point value", 3.14.into())?;
+/// props.set("my float", 2.71.into())?;
+///
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
@@ -212,47 +219,49 @@ mod test {
         assert_eq!(props.props.len(), 2);
     }
     #[test]
-    fn properties_get() {
+    fn properties_get() -> OpmResult<()> {
         let mut props = Properties::default();
-        props.create("test", "my description", 1.into()).unwrap();
-        let prop = props.get("test").unwrap();
+        props.create("test", "my description", 1.into())?;
+        let prop = props.get("test")?;
         assert_matches!(prop, &Proptype::I32(1));
         assert!(props.get("wrong").is_err());
+        Ok(())
     }
     #[test]
-    fn properties_get_bool() {
+    fn properties_get_bool() -> OpmResult<()> {
         let mut props = Properties::default();
-        props.create("no bool", "my description", 1.into()).unwrap();
-        props
-            .create("my bool", "my description", true.into())
-            .unwrap();
-        props
-            .create("my other bool", "my description", false.into())
-            .unwrap();
+        props.create("no bool", "my description", 1.into())?;
+        props.create("my bool", "my description", true.into())?;
+        props.create("my other bool", "my description", false.into())?;
         assert!(props.get_bool("wrong").is_err());
         assert!(props.get_bool("no bool").is_err());
-        assert_eq!(props.get_bool("my bool").unwrap(), true);
-        assert_eq!(props.get_bool("my other bool").unwrap(), false);
+        assert_eq!(props.get_bool("my bool")?, true);
+        assert_eq!(props.get_bool("my other bool")?, false);
+        Ok(())
     }
     #[test]
-    fn is_empty() {
+    fn is_empty() -> OpmResult<()> {
         let mut props = Properties::default();
         assert_eq!(props.is_empty(), true);
-        props.create("my prop", "my description", 1.into()).unwrap();
+        props.create("my prop", "my description", 1.into())?;
         assert_eq!(props.is_empty(), false);
+        Ok(())
     }
     #[test]
-    fn html_props() {
+    fn html_props() -> OpmResult<()> {
         let mut props = Properties::default();
-        props.create("my prop", "my description", 1.into()).unwrap();
+        props.create("my prop", "my description", 1.into())?;
         testing_logger::setup();
         let html_props = props.html_props("test123", 0);
-        let html_props = html_props.first().unwrap();
+        let html_props = html_props
+            .first()
+            .ok_or_else(|| OpossumError::Other("no properties found".to_string()))?;
         check_logs(Level::Warn, vec![]);
         assert_eq!(html_props.name, "my prop");
         assert_eq!(html_props.description, "my description");
         assert_eq!(html_props.prop_value, "1");
         let html_props = props.html_props("test123", 0);
         assert_eq!(html_props.len(), 1);
+        Ok(())
     }
 }

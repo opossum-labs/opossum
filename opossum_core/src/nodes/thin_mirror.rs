@@ -31,11 +31,12 @@ inventory::submit! {
 /// Curvature convention:
 /// - negative curvature will be a concave (focusing) mirror
 /// - positive curvature will be a convex (defocusing) mirror
+///
 /// ## Optical Ports
 ///   - Inputs
-///     - `in1`
+///     - `input_1`
 ///   - Outputs
-///     - `out1`
+///     - `output_1`
 ///
 /// ## Properties
 ///   - `name`
@@ -295,11 +296,12 @@ mod test {
         test_set_aperture::<ThinMirror>("input_1", "output_1");
     }
     #[test]
-    fn inverted() {
-        test_inverted::<ThinMirror>()
+    fn inverted() -> OpmResult<()> {
+        test_inverted::<ThinMirror>()?;
+        Ok(())
     }
     #[test]
-    fn with_curvature() {
+    fn with_curvature() -> OpmResult<()> {
         assert!(
             ThinMirror::default()
                 .with_curvature(Length::zero())
@@ -320,41 +322,43 @@ mod test {
                 .with_curvature(millimeter!(f64::NEG_INFINITY))
                 .is_ok()
         );
-        let m = ThinMirror::default()
-            .with_curvature(millimeter!(100.0))
-            .unwrap();
+        let m = ThinMirror::default().with_curvature(millimeter!(100.0))?;
         if let Ok(Proptype::Curvature(r)) = m.properties().get("curvature") {
             assert_eq!(r, &millimeter!(100.0));
         } else {
             assert!(false, "property curvature was not a length.");
         }
+        Ok(())
     }
     #[test]
-    fn analyze_empty() {
-        test_analyze_empty::<ThinMirror>()
+    fn analyze_empty() -> OpmResult<()> {
+        test_analyze_empty::<ThinMirror>()?;
+        Ok(())
     }
     #[test]
-    fn analyze_wrong() {
+    fn analyze_wrong() -> OpmResult<()> {
         let mut node = ThinMirror::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_energy_ok() {
+    fn analyze_energy_ok() -> OpmResult<()> {
         let mut node = ThinMirror::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.ok_or_else(|| OpossumError::Other("got empty output".to_string()))?;
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
     fn analyze_geometric_wrong_data_type() {
@@ -365,27 +369,30 @@ mod test {
         test_analyze_geometric_no_isometry::<ThinMirror>("input_1");
     }
     #[test]
-    fn analyze_geometric_ok() {
+    fn analyze_geometric_ok() -> OpmResult<()> {
         let mut node = ThinMirror::default();
 
-        node.set_isometry(
-            Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
-        )
-        .unwrap();
+        node.set_isometry(Isometry::new(
+            millimeter!(0.0, 0.0, 10.0),
+            degree!(0.0, 0.0, 0.0),
+        )?)?;
         let mut input = LightResult::default();
-        let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
+        let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
         let input_light = LightData::Geometric(rays);
         input.insert("input_1".into(), input_light.clone());
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
-            let ray = rays.iter().next().unwrap();
+            let ray = rays
+                .iter()
+                .next()
+                .ok_or_else(|| OpossumError::Other("no rays in bundle found".to_string()))?;
             assert_eq!(ray.position(), millimeter!(0.0, 0.0, 10.0));
             let dir = vector![0.0, 0.0, -1.0];
             assert_eq!(ray.direction(), dir);
         } else {
             assert!(false, "could not get LightData");
         }
+        Ok(())
     }
 }

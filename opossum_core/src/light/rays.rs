@@ -598,7 +598,7 @@ impl Rays {
             .collect::<Vec<f64>>();
 
         //get unique wavelengths
-        let unique_wvls = get_unique_finite_values_sorted(wvls.as_slice());
+        let unique_wvls = get_unique_finite_values_sorted(wvls.as_slice()).unwrap();
 
         //return as Vec<Length>
         unique_wvls

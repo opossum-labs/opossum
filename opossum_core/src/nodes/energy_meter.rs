@@ -238,7 +238,7 @@ mod test {
         assert_eq!(meter.name(), "test");
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<EnergyMeter>()
     }
     #[test]
@@ -265,7 +265,7 @@ mod test {
         test_set_aperture::<EnergyMeter>("input_1", "output_1");
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<EnergyMeter>()
     }
     #[test]
@@ -288,7 +288,7 @@ mod test {
         assert_eq!(result.get("output_1").unwrap(), &input_data);
     }
     #[test]
-    fn analyze_apodization_warning() {
+    fn analyze_apodization_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<EnergyMeter>()
     }
     #[test]

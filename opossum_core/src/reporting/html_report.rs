@@ -186,21 +186,15 @@ pub struct HtmlProperty {
 #[cfg(test)]
 mod test {
     use crate::{
+        error::OpmResult,
         properties::Properties,
         reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
     };
-
-    // #[test]
-    // fn from_analysis_report() {
-    // }
-    // #[test]
-    // fn generate_report_files() {
-    // }
     #[test]
-    fn from_node_report() {
+    fn from_node_report() -> OpmResult<()> {
         let mut properties = Properties::default();
-        properties.create("test1", "desc1", 1.0.into()).unwrap();
-        properties.create("test2", "desc2", "test".into()).unwrap();
+        properties.create("test1", "desc1", 1.0.into())?;
+        properties.create("test2", "desc2", "test".into())?;
         let report = NodeReport::new("test detector", "detector name", "123", properties);
         let html_report = HtmlNodeReport::from_node_report(&report, 0);
         assert_eq!(html_report.node_name, "detector name");
@@ -213,5 +207,6 @@ mod test {
         assert_eq!(html_props[0].name, "test1");
         assert_eq!(html_props[0].description, "desc1");
         assert_eq!(html_props[0].prop_value, "1.000000");
+        Ok(())
     }
 }

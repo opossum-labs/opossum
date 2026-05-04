@@ -261,7 +261,7 @@ mod test {
     use uom::si::f64::Length;
 
     #[test]
-    fn debug() {
+    fn debug() -> OpmResult<()> {
         let mut node = Spectrometer::default();
         assert_eq!(format!("{:?}", node), "no data");
         let mut input = LightResult::default();
@@ -269,13 +269,14 @@ mod test {
         let _ = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default());
         assert_eq!(format!("{:?}", node), "no spectrum data to display");
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_visible_spec());
+        let input_light = LightData::Energy(create_visible_spec()?);
         input.insert("input_1".into(), input_light.clone());
-        AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert_eq!(
             format!("{:?}", node),
             "Spectrum 380.000 - 750.000 nm (Type: Ideal)"
         );
+        Ok(())
     }
     #[test]
     fn default() {
@@ -317,11 +318,11 @@ mod test {
         assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<EnergyMeter>()
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<EnergyMeter>()
     }
     #[test]
@@ -348,7 +349,7 @@ mod test {
         assert_eq!(*output, input_light);
     }
     #[test]
-    fn analyze_apodazation_warning() {
+    fn analyze_apodazation_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<Spectrometer>()
     }
     #[test]

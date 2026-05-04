@@ -246,12 +246,13 @@ mod test {
         assert!(ellipse((0.0, 0.0), (0.0, 0.0), 0).is_err());
     }
     #[test]
-    fn ellipse_ok() {
-        let points = ellipse((1.0, 2.0), (1.0, 2.0), 4).unwrap();
+    fn ellipse_ok() -> OpmResult<()> {
+        let points = ellipse((1.0, 2.0), (1.0, 2.0), 4)?;
         assert_eq!(points.len(), 4);
         assert_abs_diff_eq!(points[0], point![2.0, 2.0]);
         assert_abs_diff_eq!(points[1], point![1.0, 4.0]);
         assert_abs_diff_eq!(points[2], point![0.0, 2.0], epsilon = 2. * f64::EPSILON);
         assert_abs_diff_eq!(points[3], point![1.0, 0.0]);
+        Ok(())
     }
 }

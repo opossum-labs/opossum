@@ -441,7 +441,7 @@ mod test {
         assert!(BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(1.01)).is_err());
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<BeamSplitter>()
     }
     #[test]
@@ -466,7 +466,7 @@ mod test {
         assert_eq!(output_ports, vec!["input_1", "input_2"]);
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<BeamSplitter>()
     }
 }
