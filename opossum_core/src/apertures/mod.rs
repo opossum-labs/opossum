@@ -177,7 +177,7 @@ impl Aperture {
     }
 
     /// Set the isometry of this [`Aperture`].
-    pub fn set_isometry(&mut self, iso: Isometry) {
+    pub const fn set_isometry(&mut self, iso: Isometry) {
         self.isometry = iso;
     }
     /// Create a new circular aperture.

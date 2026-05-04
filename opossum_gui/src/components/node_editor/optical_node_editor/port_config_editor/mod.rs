@@ -59,7 +59,9 @@ pub fn PortConfigEditor(
         });
     };
 
-    if let Some(Some(ports)) = ports_resource.read_unchecked().clone() {
+    if node_id() == node_info.read().uuid
+        && let Some(Some(ports)) = ports_resource.read_unchecked().clone()
+    {
         for (port_name, port_config) in ports.inputs {
             editor_inputs.push(rsx!(SinglePortConfigEditor {
                 node_id,
@@ -114,7 +116,7 @@ pub fn SinglePortConfigEditor(
     accordion_content.push(rsx! {
 
         CoatingEditor {
-            coating_type: port_config.coating.clone(),
+            coating_type: port_config.coating,
             on_change: move |coating_type: CoatingType| {
                 let update_port_request = UpdatePortRequest {
                     coating: Some(coating_type),
@@ -145,7 +147,7 @@ pub fn SinglePortConfigEditor(
         }
         ApertureEditor {
             node_id,
-            aperture: port_config.aperture.clone(),
+            aperture: port_config.aperture,
             on_change: move |aperture: Aperture| {
                 let update_port_request = UpdatePortRequest {
                     aperture: Some(aperture),

@@ -233,7 +233,7 @@ impl OpticPorts {
                 )))
             },
             |config| {
-                config.coating = coating.clone();
+                config.coating = *coating;
                 Ok(())
             },
         )

@@ -26,7 +26,7 @@ pub fn CoatingEditor(
     let mut coating_type_sig = use_signal(|| *coating_type.read());
     let on_coating_changed = move |ct: CoatingType| {
         coating_type_sig.set(ct);
-        on_change.call(ct)
+        on_change.call(ct);
     };
     let mut element_list: Vec<Result<VNode, RenderError>> = vec![rsx! {
         CoatingTypeSelector {coating_type_sig, on_change: on_coating_changed }
