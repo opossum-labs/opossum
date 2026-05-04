@@ -10,7 +10,7 @@ pub(super) use alignment_editor::{
 
 use crate::components::{
     node_editor::{
-        node_config_editor::NodeChangeEvent,
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::{
             alignment_editor::{AlignmentEditor, PositioningEditor},
             general_editor::GeneralEditor,
@@ -34,6 +34,19 @@ pub fn OpticalNodeEditor(
     let mut node_info_sig = use_signal(NodeInfo::default);
     let mut node_properties_sig = use_signal(Properties::default);
     let mut readonly = use_signal(|| false);
+
+    let on_property_change = EventHandler::new(move |node_change: NodeChangeEvent| {
+        if let NodeChangeAction::Property(name, proptype) = &node_change.action {
+            if let Err(e) = node_properties_sig.write().set(name, proptype.clone()) {
+                OPOSSUM_UI_LOGS.write().add_log(&format!(
+                    "Error setting new property value of proptype '{name}': {e}"
+                ));
+            } else {
+                on_change.call(node_change);
+            }
+        }
+    });
+
     let resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
         use_resource(move || async move {
             let node_id = active_node.read().node_id;
@@ -87,7 +100,7 @@ pub fn OpticalNodeEditor(
                         node_id,
                         node_properties_sig,
                         node_info_sig,
-                        on_change,
+                        on_change: on_property_change,
                         readonly: readonly(),
                     }
                     PositioningEditor {
@@ -100,6 +113,7 @@ pub fn OpticalNodeEditor(
                         node_id,
                         node_info: node_info_sig,
                         on_change,
+                        node_properties_sig,
                         readonly: readonly(),
                     }
                 }
