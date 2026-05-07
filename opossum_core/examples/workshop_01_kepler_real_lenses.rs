@@ -55,7 +55,7 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),
         &refr_index_hzf52,
     )?;
-   // Add second lens to the scene.
+    // Add second lens to the scene.
     let i_pl2 = scenery.add_node(lens2)?;
     // Add ray propagation visualizer.
     // This only displays ray paths and does not affect optics.
