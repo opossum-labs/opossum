@@ -67,32 +67,38 @@ impl Debug for OpticRef {
             .finish()
     }
 }
+
+// temporary helper struct which allows for attribute flattening
+#[derive(Serialize)]
+struct FlattenedOpticRefNodeAttr<'a> {
+    #[serde(flatten)]
+    attributes: &'a NodeAttr,
+}
+
+// temporary helper struct which allows for attribute flattening in a group node
+#[derive(Serialize)]
+struct FlattenedOpticRefGroup<'a> {
+    #[serde(flatten)]
+    attributes: &'a NodeAttr,
+    graph: &'a OpticGraph,
+}
+
 impl Serialize for OpticRef {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        // temporary helper struct which allows for attribute flattening
-        #[derive(Serialize)]
-        struct FlattenedOpticRef<'a> {
-            #[serde(flatten)]
-            attributes: &'a NodeAttr,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            graph: Option<&'a OpticGraph>,
-        }
-
         let optical_ref = self.optical_ref.lock_opm().unwrap();
 
         if let Ok(group_node) = optical_ref.as_group() {
-            FlattenedOpticRef {
+            FlattenedOpticRefGroup {
                 attributes: group_node.node_attr(),
-                graph: Some(group_node.graph()),
+                graph: group_node.graph(),
             }
             .serialize(serializer)
         } else {
-            FlattenedOpticRef {
+            FlattenedOpticRefNodeAttr {
                 attributes: optical_ref.node_attr(),
-                graph: None,
             }
             .serialize(serializer)
         }
