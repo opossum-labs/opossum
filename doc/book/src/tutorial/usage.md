@@ -53,12 +53,19 @@ The canvas itself is virtually infinite. You can pan the viewport by clicking an
 To form an optical network, the nodes must be connected. Click on an output port (the light green square on the right side of a node) and drag a line to the input port of another node. Connect them in this order: `Source -> Lens -> Lens`. Your screen should look similar to this:
 
 ![third step](../images/opossum_gui_first_steps_3.PNG)
+Each node port can only be connected to exactly one other port, i.e., a single source cannot be connected to multiple inputs simultaneously. 
+For example, if a light source or signal needs to be split into multiple paths, a dedicated beamsplitter node must be used.
 
 Each connection displays a numeric value representing the spatial separation between the connected nodes (the distance along the optical axis). For a detailed discussion on element placement, please refer to the [Concepts](../concepts/concepts.md) section. For this example, set the distance between the source and the first lens to **10 mm**, and the distance between the two lenses to **200 mm**.
 
-You can tidy up the node arrangement using the auto-layout function: Select `Auto Layout` from the `Layout` menu or press `Ctrl + Shift + A`. The result should look like this:
+Numeric values can be entered manually, with units, and unit prefixes are supported. For example, distances can be specified from millimeters (mm) to kilometers (km), including metric system prefixes from quecto (q) to quetta (Q). The system automatically reads these prefixes and converts the values into a standard internal unit.
+
+You can easily delete a node by selecting it and pressing the 'Delete' key on the keyboard if it was created by mistake or is no longer needed.
+
+You can also tidy up the node arrangement using the auto-layout function: Select `Auto Layout` from the `Layout` menu or press `Ctrl + Shift + A`. The result should look like this:
 
 ![fourth step](../images/opossum_gui_first_steps_4.PNG)
+
 
 ### Configuring Nodes
 
@@ -89,6 +96,7 @@ Detector nodes are typically "transparent"—they have no thickness and do not a
 For now, connect the detectors and set a distance of **50 mm** between the last lens and the spot diagram, so we can see the light propagate slightly beyond the second lens.
 
 ![seventh step](../images/opossum_gui_first_steps_7.PNG)
+
 
 ### Performing the Simulation
 
