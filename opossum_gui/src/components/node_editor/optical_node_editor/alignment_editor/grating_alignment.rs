@@ -76,7 +76,7 @@ pub fn GratingAlignmentInputs(
         element_list.push(rsx! {
             RotationAlignmentInputs {
                 alignment: alignment_memo,
-                axes_skip: Some(vec![RotationAxis::Pitch]),
+                axes_skip: Some(vec![RotationAxis::Yaw]),
                 on_new_rotation: on_new_rotation(on_save, alignment_memo.into()),
                 node_id,
                 readonly,
@@ -189,7 +189,7 @@ fn AngleToLittrowComponent(
         calc_deviation_angle_from_littrow(
             *diffraction_order_memo.read(),
             *line_density_memo.read(),
-            alignment_memo.read().rotation_of_axis(RotationAxis::Pitch),
+            alignment_memo.read().rotation_of_axis(RotationAxis::Yaw),
             *reference_wavelength_sig.read(),
             *incident_angle_sig.read(),
         )
@@ -212,7 +212,7 @@ fn AngleToLittrowComponent(
                     new_angle = radian!((- new_angle.sin().value + m_g_lambda).asin());
                 }
                 let mut iso = *alignment_memo.read();
-                let update_res = iso.set_rotation_of_axis(RotationAxis::Pitch, new_angle);
+                let update_res = iso.set_rotation_of_axis(RotationAxis::Yaw, new_angle);
                 match update_res {
                     Ok(()) => {
                         on_alignment_change.call(iso);
