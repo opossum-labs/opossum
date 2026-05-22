@@ -80,17 +80,25 @@ fn task_bundle() -> Result<(), anyhow::Error> {
         let exe_ext = env::consts::EXE_SUFFIX; // ".exe" oder ""
 
         for bin_name in ["opossum_backend", "opossum_cli"] {
-            // source: target/release/opossum_backend.exe
             let src = release_dir.join(format!("{}{}", bin_name, exe_ext));
-            // Destinattion: opossum_gui/staging/opossum_backend-<host-triple><ext>
-            let dest_filename = format!("{}-{}{}", bin_name, target_triple, exe_ext);
+            
+            // Konstruiert den exakten Namen, den Dioxus' format!("{bin}-{target}") erwartet
+            let dest_filename = if exe_ext.is_empty() {
+                // Linux / macOS: opossum_backend-x86_64-unknown-linux-gnu
+                format!("{}-{}", bin_name, target_triple)
+            } else {
+                // Windows: opossum_backend.exe-x86_64-pc-windows-msvc
+                // THIS IS A WORKAROUND FOR A DIOXUS BUG!!!
+                format!("{}{}-{}", bin_name, exe_ext, target_triple)
+            };
+            
             let dest = staging_path.join(&dest_filename);
 
             if src.exists() {
                 fs::copy(&src, &dest)?;
-                println!("   -> Staged: {}", dest_filename);
+                println!("   -> Staged für Dioxus: {}", dest_filename);
             } else {
-                return Err(anyhow::anyhow!("Binary not found: {}", src.display()));
+                return Err(anyhow::anyhow!("Binary nicht gefunden: {}", src.display()));
             }
         }
     }
@@ -98,7 +106,16 @@ fn task_bundle() -> Result<(), anyhow::Error> {
     {
         println!("\n🎨 Running Dioxus Bundle...");
         let _dir = sh.push_dir("opossum_gui");
-        cmd!(sh, "dx bundle --release").run()?;
+        let mut bundle_args = Vec::new();
+
+        if cfg!(target_os = "windows") {
+            bundle_args.extend(["--package-types", "nsis", "--package-types", "msi"]);
+        } else if cfg!(target_os = "linux") {
+            bundle_args.extend(["--package-types", "deb", "--package-types", "appimage"]);
+        } else if cfg!(target_os = "macos") {
+            bundle_args.extend(["--package-types", "app", "--package-types", "dmg"]);
+        }
+        cmd!(sh, "dx bundle --release {bundle_args...}").run()?;
     }
     println!("\n✅ Bundle successfully created!");
     Ok(())
