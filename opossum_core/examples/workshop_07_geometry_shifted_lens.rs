@@ -25,6 +25,7 @@
 //!
 //! Import `opossum_core` modules:
 //! - `prelude::*` brings in core optical system types, unit macros (e.g. millimeter!, nanometer!, joule!), and optical building blocks (sources, lenses, detectors, wavefront)
+use opossum_core::prelude::*;
 // Import `Path` from the standard library for working with file paths
 use std::path::Path;
 //! Entry point for the program; returns `OpmResult<()>` to handle simulation errors safely
