@@ -111,14 +111,15 @@ mod test {
         assert!(UniformDist::new(joule!(1.)).is_ok());
     }
     #[test]
-    fn uniform_renormalization_integration() {
+    fn uniform_renormalization_integration() -> OpmResult<()> {
         let total = joule!(1.0);
-        let dist = UniformDist::new(total).unwrap();
+        let dist = UniformDist::new(total)?;
         let points = vec![Point2::new(millimeter!(0.0), millimeter!(0.0)); 10];
         let mut energies = dist.apply(&points);
         energies[0] = joule!(0.0); // Simulate energy loss: set one element to zero
         dist.renormalize(&mut energies);
         let sum: f64 = energies.iter().map(|e| e.get::<joule>()).sum();
         assert_abs_diff_eq!(sum, 1.0, epsilon = 1e-12);
+        Ok(())
     }
 }

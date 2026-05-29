@@ -598,7 +598,7 @@ impl Rays {
             .collect::<Vec<f64>>();
 
         //get unique wavelengths
-        let unique_wvls = get_unique_finite_values_sorted(wvls.as_slice());
+        let unique_wvls = get_unique_finite_values_sorted(wvls.as_slice()).unwrap();
 
         //return as Vec<Length>
         unique_wvls
@@ -1042,7 +1042,7 @@ impl Rays {
         }
         Ok(())
     }
-    /// Refract a ray bundle on a [`GeoSurface`](crate::surface::geo_surface::GeoSurface) and returns a reflected [`Ray`] bundle.
+    /// Refract a ray bundle on a [`GeoSurface`](crate::geometry::geo_surface::GeoSurface) and returns a reflected [`Ray`] bundle.
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///

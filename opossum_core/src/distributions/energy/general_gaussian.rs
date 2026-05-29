@@ -726,7 +726,7 @@ mod test {
         );
     }
     #[test]
-    fn power_parameter_influence() {
+    fn power_parameter_influence() -> OpmResult<()> {
         let center = Point2::new(millimeter!(0.0), millimeter!(0.0));
         let sigma = Point2::new(millimeter!(1.0), millimeter!(1.0));
 
@@ -737,10 +737,8 @@ mod test {
             Point2::new(millimeter!(0.5), millimeter!(0.5)),
         ];
 
-        let dist_1 =
-            General2DGaussian::new(joule!(1.0), center, sigma, 1.0, degree!(0.0), false).unwrap();
-        let dist_2 =
-            General2DGaussian::new(joule!(1.0), center, sigma, 2.0, degree!(0.0), false).unwrap();
+        let dist_1 = General2DGaussian::new(joule!(1.0), center, sigma, 1.0, degree!(0.0), false)?;
+        let dist_2 = General2DGaussian::new(joule!(1.0), center, sigma, 2.0, degree!(0.0), false)?;
 
         let e1 = dist_1.apply(&points);
         let e2 = dist_2.apply(&points);
@@ -752,10 +750,11 @@ mod test {
             (e1[1].get::<joule>() - e2[1].get::<joule>()).abs() > 1e-5,
             "Power parameter should influence relative distribution between points"
         );
+        Ok(())
     }
 
     #[test]
-    fn rectangular_flag_influence() {
+    fn rectangular_flag_influence() -> OpmResult<()> {
         let center = Point2::new(millimeter!(0.0), millimeter!(0.0));
         let sigma = Point2::new(millimeter!(1.0), millimeter!(0.5));
 
@@ -766,9 +765,9 @@ mod test {
         ];
 
         let dist_ellip =
-            General2DGaussian::new(joule!(1.0), center, sigma, 2.0, degree!(0.0), false).unwrap();
+            General2DGaussian::new(joule!(1.0), center, sigma, 2.0, degree!(0.0), false)?;
         let dist_rect =
-            General2DGaussian::new(joule!(1.0), center, sigma, 2.0, degree!(0.0), true).unwrap();
+            General2DGaussian::new(joule!(1.0), center, sigma, 2.0, degree!(0.0), true)?;
 
         let e_ellip = dist_ellip.apply(&points);
         let e_rect = dist_rect.apply(&points);
@@ -777,5 +776,6 @@ mod test {
             (e_ellip[1].get::<joule>() - e_rect[1].get::<joule>()).abs() > 1e-5,
             "Rectangular flag should influence relative distribution for power != 1"
         );
+        Ok(())
     }
 }

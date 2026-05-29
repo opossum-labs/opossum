@@ -47,13 +47,17 @@ pub fn get_version() -> String {
 }
 #[cfg(test)]
 mod test {
+    use crate::error::{OpmResult, OpossumError};
+
     use super::*;
     use regex::Regex;
     #[test]
     #[ignore]
-    fn get_ver() {
+    fn get_ver() -> OpmResult<()> {
         let version_string = get_version();
-        let re = Regex::new(r"(.*) \(\d{4}/\d{2}/\d{2} \d{2}:\d{2}\)").unwrap();
+        let re = Regex::new(r"(.*) \(\d{4}/\d{2}/\d{2} \d{2}:\d{2}\)")
+            .map_err(|e| OpossumError::Other(format!("Error in regular expression: {e}")))?;
         assert!(re.is_match(&version_string));
+        Ok(())
     }
 }

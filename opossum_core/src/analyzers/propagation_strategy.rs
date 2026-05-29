@@ -14,13 +14,13 @@ use crate::{
     utils::default_from_name::DefaultFromName,
 };
 
-/// Strategy to use if a [`Ray`](crate::ray::Ray) misses a surface
+/// Strategy to use if a [`Ray`](crate::light::ray::Ray) misses a surface
 #[derive(Default, PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize, EnumIter)]
 pub enum MissedSurfaceStrategy {
-    /// The [`Ray`](crate::ray::Ray) it is set as invalid and does no longer propagate.
+    /// The [`Ray`](crate::light::ray::Ray) it is set as invalid and does no longer propagate.
     #[default]
     Stop,
-    /// The [`Ray`](crate::ray::Ray) is not altered in any way, thus skipping the surface and propagating
+    /// The [`Ray`](crate::light::ray::Ray) is not altered in any way, thus skipping the surface and propagating
     /// further through the system.
     Ignore,
 }

@@ -1,6 +1,6 @@
-//! Builder for the generation of [`LightData`].
+//! Builder for the generation of [`LightData`](crate::light::LightData).
 //!
-//! This module provides a builder for the generation of [`LightData`].
+//! This module provides a builder for the generation of [`LightData`](crate::light::LightData).
 use crate::{
     degree,
     distributions::{energy::EnergyDistType, position::PosDistType, spectral::SpecDistType},
@@ -21,7 +21,7 @@ use uom::si::{
     length::meter,
 };
 
-/// Builder for the generation of [`LightData::Geometric`].
+/// Builder for the generation of [`LightData::Geometric`](crate::light::lightdata::LightData::Geometric).
 #[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated)]
 pub enum RayDataSource {
     /// Raw [`Rays`] data.

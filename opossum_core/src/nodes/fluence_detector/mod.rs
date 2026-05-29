@@ -25,7 +25,7 @@ inventory::submit! {
 
 /// A fluence monitor
 ///
-/// It simply calculates the fluence (spatial energy distribution) of an incoming [`Ray`](crate::ray::Ray) bundle. The used algorithm
+/// It simply calculates the fluence (spatial energy distribution) of an incoming [`Ray`](crate::light::Ray) bundle. The used algorithm
 /// for calculating a fluence map is specified with the property `fluence estimator`. By default, the Voronoi estimator is
 /// used ([`FluenceEstimator::Voronoi`]). See [`FluenceEstimator`] for further options.
 ///
@@ -213,11 +213,11 @@ mod test {
         assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<FluenceDetector>()
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<FluenceDetector>()
     }
     #[test]
@@ -244,7 +244,7 @@ mod test {
         assert_eq!(*output, input_light);
     }
     #[test]
-    fn analyze_apodization_warning() {
+    fn analyze_apodization_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<FluenceDetector>()
     }
     #[test]

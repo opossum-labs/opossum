@@ -326,7 +326,7 @@ mod test {
         );
     }
     #[test]
-    fn new() {
+    fn new() -> OpmResult<()> {
         let r = RefrIndexSchott::new(
             1.0,
             2.0,
@@ -335,14 +335,14 @@ mod test {
             5.0,
             6.0,
             nanometer!(500.0)..nanometer!(2000.0),
-        )
-        .unwrap();
+        )?;
         assert_eq!(r.a0(), 1.0);
         assert_eq!(r.a1(), 2.0);
         assert_eq!(r.a2(), 3.0);
         assert_eq!(r.a3(), 4.0);
         assert_eq!(r.a4(), 5.0);
         assert_eq!(r.a5(), 6.0);
+        Ok(())
     }
     #[test]
     fn test_default_hzf52() {
@@ -408,7 +408,7 @@ mod test {
         }
     }
     #[test]
-    fn get_refractive_index() {
+    fn get_refractive_index() -> OpmResult<()> {
         let i = RefrIndexSchott::new(
             3.26760058E+000,
             -2.05384566E-002,
@@ -417,14 +417,14 @@ mod test {
             -9.08139817E-004,
             7.52649555E-005,
             nanometer!(500.0)..nanometer!(2000.0),
-        )
-        .unwrap();
+        )?;
         assert_relative_eq!(
-            i.get_refractive_index(nanometer!(1054.0)).unwrap(),
+            i.get_refractive_index(nanometer!(1054.0))?,
             1.8116,
             max_relative = 0.0001
         );
         assert!(i.get_refractive_index(nanometer!(499.0)).is_err());
         assert!(i.get_refractive_index(nanometer!(2001.0)).is_err());
+        Ok(())
     }
 }

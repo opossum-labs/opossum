@@ -11,9 +11,8 @@ use log::warn;
 ///
 /// # Panics
 /// This function might theoretically panic if the internal implementation of spectrum creation changes.
-#[must_use]
-pub fn create_visible_spec() -> Spectrum {
-    Spectrum::new(nanometer!(380.0)..nanometer!(750.0), nanometer!(0.1)).unwrap()
+pub fn create_visible_spec() -> OpmResult<Spectrum> {
+    Spectrum::new(nanometer!(380.0)..nanometer!(750.0), nanometer!(0.1))
 }
 /// Helper function for generating a near infrared spectrum.
 ///
@@ -22,9 +21,8 @@ pub fn create_visible_spec() -> Spectrum {
 ///
 /// # Panics
 /// This function might theoretically panic if the internal implementation of spectrum creation changes.
-#[must_use]
-pub fn create_nir_spec() -> Spectrum {
-    Spectrum::new(nanometer!(800.0)..nanometer!(2500.0), nanometer!(0.1)).unwrap()
+pub fn create_nir_spec() -> OpmResult<Spectrum> {
+    Spectrum::new(nanometer!(800.0)..nanometer!(2500.0), nanometer!(0.1))
 }
 /// Helper function for generating a spectrum of a narrow-band Helium-Neon laser.
 ///
@@ -35,7 +33,7 @@ pub fn create_nir_spec() -> Spectrum {
 ///
 /// This functions returns an [`OpossumError`](crate::error::OpossumError) if the given energy is negative.
 pub fn create_he_ne_spec(energy: f64) -> OpmResult<Spectrum> {
-    let mut s = create_visible_spec();
+    let mut s = create_visible_spec()?;
     s.add_single_peak(nanometer!(632.816), energy)?;
     Ok(s)
 }
@@ -48,7 +46,7 @@ pub fn create_he_ne_spec(energy: f64) -> OpmResult<Spectrum> {
 ///
 /// This functions returns an [`OpossumError`](crate::error::OpossumError) if the given energy is negative.
 pub fn create_nd_glass_spec(energy: f64) -> OpmResult<Spectrum> {
-    let mut s = create_nir_spec();
+    let mut s = create_nir_spec()?;
     s.add_lorentzian_peak(nanometer!(1054.0), nanometer!(0.5), energy)?;
     Ok(s)
 }

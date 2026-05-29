@@ -238,7 +238,7 @@ mod test {
         assert!(node.reference.is_some());
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<NodeReference>()
     }
     #[test]

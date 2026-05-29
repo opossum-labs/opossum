@@ -281,28 +281,31 @@ mod test {
         assert!(Grid::new(millimeter!(1.0, 1.0), Point2::new(1, 0)).is_err());
     }
     #[test]
-    fn generate_symmetric() {
-        let strategy = Grid::new(millimeter!(1.0, 1.0), Point2::new(2, 2)).unwrap();
+    fn generate_symmetric() -> OpmResult<()> {
+        let strategy = Grid::new(millimeter!(1.0, 1.0), Point2::new(2, 2))?;
         let points = strategy.generate();
         assert_eq!(points.len(), 4);
         assert_eq!(points[0], millimeter!(-0.5, -0.5, 0.));
         assert_eq!(points[1], millimeter!(-0.5, 0.5, 0.));
         assert_eq!(points[2], millimeter!(0.5, -0.5, 0.));
         assert_eq!(points[3], millimeter!(0.5, 0.5, 0.));
+        Ok(())
     }
     #[test]
-    fn generate_size_one() {
-        let strategy = Grid::new(millimeter!(1.0, 1.0), Point2::new(1, 1)).unwrap();
+    fn generate_size_one() -> OpmResult<()> {
+        let strategy = Grid::new(millimeter!(1.0, 1.0), Point2::new(1, 1))?;
         let points = strategy.generate();
         assert_eq!(points.len(), 1);
         assert_eq!(points[0], millimeter!(0., 0., 0.));
+        Ok(())
     }
     #[test]
-    fn generate_asymmetric() {
-        let strategy = Grid::new(millimeter!(1.0, 1.0), Point2::new(1, 2)).unwrap();
+    fn generate_asymmetric() -> OpmResult<()> {
+        let strategy = Grid::new(millimeter!(1.0, 1.0), Point2::new(1, 2))?;
         let points = strategy.generate();
         assert_eq!(points.len(), 2);
         assert_eq!(points[0], millimeter!(0., -0.5, 0.));
         assert_eq!(points[1], millimeter!(0., 0.5, 0.));
+        Ok(())
     }
 }

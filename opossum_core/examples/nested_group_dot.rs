@@ -4,7 +4,7 @@ use std::path::Path;
 use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Nested Group Dot test");
-    let i_s = scenery.add_node(SourcePort::default()).unwrap();
+    let i_s = scenery.add_node(SourcePort::default())?;
     let mut group = NodeGroup::default();
     let mut group2 = NodeGroup::default();
     group.set_expand_view(true)?;

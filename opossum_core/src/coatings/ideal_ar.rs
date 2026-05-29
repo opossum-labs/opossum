@@ -28,7 +28,7 @@ impl From<IdealAR> for CoatingType {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{joule, light::Ray, nanometer};
+    use crate::{error::OpmResult, joule, light::Ray, nanometer};
     use nalgebra::vector;
 
     #[test]
@@ -37,10 +37,11 @@ mod test {
         assert!(matches!(coating.into(), CoatingType::IdealAR));
     }
     #[test]
-    fn calc_refl() {
+    fn calc_refl() -> OpmResult<()> {
         let coating = IdealAR;
-        let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap();
+        let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?;
         let surface_normal = vector![0.0, 0.0, -1.0];
         assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.5), 0.0);
+        Ok(())
     }
 }

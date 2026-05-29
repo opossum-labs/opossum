@@ -133,29 +133,33 @@ mod test {
         assert!(Hexapolar::new(millimeter!(f64::INFINITY), 1).is_err());
     }
     #[test]
-    fn generate_one() {
-        let g = Hexapolar::new(Length::zero(), 1).unwrap();
+    fn generate_one() -> OpmResult<()> {
+        let g = Hexapolar::new(Length::zero(), 1)?;
         assert_eq!(g.generate().len(), 1);
-        let g = Hexapolar::new(millimeter!(1.0), 0).unwrap();
+        let g = Hexapolar::new(millimeter!(1.0), 0)?;
         assert_eq!(g.generate().len(), 1);
+        Ok(())
     }
     #[test]
-    fn generate() {
-        let g = Hexapolar::new(millimeter!(1.0), 1).unwrap();
+    fn generate() -> OpmResult<()> {
+        let g = Hexapolar::new(millimeter!(1.0), 1)?;
         assert_eq!(g.generate().len(), 7);
-        let g = Hexapolar::new(millimeter!(1.0), 2).unwrap();
+        let g = Hexapolar::new(millimeter!(1.0), 2)?;
         assert_eq!(g.generate().len(), 19);
+        Ok(())
     }
     #[test]
-    fn generate_max() {
-        let g = Hexapolar::new(millimeter!(1.0), u8::MAX).unwrap();
+    fn generate_max() -> OpmResult<()> {
+        let g = Hexapolar::new(millimeter!(1.0), u8::MAX)?;
         assert_eq!(g.generate().len(), 195841);
+        Ok(())
     }
     #[test]
-    fn generate_rounding() {
-        let g = Hexapolar::new(millimeter!(1.0), 6).unwrap();
+    fn generate_rounding() -> OpmResult<()> {
+        let g = Hexapolar::new(millimeter!(1.0), 6)?;
         assert_eq!(g.generate().len(), 127);
-        let g = Hexapolar::new(millimeter!(1.0), 7).unwrap();
+        let g = Hexapolar::new(millimeter!(1.0), 7)?;
         assert_eq!(g.generate().len(), 169);
+        Ok(())
     }
 }

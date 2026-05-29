@@ -198,7 +198,7 @@ pub trait AnalysisRayTrace: OpticNode {
     /// Calculate the position of this [`OpticNode`] element.
     ///
     /// This function calculates the position of this [`OpticNode`] element in 3D space. This is based on the analysis of a single,
-    /// central [`Ray`](crate::ray::Ray) representing the optical axis. The default implementation is to use the normal `analyze`
+    /// central [`Ray`](crate::light::ray::Ray) representing the optical axis. The default implementation is to use the normal `analyze`
     /// function. For a [`NodeGroup`] however, this must be separately implemented in order to allow nesting.
     ///
     /// # Errors
@@ -303,11 +303,11 @@ mod test {
         assert_eq!(analyzer.config.max_number_of_bounces(), 123);
     }
     #[test]
-    fn analyze_info() {
+    fn analyze_info() -> OpmResult<()> {
         let mut scenery = NodeGroup::new("test");
         let analyzer = RayTracingAnalyzer::default();
         testing_logger::setup();
-        analyzer.analyze(&mut scenery).unwrap();
+        analyzer.analyze(&mut scenery)?;
         check_logs(
             log::Level::Info,
             vec![
@@ -318,7 +318,7 @@ mod test {
         let mut scenery = NodeGroup::new("");
         let analyzer = RayTracingAnalyzer::default();
         testing_logger::setup();
-        analyzer.analyze(&mut scenery).unwrap();
+        analyzer.analyze(&mut scenery)?;
         check_logs(
             log::Level::Info,
             vec![
@@ -326,35 +326,34 @@ mod test {
                 "Performing ray tracing analysis of scenery.",
             ],
         );
+        Ok(())
     }
     #[test]
-    fn report() {
+    fn report() -> OpmResult<()> {
         let analyzer = RayTracingAnalyzer::default();
         let scenery = NodeGroup::new("");
-        analyzer.report(&scenery).unwrap();
+        assert!(analyzer.report(&scenery).is_ok());
+        Ok(())
     }
     #[test]
     #[ignore]
-    fn integration_test() {
+    fn integration_test() -> OpmResult<()> {
         // simulate simple system for integration test
         let mut group = NodeGroup::default();
-        let i_src = group.add_node(SourcePort::default()).unwrap();
-        let i_l1 = group
-            .add_node(ParaxialSurface::new("f=100", millimeter!(100.0)).unwrap())
-            .unwrap();
-        group
-            .connect_nodes(i_src, "output_1", i_l1, "input_1", millimeter!(50.0))
-            .unwrap();
+        let i_src = group.add_node(SourcePort::default())?;
+        let i_l1 = group.add_node(ParaxialSurface::new("f=100", millimeter!(100.0))?)?;
+        group.connect_nodes(i_src, "output_1", i_l1, "input_1", millimeter!(50.0))?;
         let mut config = RayTraceConfig::default();
         config.map_source(
             i_src,
-            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 3).unwrap(),
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 3)?,
         );
         let analyzer = RayTracingAnalyzer::new(config);
-        analyzer.analyze(&mut group).unwrap();
+        assert!(analyzer.analyze(&mut group).is_ok());
+        Ok(())
     }
     #[test]
-    fn test_position_history_integration() {
+    fn test_position_history_integration() -> OpmResult<()> {
         use crate::{
             analyzers::{Analyzer, raytrace::RayTracingAnalyzer},
             nodes::{ParaxialSurface, RayPropagationVisualizer},
@@ -363,31 +362,22 @@ mod test {
         };
         // Source -> Lens -> Visualizer
         let mut group = NodeGroup::default();
-        let i_src = group.add_node(SourcePort::default()).unwrap();
-        let i_lens = group
-            .add_node(ParaxialSurface::new("lens", millimeter!(100.0)).unwrap())
-            .unwrap();
-        let i_det = group.add_node(RayPropagationVisualizer::default()).unwrap();
-        group
-            .connect_nodes(i_src, "output_1", i_lens, "input_1", millimeter!(50.0))
-            .unwrap();
-        group
-            .connect_nodes(i_lens, "output_1", i_det, "input_1", millimeter!(50.0))
-            .unwrap();
+        let i_src = group.add_node(SourcePort::default())?;
+        let i_lens = group.add_node(ParaxialSurface::new("lens", millimeter!(100.0))?)?;
+        let i_det = group.add_node(RayPropagationVisualizer::default())?;
+        group.connect_nodes(i_src, "output_1", i_lens, "input_1", millimeter!(50.0))?;
+        group.connect_nodes(i_lens, "output_1", i_det, "input_1", millimeter!(50.0))?;
         let mut config = RayTraceConfig::default();
         config.map_source(
             i_src,
-            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 3).unwrap(),
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 3)?,
         );
         let analyzer = RayTracingAnalyzer::new(config);
-        analyzer.analyze(&mut group).unwrap();
-        let node_ref = group.graph().node(i_det).unwrap();
-        let det_node = node_ref.optical_ref.lock_opm().unwrap();
+        assert!(analyzer.analyze(&mut group).is_ok());
+        let node_ref = group.graph().node(i_det)?;
+        let det_node = node_ref.optical_ref.lock_opm()?;
         let report = det_node.node_report("test_uuid").unwrap();
-        let prop = report
-            .properties()
-            .get("Ray plot")
-            .expect("Integration Test Failed: 'Ray plot' property is missing!");
+        let prop = report.properties().get("Ray plot")?;
         if let Proptype::RayPositionHistory(hist) = prop {
             assert!(
                 !hist.rays_pos_history.is_empty(),
@@ -406,6 +396,7 @@ mod test {
         } else {
             panic!("'Ray plot' property has the wrong Proptype!");
         }
+        Ok(())
     }
     #[test]
     fn test_map_and_get_source() {
@@ -440,13 +431,13 @@ mod test {
     }
 
     #[test]
-    fn test_prune_source_map() {
+    fn test_prune_source_map() -> OpmResult<()> {
         use crate::light::lightdata::ray_data_source::{CollimatedSrc, RayDataSource};
         use uuid::Uuid;
 
         let mut scene = NodeGroup::default();
         let src = SourcePort::default();
-        let node_id = scene.add_node(src).unwrap();
+        let node_id = scene.add_node(src)?;
 
         let mut config = RayTraceConfig::default();
         let source = RayDataSource::Collimated(CollimatedSrc::default());
@@ -459,18 +450,17 @@ mod test {
 
         assert!(config.get_source(&node_id).is_some());
         assert!(config.get_source(&uuid2).is_none());
+        Ok(())
     }
     #[test]
-    fn test_no_optical_axis_warning() {
+    fn test_no_optical_axis_warning() -> OpmResult<()> {
         let mut scenery = NodeGroup::new("OpticScenery demo");
-        let node1 = scenery.add_node(Dummy::new("dummy1")).unwrap();
-        let node2 = scenery.add_node(Dummy::new("dummy2")).unwrap();
-        scenery
-            .connect_nodes(node1, "output_1", node2, "input_1", millimeter!(0.0))
-            .unwrap();
+        let node1 = scenery.add_node(Dummy::new("dummy1"))?;
+        let node2 = scenery.add_node(Dummy::new("dummy2"))?;
+        scenery.connect_nodes(node1, "output_1", node2, "input_1", millimeter!(0.0))?;
         let analyzer = RayTracingAnalyzer::default();
         testing_logger::setup();
-        analyzer.analyze(&mut scenery).unwrap();
+        analyzer.analyze(&mut scenery)?;
         check_logs(
             log::Level::Warn,
             vec![
@@ -478,5 +468,6 @@ mod test {
                 "'dummy2' (dummy) got no valid optical axis data from previous node and can thus not being placed. Skipping.",
             ],
         );
+        Ok(())
     }
 }

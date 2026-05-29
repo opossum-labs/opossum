@@ -1,7 +1,11 @@
 //! This module should contain all the functions that are used for filtering arrays, vectors and such.
 
+use std::cmp::Ordering;
+
 use approx::{RelativeEq, relative_eq};
 use num::{Float, Num};
+
+use crate::error::{OpmResult, OpossumError};
 
 /// This method filters out all NaN and infinite values
 ///  
@@ -43,7 +47,6 @@ pub fn get_min_max_filter_nonfinite<T: Float>(ax_vals: &[T]) -> Option<(T, T)> {
         Some((min, max))
     }
 }
-#[must_use]
 /// Gets all unique values in an array
 ///
 /// This method returns a vector of all unique values in an array ignoring non finite values. Note that the resulting
@@ -57,65 +60,73 @@ pub fn get_min_max_filter_nonfinite<T: Float>(ax_vals: &[T]) -> Option<(T, T)> {
 /// # Panics
 ///
 /// This function might only theoretically panic.
-pub fn get_unique_finite_values_sorted<T: Clone + RelativeEq + Num + Float>(array: &[T]) -> Vec<T> {
+pub fn get_unique_finite_values_sorted<T: Clone + RelativeEq + Num + Float>(
+    array: &[T],
+) -> OpmResult<Vec<T>> {
     let mut filtered_array = filter_nan_infinite(array);
 
     if filtered_array.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     // NaNs are filtered, so unwrap is safe.
-    filtered_array.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+    filtered_array.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
 
     let mut unique_vals = Vec::new();
     unique_vals.push(filtered_array[0]); // Add the first element
 
     for value in filtered_array.iter().skip(1) {
         // Compare with the last added unique value.
-        // Need to dereference unique_vals.last().unwrap() if T is not Copy,
-        // but Float implies Copy for f32/f64.
-        if !relative_eq!(*value, *unique_vals.last().unwrap()) {
+        if !relative_eq!(
+            *value,
+            *unique_vals
+                .last()
+                .ok_or_else(|| OpossumError::Other("empty array".into()))?
+        ) {
             unique_vals.push(*value);
         }
     }
-    unique_vals
+    Ok(unique_vals)
 }
 #[cfg(test)]
 mod test {
+    use crate::error::OpmResult;
+
     use super::*;
     use approx::assert_relative_eq;
     #[test]
-    fn get_unique_values_sorted_test() {
+    fn get_unique_values_sorted_test() -> OpmResult<()> {
         let v = vec![0., 1., 10.];
-        let unique = get_unique_finite_values_sorted(v.as_slice());
+        let unique = get_unique_finite_values_sorted(v.as_slice())?;
         assert_relative_eq!(unique[0], 0.);
         assert_relative_eq!(unique[1], 1.);
         assert_relative_eq!(unique[2], 10.);
         assert_eq!(unique.len(), 3);
 
         let v = vec![0., 1., 10., 1.];
-        let unique = get_unique_finite_values_sorted(v.as_slice());
+        let unique = get_unique_finite_values_sorted(v.as_slice())?;
         assert_relative_eq!(unique[0], 0.);
         assert_relative_eq!(unique[1], 1.);
         assert_relative_eq!(unique[2], 10.);
         assert_eq!(unique.len(), 3);
 
         let v = vec![0., 0., 0., 0.];
-        let unique = get_unique_finite_values_sorted(v.as_slice());
+        let unique = get_unique_finite_values_sorted(v.as_slice())?;
         assert_relative_eq!(unique[0], 0.);
         assert_eq!(unique.len(), 1);
 
         let v = vec![-10., 0., 0., 0.];
-        let unique = get_unique_finite_values_sorted(v.as_slice());
+        let unique = get_unique_finite_values_sorted(v.as_slice())?;
         assert_relative_eq!(unique[0], -10.);
         assert_relative_eq!(unique[1], 0.);
         assert_eq!(unique.len(), 2);
 
         let v = vec![10., 0., -1., f64::NEG_INFINITY, f64::INFINITY, f64::NAN];
-        let unique = get_unique_finite_values_sorted(v.as_slice());
+        let unique = get_unique_finite_values_sorted(v.as_slice())?;
         assert_relative_eq!(unique[0], -1.);
         assert_relative_eq!(unique[1], 0.);
         assert_relative_eq!(unique[2], 10.);
         assert_eq!(unique.len(), 3);
+        Ok(())
     }
     #[test]
     fn filter_nan_infinite_test() {
@@ -157,28 +168,33 @@ mod test {
         assert!(v_filter.is_empty());
     }
     #[test]
-    fn get_min_max_filter_nonfinite_test() {
+    fn get_min_max_filter_nonfinite_test() -> OpmResult<()> {
         let v = vec![0., 1., 10.];
-        let (min, max) = get_min_max_filter_nonfinite(v.as_slice()).unwrap();
+        let (min, max) = get_min_max_filter_nonfinite(v.as_slice())
+            .ok_or_else(|| OpossumError::Other("none encountered".into()))?;
         assert_relative_eq!(min, 0.);
         assert_relative_eq!(max, 10.);
 
         let v = vec![-0., -1., -10.];
-        let (min, max) = get_min_max_filter_nonfinite(v.as_slice()).unwrap();
+        let (min, max) = get_min_max_filter_nonfinite(v.as_slice())
+            .ok_or_else(|| OpossumError::Other("none encountered".into()))?;
         assert_relative_eq!(max, 0.);
         assert_relative_eq!(min, -10.);
 
         let v = vec![0., 1., 10., f64::NEG_INFINITY, f64::INFINITY, f64::NAN];
-        let (min, max) = get_min_max_filter_nonfinite(v.as_slice()).unwrap();
+        let (min, max) = get_min_max_filter_nonfinite(v.as_slice())
+            .ok_or_else(|| OpossumError::Other("none encountered".into()))?;
         assert_relative_eq!(min, 0.);
         assert_relative_eq!(max, 10.);
 
         let v = vec![0., f64::NEG_INFINITY, f64::INFINITY, f64::NAN];
-        let (min, max) = get_min_max_filter_nonfinite(v.as_slice()).unwrap();
+        let (min, max) = get_min_max_filter_nonfinite(v.as_slice())
+            .ok_or_else(|| OpossumError::Other("none encountered".into()))?;
         assert_relative_eq!(min, 0.);
         assert_relative_eq!(max, 0.);
 
         let v = vec![f64::NEG_INFINITY, f64::INFINITY, f64::NAN];
         assert_eq!(get_min_max_filter_nonfinite(v.as_slice()), None);
+        Ok(())
     }
 }

@@ -8,7 +8,7 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(SourcePort::new("Source"))?;
 
     let i_bs = scenery
-        .add_node(BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap())?;
+        .add_node(BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.6))?)?;
 
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",

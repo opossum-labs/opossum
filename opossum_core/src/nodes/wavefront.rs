@@ -468,19 +468,20 @@ mod test_wavefront_error_map {
     use approx::assert_abs_diff_eq;
     use nalgebra::Point3;
     #[test]
-    fn calc_wavefront_statistics() {
+    fn calc_wavefront_statistics() -> OpmResult<()> {
         let wvl = nanometer!(1000.);
         let en = joule!(1.);
 
-        let mut rays = Rays::from(Ray::new_collimated(Point3::origin(), wvl, en).unwrap());
-        let mut ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
-        ray.propagate(wvl).unwrap();
+        let mut rays = Rays::from(Ray::new_collimated(Point3::origin(), wvl, en)?);
+        let mut ray = Ray::new_collimated(Point3::origin(), wvl, en)?;
+        ray.propagate(wvl)?;
         rays.add_ray(ray);
         let wavefront_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(wvl, &Isometry::identity());
-        let wvf_map = WaveFrontErrorMap::new(&wavefront_error, wvl).unwrap();
+        let wvf_map = WaveFrontErrorMap::new(&wavefront_error, wvl)?;
         assert_eq!(wvf_map.ptv, 1.0);
         assert_abs_diff_eq!(wvf_map.rms, 0.5);
+        Ok(())
     }
     #[test]
     fn new_empty_wf_error_map() {
@@ -524,109 +525,95 @@ mod test {
         assert_eq!(meter.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn ports_inverted() {
+    fn ports_inverted() -> OpmResult<()> {
         let mut meter = WaveFront::default();
-        meter.set_inverted(true).unwrap();
+        meter.set_inverted(true)?;
         assert_eq!(meter.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
+        Ok(())
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<WaveFront>()
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<WaveFront>()
     }
     #[test]
-    fn analyze_wrong() {
+    fn analyze_wrong() -> OpmResult<()> {
         let mut node = WaveFront::default();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_ok() {
+    fn analyze_ok() -> OpmResult<()> {
         let mut node = WaveFront::default();
-        node.set_isometry(Isometry::identity()).unwrap();
+        node.set_isometry(Isometry::identity())?;
         let mut input = LightResult::default();
-        let input_light = LightData::Geometric(
-            Rays::new_uniform_collimated(
-                nanometer!(1053.0),
-                joule!(1.0),
-                &Hexapolar::new(millimeter!(1.), 1).unwrap(),
-            )
-            .unwrap(),
-        );
+        let input_light = LightData::Geometric(Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(1.), 1)?,
+        )?);
         input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input.clone(), &EnergyConfig::default());
         assert!(output.is_ok());
         let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default());
         assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = output?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
+        Ok(())
     }
     #[test]
-    fn analyze_apodazation_warning() {
+    fn analyze_apodazation_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<WaveFront>()
     }
     #[test]
-    fn analyze_inverse() {
+    fn analyze_inverse() -> OpmResult<()> {
         let mut node = WaveFront::default();
-        node.set_inverted(true).unwrap();
+        node.set_inverted(true)?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
-
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default());
-        assert!(output.is_ok());
-        let output = output.unwrap();
-        assert!(output.contains_key("input_1"));
-        assert_eq!(output.len(), 1);
-        let output = output.get("input_1");
-        assert!(output.is_some());
-        let output = output.clone().unwrap();
-        assert_eq!(*output, input_light);
+        let output_map = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
+        assert_eq!(output_map.len(), 1);
+        let result_light = output_map.get("input_1").ok_or(OpossumError::Other(
+            "Output map missing expected key 'input_1'".into(),
+        ))?;
+        assert_eq!(*result_light, input_light);
+        Ok(())
     }
     #[test]
-    fn report() {
+    fn report() -> OpmResult<()> {
         let mut wf = WaveFront::default();
         assert!(wf.node_report("").is_none());
         wf.light_data = Some(LightData::Geometric(Rays::default()));
         assert!(wf.node_report("").is_some());
-        wf.light_data = Some(LightData::Geometric(
-            Rays::new_uniform_collimated(
-                nanometer!(1053.0),
-                joule!(1.0),
-                &Hexapolar::new(millimeter!(1.), 1).unwrap(),
-            )
-            .unwrap(),
-        ));
-        let node_report = wf.node_report("").unwrap();
+        wf.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(1.), 1)?,
+        )?));
+        let node_report = wf.node_report("").ok_or(OpossumError::Other(
+            "Failed to generate node report for WaveFront".into(),
+        ))?;
         assert_eq!(node_report.node_type(), "wavefront monitor");
         assert_eq!(node_report.name(), "wavefront monitor");
-        assert!(
-            node_report
-                .properties()
-                .contains("Wavefront Map at 1053.000 nm")
-        );
-        assert!(
-            node_report
-                .properties()
-                .contains("Wavefront RMS at 1053.000 nm")
-        );
-        assert!(
-            node_report
-                .properties()
-                .contains("Wavefront PtV at 1053.000 nm")
-        );
-        let node_props = node_report.properties();
-        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
+        let props = node_report.properties();
+        assert!(props.contains("Wavefront Map at 1053.000 nm"));
+        assert!(props.contains("Wavefront RMS at 1053.000 nm"));
+        assert!(props.contains("Wavefront PtV at 1053.000 nm"));
+        let nr_of_props = props.iter().count();
         assert_eq!(nr_of_props, 3);
+
+        Ok(())
     }
 }

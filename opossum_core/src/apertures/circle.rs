@@ -69,15 +69,16 @@ mod test {
         assert!(CircleShape::new(meter!(f64::INFINITY), center).is_err());
     }
     #[test]
-    fn getters() {
-        let c = CircleShape::new(meter!(2.0), meter!(3.0, 4.0)).unwrap();
+    fn getters() -> OpmResult<()> {
+        let c = CircleShape::new(meter!(2.0), meter!(3.0, 4.0))?;
         assert_eq!(c.radius(), meter!(2.0));
         assert_eq!(c.center().x, meter!(3.0));
         assert_eq!(c.center().y, meter!(4.0));
+        Ok(())
     }
     #[test]
-    fn transmission_factor() {
-        let c = CircleShape::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
+    fn transmission_factor() -> OpmResult<()> {
+        let c = CircleShape::new(meter!(1.0), meter!(1.0, 1.0))?;
         assert_eq!(c.transmission_factor(&meter!(1.0, 1.0)), 1.0);
         assert_eq!(c.transmission_factor(&meter!(1.0, 0.0)), 1.0);
         assert_eq!(c.transmission_factor(&meter!(1.0, 2.0)), 1.0);
@@ -85,11 +86,12 @@ mod test {
         assert_eq!(c.transmission_factor(&meter!(0.0, 1.0)), 1.0);
         assert_eq!(c.transmission_factor(&meter!(0.0, 0.0)), 0.0);
         assert_eq!(c.transmission_factor(&meter!(2.0, 2.0)), 0.0);
+        Ok(())
     }
     #[test]
-    fn test_boundary_conditions() {
+    fn test_boundary_conditions() -> OpmResult<()> {
         let radius = meter!(1.0);
-        let c = CircleShape::new(radius, meter!(0.0, 0.0)).unwrap();
+        let c = CircleShape::new(radius, meter!(0.0, 0.0))?;
 
         // Point exactly on the boundary (x^2 + y^2 == r^2)
         // Floating point precision might be tricky, but 1.0^2 is exact.
@@ -98,5 +100,6 @@ mod test {
 
         // Slightly outside
         assert_eq!(c.transmission_factor(&meter!(1.000001, 0.0)), 0.0);
+        Ok(())
     }
 }

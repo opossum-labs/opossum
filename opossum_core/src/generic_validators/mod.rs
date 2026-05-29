@@ -527,8 +527,8 @@ mod tests {
     use crate::generic_validators::{AllNotEmpty, AllPositive};
 
     #[test]
-    fn test_validated_new_and_set_is_positive() {
-        let mut v = Validated::new(5, AllPositive).unwrap();
+    fn test_validated_new_and_set_is_positive() -> OpmResult<()> {
+        let mut v = Validated::new(5, AllPositive)?;
         assert_eq!(*v.get(), 5);
 
         // Set valid value
@@ -538,13 +538,15 @@ mod tests {
         // Set invalid value
         assert!(v.set(-2).is_err());
         assert_eq!(*v.get(), 10); // values remains 10
+        Ok(())
     }
 
     #[test]
-    fn test_new_valid() {
+    fn test_new_valid() -> OpmResult<()> {
         let vec = vec![1, 2, 3];
-        let validated = ValidatedVec::new(vec.clone(), AllPositive, AllNotEmpty).unwrap();
+        let validated = ValidatedVec::new(vec.clone(), AllPositive, AllNotEmpty)?;
         assert_eq!(validated.get(), &vec);
+        Ok(())
     }
 
     #[test]
@@ -562,149 +564,163 @@ mod tests {
     }
 
     #[test]
-    fn test_replace_valid() {
-        let mut validated = ValidatedVec::new(vec![1, 2, 3], AllPositive, AllNotEmpty).unwrap();
-        validated.replace(1, 5).unwrap();
+    fn test_replace_valid() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2, 3], AllPositive, AllNotEmpty)?;
+        validated.replace(1, 5)?;
         assert_eq!(validated.get(), &vec![1, 5, 3]);
+        Ok(())
     }
 
     #[test]
-    fn test_replace_invalid_element() {
-        let mut validated = ValidatedVec::new(vec![1, 2, 3], AllPositive, AllNotEmpty).unwrap();
-        let val_vec_res = validated.replace(1, -5);
-        assert!(val_vec_res.is_err());
+    fn test_replace_invalid_element() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2, 3], AllPositive, AllNotEmpty)?;
+        assert!(validated.replace(1, -5).is_err());
         assert_eq!(validated.get(), &vec![1, 2, 3]); // unchanged
+        Ok(())
     }
 
     #[test]
-    fn test_replace_invalid_container() {
-        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty).unwrap();
+    fn test_replace_invalid_container() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty)?;
         // replace with something valid, container still OK
-        validated.replace(0, 10).unwrap();
+        validated.replace(0, 10)?;
         assert_eq!(validated.get(), &vec![10]);
+        Ok(())
     }
 
     #[test]
-    fn test_replace_index_out_of_bounds() {
-        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty).unwrap();
+    fn test_replace_index_out_of_bounds() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty)?;
         // replace with something valid, container still OK
-        let val_vec_res = validated.replace(2, 10);
-        assert!(val_vec_res.is_err());
+        assert!(validated.replace(2, 10).is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_push_pop() {
-        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty).unwrap();
-        validated.push(3).unwrap();
+    fn test_push_pop() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty)?;
+        validated.push(3)?;
         assert_eq!(validated.get(), &vec![1, 2, 3]);
-        validated.pop().unwrap();
+        validated.pop()?;
         assert_eq!(validated.get(), &vec![1, 2]);
+        Ok(())
     }
 
     #[test]
-    fn test_push_invalid_element() {
-        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty).unwrap();
+    fn test_push_invalid_element() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty)?;
         let val_vec_res = validated.push(-1);
         assert!(val_vec_res.is_err());
         assert_eq!(validated.get(), &vec![1, 2]);
+        Ok(())
     }
 
     #[test]
-    fn test_pop_invalid_container() {
-        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty).unwrap();
+    fn test_pop_invalid_container() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty)?;
         let val_vec_res = validated.pop(); // popping last element → empty
         assert!(val_vec_res.is_err());
         assert_eq!(validated.get(), &vec![1]); // unchanged
+        Ok(())
     }
 
     #[test]
-    fn test_insert_remove() {
-        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty).unwrap();
-        validated.insert(1, 5).unwrap();
+    fn test_insert_remove() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty)?;
+        validated.insert(1, 5)?;
         assert_eq!(validated.get(), &vec![1, 5, 2]);
-        validated.remove(1).unwrap();
+        validated.remove(1)?;
         assert_eq!(validated.get(), &vec![1, 2]);
+        Ok(())
     }
 
     #[test]
-    fn test_remove_index_out_of_bounds() {
-        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty).unwrap();
+    fn test_remove_index_out_of_bounds() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty)?;
         let val_vec_res = validated.remove(2);
         assert!(val_vec_res.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_insert_index_out_of_bounds() {
-        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty).unwrap();
+    fn test_insert_index_out_of_bounds() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty)?;
         let val_vec_res = validated.insert(2, 0);
         assert!(val_vec_res.is_err());
         let val_vec_res = validated.insert(1, 0);
         assert!(val_vec_res.is_ok());
+        Ok(())
     }
 
     #[test]
-    fn test_remove_invalid_container() {
-        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty).unwrap();
+    fn test_remove_invalid_container() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty)?;
         let val_vec_res = validated.remove(0); // removing last element → empty
         assert!(val_vec_res.is_err());
         assert_eq!(validated.get(), &vec![1]);
+        Ok(())
     }
 
     #[test]
-    fn test_set_valid() {
-        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty).unwrap();
-        validated.set(vec![3, 4, 5]).unwrap();
+    fn test_set_valid() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty)?;
+        validated.set(vec![3, 4, 5])?;
         assert_eq!(validated.get(), &vec![3, 4, 5]);
+        Ok(())
     }
 
     #[test]
-    fn test_set_invalid_element() {
-        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty).unwrap();
+    fn test_set_invalid_element() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty)?;
         let val_vec_res = validated.set(vec![3, -1, 5]);
         assert!(val_vec_res.is_err());
         assert_eq!(validated.get(), &vec![1, 2]);
+        Ok(())
     }
 
     #[test]
-    fn test_set_invalid_container() {
-        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty).unwrap();
+    fn test_set_invalid_container() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty)?;
         let val_vec_res = validated.set(vec![]);
         assert!(val_vec_res.is_err());
         assert_eq!(validated.get(), &vec![1, 2]); // unchanged
+        Ok(())
     }
 
     #[test]
-    fn test_insert_boundaries() {
-        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty).unwrap();
+    fn test_insert_boundaries() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2], AllPositive, AllNotEmpty)?;
 
         // Insert at beginning
-        validated.insert(0, 5).unwrap();
+        validated.insert(0, 5)?;
         assert_eq!(validated.get(), &vec![5, 1, 2]);
 
         // Insert at end
-        validated.insert(validated.get().len(), 6).unwrap();
+        validated.insert(validated.get().len(), 6)?;
         assert_eq!(validated.get(), &vec![5, 1, 2, 6]);
+        Ok(())
     }
 
     #[test]
-    fn test_remove_boundaries() {
-        let mut validated = ValidatedVec::new(vec![1, 2, 3], AllPositive, AllNotEmpty).unwrap();
+    fn test_remove_boundaries() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2, 3], AllPositive, AllNotEmpty)?;
 
         // Remove first element
-        validated.remove(0).unwrap();
+        validated.remove(0)?;
         assert_eq!(validated.get(), &vec![2, 3]);
 
         // Remove last element
-        validated.remove(validated.get().len() - 1).unwrap();
+        validated.remove(validated.get().len() - 1)?;
         assert_eq!(validated.get(), &vec![2]);
+        Ok(())
     }
 
     #[test]
-    fn test_sequential_mutations_with_partial_failures() {
-        let mut validated = ValidatedVec::new(vec![1, 2, 3], AllPositive, AllNotEmpty).unwrap();
+    fn test_sequential_mutations_with_partial_failures() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2, 3], AllPositive, AllNotEmpty)?;
 
         // First replacement succeeds
-        validated.replace(0, 5).unwrap();
+        validated.replace(0, 5)?;
         assert_eq!(validated.get(), &vec![5, 2, 3]);
 
         // Second replacement fails element validation
@@ -712,25 +728,27 @@ mod tests {
         assert_eq!(validated.get(), &vec![5, 2, 3]); // rollback works
 
         // Push succeeds
-        validated.push(6).unwrap();
+        validated.push(6)?;
         assert_eq!(validated.get(), &vec![5, 2, 3, 6]);
 
         // Remove fails container validation (vector must not be empty)
-        let mut small = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty).unwrap();
+        let mut small = ValidatedVec::new(vec![1], AllPositive, AllNotEmpty)?;
         assert!(small.remove(0).is_err());
         assert_eq!(small.get(), &vec![1]);
+        Ok(())
     }
 
     #[test]
-    fn test_multiple_replacements() {
-        let mut validated = ValidatedVec::new(vec![1, 2, 3], AllPositive, AllNotEmpty).unwrap();
+    fn test_multiple_replacements() -> OpmResult<()> {
+        let mut validated = ValidatedVec::new(vec![1, 2, 3], AllPositive, AllNotEmpty)?;
 
-        validated.replace(0, 10).unwrap();
-        validated.replace(2, 20).unwrap();
+        validated.replace(0, 10)?;
+        validated.replace(2, 20)?;
         assert_eq!(validated.get(), &vec![10, 2, 20]);
 
         // Attempt invalid replacement in middle
         assert!(validated.replace(1, -5).is_err());
         assert_eq!(validated.get(), &vec![10, 2, 20]); // only failed replacement rolled back
+        Ok(())
     }
 }

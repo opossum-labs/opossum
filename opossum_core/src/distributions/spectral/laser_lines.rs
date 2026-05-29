@@ -213,10 +213,11 @@ mod laser_lines_tests {
     }
 
     #[test]
-    fn test_new_valid() {
+    fn test_new_valid() -> OpmResult<()> {
         let vec = vec![valid_line(532.0, 0.5), valid_line(1064.0, 0.5)];
-        let laser = LaserLines::new(vec.clone()).unwrap();
+        let laser = LaserLines::new(vec.clone())?;
         assert_eq!(laser.lines(), &vec);
+        Ok(())
     }
 
     #[test]
@@ -283,9 +284,8 @@ mod laser_lines_tests {
     }
 
     #[test]
-    fn test_delete_line() {
-        let mut laser =
-            LaserLines::new(vec![valid_line(532.0, 0.5), valid_line(1064.0, 0.5)]).unwrap();
+    fn test_delete_line() -> OpmResult<()> {
+        let mut laser = LaserLines::new(vec![valid_line(532.0, 0.5), valid_line(1064.0, 0.5)])?;
 
         // Valid delete
         assert!(laser.delete_line(0).is_ok());
@@ -294,17 +294,18 @@ mod laser_lines_tests {
         // Delete last element → invalid (AllNotEmpty)
         assert!(laser.delete_line(0).is_err());
         assert_eq!(laser.lines().len(), 1); // unchanged
+        Ok(())
     }
 
     #[test]
-    fn test_generate_normalized() {
-        let laser = LaserLines::new(vec![valid_line(532.0, 1.0), valid_line(1064.0, 3.0)]).unwrap();
-
-        let generated = laser.generate().unwrap();
+    fn test_generate_normalized() -> OpmResult<()> {
+        let laser = LaserLines::new(vec![valid_line(532.0, 1.0), valid_line(1064.0, 3.0)])?;
+        let generated = laser.generate()?;
 
         // Intensities normalized to sum 1.0
         let sum: f64 = generated.iter().map(|(_, intensity)| *intensity).sum();
         assert!((sum - 1.0).abs() < 1e-12);
+        Ok(())
     }
 
     #[test]

@@ -375,154 +375,138 @@ pub trait Dottable {
 
 #[cfg(test)]
 mod test {
-    use crate::nodes::{
-        BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, SourcePort, SplittingConfigBuilder,
+    use crate::{
+        error::{OpmResult, OpossumError},
+        nodes::{
+            BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, SourcePort,
+            SplittingConfigBuilder,
+        },
     };
     use num::Zero;
     use std::{fs::File, io::Read};
     use uom::si::f64::Length;
 
-    fn get_file_content(f_path: &str) -> String {
+    fn get_file_content(f_path: &str) -> OpmResult<String> {
         let file_content = &mut "".to_owned();
-        let _ = File::open(f_path).unwrap().read_to_string(file_content);
-        file_content.to_string()
+        let _ = File::open(f_path)
+            .map_err(|e| OpossumError::Other(format!("could not open file: {e}")))?
+            .read_to_string(file_content);
+        Ok(file_content.to_string())
     }
 
     #[test]
-    fn to_dot_empty() {
-        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_empty_TB.dot");
-        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_empty_LR.dot");
+    fn to_dot_empty() -> OpmResult<()> {
+        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_empty_TB.dot")?;
+        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_empty_LR.dot")?;
 
         let scenery = NodeGroup::new("Test");
 
-        let scenery_dot_str_tb = scenery.toplevel_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.toplevel_dot("LR").unwrap();
+        let scenery_dot_str_tb = scenery.toplevel_dot("TB")?;
+        let scenery_dot_str_lr = scenery.toplevel_dot("LR")?;
 
-        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
-        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
+        assert_eq!(file_content_tb, scenery_dot_str_tb);
+        assert_eq!(file_content_lr, scenery_dot_str_lr);
+        Ok(())
     }
     #[test]
     #[ignore]
-    fn to_dot_with_node() {
-        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_w_node_TB.dot");
-        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_w_node_LR.dot");
+    fn to_dot_with_node() -> OpmResult<()> {
+        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_w_node_TB.dot")?;
+        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_w_node_LR.dot")?;
 
         let mut scenery = NodeGroup::default();
-        scenery.add_node(Dummy::new("Test")).unwrap();
-        let scenery_dot_str_tb = scenery.toplevel_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.toplevel_dot("LR").unwrap();
+        scenery.add_node(Dummy::new("Test"))?;
+        let scenery_dot_str_tb = scenery.toplevel_dot("TB")?;
+        let scenery_dot_str_lr = scenery.toplevel_dot("LR")?;
 
-        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
-        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
+        assert_eq!(file_content_tb, scenery_dot_str_tb);
+        assert_eq!(file_content_lr, scenery_dot_str_lr);
+        Ok(())
     }
     #[test]
     #[ignore]
-    fn to_dot_full() {
-        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_full_TB.dot");
-        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_full_LR.dot");
+    fn to_dot_full() -> OpmResult<()> {
+        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_full_TB.dot")?;
+        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_full_LR.dot")?;
         let mut scenery = NodeGroup::default();
-        let i_s = scenery.add_node(SourcePort::default()).unwrap();
-        let bs = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
-        let i_bs = scenery.add_node(bs).unwrap();
-        let i_d1 = scenery
-            .add_node(EnergyMeter::new(
-                "Energy meter 1",
-                Metertype::IdealEnergyMeter,
-            ))
-            .unwrap();
-        let i_d2 = scenery
-            .add_node(EnergyMeter::new(
-                "Energy meter 2",
-                Metertype::IdealEnergyMeter,
-            ))
-            .unwrap();
+        let i_s = scenery.add_node(SourcePort::default())?;
+        let bs = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6))?;
+        let i_bs = scenery.add_node(bs)?;
+        let i_d1 = scenery.add_node(EnergyMeter::new(
+            "Energy meter 1",
+            Metertype::IdealEnergyMeter,
+        ))?;
+        let i_d2 = scenery.add_node(EnergyMeter::new(
+            "Energy meter 2",
+            Metertype::IdealEnergyMeter,
+        ))?;
 
-        scenery
-            .connect_nodes(i_s, "output_1", i_bs, "input_1", Length::zero())
-            .unwrap();
-        scenery
-            .connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "input_1", Length::zero())
-            .unwrap();
-        scenery
-            .connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "input_1", Length::zero())
-            .unwrap();
+        scenery.connect_nodes(i_s, "output_1", i_bs, "input_1", Length::zero())?;
+        scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "input_1", Length::zero())?;
+        scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "input_1", Length::zero())?;
 
-        let scenery_dot_str_tb = scenery.toplevel_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.toplevel_dot("LR").unwrap();
+        let scenery_dot_str_tb = scenery.toplevel_dot("TB")?;
+        let scenery_dot_str_lr = scenery.toplevel_dot("LR")?;
 
-        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
-        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
+        assert_eq!(file_content_tb, scenery_dot_str_tb);
+        assert_eq!(file_content_lr, scenery_dot_str_lr);
+        Ok(())
     }
     #[test]
     #[ignore]
-    fn to_dot_group() {
+    fn to_dot_group() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
         let mut group1 = NodeGroup::new("group 1");
-        group1.set_expand_view(true).unwrap();
-        let g1_n1 = group1.add_node(Dummy::new("node1")).unwrap();
-        let g1_n2 = group1.add_node(BeamSplitter::default()).unwrap();
-        group1
-            .map_output_port(g1_n2, "out1_trans1_refl2", "output_1")
-            .unwrap();
-        group1
-            .connect_nodes(g1_n1, "output_1", g1_n2, "input_1", Length::zero())
-            .unwrap();
+        group1.set_expand_view(true)?;
+        let g1_n1 = group1.add_node(Dummy::new("node1"))?;
+        let g1_n2 = group1.add_node(BeamSplitter::default())?;
+        group1.map_output_port(g1_n2, "out1_trans1_refl2", "output_1")?;
+        group1.connect_nodes(g1_n1, "output_1", g1_n2, "input_1", Length::zero())?;
 
         let mut nested_group = NodeGroup::new("group 1_1");
-        let nested_g_n1 = nested_group.add_node(Dummy::new("node1_1")).unwrap();
-        let nested_g_n2 = nested_group.add_node(Dummy::new("node1_2")).unwrap();
-        nested_group.set_expand_view(true).unwrap();
+        let nested_g_n1 = nested_group.add_node(Dummy::new("node1_1"))?;
+        let nested_g_n2 = nested_group.add_node(Dummy::new("node1_2"))?;
+        nested_group.set_expand_view(true)?;
 
-        nested_group
-            .connect_nodes(
-                nested_g_n1,
-                "output_1",
-                nested_g_n2,
-                "input_1",
-                Length::zero(),
-            )
-            .unwrap();
-        nested_group
-            .map_input_port(nested_g_n1, "input_1", "input_1")
-            .unwrap();
-        nested_group
-            .map_output_port(nested_g_n2, "output_1", "output_1")
-            .unwrap();
+        nested_group.connect_nodes(
+            nested_g_n1,
+            "output_1",
+            nested_g_n2,
+            "input_1",
+            Length::zero(),
+        )?;
+        nested_group.map_input_port(nested_g_n1, "input_1", "input_1")?;
+        nested_group.map_output_port(nested_g_n2, "output_1", "output_1")?;
 
-        let nested_group_id = group1.add_node(nested_group).unwrap();
-        group1
-            .connect_nodes(
-                nested_group_id,
-                "output_1",
-                g1_n1,
-                "input_1",
-                Length::zero(),
-            )
-            .unwrap();
+        let nested_group_id = group1.add_node(nested_group)?;
+        group1.connect_nodes(
+            nested_group_id,
+            "output_1",
+            g1_n1,
+            "input_1",
+            Length::zero(),
+        )?;
 
         let mut group2: NodeGroup = NodeGroup::new("group 2");
-        group2.set_expand_view(false).unwrap();
-        let g2_n1 = group2.add_node(Dummy::new("node2_1")).unwrap();
-        let g2_n2 = group2.add_node(Dummy::new("node2_2")).unwrap();
-        group2.map_input_port(g2_n1, "input_1", "input_1").unwrap();
+        group2.set_expand_view(false)?;
+        let g2_n1 = group2.add_node(Dummy::new("node2_1"))?;
+        let g2_n2 = group2.add_node(Dummy::new("node2_2"))?;
+        group2.map_input_port(g2_n1, "input_1", "input_1")?;
 
-        group2
-            .connect_nodes(g2_n1, "output_1", g2_n2, "input_1", Length::zero())
-            .unwrap();
+        group2.connect_nodes(g2_n1, "output_1", g2_n2, "input_1", Length::zero())?;
 
-        let scene_g1 = scenery.add_node(group1).unwrap();
-        let scene_g2 = scenery.add_node(group2).unwrap();
+        let scene_g1 = scenery.add_node(group1)?;
+        let scene_g2 = scenery.add_node(group2)?;
 
         // set_output_port
-        scenery
-            .connect_nodes(scene_g1, "output_1", scene_g2, "input_1", Length::zero())
-            .unwrap();
-        let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot");
-        let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot");
-        let scenery_dot_str_tb = scenery.toplevel_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.toplevel_dot("LR").unwrap();
+        scenery.connect_nodes(scene_g1, "output_1", scene_g2, "input_1", Length::zero())?;
+        let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot")?;
+        let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot")?;
+        let scenery_dot_str_tb = scenery.toplevel_dot("TB")?;
+        let scenery_dot_str_lr = scenery.toplevel_dot("LR")?;
 
-        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
-        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
+        assert_eq!(file_content_tb, scenery_dot_str_tb);
+        assert_eq!(file_content_lr, scenery_dot_str_lr);
+        Ok(())
     }
 }

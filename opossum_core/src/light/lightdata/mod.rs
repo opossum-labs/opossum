@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Data structures containing the light information flowing between [`OpticNode`s](crate::optic_node::OpticNode).
+//! Data structures containing the light information flowing between [`OpticNode`s](crate::core_optics::OpticNode).
 
 pub mod energy_data_builder;
 pub mod light_data_builder;
@@ -44,6 +44,7 @@ impl Display for LightData {
 #[cfg(test)]
 mod test {
     use crate::{
+        error::OpmResult,
         light::{
             lightdata::{light_data_builder::LightDataBuilder, ray_data_source::RayDataSource},
             spectrum_helper::create_visible_spec,
@@ -61,9 +62,10 @@ mod test {
         );
     }
     #[test]
-    fn display_energy() {
-        let ld = LightData::Energy(create_visible_spec());
+    fn display_energy() -> OpmResult<()> {
+        let ld = LightData::Energy(create_visible_spec()?);
         assert_eq!(format!("{ld}"), "Energy: 0 J");
+        Ok(())
     }
     #[test]
     fn debug() {

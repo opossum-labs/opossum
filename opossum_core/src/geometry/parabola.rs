@@ -141,7 +141,11 @@ impl GeoSurface for Parabola {
 mod test {
     use super::Parabola;
     use crate::{
-        geometry::geo_surface::GeoSurface, joule, light::Ray, meter, nanometer,
+        error::{OpmResult, OpossumError},
+        geometry::geo_surface::GeoSurface,
+        joule,
+        light::Ray,
+        meter, nanometer,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
@@ -155,12 +159,12 @@ mod test {
         assert!(Parabola::new(meter!(f64::NEG_INFINITY), Isometry::identity()).is_err());
     }
     #[test]
-    fn intersect() {
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
-        let ray = Ray::new_collimated(meter!(-1.0, -1.0, -10.0), nanometer!(1000.0), joule!(1.0))
-            .unwrap();
-        let (intersection_point, surface_normal) =
-            parabola.calc_intersect_and_normal_do(&ray).unwrap();
+    fn intersect() -> OpmResult<()> {
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
+        let ray = Ray::new_collimated(meter!(-1.0, -1.0, -10.0), nanometer!(1000.0), joule!(1.0))?;
+        let (intersection_point, surface_normal) = parabola
+            .calc_intersect_and_normal_do(&ray)
+            .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_eq!(intersection_point, meter!(-1., -1., 0.5));
         assert_abs_diff_eq!(
             surface_normal,
@@ -170,74 +174,63 @@ mod test {
                 -0.8164965809277261
             ]
         );
+        Ok(())
     }
     #[test]
-    fn intersect_ray_through_focus_concave() {
-        let parabola = Parabola::new(meter!(-1.0), Isometry::identity()).unwrap();
+    fn intersect_ray_through_focus_concave() -> OpmResult<()> {
+        let parabola = Parabola::new(meter!(-1.0), Isometry::identity())?;
         let direction = vector![0.0, 1.0, 1. - 0.25];
         let ray = Ray::new(
             meter!(0.0, 0.0, -1.0),
             direction,
             nanometer!(1000.0),
             joule!(1.0),
-        )
-        .unwrap();
+        )?;
         assert!(parabola.calc_intersect_and_normal_do(&ray).is_some());
+        Ok(())
     }
-    // #[test]
-    // fn intersect_ray_through_focus_convex() {
-    //     let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
-    //     let direction = vector![0.0, 0.05, -1.];
-    //     let ray = Ray::new(
-    //         meter!(0.0, 0.0, 1.0),
-    //         direction,
-    //         nanometer!(1000.0),
-    //         joule!(1.0),
-    //     )
-    //     .unwrap();
-    //     assert!(parabola.calc_intersect_and_normal_do(&ray).is_some());
-    // }
     #[test]
-    fn intersect_ray_through_focus_convex() {
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
+    fn intersect_ray_through_focus_convex() -> OpmResult<()> {
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
         let direction = vector![0.0, 0.5, 2.];
         let ray = Ray::new(
             meter!(0.0, -0.5, -1.0),
             direction,
             nanometer!(1000.0),
             joule!(1.0),
-        )
-        .unwrap();
+        )?;
         assert!(parabola.calc_intersect_and_normal_do(&ray).is_some());
+        Ok(())
     }
     #[test]
-    fn intersect_touching() {
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
+    fn intersect_touching() -> OpmResult<()> {
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
         let direction = vector![0.0, 1.0, 0.0];
         let ray = Ray::new(
             meter!(0.0, -1.0, 0.0),
             direction,
             nanometer!(1000.0),
             joule!(1.0),
-        )
-        .unwrap();
-        let (i_point, r_point) = parabola.calc_intersect_and_normal_do(&ray).unwrap();
+        )?;
+        let (i_point, r_point) = parabola
+            .calc_intersect_and_normal_do(&ray)
+            .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_eq!(i_point.x, meter!(0.0));
         assert_eq!(i_point.y, meter!(0.0));
         assert_eq!(i_point.z, meter!(0.0));
         assert_eq!(r_point.normalize(), vector!(0.0, 0.0, -1.0));
+        Ok(())
     }
     #[test]
-    fn intersect_not() {
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
+    fn intersect_not() -> OpmResult<()> {
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
         let direction = vector![0.0, 1.0, 0.0];
         let ray = Ray::new(
             meter!(0.0, -1.0, -1.0),
             direction,
             nanometer!(1000.0),
             joule!(1.0),
-        )
-        .unwrap();
+        )?;
         assert!(parabola.calc_intersect_and_normal_do(&ray).is_none());
 
         let direction = vector![0.0, 0.0, -1.0];
@@ -246,25 +239,21 @@ mod test {
             direction,
             nanometer!(1000.0),
             joule!(1.0),
-        )
-        .unwrap();
+        )?;
         assert!(parabola.calc_intersect_and_normal_do(&ray).is_none());
+        Ok(())
     }
     #[test]
-    fn isometry() {
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
-        assert_eq!(
-            parabola.isometry(),
-            &Isometry::new_along_z(meter!(0.0)).unwrap()
-        );
+    fn isometry() -> OpmResult<()> {
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
+        assert_eq!(parabola.isometry(), &Isometry::new_along_z(meter!(0.0))?);
+        Ok(())
     }
     #[test]
-    fn set_isometry() {
-        let mut parabola = Parabola::new(meter!(1.0), Isometry::identity()).unwrap();
-        parabola.set_isometry(Isometry::new_along_z(meter!(0.5)).unwrap());
-        assert_eq!(
-            parabola.isometry(),
-            &Isometry::new_along_z(meter!(0.5)).unwrap()
-        );
+    fn set_isometry() -> OpmResult<()> {
+        let mut parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
+        parabola.set_isometry(Isometry::new_along_z(meter!(0.5))?);
+        assert_eq!(parabola.isometry(), &Isometry::new_along_z(meter!(0.5))?);
+        Ok(())
     }
 }

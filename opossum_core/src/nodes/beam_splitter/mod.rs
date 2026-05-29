@@ -86,7 +86,7 @@ impl DefaultFromName for SplittingConfigBuilder {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
-/// Configuration for splitting a [`Ray`](crate::ray::Ray) into multiple parts.
+/// Configuration for splitting a [`Ray`](crate::light::Ray) into multiple parts.
 ///
 /// This enum defines how a ray is split, either by a fixed ratio or by a wavelength-dependent spectrum.
 pub enum SplittingConfig {
@@ -441,7 +441,7 @@ mod test {
         assert!(BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(1.01)).is_err());
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<BeamSplitter>()
     }
     #[test]
@@ -466,7 +466,7 @@ mod test {
         assert_eq!(output_ports, vec!["input_1", "input_2"]);
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<BeamSplitter>()
     }
 }

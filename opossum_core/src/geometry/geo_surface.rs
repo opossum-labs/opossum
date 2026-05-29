@@ -16,7 +16,7 @@ use uom::si::f64::Length;
 ///
 /// A geometric surface such as [`Plane`] or [`Sphere`](super::sphere::Sphere) has to implement this trait in order to be used by the
 /// `ray.refract_on_surface` function.
-pub trait GeoSurface: Send + Sync {
+pub trait GeoSurface: Send + Sync + Debug {
     /// Calculate intersection point and its normal vector of a [`Ray`] with a [`GeoSurface`]
     ///
     /// The surface normal is guaranteed to point always against the ray direction and is normalized.
@@ -54,11 +54,6 @@ pub trait GeoSurface: Send + Sync {
     fn name(&self) -> String;
 }
 
-impl Debug for dyn GeoSurface {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
-    }
-}
 /// Reference for a [`GeoSurface`].
 ///
 /// This struct is necessary in order to implement a Default trait on a `Arc<Mutex<GeoSurface>>`.
