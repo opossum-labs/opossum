@@ -1,8 +1,6 @@
 use super::{Aperture, Shape};
 use crate::{
-    apertures::CircleShape,
-    reporting::plottable::{PlotData, PlotSeries},
-    utils::math_distribution_functions::ellipse,
+    apertures::CircleShape, error::OpmResult, reporting::plottable::{PlotData, PlotSeries}, utils::math_distribution_functions::ellipse
 };
 use nalgebra::{Matrix2xX, Point2};
 use plotters::style::RGBAColor;
@@ -36,7 +34,7 @@ impl Shape for StackShape {
         transmission
     }
 }
-pub fn plot_circle(conf: &CircleShape) -> Vec<PlotSeries> {
+pub fn plot_circle(conf: &CircleShape) -> OpmResult<Vec<PlotSeries>> {
     let circle_points = ellipse(
         (
             conf.center().x.get::<millimeter>(),
@@ -48,7 +46,7 @@ pub fn plot_circle(conf: &CircleShape) -> Vec<PlotSeries> {
         ),
         100,
     )
-    .unwrap();
+    ?;
     let plt_dat = PlotData::Dim2 {
         xy_data: Matrix2xX::from_vec(
             circle_points
@@ -58,11 +56,11 @@ pub fn plot_circle(conf: &CircleShape) -> Vec<PlotSeries> {
         )
         .transpose(),
     };
-    vec![PlotSeries::new(
+    Ok(vec![PlotSeries::new(
         &plt_dat,
         RGBAColor(0, 0, 0, 1.),
         Some("Aperture".to_owned()),
-    )]
+    )])
 }
 #[cfg(test)]
 mod test {

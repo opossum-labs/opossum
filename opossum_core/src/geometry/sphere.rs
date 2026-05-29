@@ -138,7 +138,7 @@ impl GeoSurface for Sphere {
             Point3::new(Length::zero(), Length::zero(), self.radius),
             radian!(0., 0., 0.),
         )
-        .unwrap();
+        .expect("Could not set anchor isometry");
         self.isometry = isometry.append(&anchor_isometry);
     }
     fn isometry(&self) -> &Isometry {

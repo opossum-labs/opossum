@@ -190,7 +190,7 @@ impl Plottable for Aperture {
         let plt_series_opt = match plt_type {
             PlotType::Line2D(_) | PlotType::Scatter2D(_) => match self {
                 Self::Open => None,
-                Self::BinaryCircle(conf, _) => Some(stack::plot_circle(conf)),
+                Self::BinaryCircle(conf, _) => Some(stack::plot_circle(conf)?),
                 Self::BinaryRectangle(conf, _) => {
                     let center_x = conf.center().x.get::<millimeter>();
                     let center_y = conf.center().y.get::<millimeter>();

@@ -434,14 +434,13 @@ mod test_rays_ghost_focus_history {
     use uuid::Uuid;
 
     #[test]
-    fn from_vec_hashmap_uuid_tuple() {
+    fn from_vec_hashmap_uuid_tuple() -> OpmResult<()> {
         let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Grid::new(millimeter!(10.0, 10.0), point![5, 4]).unwrap(),
-        )
-        .unwrap();
+            &Grid::new(millimeter!(10.0, 10.0), point![5, 4])?,
+        )?;
         let mut hash1 = HashMap::<Uuid, Rays>::new();
 
         hash1.insert(rays1.uuid(), rays1.clone());
@@ -467,16 +466,17 @@ mod test_rays_ghost_focus_history {
                 rays1.get_ray_by_idx(i).unwrap().position().z.value
             );
         }
+        Ok(())
     }
     #[test]
-    fn from_vec_accumulated_rays() {
+    fn from_vec_accumulated_rays() -> OpmResult<()> {
         let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Grid::new(millimeter!(10.0, 10.0), point![5, 4]).unwrap(),
+            &Grid::new(millimeter!(10.0, 10.0), point![5, 4])?,
         )
-        .unwrap();
+        ?;
         let mut hash1 = HashMap::<Uuid, Rays>::new();
 
         hash1.insert(rays1.uuid(), rays1.clone());
@@ -502,23 +502,24 @@ mod test_rays_ghost_focus_history {
                 rays1.get_ray_by_idx(i).unwrap().position().z.value
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn project_to_plane() {
+    fn project_to_plane() -> OpmResult<()>{
         let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Grid::new(millimeter!(10.0, 10.0), point![5, 4]).unwrap(),
+            &Grid::new(millimeter!(10.0, 10.0), point![5, 4])?,
         )
-        .unwrap();
+        ?;
         let rays2 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Grid::new(millimeter!(10.0, 10.0), point![5, 4]).unwrap(),
+            &Grid::new(millimeter!(10.0, 10.0), point![5, 4])?,
         )
-        .unwrap();
+        ?;
         let mut hash1 = HashMap::<Uuid, Rays>::new();
         let mut hash2 = HashMap::<Uuid, Rays>::new();
 
@@ -530,7 +531,7 @@ mod test_rays_ghost_focus_history {
 
         let hist = GhostFocusHistory::from(accumulated_rays);
 
-        let projected = hist.project_to_plane(Vector3::x()).unwrap();
+        let projected = hist.project_to_plane(Vector3::x())?;
 
         for (i, bounced_rays) in projected.iter().enumerate() {
             for rays in bounced_rays {
@@ -559,7 +560,7 @@ mod test_rays_ghost_focus_history {
                 }
             }
         }
-        let projected = hist.project_to_plane(Vector3::y()).unwrap();
+        let projected = hist.project_to_plane(Vector3::y())?;
 
         for (i, bounced_rays) in projected.iter().enumerate() {
             for rays in bounced_rays {
@@ -588,7 +589,7 @@ mod test_rays_ghost_focus_history {
                 }
             }
         }
-        let projected = hist.project_to_plane(Vector3::z()).unwrap();
+        let projected = hist.project_to_plane(Vector3::z())?;
 
         for (i, bounced_rays) in projected.iter().enumerate() {
             for rays in bounced_rays {
@@ -617,17 +618,18 @@ mod test_rays_ghost_focus_history {
                 }
             }
         }
+        Ok(())
     }
 
     #[test]
-    fn add_specific_ray_history() {
+    fn add_specific_ray_history() -> OpmResult<()> {
         let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
         let rays1 = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Grid::new(millimeter!(10.0, 10.0), point![5, 4]).unwrap(),
+            &Grid::new(millimeter!(10.0, 10.0), point![5, 4])?,
         )
-        .unwrap();
+        ?;
         let mut hash1 = HashMap::<Uuid, Rays>::new();
 
         hash1.insert(rays1.uuid(), rays1.clone());
@@ -667,6 +669,7 @@ mod test_rays_ghost_focus_history {
                 rays1.get_ray_by_idx(i).unwrap().position().z.value
             );
         }
+        Ok(())
     }
 
     #[test]

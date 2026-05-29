@@ -18,12 +18,9 @@ fn main() -> OpmResult<()> {
 
     let mut plt_params = PlotParameters::default();
     plt_params
-        .set(&PlotArgs::FName("equal axis test.png".into()))
-        .unwrap()
-        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))
-        .unwrap()
-        .set(&PlotArgs::PlotSize((1000, 1000)))
-        .unwrap();
+        .set(&PlotArgs::FName("equal axis test.png".into()))?
+        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))?
+        .set(&PlotArgs::PlotSize((1000, 1000)))?;
 
     let pltdat_uom = rays.get_xy_rays_pos(true, &Isometry::identity());
     let pltdat = MatrixXx2::from_iterator(
@@ -33,11 +30,7 @@ fn main() -> OpmResult<()> {
             .map(uom::si::f64::Length::get::<millimeter>),
     );
 
-    let plt_series = PlotSeries::new(
-        &PlotData::new_dim2(pltdat).unwrap(),
-        RGBAColor(255, 0, 0, 1.),
-        None,
-    );
+    let plt_series = PlotSeries::new(&PlotData::new_dim2(pltdat)?, RGBAColor(255, 0, 0, 1.), None);
     let plt_type = PlotType::Line2D(plt_params);
     let start = Instant::now();
     let _ = plt_type.plot(&vec![plt_series]);
@@ -45,14 +38,10 @@ fn main() -> OpmResult<()> {
 
     let mut plt_params = PlotParameters::default();
     plt_params
-        .set(&PlotArgs::FName("ray_fluence_test_random.png".into()))
-        .unwrap()
-        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))
-        .unwrap()
-        .set(&PlotArgs::ExpandBounds(false))
-        .unwrap()
-        .set(&PlotArgs::PlotSize((800, 800)))
-        .unwrap();
+        .set(&PlotArgs::FName("ray_fluence_test_random.png".into()))?
+        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))?
+        .set(&PlotArgs::ExpandBounds(false))?
+        .set(&PlotArgs::PlotSize((800, 800)))?;
     let fluence_data = rays.calc_fluence_at_position(&Isometry::identity())?;
     println!("{:?}", fluence_data.peak());
     let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
@@ -80,11 +69,8 @@ fn main() -> OpmResult<()> {
 
     let mut plt_params = PlotParameters::default();
     plt_params
-        .set(&PlotArgs::FName("spot_ray_fluence_test.png".into()))
-        .unwrap()
-        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))
-        .unwrap()
-        .set(&PlotArgs::PlotSize((1000, 850)))
-        .unwrap();
+        .set(&PlotArgs::FName("spot_ray_fluence_test.png".into()))?
+        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))?
+        .set(&PlotArgs::PlotSize((1000, 850)))?;
     Ok(())
 }

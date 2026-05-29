@@ -78,10 +78,10 @@ fn main() -> OpmResult<()> {
     let mut config = EnergyConfig::default();
     config.map_source(
         i_src,
-        EnergyDataBuilder::LaserLines(
-            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))
-                .unwrap(),
-        ),
+        EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+            vec![(nanometer!(1000.0), joule!(1.0))],
+            nanometer!(1.0),
+        )?),
     );
     doc.add_analyzer(AnalyzerType::Energy(config));
     doc.save_to_file(Path::new("./opossum_core/playground/laser_system.opm"))

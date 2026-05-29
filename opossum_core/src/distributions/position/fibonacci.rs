@@ -355,17 +355,19 @@ mod test {
         assert!(FibonacciEllipse::new(Length::zero(), Length::zero(), 1).is_err());
     }
     #[test]
-    fn generate_rect() {
-        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 7).unwrap();
+    fn generate_rect() -> OpmResult<()> {
+        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 7)?;
         assert_eq!(g.generate().len(), 7);
-        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 19).unwrap();
+        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 19)?;
         assert_eq!(g.generate().len(), 19);
+        Ok(())
     }
     #[test]
-    fn generate_ellipse() {
-        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 7).unwrap();
+    fn generate_ellipse() -> OpmResult<()> {
+        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 7)?;
         assert_eq!(g.generate().len(), 7);
-        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 19).unwrap();
+        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 19)?;
         assert_eq!(g.generate().len(), 19);
+        Ok(())
     }
 }

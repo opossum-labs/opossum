@@ -94,8 +94,7 @@ impl PropagationStrategy for GhostFocusConfig {
 mod test_ghost_focus_config {
     use super::GhostFocusConfig;
     use crate::{
-        core_optics::hit_map::fluence_estimator::FluenceEstimator,
-        light::lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
+        core_optics::hit_map::fluence_estimator::FluenceEstimator, error::OpmResult, light::lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort
     };
     #[test]
     fn default() {
@@ -146,7 +145,7 @@ mod test_ghost_focus_config {
     }
 
     #[test]
-    fn test_prune_source_map() {
+    fn test_prune_source_map() -> OpmResult<()>{
         use crate::{
             light::lightdata::ray_data_source::{CollimatedSrc, RayDataSource},
             nodes::NodeGroup,
@@ -158,7 +157,7 @@ mod test_ghost_focus_config {
         let builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::default()).into();
 
         let mut scene = NodeGroup::default();
-        let node_id = scene.add_node(SourcePort::default()).unwrap();
+        let node_id = scene.add_node(SourcePort::default())?;
 
         config.map_source(node_id, builder.clone());
         config.map_source(uuid2, builder.clone());
@@ -167,5 +166,6 @@ mod test_ghost_focus_config {
 
         assert!(config.get_source(&node_id).is_some());
         assert!(config.get_source(&uuid2).is_none());
+        Ok(())
     }
 }

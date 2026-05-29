@@ -6,7 +6,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("inverse beam splitter test");
     let i_src = scenery.add_node(SourcePort::new("Source"))?;
 
-    let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
+    let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.6))?;
     bs.set_inverted(true)?;
     let i_bs = scenery.add_node(bs)?;
     let i_d1 = scenery.add_node(EnergyMeter::new(
