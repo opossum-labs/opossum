@@ -739,13 +739,13 @@ impl Display for RayDataSource {
         match self {
             Self::Raw(r) => write!(f, "Raw({r})"),
             Self::Collimated(_) => {
-                write!(f, "Collimated",)
+                write!(f, "Collimated")
             }
             Self::PointSrc(_) => {
-                write!(f, "Point source",)
+                write!(f, "Point source")
             }
             Self::Image(_) => {
-                write!(f, "Image",)
+                write!(f, "Image")
             }
         }
     }

@@ -26,9 +26,9 @@
 //! Import `opossum_core` modules:
 //! - `prelude::*` brings in core optical system types, unit macros (e.g. millimeter!, nanometer!, joule!), and optical building blocks (sources, lenses, detectors, wavefront)
 use opossum_core::prelude::*;
-// Import `Path` from the standard library for working with file paths
+/// Import `Path` from the standard library for working with file paths
 use std::path::Path;
-//! Entry point for the program; returns `OpmResult<()>` to handle simulation errors safely
+/// Entry point for the program; returns `OpmResult<()>` to handle simulation errors safely
 fn main() -> OpmResult<()> {
     // Create a NodeGroup container holding all optical components in the system
     let mut scenery = NodeGroup::new("Geometry, shifted lens");
@@ -95,7 +95,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_sd3, "output_1", i_sd4, "input_1", millimeter!(10.0))?;
     // Create a document object for ray tracing
     let mut doc = OpmDocument::new(scenery);
-     // Default configuration for ray tracing
+    // Default configuration for ray tracing
     let mut config = RayTraceConfig::default();
     // Define a collimated ray source with specified beam width, energy, and ray sampling resolution
     // - 40 mm beam width

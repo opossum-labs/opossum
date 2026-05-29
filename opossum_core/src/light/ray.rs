@@ -1709,7 +1709,11 @@ mod test {
             joule!(1.),
             J_per_cm2!(1.),
         )?;
-        assert_relative_eq!(ray.helper_ray_fluence().unwrap().value / 10000., 1., epsilon = 1e-8);
+        assert_relative_eq!(
+            ray.helper_ray_fluence().unwrap().value / 10000.,
+            1.,
+            epsilon = 1e-8
+        );
 
         let fluence_rays = ray.helper_rays_mut().unwrap();
         *fluence_rays = Rays::default();

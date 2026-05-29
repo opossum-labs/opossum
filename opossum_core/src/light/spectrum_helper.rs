@@ -9,8 +9,8 @@ use log::warn;
 /// This function generates an empty spectrum in the visible range (350 - 750 nm) with a resolution
 /// of 0.1 nm.
 ///
-/// # Panics
-/// This function might theoretically panic if the internal implementation of spectrum creation changes.
+/// # Errors
+/// This function might theoretically return an error if the internal implementation of spectrum creation changes.
 pub fn create_visible_spec() -> OpmResult<Spectrum> {
     Spectrum::new(nanometer!(380.0)..nanometer!(750.0), nanometer!(0.1))
 }
@@ -19,8 +19,8 @@ pub fn create_visible_spec() -> OpmResult<Spectrum> {
 /// This function generates an empty spectrum in the near infrared range (800 - 2500 nm) with a resolution
 /// of 0.1 nm.
 ///
-/// # Panics
-/// This function might theoretically panic if the internal implementation of spectrum creation changes.
+/// # Errors
+/// This function might theoretically return an error if the internal implementation of spectrum creation changes.
 pub fn create_nir_spec() -> OpmResult<Spectrum> {
     Spectrum::new(nanometer!(800.0)..nanometer!(2500.0), nanometer!(0.1))
 }

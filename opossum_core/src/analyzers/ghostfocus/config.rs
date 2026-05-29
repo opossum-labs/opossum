@@ -94,7 +94,8 @@ impl PropagationStrategy for GhostFocusConfig {
 mod test_ghost_focus_config {
     use super::GhostFocusConfig;
     use crate::{
-        core_optics::hit_map::fluence_estimator::FluenceEstimator, error::OpmResult, light::lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort
+        core_optics::hit_map::fluence_estimator::FluenceEstimator, error::OpmResult,
+        light::lightdata::ray_data_builder::RayDataBuilder, nodes::SourcePort,
     };
     #[test]
     fn default() {
@@ -145,7 +146,7 @@ mod test_ghost_focus_config {
     }
 
     #[test]
-    fn test_prune_source_map() -> OpmResult<()>{
+    fn test_prune_source_map() -> OpmResult<()> {
         use crate::{
             light::lightdata::ray_data_source::{CollimatedSrc, RayDataSource},
             nodes::NodeGroup,

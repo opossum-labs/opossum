@@ -2296,12 +2296,18 @@ mod test {
             nanometer!(1053.0),
             joule!(1.0),
         )?);
-        assert_eq!(rays.beam_radius_rms().unwrap(), millimeter!(f64::sqrt(2.0) / 2.0));
+        assert_eq!(
+            rays.beam_radius_rms().unwrap(),
+            millimeter!(f64::sqrt(2.0) / 2.0)
+        );
         let mut ray =
             Ray::new_collimated(millimeter!(1.0, 15.0, 0.), nanometer!(1053.0), joule!(1.0))?;
         ray.set_invalid();
         rays.add_ray(ray);
-        assert_eq!(rays.beam_radius_rms().unwrap(), millimeter!(f64::sqrt(2.0) / 2.0));
+        assert_eq!(
+            rays.beam_radius_rms().unwrap(),
+            millimeter!(f64::sqrt(2.0) / 2.0)
+        );
         Ok(())
     }
     #[test]

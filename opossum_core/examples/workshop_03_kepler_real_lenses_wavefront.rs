@@ -1,4 +1,3 @@
-
 //! # Kepler Wavefront Aberrations Example
 //!
 //! This example demonstrates how to set up a Keplerian optical system using `opossum_core`.
@@ -19,20 +18,20 @@
 use opossum_core::{nodes::round_collimated_ray_builder, prelude::*};
 use std::path::Path;
 /// Entry point for the Kepler wavefront aberration example.
-/// 
+///
 /// # Returns
 /// `OpmResult<()>` – the result of building and saving the optical system.
-/// 
+///
 /// # Description
 /// This function sets up the optical components, connects them, configures ray tracing,
 /// and saves the resulting `OpmDocument` to a file. It is a complete example demonstrating
 /// the basic workflow in `opossum_core`.
 
 fn main() -> OpmResult<()> {
-    // Initialize the optical "scenery". 
+    // Initialize the optical "scenery".
     // `NodeGroup` is a container that holds all optical nodes (sources, lenses, analyzers).
     let mut scenery = NodeGroup::new("Kepler wavefront aberrations");
-     // 1. Define the Light Source
+    // 1. Define the Light Source
     // Create a collimated (parallel) ray source.
     // This will generate the initial rays for the optical system.
     let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
@@ -53,9 +52,9 @@ fn main() -> OpmResult<()> {
     // First lens: 75 mm focal length, 10 mm thickness, circular aperture of 25 mm.
     let mut lens1 = Lens::new(
         "75 mm lens",
-        millimeter!(122.25),// radius of curvature front
-        millimeter!(-122.25),// radius of curvature back
-        millimeter!(10.0),// thickness
+        millimeter!(122.25),  // radius of curvature front
+        millimeter!(-122.25), // radius of curvature back
+        millimeter!(10.0),    // thickness
         &refr_index_hzf52,
     )?;
     let aperture =
@@ -63,7 +62,7 @@ fn main() -> OpmResult<()> {
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Spot diagram analyzer: visualizes the ray convergence at the focus.
     let i_pl1 = scenery.add_node(lens1)?;
-     // Second lens: 50 mm focal length, 10 mm thickness..
+    // Second lens: 50 mm focal length, 10 mm thickness..
     let i_sd6 = scenery.add_node(SpotDiagram::new("spot diagram at focus"))?;
     let lens2 = Lens::new(
         "50 mm lens",

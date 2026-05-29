@@ -24,7 +24,7 @@
 //! Import `opossum_core` modules:
 //! - `CoatingType` for mirror reflectivity properties
 //! - `prelude::*` brings in core optical system types and helpers
-//! 
+//!
 use opossum_core::coatings::CoatingType;
 use opossum_core::prelude::*;
 // Import `Path` from the standard library for working with file paths
@@ -53,11 +53,11 @@ fn main() -> OpmResult<()> {
     )?;
     // Create a ray propagation visualizer
     let mut ray_prop_vis = RayPropagationVisualizer::default();
-   // Set ray transparency property for clear visualization
+    // Set ray transparency property for clear visualization
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     // Add the visualizer to the system
     let i_prop_vis = scenery.add_node(ray_prop_vis)?;
-     // Connect source → mirror 1
+    // Connect source → mirror 1
     scenery.connect_nodes(i_src, "output_1", i_m1, "input_1", millimeter!(100.0))?;
     // Connect mirror 1 → mirror 2
     scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(100.0))?;

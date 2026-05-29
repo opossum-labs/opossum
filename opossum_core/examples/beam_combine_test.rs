@@ -8,8 +8,10 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("beam combiner demo");
     let i_s1 = scenery.add_node(SourcePort::new("Source 633nm"))?;
     let i_s2 = scenery.add_node(SourcePort::new("Source 1053nm"))?;
-    let i_bs = scenery
-        .add_node(BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5))?)?;
+    let i_bs = scenery.add_node(BeamSplitter::new(
+        "bs",
+        &SplittingConfigBuilder::FixedRatio(0.5),
+    )?)?;
     let i_spec = scenery.add_node(Spectrometer::default())?;
 
     scenery.connect_nodes(i_s1, "output_1", i_bs, "input_1", Length::zero())?;

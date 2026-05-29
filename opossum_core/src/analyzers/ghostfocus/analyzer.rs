@@ -280,9 +280,12 @@ mod test_ghost_focus_analyzer {
     fn analyze_single_surface_node() -> OpmResult<()> {
         let mut sd = SpotDiagram::default();
         let config = GhostFocusConfig::default();
-        let out_result = sd
-            .unified_analyze_single_surface_node(LightResult::default(), &config, "input_1", None)
-            ?;
+        let out_result = sd.unified_analyze_single_surface_node(
+            LightResult::default(),
+            &config,
+            "input_1",
+            None,
+        )?;
         let output_data = out_result.get("output_1");
 
         match output_data {
@@ -449,7 +452,10 @@ mod test_ghost_analysis_nested_groups_inversion {
         Ok(doc)
     }
 
-    fn get_ghost_focus_config_and_map_to_source(src_id: Uuid, bounces: usize) -> OpmResult<GhostFocusConfig> {
+    fn get_ghost_focus_config_and_map_to_source(
+        src_id: Uuid,
+        bounces: usize,
+    ) -> OpmResult<GhostFocusConfig> {
         // collimated source definition
         let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
             Hexapolar::new(millimeter!(10.), 0)?.into(),
@@ -460,12 +466,9 @@ mod test_ghost_analysis_nested_groups_inversion {
                 5.,
                 radian!(0.),
                 false,
-            )
-            ?
+            )?
             .into(),
-            LaserLines::new(vec![(nanometer!(1053.0), 1.0)])
-                ?
-                .into(),
+            LaserLines::new(vec![(nanometer!(1053.0), 1.0)])?.into(),
         ));
         let mut config = GhostFocusConfig::default();
         config.map_source(src_id, ray_data_source.into());
