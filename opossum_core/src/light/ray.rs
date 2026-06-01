@@ -873,7 +873,7 @@ mod test {
         Ok(())
     }
     #[test]
-    fn new_collimated() -> OpmResult<(())> {
+    fn new_collimated() -> OpmResult<()> {
         let pos = millimeter!(1.0, 2.0, 0.0);
         let wvl = nanometer!(1053.0);
         let e = joule!(1.0);

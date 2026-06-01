@@ -361,8 +361,8 @@ mod test {
         Ok(())
     }
     #[test]
-    fn analyze_geometric_wrong_data_type() {
-        test_analyze_wrong_data_type::<ThinMirror>("input_1");
+    fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
+        test_analyze_wrong_data_type::<ThinMirror>("input_1")
     }
     #[test]
     fn analyze_geometric_no_isometery() {

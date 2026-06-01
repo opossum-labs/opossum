@@ -587,8 +587,11 @@ impl Rays {
         Ok(beams_invalided)
     }
     /// Finds all unique wavelengths in this raybundle and returns them in a vector
-    #[must_use]
-    pub fn get_unique_wavelengths(&self, valid_only: bool) -> Vec<Length> {
+    ///
+    /// # Errors
+    ///
+    /// This function might return an error if internally the wavelengths could not be sorted (e.g. the array is empty)
+    pub fn get_unique_wavelengths(&self, valid_only: bool) -> OpmResult<Vec<Length>> {
         //get all wavelengths of the rays converted to nm
         let wvls = self
             .ray_bundle
@@ -598,13 +601,13 @@ impl Rays {
             .collect::<Vec<f64>>();
 
         //get unique wavelengths
-        let unique_wvls = get_unique_finite_values_sorted(wvls.as_slice()).unwrap();
+        let unique_wvls = get_unique_finite_values_sorted(wvls.as_slice())?;
 
         //return as Vec<Length>
-        unique_wvls
+        Ok(unique_wvls
             .iter()
             .map(|w| nanometer!(*w))
-            .collect::<Vec<Length>>()
+            .collect::<Vec<Length>>())
     }
     /// Returns the centroid of this [`Rays`].
     ///
@@ -753,7 +756,7 @@ impl Rays {
             let center_wavelength = self.get_center_wavelength().ok_or_else(|| {
                 OpossumError::Other("Cannot determine center wavelength of empty ray bundle".into())
             })?;
-            let wvls = self.get_unique_wavelengths(true);
+            let wvls = self.get_unique_wavelengths(true)?;
 
             if average_flag {
                 warn!(
@@ -762,34 +765,6 @@ impl Rays {
                 Err(OpossumError::Other(
                     "Averaging wavefronts over the spectrum is not yet implemented".into(),
                 ))
-                // spec.normalize_to_sum()?;
-                // if let Some(center_wavelength_index) = ((center_wavelength - spec_start)/ spec_res_micro)
-                //     .floor()
-                //     .to_usize(){
-                //         let center_wavelength_data = &wf_error[center_wavelength_index];
-
-                //         // interpolate all other wavefront data to the positions of the center wavelength data
-                //         let xy_coord = MatrixXx2::<f64>::from_columns(&[center_wavelength_data.column(0), center_wavelength_data.column(1)]);
-                //         let mut averaged_wavefront_data = DVector::from_element(
-                //             center_wavelength_data.nrows(),
-                //             0.,
-                //         );
-                //         for (wf_map, (wvl, spec_int)) in wf_error.iter().zip(wvls.iter().zip(spec_int.iter())) {
-                //             let (interp_dat, _) = vec_interpolate_3d_scatter_data(&wf_map, &xy_coord)?;
-                //             averaged_wavefront_data += interp_dat; // * *spec_int*center_wavelength/ *wvl;
-                //         }
-                //         let dat = MatrixXx3::from_columns(&[
-                //             xy_coord.column(0),
-                //             xy_coord.column(1),
-                //             averaged_wavefront_data.as_slice().into(),
-                //         ]);
-                //         Ok(WaveFrontData {
-                //             wavefront_error_maps: vec![WaveFrontErrorMap::new(&dat, micrometer!(center_wavelength))?],
-                //         })
-                // }
-                // else{
-                //     Err(OpossumError::Other("Center wavelength is outside of spectral range".into()))
-                // }
             } else {
                 let closest_wvl = wvls.iter().fold(wvls[0], |a, &b| {
                     if (b - center_wavelength).abs() < (a - center_wavelength).abs() {
@@ -1474,7 +1449,7 @@ impl Rays {
         wavelength_bin_size: Length,
         valid_only: bool,
     ) -> OpmResult<(Vec<Self>, Vec<Length>)> {
-        let unique_wavelengths = self.get_unique_wavelengths(valid_only);
+        let unique_wavelengths = self.get_unique_wavelengths(valid_only)?;
         let num_split_bundles = unique_wavelengths.len();
         if num_split_bundles == 1 {
             Ok((vec![self.clone()], unique_wavelengths))
@@ -2027,7 +2002,7 @@ mod test {
         rays_1w.add_rays(&mut rays_2w);
         rays_1w.add_rays(&mut rays_3w);
 
-        let unique = rays_1w.get_unique_wavelengths(true);
+        let unique = rays_1w.get_unique_wavelengths(true)?;
         assert_eq!(unique.len(), 3);
         assert!(relative_eq!(
             unique[0].get::<nanometer>(),
@@ -2050,7 +2025,7 @@ mod test {
         rays_1w.ray_bundle[3].set_invalid();
         rays_1w.ray_bundle[4].set_invalid();
 
-        let unique = rays_1w.get_unique_wavelengths(true);
+        let unique = rays_1w.get_unique_wavelengths(true)?;
         assert_eq!(unique.len(), 2);
         assert!(relative_eq!(
             unique[0].get::<nanometer>(),
@@ -2062,7 +2037,7 @@ mod test {
             527.,
             max_relative = 2. * f64::EPSILON
         ));
-        let unique = rays_1w.get_unique_wavelengths(false);
+        let unique = rays_1w.get_unique_wavelengths(false)?;
         assert_eq!(unique.len(), 3);
         assert!(relative_eq!(
             unique[0].get::<nanometer>(),
