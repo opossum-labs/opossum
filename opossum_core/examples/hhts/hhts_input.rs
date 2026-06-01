@@ -16,7 +16,7 @@ pub fn hhts_input() -> OpmResult<NodeGroup> {
     let mm15 = group.add_node(BeamSplitter::new("MM15", &dichroic_mirror)?)?;
     let window = group.add_node(IdealFilter::new("window", &window_filter)?)?;
     let hhts_t1_cm = group.add_node(BeamSplitter::new("HHTS_T1_CM", &dichroic_mirror)?)?;
-    let meter = EnergyMeter::new("Beamdump", Metertype::IdealEnergyMeter);
+    let meter = EnergyMeter::new("Beamdump", Metertype::IdealEnergyMeter)?;
     let beam_dump = group.add_node(meter)?;
 
     let hhts_t1_pm = group.add_node(BeamSplitter::new("HHTS_T1_PM", &double_mirror)?)?;

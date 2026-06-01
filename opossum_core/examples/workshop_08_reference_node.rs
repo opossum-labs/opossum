@@ -59,7 +59,7 @@ fn main() -> OpmResult<()> {
     // Create a thin mirror with a 0.5° tilt angle
     let i_m1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(0.5, 0.0, 0.0))?)?;
     // Create a reference copy of the first lens
-    let mut l1_ref = NodeReference::from_node(&scenery.node(i_l1)?);
+    let mut l1_ref = NodeReference::from_node(&scenery.node(i_l1)?)?;
     // Invert propagation direction of referenced lens
     l1_ref.set_inverted(true)?;
     // Add referenced lens to system

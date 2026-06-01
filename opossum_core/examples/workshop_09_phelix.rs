@@ -108,16 +108,16 @@ fn main() -> OpmResult<()> {
 
     // Reverse-propagation references
     // Create reverse-propagation reference for MM2
-    let mut mm2_r = NodeReference::from_node(&scenery.node(i_mm2)?);
+    let mut mm2_r = NodeReference::from_node(&scenery.node(i_mm2)?)?;
     mm2_r.set_inverted(true)?;
     let i_mm2_r = scenery.add_node(mm2_r)?;
 
-    let mut mm3_r = NodeReference::from_node(&scenery.node(i_mm3)?);
+    let mut mm3_r = NodeReference::from_node(&scenery.node(i_mm3)?)?;
     mm3_r.set_inverted(true)?;
     let i_mm3_r = scenery.add_node(mm3_r)?;
 
     // Create reverse-propagation reference for relay optic
-    let mut l2_r = NodeReference::from_node(&scenery.node(i_l2)?);
+    let mut l2_r = NodeReference::from_node(&scenery.node(i_l2)?)?;
     l2_r.set_inverted(true)?;
     let i_l2_r = scenery.add_node(l2_r)?;
 
@@ -152,7 +152,7 @@ fn main() -> OpmResult<()> {
     // Steering mirror for the return path
     let i_mm1 = main_amp.add_node(ThinMirror::new("MM1").with_tilt(degree!(0.0, 0.5, 0.0))?)?;
     // Create inverted reference for reverse propagation
-    let mut amps_r = NodeReference::from_node(&main_amp.node(i_amps)?);
+    let mut amps_r = NodeReference::from_node(&main_amp.node(i_amps)?)?;
     amps_r.set_inverted(true)?;
     let i_amps_r = main_amp.add_node(amps_r)?;
 

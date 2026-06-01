@@ -22,12 +22,12 @@ fn main() -> OpmResult<()> {
     let i_d1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
         opossum_core::nodes::Metertype::IdealEnergyMeter,
-    ))?;
+    )?)?;
     let i_d2 = scenery.add_node(Spectrometer::default())?;
     let i_d3 = scenery.add_node(EnergyMeter::new(
         "Energy meter 2",
         opossum_core::nodes::Metertype::IdealEnergyMeter,
-    ))?;
+    )?)?;
 
     scenery.connect_nodes(i_src, "output_1", i_bs, "input_1", Length::zero())?;
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "input_1", Length::zero())?;
