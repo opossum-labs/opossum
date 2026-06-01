@@ -19,7 +19,7 @@
 //! - Invert propagation direction through a referenced optical element
 //! - Combine lens, mirror, and reference node in a single optical graph path with reversed propagation through the reference node
 //! - Generate rays using structured spatial, energy, and spectral definitions
-//! 
+//!
 //! Import `opossum_core` modules:
 //! - `prelude::*` provides core optical system types, unit macros (millimeter!, degree!, nanometer!, joule!), and optical components (sources, lenses, mirrors, detectors)
 //! - Distribution modules define ray generation using spatial grid (`Grid`), energy distribution (`UniformDist`), and spectral lines (`LaserLines`)
@@ -59,8 +59,8 @@ fn main() -> OpmResult<()> {
     // Create a thin mirror with a 0.5° tilt angle
     let i_m1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(0.5, 0.0, 0.0))?)?;
     // Create a reference copy of the first lens
-    let mut l1_ref = NodeReference::from_node(&scenery.node(i_l1)?);
-     // Invert propagation direction of referenced lens
+    let mut l1_ref = NodeReference::from_node(&scenery.node(i_l1)?)?;
+    // Invert propagation direction of referenced lens
     l1_ref.set_inverted(true)?;
     // Add referenced lens to system
     let i_l1_ref = scenery.add_node(l1_ref)?;
@@ -89,7 +89,7 @@ fn main() -> OpmResult<()> {
     )?);
     // Default ray tracing configuration
     let mut config = RayTraceConfig::default();
-     // Map structured source to optical system
+    // Map structured source to optical system
     config.map_source(i_src, ray_data_source.into());
     // Add ray tracing analyzer
     doc.add_analyzer(AnalyzerType::RayTrace(config));

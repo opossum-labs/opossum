@@ -71,7 +71,7 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
             ));
         };
         let ref_name = format!("ref ({})", reference_node.optical_ref.lock_opm()?.name());
-        ref_node.assign_reference(&reference_node);
+        ref_node.assign_reference(&reference_node)?;
         ref_node.node_attr_mut().set_name(&ref_name);
     }
     Ok(())

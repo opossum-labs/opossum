@@ -1,6 +1,9 @@
 use super::{Aperture, Shape};
 use crate::{
-    apertures::CircleShape, error::OpmResult, reporting::plottable::{PlotData, PlotSeries}, utils::math_distribution_functions::ellipse
+    apertures::CircleShape,
+    error::OpmResult,
+    reporting::plottable::{PlotData, PlotSeries},
+    utils::math_distribution_functions::ellipse,
 };
 use nalgebra::{Matrix2xX, Point2};
 use plotters::style::RGBAColor;
@@ -45,8 +48,7 @@ pub fn plot_circle(conf: &CircleShape) -> OpmResult<Vec<PlotSeries>> {
             conf.radius().get::<millimeter>(),
         ),
         100,
-    )
-    ?;
+    )?;
     let plt_dat = PlotData::Dim2 {
         xy_data: Matrix2xX::from_vec(
             circle_points

@@ -57,9 +57,9 @@ pub fn get_min_max_filter_nonfinite<T: Float>(ax_vals: &[T]) -> Option<(T, T)> {
 ///
 /// - `array`: array of values
 ///
-/// # Panics
+/// # Errors
 ///
-/// This function might only theoretically panic.
+/// This function returns an error if the given array is empty.
 pub fn get_unique_finite_values_sorted<T: Clone + RelativeEq + Num + Float>(
     array: &[T],
 ) -> OpmResult<Vec<T>> {

@@ -81,7 +81,7 @@ fn task_bundle() -> Result<(), anyhow::Error> {
 
         for bin_name in ["opossum_backend", "opossum_cli"] {
             let src = release_dir.join(format!("{}{}", bin_name, exe_ext));
-            
+
             // Konstruiert den exakten Namen, den Dioxus' format!("{bin}-{target}") erwartet
             let dest_filename = if exe_ext.is_empty() {
                 // Linux / macOS: opossum_backend-x86_64-unknown-linux-gnu
@@ -91,7 +91,7 @@ fn task_bundle() -> Result<(), anyhow::Error> {
                 // THIS IS A WORKAROUND FOR A DIOXUS BUG!!!
                 format!("{}{}-{}", bin_name, exe_ext, target_triple)
             };
-            
+
             let dest = staging_path.join(&dest_filename);
 
             if src.exists() {

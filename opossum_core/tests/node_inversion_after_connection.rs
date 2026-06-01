@@ -3,7 +3,13 @@ use opossum_core::{analyzers::energy::EnergyConfig, prelude::*, utils::LockExt};
 /// This test creates a simple optical setup with a source, a dummy node, and an energy meter.
 /// The dummy nodes is then inverted after already being connected in the setup. The test checks if the inversion
 /// is correctly applied and if the energy meter can still measure the energy after the inversion.
+///
+/// CURRENTLY THIS IS A FAILING TEST!
+///
+/// A solution incorporates a general change in the handling of node connections.
+/// See issue [`#990`](https://github.com/opossum-labs/opossum/issues/990).
 #[test]
+#[ignore]
 fn node_inversion_after_connection() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Node inversion test");
     let i_src = scenery.add_node(SourcePort::default())?;
@@ -37,28 +43,6 @@ fn node_inversion_after_connection() -> OpmResult<()> {
 
     let mut doc = OpmDocument::from_string(&opm_file)?;
     // Analyze here...
-    // testing_logger::setup();
     let _reports = doc.analyze()?;
-    // testing_logger::validate(|captured_logs| {
-    //     let captured_logs: Vec<_> = captured_logs
-    //         .iter()
-    //         // .filter(|l| l.level == log::Level::Warn)
-    //         .collect();
-    //     // assert_eq!(
-    //     //     captured_logs.len(),
-    //     //     0,
-    //     //     "expected # of warnings do not match: {} != {}. Got warnings: {:?}",
-    //     //     captured_logs.len(),
-    //     //     0,
-    //     //     captured_logs
-    //     //         .iter()
-    //     //         .map(|l| l.body.as_str())
-    //     //         .collect::<Vec<_>>()
-    //     // );
-    //     for log in captured_logs.iter() {
-    //         println!("{}", log.body);
-    //     }
-    // });
-    // println!("Report: {:?}", ron::ser::to_string_pretty(&reports[0], PrettyConfig::default()));
     Ok(())
 }

@@ -495,6 +495,7 @@ mod test {
         core_optics::OpticNode,
         degree,
         distributions::position::Hexapolar,
+        error::OpmResult,
         joule,
         light::{
             LightData, LightResult, Rays, light_result::light_result_to_light_rays,
@@ -552,9 +553,10 @@ mod test {
         assert!(ParabolicMirror::new("Parabola", meter!(f64::NEG_INFINITY), false).is_err());
     }
     #[test]
-    fn name() {
-        let p = ParabolicMirror::new("Parabola", meter!(1.), true).unwrap();
+    fn name() -> OpmResult<()> {
+        let p = ParabolicMirror::new("Parabola", meter!(1.), true)?;
         assert_eq!(p.node_attr.name().as_str(), "Parabola");
+        Ok(())
     }
     #[test]
     fn new_with_off_axis_x() {
@@ -814,15 +816,14 @@ mod test {
         );
     }
     #[test]
-    fn calc_off_axis_isometry() {
+    fn calc_off_axis_isometry() -> OpmResult<()> {
         let parabola = ParabolicMirror::new_with_off_axis(
             "Parabola",
             meter!(1.),
             true,
             degree!(45.),
             Vector2::new(0., 1.),
-        )
-        .unwrap();
+        )?;
         let transform_mat = Matrix4::from_vec(vec![
             -0.,
             1.,
@@ -845,78 +846,72 @@ mod test {
         assert_relative_eq!(
             transform_mat,
             parabola
-                .calc_off_axis_isometry()
-                .unwrap()
+                .calc_off_axis_isometry()?
                 .get_transform()
                 .to_matrix(),
             epsilon = 3. * f64::EPSILON
         );
+        Ok(())
     }
 
     #[test]
-    fn calc_parent_focal_length() {
+    fn calc_parent_focal_length() -> OpmResult<()> {
         let parabola = ParabolicMirror::new_with_off_axis(
             "Parabola",
             meter!(1.),
             true,
             degree!(90.),
             Vector2::new(0., 1.),
-        )
-        .unwrap();
-        assert_relative_eq!(parabola.calc_parent_focal_length().unwrap().value, 0.5);
+        )?;
+        assert_relative_eq!(parabola.calc_parent_focal_length()?.value, 0.5);
+        Ok(())
     }
 
     #[test]
-    fn with_oap_angle() {
-        let parabola = ParabolicMirror::default()
-            .with_oap_angle(degree!(45.))
-            .unwrap();
-        let Proptype::Angle(angle) = parabola.node_attr.get_property("off-axis angle").unwrap()
-        else {
+    fn with_oap_angle() -> OpmResult<()> {
+        let parabola = ParabolicMirror::default().with_oap_angle(degree!(45.))?;
+        let Proptype::Angle(angle) = parabola.node_attr.get_property("off-axis angle")? else {
             panic!()
         };
         assert_relative_eq!(angle.value, 45. / 180. * f64::consts::PI);
+        Ok(())
     }
     #[test]
-    fn with_oap_direction() {
-        let parabola = ParabolicMirror::default()
-            .with_oap_direction(Vector2::new(0.35, 8.35))
-            .unwrap();
-        let Proptype::Vec2(oa_dir) = parabola
-            .node_attr
-            .get_property("off-axis direction")
-            .unwrap()
-        else {
+    fn with_oap_direction() -> OpmResult<()> {
+        let parabola = ParabolicMirror::default().with_oap_direction(Vector2::new(0.35, 8.35))?;
+        let Proptype::Vec2(oa_dir) = parabola.node_attr.get_property("off-axis direction")? else {
             panic!()
         };
         assert_relative_eq!(*oa_dir, Vector2::new(0.35, 8.35).normalize());
+        Ok(())
     }
     #[test]
-    fn analysis_raytrace_empty_input() {
+    fn analysis_raytrace_empty_input() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
         let light_data = LightData::Geometric(Rays::default());
         let input = LightResult::from([("input_1".into(), light_data)]);
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn analysis_raytrace_no_input() {
+    fn analysis_raytrace_no_input() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
         let light_data = LightData::Fourier;
         let input = LightResult::from([("output_1".into(), light_data)]);
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn analysis_raytrace_lightdata_energy() {
+    fn analysis_raytrace_lightdata_energy() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
-        let light_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let light_data = LightData::Energy(create_he_ne_spec(1.0)?);
         let input = LightResult::from([("input_1".into(), light_data)]);
         assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
+        Ok(())
     }
     #[test]
     fn analysis_raytrace_lightdata_ghost_focus() {
@@ -935,50 +930,52 @@ mod test {
     }
 
     #[test]
-    fn analysis_raytrace_no_iso() {
+    fn analysis_raytrace_no_iso() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Hexapolar::new(millimeter!(1.), 3).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(1.), 3)?,
+        )?;
         let light_data = LightData::Geometric(rays);
         let input = LightResult::from([("input_1".into(), light_data)]);
         assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
+        Ok(())
     }
     #[test]
-    fn analysis_raytrace() {
+    fn analysis_raytrace() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
-        node.set_isometry(Isometry::identity()).unwrap();
+        node.set_isometry(Isometry::identity())?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Hexapolar::new(millimeter!(1.), 3).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(1.), 3)?,
+        )?;
         let light_data = LightData::Geometric(rays);
         let input = LightResult::from([("input_1".into(), light_data)]);
         assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_ok());
+        Ok(())
     }
 
     #[test]
-    fn analysis_energy() {
+    fn analysis_energy() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
-        let light_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let light_data = LightData::Energy(create_he_ne_spec(1.0)?);
         let input = LightResult::from([("input_1".into(), light_data)]);
         let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default());
         assert!(output.is_ok());
-        assert!(!output.unwrap().is_empty());
+        assert!(!output?.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn analysis_energy_no_input() {
+    fn analysis_energy_no_input() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
         let light_data = LightData::Fourier;
         let input = LightResult::from([("output_1".into(), light_data)]);
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -1003,50 +1000,48 @@ mod test {
         assert!(AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).is_ok());
     }
     #[test]
-    fn analysis_ghost_focus_empty_input() {
+    fn analysis_ghost_focus_empty_input() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
         let light_data = LightData::GhostFocus(Vec::<Rays>::new());
-        let input = light_result_to_light_rays(LightResult::from([("input_1".into(), light_data)]))
-            .unwrap();
+        let input =
+            light_result_to_light_rays(LightResult::from([("input_1".into(), light_data)]))?;
         let output = AnalysisGhostFocus::analyze(
             &mut node,
             input,
             &GhostFocusConfig::default(),
             &mut Vec::<Rays>::new(),
             0,
-        )
-        .unwrap();
+        )?;
         assert!(output.values().last().unwrap().is_empty());
+        Ok(())
     }
     #[test]
-    fn analysis_ghost_focus_no_input() {
+    fn analysis_ghost_focus_no_input() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
         let light_data = LightData::GhostFocus(vec![Rays::default()]);
         let input =
-            light_result_to_light_rays(LightResult::from([("output_1".into(), light_data)]))
-                .unwrap();
+            light_result_to_light_rays(LightResult::from([("output_1".into(), light_data)]))?;
         let output = AnalysisGhostFocus::analyze(
             &mut node,
             input,
             &GhostFocusConfig::default(),
             &mut Vec::<Rays>::new(),
             0,
-        )
-        .unwrap();
+        )?;
         assert!(output.values().last().unwrap().is_empty());
+        Ok(())
     }
     #[test]
-    fn analysis_ghost_focus_no_iso() {
+    fn analysis_ghost_focus_no_iso() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Hexapolar::new(millimeter!(1.), 3).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(1.), 3)?,
+        )?;
         let light_data = LightData::GhostFocus(vec![rays]);
-        let input = light_result_to_light_rays(LightResult::from([("input_1".into(), light_data)]))
-            .unwrap();
+        let input =
+            light_result_to_light_rays(LightResult::from([("input_1".into(), light_data)]))?;
         let output = AnalysisGhostFocus::analyze(
             &mut node,
             input,
@@ -1055,21 +1050,20 @@ mod test {
             0,
         );
         assert!(output.is_err());
+        Ok(())
     }
     #[test]
-    fn analysis_ghost_focus() {
+    fn analysis_ghost_focus() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
-        node.set_isometry(Isometry::new_along_z(millimeter!(10.0)).unwrap())
-            .unwrap();
+        node.set_isometry(Isometry::new_along_z(millimeter!(10.0))?)?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Hexapolar::new(millimeter!(1.), 3).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(1.), 3)?,
+        )?;
         let light_data = LightData::GhostFocus(vec![rays]);
-        let input = light_result_to_light_rays(LightResult::from([("input_1".into(), light_data)]))
-            .unwrap();
+        let input =
+            light_result_to_light_rays(LightResult::from([("input_1".into(), light_data)]))?;
         let output = AnalysisGhostFocus::analyze(
             &mut node,
             input,
@@ -1078,22 +1072,23 @@ mod test {
             0,
         );
         assert!(output.is_ok());
+        Ok(())
     }
     #[test]
-    fn calc_node_position() {
+    fn calc_node_position() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
-        node.set_isometry(Isometry::identity()).unwrap();
+        node.set_isometry(Isometry::identity())?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
-            &Hexapolar::new(millimeter!(1.), 3).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(1.), 3)?,
+        )?;
         let light_data = LightData::Geometric(rays);
         let input = LightResult::from([("input_1".into(), light_data)]);
         assert!(
             node.calc_node_positions(input, &RayTraceConfig::default())
                 .is_ok()
         );
+        Ok(())
     }
 }

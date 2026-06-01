@@ -16,7 +16,7 @@ fn main() -> OpmResult<()> {
     let i_e1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
         opossum_core::nodes::Metertype::IdealEnergyMeter,
-    ))?;
+    )?)?;
     let i_sd1 = scenery.add_node(SpotDiagram::new("output_1"))?;
 
     scenery.connect_nodes(i_src, "output_1", i_l1, "input_1", Length::zero())?;
@@ -45,7 +45,7 @@ fn main() -> OpmResult<()> {
     let i_cb_e = cam_box.add_node(EnergyMeter::new(
         "Energy meter",
         opossum_core::nodes::Metertype::IdealEnergyMeter,
-    ))?;
+    )?)?;
 
     cam_box.connect_nodes(
         i_cb_bs,

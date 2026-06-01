@@ -342,8 +342,8 @@ mod test {
         assert!(output.is_empty());
     }
     #[test]
-    fn analyze_geometric_wrong_data_type() {
-        test_analyze_wrong_data_type::<IdealFilter>("input_1");
+    fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
+        test_analyze_wrong_data_type::<IdealFilter>("input_1")
     }
     #[test]
     fn analyze_energy_ok() {
