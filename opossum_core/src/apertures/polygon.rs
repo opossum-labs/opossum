@@ -159,8 +159,7 @@ mod test {
             meter!(1.0, 0.5),
             meter!(2.0, 0.0),
             meter!(1.0, 1.0),
-        ])
-        .unwrap();
+        ])?;
         assert_eq!(poly.transmission_factor(&meter!(0.0, 0.0, 0.0)), 1.0);
         assert_eq!(poly.transmission_factor(&meter!(2.0, 0.0, 0.0)), 1.0);
         assert_eq!(poly.transmission_factor(&meter!(1.0, 1.0, 0.0)), 1.0);

@@ -376,7 +376,9 @@ mod test {
         assert!(analyzer.analyze(&mut group).is_ok());
         let node_ref = group.graph().node(i_det)?;
         let det_node = node_ref.optical_ref.lock_opm()?;
-        let report = det_node.node_report("test_uuid").unwrap();
+        let report = det_node
+            .node_report("test_uuid")
+            .ok_or_else(|| OpossumError::Other("got empty report".into()))?;
         let prop = report.properties().get("Ray plot")?;
         if let Proptype::RayPositionHistory(hist) = prop {
             assert!(

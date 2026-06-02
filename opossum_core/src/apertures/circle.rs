@@ -76,13 +76,14 @@ mod test {
         assert!(CircleShape::new(meter!(f64::INFINITY)).is_err());
     }
     #[test]
-    fn getters() {
-        let c = CircleShape::new(meter!(2.0)).unwrap();
+    fn getters() -> OpmResult<()> {
+        let c = CircleShape::new(meter!(2.0))?;
         assert_eq!(c.radius(), meter!(2.0));
+        Ok(())
     }
     #[test]
-    fn transmission_factor() {
-        let c = CircleShape::new(meter!(1.0)).unwrap();
+    fn transmission_factor() -> OpmResult<()> {
+        let c = CircleShape::new(meter!(1.0))?;
         assert_eq!(c.transmission_factor(&meter!(0.0, 0.0, 0.0)), 1.0);
         assert_eq!(c.transmission_factor(&meter!(0.0, -1.0, 0.0)), 1.0);
         assert_eq!(c.transmission_factor(&meter!(0.0, 1.0, 0.0)), 1.0);
@@ -90,6 +91,7 @@ mod test {
         assert_eq!(c.transmission_factor(&meter!(-1.0, 0.0, 0.0)), 1.0);
         assert_eq!(c.transmission_factor(&meter!(-1.0, -1.0, 0.0)), 0.0);
         assert_eq!(c.transmission_factor(&meter!(1.0, 1.0, 0.0)), 0.0);
+        Ok(())
     }
     #[test]
     fn test_boundary_conditions() -> OpmResult<()> {

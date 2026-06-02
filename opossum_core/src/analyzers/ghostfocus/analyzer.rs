@@ -253,29 +253,17 @@ mod test_ghost_focus_analyzer {
         lens.set_coating(
             &PortType::Input,
             "input_1",
-            &CoatingConstantR::new(percent!(20.0)).unwrap().into(),
-        )
-        .unwrap();
+            &CoatingConstantR::new(percent!(20.0))?.into(),
+        )?;
         lens.set_coating(
             &PortType::Output,
             "output_1",
-            &CoatingConstantR::new(percent!(20.0)).unwrap().into(),
-        )
-        .unwrap();
-        let i_l = scenery.add_node(lens).unwrap();
-        let mir1 = scenery
-            .add_node(
-                ThinMirror::new("mir 1")
-                    .with_tilt(degree!(45., 0., 0.))
-                    .unwrap(),
-            )
-            .unwrap();
-        scenery
-            .connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(120.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_l, "output_1", mir1, "input_1", millimeter!(60.0))
-            .unwrap();
+            &CoatingConstantR::new(percent!(20.0))?.into(),
+        )?;
+        let i_l = scenery.add_node(lens)?;
+        let mir1 = scenery.add_node(ThinMirror::new("mir 1").with_tilt(degree!(45., 0., 0.))?)?;
+        scenery.connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(120.0))?;
+        scenery.connect_nodes(i_l, "output_1", mir1, "input_1", millimeter!(60.0))?;
 
         let mut config = GhostFocusConfig::default();
         config.set_max_bounces(2);
@@ -342,46 +330,36 @@ mod test_ghost_analysis_nested_groups_inversion {
             inf,
             inf,
             millimeter!(1.),
-            RefrIndexConst::new(1.4).unwrap(),
-        )
-        .unwrap();
-        lens_01
-            .set_coating(
-                &PortType::Input,
-                "input_1",
-                &CoatingConstantR::new(percent!(1.0)).unwrap().into(),
-            )
-            .unwrap();
-        lens_01
-            .set_coating(
-                &PortType::Output,
-                "output_1",
-                &CoatingConstantR::new(percent!(1.0)).unwrap().into(),
-            )
-            .unwrap();
+            RefrIndexConst::new(1.4)?,
+        )?;
+        lens_01.set_coating(
+            &PortType::Input,
+            "input_1",
+            &CoatingConstantR::new(percent!(1.0))?.into(),
+        )?;
+        lens_01.set_coating(
+            &PortType::Output,
+            "output_1",
+            &CoatingConstantR::new(percent!(1.0))?.into(),
+        )?;
 
         let mut lens_02 = Lens::new(
             "Lens 0_2",
             inf,
             inf,
             millimeter!(1.),
-            RefrIndexConst::new(1.4).unwrap(),
-        )
-        .unwrap();
-        lens_02
-            .set_coating(
-                &PortType::Input,
-                "input_1",
-                &CoatingConstantR::new(percent!(1.0)).unwrap().into(),
-            )
-            .unwrap();
-        lens_02
-            .set_coating(
-                &PortType::Output,
-                "output_1",
-                &CoatingConstantR::new(percent!(1.0)).unwrap().into(),
-            )
-            .unwrap();
+            RefrIndexConst::new(1.4)?,
+        )?;
+        lens_02.set_coating(
+            &PortType::Input,
+            "input_1",
+            &CoatingConstantR::new(percent!(1.0))?.into(),
+        )?;
+        lens_02.set_coating(
+            &PortType::Output,
+            "output_1",
+            &CoatingConstantR::new(percent!(1.0))?.into(),
+        )?;
 
         let src = scenery.add_node(SourcePort::new("Collimated Source"))?;
         let l0_1 = scenery.add_node(lens_01)?;
@@ -392,23 +370,18 @@ mod test_ghost_analysis_nested_groups_inversion {
             inf,
             inf,
             millimeter!(1.),
-            RefrIndexConst::new(1.4).unwrap(),
-        )
-        .unwrap();
-        lens_1
-            .set_coating(
-                &PortType::Input,
-                "input_1",
-                &CoatingConstantR::new(percent!(1.0)).unwrap().into(),
-            )
-            .unwrap();
-        lens_1
-            .set_coating(
-                &PortType::Output,
-                "output_1",
-                &CoatingConstantR::new(percent!(1.0)).unwrap().into(),
-            )
-            .unwrap();
+            RefrIndexConst::new(1.4)?,
+        )?;
+        lens_1.set_coating(
+            &PortType::Input,
+            "input_1",
+            &CoatingConstantR::new(percent!(1.0))?.into(),
+        )?;
+        lens_1.set_coating(
+            &PortType::Output,
+            "output_1",
+            &CoatingConstantR::new(percent!(1.0))?.into(),
+        )?;
 
         let mut group_1 = NodeGroup::new("Group 1");
         group_1.set_expand_view(true)?;
@@ -419,23 +392,18 @@ mod test_ghost_analysis_nested_groups_inversion {
             inf,
             inf,
             millimeter!(1.),
-            RefrIndexConst::new(1.4).unwrap(),
-        )
-        .unwrap();
-        lens_2
-            .set_coating(
-                &PortType::Input,
-                "input_1",
-                &CoatingConstantR::new(percent!(1.0)).unwrap().into(),
-            )
-            .unwrap();
-        lens_2
-            .set_coating(
-                &PortType::Output,
-                "output_1",
-                &CoatingConstantR::new(percent!(1.0)).unwrap().into(),
-            )
-            .unwrap();
+            RefrIndexConst::new(1.4)?,
+        )?;
+        lens_2.set_coating(
+            &PortType::Input,
+            "input_1",
+            &CoatingConstantR::new(percent!(1.0))?.into(),
+        )?;
+        lens_2.set_coating(
+            &PortType::Output,
+            "output_1",
+            &CoatingConstantR::new(percent!(1.0))?.into(),
+        )?;
         let mut group_2 = NodeGroup::new("Group 2");
         group_2.set_expand_view(true)?;
         let l2 = group_2.add_node(lens_2)?;
@@ -445,23 +413,18 @@ mod test_ghost_analysis_nested_groups_inversion {
             inf,
             inf,
             millimeter!(1.),
-            RefrIndexConst::new(1.4).unwrap(),
-        )
-        .unwrap();
-        lens_3
-            .set_coating(
-                &PortType::Input,
-                "input_1",
-                &CoatingConstantR::new(percent!(1.0)).unwrap().into(),
-            )
-            .unwrap();
-        lens_3
-            .set_coating(
-                &PortType::Output,
-                "output_1",
-                &CoatingConstantR::new(percent!(1.0)).unwrap().into(),
-            )
-            .unwrap();
+            RefrIndexConst::new(1.4)?,
+        )?;
+        lens_3.set_coating(
+            &PortType::Input,
+            "input_1",
+            &CoatingConstantR::new(percent!(1.0))?.into(),
+        )?;
+        lens_3.set_coating(
+            &PortType::Output,
+            "output_1",
+            &CoatingConstantR::new(percent!(1.0))?.into(),
+        )?;
         let mut group_3 = NodeGroup::new("Group 3");
         group_3.set_expand_view(true)?;
         let l3 = group_3.add_node(lens_3)?;

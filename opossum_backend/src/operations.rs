@@ -399,7 +399,7 @@ fn copy_analyzer(
     shift: Point2<f64>,
     analyzer: &AnalyzerInfo,
 ) -> AnalyzerInfo {
-    let old_pos = analyzer.gui_position().unwrap();
+    let old_pos = analyzer.gui_position().unwrap_or_default();
     let new_pos = Point2::new(old_pos.x + shift.x, old_pos.y + shift.y);
     let new_analyzer = AnalyzerInfo::new(analyzer.analyzer_type().clone(), Uuid::new_v4(), new_pos);
     let mut document = data.document.lock();

@@ -149,9 +149,10 @@ fn get_args<T>(
 /// # Panics
 /// Panics if no parent directory can be determined. In theory not possible, since the used `file_path`
 /// is only passed if it is valid.
-fn get_parent_dir(path: &Path) -> PathBuf {
-    let parent_dir = Path::parent(path).unwrap();
-    PathBuf::from(parent_dir)
+fn get_parent_dir(path: &Path) -> OpmResult<PathBuf> {
+    let parent_dir = Path::parent(path)
+        .ok_or_else(|| OpossumError::Console("Could not determine parent directory".into()))?;
+    Ok(PathBuf::from(parent_dir))
 }
 impl TryFrom<PartialArgs> for Args {
     type Error = OpossumError;
@@ -181,7 +182,7 @@ impl TryFrom<PartialArgs> for Args {
         )?;
         drop(reader);
         let report_directory = if report_directory.as_os_str().is_empty() {
-            get_parent_dir(&file_path)
+            get_parent_dir(&file_path)?
         } else {
             report_directory
         };
@@ -307,12 +308,13 @@ mod test {
         );
     }
     #[test]
-    fn get_parent_dir_test() {
+    fn get_parent_dir_test() -> OpmResult<()> {
         let path_valid = "./files_for_testing/opm/my_file.opm".to_owned();
         assert_eq!(
-            get_parent_dir(&PathBuf::from(path_valid)),
+            get_parent_dir(&PathBuf::from(path_valid))?,
             PathBuf::from("./files_for_testing/opm")
         );
+        Ok(())
     }
     #[test]
     fn create_prompt_str_test() -> OpmResult<()> {
@@ -384,7 +386,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
 
         let args = Args {
             file_path: PathBuf::from(path_valid.clone()),
-            report_directory: PathBuf::from(get_parent_dir(&PathBuf::from(path_valid.clone()))),
+            report_directory: PathBuf::from(get_parent_dir(&PathBuf::from(path_valid.clone()))?),
             show_logo: true,
         };
 
@@ -437,7 +439,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         .unwrap();
         let mut reader = BufReader::new(&correct_file_path[..]);
         let file_path3 =
-            get_args(eval_file_path_input, None, "f", &mut reader, &mut writer).unwrap();
+            get_args(eval_file_path_input, None, "f", &mut reader, &mut writer)?;
         let file_path_str3 = file_path3.to_str().unwrap();
         assert_eq!(file_path_str3, "./files_for_testing/opm/opticscenery.opm");
 
