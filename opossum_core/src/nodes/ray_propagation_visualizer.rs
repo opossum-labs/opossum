@@ -1,5 +1,7 @@
 //! Ray propagation monitor
 #![warn(missing_docs)]
+use std::cmp::Ordering;
+
 use log::warn;
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
 use opm_macros_lib::OpmNode;
@@ -351,7 +353,7 @@ impl Plottable for RayPositionHistories {
                 .iter()
                 .map(uom::si::f64::Length::get::<nanometer>)
                 .collect::<Vec<f64>>();
-            wavelengths.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            wavelengths.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
 
             let color_grad = colorous::TURBO;
 
@@ -426,10 +428,11 @@ mod test {
         assert!(node.as_group_mut().is_err());
     }
     #[test]
-    fn new() {
-        let meter = RayPropagationVisualizer::new("test", None).unwrap();
+    fn new() -> OpmResult<()> {
+        let meter = RayPropagationVisualizer::new("test", None)?;
         assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
+        Ok(())
     }
     #[test]
     fn ports() {
@@ -438,65 +441,69 @@ mod test {
         assert_eq!(meter.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn ports_inverted() {
+    fn ports_inverted() -> OpmResult<()> {
         let mut meter = RayPropagationVisualizer::default();
-        meter.set_inverted(true).unwrap();
+        meter.set_inverted(true)?;
         assert_eq!(meter.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
+        Ok(())
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<RayPropagationVisualizer>()
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<RayPropagationVisualizer>()
     }
     #[test]
-    fn analyze_wrong() {
+    fn analyze_wrong() -> OpmResult<()> {
         let mut node = RayPropagationVisualizer::default();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_ok() {
+    fn analyze_ok() -> OpmResult<()> {
         let mut node = RayPropagationVisualizer::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
-    fn analyze_apodization_warning() {
+    fn analyze_apodization_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<RayPropagationVisualizer>()
     }
     #[test]
-    fn analyze_inverse() {
+    fn analyze_inverse() -> OpmResult<()> {
         let mut node = RayPropagationVisualizer::default();
-        node.set_inverted(true).unwrap();
+        node.set_inverted(true)?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
-    fn report() {
+    fn report() -> OpmResult<()> {
         let mut fd = RayPropagationVisualizer::default();
         let node_report = fd.node_report("").unwrap();
         assert_eq!(node_report.node_type(), "ray propagation");
@@ -507,14 +514,11 @@ mod test {
         fd.light_data = Some(LightData::Geometric(Rays::default()));
         let node_report = fd.node_report("").unwrap();
         assert!(!node_report.properties().contains("Ray plot"));
-        fd.light_data = Some(LightData::Geometric(
-            Rays::new_uniform_collimated(
-                nanometer!(1053.0),
-                joule!(1.0),
-                &Hexapolar::new(millimeter!(1.), 1).unwrap(),
-            )
-            .unwrap(),
-        ));
+        fd.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(1.), 1)?,
+        )?));
         let node_report = fd.node_report("").unwrap();
         assert!(node_report.properties().contains("Ray plot"));
         let node_props = node_report.properties();
@@ -546,6 +550,7 @@ mod test {
                 .message
                 .contains("propagation plot can only be calculated")
         );
+        Ok(())
     }
     #[test]
     fn new_ray_pos_hist_spec() {
@@ -589,7 +594,7 @@ mod test {
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
     }
     #[test]
-    fn ray_pos_hist_spec_get_history() {
+    fn ray_pos_hist_spec_get_history() -> OpmResult<()> {
         let history = vec![
             MatrixXx3::from_vec(vec![millimeter!(1.), millimeter!(0.), millimeter!(0.)]),
             MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(1.), millimeter!(0.)]),
@@ -598,8 +603,7 @@ mod test {
         let wavelength_bin_size = nanometer!(1.);
         let wavelength = nanometer!(1053.);
         let pos_hist =
-            RayPositionHistorySpectrum::new(history.clone(), wavelength, wavelength_bin_size)
-                .unwrap();
+            RayPositionHistorySpectrum::new(history.clone(), wavelength, wavelength_bin_size)?;
 
         let pos_hist_get = pos_hist.get_history();
         assert_relative_eq!(
@@ -638,6 +642,7 @@ mod test {
             history[2][2].get::<millimeter>(),
             pos_hist_get[2][2].get::<millimeter>()
         );
+        Ok(())
     }
     #[test]
     fn ray_pos_hist_spec_get_wavelength() {
@@ -679,7 +684,7 @@ mod test {
         )
     }
     #[test]
-    fn project_to_plane() {
+    fn project_to_plane() -> OpmResult<()> {
         let history = vec![
             MatrixXx3::from_vec(vec![millimeter!(1.), millimeter!(0.), millimeter!(0.)]),
             MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(1.), millimeter!(0.)]),
@@ -692,7 +697,7 @@ mod test {
             wavelength_bin_size: nanometer!(1.),
         };
 
-        let projected_rays = pos_hist.project_to_plane(Vector3::x()).unwrap();
+        let projected_rays = pos_hist.project_to_plane(Vector3::x())?;
         assert_eq!(projected_rays[0][(0, 0)].get::<millimeter>(), 0.);
         assert_eq!(projected_rays[0][(0, 1)].get::<millimeter>(), 0.);
         assert_eq!(projected_rays[1][(0, 0)].get::<millimeter>(), 0.);
@@ -700,7 +705,7 @@ mod test {
         assert_eq!(projected_rays[2][(0, 0)].get::<millimeter>(), 1.);
         assert_eq!(projected_rays[2][(0, 1)].get::<millimeter>(), 0.);
 
-        let projected_rays = pos_hist.project_to_plane(Vector3::y()).unwrap();
+        let projected_rays = pos_hist.project_to_plane(Vector3::y())?;
         assert_eq!(projected_rays[0][(0, 0)].get::<millimeter>(), 0.);
         assert_eq!(projected_rays[0][(0, 1)].get::<millimeter>(), 1.);
         assert_eq!(projected_rays[1][(0, 0)].get::<millimeter>(), 0.);
@@ -708,12 +713,13 @@ mod test {
         assert_eq!(projected_rays[2][(0, 0)].get::<millimeter>(), 1.);
         assert_eq!(projected_rays[2][(0, 1)].get::<millimeter>(), 0.);
 
-        let projected_rays = pos_hist.project_to_plane(Vector3::z()).unwrap();
+        let projected_rays = pos_hist.project_to_plane(Vector3::z())?;
         assert_eq!(projected_rays[0][(0, 0)].get::<millimeter>(), 1.);
         assert_eq!(projected_rays[0][(0, 1)].get::<millimeter>(), 0.);
         assert_eq!(projected_rays[1][(0, 0)].get::<millimeter>(), 0.);
         assert_eq!(projected_rays[1][(0, 1)].get::<millimeter>(), 1.);
         assert_eq!(projected_rays[2][(0, 0)].get::<millimeter>(), 0.);
         assert_eq!(projected_rays[2][(0, 1)].get::<millimeter>(), 0.);
+        Ok(())
     }
 }

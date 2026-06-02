@@ -312,7 +312,7 @@ mod test {
         assert_eq!(node.filter_type().unwrap(), FilterType::Constant(0.0));
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<IdealFilter>()
     }
     #[test]
@@ -329,7 +329,7 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["input_1"]);
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<IdealFilter>()
     }
     #[test]
@@ -342,8 +342,8 @@ mod test {
         assert!(output.is_empty());
     }
     #[test]
-    fn analyze_geometric_wrong_data_type() {
-        test_analyze_wrong_data_type::<IdealFilter>("input_1");
+    fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
+        test_analyze_wrong_data_type::<IdealFilter>("input_1")
     }
     #[test]
     fn analyze_energy_ok() {

@@ -30,20 +30,23 @@ impl Gaussian2D {
 #[cfg(test)]
 mod test {
     use super::Gaussian2D;
-    use crate::{joule, millimeter, nodes::fluence_detector::Fluence, utils::griddata::linspace};
+    use crate::{
+        error::OpmResult, joule, millimeter, nodes::fluence_detector::Fluence,
+        utils::griddata::linspace,
+    };
     use approx::assert_abs_diff_eq;
     use nalgebra::DMatrix;
     use uom::si::{f64::Ratio, ratio::ratio};
 
     #[test]
-    fn check_norm() {
+    fn check_norm() -> OpmResult<()> {
         let g = Gaussian2D::new(millimeter!(0.0, 0.0), millimeter!(5.0), joule!(1.0));
         let nr_of_points = (120, 120);
         let grid_element_area = millimeter!(200.0) * millimeter!(200.0)
             / Ratio::new::<ratio>((nr_of_points.0 * nr_of_points.1) as f64);
 
-        let x_pos = linspace(-100.0, 100.0, nr_of_points.0).unwrap();
-        let y_pos = linspace(-100.0, 100.0, nr_of_points.1).unwrap();
+        let x_pos = linspace(-100.0, 100.0, nr_of_points.0)?;
+        let y_pos = linspace(-100.0, 100.0, nr_of_points.1)?;
         let mut field = DMatrix::<Fluence>::zeros(nr_of_points.0, nr_of_points.1);
         for i_x in 0..nr_of_points.0 {
             for i_y in 0..nr_of_points.1 {
@@ -52,5 +55,6 @@ mod test {
         }
         let total_energy = field.sum() * grid_element_area;
         assert_abs_diff_eq!(total_energy.value, 1.0, epsilon = 0.02);
+        Ok(())
     }
 }

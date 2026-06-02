@@ -19,7 +19,7 @@ use crate::{
 /// Structure for storing an optical node.
 ///
 /// This structure stores a reference to an optical node (a structure implementing the
-/// [`OpticNode`](crate::optic_node::OpticNode) trait). This [`OpticRef`] is then stored
+/// [`OpticNode`] trait). This [`OpticRef`] is then stored
 /// as a node in a `NodeGroup`)[`crate::nodes::NodeGroup`].
 pub struct OpticRef {
     /// The underlying optical reference.
@@ -67,32 +67,38 @@ impl Debug for OpticRef {
             .finish()
     }
 }
+
+// temporary helper struct which allows for attribute flattening
+#[derive(Serialize)]
+struct FlattenedOpticRefNodeAttr<'a> {
+    #[serde(flatten)]
+    attributes: &'a NodeAttr,
+}
+
+// temporary helper struct which allows for attribute flattening in a group node
+#[derive(Serialize)]
+struct FlattenedOpticRefGroup<'a> {
+    #[serde(flatten)]
+    attributes: &'a NodeAttr,
+    graph: &'a OpticGraph,
+}
+
 impl Serialize for OpticRef {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        // temporary helper struct which allows for attribute flattening
-        #[derive(Serialize)]
-        struct FlattenedOpticRef<'a> {
-            #[serde(flatten)]
-            attributes: &'a NodeAttr,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            graph: Option<&'a OpticGraph>,
-        }
-
         let optical_ref = self.optical_ref.lock_opm().unwrap();
 
         if let Ok(group_node) = optical_ref.as_group() {
-            FlattenedOpticRef {
+            FlattenedOpticRefGroup {
                 attributes: group_node.node_attr(),
-                graph: Some(group_node.graph()),
+                graph: group_node.graph(),
             }
             .serialize(serializer)
         } else {
-            FlattenedOpticRef {
+            FlattenedOpticRefNodeAttr {
                 attributes: optical_ref.node_attr(),
-                graph: None,
             }
             .serialize(serializer)
         }
@@ -141,7 +147,12 @@ impl<'de> Deserialize<'de> for OpticRef {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{core_optics::OpticNode, nodes::Dummy, utils::LockExt};
+    use crate::{
+        core_optics::OpticNode,
+        error::{OpmResult, OpossumError},
+        nodes::Dummy,
+        utils::LockExt,
+    };
     use std::{fs::File, io::Read, path::PathBuf};
     use uuid::uuid;
     #[test]
@@ -155,17 +166,22 @@ mod test {
     #[test]
     fn serialize() {
         let optic_ref = OpticRef::new(Arc::new(Mutex::new(Dummy::default())), None);
-        let _ =
+        assert!(
             ron::ser::to_string_pretty(&optic_ref, ron::ser::PrettyConfig::new().new_line("\n"))
-                .unwrap();
+                .is_ok()
+        );
     }
     #[test]
-    fn deserialize() {
+    fn deserialize() -> OpmResult<()> {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("files_for_testing/opm/optic_ref.opm");
         let file_content = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content);
-        let optic_ref: OpticRef = ron::from_str(&file_content).unwrap();
+        let _ = File::open(path)
+            .map_err(|e| OpossumError::OpticScenery(format!("Error opening file: {e}")))?
+            .read_to_string(file_content);
+        let optic_ref: OpticRef = ron::from_str(&file_content).map_err(|e| {
+            OpossumError::OpmDocument(format!("Error parsing opm file string: {e}"))
+        })?;
         assert_eq!(
             optic_ref.uuid(),
             uuid!("a2534789-ec98-4e9b-a1da-315a59d9da43")
@@ -173,6 +189,7 @@ mod test {
         let optic_ref = optic_ref.optical_ref.lock_opm().unwrap();
         assert_eq!(optic_ref.node_type(), "dummy");
         assert_eq!(optic_ref.name(), "dummy1");
+        Ok(())
     }
     #[test]
     fn debug() {

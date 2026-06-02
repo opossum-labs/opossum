@@ -63,21 +63,21 @@ impl NodeReference {
     /// # Attributes
     /// `node`: `OpticRef` of the node
     ///
-    /// # Panics
-    /// - if the node [`Properties`](crate::properties::Properties) `name` and `node_type` do not exist
-    /// - if the node [`Properties`](crate::properties::Properties) `name` can not be set
-    #[must_use]
-    pub fn from_node(node: &OpticRef) -> Self {
+    /// # Errors
+    ///
+    /// This function returns an error if
+    /// - an internal resource lock cannot be aquired
+    /// - the internal reference id cannot be assigned
+    pub fn from_node(node: &OpticRef) -> OpmResult<Self> {
         let mut refr = Self::default();
-        let node_mut = node.optical_ref.lock_opm().unwrap();
+        let node_mut = node.optical_ref.lock_opm()?;
         refr.node_attr
-            .set_property("reference id", Proptype::Uuid(node_mut.node_attr().uuid()))
-            .unwrap();
+            .set_property("reference id", Proptype::Uuid(node_mut.node_attr().uuid()))?;
         let ref_name = format!("ref ({})", node_mut.name());
         drop(node_mut);
         refr.node_attr.set_name(&ref_name);
         refr.reference = Some(Arc::downgrade(&node.optical_ref));
-        refr
+        Ok(refr)
     }
     /// Assign a reference to another optical node.
     ///
@@ -85,16 +85,18 @@ impl NodeReference {
     /// construction of a [`NodeReference`] using it's `new` function. This function allows for setting / changing after construction (e.g.
     /// during deserialization).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function could theoretically panic if a mutex lock fails.
-    pub fn assign_reference(&mut self, node: &OpticRef) {
+    /// This function could (theoretically) return an error if
+    /// - if a mutex lock fails.
+    /// - an internal `reference_id` property cannot be assigned.
+    pub fn assign_reference(&mut self, node: &OpticRef) -> OpmResult<()> {
         self.node_attr_mut()
-            .set_property("reference id", Proptype::Uuid(node.uuid()))
-            .unwrap();
-        let ref_name = format!("ref ({})", node.optical_ref.lock_opm().unwrap().name());
+            .set_property("reference id", Proptype::Uuid(node.uuid()))?;
+        let ref_name = format!("ref ({})", node.optical_ref.lock_opm()?.name());
         self.node_attr.set_name(&ref_name);
         self.reference = Some(Arc::downgrade(&node.optical_ref));
+        Ok(())
     }
 }
 impl OpticNode for NodeReference {
@@ -210,35 +212,37 @@ mod test {
         assert!(node.as_group_mut().is_err());
     }
     #[test]
-    fn from_node() {
+    fn from_node() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let node_id = scenery.add_node(Dummy::default()).unwrap();
-        let node_ref = scenery.node(node_id).unwrap();
-        let node = NodeReference::from_node(&node_ref);
+        let node_id = scenery.add_node(Dummy::default())?;
+        let node_ref = scenery.node(node_id)?;
+        let node = NodeReference::from_node(&node_ref)?;
         assert!(node.reference.is_some());
+        Ok(())
     }
     #[test]
-    fn from_node_name() {
+    fn from_node_name() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let node_id = scenery.add_node(Dummy::default()).unwrap();
-        let node_ref = scenery.node(node_id).unwrap();
-        let node_name = format!("ref ({})", node_ref.optical_ref.lock_opm().unwrap().name());
-        let node = NodeReference::from_node(&node_ref);
-
+        let node_id = scenery.add_node(Dummy::default())?;
+        let node_ref = scenery.node(node_id)?;
+        let node_name = format!("ref ({})", node_ref.optical_ref.lock_opm()?.name());
+        let node = NodeReference::from_node(&node_ref)?;
         assert_eq!(node.name(), node_name);
+        Ok(())
     }
     #[test]
-    fn assign_reference() {
+    fn assign_reference() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let node_id = scenery.add_node(Dummy::default()).unwrap();
-        let node_ref = scenery.node(node_id).unwrap();
+        let node_id = scenery.add_node(Dummy::default())?;
+        let node_ref = scenery.node(node_id)?;
         let mut node = NodeReference::default();
         assert!(node.reference.is_none());
-        node.assign_reference(&node_ref);
+        node.assign_reference(&node_ref)?;
         assert!(node.reference.is_some());
+        Ok(())
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<NodeReference>()
     }
     #[test]
@@ -248,31 +252,33 @@ mod test {
         assert!(node.ports().names(&PortType::Output).is_empty());
     }
     #[test]
-    fn ports_non_empty() {
+    fn ports_non_empty() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let node_id = scenery.add_node(Dummy::default()).unwrap();
-        let node = NodeReference::from_node(&scenery.node(node_id).unwrap());
+        let node_id = scenery.add_node(Dummy::default())?;
+        let node = NodeReference::from_node(&scenery.node(node_id)?)?;
         assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
+        Ok(())
     }
     #[test]
-    fn ports_inverted() {
+    fn ports_inverted() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let node_id = scenery.add_node(Dummy::default()).unwrap();
-        let mut node = NodeReference::from_node(&scenery.node(node_id).unwrap());
-        node.set_inverted(true.into()).unwrap();
+        let node_id = scenery.add_node(Dummy::default())?;
+        let mut node = NodeReference::from_node(&scenery.node(node_id)?)?;
+        node.set_inverted(true.into())?;
         assert_eq!(node.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["input_1"]);
+        Ok(())
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let node_id = scenery.add_node(Dummy::default()).unwrap();
-        let mut node = NodeReference::from_node(&scenery.node(node_id).unwrap());
+        let node_id = scenery.add_node(Dummy::default())?;
+        let mut node = NodeReference::from_node(&scenery.node(node_id)?)?;
         let output =
-            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())
-                .unwrap();
+            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
     fn analyze_no_reference() {
@@ -282,38 +288,40 @@ mod test {
         assert!(output.is_err());
     }
     #[test]
-    fn analyze() {
+    fn analyze() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let node_id = scenery.add_node(Dummy::default()).unwrap();
-        let mut node = NodeReference::from_node(&scenery.node(node_id).unwrap());
+        let node_id = scenery.add_node(Dummy::default())?;
+        let mut node = NodeReference::from_node(&scenery.node(node_id)?)?;
 
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
-    fn analyze_inverse() {
+    fn analyze_inverse() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let node_id = scenery.add_node(Dummy::default()).unwrap();
-        let mut node = NodeReference::from_node(&scenery.node(node_id).unwrap());
-        node.set_inverted(true).unwrap();
+        let node_id = scenery.add_node(Dummy::default())?;
+        let mut node = NodeReference::from_node(&scenery.node(node_id)?)?;
+        node.set_inverted(true)?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
 }

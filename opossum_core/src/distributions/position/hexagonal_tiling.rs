@@ -140,17 +140,17 @@ impl From<HexagonalTiling> for super::PosDistType {
 
 #[cfg(test)]
 mod tests {
+    use crate::{distributions::position::HexagonalTiling, error::OpmResult, millimeter};
     use approx::assert_relative_eq;
 
-    use crate::{distributions::position::HexagonalTiling, millimeter};
-
     #[test]
-    fn valid_hexagonal_tiling_creation() {
+    fn valid_hexagonal_tiling_creation() -> OpmResult<()> {
         let radius = millimeter!(10.0);
-        let tiling = HexagonalTiling::new(radius, 5).unwrap();
+        let tiling = HexagonalTiling::new(radius, 5)?;
 
         assert_relative_eq!(tiling.radius().value, radius.value);
         assert_eq!(tiling.nr_of_hex_along_radius(), 5);
+        Ok(())
     }
 
     #[test]

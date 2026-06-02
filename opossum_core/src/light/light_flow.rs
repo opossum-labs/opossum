@@ -96,45 +96,49 @@ impl LightFlow {
 
 #[cfg(test)]
 mod test {
-    use core::f64;
-
     use super::*;
     use crate::millimeter;
+    use core::f64;
     use num::Zero;
 
     #[test]
-    fn new() {
+    fn new() -> OpmResult<()> {
         assert!(LightFlow::new("test1", "test2", millimeter!(f64::NAN)).is_err());
         assert!(LightFlow::new("test1", "test2", millimeter!(f64::NEG_INFINITY)).is_err());
         assert!(LightFlow::new("test1", "test2", millimeter!(f64::INFINITY)).is_err());
-        let light = LightFlow::new("test1", "test2", Length::zero()).unwrap();
+        let light = LightFlow::new("test1", "test2", Length::zero())?;
         assert_eq!(light.src_port, "test1");
         assert_eq!(light.target_port, "test2");
         assert!(light.data.is_none());
-        assert_eq!(light.distance, Length::zero())
+        assert_eq!(light.distance, Length::zero());
+        Ok(())
     }
     #[test]
-    fn src_port() {
-        let light = LightFlow::new("test1", "test2", Length::zero()).unwrap();
+    fn src_port() -> OpmResult<()> {
+        let light = LightFlow::new("test1", "test2", Length::zero())?;
         assert_eq!(light.src_port(), "test1");
+        Ok(())
     }
     #[test]
-    fn target_port() {
-        let light = LightFlow::new("test1", "test2", Length::zero()).unwrap();
+    fn target_port() -> OpmResult<()> {
+        let light = LightFlow::new("test1", "test2", Length::zero())?;
         assert_eq!(light.target_port(), "test2");
+        Ok(())
     }
     #[test]
-    fn distance() {
-        let light = LightFlow::new("test1", "test2", millimeter!(100.0)).unwrap();
+    fn distance() -> OpmResult<()> {
+        let light = LightFlow::new("test1", "test2", millimeter!(100.0))?;
         assert_eq!(light.distance(), &millimeter!(100.0));
+        Ok(())
     }
     #[test]
-    fn set_distance() {
-        let mut light = LightFlow::new("test1", "test2", millimeter!(100.0)).unwrap();
+    fn set_distance() -> OpmResult<()> {
+        let mut light = LightFlow::new("test1", "test2", millimeter!(100.0))?;
         assert!(light.set_distance(millimeter!(f64::NAN)).is_err());
         assert!(light.set_distance(millimeter!(f64::INFINITY)).is_err());
         assert!(light.set_distance(millimeter!(f64::NEG_INFINITY)).is_err());
-        light.set_distance(millimeter!(50.0)).unwrap();
+        light.set_distance(millimeter!(50.0))?;
         assert_eq!(light.distance(), &millimeter!(50.0));
+        Ok(())
     }
 }

@@ -138,7 +138,7 @@ impl Aperture {
         Self::Stack(config, aperture_type)
     }
     #[must_use]
-    /// Check if the aperture is [`Aperture::None`]
+    /// Check if the aperture is [`Aperture::Open`]
     pub const fn is_none(&self) -> bool {
         matches!(self, Self::Open)
     }
@@ -190,7 +190,7 @@ impl Plottable for Aperture {
         let plt_series_opt = match plt_type {
             PlotType::Line2D(_) | PlotType::Scatter2D(_) => match self {
                 Self::Open => None,
-                Self::BinaryCircle(conf, _) => Some(stack::plot_circle(conf)),
+                Self::BinaryCircle(conf, _) => Some(stack::plot_circle(conf)?),
                 Self::BinaryRectangle(conf, _) => {
                     let center_x = conf.center().x.get::<millimeter>();
                     let center_y = conf.center().y.get::<millimeter>();
@@ -343,16 +343,14 @@ mod test {
     }
 
     #[test]
-    fn test_new_stack() {
-        let circle =
-            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
+    fn test_new_stack() -> OpmResult<()> {
+        let circle = Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole)?;
         let rect = Aperture::new_rectangle(
             meter!(1.0),
             meter!(1.0),
             meter!(0.0, 0.0),
             ApertureType::Hole,
-        )
-        .unwrap();
+        )?;
 
         // Stack returns Self directly, not OpmResult
         let stack = Aperture::new_stack(vec![circle, rect], ApertureType::Obstruction);
@@ -363,22 +361,22 @@ mod test {
         } else {
             panic!("Expected Aperture::Stack variant");
         }
+        Ok(())
     }
 
     #[test]
-    fn test_is_none() {
+    fn test_is_none() -> OpmResult<()> {
         assert!(Aperture::Open.is_none());
-        let circle =
-            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
+        let circle = Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole)?;
         assert!(!circle.is_none());
+        Ok(())
     }
     #[test]
-    fn test_obstruction_logic() {
+    fn test_obstruction_logic() -> OpmResult<()> {
         // A circle as a hole (default)
-        let hole = Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole).unwrap();
+        let hole = Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Hole)?;
         // A circle as an obstruction
-        let block =
-            Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Obstruction).unwrap();
+        let block = Aperture::new_circle(meter!(1.0), meter!(0.0, 0.0), ApertureType::Obstruction)?;
 
         let p_inside = meter!(0.5, 0.0);
         let p_outside = meter!(2.0, 0.0);
@@ -388,5 +386,6 @@ mod test {
 
         assert_eq!(block.apodize(&p_inside), 0.0);
         assert_eq!(block.apodize(&p_outside), 1.0);
+        Ok(())
     }
 }

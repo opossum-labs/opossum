@@ -155,7 +155,7 @@ mod test {
     // use approx::assert_abs_diff_eq;
     use super::Kde;
     // use crate::{joule, meter, millimeter};
-    use crate::millimeter;
+    use crate::{error::OpmResult, millimeter};
     use core::f64;
     #[test]
     fn default() {
@@ -163,14 +163,15 @@ mod test {
         assert_eq!(kde.band_width, millimeter!(1.0));
     }
     #[test]
-    fn set_bandwidth() {
+    fn set_bandwidth() -> OpmResult<()> {
         let mut kde = Kde::default();
         assert!(kde.set_band_width(millimeter!(0.0)).is_err());
         assert!(kde.set_band_width(millimeter!(f64::NAN)).is_err());
         assert!(kde.set_band_width(millimeter!(f64::INFINITY)).is_err());
         assert!(kde.set_band_width(millimeter!(f64::NEG_INFINITY)).is_err());
-        kde.set_band_width(millimeter!(2.0)).unwrap();
+        kde.set_band_width(millimeter!(2.0))?;
         assert_eq!(kde.band_width, millimeter!(2.0));
+        Ok(())
     }
     // #[test]
     // fn point_distances_std_dev() {

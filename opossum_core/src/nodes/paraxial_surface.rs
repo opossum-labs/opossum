@@ -189,8 +189,8 @@ mod test {
         assert!(node.as_group_mut().is_err());
     }
     #[test]
-    fn new() {
-        let node = ParaxialSurface::new("Test", millimeter!(100.0)).unwrap();
+    fn new() -> OpmResult<()> {
+        let node = ParaxialSurface::new("Test", millimeter!(100.0))?;
         assert_eq!(node.name(), "Test");
         if let Ok(Proptype::Length(dist)) = node.properties().get("focal length") {
             assert_eq!(dist, &millimeter!(100.0));
@@ -202,6 +202,7 @@ mod test {
         assert!(ParaxialSurface::new("Test", millimeter!(f64::NAN)).is_err());
         assert!(ParaxialSurface::new("Test", millimeter!(f64::INFINITY)).is_err());
         assert!(ParaxialSurface::new("Test", millimeter!(f64::NEG_INFINITY)).is_err());
+        Ok(())
     }
     #[test]
     fn node_type_readonly() {
@@ -209,7 +210,7 @@ mod test {
         assert!(node.set_property("node_type", "other".into()).is_err());
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<ParaxialSurface>()
     }
     #[test]
@@ -223,45 +224,43 @@ mod test {
         test_set_aperture::<ParaxialSurface>("input_1", "output_1");
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<ParaxialSurface>()
     }
     #[test]
-    fn analyze_wrong_port() {
+    fn analyze_wrong_port() -> OpmResult<()> {
         let mut node = ParaxialSurface::default();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_geometric_wrong_data_type() {
-        test_analyze_wrong_data_type::<ParaxialSurface>("input_1");
+    fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
+        test_analyze_wrong_data_type::<ParaxialSurface>("input_1")
     }
     #[test]
     fn analyze_geometric_no_isometry() {
         test_analyze_geometric_no_isometry::<ParaxialSurface>("input_1");
     }
     #[test]
-    fn analyze_geometric_ok() {
+    fn analyze_geometric_ok() -> OpmResult<()> {
         let mut node = ParaxialSurface::default();
-        node.set_isometry(
-            Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
-        )
-        .unwrap();
+        node.set_isometry(Isometry::new(
+            millimeter!(0.0, 0.0, 10.0),
+            degree!(0.0, 0.0, 0.0),
+        )?)?;
         let mut rays = Rays::default();
         let mut initial_ray =
-            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap();
+            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))?;
         initial_ray.add_to_pos_hist(millimeter!(0., 0., -10.));
         rays.add_ray(initial_ray);
 
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Geometric(rays));
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
 
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
@@ -276,22 +275,23 @@ mod test {
         } else {
             assert!(false, "could not get LightData");
         }
+        Ok(())
     }
     #[test]
-    fn test_shifted_x() {
-        let mut node = ParaxialSurface::new("test", millimeter!(10.)).unwrap();
-        node.set_isometry(
-            Isometry::new(millimeter!(10.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
-        )
-        .unwrap();
-        let rays = Rays::from(
-            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap(),
-        );
+    fn test_shifted_x() -> OpmResult<()> {
+        let mut node = ParaxialSurface::new("test", millimeter!(10.))?;
+        node.set_isometry(Isometry::new(
+            millimeter!(10.0, 0.0, 10.0),
+            degree!(0.0, 0.0, 0.0),
+        )?)?;
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Geometric(rays));
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
 
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
@@ -301,22 +301,23 @@ mod test {
         } else {
             assert!(false, "could not get LightData");
         }
+        Ok(())
     }
     #[test]
-    fn test_shifted_y() {
-        let mut node = ParaxialSurface::new("test", millimeter!(10.)).unwrap();
-        node.set_isometry(
-            Isometry::new(millimeter!(0.0, 10.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
-        )
-        .unwrap();
-        let rays = Rays::from(
-            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap(),
-        );
+    fn test_shifted_y() -> OpmResult<()> {
+        let mut node = ParaxialSurface::new("test", millimeter!(10.))?;
+        node.set_isometry(Isometry::new(
+            millimeter!(0.0, 10.0, 10.0),
+            degree!(0.0, 0.0, 0.0),
+        )?)?;
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Geometric(rays));
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
 
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
@@ -326,27 +327,24 @@ mod test {
         } else {
             assert!(false, "could not get LightData");
         }
+        Ok(())
     }
 
     #[test]
-    fn test_rotated_y() {
-        let mut node = ParaxialSurface::new("test", millimeter!(10.)).unwrap();
-        node.set_isometry(
-            Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(45.0, 0.0, 0.0)).unwrap(),
-        )
-        .unwrap();
-        let rays = Rays::from(
-            Ray::new_collimated(
-                millimeter!(0.0, 10.0 / f64::sqrt(2.), 0.0),
-                nanometer!(1000.0),
-                joule!(1.0),
-            )
-            .unwrap(),
-        );
+    fn test_rotated_y() -> OpmResult<()> {
+        let mut node = ParaxialSurface::new("test", millimeter!(10.))?;
+        node.set_isometry(Isometry::new(
+            millimeter!(0.0, 0.0, 10.0),
+            degree!(45.0, 0.0, 0.0),
+        )?)?;
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 10.0 / f64::sqrt(2.), 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Geometric(rays));
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
 
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
@@ -358,27 +356,24 @@ mod test {
         } else {
             assert!(false, "could not get LightData");
         }
+        Ok(())
     }
 
     #[test]
-    fn test_rotated_x() {
-        let mut node = ParaxialSurface::new("test", millimeter!(10.)).unwrap();
-        node.set_isometry(
-            Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 45.0, 0.0)).unwrap(),
-        )
-        .unwrap();
-        let rays = Rays::from(
-            Ray::new_collimated(
-                millimeter!(-10.0 / f64::sqrt(2.), 0.0, 0.0),
-                nanometer!(1000.0),
-                joule!(1.0),
-            )
-            .unwrap(),
-        );
+    fn test_rotated_x() -> OpmResult<()> {
+        let mut node = ParaxialSurface::new("test", millimeter!(10.))?;
+        node.set_isometry(Isometry::new(
+            millimeter!(0.0, 0.0, 10.0),
+            degree!(0.0, 45.0, 0.0),
+        )?)?;
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(-10.0 / f64::sqrt(2.), 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Geometric(rays));
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
 
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
@@ -390,6 +385,7 @@ mod test {
         } else {
             assert!(false, "could not get LightData");
         }
+        Ok(())
     }
 
     #[test]

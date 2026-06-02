@@ -41,7 +41,7 @@ impl From<Fresnel> for CoatingType {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{joule, nanometer};
+    use crate::{error::OpmResult, joule, nanometer};
     use approx::assert_abs_diff_eq;
     use nalgebra::vector;
 
@@ -51,34 +51,37 @@ mod test {
         assert!(matches!(coating.into(), CoatingType::Fresnel));
     }
     #[test]
-    fn calc_refl_same_index() {
-        let mut ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap();
-        ray.set_refractive_index(1.0).unwrap();
+    fn calc_refl_same_index() -> OpmResult<()> {
+        let mut ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?;
+        ray.set_refractive_index(1.0)?;
         let surface_normal = vector![0.0, 0.0, -1.0];
         let coating = Fresnel;
         assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.0), 0.0);
 
-        ray.set_refractive_index(2.0).unwrap();
+        ray.set_refractive_index(2.0)?;
         assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 2.0), 0.0);
+        Ok(())
     }
     #[test]
-    fn calc_refl_glass_perpendicular() {
-        let mut ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap();
-        ray.set_refractive_index(1.0).unwrap();
+    fn calc_refl_glass_perpendicular() -> OpmResult<()> {
+        let mut ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?;
+        ray.set_refractive_index(1.0)?;
         let surface_normal = vector![0.0, 0.0, -1.0];
         let coating = Fresnel;
         assert_abs_diff_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.5), 0.04);
+        Ok(())
     }
     #[test]
-    fn calc_refl_glass_45_deg() {
-        let mut ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap();
-        ray.set_refractive_index(1.0).unwrap();
-        ray.set_direction(vector![0.0, 1.0, 1.0]).unwrap();
+    fn calc_refl_glass_45_deg() -> OpmResult<()> {
+        let mut ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?;
+        ray.set_refractive_index(1.0)?;
+        ray.set_direction(vector![0.0, 1.0, 1.0])?;
         let surface_normal = vector![0.0, 0.0, -1.0];
         let coating = Fresnel;
         assert_abs_diff_eq!(
             coating.calc_reflectivity(&ray, surface_normal, 1.5),
             0.05023991101223595
         );
+        Ok(())
     }
 }

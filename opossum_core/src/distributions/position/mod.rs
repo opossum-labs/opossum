@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Position distribution functions
 //!
-//! These distributions are mainly used during the construction of [`Ray`](crate::ray::Ray) bundles ([`Rays`](crate::rays::Rays)).
+//! These distributions are mainly used during the construction of [`Ray`](crate::light::Ray) bundles ([`Rays`](crate::light::Rays)).
 //!
 //! ## Example
 //!

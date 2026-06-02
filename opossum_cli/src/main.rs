@@ -3,7 +3,10 @@
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
-use opossum_core::{error::OpmResult, opm_document::OpmDocument};
+use opossum_core::{
+    error::{OpmResult, OpossumError},
+    opm_document::OpmDocument,
+};
 use std::{env, path::Path};
 mod console;
 use crate::console::{Args, PartialArgs};
@@ -17,7 +20,9 @@ fn opossum() -> OpmResult<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     info!(
         "Current work dir: {}",
-        env::current_dir().unwrap().display()
+        env::current_dir()
+            .map_err(|e| OpossumError::Console(format!("Error getting work directory: {e}")))?
+            .display()
     );
     // parse CLI arguments
     let opossum_args = Args::try_from(PartialArgs::parse())?;

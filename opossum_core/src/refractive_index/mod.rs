@@ -150,13 +150,10 @@ mod test {
     }
 
     #[test]
-    fn test_display_strings() {
+    fn test_display_strings() -> OpmResult<()> {
         // Test that each variant displays the correct descriptive string.
         assert_eq!(
-            format!(
-                "{}",
-                RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap())
-            ),
+            format!("{}", RefractiveIndexType::Const(RefrIndexConst::new(1.5)?)),
             "Constant"
         );
         assert_eq!(
@@ -180,13 +177,14 @@ mod test {
             ),
             "Conrady equation"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_central_validation_logic() {
+    fn test_central_validation_logic() -> OpmResult<()> {
         // Case 1: Valid calculation (N-BK7 default at 1050nm).
         let refr = RefractiveIndexType::default();
-        let n = refr.get_refractive_index(nanometer!(1050.0)).unwrap();
+        let n = refr.get_refractive_index(nanometer!(1050.0))?;
         assert!(n >= 1.0);
 
         // Case 2: Validation during construction
@@ -206,8 +204,7 @@ mod test {
             0.02,
             103.0,
             nanometer!(1000.0)..nanometer!(1100.0),
-        )
-        .unwrap();
+        )?;
 
         let sneaky_enum = RefractiveIndexType::Sellmeier1(sneaky_sellmeier);
         let result = sneaky_enum.get_refractive_index(nanometer!(1050.0));
@@ -217,6 +214,7 @@ mod test {
         if let Err(OpossumError::Other(msg)) = result {
             assert!(msg.contains("<1.0 or not finite"));
         }
+        Ok(())
     }
 
     #[test]

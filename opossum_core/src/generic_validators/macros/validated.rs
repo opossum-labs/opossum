@@ -40,20 +40,23 @@ macro_rules! validated {
 
 #[cfg(test)]
 mod macro_tests {
-    use crate::generic_validators::{
-        AllFinite, AllNotZero, AllPositive, AndValidator, OrValidator, Validated,
+    use crate::{
+        error::OpmResult,
+        generic_validators::{
+            AllFinite, AllNotZero, AllPositive, AndValidator, OrValidator, Validated,
+        },
     };
     use nalgebra::Point2;
     use uom::si::f64::Length;
 
     #[test]
-    fn test_validated_macro_scalar() {
+    fn test_validated_macro_scalar() -> OpmResult<()> {
         let value = 5.0f64;
 
         let manual_validator = AndValidator::new(AllPositive, AllFinite);
-        let mut validated_manual = Validated::new(value, manual_validator).unwrap();
+        let mut validated_manual = Validated::new(value, manual_validator)?;
 
-        let mut validated_macro = validated!(value, AllPositive && AllFinite).unwrap();
+        let mut validated_macro = validated!(value, AllPositive && AllFinite)?;
 
         assert_eq!(validated_manual.value, validated_macro.value);
 
@@ -62,18 +65,18 @@ mod macro_tests {
 
         let invalid_value = -1.0;
         assert!(validated!(invalid_value, AllPositive && AllFinite).is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_validated_macro_point2() {
+    fn test_validated_macro_point2() -> OpmResult<()> {
         let value = Point2::new(2.0, 3.0);
 
         let manual_validator =
             AndValidator::new(AndValidator::new(AllPositive, AllFinite), AllNotZero);
-        let mut validated_manual = Validated::new(value, manual_validator).unwrap();
+        let mut validated_manual = Validated::new(value, manual_validator)?;
 
-        let mut validated_macro =
-            validated!(value, AllPositive && AllFinite && AllNotZero).unwrap();
+        let mut validated_macro = validated!(value, AllPositive && AllFinite && AllNotZero)?;
 
         assert_eq!(validated_manual.value, validated_macro.value);
         assert!(validated_manual.set(value).is_ok());
@@ -81,6 +84,7 @@ mod macro_tests {
 
         let invalid_value = Point2::new(0.0, 3.0); // zero in x
         assert!(validated!(invalid_value, AllPositive && AllFinite && AllNotZero).is_err());
+        Ok(())
     }
 
     #[test]
@@ -105,13 +109,13 @@ mod macro_tests {
     }
 
     #[test]
-    fn test_or_validator_scalar() {
+    fn test_or_validator_scalar() -> OpmResult<()> {
         let value = 5.0f64;
 
         let manual_validator = OrValidator::new(AllPositive, AllNotZero);
-        let mut validated_manual = Validated::new(value, manual_validator).unwrap();
+        let mut validated_manual = Validated::new(value, manual_validator)?;
 
-        let mut validated_macro = validated!(value, AllPositive || AllNotZero).unwrap();
+        let mut validated_macro = validated!(value, AllPositive || AllNotZero)?;
 
         assert_eq!(validated_manual.value, validated_macro.value);
         assert!(validated_manual.set(value).is_ok());
@@ -119,18 +123,18 @@ mod macro_tests {
 
         let invalid_value = -0.0; // neither positive nor non-zero fails
         assert!(validated!(invalid_value, AllPositive || AllNotZero).is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_and_or_mixed_scalar() {
+    fn test_and_or_mixed_scalar() -> OpmResult<()> {
         let value = 5.0f64;
 
         let manual_validator =
             AndValidator::new(OrValidator::new(AllPositive, AllNotZero), AllFinite);
-        let mut validated_manual = Validated::new(value, manual_validator).unwrap();
+        let mut validated_manual = Validated::new(value, manual_validator)?;
 
-        let mut validated_macro =
-            validated!(value, (AllPositive || AllNotZero) && AllFinite).unwrap();
+        let mut validated_macro = validated!(value, (AllPositive || AllNotZero) && AllFinite)?;
 
         assert_eq!(validated_manual.value, validated_macro.value);
         assert!(validated_manual.set(value).is_ok());
@@ -138,18 +142,18 @@ mod macro_tests {
 
         let invalid_value = -0.0;
         assert!(validated!(invalid_value, (AllPositive || AllNotZero) && AllFinite).is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_and_or_point2() {
+    fn test_and_or_point2() -> OpmResult<()> {
         let value = Point2::new(5.0, 2.0);
 
         let manual_validator =
             AndValidator::new(OrValidator::new(AllPositive, AllNotZero), AllFinite);
-        let mut validated_manual = Validated::new(value, manual_validator).unwrap();
+        let mut validated_manual = Validated::new(value, manual_validator)?;
 
-        let mut validated_macro =
-            validated!(value, (AllPositive || AllNotZero) && AllFinite).unwrap();
+        let mut validated_macro = validated!(value, (AllPositive || AllNotZero) && AllFinite)?;
 
         assert_eq!(validated_manual.value, validated_macro.value);
         assert!(validated_manual.set(value).is_ok());
@@ -157,6 +161,7 @@ mod macro_tests {
 
         let invalid_value = Point2::new(0.0, -3.0);
         assert!(validated!(invalid_value, (AllPositive || AllNotZero) && AllFinite).is_err());
+        Ok(())
     }
 
     #[test]
@@ -188,13 +193,14 @@ mod macro_tests {
     }
 
     #[test]
-    fn test_not_validator_macro() {
+    fn test_not_validator_macro() -> OpmResult<()> {
         let value = -5.0f64;
-        let validated_macro = validated!(value, !AllPositive).unwrap();
+        let validated_macro = validated!(value, !AllPositive)?;
         assert_eq!(validated_macro.value, value);
 
         let invalid_value = 3.0;
         assert!(validated!(invalid_value, !AllPositive).is_err());
+        Ok(())
     }
 }
 
@@ -301,9 +307,12 @@ mod macro_type_tests {
 mod nested_macro_tests {
     use core::f64;
 
-    use crate::generic_validators::{
-        AllFinite, AllNormal, AllNotZero, AllPositive, AndValidator, NotValidator, OrValidator,
-        Validated,
+    use crate::{
+        error::OpmResult,
+        generic_validators::{
+            AllFinite, AllNormal, AllNotZero, AllPositive, AndValidator, NotValidator, OrValidator,
+            Validated,
+        },
     };
     use nalgebra::Point2;
     use static_assertions::assert_type_eq_all;
@@ -312,7 +321,7 @@ mod nested_macro_tests {
     // 1. Combination of NOT / AND / OR with scalars
     // ----------------------------------------
     #[test]
-    fn test_nested_and_or_not_scalar() {
+    fn test_nested_and_or_not_scalar() -> OpmResult<()> {
         let value = 5.0f64;
 
         // Manual nested validator: !A && (B || C) && D
@@ -347,15 +356,15 @@ mod nested_macro_tests {
             valid_value,
             !AllPositive && (AllFinite || AllNotZero) && AllNotZero
         );
-        assert!(macro_ok.is_ok());
-        assert_eq!(macro_ok.unwrap().value, valid_value);
+        assert_eq!(macro_ok?.value, valid_value);
+        Ok(())
     }
 
     // ----------------------------------------
     // 2. Combination with Point2 and NOT / OR / AND
     // ----------------------------------------
     #[test]
-    fn test_nested_and_or_not_point2() {
+    fn test_nested_and_or_not_point2() -> OpmResult<()> {
         let value = Point2::new(1.0, 2.0);
 
         // Manual: (!A && (B || C)) && D
@@ -386,15 +395,15 @@ mod nested_macro_tests {
             valid_point,
             (!AllPositive && (AllFinite || AllNotZero)) && AllFinite
         );
-        assert!(macro_ok.is_ok());
-        assert_eq!(macro_ok.unwrap().value, valid_point);
+        assert_eq!(macro_ok?.value, valid_point);
+        Ok(())
     }
 
     // ----------------------------------------
     // 3. Complex nested mix with scalars
     // ----------------------------------------
     #[test]
-    fn test_complex_mixed_macro_scalar() {
+    fn test_complex_mixed_macro_scalar() -> OpmResult<()> {
         let value = 4.0f64;
 
         // Manual equivalent: ((A || !B) && C) || D
@@ -414,8 +423,7 @@ mod nested_macro_tests {
             value,
             ((AllPositive || !AllNotZero) && AllFinite) || AllNormal
         );
-        assert!(macro_res.is_ok());
-        assert_eq!(macro_res.unwrap().value, value);
+        assert_eq!(macro_res?.value, value);
 
         // Invalid value (zero)
         let invalid_value = f64::NAN;
@@ -424,13 +432,14 @@ mod nested_macro_tests {
             ((AllPositive || !AllNotZero) && AllFinite) || AllNormal
         );
         assert!(macro_err.is_err());
+        Ok(())
     }
 
     // ----------------------------------------
     // 4. Complexer expression with Point2
     // ----------------------------------------
     #[test]
-    fn test_complex_mixed_macro_point2() {
+    fn test_complex_mixed_macro_point2() -> OpmResult<()> {
         let value = Point2::new(1.0, -2.0);
 
         // Manual: ((!A || B) && C) || D
@@ -450,8 +459,7 @@ mod nested_macro_tests {
             value,
             ((!AllPositive || AllNotZero) && AllFinite) || AllNotZero
         );
-        assert!(macro_res.is_ok());
-        assert_eq!(macro_res.unwrap().value, value);
+        assert_eq!(macro_res?.value, value);
 
         let invalid_point = Point2::new(f64::NAN, -0.0);
         let macro_err = validated!(
@@ -459,6 +467,7 @@ mod nested_macro_tests {
             ((!AllPositive || AllNotZero) && AllFinite) || AllNotZero
         );
         assert!(macro_err.is_err());
+        Ok(())
     }
 
     // ----------------------------------------

@@ -1,7 +1,10 @@
 pub mod input_components;
 use approx::relative_eq;
 use dioxus::prelude::*;
-use opossum_core::utils::geom_transformation::{RotationAxis, TranslationAxis};
+use opossum_core::{
+    error::{OpmResult, OpossumError},
+    utils::geom_transformation::{RotationAxis, TranslationAxis},
+};
 use regex::Regex;
 use std::{fmt::Display, str::FromStr};
 use strum::IntoEnumIterator;
@@ -208,13 +211,16 @@ pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Opt
         .map_or(None, |parsed| Some(parsed * 10f64.powi(factor)))
 }
 
-pub fn parse_exp_input_strict(input: &str) -> Result<String, ()> {
-    let regex = Regex::new(r"^[+-]?(?:(\d+([.,]\d*)?)|([.,]\d+))([eE][+-]?\d+)?$").unwrap();
+pub fn parse_exp_input_strict(input: &str) -> OpmResult<String> {
+    let regex = Regex::new(r"^[+-]?(?:(\d+([.,]\d*)?)|([.,]\d+))([eE][+-]?\d+)?$")
+        .map_err(|e| OpossumError::Other(format!("Error compiling regex: {}", e)))?;
     let trimmed = input.trim().replace(',', ".");
     if regex.is_match(&trimmed) {
         return Ok(trimmed);
     }
-    Err(())
+    Err(OpossumError::Other(
+        "Could not match regular expression".into(),
+    ))
 }
 
 /// Strictly parses a unit input consisting of a numeric value and an SI-prefixed unit.
@@ -234,22 +240,24 @@ pub fn parse_exp_input_strict(input: &str) -> Result<String, ()> {
 /// `Ok((value, prefix))` where `value` is the numeric string and `prefix`
 /// is the extracted SI prefix (or empty if none is present).
 /// Returns `Err(())` if the input does not strictly conform to the expected format.
-pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, String), ()> {
+pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> OpmResult<(String, String)> {
     let regex = Regex::new(
         r"^(?P<value>[+-]?(?:\d*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d*)?)\s*(?P<unit>\S+)$",
     )
-    .unwrap();
+    .map_err(|e| OpossumError::Other(format!("Error compiling regex: {}", e)))?;
 
     let valid_prefixes = [
         'q', 'r', 'y', 'z', 'a', 'f', 'p', 'n', 'µ', 'u', 'm', 'k', 'M', 'G', 'T', 'P', 'E', 'Z',
         'Y', 'R', 'Q',
     ];
 
-    let caps = regex.captures(input.trim()).ok_or(())?;
+    let caps = regex
+        .captures(input.trim())
+        .ok_or(OpossumError::Other("error during capture".into()))?;
 
     let value = caps.name("value").unwrap().as_str().replace(',', ".");
     if value.is_empty() {
-        return Err(());
+        return Err(OpossumError::Other("Could not convert prefix".into()));
     }
 
     let unit = caps.name("unit").unwrap().as_str();
@@ -265,8 +273,7 @@ pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> Result<(String, 
             return Ok((value, prefix_char.to_string()));
         }
     }
-
-    Err(())
+    Err(OpossumError::Other("error parsing input".into()))
 }
 
 /// Formats a floating-point value using SI engineering notation.
@@ -592,7 +599,7 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_without_prefix_parse_unit_input_strict() {
+    fn test_valid_without_prefix_parse_unit_input_strict() -> OpmResult<()> {
         let base_unit = "A";
         let cases = vec![
             ("123A", "123", ""),
@@ -605,7 +612,7 @@ mod tests {
         ];
 
         for (input, expected_value, expected_prefix) in cases {
-            let result = parse_unit_input_strict(input, base_unit).unwrap();
+            let result = parse_unit_input_strict(input, base_unit)?;
             assert_eq!(
                 result.0,
                 expected_value.replace(",", "."),
@@ -614,10 +621,11 @@ mod tests {
             );
             assert_eq!(result.1, expected_prefix, "Input '{}'", input);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_valid_with_prefix_parse_unit_input_strict() {
+    fn test_valid_with_prefix_parse_unit_input_strict() -> OpmResult<()> {
         let base_unit = "A";
         let cases = vec![
             ("3.5kA", "3.5", "k"),
@@ -628,14 +636,15 @@ mod tests {
         ];
 
         for (input, expected_value, expected_prefix) in cases {
-            let result = parse_unit_input_strict(input, base_unit).unwrap();
+            let result = parse_unit_input_strict(input, base_unit)?;
             assert_eq!(result.0, expected_value, "Input '{}'", input);
             assert_eq!(result.1, expected_prefix, "Input '{}'", input);
         }
+        Ok(())
     }
 
     #[test]
-    fn parse_unit_input_strict_valid_without_prefix() {
+    fn parse_unit_input_strict_valid_without_prefix() -> OpmResult<()> {
         let cases = vec![
             ("123A", "123", "A"),
             ("+123A", "+123", "A"),
@@ -646,14 +655,15 @@ mod tests {
         ];
 
         for (input, expected_value, base_unit) in cases {
-            let result = parse_unit_input_strict(input, base_unit).unwrap();
+            let result = parse_unit_input_strict(input, base_unit)?;
             assert_eq!(result.0, expected_value, "Input '{}'", input);
             assert_eq!(result.1, "", "Input '{}'", input); // no prefix
         }
+        Ok(())
     }
 
     #[test]
-    fn parse_unit_input_strict_valid_with_prefix() {
+    fn parse_unit_input_strict_valid_with_prefix() -> OpmResult<()> {
         let cases = vec![
             ("3.5kA", "3.5", "A", "k"),
             ("-1.2mA", "-1.2", "A", "m"),
@@ -665,10 +675,11 @@ mod tests {
         ];
 
         for (input, expected_value, base_unit, expected_prefix) in cases {
-            let result = parse_unit_input_strict(input, base_unit).unwrap();
+            let result = parse_unit_input_strict(input, base_unit)?;
             assert_eq!(result.0, expected_value, "Input '{}'", input);
             assert_eq!(result.1, expected_prefix, "Input '{}'", input);
         }
+        Ok(())
     }
 
     #[test]
@@ -823,7 +834,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_exp_input_strict_valid() {
+    fn test_parse_exp_input_strict_valid() -> OpmResult<()> {
         let valid_cases = vec![
             "123", "+123", "-123", "0.456", "7,89", "1e10", "-1E-10", "+3.14E+2", ".5", "-.75",
             "42 ", // trailing space
@@ -831,7 +842,7 @@ mod tests {
         ];
 
         for input in valid_cases {
-            let result = parse_exp_input_strict(input).unwrap();
+            let result = parse_exp_input_strict(input)?;
             assert_eq!(
                 result,
                 input.trim().replace(",", "."),
@@ -839,6 +850,7 @@ mod tests {
                 input
             );
         }
+        Ok(())
     }
 
     #[test]
@@ -858,13 +870,14 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_exp_input_strict_edge_cases() {
+    fn test_parse_exp_input_strict_edge_cases() -> OpmResult<()> {
         let edge_cases = vec!["0", "0.0", "-0", "+0", "1E0", "-1E0"];
 
         for input in edge_cases {
-            let result = parse_exp_input_strict(input).unwrap();
+            let result = parse_exp_input_strict(input)?;
             assert_eq!(result, input, "Edge case '{}' should parse strictly", input);
         }
+        Ok(())
     }
     #[test]
     fn test_format_si_notation_normal() {

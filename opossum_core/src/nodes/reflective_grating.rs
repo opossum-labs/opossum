@@ -403,11 +403,11 @@ mod test {
         test_set_aperture::<ReflectiveGrating>("input_1", "output_1");
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<ReflectiveGrating>()
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<ReflectiveGrating>()
     }
     #[test]
@@ -434,8 +434,8 @@ mod test {
         assert_eq!(*output, input_light);
     }
     #[test]
-    fn analyze_geometric_wrong_data_type() {
-        test_analyze_wrong_data_type::<ReflectiveGrating>("input_1");
+    fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
+        test_analyze_wrong_data_type::<ReflectiveGrating>("input_1")
     }
     #[test]
     fn analyze_geometric_no_isometery() {

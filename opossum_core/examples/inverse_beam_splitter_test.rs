@@ -6,17 +6,17 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("inverse beam splitter test");
     let i_src = scenery.add_node(SourcePort::new("Source"))?;
 
-    let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
+    let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.6))?;
     bs.set_inverted(true)?;
     let i_bs = scenery.add_node(bs)?;
     let i_d1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
         opossum_core::nodes::Metertype::IdealEnergyMeter,
-    ))?;
+    )?)?;
     let i_d2 = scenery.add_node(EnergyMeter::new(
         "Energy meter 2",
         opossum_core::nodes::Metertype::IdealEnergyMeter,
-    ))?;
+    )?)?;
 
     scenery.connect_nodes(i_src, "output_1", i_bs, "out1_trans1_refl2", Length::zero())?;
     scenery.connect_nodes(i_bs, "input_1", i_d1, "input_1", Length::zero())?;

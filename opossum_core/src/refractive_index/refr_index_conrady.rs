@@ -147,12 +147,12 @@ mod test {
         );
     }
     #[test]
-    fn new() {
-        let r =
-            RefrIndexConrady::new(1.0, 2.0, 3.0, nanometer!(500.0)..nanometer!(2000.0)).unwrap();
+    fn new() -> OpmResult<()> {
+        let r = RefrIndexConrady::new(1.0, 2.0, 3.0, nanometer!(500.0)..nanometer!(2000.0))?;
         assert_eq!(r.n0(), 1.0);
         assert_eq!(r.a(), 2.0);
         assert_eq!(r.b(), 3.0);
+        Ok(())
     }
     #[test]
     fn test_default_sio2() {
@@ -206,15 +206,15 @@ mod test {
         }
     }
     #[test]
-    fn get_refractive_index() {
-        let i =
-            RefrIndexConrady::new(1.0, 1.0, 1.0, nanometer!(500.0)..nanometer!(2000.0)).unwrap();
+    fn get_refractive_index() -> OpmResult<()> {
+        let i = RefrIndexConrady::new(1.0, 1.0, 1.0, nanometer!(500.0)..nanometer!(2000.0))?;
         assert_relative_eq!(
-            i.get_refractive_index(nanometer!(1054.0)).unwrap(),
+            i.get_refractive_index(nanometer!(1054.0))?,
             2.7806,
             max_relative = 0.0001
         );
         assert!(i.get_refractive_index(nanometer!(499.0)).is_err());
         assert!(i.get_refractive_index(nanometer!(2001.0)).is_err());
+        Ok(())
     }
 }

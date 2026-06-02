@@ -177,11 +177,11 @@ mod test {
     }
 
     #[test]
-    fn generate_bounds() {
+    fn generate_bounds() -> OpmResult<()> {
         let side_x = millimeter!(2.0);
         let side_y = millimeter!(4.0);
         let n = 100;
-        let strategy = SobolDist::new(side_x, side_y, n).unwrap();
+        let strategy = SobolDist::new(side_x, side_y, n)?;
         let points = strategy.generate();
 
         assert_eq!(points.len(), n);
@@ -201,5 +201,6 @@ mod test {
             );
             assert_eq!(p.z, Length::zero());
         }
+        Ok(())
     }
 }

@@ -102,7 +102,7 @@ impl GeoSurface for Plane {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{degree, joule, millimeter, nanometer};
+    use crate::{degree, error::OpmResult, joule, millimeter, nanometer};
     #[test]
     fn default() {
         let p = Plane::default();
@@ -116,57 +116,61 @@ mod test {
         assert_eq!(r.z, degree!(0.0));
     }
     #[test]
-    fn new() {
-        let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
+    fn new() -> OpmResult<()> {
+        let iso = Isometry::new_along_z(millimeter!(1.0))?;
         let p = Plane::new(iso);
         let t = p.isometry.translation_vec();
         assert_eq!(t.x, millimeter!(0.0));
         assert_eq!(t.y, millimeter!(0.0));
         assert_eq!(t.z, millimeter!(1.0));
+        Ok(())
     }
     #[test]
-    fn set_isometry() {
+    fn set_isometry() -> OpmResult<()> {
         let mut p = Plane::default();
-        let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(1.0))?;
         p.set_isometry(iso);
         let t = p.isometry.translation_vec();
         assert_eq!(t.x, millimeter!(0.0));
         assert_eq!(t.y, millimeter!(0.0));
         assert_eq!(t.z, millimeter!(1.0));
+        Ok(())
     }
     #[test]
-    fn intersect_on_axis() {
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+    fn intersect_on_axis() -> OpmResult<()> {
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
         let s = Plane::new(iso);
-        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
+        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(0.0, 0.0, 10.0), -Vector3::z()))
         );
+        Ok(())
     }
     #[test]
-    fn intersect_on_axis_behind() {
-        let iso = Isometry::new_along_z(millimeter!(-10.0)).unwrap();
+    fn intersect_on_axis_behind() -> OpmResult<()> {
+        let iso = Isometry::new_along_z(millimeter!(-10.0))?;
         let s = Plane::new(iso);
-        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
-        assert_eq!(s.calc_intersect_and_normal(&ray), None);
+        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
+        Ok(())
     }
     #[test]
-    fn intersect_zero_dist() {
-        let iso = Isometry::new_along_z(millimeter!(0.0)).unwrap();
+    fn intersect_zero_dist() -> OpmResult<()> {
+        let iso = Isometry::new_along_z(millimeter!(0.0))?;
         let s = Plane::new(iso);
-        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
+        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(0.0, 0.0, 0.0), -Vector3::z()))
         );
+        Ok(())
     }
     #[test]
-    fn intersect_off_axis() {
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+    fn intersect_off_axis() -> OpmResult<()> {
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
         let s = Plane::new(iso);
-        let ray = Ray::new_collimated(millimeter!(0.0, 1.0, 1.0), nanometer!(1053.0), joule!(1.0))
-            .unwrap();
+        let ray = Ray::new_collimated(millimeter!(0.0, 1.0, 1.0), nanometer!(1053.0), joule!(1.0))?;
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(0.0, 1.0, 10.0), -Vector3::z()))
@@ -176,27 +180,27 @@ mod test {
             Vector3::new(0.0, 1.0, 1.0),
             nanometer!(1053.0),
             joule!(1.0),
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(0.0, 11.0, 10.0), -Vector3::z()))
         );
+        Ok(())
     }
     #[test]
-    fn intersect_on_axis_backwards() {
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+    fn intersect_on_axis_backwards() -> OpmResult<()> {
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
         let s = Plane::new(iso);
         let ray = Ray::new(
             millimeter!(0.0, 0.0, 20.0),
             -Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(0.0, 0.0, 10.0), Vector3::z()))
         );
+        Ok(())
     }
 }

@@ -30,7 +30,7 @@ fn main() -> OpmResult<()> {
         "ne03b_raw",
         PltBackEnd::SVG,
     )?;
-    let mut s5 = create_visible_spec();
+    let mut s5 = create_visible_spec()?;
     s5.resample(&s4);
     s5.to_plot(
         Path::new("./opossum_core/playground"),

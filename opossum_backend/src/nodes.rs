@@ -188,7 +188,7 @@ pub fn copy_from_optic_ref(
     let new_node_ref = create_node_ref(&node_type)?;
     let mut node = new_node_ref.optical_ref.lock_opm()?;
     if let Some(referenced_node) = referenced_node_opt {
-        node.as_refnode_mut()?.assign_reference(&referenced_node);
+        node.as_refnode_mut()?.assign_reference(&referenced_node)?;
     }
 
     let node_attr = node.node_attr_mut();
@@ -438,7 +438,6 @@ fn resolve_references(
             })?;
         }
     }
-
     Ok(())
 }
 
@@ -842,7 +841,7 @@ async fn post_subreference(
     let mut document = data.document.lock();
     let referring_node =
         get_nested_referenced_node_from_state(ref_node_info.referring_node(), &document)?;
-    let mut node_reference = NodeReference::from_node(&referring_node);
+    let mut node_reference = NodeReference::from_node(&referring_node)?;
 
     node_reference
         .node_attr_mut()

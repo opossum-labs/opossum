@@ -1053,24 +1053,26 @@ mod test {
     };
     use num::Zero;
     #[test]
-    fn default() {
+    fn default() -> OpmResult<()> {
         let mut node = NodeGroup::default();
         assert_eq!(node.name(), "group");
         assert_eq!(node.node_type(), "group");
         assert_eq!(node.node_attr().inverted(), false);
-        assert_eq!(node.expand_view().unwrap(), false);
+        assert_eq!(node.expand_view()?, false);
         assert_eq!(node.node_color(), "yellow");
         assert!(node.as_group_mut().is_ok());
         assert_eq!(node.graph.edge_count(), 0);
         assert_eq!(node.graph.node_count(), 0);
+        Ok(())
     }
     #[test]
-    fn expand_view_property() {
+    fn expand_view_property() -> OpmResult<()> {
         let mut node = NodeGroup::default();
-        node.set_expand_view(true).unwrap();
-        assert_eq!(node.expand_view().unwrap(), true);
-        node.set_expand_view(false).unwrap();
-        assert_eq!(node.expand_view().unwrap(), false);
+        node.set_expand_view(true)?;
+        assert_eq!(node.expand_view()?, true);
+        node.set_expand_view(false)?;
+        assert_eq!(node.expand_view()?, false);
+        Ok(())
     }
     #[test]
     fn new() {
@@ -1078,41 +1080,40 @@ mod test {
         assert_eq!(node.name(), "test");
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<NodeGroup>()
     }
     #[test]
-    fn ports() {
+    fn ports() -> OpmResult<()> {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::default()).unwrap();
-        let sn2_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
-            .unwrap();
+        let sn1_i = og.add_node(Dummy::default())?;
+        let sn2_i = og.add_node(Dummy::default())?;
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())?;
         assert!(og.ports().names(&PortType::Input).is_empty());
         assert!(og.ports().names(&PortType::Output).is_empty());
-        og.map_input_port(sn1_i, "input_1", "input_1").unwrap();
+        og.map_input_port(sn1_i, "input_1", "input_1")?;
         assert!(
             og.ports()
                 .names(&PortType::Input)
                 .contains(&("input_1".to_string()))
         );
-        og.map_output_port(sn2_i, "output_1", "output_1").unwrap();
+        og.map_output_port(sn2_i, "output_1", "output_1")?;
         assert!(
             og.ports()
                 .names(&PortType::Output)
                 .contains(&("output_1".to_string()))
         );
+        Ok(())
     }
     #[test]
-    fn ports_inverted() {
+    fn ports_inverted() -> OpmResult<()> {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::default()).unwrap();
-        let sn2_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
-            .unwrap();
-        og.map_input_port(sn1_i, "input_1", "input_1").unwrap();
-        og.map_output_port(sn2_i, "output_1", "output_1").unwrap();
-        og.set_inverted(true).unwrap();
+        let sn1_i = og.add_node(Dummy::default())?;
+        let sn2_i = og.add_node(Dummy::default())?;
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())?;
+        og.map_input_port(sn1_i, "input_1", "input_1")?;
+        og.map_output_port(sn2_i, "output_1", "output_1")?;
+        og.set_inverted(true)?;
         assert!(
             og.ports()
                 .names(&PortType::Output)
@@ -1123,83 +1124,83 @@ mod test {
                 .names(&PortType::Input)
                 .contains(&("output_1".to_string()))
         );
+        Ok(())
     }
     #[test]
-    fn report() {
+    fn report() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        scenery.add_node(Dummy::default()).unwrap();
-        let report = scenery.toplevel_report().unwrap();
+        scenery.add_node(Dummy::default())?;
+        let report = scenery.toplevel_report()?;
         assert!(
             ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::new().new_line("\n"))
                 .is_ok()
         );
         // How shall we further parse the output?
+        Ok(())
     }
     #[test]
-    fn report_empty() {
+    fn report_empty() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
         AnalysisEnergy::analyze(
             &mut scenery,
             LightResult::default(),
             &EnergyConfig::default(),
-        )
-        .unwrap();
-        scenery.toplevel_report().unwrap();
+        )?;
+        scenery.toplevel_report()?;
+        Ok(())
     }
     #[test]
-    fn analyze_dummy() {
+    fn analyze_dummy() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let node1 = scenery.add_node(Dummy::default()).unwrap();
-        let node2 = scenery.add_node(Dummy::default()).unwrap();
-        scenery
-            .connect_nodes(node1, "output_1", node2, "input_1", Length::zero())
-            .unwrap();
+        let node1 = scenery.add_node(Dummy::default())?;
+        let node2 = scenery.add_node(Dummy::default())?;
+        scenery.connect_nodes(node1, "output_1", node2, "input_1", Length::zero())?;
         AnalysisEnergy::analyze(
             &mut scenery,
             LightResult::default(),
             &EnergyConfig::default(),
-        )
-        .unwrap();
+        )?;
+        Ok(())
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
         AnalysisEnergy::analyze(
             &mut scenery,
             LightResult::default(),
             &EnergyConfig::default(),
-        )
-        .unwrap();
+        )?;
+        Ok(())
     }
     #[test]
-    fn analyze_energy_threshold() {
-        let mut rays = Rays::from(
-            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap(),
-        );
-        rays.add_ray(
-            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.1)).unwrap(),
-        );
+    fn analyze_energy_threshold() -> OpmResult<()> {
+        let mut rays = Rays::from(Ray::new_collimated(
+            millimeter!(0., 0., 0.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(0., 0., 0.),
+            nanometer!(1053.0),
+            joule!(0.1),
+        )?);
         let ray_data_builder = RayDataSource::Raw(rays);
         let mut scenery = NodeGroup::default();
-        let i_s = scenery.add_node(SourcePort::default()).unwrap();
+        let i_s = scenery.add_node(SourcePort::default())?;
 
         let mut em = EnergyMeter::default();
-        em.set_isometry(Isometry::identity()).unwrap();
-        let i_e = scenery.add_node(em).unwrap();
-        scenery
-            .connect_nodes(i_s, "output_1", i_e, "input_1", Length::zero())
-            .unwrap();
+        em.set_isometry(Isometry::identity())?;
+        let i_e = scenery.add_node(em)?;
+        scenery.connect_nodes(i_s, "output_1", i_e, "input_1", Length::zero())?;
         let mut raytrace_config = RayTraceConfig::default();
-        raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();
+        raytrace_config.set_min_energy_per_ray(joule!(0.5))?;
         raytrace_config.map_source(i_s, ray_data_builder.into());
-        AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config).unwrap();
-        let uuid = scenery.node(i_e).unwrap().uuid().as_simple().to_string();
+        AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config)?;
+        let uuid = scenery.node(i_e)?.uuid().as_simple().to_string();
         let report = scenery
-            .node(i_e)
-            .unwrap()
+            .node(i_e)?
             .optical_ref
-            .lock_opm()
-            .unwrap()
+            .lock_opm()?
             .node_report(&uuid)
             .unwrap();
         if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {
@@ -1207,6 +1208,7 @@ mod test {
         } else {
             assert!(false)
         }
+        Ok(())
     }
 }
 
@@ -1221,43 +1223,41 @@ mod group_port_mapping_tests {
     ============================================================
     */
 
-    fn simple_group() -> NodeGroup {
+    fn simple_group() -> OpmResult<NodeGroup> {
         let mut group = NodeGroup::new("g");
-        let n1 = group.add_node(Dummy::new("n1")).unwrap();
-        group.map_input_port(n1, "input_1", "in").unwrap();
-        group.set_expand_view(true).unwrap();
-        group
+        let n1 = group.add_node(Dummy::new("n1"))?;
+        group.map_input_port(n1, "input_1", "in")?;
+        group.set_expand_view(true)?;
+        Ok(group)
     }
 
-    fn nested_group() -> NodeGroup {
+    fn nested_group() -> OpmResult<NodeGroup> {
         let mut outer = NodeGroup::new("outer");
         let mut inner = NodeGroup::new("inner");
-        let node = inner.add_node(Dummy::new("leaf")).unwrap();
-        inner.map_input_port(node, "input_1", "in").unwrap();
-        inner.set_expand_view(true).unwrap();
-        let inner_id = outer.add_node(inner).unwrap();
-        outer.map_input_port(inner_id, "in", "in").unwrap();
-        outer.set_expand_view(true).unwrap();
-        outer
+        let node = inner.add_node(Dummy::new("leaf"))?;
+        inner.map_input_port(node, "input_1", "in")?;
+        inner.set_expand_view(true)?;
+        let inner_id = outer.add_node(inner)?;
+        outer.map_input_port(inner_id, "in", "in")?;
+        outer.set_expand_view(true)?;
+        Ok(outer)
     }
 
-    fn deep_nested_group(depth: usize) -> NodeGroup {
+    fn deep_nested_group(depth: usize) -> OpmResult<NodeGroup> {
         let mut leaf_group = NodeGroup::new("leaf_group");
-        let leaf_node = leaf_group.add_node(Dummy::new("leaf")).unwrap();
-        leaf_group
-            .map_input_port(leaf_node, "input_1", "in")
-            .unwrap();
-        leaf_group.set_expand_view(true).unwrap();
+        let leaf_node = leaf_group.add_node(Dummy::new("leaf"))?;
+        leaf_group.map_input_port(leaf_node, "input_1", "in")?;
+        leaf_group.set_expand_view(true)?;
 
         let mut current = leaf_group;
         for i in 0..depth {
             let mut parent = NodeGroup::new(&format!("g{i}"));
-            let id = parent.add_node(current).unwrap();
-            parent.map_input_port(id, "in", "in").unwrap();
-            parent.set_expand_view(true).unwrap();
+            let id = parent.add_node(current)?;
+            parent.map_input_port(id, "in", "in")?;
+            parent.set_expand_view(true)?;
             current = parent;
         }
-        current
+        Ok(current)
     }
 
     /*
@@ -1267,56 +1267,62 @@ mod group_port_mapping_tests {
     */
 
     #[test]
-    fn mapped_port_simple_group() {
-        let group = simple_group();
+    fn mapped_port_simple_group() -> OpmResult<()> {
+        let group = simple_group()?;
         let node_id = group.node_attr().uuid().as_simple().to_string();
-        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        let result = group.get_mapped_port_str("in", &node_id)?;
         assert!(result.contains(":input_1"));
         assert!(result.starts_with('i'));
+        Ok(())
     }
 
     #[test]
-    fn connecting_already_mapped_port() {
+    fn connecting_already_mapped_port() -> OpmResult<()> {
         let mut group = NodeGroup::new("g");
-        let n1 = group.add_node(Dummy::new("n1")).unwrap();
-        group.map_input_port(n1, "input_1", "in").unwrap();
-        let n2 = group.add_node(Dummy::default()).unwrap();
+        let n1 = group.add_node(Dummy::new("n1"))?;
+        group.map_input_port(n1, "input_1", "in")?;
+        let n2 = group.add_node(Dummy::default())?;
         let result = group.connect_nodes(n2, "output_1", n1, "input_1", meter!(0.));
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]
-    fn mapped_port_nested_group() {
-        let group = nested_group();
+    fn mapped_port_nested_group() -> OpmResult<()> {
+        let group = nested_group()?;
         let node_id = group.node_attr().uuid().as_simple().to_string();
-        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        let result = group.get_mapped_port_str("in", &node_id)?;
         assert!(result.contains(":input_1"));
         assert!(result.starts_with('i'));
+        Ok(())
     }
 
     #[test]
-    fn mapped_port_deep_nested_groups() {
-        let group = deep_nested_group(5);
+    fn mapped_port_deep_nested_groups() -> OpmResult<()> {
+        let group = deep_nested_group(5)?;
         let node_id = group.node_attr().uuid().as_simple().to_string();
-        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        let result = group.get_mapped_port_str("in", &node_id)?;
         assert!(result.contains(":input_1"));
         assert!(result.starts_with('i'));
+        Ok(())
     }
 
     #[test]
-    fn collapsed_group_returns_external_port() {
-        let mut group = simple_group();
-        group.set_expand_view(false).unwrap();
+    fn collapsed_group_returns_external_port() -> OpmResult<()> {
+        let mut group = simple_group()?;
+        group.set_expand_view(false)?;
         let node_id = group.node_attr().uuid().as_simple().to_string();
-        let result = group.get_mapped_port_str("in", &node_id).unwrap();
+        let result = group.get_mapped_port_str("in", &node_id)?;
         assert_eq!(result, format!("{node_id}:in"));
+        Ok(())
     }
 
     #[test]
-    fn unmapped_port_returns_error() {
-        let group = simple_group();
+    fn unmapped_port_returns_error() -> OpmResult<()> {
+        let group = simple_group()?;
         let node_id = group.node_attr().uuid().as_simple().to_string();
         let result = group.get_mapped_port_str("does_not_exist", &node_id);
         assert!(result.is_err());
+        Ok(())
     }
 }

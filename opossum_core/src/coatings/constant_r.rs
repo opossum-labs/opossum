@@ -64,18 +64,20 @@ mod test {
         assert!(ConstantR::new(1.1).is_err());
     }
     #[test]
-    fn from() {
-        let coating = ConstantR::new(0.5).unwrap();
+    fn from() -> OpmResult<()> {
+        let coating = ConstantR::new(0.5)?;
         assert!(matches!(
             coating.into(),
             CoatingType::ConstantR { reflectivity: 0.5 }
         ));
+        Ok(())
     }
     #[test]
-    fn calc_refl() {
-        let coating = ConstantR::new(0.5).unwrap();
-        let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap();
+    fn calc_refl() -> OpmResult<()> {
+        let coating = ConstantR::new(0.5)?;
+        let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?;
         let surface_normal = vector![0.0, 0.0, -1.0];
         assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.5), 0.5);
+        Ok(())
     }
 }
