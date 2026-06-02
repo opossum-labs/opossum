@@ -137,46 +137,44 @@ mod test {
     use crate::prelude::ApertureShape;
 
     #[test]
-    fn stack() {
-        let r = RectangleShape::new(meter!(1.0), meter!(1.0)).unwrap();
+    fn stack() -> OpmResult<()> {
+        let r = RectangleShape::new(meter!(1.0), meter!(1.0))?;
         let r_ap = Aperture::new(
             ApertureShape::BinaryRectangle(r),
             ApertureType::Hole,
             Some(meter!(0.5, 0.5)),
             None,
-        )
-        .unwrap();
-        let c = CircleShape::new(meter!(1.0)).unwrap();
+        )?;
+        let c = CircleShape::new(meter!(1.0))?;
         let c_ap = Aperture::new(
             ApertureShape::BinaryCircle(c),
             ApertureType::Hole,
             None,
             None,
-        )
-        .unwrap();
-        let s = StackShape::new(vec![r_ap, c_ap]).unwrap();
-        let s_ap = Aperture::new(ApertureShape::Stack(s), ApertureType::Hole, None, None).unwrap();
+        )?;
+        let s = StackShape::new(vec![r_ap, c_ap])?;
+        let s_ap = Aperture::new(ApertureShape::Stack(s), ApertureType::Hole, None, None)?;
         assert_eq!(s_ap.apodize(&meter!(0.0, 0.0, 0.0)), 1.0);
         assert_eq!(s_ap.apodize(&meter!(1.0, 0.0, 0.0)), 1.0);
         assert_eq!(s_ap.apodize(&meter!(0.0, 1.0, 0.0)), 1.0);
         assert_eq!(s_ap.apodize(&meter!(1.0, 1.0, 0.0)), 0.0);
         assert_eq!(s_ap.apodize(&meter!(-1.0, 0.0, 0.0)), 0.0);
         assert_eq!(s_ap.apodize(&meter!(0.0, -1.0, 0.0)), 0.0);
+        Ok(())
     }
     #[test]
     fn test_stack_transmission_factor() -> OpmResult<()> {
         // 1. Create a circle at (0,0) with radius 1.0
-        let circle = CircleShape::new(meter!(1.0)).unwrap();
+        let circle = CircleShape::new(meter!(1.0))?;
         let circle_ap = ApertureShape::BinaryCircle(circle);
-        let circle_ap = Aperture::new(circle_ap, ApertureType::Hole, None, None).unwrap();
+        let circle_ap = Aperture::new(circle_ap, ApertureType::Hole, None, None)?;
         // 2. Create a rectangle at (1,0) with width 2.0 and height 2.0
         // This rectangle covers x from 0.0 to 2.0 and y from -1.0 to 1.0
-        let rect = RectangleShape::new(meter!(2.0), meter!(2.0)).unwrap();
+        let rect = RectangleShape::new(meter!(2.0), meter!(2.0))?;
         let rect_ap = ApertureShape::BinaryRectangle(rect);
-        let rect_ap =
-            Aperture::new(rect_ap, ApertureType::Hole, Some(meter!(1.0, 0.0)), None).unwrap();
+        let rect_ap = Aperture::new(rect_ap, ApertureType::Hole, Some(meter!(1.0, 0.0)), None)?;
         // 3. Create the stack
-        let stack = StackShape::new(vec![circle_ap, rect_ap]).unwrap();
+        let stack = StackShape::new(vec![circle_ap, rect_ap])?;
 
         // --- Test Points ---
 

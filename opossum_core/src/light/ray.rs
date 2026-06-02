@@ -1146,7 +1146,7 @@ mod test {
         let wvl = nanometer!(1054.0);
         let e = joule!(1.0);
         let reflectivity = percent!(20.0);
-        let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
+        let mut ray = Ray::new_collimated(position, wvl, e)?;
         let plane_z_pos = millimeter!(10.0);
         let isometry = Isometry::new(
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
@@ -1154,7 +1154,7 @@ mod test {
         )?;
         let mut s = OpticSurface::default();
         s.set_isometry(isometry);
-        s.set_coating(CoatingConstantR::new(reflectivity).unwrap().into());
+        s.set_coating(CoatingConstantR::new(reflectivity)?.into());
         assert!(
             ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
                 .is_err()
@@ -1327,12 +1327,8 @@ mod test {
     fn filter_energy() -> OpmResult<()> {
         let position = millimeter!(0., 1., 0.);
         let wvl = nanometer!(1054.0);
-        let mut ray = Ray::new_collimated(position, wvl, joule!(1.0)).unwrap();
-        let _ = ray
-            .filter_energy(&FilterType::Constant(
-                FilterConst::new(percent!(30.0)).unwrap(),
-            ))
-            .unwrap();
+        let mut ray = Ray::new_collimated(position, wvl, joule!(1.0))?;
+        let _ = ray.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
         assert_eq!(ray.pos, millimeter!(0., 1., 0.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.wvl, wvl);
@@ -1715,19 +1711,19 @@ mod test {
     }
 
     #[test]
-    fn position_history_with_current() {
+    fn position_history_with_current() -> OpmResult<()> {
         let ray = Ray::new(
             meter!(1., 2., 3.),
             Vector3::new(0., 0., 1.),
             nanometer!(1000.),
             joule!(1.),
-        )
-        .unwrap();
+        )?;
         assert_eq!(ray.position_history_with_current().column(0).len(), 1);
         let hist = ray.position_history_with_current();
         assert_relative_eq!(hist[(0, 0)].value, 1.);
         assert_relative_eq!(hist[(0, 1)].value, 2.);
         assert_relative_eq!(hist[(0, 2)].value, 3.);
+        Ok(())
     }
 
     #[test]
@@ -1787,9 +1783,7 @@ mod test {
                 .change_helper_fluence_by_factor(percent!(f64::INFINITY))
                 .is_err()
         );
-        original_ray
-            .change_helper_fluence_by_factor(percent!(400.0))
-            .unwrap();
+        original_ray.change_helper_fluence_by_factor(percent!(400.0))?;
         assert_relative_eq!(
             original_ray.helper_ray_fluence().unwrap().value / 40000.,
             1.,

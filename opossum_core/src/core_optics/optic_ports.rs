@@ -497,10 +497,8 @@ mod test {
                 .ok_or(OpossumError::OpticPort("Could not get port".to_string()))?,
             CoatingType::IdealAR
         ));
-        let coating = CoatingConstantR::new(percent!(50.0)).unwrap();
-        ports
-            .set_coating(&PortType::Input, "test1", &coating.into())
-            .unwrap();
+        let coating = CoatingConstantR::new(percent!(50.0))?;
+        ports.set_coating(&PortType::Input, "test1", &coating.into())?;
         if let CoatingType::ConstantR(conf) = ports.coating(&PortType::Input, "test1").unwrap() {
             assert_eq!(conf.reflectivity(), percent!(50.0));
         } else {

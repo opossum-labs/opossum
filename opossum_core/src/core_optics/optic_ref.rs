@@ -186,7 +186,7 @@ mod test {
             optic_ref.uuid(),
             uuid!("a2534789-ec98-4e9b-a1da-315a59d9da43")
         );
-        let optic_ref = optic_ref.optical_ref.lock_opm().unwrap();
+        let optic_ref = optic_ref.optical_ref.lock_opm()?;
         assert_eq!(optic_ref.node_type(), "dummy");
         assert_eq!(optic_ref.name(), "dummy1");
         Ok(())

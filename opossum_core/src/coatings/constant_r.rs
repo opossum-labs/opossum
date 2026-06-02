@@ -104,22 +104,24 @@ mod test {
         assert!(CoatingConstantR::new(percent!(100.1)).is_err());
     }
     #[test]
-    fn from() {
-        let coating = CoatingConstantR::new(percent!(50.0)).unwrap();
+    fn from() -> OpmResult<()> {
+        let coating = CoatingConstantR::new(percent!(50.0))?;
         if let CoatingType::ConstantR(config) = coating.into() {
             assert_eq!(*config.reflectivity.get(), percent!(50.0));
         } else {
             panic!("Expected CoatingType::ConstantR variant");
         }
+        Ok(())
     }
     #[test]
-    fn calc_refl() {
-        let coating = CoatingConstantR::new(percent!(50.0)).unwrap();
-        let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap();
+    fn calc_refl() -> OpmResult<()> {
+        let coating = CoatingConstantR::new(percent!(50.0))?;
+        let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?;
         let surface_normal = vector![0.0, 0.0, -1.0];
         assert_eq!(
             coating.calc_reflectivity(&ray, surface_normal, 1.5),
             percent!(50.0)
         );
+        Ok(())
     }
 }

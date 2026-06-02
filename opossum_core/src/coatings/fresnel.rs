@@ -80,7 +80,7 @@ mod test {
             percent!(0.0)
         );
 
-        ray.set_refractive_index(2.0).unwrap();
+        ray.set_refractive_index(2.0)?;
         assert_eq!(
             coating.calc_reflectivity(&ray, surface_normal, 2.0),
             percent!(0.0)
