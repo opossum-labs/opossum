@@ -129,14 +129,16 @@ fn get_args<T>(
         let arg = func(i);
         if arg.is_none() {
             let prompt_str = create_prompt_str(arg_flag, "Invalid input!\n")?;
-            let input: String = prompt_reply_from_bufread(reader, writer, prompt_str).unwrap();
+            let input: String = prompt_reply_from_bufread(reader, writer, prompt_str)
+                .map_err(|e| OpossumError::Console(format!("Error getting arguments: {e}")))?;
             get_args(func, Some(input.as_str()), arg_flag, reader, writer)
         } else {
             arg.ok_or_else(|| OpossumError::Console("Could not extract argument!".into()))
         }
     } else {
         let prompt_str = create_prompt_str(arg_flag, "")?;
-        let input: String = prompt_reply_from_bufread(reader, writer, prompt_str).unwrap();
+        let input: String = prompt_reply_from_bufread(reader, writer, prompt_str)
+            .map_err(|e| OpossumError::Console(format!("Error writing prompt message: {e}")))?;
         get_args(func, Some(input.as_str()), arg_flag, reader, writer)
     }
 }
@@ -313,16 +315,17 @@ mod test {
         );
     }
     #[test]
-    fn create_prompt_str_test() {
+    fn create_prompt_str_test() -> OpmResult<()> {
         assert_eq!(
-            create_prompt_str("f", "test_str\r\n").unwrap(),
+            create_prompt_str("f", "test_str\r\n")?,
             "test_str\r\nPlease insert path to optical-setup-description file:\n"
         );
         assert_eq!(
-            create_prompt_str("r", "test_str\r\n").unwrap(),
+            create_prompt_str("r", "test_str\r\n")?,
             "test_str\r\nPlease insert a report directory or nothing to select the same directory as the optical-setup file\n"
         );
         assert!(create_prompt_str("invalid_flag", "").is_err());
+        Ok(())
     }
     #[test]
     fn intro_test() {
@@ -371,7 +374,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
                           Opossum - Open-source Optics Simulation System and Unified Modeler                           \n")
     }
     #[test]
-    fn try_from_args_test() {
+    fn try_from_args_test() -> OpmResult<()> {
         let path_valid = "./files_for_testing/opm/opticscenery.opm".to_owned();
         let part_args = PartialArgs {
             file_path: Some(path_valid.clone()),
@@ -385,7 +388,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             show_logo: true,
         };
 
-        let args_from = Args::try_from(part_args).unwrap();
+        let args_from = Args::try_from(part_args)?;
 
         assert_eq!(args.file_path, args_from.file_path);
         assert_eq!(args.report_directory, args_from.report_directory);
@@ -401,12 +404,13 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             report_directory: PathBuf::from("./files_for_testing/"),
             show_logo: true,
         };
-        let args_from = Args::try_from(part_args).unwrap();
+        let args_from = Args::try_from(part_args)?;
         assert_eq!(args.report_directory, args_from.report_directory);
+        Ok(())
     }
 
     #[test]
-    fn get_args_test() {
+    fn get_args_test() -> OpmResult<()> {
         let correct_file_path = b"./files_for_testing/opm/opticscenery.opm\r\n";
         let report_directory_path1 = b"./files_for_testing/\r\n";
 
@@ -418,8 +422,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             "f",
             &mut reader,
             &mut writer,
-        )
-        .unwrap();
+        )?;
         let file_path_str1 = file_path1.to_str().unwrap();
         assert_eq!(file_path_str1, "./files_for_testing/opm/opticscenery.opm");
 
@@ -457,8 +460,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             "r",
             &mut reader,
             &mut writer,
-        )
-        .unwrap();
+        )?;
         let report_path_str2 = report_path2.to_str().unwrap();
         assert_eq!(report_path_str2, "./files_for_testing/");
 
@@ -469,11 +471,11 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             "r",
             &mut reader,
             &mut writer,
-        )
-        .unwrap();
+        )?;
         let report_path_str3 = report_path3.to_str().unwrap();
         assert_eq!(report_path_str3, "./files_for_not_testing/");
         std::fs::remove_dir("./files_for_not_testing/").unwrap();
+        Ok(())
     }
 
     #[test]

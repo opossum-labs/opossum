@@ -1,12 +1,12 @@
 use nalgebra::{Isometry3, Point3, Rotation, Vector3};
-use opossum_core::{degree, utils::geom_transformation::Isometry};
+use opossum_core::{degree, error::OpmResult, utils::geom_transformation::Isometry};
 
-fn main() {
+fn main() -> OpmResult<()> {
     let rot_x = Isometry3::rotation(Vector3::x() * std::f64::consts::PI / 4.);
     let rot_y = Isometry3::rotation(Vector3::y() * std::f64::consts::PI / 4.);
     let rot_from_euler =
         Rotation::from_euler_angles(std::f64::consts::PI / 4., std::f64::consts::PI / 4., 0.);
-    let rot_xy: Isometry = Isometry::new(Point3::origin(), degree!(45., 45., 0.)).unwrap();
+    let rot_xy: Isometry = Isometry::new(Point3::origin(), degree!(45., 45., 0.))?;
 
     let start_vec = Vector3::new(0., 0., 1.);
 
@@ -17,4 +17,5 @@ fn main() {
     println!("{end_vec_x_then_y}");
     println!("{end_vec_xy}");
     println!("{end_vec_euler}");
+    Ok(())
 }

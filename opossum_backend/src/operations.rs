@@ -367,7 +367,7 @@ fn resolve_references(
         if let Some(referenced_node) = referenced_node_opt {
             scenery.with_node_mut(*new_id, |node| {
                 if let Ok(ref_node) = node.as_refnode_mut() {
-                    ref_node.assign_reference(&referenced_node);
+                    let _ = ref_node.assign_reference(&referenced_node);
                 }
             })?;
         }
@@ -589,7 +589,7 @@ pub fn copy_from_optic_ref(
     let new_node_ref = create_node_ref(&node_type)?;
     let mut node = new_node_ref.optical_ref.lock_opm()?;
     if let Some(referenced_node) = referenced_node_opt {
-        node.as_refnode_mut()?.assign_reference(&referenced_node);
+        node.as_refnode_mut()?.assign_reference(&referenced_node)?;
     }
 
     let node_attr = node.node_attr_mut();

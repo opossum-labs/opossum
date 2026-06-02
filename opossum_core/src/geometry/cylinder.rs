@@ -130,7 +130,7 @@ impl GeoSurface for Cylinder {
             Point3::new(Length::zero(), Length::zero(), self.radius),
             radian!(0., 0., 0.),
         )
-        .unwrap();
+        .expect("Could not set anchor isometry");
         self.isometry = isometry.append(&anchor_isometry);
     }
     fn isometry(&self) -> &Isometry {
@@ -149,28 +149,31 @@ mod test {
     use uom::si::length::millimeter;
 
     #[test]
-    fn new() {
-        let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
+    fn new() -> OpmResult<()> {
+        let iso = Isometry::new_along_z(millimeter!(1.0))?;
         assert!(Cylinder::new(millimeter!(f64::NAN), iso.clone()).is_err());
         assert!(Cylinder::new(millimeter!(f64::INFINITY), iso.clone()).is_err());
         assert!(Cylinder::new(millimeter!(f64::NEG_INFINITY), iso.clone()).is_err());
 
-        let s = Cylinder::new(millimeter!(2.0), iso.clone()).unwrap();
+        let s = Cylinder::new(millimeter!(2.0), iso.clone())?;
         assert_eq!(s.radius, millimeter!(2.0));
         assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, 1.0));
 
-        let iso = Isometry::new_along_z(millimeter!(-1.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(-1.0))?;
 
-        let s = Cylinder::new(millimeter!(2.0), iso).unwrap();
+        let s = Cylinder::new(millimeter!(2.0), iso)?;
         assert_eq!(s.radius, millimeter!(2.0));
         assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, -1.0));
+        Ok(())
     }
     #[test]
-    fn intersect_positive_on_axis() {
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Cylinder::new(millimeter!(1.0), iso).unwrap();
-        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
-        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+    fn intersect_positive_on_axis() -> OpmResult<()> {
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
+        let s = Cylinder::new(millimeter!(1.0), iso)?;
+        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
+        let (intersection_point, normal) = s
+            .calc_intersect_and_normal(&ray)
+            .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_abs_diff_eq!(intersection_point.x.value, 0.0);
         assert_abs_diff_eq!(intersection_point.y.value, 0.0);
         assert_abs_diff_eq!(intersection_point.z.value, 0.009);
@@ -178,43 +181,48 @@ mod test {
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, -1.0);
 
-        let ray = Ray::new_collimated(millimeter!(0.0, 1.0, 0.0), nanometer!(1053.0), joule!(1.0))
-            .unwrap();
-        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        let ray = Ray::new_collimated(millimeter!(0.0, 1.0, 0.0), nanometer!(1053.0), joule!(1.0))?;
+        let (intersection_point, normal) = s
+            .calc_intersect_and_normal(&ray)
+            .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_abs_diff_eq!(intersection_point.x.value, 0.0);
         assert_abs_diff_eq!(intersection_point.y.value, 0.001);
         assert_abs_diff_eq!(intersection_point.z.value, 0.009);
         assert_abs_diff_eq!(normal.x, 0.0);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, -1.0);
+        Ok(())
     }
     #[test]
-    fn intersect_positive_on_axis_behind() {
-        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
-        let iso = Isometry::new_along_z(millimeter!(-10.0)).unwrap();
-        let s = Cylinder::new(millimeter!(1.0), iso.clone()).unwrap();
+    fn intersect_positive_on_axis_behind() -> OpmResult<()> {
+        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
+        let iso = Isometry::new_along_z(millimeter!(-10.0))?;
+        let s = Cylinder::new(millimeter!(1.0), iso.clone())?;
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
+        Ok(())
     }
     #[test]
-    fn intersect_positive_collinear_no_intersect() {
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Cylinder::new(millimeter!(1.0), iso).unwrap();
-        let ray = Ray::new_collimated(millimeter!(1.1, 0.0, 0.0), nanometer!(1053.0), joule!(1.0))
-            .unwrap();
+    fn intersect_positive_collinear_no_intersect() -> OpmResult<()> {
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
+        let s = Cylinder::new(millimeter!(1.0), iso)?;
+        let ray = Ray::new_collimated(millimeter!(1.1, 0.0, 0.0), nanometer!(1053.0), joule!(1.0))?;
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
+        Ok(())
     }
     #[test]
-    fn intersect_positive_collinear_touch() {
+    fn intersect_positive_collinear_touch() -> OpmResult<()> {
         let wvl = nanometer!(1053.0);
-        let ray = Ray::new_collimated(millimeter!(1.0, 0.0, 0.0), wvl, joule!(1.0)).unwrap();
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Cylinder::new(millimeter!(1.0), iso).unwrap();
+        let ray = Ray::new_collimated(millimeter!(1.0, 0.0, 0.0), wvl, joule!(1.0))?;
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
+        let s = Cylinder::new(millimeter!(1.0), iso)?;
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(1.0, 0.0, 10.0), Vector3::x()))
         );
-        let ray = Ray::new_collimated(millimeter!(-1.0, 0.0, 0.0), wvl, joule!(1.0)).unwrap();
-        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        let ray = Ray::new_collimated(millimeter!(-1.0, 0.0, 0.0), wvl, joule!(1.0))?;
+        let (intersection_point, normal) = s
+            .calc_intersect_and_normal(&ray)
+            .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_eq!(intersection_point.y, Length::zero());
         assert_abs_diff_eq!(intersection_point.x.value, -0.001);
         assert_abs_diff_eq!(
@@ -225,41 +233,50 @@ mod test {
         assert_abs_diff_eq!(normal.x, -1.0);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, 0.0);
+        Ok(())
     }
     #[test]
-    fn intersect_positive_back_propagating_on_axis() {
+    fn intersect_positive_back_propagating_on_axis() -> OpmResult<()> {
         let wvl = nanometer!(1053.0);
-        let ray = Ray::new(millimeter!(0.0, 0.0, 10.0), -Vector3::z(), wvl, joule!(1.0)).unwrap();
-        let iso = Isometry::new_along_z(millimeter!(0.0)).unwrap();
-        let s = Cylinder::new(millimeter!(1.0), iso).unwrap();
-        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        let ray = Ray::new(millimeter!(0.0, 0.0, 10.0), -Vector3::z(), wvl, joule!(1.0))?;
+        let iso = Isometry::new_along_z(millimeter!(0.0))?;
+        let s = Cylinder::new(millimeter!(1.0), iso)?;
+        let (intersection_point, normal) = s
+            .calc_intersect_and_normal(&ray)
+            .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_abs_diff_eq!(intersection_point.x.value, 0.0);
         assert_abs_diff_eq!(intersection_point.y.value, 0.0);
         assert_abs_diff_eq!(intersection_point.z.value, -0.001);
         assert_abs_diff_eq!(normal.x, 0.0);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, 1.0);
+        Ok(())
     }
     #[test]
-    fn intersect_negative_back_propagating_on_axis() {
+    fn intersect_negative_back_propagating_on_axis() -> OpmResult<()> {
         let wvl = nanometer!(1053.0);
-        let ray = Ray::new(millimeter!(0.0, 0.0, 10.0), -Vector3::z(), wvl, joule!(1.0)).unwrap();
-        let iso = Isometry::new_along_z(millimeter!(0.0)).unwrap();
-        let s = Cylinder::new(millimeter!(-1.0), iso).unwrap();
-        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        let ray = Ray::new(millimeter!(0.0, 0.0, 10.0), -Vector3::z(), wvl, joule!(1.0))?;
+        let iso = Isometry::new_along_z(millimeter!(0.0))?;
+        let s = Cylinder::new(millimeter!(-1.0), iso)?;
+        let (intersection_point, normal) = s
+            .calc_intersect_and_normal(&ray)
+            .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_abs_diff_eq!(intersection_point.x.value, 0.0);
         assert_abs_diff_eq!(intersection_point.y.value, 0.0);
         assert_abs_diff_eq!(intersection_point.z.value, 0.001);
         assert_abs_diff_eq!(normal.x, 0.0);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, 1.0);
+        Ok(())
     }
     #[test]
-    fn intersect_negative_on_axis() {
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Cylinder::new(millimeter!(-1.0), iso).unwrap();
-        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
-        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+    fn intersect_negative_on_axis() -> OpmResult<()> {
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
+        let s = Cylinder::new(millimeter!(-1.0), iso)?;
+        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
+        let (intersection_point, normal) = s
+            .calc_intersect_and_normal(&ray)
+            .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_abs_diff_eq!(intersection_point.x.value, 0.0);
         assert_abs_diff_eq!(intersection_point.y.value, 0.0);
         assert_abs_diff_eq!(intersection_point.z.value, 0.011);
@@ -267,29 +284,33 @@ mod test {
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, -1.0);
 
-        let ray = Ray::new_collimated(millimeter!(0.0, 1.0, 0.0), nanometer!(1053.0), joule!(1.0))
-            .unwrap();
-        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        let ray = Ray::new_collimated(millimeter!(0.0, 1.0, 0.0), nanometer!(1053.0), joule!(1.0))?;
+        let (intersection_point, normal) = s
+            .calc_intersect_and_normal(&ray)
+            .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_abs_diff_eq!(intersection_point.x.value, 0.0);
         assert_abs_diff_eq!(intersection_point.y.value, 0.001);
         assert_abs_diff_eq!(intersection_point.z.value, 0.011);
         assert_abs_diff_eq!(normal.x, 0.0);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, -1.0);
+        Ok(())
     }
     #[test]
-    fn intersect_positive_back_propagating_off_axis() {
+    fn intersect_positive_back_propagating_off_axis() -> OpmResult<()> {
         let wvl = nanometer!(1053.0);
         // Ray starts at z=10, moves in -z direction, offset in x
-        let ray = Ray::new(millimeter!(0.6, 0.0, 10.0), -Vector3::z(), wvl, joule!(1.0)).unwrap();
+        let ray = Ray::new(millimeter!(0.6, 0.0, 10.0), -Vector3::z(), wvl, joule!(1.0))?;
 
         // Cylinder at origin with radius 1mm
-        let iso = Isometry::new_along_z(millimeter!(0.0)).unwrap();
-        let s = Cylinder::new(millimeter!(1.0), iso).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(0.0))?;
+        let s = Cylinder::new(millimeter!(1.0), iso)?;
 
         // Geometry: x^2 + z^2 = r^2 => 0.6^2 + z^2 = 1.0^2
         // 0.36 + z^2 = 1.0 => z^2 = 0.64 => z = -0.8 (first hit from z=-10)
-        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        let (intersection_point, normal) = s
+            .calc_intersect_and_normal(&ray)
+            .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
 
         assert_abs_diff_eq!(intersection_point.x.get::<millimeter>(), 0.6);
         assert_abs_diff_eq!(
@@ -304,5 +325,6 @@ mod test {
         assert_abs_diff_eq!(normal.x, -0.6, epsilon = 1e-12);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, 0.8, epsilon = 1e-12);
+        Ok(())
     }
 }

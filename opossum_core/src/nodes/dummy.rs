@@ -31,9 +31,9 @@ inventory::submit! {
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - `front`
+///     - `input_1`
 ///   - Outputs
-///     - `rear`
+///     - `output_1`
 ///
 /// ## Properties
 ///   - `name`
@@ -159,7 +159,7 @@ mod test {
         assert_eq!(node.name(), "Test1")
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<Dummy>()
     }
     #[test]
@@ -183,53 +183,57 @@ mod test {
         assert!(report.is_none());
     }
     #[test]
-    fn ports_inverted() {
+    fn ports_inverted() -> OpmResult<()> {
         let mut node = Dummy::default();
-        node.set_inverted(true).unwrap();
+        node.set_inverted(true)?;
         assert_eq!(node.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["input_1"]);
+        Ok(())
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<Dummy>()
     }
     #[test]
-    fn analyze_wrong() {
+    fn analyze_wrong() -> OpmResult<()> {
         let mut dummy = Dummy::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut dummy, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut dummy, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_ok() {
+    fn analyze_ok() -> OpmResult<()> {
         let mut dummy = Dummy::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut dummy, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut dummy, input, &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
-    fn analyze_inverse() {
+    fn analyze_inverse() -> OpmResult<()> {
         let mut dummy = Dummy::default();
-        dummy.set_inverted(true).unwrap();
+        dummy.set_inverted(true)?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut dummy, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut dummy, input, &EnergyConfig::default())?;
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
 }

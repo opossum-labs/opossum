@@ -208,32 +208,32 @@ mod tests {
         assert!(matches!(ldb, LightDataBuilder::Geometric(_)));
     }
     #[test]
-    fn from_light_data_builder_to_proptype() {
+    fn from_light_data_builder_to_proptype() -> OpmResult<()> {
         let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))
-                .unwrap(),
+            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))?,
         ));
         let proptype: Proptype = light_data_builder.into();
         assert!(matches!(proptype, Proptype::LightDataBuilder(_)));
+        Ok(())
     }
     #[test]
-    fn display_light_data_builder() {
+    fn display_light_data_builder() -> OpmResult<()> {
         let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))
-                .unwrap(),
+            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))?,
         ));
         assert_eq!(format!("{light_data_builder}"), "Energy");
+        Ok(())
     }
     #[test]
-    fn build_light_data() {
+    fn build_light_data() -> OpmResult<()> {
         let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
-            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))
-                .unwrap(),
+            EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(1.0))], nanometer!(1.0))?,
         ));
-        let light_data = light_data_builder.build().unwrap();
+        let light_data = light_data_builder.build()?;
         assert!(matches!(light_data, LightData::Energy(_)));
         let light_data_builder = LightDataBuilder::Geometric(RayDataSource::Raw(Rays::default()));
-        let light_data = light_data_builder.build().unwrap();
+        let light_data = light_data_builder.build()?;
         assert!(matches!(light_data, LightData::Geometric(_)));
+        Ok(())
     }
 }

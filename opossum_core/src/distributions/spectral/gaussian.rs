@@ -339,20 +339,20 @@ mod test {
         );
     }
     #[test]
-    fn generate() {
+    fn generate() -> OpmResult<()> {
         let gauss = Gaussian::new(
             (nanometer!(1000.0), nanometer!(2000.0)),
             11,
             nanometer!(1500.0),
             nanometer!(500.0),
             1.0,
-        )
-        .unwrap();
-        let values = gauss.generate().unwrap();
+        )?;
+        let values = gauss.generate()?;
         assert_eq!(values.len(), 11);
         assert_abs_diff_eq!(values[5].0.value, nanometer!(1500.0).value);
         let v_sum: f64 = values.iter().map(|v| v.1).sum();
         assert_abs_diff_eq!(v_sum, 1.0);
+        Ok(())
     }
     #[test]
     fn test_default() {
@@ -412,7 +412,7 @@ mod test {
     }
 
     #[test]
-    fn test_generate_symmetry() {
+    fn test_generate_symmetry() -> OpmResult<()> {
         // A Gaussian centered in the range should be symmetric
         let mu = nanometer!(1500.0);
         let g = Gaussian::new(
@@ -421,14 +421,13 @@ mod test {
             mu,
             nanometer!(100.0),
             1.0,
-        )
-        .unwrap();
-
-        let values = g.generate().unwrap();
+        )?;
+        let values = g.generate()?;
 
         // Check symmetry around index 10 (the 11th point at 1500nm)
         for i in 0..10 {
             assert_abs_diff_eq!(values[i].1, values[20 - i].1, epsilon = 1e-12);
         }
+        Ok(())
     }
 }

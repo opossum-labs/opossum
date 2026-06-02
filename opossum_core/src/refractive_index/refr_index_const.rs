@@ -96,6 +96,8 @@ mod test {
     use num::Zero;
     use uom::si::f64::Length;
 
+    use crate::error::OpossumError;
+
     use super::*;
     #[test]
     fn new() {
@@ -104,25 +106,29 @@ mod test {
         assert!(RefrIndexConst::new(f64::INFINITY).is_err());
     }
     #[test]
-    fn get_refractive_index() {
-        let i = RefrIndexConst::new(1.5).unwrap();
-        assert_eq!(i.get_refractive_index(Length::zero()).unwrap(), 1.5);
+    fn get_refractive_index() -> OpmResult<()> {
+        let i = RefrIndexConst::new(1.5)?;
+        assert_eq!(i.get_refractive_index(Length::zero())?, 1.5);
+        Ok(())
     }
     #[test]
-    fn get_enum() {
-        let i = RefrIndexConst::new(1.5).unwrap();
+    fn get_enum() -> OpmResult<()> {
+        let i = RefrIndexConst::new(1.5)?;
         assert!(matches!(
             RefractiveIndexType::from(&i),
             RefractiveIndexType::Const(_)
         ));
+        Ok(())
     }
 
     #[test]
-    fn validator_deserialize() {
-        let i = RefrIndexConst::new(1.5).unwrap();
+    fn validator_deserialize() -> OpmResult<()> {
+        let i = RefrIndexConst::new(1.5)?;
         let serialized =
-            ron::ser::to_string_pretty(&i, ron::ser::PrettyConfig::new().new_line("\n")).unwrap();
-        let mut deserialized: RefrIndexConst = ron::from_str(&serialized).unwrap();
+            ron::ser::to_string_pretty(&i, ron::ser::PrettyConfig::new().new_line("\n"))
+                .map_err(|e| OpossumError::Other(format!("serialization error: {e}")))?;
+        let mut deserialized: RefrIndexConst = ron::from_str(&serialized)
+            .map_err(|e| OpossumError::Other(format!("deserialization error: {e}")))?;
 
         // all in range must still be valid by the default setter!
         assert_eq!(deserialized.refractive_index(), 1.5);
@@ -130,5 +136,6 @@ mod test {
         assert_eq!(deserialized.refractive_index(), 2.5);
         assert!(deserialized.set_refractive_index(0.9).is_err());
         assert_eq!(deserialized.refractive_index(), 2.5);
+        Ok(())
     }
 }

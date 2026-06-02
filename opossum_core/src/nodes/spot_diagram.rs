@@ -385,7 +385,7 @@ mod test {
         assert_eq!(spot.ports().names(&PortType::Output), vec!["input_1"]);
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<SpotDiagram>()
     }
     #[test]
@@ -396,7 +396,7 @@ mod test {
         assert!(spot.light_data.is_none());
     }
     #[test]
-    fn analyze_energy_empty() {
+    fn analyze_energy_empty() -> OpmResult<()> {
         test_analyze_empty::<SpotDiagram>()
     }
     #[test]
@@ -423,7 +423,7 @@ mod test {
         assert_eq!(*output, input_light);
     }
     #[test]
-    fn analyze_apodization_warning() {
+    fn analyze_apodization_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<SpotDiagram>()
     }
     #[test]

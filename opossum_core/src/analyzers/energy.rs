@@ -151,96 +151,104 @@ pub trait AnalysisEnergy: OpticNode {
 
 #[cfg(test)]
 mod test {
-    use num::Zero;
-    use uom::si::f64::Length;
-
     use super::EnergyAnalyzer;
     use crate::{
         analyzers::{Analyzer, energy::EnergyConfig},
+        error::OpmResult,
         joule,
         light::lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
         nanometer,
         nodes::{EnergyMeter, NodeGroup, SourcePort},
     };
-    #[test]
-    fn analyze_empty_scene() {
+    use num::Zero;
+    use uom::si::f64::Length;
+
+    fn create_scene() -> OpmResult<(NodeGroup, EnergyConfig)> {
         let mut scenery = NodeGroup::default();
-        let energy_analyzer = EnergyAnalyzer::default();
-        energy_analyzer.analyze(&mut scenery).unwrap();
-    }
-    fn create_scene() -> (NodeGroup, EnergyConfig) {
-        let mut scenery = NodeGroup::default();
-        let energy_data_builder = EnergyDataBuilder::LaserLines(
-            EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
-        );
-        let i_src = scenery.add_node(SourcePort::default()).unwrap();
-        let i_em = scenery.add_node(EnergyMeter::default()).unwrap();
-        scenery
-            .connect_nodes(i_src, "output_1", i_em, "input_1", Length::zero())
-            .unwrap();
+        let energy_data_builder = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+            vec![(nanometer!(633.0), joule!(1.0))],
+            nanometer!(1.0),
+        )?);
+        let i_src = scenery.add_node(SourcePort::default())?;
+        let i_em = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(i_src, "output_1", i_em, "input_1", Length::zero())?;
         let mut config = EnergyConfig::default();
         config.map_source(i_src, energy_data_builder.into());
-        (scenery, config)
-    }
-    #[test]
-    fn analyze_full_scene() {
-        let (mut scenery, config) = create_scene();
-        let energy_analyzer = EnergyAnalyzer::new(config);
-        energy_analyzer.analyze(&mut scenery).unwrap();
-    }
-    #[test]
-    fn analyze_report_without_analysis() {
-        let (scenery, config) = create_scene();
-        let energy_analyzer = EnergyAnalyzer::new(config);
-        // energy_analyzer.analyze(&mut scenery).unwrap();
-        energy_analyzer.report(&scenery).unwrap();
+        Ok((scenery, config))
     }
 
     #[test]
-    fn test_map_and_get_source() {
+    fn analyze_empty_scene() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let energy_analyzer = EnergyAnalyzer::default();
+        energy_analyzer.analyze(&mut scenery)?;
+        Ok(())
+    }
+    #[test]
+    fn analyze_full_scene() -> OpmResult<()> {
+        let (mut scenery, config) = create_scene()?;
+        let energy_analyzer = EnergyAnalyzer::new(config);
+        energy_analyzer.analyze(&mut scenery)?;
+        Ok(())
+    }
+    #[test]
+    fn analyze_report_without_analysis() -> OpmResult<()> {
+        let (scenery, config) = create_scene()?;
+        let energy_analyzer = EnergyAnalyzer::new(config);
+        energy_analyzer.report(&scenery)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_map_and_get_source() -> OpmResult<()> {
         use uuid::Uuid;
         let mut config = super::EnergyConfig::default();
         let uuid = Uuid::new_v4();
-        let builder = EnergyDataBuilder::LaserLines(
-            EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
-        );
+        let builder = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+            vec![(nanometer!(633.0), joule!(1.0))],
+            nanometer!(1.0),
+        )?);
 
         assert_eq!(config.map_source(uuid, builder.clone()), false);
         assert_eq!(config.get_source(&uuid), Some(&builder));
 
-        let builder2 = EnergyDataBuilder::LaserLines(
-            EnergyLaserLines::new(vec![(nanometer!(532.0), joule!(2.0))], nanometer!(1.0)).unwrap(),
-        );
+        let builder2 = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+            vec![(nanometer!(532.0), joule!(2.0))],
+            nanometer!(1.0),
+        )?);
         assert_eq!(config.map_source(uuid, builder2.clone()), true);
         assert_eq!(config.get_source(&uuid), Some(&builder2));
+        Ok(())
     }
 
     #[test]
-    fn test_remove_source() {
+    fn test_remove_source() -> OpmResult<()> {
         use uuid::Uuid;
         let mut config = super::EnergyConfig::default();
         let uuid = Uuid::new_v4();
-        let builder = EnergyDataBuilder::LaserLines(
-            EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
-        );
-
+        let builder = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+            vec![(nanometer!(633.0), joule!(1.0))],
+            nanometer!(1.0),
+        )?);
         config.map_source(uuid, builder.clone());
         assert_eq!(config.remove_source(&uuid), Some(builder));
         assert!(config.get_source(&uuid).is_none());
         assert!(config.remove_source(&uuid).is_none());
+        Ok(())
     }
 
     #[test]
-    fn test_prune_source_map() {
+    fn test_prune_source_map() -> OpmResult<()> {
         use uuid::Uuid;
         let mut config = super::EnergyConfig::default();
         let uuid2 = Uuid::new_v4();
-        let builder = EnergyDataBuilder::LaserLines(
-            EnergyLaserLines::new(vec![(nanometer!(633.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
-        );
+        let builder = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+            vec![(nanometer!(633.0), joule!(1.0))],
+            nanometer!(1.0),
+        )?);
 
         let mut scene = NodeGroup::default();
-        let node_id = scene.add_node(SourcePort::new("source")).unwrap();
+        let node_id = scene.add_node(SourcePort::new("source"))?;
 
         config.map_source(node_id, builder.clone());
         config.map_source(uuid2, builder.clone());
@@ -249,5 +257,6 @@ mod test {
 
         assert!(config.get_source(&node_id).is_some());
         assert!(config.get_source(&uuid2).is_none());
+        Ok(())
     }
 }

@@ -238,16 +238,17 @@ mod test_ghost_focus_analyzer {
         percent,
     };
     #[test]
-    fn empty_report() {
+    fn empty_report() -> OpmResult<()> {
         let analyzer = GhostFocusAnalyzer::default();
         let scenery = NodeGroup::new("");
-        analyzer.report(&scenery).unwrap();
+        analyzer.report(&scenery)?;
+        Ok(())
     }
     #[test]
     #[ignore]
-    fn report() {
+    fn report() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let i_src = scenery.add_node(SourcePort::default()).unwrap();
+        let i_src = scenery.add_node(SourcePort::default())?;
         let mut lens = Lens::default();
         lens.set_coating(
             &PortType::Input,
@@ -280,20 +281,24 @@ mod test_ghost_focus_analyzer {
         config.set_max_bounces(2);
         config.map_source(
             i_src,
-            round_collimated_ray_builder(millimeter!(10.0), joule!(2.), 5).unwrap(),
+            round_collimated_ray_builder(millimeter!(10.0), joule!(2.), 5)?,
         );
         let analyzer = GhostFocusAnalyzer::new(config);
-        analyzer.analyze(&mut scenery).unwrap();
-        analyzer.report(&scenery).unwrap();
+        analyzer.analyze(&mut scenery)?;
+        analyzer.report(&scenery)?;
+        Ok(())
     }
 
     #[test]
-    fn analyze_single_surface_node() {
+    fn analyze_single_surface_node() -> OpmResult<()> {
         let mut sd = SpotDiagram::default();
         let config = GhostFocusConfig::default();
-        let out_result = sd
-            .unified_analyze_single_surface_node(LightResult::default(), &config, "input_1", None)
-            .unwrap();
+        let out_result = sd.unified_analyze_single_surface_node(
+            LightResult::default(),
+            &config,
+            "input_1",
+            None,
+        )?;
         let output_data = out_result.get("output_1");
 
         match output_data {
@@ -304,6 +309,7 @@ mod test_ghost_focus_analyzer {
             None => assert!(out_result.is_empty()),
             _ => panic!("Unerwarteter Datentyp auf dem Output Port"),
         }
+        Ok(())
     }
 }
 #[cfg(test)]
@@ -312,6 +318,7 @@ mod test_ghost_analysis_nested_groups_inversion {
         analyzers::ghostfocus::config::GhostFocusConfig,
         coatings::CoatingConstantR,
         distributions::{position::Hexapolar, spectral::LaserLines},
+        error::OpmResult,
         joule, millimeter, nanometer,
         nodes::{Lens, NodeGroup, SourcePort},
         percent,
@@ -324,9 +331,9 @@ mod test_ghost_analysis_nested_groups_inversion {
     };
     use uuid::Uuid;
 
-    fn create_doc(bounces: usize) -> OpmDocument {
+    fn create_doc(bounces: usize) -> OpmResult<OpmDocument> {
         let mut scenery = NodeGroup::new("Ghost focus nested group test");
-        scenery.set_expand_view(true).unwrap();
+        scenery.set_expand_view(true)?;
 
         let inf = millimeter!(f64::INFINITY);
 
@@ -376,11 +383,9 @@ mod test_ghost_analysis_nested_groups_inversion {
             )
             .unwrap();
 
-        let src = scenery
-            .add_node(SourcePort::new("Collimated Source"))
-            .unwrap();
-        let l0_1 = scenery.add_node(lens_01).unwrap();
-        let l0_2 = scenery.add_node(lens_02).unwrap();
+        let src = scenery.add_node(SourcePort::new("Collimated Source"))?;
+        let l0_1 = scenery.add_node(lens_01)?;
+        let l0_2 = scenery.add_node(lens_02)?;
 
         let mut lens_1 = Lens::new(
             "Lens 1",
@@ -406,8 +411,8 @@ mod test_ghost_analysis_nested_groups_inversion {
             .unwrap();
 
         let mut group_1 = NodeGroup::new("Group 1");
-        group_1.set_expand_view(true).unwrap();
-        let l1 = group_1.add_node(lens_1).unwrap();
+        group_1.set_expand_view(true)?;
+        let l1 = group_1.add_node(lens_1)?;
 
         let mut lens_2 = Lens::new(
             "Lens 2",
@@ -432,8 +437,8 @@ mod test_ghost_analysis_nested_groups_inversion {
             )
             .unwrap();
         let mut group_2 = NodeGroup::new("Group 2");
-        group_2.set_expand_view(true).unwrap();
-        let l2 = group_2.add_node(lens_2).unwrap();
+        group_2.set_expand_view(true)?;
+        let l2 = group_2.add_node(lens_2)?;
 
         let mut lens_3 = Lens::new(
             "Lens 3",
@@ -458,48 +463,41 @@ mod test_ghost_analysis_nested_groups_inversion {
             )
             .unwrap();
         let mut group_3 = NodeGroup::new("Group 3");
-        group_3.set_expand_view(true).unwrap();
-        let l3 = group_3.add_node(lens_3).unwrap();
-        group_3.map_input_port(l3, "input_1", "input_1").unwrap();
-        group_3.map_output_port(l3, "output_1", "output_1").unwrap();
+        group_3.set_expand_view(true)?;
+        let l3 = group_3.add_node(lens_3)?;
+        group_3.map_input_port(l3, "input_1", "input_1")?;
+        group_3.map_output_port(l3, "output_1", "output_1")?;
 
-        let g3 = group_2.add_node(group_3).unwrap();
-        group_2
-            .connect_nodes(l2, "output_1", g3, "input_1", millimeter!(10.))
-            .unwrap();
-        group_2.map_input_port(l2, "input_1", "input_1").unwrap();
-        group_2.map_output_port(g3, "output_1", "output_1").unwrap();
+        let g3 = group_2.add_node(group_3)?;
+        group_2.connect_nodes(l2, "output_1", g3, "input_1", millimeter!(10.))?;
+        group_2.map_input_port(l2, "input_1", "input_1")?;
+        group_2.map_output_port(g3, "output_1", "output_1")?;
 
-        let g2 = group_1.add_node(group_2).unwrap();
-        group_1
-            .connect_nodes(l1, "output_1", g2, "input_1", millimeter!(10.))
-            .unwrap();
-        group_1.map_input_port(l1, "input_1", "input_1").unwrap();
-        group_1.map_output_port(g2, "output_1", "output_1").unwrap();
+        let g2 = group_1.add_node(group_2)?;
+        group_1.connect_nodes(l1, "output_1", g2, "input_1", millimeter!(10.))?;
+        group_1.map_input_port(l1, "input_1", "input_1")?;
+        group_1.map_output_port(g2, "output_1", "output_1")?;
 
-        let g1 = scenery.add_node(group_1).unwrap();
+        let g1 = scenery.add_node(group_1)?;
 
-        scenery
-            .connect_nodes(src, "output_1", l0_1, "input_1", millimeter!(10.))
-            .unwrap();
-        scenery
-            .connect_nodes(l0_1, "output_1", g1, "input_1", millimeter!(10.))
-            .unwrap();
-        scenery
-            .connect_nodes(g1, "output_1", l0_2, "input_1", millimeter!(10.))
-            .unwrap();
+        scenery.connect_nodes(src, "output_1", l0_1, "input_1", millimeter!(10.))?;
+        scenery.connect_nodes(l0_1, "output_1", g1, "input_1", millimeter!(10.))?;
+        scenery.connect_nodes(g1, "output_1", l0_2, "input_1", millimeter!(10.))?;
 
         //analyzers are added in the tests
         let mut doc: OpmDocument = OpmDocument::new(scenery);
-        let config = get_ghost_focus_config_and_map_to_source(src, bounces);
+        let config = get_ghost_focus_config_and_map_to_source(src, bounces)?;
         doc.add_analyzer(AnalyzerType::GhostFocus(config));
-        doc
+        Ok(doc)
     }
 
-    fn get_ghost_focus_config_and_map_to_source(src_id: Uuid, bounces: usize) -> GhostFocusConfig {
+    fn get_ghost_focus_config_and_map_to_source(
+        src_id: Uuid,
+        bounces: usize,
+    ) -> OpmResult<GhostFocusConfig> {
         // collimated source definition
         let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
-            Hexapolar::new(millimeter!(10.), 0).unwrap().into(),
+            Hexapolar::new(millimeter!(10.), 0)?.into(),
             crate::distributions::energy::General2DGaussian::new(
                 joule!(5.0),
                 millimeter!(0., 0.),
@@ -507,22 +505,19 @@ mod test_ghost_analysis_nested_groups_inversion {
                 5.,
                 radian!(0.),
                 false,
-            )
-            .unwrap()
+            )?
             .into(),
-            LaserLines::new(vec![(nanometer!(1053.0), 1.0)])
-                .unwrap()
-                .into(),
+            LaserLines::new(vec![(nanometer!(1053.0), 1.0)])?.into(),
         ));
         let mut config = GhostFocusConfig::default();
         config.map_source(src_id, ray_data_source.into());
         config.set_max_bounces(bounces);
-        config
+        Ok(config)
     }
 
     fn check_not_inverted(group: &NodeGroup) -> bool {
         for opt_ref in group.graph().nodes() {
-            let node = opt_ref.optical_ref.lock_opm().unwrap();
+            let node = opt_ref.optical_ref.lock_opm().expect("error getting lock");
             if let Ok(g) = node.as_group() {
                 if !check_not_inverted(g) {
                     return false;
@@ -536,53 +531,54 @@ mod test_ghost_analysis_nested_groups_inversion {
     }
 
     #[test]
-    fn bounce_0() {
+    fn bounce_0() -> OpmResult<()> {
         let bounce = 0;
-        let mut document = create_doc(bounce);
-
-        let _ = document.analyze().unwrap();
+        let mut document = create_doc(bounce)?;
+        let _ = document.analyze()?;
 
         let scenery = document.scenery();
-        assert!(check_not_inverted(scenery))
+        assert!(check_not_inverted(scenery));
+        Ok(())
     }
     #[test]
-    fn bounce_1() {
+    fn bounce_1() -> OpmResult<()> {
         let bounce = 1;
-        let mut document = create_doc(bounce);
-
-        let _ = document.analyze().unwrap();
+        let mut document = create_doc(bounce)?;
+        let _ = document.analyze()?;
 
         let scenery = document.scenery();
-        assert!(check_not_inverted(scenery))
+        assert!(check_not_inverted(scenery));
+        Ok(())
     }
     #[test]
-    fn bounce_2() {
+    fn bounce_2() -> OpmResult<()> {
         let bounce = 2;
-        let mut document = create_doc(bounce);
-
-        let _ = document.analyze().unwrap();
+        let mut document = create_doc(bounce)?;
+        let _ = document.analyze()?;
 
         let scenery = document.scenery();
-        assert!(check_not_inverted(scenery))
+        assert!(check_not_inverted(scenery));
+        Ok(())
     }
     #[test]
-    fn bounce_3() {
+    fn bounce_3() -> OpmResult<()> {
         let bounce = 3;
-        let mut document = create_doc(bounce);
-
-        let _ = document.analyze().unwrap();
+        let mut document = create_doc(bounce)?;
+        let _ = document.analyze()?;
 
         let scenery = document.scenery();
-        assert!(check_not_inverted(scenery))
+        assert!(check_not_inverted(scenery));
+        Ok(())
     }
     #[test]
-    fn bounce_4() {
+    fn bounce_4() -> OpmResult<()> {
         let bounce = 4;
-        let mut document = create_doc(bounce);
+        let mut document = create_doc(bounce)?;
 
-        let _ = document.analyze().unwrap();
+        let _ = document.analyze()?;
 
         let scenery = document.scenery();
-        assert!(check_not_inverted(scenery))
+        assert!(check_not_inverted(scenery));
+        Ok(())
     }
 }

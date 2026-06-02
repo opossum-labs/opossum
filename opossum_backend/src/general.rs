@@ -105,7 +105,7 @@ async fn get_node_types() -> Result<Json<Vec<NodeType>>, BackEndErrorResponse> {
             description: t.1.into(),
         })
         .collect();
-    node_types.sort_by(|a, b| a.node_type.to_lowercase().cmp(&b.node_type.to_lowercase()));
+    node_types.sort_by_key(|a| a.node_type.to_lowercase());
     Ok(Json(node_types))
 }
 /// Return a list of available analyzer types of OPOSSUM

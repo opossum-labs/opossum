@@ -1,6 +1,6 @@
 //! Energy distribution functions
 //!
-//! These functions are used while generating ray bundles ([`Rays`](crate::rays::Rays)).
+//! These functions are used while generating ray bundles ([`Rays`](crate::light::Rays)).
 pub mod general_gaussian;
 pub mod uniform;
 use std::fmt::Display;

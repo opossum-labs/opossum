@@ -71,6 +71,19 @@ impl std::convert::From<String> for OpossumError {
     }
 }
 #[cfg(test)]
+/// Helper function for testing error results. Asserts that the result is an error and that it matches the expected error.
+pub fn assert_err<T>(result: OpmResult<T>, expected: OpossumError) {
+    match result {
+        Err(e) => assert_eq!(
+            e, expected,
+            "Expected error {:?}, but got {:?}",
+            expected, e
+        ),
+        Ok(_) => panic!("Expected error {:?}, but got Ok", expected),
+    }
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
     #[test]

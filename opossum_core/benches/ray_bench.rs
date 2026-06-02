@@ -5,8 +5,8 @@ use nalgebra::{Point3, vector};
 use num::Zero;
 use opossum_core::{
     J_per_cm2, analyzers::propagation_strategy::MissedSurfaceStrategy,
-    core_optics::optic_surface::OpticSurface, degree, joule, light::Ray, millimeter, nanometer,
-    utils::geom_transformation::Isometry,
+    core_optics::optic_surface::OpticSurface, degree, error::OpossumError, joule, light::Ray,
+    millimeter, nanometer, utils::geom_transformation::Isometry,
 };
 use uom::si::f64::Length;
 
@@ -29,14 +29,15 @@ fn bench_propagate(c: &mut Criterion) {
             nanometer!(1053.0),
             joule!(1.0),
         )
-        .unwrap();
+        .expect("Setup of ray failed");
         let length = millimeter!(10.0);
 
         // Use iter_with_setup to exclude the clone operation from the measurement.
         b.iter_with_setup(
             || ray.clone(),
             |mut cloned_ray| {
-                std::hint::black_box(cloned_ray.propagate(length)).unwrap();
+                std::hint::black_box(cloned_ray.propagate(length))?;
+                Ok::<(), OpossumError>(())
             },
         );
     });
@@ -50,7 +51,7 @@ fn bench_refract_paraxial(c: &mut Criterion) {
             nanometer!(1053.0),
             joule!(1.0),
         )
-        .unwrap();
+        .expect("Setup of ray failed");
         let focal_length = millimeter!(100.0);
         let iso = Isometry::identity();
 
@@ -58,7 +59,8 @@ fn bench_refract_paraxial(c: &mut Criterion) {
             || ray.clone(),
             |mut cloned_ray| {
                 // Use criterion::black_box to prevent the optimizer from removing the call.
-                std::hint::black_box(cloned_ray.refract_paraxial(focal_length, &iso)).unwrap();
+                std::hint::black_box(cloned_ray.refract_paraxial(focal_length, &iso))?;
+                Ok::<(), OpossumError>(())
             },
         );
     });
@@ -69,14 +71,14 @@ fn bench_refract_on_surface(c: &mut Criterion) {
     c.bench_function("ray_refract_on_surface", |b| {
         // Setup function to create fresh data for each measurement run.
         let setup = || {
-            let ray =
-                Ray::new_collimated(Point3::origin(), nanometer!(1054.0), joule!(1.0)).unwrap();
+            let ray = Ray::new_collimated(Point3::origin(), nanometer!(1054.0), joule!(1.0))
+                .expect("error setting up ray");
             let plane_z_pos = millimeter!(10.0);
             let isometry = Isometry::new(
                 Point3::new(Length::zero(), Length::zero(), plane_z_pos),
                 degree!(0.0, 0.0, 0.0),
             )
-            .unwrap();
+            .expect("Setup of ray failed");
             let surface = OpticSurface::default();
             surface.set_isometry(isometry);
             let n2 = Some(1.5);
@@ -86,7 +88,8 @@ fn bench_refract_on_surface(c: &mut Criterion) {
 
         // iter_with_setup is used because the function requires mutable access to the ray and surface.
         b.iter_with_setup(setup, |(mut ray, mut surface, n2, strategy)| {
-            std::hint::black_box(ray.refract_on_surface(&mut surface, n2, &strategy)).unwrap();
+            std::hint::black_box(ray.refract_on_surface(&mut surface, n2, &strategy))?;
+            Ok::<(), OpossumError>(())
         });
     });
 }
@@ -100,14 +103,14 @@ fn bench_diffract_on_periodic_structure(c: &mut Criterion) {
             nanometer!(633.0),
             joule!(1.0),
         )
-        .unwrap();
+        .expect("Setup of ray failed");
 
         let plane_z_pos = millimeter!(10.0);
         let isometry = Isometry::new(
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )
-        .unwrap();
+        .expect("Setup of isometry failed");
         let surface = OpticSurface::default();
         surface.set_isometry(isometry);
 
@@ -124,8 +127,8 @@ fn bench_diffract_on_periodic_structure(c: &mut Criterion) {
                     n2,
                     grating_vector,
                     &diffraction_order,
-                ))
-                .unwrap();
+                ))?;
+                Ok::<(), OpossumError>(())
             },
         );
     });
@@ -140,14 +143,17 @@ fn bench_helper_ray_fluence(c: &mut Criterion) {
             joule!(1.),
             J_per_cm2!(1.),
         )
-        .unwrap();
+        .expect("Setup of ray failed");
 
         // Propagate the helper rays a bit to make the calculation non-trivial
         if let Some(helpers) = ray.helper_rays_mut() {
             for r in helpers {
-                r.propagate(millimeter!(10.0)).unwrap();
-                r.set_direction(vector![0.1, 0.1, 1.0]).unwrap();
-                r.propagate(millimeter!(5.0)).unwrap();
+                r.propagate(millimeter!(10.0))
+                    .expect("Error while propagating");
+                r.set_direction(vector![0.1, 0.1, 1.0])
+                    .expect("Error setting ray direction");
+                r.propagate(millimeter!(5.0))
+                    .expect("Error while propagating");
             }
         }
 

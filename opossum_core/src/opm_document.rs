@@ -383,12 +383,15 @@ mod test {
         );
     }
     #[test]
-    fn save_to_file() {
-        let file = NamedTempFile::new().unwrap();
+    fn save_to_file() -> OpmResult<()> {
+        let file = NamedTempFile::new()
+            .map_err(|e| OpossumError::OpmDocument(format!("Error generating temp file: {e}")))?;
         let path = file.into_temp_path();
         let document = OpmDocument::default();
         assert!(document.save_to_file(&path).is_ok());
-        path.close().unwrap()
+        path.close()
+            .map_err(|e| OpossumError::OpmDocument(format!("Error closing temp file: {e}")))?;
+        Ok(())
     }
     #[test]
     fn add_analyzer() {
@@ -444,158 +447,109 @@ mod test {
         assert!(document.analyzers.is_empty());
     }
     #[test]
-    fn all_nodes_integration_test() {
+    fn all_nodes_integration_test() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let i_0 = scenery.add_node(SourcePort::default()).unwrap();
-        let i_1 = scenery.add_node(BeamSplitter::default()).unwrap();
-        let i_2 = scenery.add_node(CylindricLens::default()).unwrap();
-        let i_3 = scenery.add_node(FluenceDetector::default()).unwrap();
-        let i_4 = scenery.add_node(Lens::default()).unwrap();
-        let i_5 = scenery.add_node(Wedge::default()).unwrap();
-        let i_6 = scenery.add_node(Dummy::default()).unwrap();
-        let i_7 = scenery.add_node(EnergyMeter::default()).unwrap();
-        let i_8 = scenery.add_node(IdealFilter::default()).unwrap();
-        let i_9 = scenery
-            .add_node(ParaxialSurface::new("paraxial", millimeter!(1000.0)).unwrap())
-            .unwrap();
-        let i_10 = scenery
-            .add_node(RayPropagationVisualizer::default())
-            .unwrap();
-        let i_11 = scenery.add_node(Spectrometer::default()).unwrap();
-        let i_12 = scenery.add_node(SpotDiagram::default()).unwrap();
-        let i_13 = scenery.add_node(WaveFront::default()).unwrap();
-        let i_14 = scenery.add_node(ParabolicMirror::default()).unwrap();
-        let i_15 = scenery
-            .add_node(
-                ReflectiveGrating::default()
-                    .with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))
-                    .unwrap(),
-            )
-            .unwrap();
-        let i_16 = scenery.add_node(ThinMirror::default()).unwrap();
+        let i_0 = scenery.add_node(SourcePort::default())?;
+        let i_1 = scenery.add_node(BeamSplitter::default())?;
+        let i_2 = scenery.add_node(CylindricLens::default())?;
+        let i_3 = scenery.add_node(FluenceDetector::default())?;
+        let i_4 = scenery.add_node(Lens::default())?;
+        let i_5 = scenery.add_node(Wedge::default())?;
+        let i_6 = scenery.add_node(Dummy::default())?;
+        let i_7 = scenery.add_node(EnergyMeter::default())?;
+        let i_8 = scenery.add_node(IdealFilter::default())?;
+        let i_9 = scenery.add_node(ParaxialSurface::new("paraxial", millimeter!(1000.0))?)?;
+        let i_10 = scenery.add_node(RayPropagationVisualizer::default())?;
+        let i_11 = scenery.add_node(Spectrometer::default())?;
+        let i_12 = scenery.add_node(SpotDiagram::default())?;
+        let i_13 = scenery.add_node(WaveFront::default())?;
+        let i_14 = scenery.add_node(ParabolicMirror::default())?;
+        let i_15 = scenery.add_node(
+            ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))?,
+        )?;
+        let i_16 = scenery.add_node(ThinMirror::default())?;
 
-        scenery
-            .connect_nodes(i_0, "output_1", i_1, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_1, "out1_trans1_refl2", i_2, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_2, "output_1", i_3, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_3, "output_1", i_4, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_4, "output_1", i_5, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_5, "output_1", i_6, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_6, "output_1", i_7, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_7, "output_1", i_8, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_8, "output_1", i_9, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_9, "output_1", i_10, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_10, "output_1", i_11, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_11, "output_1", i_12, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_12, "output_1", i_13, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_13, "output_1", i_14, "input_1", millimeter!(5.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_14, "output_1", i_15, "input_1", millimeter!(50.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_15, "output_1", i_16, "input_1", millimeter!(50.0))
-            .unwrap();
+        scenery.connect_nodes(i_0, "output_1", i_1, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_1, "out1_trans1_refl2", i_2, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_2, "output_1", i_3, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_3, "output_1", i_4, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_4, "output_1", i_5, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_5, "output_1", i_6, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_6, "output_1", i_7, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_7, "output_1", i_8, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_8, "output_1", i_9, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_9, "output_1", i_10, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_10, "output_1", i_11, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_11, "output_1", i_12, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_12, "output_1", i_13, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_13, "output_1", i_14, "input_1", millimeter!(5.0))?;
+        scenery.connect_nodes(i_14, "output_1", i_15, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(i_15, "output_1", i_16, "input_1", millimeter!(50.0))?;
 
         scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
-        let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1).unwrap();
+        let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?;
         let mut config = RayTraceConfig::default();
         config.map_source(i_0, ray_builder.clone());
         // Perform ray tracing analysis
         testing_logger::setup();
         let analyzer = RayTracingAnalyzer::new(config);
-        analyzer.analyze(&mut scenery).unwrap();
+        analyzer.analyze(&mut scenery)?;
         check_logs(log::Level::Warn, vec![]);
         scenery.reset_data();
         // Perform ghost focus analysis
         let mut config = GhostFocusConfig::default();
         config.map_source(i_0, ray_builder);
         let analyzer = GhostFocusAnalyzer::new(config);
-        analyzer.analyze(&mut scenery).unwrap();
+        analyzer.analyze(&mut scenery)?;
         check_logs(log::Level::Warn, vec![]);
+        Ok(())
     }
     #[test]
-    fn full_analysis_with_save_and_load() {
+    fn full_analysis_with_save_and_load() -> OpmResult<()> {
         let mut scenery = NodeGroup::new("Lens Ray-trace test");
-        let src = scenery.add_node(SourcePort::default()).unwrap();
+        let src = scenery.add_node(SourcePort::default())?;
         let lens1 = Wedge::new(
             "Wedge",
             millimeter!(10.0),
             degree!(0.0),
-            &RefrIndexConst::new(1.5068).unwrap(),
-        )
-        .unwrap()
-        .with_tilt(degree!(15.0, 0.0, 0.0))
-        .unwrap();
-        let l1 = scenery.add_node(lens1).unwrap();
+            &RefrIndexConst::new(1.5068)?,
+        )?
+        .with_tilt(degree!(15.0, 0.0, 0.0))?;
+        let l1 = scenery.add_node(lens1)?;
         let lens2 = Lens::new(
             "Lens 2",
             millimeter!(205.55),
             millimeter!(-205.55),
             millimeter!(2.79),
-            &RefrIndexConst::new(1.5068).unwrap(),
-        )
-        .unwrap()
-        .with_tilt(degree!(15.0, 0.0, 0.0))
-        .unwrap();
-        let l2 = scenery.add_node(lens2).unwrap();
-        let det = scenery
-            .add_node(RayPropagationVisualizer::new("Ray plot", None).unwrap())
-            .unwrap();
-        scenery
-            .connect_nodes(src, "output_1", l1, "input_1", millimeter!(50.0))
-            .unwrap();
-        scenery
-            .connect_nodes(l1, "output_1", l2, "input_1", millimeter!(50.0))
-            .unwrap();
-        scenery
-            .connect_nodes(l2, "output_1", det, "input_1", millimeter!(50.0))
-            .unwrap();
+            &RefrIndexConst::new(1.5068)?,
+        )?
+        .with_tilt(degree!(15.0, 0.0, 0.0))?;
+        let l2 = scenery.add_node(lens2)?;
+        let det = scenery.add_node(RayPropagationVisualizer::new("Ray plot", None)?)?;
+        scenery.connect_nodes(src, "output_1", l1, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(l1, "output_1", l2, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(l2, "output_1", det, "input_1", millimeter!(50.0))?;
         let mut doc = OpmDocument::new(scenery);
         let mut config = RayTraceConfig::default();
         config.map_source(
             src,
-            collimated_line_ray_builder(millimeter!(20.0), joule!(1.0), 6).unwrap(),
+            collimated_line_ray_builder(millimeter!(20.0), joule!(1.0), 6)?,
         );
         doc.add_analyzer(AnalyzerType::RayTrace(config));
-        let temp_model_file = NamedTempFile::new().unwrap();
-        doc.save_to_file(temp_model_file.path()).unwrap();
+        let temp_model_file = NamedTempFile::new()
+            .map_err(|e| OpossumError::OpmDocument(format!("Error generating temp file: {e}")))?;
+        doc.save_to_file(temp_model_file.path())?;
 
         testing_logger::setup();
-        let mut doc = OpmDocument::from_file(temp_model_file.path()).unwrap();
-        let _ = doc.analyze().unwrap();
+        let mut doc = OpmDocument::from_file(temp_model_file.path())?;
+        let _ = doc.analyze()?;
         check_logs(log::Level::Warn, vec![]);
+        Ok(())
     }
     #[test]
-    fn create_dot_file_test() {
+    fn create_dot_file_test() -> OpmResult<()> {
         let document =
-            OpmDocument::from_file(&Path::new("./files_for_testing/opm/opticscenery.opm")).unwrap();
+            OpmDocument::from_file(&Path::new("./files_for_testing/opm/opticscenery.opm"))?;
         assert!(
             document
                 .create_dot_file(&Path::new("./files_for_testing/dot/_not_valid/"))
@@ -606,8 +560,11 @@ mod test {
                 .create_dot_file(&Path::new("./files_for_testing/dot/"))
                 .is_ok()
         );
-        fs::remove_file("./files_for_testing/dot/scenery.dot").unwrap();
-        fs::remove_file("./files_for_testing/dot/scenery.svg").unwrap();
+        fs::remove_file("./files_for_testing/dot/scenery.dot")
+            .map_err(|e| OpossumError::OpmDocument(format!("Error removing temp file: {e}")))?;
+        fs::remove_file("./files_for_testing/dot/scenery.svg")
+            .map_err(|e| OpossumError::OpmDocument(format!("Error generating temp file: {e}")))?;
+        Ok(())
     }
     #[test]
     fn analyzer_info_set_analyzer_type() {

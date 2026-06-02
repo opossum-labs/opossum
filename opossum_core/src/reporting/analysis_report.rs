@@ -182,14 +182,15 @@ mod test {
         assert_eq!(report.node_reports.len(), 1);
     }
     #[test]
-    fn save() {
+    fn save() -> OpmResult<()> {
         let mut document =
-            OpmDocument::from_file(&Path::new("./files_for_testing/opm/opticscenery.opm")).unwrap();
-        let reports = document.analyze().unwrap();
+            OpmDocument::from_file(&Path::new("./files_for_testing/opm/opticscenery.opm"))?;
+        let reports = document.analyze()?;
         assert!(
             reports[0]
                 .save(&Path::new("./files_for_testing/report/_not_valid/"), 0)
                 .is_err()
         );
+        Ok(())
     }
 }

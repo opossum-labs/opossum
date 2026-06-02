@@ -29,12 +29,9 @@ fn main() -> OpmResult<()> {
 
     let mut plt_params = PlotParameters::default();
     plt_params
-        .set(&PlotArgs::FName("gaussian.png".into()))
-        .unwrap()
-        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))
-        .unwrap()
-        .set(&PlotArgs::PlotSize((1000, 800)))
-        .unwrap();
+        .set(&PlotArgs::FName("gaussian.png".into()))?
+        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))?
+        .set(&PlotArgs::PlotSize((1000, 800)))?;
     let plt_dat = PlotData::ColorMesh {
         x_dat_n: DVector::from_iterator(
             fl_x.len(),

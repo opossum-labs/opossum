@@ -92,9 +92,9 @@ mod test {
         assert_eq!(c.transmission_factor(&meter!(1.0, 1.0, 0.0)), 0.0);
     }
     #[test]
-    fn test_boundary_conditions() {
+    fn test_boundary_conditions() -> OpmResult<()> {
         let radius = meter!(1.0);
-        let c = CircleShape::new(radius).unwrap();
+        let c = CircleShape::new(radius)?;
 
         // Point exactly on the boundary (x^2 + y^2 == r^2)
         // Floating point precision might be tricky, but 1.0^2 is exact.
@@ -103,5 +103,6 @@ mod test {
 
         // Slightly outside
         assert_eq!(c.transmission_factor(&meter!(1.000001, 0.0, 0.0)), 0.0);
+        Ok(())
     }
 }

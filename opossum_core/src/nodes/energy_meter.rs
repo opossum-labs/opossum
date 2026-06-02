@@ -95,17 +95,16 @@ impl EnergyMeter {
     /// * `name`:           name of the [`EnergyMeter`]
     /// * `meter_type`:     specific [`Metertype`] of the [`EnergyMeter`]
     ///
-    /// # Panics
-    /// This function panics if the [`Properties`] `name` or `meter type` can not be set.
-    #[must_use]
-    pub fn new(name: &str, meter_type: Metertype) -> Self {
+    /// # Errors
+    ///
+    /// This function returns an error if the [`Properties`] `name` or `meter type` can not be set.
+    pub fn new(name: &str, meter_type: Metertype) -> OpmResult<Self> {
         let mut energy_meter = Self::default();
         energy_meter.node_attr.set_name(name);
         energy_meter
             .node_attr
-            .set_property("meter type", meter_type.into())
-            .unwrap();
-        energy_meter
+            .set_property("meter type", meter_type.into())?;
+        Ok(energy_meter)
     }
     /// Returns the meter type of this [`EnergyMeter`].
     /// # Panics
@@ -121,12 +120,14 @@ impl EnergyMeter {
         }
     }
     /// Sets the meter type of this [`EnergyMeter`].
-    /// # Panics
-    /// This function panics if the property "meter type" can not be set.
-    pub fn set_meter_type(&mut self, meter_type: Metertype) {
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if internally the property "meter type" can not be set.
+    pub fn set_meter_type(&mut self, meter_type: Metertype) -> OpmResult<()> {
         self.node_attr
-            .set_property("meter type", meter_type.into())
-            .unwrap();
+            .set_property("meter type", meter_type.into())?;
+        Ok(())
     }
 }
 impl OpticNode for EnergyMeter {
@@ -231,21 +232,23 @@ mod test {
         assert!(node.as_group_mut().is_err());
     }
     #[test]
-    fn new() {
-        let meter = EnergyMeter::new("test", Metertype::IdealPowerMeter);
+    fn new() -> OpmResult<()> {
+        let meter = EnergyMeter::new("test", Metertype::IdealPowerMeter)?;
         assert!(meter.light_data.is_none());
         assert_eq!(meter.meter_type(), Metertype::IdealPowerMeter);
         assert_eq!(meter.name(), "test");
+        Ok(())
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<EnergyMeter>()
     }
     #[test]
-    fn set_meter_type() {
+    fn set_meter_type() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
-        meter.set_meter_type(Metertype::IdealPowerMeter);
+        meter.set_meter_type(Metertype::IdealPowerMeter)?;
         assert_eq!(meter.meter_type(), Metertype::IdealPowerMeter);
+        Ok(())
     }
     #[test]
     fn ports() {
@@ -254,66 +257,71 @@ mod test {
         assert_eq!(meter.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn ports_inverted() {
+    fn ports_inverted() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
-        meter.set_inverted(true).unwrap();
+        meter.set_inverted(true)?;
         assert_eq!(meter.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
+        Ok(())
     }
     #[test]
     fn set_aperture() {
         test_set_aperture::<EnergyMeter>("input_1", "output_1");
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<EnergyMeter>()
     }
     #[test]
-    fn analyze_wrong() {
+    fn analyze_wrong() -> OpmResult<()> {
         let mut node = EnergyMeter::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_ok() {
+    fn analyze_ok() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
         let mut input = LightResult::default();
-        let input_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_data = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_data.clone());
-        let result = AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default()).unwrap();
+        let result = AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default())?;
         assert!(result.contains_key("output_1"));
         assert_eq!(result.get("output_1").unwrap(), &input_data);
+        Ok(())
     }
     #[test]
-    fn analyze_apodization_warning() {
+    fn analyze_apodization_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<EnergyMeter>()
     }
     #[test]
-    fn analyze_inverted() {
+    fn analyze_inverted() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
         let mut input = LightResult::default();
-        meter.set_inverted(true).unwrap();
-        let input_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        meter.set_inverted(true)?;
+        let input_data = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_data.clone());
-        let result = AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default()).unwrap();
+        let result = AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default())?;
         assert!(result.contains_key("input_1"));
         assert_eq!(result.get("input_1").unwrap(), &input_data);
+        Ok(())
     }
     #[test]
-    fn debug() {
+    fn debug() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
         assert_eq!(format!("{meter:?}"), "no data");
         let mut input = LightResult::default();
-        let input_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_data = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_data.clone());
-        AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default()).unwrap();
+        AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default())?;
         assert_eq!(format!("{meter:?}"), "Energy: 1 J (Type: IdealEnergyMeter)");
+        Ok(())
     }
     #[test]
-    fn report() {
+    fn report() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
         let report = meter.node_report("123").unwrap();
         assert_eq!(report.name(), "energy meter");
@@ -331,14 +339,15 @@ mod test {
             panic!("could not read Model property");
         }
         let mut input = LightResult::default();
-        let input_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_data = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_data.clone());
-        AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default()).unwrap();
+        AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default())?;
         let report = meter.node_report("123").unwrap();
         if let Ok(Proptype::Energy(e)) = report.properties().get("Energy") {
             assert_eq!(e, &joule!(1.0));
         } else {
             panic!("could not read Energy property");
         }
+        Ok(())
     }
 }

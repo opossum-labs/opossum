@@ -280,7 +280,7 @@ async fn post_reference(
     let mut document = data.document.lock();
     let referring_node =
         get_nested_referenced_node_from_state(ref_node_info.referring_node(), &document)?;
-    let mut node_reference = NodeReference::from_node(&referring_node);
+    let mut node_reference = NodeReference::from_node(&referring_node)?;
 
     node_reference
         .node_attr_mut()

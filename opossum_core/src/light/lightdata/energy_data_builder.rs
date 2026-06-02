@@ -133,15 +133,14 @@ impl std::fmt::Debug for EnergyDataBuilder {
             Self::Raw(s) => write!(f, "Raw({s:?})"),
             Self::FromFile(p) => write!(f, "FromFile({})", p.f_path().display()),
             Self::LaserLines(e) => {
-                write!(f, "LaserLines([").unwrap();
+                write!(f, "LaserLines([")?;
                 for (wvl, energy) in &e.lines() {
                     write!(
                         f,
                         "({:.3}, {:.3})",
                         wvl.into_format_args(nanometer, Abbreviation),
                         energy.into_format_args(joule, Abbreviation)
-                    )
-                    .unwrap();
+                    )?;
                 }
                 write!(
                     f,
@@ -375,16 +374,20 @@ mod test {
         assert_eq!(s.f_path(), "empty.csv");
     }
     #[test]
-    fn spectrum_file_file_path() {
-        let s = SpectrumFile::new("path.csv".into()).unwrap();
+    fn spectrum_file_file_path() -> OpmResult<()> {
+        let s = SpectrumFile::new("path.csv".into())?;
         assert_eq!(s.f_path(), "path.csv");
+        Ok(())
     }
     #[test]
-    fn spectrum_file_deserialize() {
+    fn spectrum_file_deserialize() -> OpmResult<()> {
         let s = SpectrumFile::default();
         let serialized =
-            ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).unwrap();
+            ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).map_err(
+                |e| OpossumError::Spectrum(format!("failed to serialize spectrum: {e}")),
+            )?;
         assert!(ron::from_str::<SpectrumFile>(&serialized).is_ok());
+        Ok(())
     }
     #[test]
     fn energy_laser_lines_new() {
@@ -506,13 +509,12 @@ mod test {
         );
     }
     #[test]
-    fn energy_laser_lines_delete_line() {
+    fn energy_laser_lines_delete_line() -> OpmResult<()> {
         let mut ell = EnergyLaserLines::default();
         ell.set_lines(vec![
             (nanometer!(500.0), joule!(0.5)),
             (nanometer!(505.0), joule!(1.5)),
-        ])
-        .unwrap();
+        ])?;
         assert!(
             ell.delete_line(2).is_err(),
             // "deleting out of bounds index is an error"
@@ -524,6 +526,7 @@ mod test {
             // "deleting the last remaining line is an error"
         );
         assert_eq!(ell.lines(), vec![(nanometer!(505.0), joule!(1.5))]);
+        Ok(())
     }
     #[test]
     fn energy_data_builder_from_energy_laser_lines() {
@@ -538,13 +541,14 @@ mod test {
         assert!(matches!(edb, EnergyDataBuilder::FromFile(_)));
     }
     #[test]
-    fn energy_data_builder_from_raw() {
-        let s = Spectrum::new(nanometer!(500.0)..nanometer!(550.0), nanometer!(1.0)).unwrap();
+    fn energy_data_builder_from_raw() -> OpmResult<()> {
+        let s = Spectrum::new(nanometer!(500.0)..nanometer!(550.0), nanometer!(1.0))?;
         let edb: EnergyDataBuilder = s.into();
         assert!(matches!(edb, EnergyDataBuilder::Raw(_)));
+        Ok(())
     }
     #[test]
-    fn energy_data_builder_build_display() {
+    fn energy_data_builder_build_display() -> OpmResult<()> {
         let ell = EnergyLaserLines::default();
         let edb: EnergyDataBuilder = ell.into();
         assert!(edb.build().is_ok());
@@ -553,8 +557,7 @@ mod test {
             format!("{edb:?}"),
             "LaserLines([(1054.000 nm, 1.000 J)] resolution: 0.100 nm)"
         );
-        let sf = SpectrumFile::new("./files_for_testing/spectrum/spec_to_csv_test_01.csv".into())
-            .unwrap();
+        let sf = SpectrumFile::new("./files_for_testing/spectrum/spec_to_csv_test_01.csv".into())?;
         let edb: EnergyDataBuilder = sf.into();
         assert!(edb.build().is_ok());
         assert_eq!(format!("{edb}"), "From File");
@@ -562,7 +565,7 @@ mod test {
             format!("{edb:?}"),
             "FromFile(./files_for_testing/spectrum/spec_to_csv_test_01.csv)"
         );
-        let s = Spectrum::new(nanometer!(500.0)..nanometer!(503.0), nanometer!(1.0)).unwrap();
+        let s = Spectrum::new(nanometer!(500.0)..nanometer!(503.0), nanometer!(1.0))?;
         let edb: EnergyDataBuilder = s.into();
         assert!(edb.build().is_ok());
         assert_eq!(format!("{edb}"), "Raw");
@@ -570,5 +573,6 @@ mod test {
             format!("{edb:?}"),
             "Raw( 500.00 nm -> 0\n 501.00 nm -> 0\n 502.00 nm -> 0\n 503.00 nm -> 0\n)"
         );
+        Ok(())
     }
 }

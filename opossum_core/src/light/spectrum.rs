@@ -139,13 +139,15 @@ impl Spectrum {
             let record = record.map_err(|e| OpossumError::Spectrum(e.to_string()))?;
             let lambda = record
                 .get(0)
-                .unwrap()
+                .ok_or_else(|| {
+                    OpossumError::Spectrum("Could not read wavelength in CSV file".into())
+                })?
                 .trim()
                 .parse::<f64>()
                 .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
             let data = record
                 .get(1)
-                .unwrap()
+                .ok_or_else(|| OpossumError::Spectrum("Could not read data in CSV file".into()))?
                 .trim()
                 .parse::<f64>()
                 .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
@@ -798,20 +800,21 @@ mod test {
         Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5)).unwrap()
     }
     #[test]
-    fn test_merge_spectra() {
-        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5)).unwrap();
-        let mut s2 = Spectrum::new(micrometer!(5.0)..micrometer!(8.0), micrometer!(0.5)).unwrap();
-        s1.add_single_peak(micrometer!(1.), 1.).unwrap();
-        s2.add_single_peak(micrometer!(5.), 1.).unwrap();
+    fn test_merge_spectra() -> OpmResult<()> {
+        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5))?;
+        let mut s2 = Spectrum::new(micrometer!(5.0)..micrometer!(8.0), micrometer!(0.5))?;
+        s1.add_single_peak(micrometer!(1.), 1.)?;
+        s2.add_single_peak(micrometer!(5.), 1.)?;
 
         let merged = merge_spectra(Some(s1), Some(s2)).unwrap();
 
         assert_relative_eq!(merged.average_resolution().value, micrometer!(0.5).value);
         assert_relative_eq!(merged.range().start.value, micrometer!(1.).value);
         assert_relative_eq!(merged.range().end.value, micrometer!(8.).value);
+        Ok(())
     }
     #[test]
-    fn new() {
+    fn new() -> OpmResult<()> {
         let s = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5));
         assert!(s.is_ok());
         assert_eq!(
@@ -826,14 +829,13 @@ mod test {
                 (4.0, 0.0)
             ]
         );
+        Ok(())
     }
     #[test]
-    fn from_csv_ok() {
+    fn from_csv_ok() -> OpmResult<()> {
         let s = Spectrum::from_csv(Path::new(
             "files_for_testing/spectrum/spec_to_csv_test_01.csv",
-        ));
-        assert!(s.is_ok());
-        let s = s.unwrap();
+        ))?;
         let lambdas = s.lambda_vec();
         assert!(
             lambdas
@@ -853,6 +855,7 @@ mod test {
                 )
                 .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON))
         );
+        Ok(())
     }
     #[test]
     fn from_csv_err() {
@@ -877,30 +880,27 @@ mod test {
         );
     }
     #[test]
-    fn from_laser_lines_single() {
-        let s = Spectrum::from_laser_lines(
-            &EnergyLaserLines::new(vec![(micrometer!(1.0), joule!(1.0))], nanometer!(1.0)).unwrap(),
-        )
-        .unwrap();
+    fn from_laser_lines_single() -> OpmResult<()> {
+        let s = Spectrum::from_laser_lines(&EnergyLaserLines::new(
+            vec![(micrometer!(1.0), joule!(1.0))],
+            nanometer!(1.0),
+        )?)?;
         assert_eq!(s.total_energy(), 1.0);
         assert_abs_diff_eq!(s.data[0].0, 1.0);
         assert_abs_diff_eq!(s.data[1].0, 1.001);
         assert_abs_diff_eq!(s.data[0].1, 1000.0, epsilon = 1.0E-9);
         assert_abs_diff_eq!(s.data[1].1, 0.0);
+        Ok(())
     }
     #[test]
-    fn from_laser_lines_double() {
-        let s = Spectrum::from_laser_lines(
-            &EnergyLaserLines::new(
-                vec![
-                    (micrometer!(1.0), joule!(1.0)),
-                    (micrometer!(1.010), joule!(0.5)),
-                ],
-                nanometer!(1.0),
-            )
-            .unwrap(),
-        )
-        .unwrap();
+    fn from_laser_lines_double() -> OpmResult<()> {
+        let s = Spectrum::from_laser_lines(&EnergyLaserLines::new(
+            vec![
+                (micrometer!(1.0), joule!(1.0)),
+                (micrometer!(1.010), joule!(0.5)),
+            ],
+            nanometer!(1.0),
+        )?)?;
         assert_abs_diff_eq!(s.total_energy(), 1.5, epsilon = 1.0E-9);
         assert_abs_diff_eq!(s.data[0].0, 1.0);
         assert_abs_diff_eq!(s.data[0].1, 1000.0, epsilon = 1.0E-9);
@@ -912,24 +912,26 @@ mod test {
         assert_abs_diff_eq!(s.data[10].1, 500.0, epsilon = 1.0E-9);
         assert_abs_diff_eq!(s.data[11].0, 1.011);
         assert_abs_diff_eq!(s.data[11].1, 0.0);
+        Ok(())
     }
     #[test]
-    fn visible_spectrum() {
-        let s = create_visible_spec();
+    fn visible_spectrum() -> OpmResult<()> {
+        let s = create_visible_spec()?;
         assert_eq!(s.lambda_vec().first().unwrap(), &0.38);
         assert_abs_diff_eq!(s.lambda_vec().last().unwrap(), &0.750);
+        Ok(())
     }
     #[test]
-    fn nir_spec() {
-        assert_eq!(create_nir_spec().lambda_vec().first().unwrap(), &0.8);
+    fn nir_spec() -> OpmResult<()> {
+        assert_eq!(create_nir_spec()?.lambda_vec().first().unwrap(), &0.8);
+        Ok(())
     }
     #[test]
-    fn nd_glass_spec() {
-        let s = create_nd_glass_spec(1.0);
-        assert!(s.is_ok());
-        let s = s.unwrap();
+    fn nd_glass_spec() -> OpmResult<()> {
+        let s = create_nd_glass_spec(1.0)?;
         assert_eq!(s.lambda_vec().first().unwrap(), &0.8);
         assert!(create_nd_glass_spec(-1.0).is_err());
+        Ok(())
     }
     #[test]
     fn new_negative_resolution() {
@@ -969,19 +971,21 @@ mod test {
         assert_eq!(s.data[3].1, 1.0);
     }
     #[test]
-    fn set_single_peak_additive() {
+    fn set_single_peak_additive() -> OpmResult<()> {
         let mut s = prep();
-        s.add_single_peak(micrometer!(2.0), 1.0).unwrap();
-        s.add_single_peak(micrometer!(2.0), 1.0).unwrap();
+        s.add_single_peak(micrometer!(2.0), 1.0)?;
+        s.add_single_peak(micrometer!(2.0), 1.0)?;
         assert_eq!(s.data[2].1, 4.0);
+        Ok(())
     }
     #[test]
-    fn set_single_peak_interp_additive() {
+    fn set_single_peak_interp_additive() -> OpmResult<()> {
         let mut s = prep();
-        s.add_single_peak(micrometer!(2.0), 1.0).unwrap();
-        s.add_single_peak(micrometer!(2.25), 1.0).unwrap();
+        s.add_single_peak(micrometer!(2.0), 1.0)?;
+        s.add_single_peak(micrometer!(2.25), 1.0)?;
         assert_eq!(s.data[2].1, 3.0);
         assert_eq!(s.data[3].1, 1.0);
+        Ok(())
     }
     #[test]
     fn set_single_peak_lower_bound() {
@@ -1006,13 +1010,14 @@ mod test {
         assert!(s.add_single_peak(micrometer!(1.5), -1.0).is_err());
     }
     #[test]
-    fn add_lorentzian() {
-        let mut s = Spectrum::new(micrometer!(1.0)..micrometer!(50.0), micrometer!(0.1)).unwrap();
+    fn add_lorentzian() -> OpmResult<()> {
+        let mut s = Spectrum::new(micrometer!(1.0)..micrometer!(50.0), micrometer!(0.1))?;
         assert!(
             s.add_lorentzian_peak(micrometer!(25.0), micrometer!(0.5), 2.0)
                 .is_ok()
         );
         assert!(s.total_energy().abs_diff_eq(&2.0, 0.1));
+        Ok(())
     }
     #[test]
     fn add_lorentzian_wrong_params() {
@@ -1031,22 +1036,24 @@ mod test {
         );
     }
     #[test]
-    fn total_energy() {
+    fn total_energy() -> OpmResult<()> {
         let mut s = prep();
-        s.add_single_peak(micrometer!(2.0), 1.0).unwrap();
+        s.add_single_peak(micrometer!(2.0), 1.0)?;
         assert_eq!(s.total_energy(), 1.0);
+        Ok(())
     }
     #[test]
-    fn total_energy_interpolated_peak() {
-        let mut s = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(1.0)).unwrap();
-        s.add_single_peak(micrometer!(1.5), 1.0).unwrap();
+    fn total_energy_interpolated_peak() -> OpmResult<()> {
+        let mut s = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(1.0))?;
+        s.add_single_peak(micrometer!(1.5), 1.0)?;
         assert_eq!(s.total_energy(), 1.0);
+        Ok(())
     }
     #[test]
-    fn get_value() {
+    fn get_value() -> OpmResult<()> {
         let mut s = Spectrum::default();
         let data = vec![(1.0, 1.0), (2.0, 2.0), (3.0, 4.0)];
-        s.set_data(data).unwrap();
+        s.set_data(data)?;
         assert_eq!(s.get_value(&micrometer!(0.9)), None);
         assert_eq!(s.get_value(&micrometer!(1.0)), Some(1.0));
         assert_eq!(s.get_value(&micrometer!(1.2)), Some(1.2));
@@ -1054,37 +1061,29 @@ mod test {
         assert_eq!(s.get_value(&micrometer!(2.75)), Some(3.5));
         assert_eq!(s.get_value(&micrometer!(3.0)), Some(4.0));
         assert_eq!(s.get_value(&micrometer!(3.1)), None);
+        Ok(())
     }
     #[test]
-    #[ignore] //cannot be empty
-    fn get_value_empty() {
-        // let s = Spectrum { data: vec![] };
-        // assert_eq!(s.get_value(&micrometer!(1.0)), None);
-        // let s = Spectrum {
-        //     data: vec![(1.0, 1.0)],
-        // };
-        // assert_eq!(s.get_value(&micrometer!(0.9)), None);
-        // assert_eq!(s.get_value(&micrometer!(1.0)), Some(1.0));
-        // assert_eq!(s.get_value(&micrometer!(1.1)), None);
-    }
-    #[test]
-    fn scale_vertical() {
-        let mut s = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0)).unwrap();
-        s.add_single_peak(micrometer!(2.5), 1.0).unwrap();
+    fn scale_vertical() -> OpmResult<()> {
+        let mut s = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0))?;
+        s.add_single_peak(micrometer!(2.5), 1.0)?;
         assert!(s.scale_vertical(&0.5).is_ok());
         assert_eq!(s.data_vec(), vec![0.0, 0.25, 0.25, 0.0, 0.0]);
+        Ok(())
     }
     #[test]
-    fn scale_vertical2() {
-        let mut s = create_he_ne_spec(1.0).unwrap();
-        let s2 = create_he_ne_spec(0.6).unwrap();
-        s.scale_vertical(&0.6).unwrap();
+    fn scale_vertical2() -> OpmResult<()> {
+        let mut s = create_he_ne_spec(1.0)?;
+        let s2 = create_he_ne_spec(0.6)?;
+        s.scale_vertical(&0.6)?;
         assert_eq!(s.total_energy(), s2.total_energy());
+        Ok(())
     }
     #[test]
-    fn he_ne_spectrum() {
-        let s = create_he_ne_spec(1.0).unwrap();
+    fn he_ne_spectrum() -> OpmResult<()> {
+        let s = create_he_ne_spec(1.0)?;
         assert_eq!(s.total_energy(), 1.0);
+        Ok(())
     }
     #[test]
     fn scale_vertical_negative() {
@@ -1105,29 +1104,31 @@ mod test {
         assert_eq!(calc_ratio(1.0, 2.0, 1.0, 2.0), 1.0); // bucket matches source
     }
     #[test]
-    fn resample() {
-        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0)).unwrap();
-        let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0)).unwrap();
-        s2.add_single_peak(micrometer!(2.0), 1.0).unwrap();
+    fn resample() -> OpmResult<()> {
+        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0))?;
+        let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0))?;
+        s2.add_single_peak(micrometer!(2.0), 1.0)?;
         s1.resample(&s2);
         assert_eq!(s1.data, s2.data);
         assert_eq!(s1.total_energy(), s2.total_energy());
+        Ok(())
     }
     #[test]
-    fn resample_delete_old_data() {
-        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0)).unwrap();
-        s1.add_single_peak(micrometer!(3.0), 1.0).unwrap();
-        let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0)).unwrap();
-        s2.add_single_peak(micrometer!(2.0), 1.0).unwrap();
+    fn resample_delete_old_data() -> OpmResult<()> {
+        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0))?;
+        s1.add_single_peak(micrometer!(3.0), 1.0)?;
+        let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0))?;
+        s2.add_single_peak(micrometer!(2.0), 1.0)?;
         s1.resample(&s2);
         assert_eq!(s1.data, s2.data);
         assert_eq!(s1.total_energy(), s2.total_energy());
+        Ok(())
     }
     #[test]
-    fn resample_interp() {
-        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(0.5)).unwrap();
-        let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(6.0), micrometer!(1.0)).unwrap();
-        s2.add_single_peak(micrometer!(2.0), 1.0).unwrap();
+    fn resample_interp() -> OpmResult<()> {
+        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(0.5))?;
+        let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(6.0), micrometer!(1.0))?;
+        s2.add_single_peak(micrometer!(2.0), 1.0)?;
         s1.resample(&s2);
         assert_eq!(s1.total_energy(), s2.total_energy());
         assert!(
@@ -1136,51 +1137,57 @@ mod test {
                 .zip(vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0])
                 .all(|v| (*v.0).abs_diff_eq(&v.1, f64::EPSILON))
         );
+        Ok(())
     }
     #[test]
-    fn resample_interp2() {
-        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0)).unwrap();
-        let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(6.0), micrometer!(0.5)).unwrap();
-        s2.add_single_peak(micrometer!(2.0), 1.0).unwrap();
+    fn resample_interp2() -> OpmResult<()> {
+        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(5.0), micrometer!(1.0))?;
+        let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(6.0), micrometer!(0.5))?;
+        s2.add_single_peak(micrometer!(2.0), 1.0)?;
         s1.resample(&s2);
         assert_eq!(s1.data_vec(), vec![0.0, 1.0, 0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
+        Ok(())
     }
     #[test]
-    fn resample_right_outside() {
-        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(1.0)).unwrap();
-        let mut s2 = Spectrum::new(micrometer!(4.0)..micrometer!(6.0), micrometer!(1.0)).unwrap();
-        s2.add_single_peak(micrometer!(4.0), 1.0).unwrap();
+    fn resample_right_outside() -> OpmResult<()> {
+        let mut s1 = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(1.0))?;
+        let mut s2 = Spectrum::new(micrometer!(4.0)..micrometer!(6.0), micrometer!(1.0))?;
+        s2.add_single_peak(micrometer!(4.0), 1.0)?;
         s1.resample(&s2);
         assert_eq!(s1.data_vec(), vec![0.0, 0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
+        Ok(())
     }
     #[test]
-    fn resample_left_outside() {
-        let mut s1 = Spectrum::new(micrometer!(4.0)..micrometer!(6.0), micrometer!(1.0)).unwrap();
-        let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(1.0)).unwrap();
-        s2.add_single_peak(micrometer!(2.0), 1.0).unwrap();
+    fn resample_left_outside() -> OpmResult<()> {
+        let mut s1 = Spectrum::new(micrometer!(4.0)..micrometer!(6.0), micrometer!(1.0))?;
+        let mut s2 = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(1.0))?;
+        s2.add_single_peak(micrometer!(2.0), 1.0)?;
         s1.resample(&s2);
         assert_eq!(s1.data_vec(), vec![0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
+        Ok(())
     }
     #[test]
-    fn add() {
+    fn add() -> OpmResult<()> {
         let mut s = prep();
-        s.add_single_peak(micrometer!(1.75), 1.0).unwrap();
+        s.add_single_peak(micrometer!(1.75), 1.0)?;
         let mut s2 = prep();
-        s2.add_single_peak(micrometer!(2.25), 0.5).unwrap();
+        s2.add_single_peak(micrometer!(2.25), 0.5)?;
         s.add(&s2);
         assert_eq!(s.data_vec(), vec![0.0, 1.0, 1.5, 0.5, 0.0, 0.0, 0.0]);
+        Ok(())
     }
     #[test]
-    fn sub() {
+    fn sub() -> OpmResult<()> {
         let mut s = prep();
-        s.add_single_peak(micrometer!(1.75), 1.0).unwrap();
+        s.add_single_peak(micrometer!(1.75), 1.0)?;
         let mut s2 = prep();
-        s2.add_single_peak(micrometer!(2.25), 0.5).unwrap();
+        s2.add_single_peak(micrometer!(2.25), 0.5)?;
         s.sub(&s2);
         assert_eq!(s.data_vec(), vec![0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 0.0]);
+        Ok(())
     }
     #[test]
     fn serialize() {
@@ -1235,15 +1242,16 @@ mod test {
         );
     }
     #[test]
-    fn debug() {
-        let s = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(1.0)).unwrap();
+    fn debug() -> OpmResult<()> {
+        let s = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(1.0))?;
         assert_eq!(
             format!("{:?}", s),
             "1000.00 nm -> 0\n2000.00 nm -> 0\n3000.00 nm -> 0\n4000.00 nm -> 0\n"
         );
+        Ok(())
     }
     #[test]
-    fn split_by_spectrum() {
+    fn split_by_spectrum() -> OpmResult<()> {
         let edge_filter = EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(1000.0),
@@ -1251,22 +1259,19 @@ mod test {
             Some(nanometer!(0.4)),
             nanometer!(900.0)..nanometer!(1100.0),
             nanometer!(0.2),
-        )
-        .unwrap();
-        let longpass = SpectralFilterBuilder::EdgeFilter(edge_filter)
-            .build()
-            .unwrap();
-        let mut input_laser = Spectrum::from_laser_lines(
-            &EnergyLaserLines::new(vec![(nanometer!(1050.0), joule!(100.0))], nanometer!(5.0))
-                .unwrap(),
-        )
-        .unwrap();
+        )?;
+        let longpass = SpectralFilterBuilder::EdgeFilter(edge_filter).build()?;
+        let mut input_laser = Spectrum::from_laser_lines(&EnergyLaserLines::new(
+            vec![(nanometer!(1050.0), joule!(100.0))],
+            nanometer!(5.0),
+        )?)?;
         let split_spectrum = input_laser.split_by_spectrum(&longpass);
         assert_abs_diff_eq!(input_laser.total_energy(), 100.0);
         assert_abs_diff_eq!(split_spectrum.total_energy(), 0.0);
+        Ok(())
     }
     #[test]
-    fn split_by_spectrum_at_longpass_edge() {
+    fn split_by_spectrum_at_longpass_edge() -> OpmResult<()> {
         let edge_filter = EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(1000.0),
@@ -1274,18 +1279,15 @@ mod test {
             Some(nanometer!(1.0)),
             nanometer!(900.0)..nanometer!(1100.0),
             nanometer!(0.2),
-        )
-        .unwrap();
-        let longpass = SpectralFilterBuilder::EdgeFilter(edge_filter)
-            .build()
-            .unwrap();
-        let mut input_laser = Spectrum::from_laser_lines(
-            &EnergyLaserLines::new(vec![(nanometer!(1000.0), joule!(100.0))], nanometer!(0.2))
-                .unwrap(),
-        )
-        .unwrap();
+        )?;
+        let longpass = SpectralFilterBuilder::EdgeFilter(edge_filter).build()?;
+        let mut input_laser = Spectrum::from_laser_lines(&EnergyLaserLines::new(
+            vec![(nanometer!(1000.0), joule!(100.0))],
+            nanometer!(0.2),
+        )?)?;
         let split_spectrum = input_laser.split_by_spectrum(&longpass);
         assert_abs_diff_eq!(input_laser.total_energy(), 50.0, epsilon = 1.0e-8);
         assert_abs_diff_eq!(split_spectrum.total_energy(), 50.0, epsilon = 1.0e-8);
+        Ok(())
     }
 }

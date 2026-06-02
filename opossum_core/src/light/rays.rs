@@ -589,8 +589,11 @@ impl Rays {
         Ok(beams_invalided)
     }
     /// Finds all unique wavelengths in this raybundle and returns them in a vector
-    #[must_use]
-    pub fn get_unique_wavelengths(&self, valid_only: bool) -> Vec<Length> {
+    ///
+    /// # Errors
+    ///
+    /// This function might return an error if internally the wavelengths could not be sorted (e.g. the array is empty)
+    pub fn get_unique_wavelengths(&self, valid_only: bool) -> OpmResult<Vec<Length>> {
         //get all wavelengths of the rays converted to nm
         let wvls = self
             .ray_bundle
@@ -600,13 +603,13 @@ impl Rays {
             .collect::<Vec<f64>>();
 
         //get unique wavelengths
-        let unique_wvls = get_unique_finite_values_sorted(wvls.as_slice());
+        let unique_wvls = get_unique_finite_values_sorted(wvls.as_slice())?;
 
         //return as Vec<Length>
-        unique_wvls
+        Ok(unique_wvls
             .iter()
             .map(|w| nanometer!(*w))
-            .collect::<Vec<Length>>()
+            .collect::<Vec<Length>>())
     }
     /// Returns the centroid of this [`Rays`].
     ///
@@ -755,7 +758,7 @@ impl Rays {
             let center_wavelength = self.get_center_wavelength().ok_or_else(|| {
                 OpossumError::Other("Cannot determine center wavelength of empty ray bundle".into())
             })?;
-            let wvls = self.get_unique_wavelengths(true);
+            let wvls = self.get_unique_wavelengths(true)?;
 
             if average_flag {
                 warn!(
@@ -764,34 +767,6 @@ impl Rays {
                 Err(OpossumError::Other(
                     "Averaging wavefronts over the spectrum is not yet implemented".into(),
                 ))
-                // spec.normalize_to_sum()?;
-                // if let Some(center_wavelength_index) = ((center_wavelength - spec_start)/ spec_res_micro)
-                //     .floor()
-                //     .to_usize(){
-                //         let center_wavelength_data = &wf_error[center_wavelength_index];
-
-                //         // interpolate all other wavefront data to the positions of the center wavelength data
-                //         let xy_coord = MatrixXx2::<f64>::from_columns(&[center_wavelength_data.column(0), center_wavelength_data.column(1)]);
-                //         let mut averaged_wavefront_data = DVector::from_element(
-                //             center_wavelength_data.nrows(),
-                //             0.,
-                //         );
-                //         for (wf_map, (wvl, spec_int)) in wf_error.iter().zip(wvls.iter().zip(spec_int.iter())) {
-                //             let (interp_dat, _) = vec_interpolate_3d_scatter_data(&wf_map, &xy_coord)?;
-                //             averaged_wavefront_data += interp_dat; // * *spec_int*center_wavelength/ *wvl;
-                //         }
-                //         let dat = MatrixXx3::from_columns(&[
-                //             xy_coord.column(0),
-                //             xy_coord.column(1),
-                //             averaged_wavefront_data.as_slice().into(),
-                //         ]);
-                //         Ok(WaveFrontData {
-                //             wavefront_error_maps: vec![WaveFrontErrorMap::new(&dat, micrometer!(center_wavelength))?],
-                //         })
-                // }
-                // else{
-                //     Err(OpossumError::Other("Center wavelength is outside of spectral range".into()))
-                // }
             } else {
                 let closest_wvl = wvls.iter().fold(wvls[0], |a, &b| {
                     if (b - center_wavelength).abs() < (a - center_wavelength).abs() {
@@ -1044,7 +1019,7 @@ impl Rays {
         }
         Ok(())
     }
-    /// Refract a ray bundle on a [`GeoSurface`](crate::surface::geo_surface::GeoSurface) and returns a reflected [`Ray`] bundle.
+    /// Refract a ray bundle on a [`GeoSurface`](crate::geometry::geo_surface::GeoSurface) and returns a reflected [`Ray`] bundle.
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
@@ -1469,7 +1444,7 @@ impl Rays {
         wavelength_bin_size: Length,
         valid_only: bool,
     ) -> OpmResult<(Vec<Self>, Vec<Length>)> {
-        let unique_wavelengths = self.get_unique_wavelengths(valid_only);
+        let unique_wavelengths = self.get_unique_wavelengths(valid_only)?;
         let num_split_bundles = unique_wavelengths.len();
         if num_split_bundles == 1 {
             Ok((vec![self.clone()], unique_wavelengths))
@@ -1849,69 +1824,70 @@ mod test {
         assert_eq!(Rays::default().nr_of_rays(false), 0);
     }
     #[test]
-    fn from() {
-        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
-            .unwrap();
+    fn from() -> OpmResult<()> {
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))?;
         let rays = Rays::from(ray.clone());
         assert_eq!(rays.nr_of_rays(true), 1);
         let r = rays.iter().next().unwrap();
         assert_eq!(*r, ray);
+        Ok(())
     }
     #[test]
-    fn is_empty() {
+    fn is_empty() -> OpmResult<()> {
         assert!(Rays::default().is_empty());
-        let rays = Rays::from(
-            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap(),
-        );
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         assert!(!rays.is_empty());
+        Ok(())
     }
     #[test]
-    fn display() {
-        let mut rays = Rays::from(
-            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap(),
-        );
-        rays.add_ray(
-            Ray::new_collimated(millimeter!(0.0, 1.0, 0.0), nanometer!(1001.0), joule!(1.0))
-                .unwrap(),
-        );
+    fn display() -> OpmResult<()> {
+        let mut rays = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(0.0, 1.0, 0.0),
+            nanometer!(1001.0),
+            joule!(1.0),
+        )?);
         assert_eq!(
             format!("{}", rays),
             "pos: (0 m, 0 m, 0 m), dir: (0, 0, 1), energy: 1.000000 J, wavelength: 1000.0000 nm, valid: true\npos: (0 m, 0.001 m, 0 m), dir: (0, 0, 1), energy: 1.000000 J, wavelength: 1001.0000 nm, valid: true\n# of rays: 2"
         );
+        Ok(())
     }
     #[test]
-    fn split_ray_bundle_by_wavelength_test() {
+    fn split_ray_bundle_by_wavelength_test() -> OpmResult<()> {
         let mut rays_1w = Rays::new_uniform_collimated(
             nanometer!(1053.),
             joule!(1.),
-            &FibonacciEllipse::new(millimeter!(2.), millimeter!(2.), 5).unwrap(),
-        )
-        .unwrap();
+            &FibonacciEllipse::new(millimeter!(2.), millimeter!(2.), 5)?,
+        )?;
 
         let mut rays_2w = Rays::new_uniform_collimated(
             nanometer!(527.),
             joule!(1.),
-            &FibonacciEllipse::new(millimeter!(1.3), millimeter!(1.3), 10).unwrap(),
-        )
-        .unwrap();
+            &FibonacciEllipse::new(millimeter!(1.3), millimeter!(1.3), 10)?,
+        )?;
 
         let mut rays_3w = Rays::new_uniform_collimated(
             nanometer!(1053. / 3.),
             joule!(1.),
-            &FibonacciEllipse::new(millimeter!(0.5), millimeter!(0.5), 15).unwrap(),
-        )
-        .unwrap();
+            &FibonacciEllipse::new(millimeter!(0.5), millimeter!(0.5), 15)?,
+        )?;
 
         rays_1w.add_rays(&mut rays_2w);
         rays_1w.add_rays(&mut rays_3w);
 
         let mut ray_bundle = rays_1w;
 
-        let (split_bundles, wavelengths) = ray_bundle
-            .split_ray_bundle_by_wavelength(nanometer!(1.), true)
-            .unwrap();
+        let (split_bundles, wavelengths) =
+            ray_bundle.split_ray_bundle_by_wavelength(nanometer!(1.), true)?;
         assert_eq!(wavelengths.len(), 3);
         assert!(relative_eq!(
             wavelengths[0].get::<nanometer>(),
@@ -1937,9 +1913,8 @@ mod test {
         ray_bundle.ray_bundle[5].set_invalid();
         ray_bundle.ray_bundle[20].set_invalid();
 
-        let (split_bundles, wavelengths) = ray_bundle
-            .split_ray_bundle_by_wavelength(nanometer!(1.), true)
-            .unwrap();
+        let (split_bundles, wavelengths) =
+            ray_bundle.split_ray_bundle_by_wavelength(nanometer!(1.), true)?;
 
         assert_eq!(wavelengths.len(), 3);
         assert!(relative_eq!(
@@ -1962,9 +1937,8 @@ mod test {
         assert_eq!(split_bundles[1].ray_bundle.len(), 9);
         assert_eq!(split_bundles[2].ray_bundle.len(), 4);
 
-        let (split_bundles, wavelengths) = ray_bundle
-            .split_ray_bundle_by_wavelength(nanometer!(400.), true)
-            .unwrap();
+        let (split_bundles, wavelengths) =
+            ray_bundle.split_ray_bundle_by_wavelength(nanometer!(400.), true)?;
 
         assert_eq!(wavelengths.len(), 2);
         assert!(relative_eq!(
@@ -1981,9 +1955,8 @@ mod test {
         assert_eq!(split_bundles[0].ray_bundle.len(), 23);
         assert_eq!(split_bundles[1].ray_bundle.len(), 4);
 
-        let (split_bundles, wavelengths) = ray_bundle
-            .split_ray_bundle_by_wavelength(nanometer!(400.), false)
-            .unwrap();
+        let (split_bundles, wavelengths) =
+            ray_bundle.split_ray_bundle_by_wavelength(nanometer!(400.), false)?;
 
         assert_eq!(wavelengths.len(), 2);
         assert!(relative_eq!(
@@ -1999,34 +1972,32 @@ mod test {
 
         assert_eq!(split_bundles[0].ray_bundle.len(), 25);
         assert_eq!(split_bundles[1].ray_bundle.len(), 5);
+        Ok(())
     }
     #[test]
-    fn get_unique_wavelengths() {
+    fn get_unique_wavelengths() -> OpmResult<()> {
         let mut rays_1w = Rays::new_uniform_collimated(
             nanometer!(1053.),
             joule!(1.),
-            &FibonacciEllipse::new(millimeter!(2.), millimeter!(2.), 5).unwrap(),
-        )
-        .unwrap();
+            &FibonacciEllipse::new(millimeter!(2.), millimeter!(2.), 5)?,
+        )?;
 
         let mut rays_2w = Rays::new_uniform_collimated(
             nanometer!(527.),
             joule!(1.),
-            &FibonacciEllipse::new(millimeter!(1.3), millimeter!(1.3), 10).unwrap(),
-        )
-        .unwrap();
+            &FibonacciEllipse::new(millimeter!(1.3), millimeter!(1.3), 10)?,
+        )?;
 
         let mut rays_3w = Rays::new_uniform_collimated(
             nanometer!(1053. / 3.),
             joule!(1.),
-            &FibonacciEllipse::new(millimeter!(0.5), millimeter!(0.5), 15).unwrap(),
-        )
-        .unwrap();
+            &FibonacciEllipse::new(millimeter!(0.5), millimeter!(0.5), 15)?,
+        )?;
 
         rays_1w.add_rays(&mut rays_2w);
         rays_1w.add_rays(&mut rays_3w);
 
-        let unique = rays_1w.get_unique_wavelengths(true);
+        let unique = rays_1w.get_unique_wavelengths(true)?;
         assert_eq!(unique.len(), 3);
         assert!(relative_eq!(
             unique[0].get::<nanometer>(),
@@ -2049,7 +2020,7 @@ mod test {
         rays_1w.ray_bundle[3].set_invalid();
         rays_1w.ray_bundle[4].set_invalid();
 
-        let unique = rays_1w.get_unique_wavelengths(true);
+        let unique = rays_1w.get_unique_wavelengths(true)?;
         assert_eq!(unique.len(), 2);
         assert!(relative_eq!(
             unique[0].get::<nanometer>(),
@@ -2061,7 +2032,7 @@ mod test {
             527.,
             max_relative = 2. * f64::EPSILON
         ));
-        let unique = rays_1w.get_unique_wavelengths(false);
+        let unique = rays_1w.get_unique_wavelengths(false)?;
         assert_eq!(unique.len(), 3);
         assert!(relative_eq!(
             unique[0].get::<nanometer>(),
@@ -2078,6 +2049,7 @@ mod test {
             1053.,
             max_relative = 2. * f64::EPSILON
         ));
+        Ok(())
     }
 
     #[test]
@@ -2087,9 +2059,9 @@ mod test {
         assert_eq!(rays.nr_of_rays(false), 0);
     }
     #[test]
-    fn new_collimated_gaussian() {
+    fn new_collimated_gaussian() -> OpmResult<()> {
         let wvl = nanometer!(1054.0);
-        let pos_strategy = &Hexapolar::new(millimeter!(1.0), 2).unwrap();
+        let pos_strategy = &Hexapolar::new(millimeter!(1.0), 2)?;
         let energy_strategy = &General2DGaussian::new(
             joule!(1.),
             millimeter!(0., 0.),
@@ -2097,47 +2069,48 @@ mod test {
             1.,
             radian!(0.),
             true,
-        )
-        .unwrap();
-        let rays = Rays::new_collimated(wvl, energy_strategy, pos_strategy).unwrap();
+        )?;
+        let rays = Rays::new_collimated(wvl, energy_strategy, pos_strategy)?;
 
-        assert_relative_eq!(rays.total_energy().get::<joule>(), 1.)
+        assert_relative_eq!(rays.total_energy().get::<joule>(), 1.);
+        Ok(())
     }
     #[test]
-    fn new_uniform_collimated() {
+    fn new_uniform_collimated() -> OpmResult<()> {
         let wvl = nanometer!(1054.0);
         let energy = joule!(1.0);
-        let strategy = &Hexapolar::new(millimeter!(1.0), 2).unwrap();
+        let strategy = &Hexapolar::new(millimeter!(1.0), 2)?;
         let rays = Rays::new_uniform_collimated(wvl, energy, strategy);
         assert!(rays.is_ok());
-        let rays = rays.unwrap();
+        let rays = rays?;
         assert_eq!(rays.nr_of_rays(true), 19);
         assert!(Energy::abs(rays.total_energy() - joule!(1.0)) < joule!(10.0 * f64::EPSILON));
+        Ok(())
     }
     #[test]
-    fn new_uniform_collimated_zero() {
+    fn new_uniform_collimated_zero() -> OpmResult<()> {
         let wvl = nanometer!(1054.0);
         let energy = joule!(1.0);
-        let strategy = &Hexapolar::new(Length::zero(), 2).unwrap();
+        let strategy = &Hexapolar::new(Length::zero(), 2)?;
         let rays = Rays::new_uniform_collimated(wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();
         assert_eq!(rays.nr_of_rays(true), 1);
         assert_eq!(rays.ray_bundle[0].position(), millimeter!(0., 0., 0.));
         assert_eq!(rays.ray_bundle[0].direction(), Vector3::z());
+        Ok(())
     }
     #[test]
-    fn new_hexapolar_point_source() {
+    fn new_hexapolar_point_source() -> OpmResult<()> {
         let position = millimeter!(0., 0., 0.);
         let wave_length = nanometer!(1053.0);
-        let rays =
-            Rays::new_hexapolar_point_source(position, degree!(90.0), 1, wave_length, joule!(1.0));
+        let mut rays =
+            Rays::new_hexapolar_point_source(position, degree!(90.0), 1, wave_length, joule!(1.0))?;
 
-        let mut rays = rays.unwrap();
         for ray in &rays.ray_bundle {
             assert_eq!(ray.position(), millimeter!(0., 0., 0.))
         }
-        propagate(&mut rays, millimeter!(1.0)).unwrap();
+        propagate(&mut rays, millimeter!(1.0))?;
         assert_eq!(rays.ray_bundle[0].position(), millimeter!(0., 0., 1.));
         assert_eq!(rays.ray_bundle[1].position()[0], Length::zero());
         assert_abs_diff_eq!(
@@ -2165,70 +2138,64 @@ mod test {
                 .is_err()
         );
         let rays =
-            Rays::new_hexapolar_point_source(position, Angle::zero(), 1, wave_length, joule!(1.0))
-                .unwrap();
+            Rays::new_hexapolar_point_source(position, Angle::zero(), 1, wave_length, joule!(1.0))?;
         assert_eq!(rays.nr_of_rays(false), 1);
         assert_eq!(
             rays.ray_bundle[0].position(),
             Point3::new(position.x, position.y, Length::zero())
         );
         assert_eq!(rays.ray_bundle[0].direction(), Vector3::z());
+        Ok(())
     }
     #[test]
-    fn add_ray() {
+    fn add_ray() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert_eq!(rays.nr_of_rays(false), 0);
-        let ray =
-            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
+        let ray = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0))?;
         rays.add_ray(ray);
         assert_eq!(rays.nr_of_rays(false), 1);
+        Ok(())
     }
     #[test]
-    fn add_rays() {
+    fn add_rays() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert_eq!(rays.nr_of_rays(false), 0);
-        let ray =
-            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
+        let ray = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0))?;
         rays.add_ray(ray);
         assert_eq!(rays.nr_of_rays(false), 1);
         let mut rays2 = rays.clone();
         rays.add_rays(&mut rays2);
         assert_eq!(rays.nr_of_rays(false), 2);
+        Ok(())
     }
     #[test]
-    fn set_refractive_index() {
+    fn set_refractive_index() -> OpmResult<()> {
         testing_logger::setup();
         let mut rays = Rays::default();
-        rays.set_refractive_index(&RefractiveIndexType::Const(
-            RefrIndexConst::new(1.5).unwrap(),
-        ))
-        .unwrap();
+        rays.set_refractive_index(&RefractiveIndexType::Const(RefrIndexConst::new(1.5)?))?;
         check_logs(
             log::Level::Warn,
             vec!["ray bundle contains no valid rays for setting the refractive index"],
         );
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0))?;
         rays.add_ray(ray);
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0))?;
         rays.add_ray(ray);
-        rays.set_refractive_index(&RefractiveIndexType::Const(
-            RefrIndexConst::new(2.0).unwrap(),
-        ))
-        .unwrap();
+        rays.set_refractive_index(&RefractiveIndexType::Const(RefrIndexConst::new(2.0)?))?;
         assert_eq!(rays.ray_bundle[0].refractive_index(), 2.0);
         assert_eq!(rays.ray_bundle[1].refractive_index(), 2.0);
+        Ok(())
     }
     #[test]
-    fn total_energy() {
+    fn total_energy() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(rays.total_energy().is_zero());
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0))?;
         rays.add_ray(ray.clone());
         assert_eq!(rays.total_energy(), joule!(1.0));
         rays.add_ray(ray.clone());
         assert_eq!(rays.total_energy(), joule!(2.0));
-        let mut ray =
-            Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
+        let mut ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0))?;
         ray.set_invalid();
         rays.add_ray(ray);
         assert_eq!(rays.total_energy(), joule!(2.0));
@@ -2236,78 +2203,85 @@ mod test {
         let rays = Rays::new_uniform_collimated(
             nanometer!(1054.0),
             joule!(1.0),
-            &Random::new(millimeter!(1.0), millimeter!(1.0), 100000).unwrap(),
-        )
-        .unwrap();
+            &Random::new(millimeter!(1.0), millimeter!(1.0), 100000)?,
+        )?;
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 1.0);
+        Ok(())
     }
     #[test]
-    fn centroid() {
+    fn centroid() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert_eq!(rays.centroid(), None);
-        rays.add_ray(
-            Ray::new_collimated(millimeter!(1.0, 2.0, 0.), nanometer!(1053.0), joule!(1.0))
-                .unwrap(),
-        );
-        rays.add_ray(
-            Ray::new_collimated(millimeter!(2.0, 3.0, 0.), nanometer!(1053.0), joule!(1.0))
-                .unwrap(),
-        );
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(1.0, 2.0, 0.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(2.0, 3.0, 0.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
         assert_eq!(rays.centroid().unwrap(), millimeter!(1.5, 2.5, 0.));
         let mut ray =
-            Ray::new_collimated(millimeter!(2.0, 3.0, 0.), nanometer!(1053.0), joule!(1.0))
-                .unwrap();
+            Ray::new_collimated(millimeter!(2.0, 3.0, 0.), nanometer!(1053.0), joule!(1.0))?;
         ray.set_invalid();
         rays.add_ray(ray);
         assert_eq!(rays.centroid().unwrap(), millimeter!(1.5, 2.5, 0.));
+        Ok(())
     }
     #[test]
-    fn beam_radius_geo() {
+    fn beam_radius_geo() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(rays.beam_radius_geo().is_none());
-        rays.add_ray(
-            Ray::new_collimated(millimeter!(1.0, 2.0, 0.), nanometer!(1053.0), joule!(1.0))
-                .unwrap(),
-        );
-        rays.add_ray(
-            Ray::new_collimated(millimeter!(2.0, 3.0, 0.), nanometer!(1053.0), joule!(1.0))
-                .unwrap(),
-        );
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(1.0, 2.0, 0.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(2.0, 3.0, 0.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
         assert_eq!(rays.beam_radius_geo().unwrap(), millimeter!(0.5_f64.sqrt()));
         let mut ray =
-            Ray::new_collimated(millimeter!(1.0, 15.0, 0.), nanometer!(1053.0), joule!(1.0))
-                .unwrap();
+            Ray::new_collimated(millimeter!(1.0, 15.0, 0.), nanometer!(1053.0), joule!(1.0))?;
         ray.set_invalid();
         assert_eq!(rays.beam_radius_geo().unwrap(), millimeter!(0.5_f64.sqrt()));
+        Ok(())
     }
     #[test]
-    fn beam_radius_rms() {
+    fn beam_radius_rms() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(rays.beam_radius_rms().is_none());
-        rays.add_ray(
-            Ray::new_collimated(millimeter!(1.0, 1.0, 0.), nanometer!(1053.0), joule!(1.0))
-                .unwrap(),
-        );
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(1.0, 1.0, 0.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
         assert_eq!(rays.beam_radius_rms().unwrap(), Length::zero());
-        rays.add_ray(
-            Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap(),
-        );
+        rays.add_ray(Ray::new_collimated(
+            Point3::origin(),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
         assert_eq!(
             rays.beam_radius_rms().unwrap(),
             millimeter!(f64::sqrt(2.0) / 2.0)
         );
         let mut ray =
-            Ray::new_collimated(millimeter!(1.0, 15.0, 0.), nanometer!(1053.0), joule!(1.0))
-                .unwrap();
+            Ray::new_collimated(millimeter!(1.0, 15.0, 0.), nanometer!(1053.0), joule!(1.0))?;
         ray.set_invalid();
         rays.add_ray(ray);
         assert_eq!(
             rays.beam_radius_rms().unwrap(),
             millimeter!(f64::sqrt(2.0) / 2.0)
         );
+        Ok(())
     }
     #[test]
-    fn refract_paraxial() {
+    fn refract_paraxial() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(
             rays.refract_paraxial(millimeter!(0.0), &Isometry::identity())
@@ -2329,14 +2303,11 @@ mod test {
             rays.refract_paraxial(millimeter!(100.0), &Isometry::identity())
                 .is_ok()
         );
-        let ray0 =
-            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
-        let ray1 =
-            Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
+        let ray0 = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0))?;
+        let ray1 = Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0))?;
         rays.add_ray(ray0.clone());
         rays.add_ray(ray1.clone());
-        rays.refract_paraxial(millimeter!(100.0), &Isometry::identity())
-            .unwrap();
+        rays.refract_paraxial(millimeter!(100.0), &Isometry::identity())?;
         assert_eq!(rays.ray_bundle[0].position(), ray0.position());
         assert_eq!(rays.ray_bundle[0].direction(), ray0.direction());
         assert_eq!(rays.ray_bundle[1].position(), ray1.position());
@@ -2344,94 +2315,88 @@ mod test {
         assert_abs_diff_eq!(rays.ray_bundle[1].direction().x, new_dir.x);
         assert_abs_diff_eq!(rays.ray_bundle[1].direction().y, new_dir.y);
         assert_abs_diff_eq!(rays.ray_bundle[1].direction().z, new_dir.z);
+        Ok(())
     }
     #[test]
-    fn refract_on_surface_empty() {
+    fn refract_on_surface_empty() -> OpmResult<()> {
         let mut rays = Rays::default();
         testing_logger::setup();
-        let reflected = rays
-            .refract_on_surface(
-                &mut OpticSurface::default(),
-                Some(&refr_index_vaccuum()),
-                true,
-                &MissedSurfaceStrategy::Stop,
-            )
-            .unwrap();
+        let reflected = rays.refract_on_surface(
+            &mut OpticSurface::default(),
+            Some(&refr_index_vaccuum()),
+            true,
+            &MissedSurfaceStrategy::Stop,
+        )?;
         check_logs(
             log::Level::Warn,
             vec!["ray bundle contains no valid rays - not propagating"],
         );
         assert_eq!(reflected.nr_of_rays(false), 0);
+        Ok(())
     }
     #[test]
-    fn refract_on_surface_helper_rays() {
+    fn refract_on_surface_helper_rays() -> OpmResult<()> {
         let tot_energy = joule!(1.);
-        let pos_strategy = Hexapolar::new(millimeter!(15.), 5).unwrap();
+        let pos_strategy = Hexapolar::new(millimeter!(15.), 5)?;
         let fluence_strategy =
             crate::distributions::fluence::general_gaussian::General2DGaussian::new(
                 tot_energy,
                 millimeter!(0., 0.),
                 millimeter!(2.5, 2.5),
                 radian!(0.),
-            )
-            .unwrap();
+            )?;
         let mut rays = Rays::new_collimated_w_fluence_helper(
             nanometer!(1000.),
             &fluence_strategy,
             &pos_strategy,
-        )
-        .unwrap();
+        )?;
 
-        let _ = rays
-            .refract_on_surface(
-                &mut OpticSurface::default(),
-                Some(&refr_index_vaccuum()),
-                true,
-                &MissedSurfaceStrategy::Stop,
-            )
-            .unwrap();
+        let _ = rays.refract_on_surface(
+            &mut OpticSurface::default(),
+            Some(&refr_index_vaccuum()),
+            true,
+            &MissedSurfaceStrategy::Stop,
+        )?;
+        Ok(())
     }
     #[test]
-    fn refract_on_surface_parent_node_split_id() {
+    fn refract_on_surface_parent_node_split_id() -> OpmResult<()> {
         let mut rays = Rays::default();
         let node_uuid = Uuid::new_v4();
         let parent_uuid = Uuid::new_v4();
         rays.set_node_origin_uuid(node_uuid);
         rays.set_parent_uuid(parent_uuid);
         rays.set_parent_node_split_idx(10);
-        let reflected = rays
-            .refract_on_surface(
-                &mut OpticSurface::default(),
-                Some(&refr_index_vaccuum()),
-                false,
-                &MissedSurfaceStrategy::Stop,
-            )
-            .unwrap();
+        let reflected = rays.refract_on_surface(
+            &mut OpticSurface::default(),
+            Some(&refr_index_vaccuum()),
+            false,
+            &MissedSurfaceStrategy::Stop,
+        )?;
 
         assert_eq!(*reflected.parent_pos_split_idx(), 10);
         assert_eq!(reflected.node_origin().unwrap(), node_uuid);
         assert_eq!(reflected.parent_id().unwrap(), parent_uuid);
         assert_eq!(reflected.uuid(), rays.uuid());
+        Ok(())
     }
     #[test]
-    fn refract_on_surface_same_index() {
+    fn refract_on_surface_same_index() -> OpmResult<()> {
         let mut rays = Rays::default();
         let mut ray0 = Ray::new(
             millimeter!(0., 0., -10.),
             vector![0.0, 1.0, 1.0],
             nanometer!(1053.0),
             joule!(1.0),
-        )
-        .unwrap();
-        ray0.set_refractive_index(1.5).unwrap();
+        )?;
+        ray0.set_refractive_index(1.5)?;
         let mut ray1 = Ray::new(
             millimeter!(0., 1., -10.),
             vector![0.0, 1.0, 1.0],
             nanometer!(1053.0),
             joule!(1.0),
-        )
-        .unwrap();
-        ray1.set_refractive_index(2.0).unwrap();
+        )?;
+        ray1.set_refractive_index(2.0)?;
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         rays.refract_on_surface(
@@ -2439,40 +2404,41 @@ mod test {
             None,
             true,
             &MissedSurfaceStrategy::Stop,
-        )
-        .unwrap();
+        )?;
         for ray in rays.iter() {
             assert_abs_diff_eq!(ray.direction(), vector![0.0, 1.0, 1.0].normalize())
         }
+        Ok(())
     }
     #[test]
-    fn refract_on_surface_missed() {
-        let mut rays = Rays::from(
-            Ray::new_collimated(millimeter!(0.0, 0.0, 1.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap(),
-        );
+    fn refract_on_surface_missed() -> OpmResult<()> {
+        let mut rays = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 0.0, 1.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         testing_logger::setup();
-        let reflected = rays
-            .refract_on_surface(
-                &mut OpticSurface::default(),
-                Some(&refr_index_vaccuum()),
-                true,
-                &MissedSurfaceStrategy::Stop,
-            )
-            .unwrap();
+        let reflected = rays.refract_on_surface(
+            &mut OpticSurface::default(),
+            Some(&refr_index_vaccuum()),
+            true,
+            &MissedSurfaceStrategy::Stop,
+        )?;
         check_logs(
             log::Level::Warn,
             vec!["rays totally reflected or missed a surface"],
         );
         assert_eq!(reflected.nr_of_rays(false), 0);
+        Ok(())
     }
     #[test]
-    fn refract_on_surface_energy() {
+    fn refract_on_surface_energy() -> OpmResult<()> {
         let mut rays = Rays::default();
-        rays.add_ray(
-            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap(),
-        );
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(0.0, 0.0, -1.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
         let mut s = OpticSurface::default();
         s.set_coating(CoatingConstantR::new(percent!(20.0)).unwrap().into());
         let reflected = rays
@@ -2485,9 +2451,10 @@ mod test {
             .unwrap();
         assert_eq!(rays.total_energy(), joule!(0.8));
         assert_eq!(reflected.total_energy(), joule!(0.2));
+        Ok(())
     }
     #[test]
-    fn filter_energy() {
+    fn filter_energy() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(
             rays.filter_energy(&FilterType::Constant(
@@ -2496,7 +2463,7 @@ mod test {
             .is_ok()
         );
         let mut ray =
-            Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1054.0), joule!(1.0)).unwrap();
+            Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1054.0), joule!(1.0))?;
         rays.add_ray(ray.clone());
         let _ = ray
             .filter_energy(&FilterType::Constant(
@@ -2512,9 +2479,10 @@ mod test {
         assert_eq!(rays.ray_bundle[0].wavelength(), ray.wavelength());
         assert_eq!(rays.ray_bundle[0].energy(), ray.energy());
         assert_eq!(rays.ray_bundle.len(), 1);
+        Ok(())
     }
     #[test]
-    fn invalidate_by_threshold() {
+    fn invalidate_by_threshold() -> OpmResult<()> {
         testing_logger::setup();
         let mut rays = Rays::default();
         assert!(
@@ -2531,25 +2499,23 @@ mod test {
             vec!["negative threshold energy given. Ray bundle unmodified."],
         );
         assert!(rays.invalidate_by_threshold_energy(joule!(0.0)).is_ok());
-        let ray =
-            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
+        let ray = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0))?;
         rays.add_ray(ray);
-        let ray =
-            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.1)).unwrap();
+        let ray = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.1))?;
         rays.add_ray(ray);
-        rays.invalidate_by_threshold_energy(joule!(0.1)).unwrap();
+        rays.invalidate_by_threshold_energy(joule!(0.1))?;
         assert_eq!(rays.nr_of_rays(true), 2);
-        rays.invalidate_by_threshold_energy(joule!(0.5)).unwrap();
+        rays.invalidate_by_threshold_energy(joule!(0.5))?;
         assert_eq!(rays.nr_of_rays(true), 1);
-        rays.invalidate_by_threshold_energy(joule!(1.1)).unwrap();
+        rays.invalidate_by_threshold_energy(joule!(1.1))?;
         assert_eq!(rays.nr_of_rays(true), 0);
+        Ok(())
     }
     #[test]
-    fn apodize() {
+    fn apodize() -> OpmResult<()> {
         let mut rays = Rays::default();
-        let ray0 = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
-        let ray1 = Ray::new_collimated(millimeter!(1.0, 1.0, 0.), nanometer!(1053.0), joule!(1.0))
-            .unwrap();
+        let ray0 = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0))?;
+        let ray1 = Ray::new_collimated(millimeter!(1.0, 1.0, 0.), nanometer!(1053.0), joule!(1.0))?;
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         assert_eq!(rays.total_energy(), joule!(2.0));
@@ -2563,91 +2529,100 @@ mod test {
         .unwrap();
         rays.apodize(&aperture, &Isometry::identity()).unwrap();
         assert_eq!(rays.total_energy(), joule!(1.0));
+        Ok(())
     }
     #[test]
-    fn wavelength_range() {
+    fn wavelength_range() -> OpmResult<()> {
         let e = joule!(1.0);
         let mut rays = Rays::default();
         assert_eq!(rays.wavelength_range(), None);
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap();
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e)?;
         rays.add_ray(ray);
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap();
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e)?;
         rays.add_ray(ray);
         assert_eq!(
             rays.wavelength_range(),
             Some(nanometer!(1053.0)..nanometer!(1053.0))
         );
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1050.0), e).unwrap();
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1050.0), e)?;
         rays.add_ray(ray);
         assert_eq!(
             rays.wavelength_range(),
             Some(nanometer!(1050.0)..nanometer!(1053.0))
         );
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1051.0), e).unwrap();
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1051.0), e)?;
         rays.add_ray(ray);
         assert_eq!(
             rays.wavelength_range(),
             Some(nanometer!(1050.0)..nanometer!(1053.0))
         );
-        let mut ray = Ray::new_collimated(Point3::origin(), nanometer!(1000.0), e).unwrap();
+        let mut ray = Ray::new_collimated(Point3::origin(), nanometer!(1000.0), e)?;
         ray.set_invalid();
         rays.add_ray(ray);
         assert_eq!(
             rays.wavelength_range(),
             Some(nanometer!(1050.0)..nanometer!(1053.0))
         );
+        Ok(())
     }
     #[test]
-    fn to_spectrum() {
+    fn to_spectrum() -> OpmResult<()> {
         let e = joule!(1.0);
-        let mut rays =
-            Rays::from(Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap());
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap();
+        let mut rays = Rays::from(Ray::new_collimated(
+            Point3::origin(),
+            nanometer!(1053.0),
+            e,
+        )?);
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e)?;
         rays.add_ray(ray);
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1052.0), e).unwrap();
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1052.0), e)?;
         rays.add_ray(ray);
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1052.1), e).unwrap();
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1052.1), e)?;
         rays.add_ray(ray);
-        let spectrum = rays.to_spectrum(&nanometer!(0.5)).unwrap();
+        let spectrum = rays.to_spectrum(&nanometer!(0.5))?;
         assert_abs_diff_eq!(
             spectrum.total_energy(),
             4.0,
             epsilon = 100000.0 * f64::EPSILON
         );
-        let mut ray = Ray::new_collimated(Point3::origin(), nanometer!(1052.1), e).unwrap();
+        let mut ray = Ray::new_collimated(Point3::origin(), nanometer!(1052.1), e)?;
         ray.set_invalid();
         rays.add_ray(ray);
-        let spectrum = rays.to_spectrum(&nanometer!(0.5)).unwrap();
+        let spectrum = rays.to_spectrum(&nanometer!(0.5))?;
         assert_abs_diff_eq!(
             spectrum.total_energy(),
             4.0,
             epsilon = 100000.0 * f64::EPSILON
         );
+        Ok(())
     }
     #[test]
-    fn to_spectrum_central_wvl() {
+    fn to_spectrum_central_wvl() -> OpmResult<()> {
         let e = joule!(1.0);
-        let mut rays =
-            Rays::from(Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap());
-        let ray = Ray::new_collimated(Point3::origin(), nanometer!(527.0), e).unwrap();
+        let mut rays = Rays::from(Ray::new_collimated(
+            Point3::origin(),
+            nanometer!(1053.0),
+            e,
+        )?);
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(527.0), e)?;
         rays.add_ray(ray);
         assert_relative_eq!(
-            rays.to_spectrum(&nanometer!(0.1))
-                .unwrap()
+            rays.to_spectrum(&nanometer!(0.1))?
                 .center_wavelength()
                 .value,
             nanometer!(790.0).value
         );
+        Ok(())
     }
     #[test]
-    fn split() {
-        let ray1 = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
-        let ray2 = Ray::new_collimated(Point3::origin(), nanometer!(1050.0), joule!(2.0)).unwrap();
+    fn split() -> OpmResult<()> {
+        let ray1 = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0))?;
+        let ray2 = Ray::new_collimated(Point3::origin(), nanometer!(1050.0), joule!(2.0))?;
         let mut rays = Rays::from(ray1.clone());
         rays.add_ray(ray2.clone());
         assert!(rays.split(&SplittingConfig::Ratio(1.1)).is_err());
         assert!(rays.split(&SplittingConfig::Ratio(-0.1)).is_err());
-        let split_rays = rays.split(&SplittingConfig::Ratio(0.2)).unwrap();
+        let split_rays = rays.split(&SplittingConfig::Ratio(0.2))?;
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
         assert_abs_diff_eq!(
             split_rays.total_energy().get::<joule>(),
@@ -2656,8 +2631,7 @@ mod test {
         );
         let mut rays = Rays::from(ray1.clone());
         rays.add_ray(ray2.clone());
-        let mut ray =
-            Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(5.0)).unwrap();
+        let mut ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(5.0))?;
         ray.set_invalid();
         rays.add_ray(ray);
         assert_abs_diff_eq!(
@@ -2665,26 +2639,24 @@ mod test {
             2.4,
             epsilon = 10.0 * f64::EPSILON
         );
+        Ok(())
     }
 
     #[test]
     #[ignore]
-    fn get_rays_position_history_in_mm() {
-        let ray_vec = vec![
-            Ray::new(
-                Point3::origin(),
-                vector![0., 1., 2.],
-                nanometer!(1053.),
-                joule!(1.),
-            )
-            .unwrap(),
-        ];
+    fn get_rays_position_history_in_mm() -> OpmResult<()> {
+        let ray_vec = vec![Ray::new(
+            Point3::origin(),
+            vector![0., 1., 2.],
+            nanometer!(1053.),
+            joule!(1.),
+        )?];
         let mut rays = Rays::from(ray_vec);
         let _ = propagate(&mut rays, millimeter!(0.5));
         let _ = propagate(&mut rays, millimeter!(1.0));
 
         let pos_hist_comp = vec![MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5])];
-        let pos_hist = rays.get_rays_position_history(false).unwrap();
+        let pos_hist = rays.get_rays_position_history(false)?;
         for (ray_pos, ray_pos_calc) in izip!(
             pos_hist_comp.iter(),
             pos_hist.rays_pos_history[0].get_history().iter()
@@ -2695,9 +2667,10 @@ mod test {
                 assert_eq!(row[2], row_calc[2].get::<millimeter>());
             }
         }
+        Ok(())
     }
     #[test]
-    fn get_wavefront_data_in_units_of_wvl() {
+    fn get_wavefront_data_in_units_of_wvl() -> OpmResult<()> {
         //empty rays vector
         let rays = Rays::from(Vec::<Ray>::new());
         let wf_data = rays.get_wavefront_data_in_units_of_wvl(true, false, &Isometry::identity());
@@ -2709,63 +2682,52 @@ mod test {
             5,
             nanometer!(1000.),
             joule!(1.),
-        )
-        .unwrap();
+        )?;
         let _ = propagate(&mut rays, millimeter!(1.0));
-        let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(true, false, &Isometry::identity())
-            .unwrap();
+        let wf_data =
+            rays.get_wavefront_data_in_units_of_wvl(true, false, &Isometry::identity())?;
         assert!(wf_data.wavefront_error_maps.len() == 1);
-        rays.add_ray(
-            Ray::new(
-                Point3::origin(),
-                Vector3::y(),
-                nanometer!(1005.),
-                joule!(1.),
-            )
-            .unwrap(),
-        );
-        let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, false, &Isometry::identity())
-            .unwrap();
+        rays.add_ray(Ray::new(
+            Point3::origin(),
+            Vector3::y(),
+            nanometer!(1005.),
+            joule!(1.),
+        )?);
+        let wf_data =
+            rays.get_wavefront_data_in_units_of_wvl(false, false, &Isometry::identity())?;
 
         assert!(wf_data.wavefront_error_maps.len() == 2);
-        rays.add_ray(
-            Ray::new(
-                Point3::origin(),
-                Vector3::y(),
-                nanometer!(1007.),
-                joule!(1.),
-            )
-            .unwrap(),
-        );
+        rays.add_ray(Ray::new(
+            Point3::origin(),
+            Vector3::y(),
+            nanometer!(1007.),
+            joule!(1.),
+        )?);
 
-        let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, false, &Isometry::identity())
-            .unwrap();
+        let wf_data =
+            rays.get_wavefront_data_in_units_of_wvl(false, false, &Isometry::identity())?;
 
         assert!(wf_data.wavefront_error_maps.len() == 3);
+        Ok(())
     }
     #[test]
-    fn wavefront_error_at_pos_in_units_of_wvl() {
+    fn wavefront_error_at_pos_in_units_of_wvl() -> OpmResult<()> {
         let mut rays = Rays::new_hexapolar_point_source(
             Point3::origin(),
             degree!(90.),
             1,
             nanometer!(1000.),
             joule!(1.),
-        )
-        .unwrap();
+        )?;
 
         let mut s = OpticSurface::default();
-        s.set_isometry(Isometry::new_along_z(millimeter!(10.0)).unwrap());
+        s.set_isometry(Isometry::new_along_z(millimeter!(10.0))?);
         rays.refract_on_surface(
             &mut s,
             Some(&refr_index_vaccuum()),
             true,
             &MissedSurfaceStrategy::Stop,
-        )
-        .unwrap();
+        )?;
         let wf_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.), &Isometry::identity());
         for (i, val) in wf_error.column(2).iter().enumerate() {
@@ -2785,15 +2747,13 @@ mod test {
             1,
             nanometer!(500.),
             joule!(1.),
-        )
-        .unwrap();
+        )?;
         rays.refract_on_surface(
             &mut s,
             Some(&refr_index_vaccuum()),
             true,
             &MissedSurfaceStrategy::Stop,
-        )
-        .unwrap();
+        )?;
         let wf_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.), &Isometry::identity());
         for (i, val) in wf_error.column(2).iter().enumerate() {
@@ -2807,17 +2767,17 @@ mod test {
                 assert_abs_diff_eq!(val, &0.0)
             }
         }
+        Ok(())
     }
     #[test]
-    fn get_xy_rays_pos() {
+    fn get_xy_rays_pos() -> OpmResult<()> {
         let rays = Rays::new_hexapolar_point_source(
             Point3::origin(),
             degree!(90.),
             1,
             nanometer!(1000.),
             joule!(1.),
-        )
-        .unwrap();
+        )?;
 
         let xy_pos = rays.get_xy_rays_pos(false, &Isometry::identity());
         for val in xy_pos.row_iter() {
@@ -2833,29 +2793,25 @@ mod test {
                 Vector3::y(),
                 nanometer!(1000.),
                 joule!(1.),
-            )
-            .unwrap(),
+            )?,
             Ray::new(
                 meter!(2.0, 2.0, 0.),
                 Vector3::y(),
                 nanometer!(1000.),
                 joule!(1.),
-            )
-            .unwrap(),
+            )?,
             Ray::new(
                 meter!(-10.0, -10.0, 0.),
                 Vector3::y(),
                 nanometer!(1000.),
                 joule!(1.),
-            )
-            .unwrap(),
+            )?,
             Ray::new(
                 meter!(-2000.0, -2000.0, 0.),
                 Vector3::y(),
                 nanometer!(1000.),
                 joule!(1.),
-            )
-            .unwrap(),
+            )?,
         ];
 
         let rays = Rays::from(ray_vec);
@@ -2871,80 +2827,74 @@ mod test {
                     < f64::EPSILON * val_is[(0, 1)].abs()
             );
         }
+        Ok(())
     }
     #[test]
-    fn calc_fluence_at_position_test() {
+    fn calc_fluence_at_position_test() -> OpmResult<()> {
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
-            &FibonacciRectangle::new(centimeter!(1.), centimeter!(1.), 2000).unwrap(),
-        )
-        .unwrap();
+            &FibonacciRectangle::new(centimeter!(1.), centimeter!(1.), 2000)?,
+        )?;
 
-        let _ = rays
-            .calc_fluence_at_position(&Isometry::identity())
-            .unwrap();
+        let _ = rays.calc_fluence_at_position(&Isometry::identity())?;
 
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
-            &FibonacciRectangle::new(centimeter!(1.), centimeter!(2.), 10000).unwrap(),
-        )
-        .unwrap();
+            &FibonacciRectangle::new(centimeter!(1.), centimeter!(2.), 10000)?,
+        )?;
 
-        let _ = rays
-            .calc_fluence_at_position(&Isometry::identity())
-            .unwrap();
+        let _ = rays.calc_fluence_at_position(&Isometry::identity())?;
+        Ok(())
     }
 
     #[test]
-    fn energy_centroid_test() {
+    fn energy_centroid_test() -> OpmResult<()> {
         let rays = Rays::from(vec![
-            Ray::new_collimated(millimeter!(-1., 0., 0.), nanometer!(1054.), joule!(1.)).unwrap(),
-            Ray::new_collimated(millimeter!(1., 0., 0.), nanometer!(1054.), joule!(1.)).unwrap(),
+            Ray::new_collimated(millimeter!(-1., 0., 0.), nanometer!(1054.), joule!(1.))?,
+            Ray::new_collimated(millimeter!(1., 0., 0.), nanometer!(1054.), joule!(1.))?,
         ]);
-        let centroid = rays.energy_weighted_centroid();
-        assert!(centroid.is_some());
-        assert_relative_eq!(centroid.unwrap().x.value, 0.);
-        assert_relative_eq!(centroid.unwrap().y.value, 0.);
-        assert_relative_eq!(centroid.unwrap().z.value, 0.);
+        let centroid = rays.energy_weighted_centroid().unwrap();
+        assert_relative_eq!(centroid.x.value, 0.);
+        assert_relative_eq!(centroid.y.value, 0.);
+        assert_relative_eq!(centroid.z.value, 0.);
 
         let rays = Rays::from(vec![
-            Ray::new_collimated(millimeter!(-1., 0., 0.), nanometer!(1054.), joule!(1.)).unwrap(),
-            Ray::new_collimated(millimeter!(1., 0., 0.), nanometer!(1054.), joule!(0.5)).unwrap(),
+            Ray::new_collimated(millimeter!(-1., 0., 0.), nanometer!(1054.), joule!(1.))?,
+            Ray::new_collimated(millimeter!(1., 0., 0.), nanometer!(1054.), joule!(0.5))?,
         ]);
-        let centroid = rays.energy_weighted_centroid();
-        assert!(centroid.is_some());
-        assert_relative_eq!(centroid.unwrap().x.get::<millimeter>(), -1. / 3.);
-        assert_relative_eq!(centroid.unwrap().y.get::<millimeter>(), 0.);
-        assert_relative_eq!(centroid.unwrap().z.get::<millimeter>(), 0.);
+        let centroid = rays.energy_weighted_centroid().unwrap();
+        assert_relative_eq!(centroid.x.get::<millimeter>(), -1. / 3.);
+        assert_relative_eq!(centroid.y.get::<millimeter>(), 0.);
+        assert_relative_eq!(centroid.z.get::<millimeter>(), 0.);
 
         let mut rays = Rays::from(vec![
-            Ray::new_collimated(millimeter!(-1., 0., 0.), nanometer!(1054.), joule!(1.)).unwrap(),
-            Ray::new_collimated(millimeter!(1., 0., 0.), nanometer!(1054.), joule!(0.5)).unwrap(),
+            Ray::new_collimated(millimeter!(-1., 0., 0.), nanometer!(1054.), joule!(1.))?,
+            Ray::new_collimated(millimeter!(1., 0., 0.), nanometer!(1054.), joule!(0.5))?,
         ]);
 
         rays.ray_bundle[1].set_invalid();
-        let centroid = rays.energy_weighted_centroid();
-        assert!(centroid.is_some());
-        assert_relative_eq!(centroid.unwrap().x.get::<millimeter>(), -1.);
-        assert_relative_eq!(centroid.unwrap().y.get::<millimeter>(), 0.);
-        assert_relative_eq!(centroid.unwrap().z.get::<millimeter>(), 0.);
+        let centroid = rays.energy_weighted_centroid().unwrap();
+        assert_relative_eq!(centroid.x.get::<millimeter>(), -1.);
+        assert_relative_eq!(centroid.y.get::<millimeter>(), 0.);
+        assert_relative_eq!(centroid.z.get::<millimeter>(), 0.);
 
         let rays = Rays::default();
         let centroid = rays.energy_weighted_centroid();
         assert!(centroid.is_none());
+        Ok(())
     }
     #[test]
-    fn energy_centroid_test_non_trivial() {
+    fn energy_centroid_test_non_trivial() -> OpmResult<()> {
         // --- NEW: Robust test case for all axes and non-unit energy ---
         // Ray 1: Pos(2, 4, 6), Energy 0.5 -> Weighted: (1, 2, 3)
         // Ray 2: Pos(4, 8, 12), Energy 2.0 -> Weighted: (8, 16, 24)
         // Total Energy: 2.5
         // Expected Centroid: Sum(Weighted) / 2.5 = (9/2.5, 18/2.5, 27/2.5) = (3.6, 7.2, 10.8)
         let robust_rays = Rays::from(vec![
-            Ray::new_collimated(millimeter!(2., 4., 6.), nanometer!(1054.), joule!(0.5)).unwrap(),
-            Ray::new_collimated(millimeter!(4., 8., 12.), nanometer!(1054.), joule!(2.0)).unwrap(),
+            Ray::new_collimated(millimeter!(2., 4., 6.), nanometer!(1054.), joule!(0.5))?,
+            Ray::new_collimated(millimeter!(4., 8., 12.), nanometer!(1054.), joule!(2.0))?,
         ]);
 
         let c = robust_rays.energy_weighted_centroid().unwrap();
@@ -2957,58 +2907,48 @@ mod test {
         // --- Check invalid/empty cases ---
         let rays_empty = Rays::default();
         assert!(rays_empty.energy_weighted_centroid().is_none());
+        Ok(())
     }
     #[test]
-    fn define_up_direction_test() {
+    fn define_up_direction_test() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(rays.define_up_direction().is_err());
-        rays.add_ray(
-            Ray::new(
-                meter!(0., 0., 0.),
-                Vector3::x(),
-                nanometer!(1000.),
-                joule!(1.),
-            )
-            .unwrap(),
-        );
-        rays.add_ray(
-            Ray::new(
-                meter!(0., 0., 0.),
-                Vector3::x(),
-                nanometer!(1000.),
-                joule!(1.),
-            )
-            .unwrap(),
-        );
+        rays.add_ray(Ray::new(
+            meter!(0., 0., 0.),
+            Vector3::x(),
+            nanometer!(1000.),
+            joule!(1.),
+        )?);
+        rays.add_ray(Ray::new(
+            meter!(0., 0., 0.),
+            Vector3::x(),
+            nanometer!(1000.),
+            joule!(1.),
+        )?);
         testing_logger::setup();
         assert!(rays.define_up_direction().is_ok());
         check_logs(
             log::Level::Warn,
             vec!["Ray bundle not used for alignment, use first ray for up-direction calculation"],
         );
+        Ok(())
     }
     #[test]
-    fn calc_new_up_direction_test() {
+    fn calc_new_up_direction_test() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(rays.calc_new_up_direction(&mut Vector3::y()).is_err());
-        rays.add_ray(
-            Ray::new(
-                meter!(0., 0., 0.),
-                Vector3::x(),
-                nanometer!(1000.),
-                joule!(1.),
-            )
-            .unwrap(),
-        );
-        rays.add_ray(
-            Ray::new(
-                meter!(0., 0., 0.),
-                Vector3::x(),
-                nanometer!(1000.),
-                joule!(1.),
-            )
-            .unwrap(),
-        );
+        rays.add_ray(Ray::new(
+            meter!(0., 0., 0.),
+            Vector3::x(),
+            nanometer!(1000.),
+            joule!(1.),
+        )?);
+        rays.add_ray(Ray::new(
+            meter!(0., 0., 0.),
+            Vector3::x(),
+            nanometer!(1000.),
+            joule!(1.),
+        )?);
         testing_logger::setup();
         //error because underlying function return error
         assert!(rays.calc_new_up_direction(&mut Vector3::y()).is_err());
@@ -3016,32 +2956,28 @@ mod test {
             log::Level::Warn,
             vec!["Ray bundle not used for alignment, use first ray for up-direction calculation"],
         );
+        Ok(())
     }
     #[test]
-    fn get_ray_by_idx() {
+    fn get_ray_by_idx() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(rays.get_ray_by_idx(0).is_none());
-        rays.add_ray(
-            Ray::new(
-                meter!(0., 0., 0.),
-                Vector3::new(0., 0., 1.),
-                nanometer!(1000.),
-                joule!(1.),
-            )
-            .unwrap(),
-        );
-        rays.add_ray(
-            Ray::new(
-                meter!(1., 1., 1.),
-                Vector3::new(0., 0., 1.),
-                nanometer!(1050.),
-                joule!(1.),
-            )
-            .unwrap(),
-        );
+        rays.add_ray(Ray::new(
+            meter!(0., 0., 0.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )?);
+        rays.add_ray(Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1050.),
+            joule!(1.),
+        )?);
         assert!(rays.get_ray_by_idx(1).is_some());
         assert!(rays.get_ray_by_idx(2).is_none());
         assert_relative_eq!(rays.get_ray_by_idx(1).unwrap().wavelength().value, 1050e-9);
+        Ok(())
     }
 
     #[test]
@@ -3070,23 +3006,21 @@ mod test {
     }
 
     #[test]
-    fn new_collimated_w_fluence_helper() {
+    fn new_collimated_w_fluence_helper() -> OpmResult<()> {
         let tot_energy = joule!(1.);
-        let pos_strategy = Hexapolar::new(millimeter!(15.), 5).unwrap();
+        let pos_strategy = Hexapolar::new(millimeter!(15.), 5)?;
         let fluence_strategy =
             crate::distributions::fluence::general_gaussian::General2DGaussian::new(
                 tot_energy,
                 millimeter!(0., 0.),
                 millimeter!(2.5, 2.5),
                 radian!(0.),
-            )
-            .unwrap();
+            )?;
         let rays = Rays::new_collimated_w_fluence_helper(
             nanometer!(1000.),
             &fluence_strategy,
             &pos_strategy,
-        )
-        .unwrap();
+        )?;
         assert_relative_eq!(
             rays.get_ray_by_idx(0)
                 .unwrap()
@@ -3096,7 +3030,8 @@ mod test {
                 * (2. * PI * 0.0025 * 0.0025),
             1.,
             epsilon = 2. * f64::EPSILON
-        )
+        );
+        Ok(())
     }
 }
 
@@ -3108,7 +3043,9 @@ mod fluence_rays_test {
     use nalgebra::Vector3;
 
     use crate::{
-        J_per_cm2, joule,
+        J_per_cm2,
+        error::OpmResult,
+        joule,
         light::{Ray, Rays},
         meter, nanometer, percent,
     };
@@ -3116,96 +3053,94 @@ mod fluence_rays_test {
     use super::FluenceRays;
 
     #[test]
-    fn new() {
+    fn new() -> OpmResult<()> {
         let original_ray = Ray::new(
             meter!(1., 1., 1.),
             Vector3::new(0., 0., 1.),
             nanometer!(1000.),
             joule!(1.),
-        )
-        .unwrap();
+        )?;
         let fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.));
         assert!(fluence_rays.is_ok());
+        Ok(())
     }
 
     #[test]
-    fn new_false_fluence() {
+    fn new_false_fluence() -> OpmResult<()> {
         let original_ray = Ray::new(
             meter!(1., 1., 1.),
             Vector3::new(0., 0., 1.),
             nanometer!(1000.),
             joule!(1.),
-        )
-        .unwrap();
+        )?;
         assert!(FluenceRays::new(&original_ray, J_per_cm2!(-1.)).is_err());
         assert!(FluenceRays::new(&original_ray, J_per_cm2!(f64::NEG_INFINITY)).is_err());
         assert!(FluenceRays::new(&original_ray, J_per_cm2!(0.)).is_ok());
         assert!(FluenceRays::new(&original_ray, J_per_cm2!(f64::INFINITY)).is_err());
         assert!(FluenceRays::new(&original_ray, J_per_cm2!(f64::NAN)).is_err());
+        Ok(())
     }
 
     #[test]
-    fn helper_rays() {
+    fn helper_rays() -> OpmResult<()> {
         let original_ray = Ray::new(
             meter!(1., 1., 1.),
             Vector3::new(0., 0., 1.),
             nanometer!(1000.),
             joule!(1.),
-        )
-        .unwrap();
-        let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
+        )?;
+        let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.))?;
         assert_eq!(fluence_rays.rays().nr_of_rays(true), 3);
         assert_eq!(fluence_rays.rays_mut().nr_of_rays(true), 3);
+        Ok(())
     }
 
     #[test]
-    fn init_fluence() {
+    fn init_fluence() -> OpmResult<()> {
         let original_ray = Ray::new(
             meter!(1., 1., 1.),
             Vector3::new(0., 0., 1.),
             nanometer!(1000.),
             joule!(1.),
-        )
-        .unwrap();
-        let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
-        assert_relative_eq!(fluence_rays.init_fluence().unwrap().value, 10000.);
+        )?;
+        let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.))?;
+        assert_relative_eq!(fluence_rays.init_fluence()?.value, 10000.);
 
         fluence_rays.helper_rays = Rays::default();
 
-        assert!(fluence_rays.init_fluence().is_err())
+        assert!(fluence_rays.init_fluence().is_err());
+        Ok(())
     }
     #[test]
-    fn effective_energy() {
+    fn effective_energy() -> OpmResult<()> {
         let original_ray = Ray::new(
             meter!(1., 1., 1.),
             Vector3::new(0., 0., 1.),
             nanometer!(1000.),
             joule!(1.),
-        )
-        .unwrap();
-        let fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
+        )?;
+        let fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.))?;
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 1e-8);
         let original_ray = Ray::new(
             meter!(1., 1., 1.),
             Vector3::new(0., 0., 1.),
             nanometer!(10000.),
             joule!(1.),
-        )
-        .unwrap();
-        let fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
+        )?;
+        let fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.))?;
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 1e-6);
+        Ok(())
     }
 
     #[test]
-    fn change_effective_energy_by_factor() {
+    fn change_effective_energy_by_factor() -> OpmResult<()> {
         let original_ray = Ray::new(
             meter!(1., 1., 1.),
             Vector3::new(0., 0., 1.),
             nanometer!(1000.),
             joule!(1.),
-        )
-        .unwrap();
-        let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
+        )?;
+        let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.))?;
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 1e-8);
 
         assert!(
@@ -3241,5 +3176,6 @@ mod fluence_rays_test {
                 .is_ok()
         );
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 0.);
+        Ok(())
     }
 }

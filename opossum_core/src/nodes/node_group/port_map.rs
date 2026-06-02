@@ -40,7 +40,7 @@ impl PortMap {
         );
         Ok(())
     }
-    /// Remove a port mapping for the given combination of internal [`NodeIndex`] and internal port name.
+    /// Remove a port mapping for the given combination of internal [`Uuid`] and internal port name.
     /// Returns `true`, if successful. If the combination is not found, the [`PortMap`] is unmodified and `false` is returned.
     pub fn remove(&mut self, node_id: Uuid, internal_port_name: &str) -> bool {
         let key_to_remove = self
@@ -58,7 +58,7 @@ impl PortMap {
         }
     }
 
-    /// Remove a port mapping for the given combination of internal [`NodeIndex`] and internal port name.
+    /// Remove a port mapping for the given combination of internal [`Uuid`] and internal port name.
     /// Returns `true`, if successful. If the combination is not found, the [`PortMap`] is unmodified and `false` is returned.
     pub fn remove_key(&mut self, key: &str) -> bool {
         self.0.remove(key).is_some()
@@ -83,7 +83,7 @@ impl PortMap {
     pub fn get(&self, port_name: &str) -> Option<&(Uuid, String)> {
         self.0.get(port_name)
     }
-    /// Return the name of the external port name for a given combination of internal [`NodeIndex`] and internal port name.
+    /// Return the name of the external port name for a given combination of internal [`Uuid`] and internal port name.
     ///
     /// This performs a backward search of this [`PortMap`]. This function returns `None` if the given index / port name combination
     /// was not found.

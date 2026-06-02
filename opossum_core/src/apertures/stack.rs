@@ -99,7 +99,7 @@ impl Shape for StackShape {
         transmission
     }
 }
-pub fn plot_circle(conf: CircleShape, isometry: &Isometry) -> Vec<PlotSeries> {
+pub fn plot_circle(conf: CircleShape, isometry: &Isometry) -> OpmResult<Vec<PlotSeries>> {
     let circle_points = ellipse(
         (
             isometry.translation().x.get::<millimeter>(),
@@ -110,8 +110,7 @@ pub fn plot_circle(conf: CircleShape, isometry: &Isometry) -> Vec<PlotSeries> {
             conf.radius().get::<millimeter>(),
         ),
         100,
-    )
-    .unwrap();
+    )?;
     let plt_dat = PlotData::Dim2 {
         xy_data: Matrix2xX::from_vec(
             circle_points
@@ -121,11 +120,11 @@ pub fn plot_circle(conf: CircleShape, isometry: &Isometry) -> Vec<PlotSeries> {
         )
         .transpose(),
     };
-    vec![PlotSeries::new(
+    Ok(vec![PlotSeries::new(
         &plt_dat,
         RGBAColor(0, 0, 0, 1.),
         Some("Aperture".to_owned()),
-    )]
+    )])
 }
 #[cfg(test)]
 mod test {
@@ -133,6 +132,7 @@ mod test {
 
     use super::super::{Aperture, ApertureType, CircleShape, RectangleShape};
     use super::*;
+    use crate::error::OpmResult;
     use crate::meter;
     use crate::prelude::ApertureShape;
 
@@ -164,7 +164,7 @@ mod test {
         assert_eq!(s_ap.apodize(&meter!(0.0, -1.0, 0.0)), 0.0);
     }
     #[test]
-    fn test_stack_transmission_factor() {
+    fn test_stack_transmission_factor() -> OpmResult<()> {
         // 1. Create a circle at (0,0) with radius 1.0
         let circle = CircleShape::new(meter!(1.0)).unwrap();
         let circle_ap = ApertureShape::BinaryCircle(circle);
@@ -211,5 +211,6 @@ mod test {
             0.0,
             epsilon = 1e-12
         );
+        Ok(())
     }
 }

@@ -9,16 +9,18 @@ pub mod test_helper {
         apertures::{ApertureShape, ApertureType, CircleShape},
         core_optics::{OpticNode, PortType},
         distributions::position::Hexapolar,
+        error::OpmResult,
         joule,
         light::{LightData, LightResult, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
         prelude::Aperture,
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
-    pub fn test_inverted<T: Default + OpticNode>() {
+    pub fn test_inverted<T: Default + OpticNode>() -> OpmResult<()> {
         let mut node = T::default();
-        node.set_inverted(true).unwrap();
-        assert_eq!(node.inverted(), true)
+        node.set_inverted(true)?;
+        assert_eq!(node.inverted(), true);
+        Ok(())
     }
     pub fn test_set_aperture<T: Default + OpticNode>(
         input_port_name: &str,
@@ -51,16 +53,19 @@ pub mod test_helper {
                 .is_err()
         );
     }
-    pub fn test_analyze_empty<T: Default + AnalysisEnergy>() {
+    pub fn test_analyze_empty<T: Default + AnalysisEnergy>() -> OpmResult<()> {
         let mut node = T::default();
         let input = LightResult::default();
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
-    pub fn test_analyze_wrong_data_type<T: Default + AnalysisRayTrace>(input_port_name: &str) {
+    pub fn test_analyze_wrong_data_type<T: Default + AnalysisRayTrace>(
+        input_port_name: &str,
+    ) -> OpmResult<()> {
         let mut node = T::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         assert!(
             node.ports()
                 .names(&PortType::Input)
@@ -69,8 +74,9 @@ pub mod test_helper {
         );
         input.insert(input_port_name.into(), input_light.clone());
         assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
+        Ok(())
     }
-    pub fn test_analyze_apodization_warning<T: Default + AnalysisRayTrace>() {
+    pub fn test_analyze_apodization_warning<T: Default + AnalysisRayTrace>() -> OpmResult<()> {
         testing_logger::setup();
         let mut node = T::default();
         node.set_isometry(Isometry::identity()).unwrap();
@@ -91,18 +97,18 @@ pub mod test_helper {
         let rays = Rays::new_uniform_collimated(
             nanometer!(1054.0),
             joule!(1.0),
-            &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(10.0), 3)?,
+        )?;
         let input_light = LightData::Geometric(rays);
         input.insert("input_1".into(), input_light.clone());
-        AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         let msg = format!(
             "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
             node.node_attr().name(),
             node.node_attr().node_type()
         );
         check_logs(log::Level::Warn, vec![&msg]);
+        Ok(())
     }
     pub fn test_analyze_geometric_no_isometry<T: Default + AnalysisRayTrace>(
         input_port_name: &str,

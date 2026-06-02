@@ -323,11 +323,11 @@ mod test {
         );
     }
     #[test]
-    fn inverted() {
+    fn inverted() -> OpmResult<()> {
         test_inverted::<CylindricLens>()
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<CylindricLens>()
     }
     #[test]
@@ -340,8 +340,8 @@ mod test {
         assert!(output.is_empty());
     }
     #[test]
-    fn analyze_geometric_wrong_data_type() {
-        test_analyze_wrong_data_type::<CylindricLens>("input_1");
+    fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
+        test_analyze_wrong_data_type::<CylindricLens>("input_1")
     }
     #[test]
     fn analyze_flatflat() {

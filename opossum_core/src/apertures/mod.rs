@@ -371,7 +371,7 @@ impl Plottable for Aperture {
             PlotType::Line2D(_) | PlotType::Scatter2D(_) => match &self.shape {
                 ApertureShape::Open => None,
                 ApertureShape::BinaryCircle(conf) => {
-                    Some(stack::plot_circle(*conf, self.isometry()))
+                    Some(stack::plot_circle(*conf, self.isometry())?)
                 }
                 ApertureShape::BinaryRectangle(conf) => {
                     let mut points = [
@@ -553,7 +553,7 @@ mod test {
     }
 
     #[test]
-    fn test_new_stack() {
+    fn test_new_stack() -> OpmResult<()> {
         let circle =
             Aperture::new_circle(meter!(1.0), ApertureType::Hole, Some(meter!(0.0, 0.0))).unwrap();
         let rect = Aperture::new_rectangle(
@@ -575,17 +575,19 @@ mod test {
         } else {
             panic!("Expected Aperture::Stack variant");
         }
+        Ok(())
     }
 
     #[test]
-    fn test_is_none() {
+    fn test_is_none() -> OpmResult<()> {
         assert!(ApertureShape::Open.is_none());
         let circle =
             Aperture::new_circle(meter!(1.0), ApertureType::Hole, Some(meter!(0.0, 0.0))).unwrap();
         assert!(!circle.is_none());
+        Ok(())
     }
     #[test]
-    fn test_obstruction_logic() {
+    fn test_obstruction_logic() -> OpmResult<()> {
         // A circle as a hole (default)
         let hole =
             Aperture::new_circle(meter!(1.0), ApertureType::Hole, Some(meter!(0.0, 0.0))).unwrap();
@@ -605,5 +607,6 @@ mod test {
 
         assert_eq!(block.apodize(&p_inside), 0.0);
         assert_eq!(block.apodize(&p_outside), 1.0);
+        Ok(())
     }
 }

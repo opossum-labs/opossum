@@ -294,7 +294,7 @@ mod test {
         );
     }
     #[test]
-    fn new() {
+    fn new() -> OpmResult<()> {
         let r = RefrIndexSellmeier1::new(
             1.0,
             2.0,
@@ -303,14 +303,14 @@ mod test {
             5.0,
             6.0,
             nanometer!(500.0)..nanometer!(2000.0),
-        )
-        .unwrap();
+        )?;
         assert_eq!(r.k1(), 1.0);
         assert_eq!(r.k2(), 2.0);
         assert_eq!(r.k3(), 3.0);
         assert_eq!(r.l1(), 4.0);
         assert_eq!(r.l2(), 5.0);
         assert_eq!(r.l3(), 6.0);
+        Ok(())
     }
     #[test]
     fn test_default_bk7() {
@@ -370,7 +370,7 @@ mod test {
         }
     }
     #[test]
-    fn get_refractive_index() {
+    fn get_refractive_index() -> OpmResult<()> {
         let i = RefrIndexSellmeier1::new(
             6.14555251E-1,
             6.56775017E-1,
@@ -379,14 +379,14 @@ mod test {
             2.87769588E-3,
             1.07653051E+2,
             nanometer!(500.0)..nanometer!(2000.0),
-        )
-        .unwrap();
+        )?;
         assert_relative_eq!(
-            i.get_refractive_index(nanometer!(1054.0)).unwrap(),
+            i.get_refractive_index(nanometer!(1054.0))?,
             1.5068,
             max_relative = 0.0001
         );
         assert!(i.get_refractive_index(nanometer!(499.0)).is_err());
         assert!(i.get_refractive_index(nanometer!(2001.0)).is_err());
+        Ok(())
     }
 }
