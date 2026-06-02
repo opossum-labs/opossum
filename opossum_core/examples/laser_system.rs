@@ -1,5 +1,7 @@
 use num::Zero;
-use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
+use opossum_core::{
+    analyzers::energy::EnergyConfig, nodes::ideal_filter::FilterConst, percent, prelude::*,
+};
 use std::path::Path;
 use uom::si::f64::Length;
 
@@ -28,7 +30,7 @@ fn main() -> OpmResult<()> {
     // Diagnostic beam line
     let i_f = scenery.add_node(IdealFilter::new(
         "OD1 filter",
-        &FilterTypeBuilder::Constant(0.1),
+        &FilterTypeBuilder::Constant(FilterConst::new(percent!(10.0))?),
     )?)?;
     scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "input_1", Length::zero())?;
 

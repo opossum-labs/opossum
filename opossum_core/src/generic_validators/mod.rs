@@ -7,6 +7,7 @@ mod finite;
 mod in_range;
 mod logical_combinations;
 mod macros;
+mod min_entries;
 mod normal;
 mod not_all_zero;
 mod not_empty;
@@ -24,6 +25,7 @@ pub use in_range::AllInRange;
 pub use logical_combinations::{
     AndValidator, AndValidatorVec, NotValidator, NotValidatorVec, OrValidator, OrValidatorVec,
 };
+pub use min_entries::Min3Entries;
 pub use normal::{AllNormal, XNormal, YNormal};
 pub use not_all_zero::{NotAllZero, XNotAllZero, YNotAllZero};
 pub use not_empty::AllNotEmpty;

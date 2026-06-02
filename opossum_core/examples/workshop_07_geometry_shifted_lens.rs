@@ -61,8 +61,11 @@ fn main() -> OpmResult<()> {
     )?
     .with_decenter(millimeter!(0.0, 5.0, 0.0))?;
     // Define a circular aperture with 25 mm radius
-    let aperture =
-        Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
+    let aperture = Aperture::new_circle(
+        millimeter!(25.0),
+        ApertureType::Hole,
+        Some(millimeter!(0.0, 0.0)),
+    )?;
     // Apply the aperture to the input side of the first lens
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Add the first lens to the optical system

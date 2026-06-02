@@ -359,7 +359,7 @@ pub async fn optimize_layout_and_sync(
         height += to_f64(group_height * SUGIYAMA_VERTEX_SPACING);
     }
     for (id, pos) in &new_positions {
-        if let Err(err_str) = api::update_gui_position(*id, *pos).await {
+        if let Err(err_str) = api::update_node_position(*id, *pos).await {
             // If any API call fails, log it and return an error for the whole operation.
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
             return Err(format!("Failed to sync position for node {id}"));

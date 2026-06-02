@@ -1,5 +1,4 @@
 //! General endpoints
-
 use crate::{app_state::AppState, error::BackEndErrorResponse};
 use actix_web::{
     HttpResponse, Responder, get, post,
@@ -7,7 +6,6 @@ use actix_web::{
 };
 use opossum_core::{
     analyzers::AnalyzerType,
-    reporting::analysis_report::AnalysisReport,
     types::api_types::{NodeType, VersionInfo},
 };
 use semver::Version;
@@ -16,8 +14,13 @@ use utoipa_actix_web::service_config::ServiceConfig;
 
 /// Return a welcome message
 ///
-/// Simply return the text `OPOSSUM backend`. This is mostly for checking that the client is communication with the correct server.
-#[utoipa::path(get, path="/", responses((status = OK, description = "Fixed answer string", body = str, example = "OPOSSUM backend")), tag="general")]
+/// Simply return the text `OPOSSUM backend`. This is meant for checking the communication with the correct server.
+#[utoipa::path(
+    get,
+    path="/",
+    responses((status = OK, description = "Fixed answer string", body = str, example = "OPOSSUM backend")),
+    tag="general"
+)]
 #[get("/")]
 async fn get_hello() -> &'static str {
     "OPOSSUM backend"
@@ -32,7 +35,11 @@ struct GitHubRelease {
 /// Return a version information
 ///
 /// Return the version numbers of the OPOSSUM library and the backend server including a check for updates on GitHub.
-#[utoipa::path(get, responses((status = OK, description = "success", body = VersionInfo)), tag="general")]
+#[utoipa::path(
+    get,
+    responses((status = OK, description = "success", body = VersionInfo)),
+    tag="general"
+)]
 #[get("/version")]
 async fn get_version() -> impl Responder {
     let backend_version = env!("CARGO_PKG_VERSION").to_string();
@@ -43,7 +50,10 @@ async fn get_version() -> impl Responder {
     let mut update_available = false;
 
     // Try to call GitHub API
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .unwrap();
     let res = client
         .get("https://api.github.com/repos/opossum-labs/opossum/releases/latest")
         .header("User-Agent", "OPOSSUM-Backend")
@@ -66,7 +76,6 @@ async fn get_version() -> impl Responder {
             update_available = github_ver > local_ver;
         }
     }
-
     Json(VersionInfo {
         backend_version,
         opossum_version,
@@ -76,10 +85,16 @@ async fn get_version() -> impl Responder {
     })
 }
 
-/// Return a (aplhabetically sorted) list of all available node types of OPOSSUM
+/// Return a list of all available optical node types
 ///
-/// Return a list of strings of available node types from the OPOSSUM library.
-#[utoipa::path(get, responses((status = OK, description = "success", body = Vec<NodeType>)), tag="general")]
+/// Return an alphabetically sorted list of strings of all available node types present in the OPOSSUM library.
+#[utoipa::path(
+    get,
+    responses(
+        (status = OK, description = "List of node types successfully retrieved", body = Vec<NodeType>)
+    ),
+    tag="general"
+)]
 #[get("/node_types")]
 async fn get_node_types() -> Result<Json<Vec<NodeType>>, BackEndErrorResponse> {
     let types = opossum_core::nodes::node_types();
@@ -90,13 +105,17 @@ async fn get_node_types() -> Result<Json<Vec<NodeType>>, BackEndErrorResponse> {
             description: t.1.into(),
         })
         .collect();
-    node_types.sort_by(|a, b| a.node_type.to_lowercase().cmp(&b.node_type.to_lowercase()));
+    node_types.sort_by_key(|a| a.node_type.to_lowercase());
     Ok(Json(node_types))
 }
 /// Return a list of available analyzer types of OPOSSUM
 ///
 /// Return a list of all available analyzer types from the OPOSSUM library.
-#[utoipa::path(get, responses((status = OK, description = "success", body = Vec<AnalyzerType>)), tag="general")]
+#[utoipa::path(
+    get,
+    responses((status = OK, description = "List of analyzer types successfully retrieved", body = Vec<AnalyzerType>)),
+    tag="general"
+)]
 #[get("/analyzer_types")]
 async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, BackEndErrorResponse> {
     let analyzer_types = opossum_core::analyzers::AnalyzerType::analyzer_types();
@@ -107,36 +126,31 @@ async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, BackEndErrorRes
 /// This terminates the OPOSSUM backend server. This is a (probably temporary) endpoint which is used to kill the server
 /// when the GUI is closed. It might be removed in the future. **Note**: After sending this call you can no longer communicate as
 /// the server is closed.
-#[utoipa::path(post, responses((status = 204, description = "success")), tag="general")]
+#[utoipa::path(
+    post,
+    responses(
+        (status = NO_CONTENT, description = "Server successfully terminated"),
+        (status = INTERNAL_SERVER_ERROR, description = "Server handle not found, termination failed", body = String)
+    ),
+    tag="general"
+)]
 #[post("/terminate")]
-async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
-    let server_handle = data.server_handle.lock().clone();
-    server_handle.unwrap().stop(true).await;
-    HttpResponse::NoContent().finish()
+pub async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
+    let handle_opt = data.server_handle.lock().clone();
+    if let Some(handle) = handle_opt {
+        handle.stop(true).await;
+        HttpResponse::NoContent().finish()
+    } else {
+        HttpResponse::InternalServerError().body("Server handle not found")
+    }
 }
 
-/// Analyze current setup and eturn a vector of analysisreports
-#[utoipa::path(get, responses(
-    (status = OK, description = "success", content_type="application/json"),
-    (status = BAD_REQUEST, body = BackEndErrorResponse, description = "Error during analysis", content_type="application/json")
-
-), tag="general")]
-#[get("/analyze")]
-async fn get_analyze(
-    data: web::Data<AppState>,
-) -> Result<Json<Vec<AnalysisReport>>, BackEndErrorResponse> {
-    let mut document = data.document.lock();
-    let reports = document.analyze()?;
-    drop(document);
-    Ok(Json(reports))
-}
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_version);
     cfg.service(get_hello);
     cfg.service(get_node_types);
     cfg.service(get_analyzer_types);
     cfg.service(post_terminate);
-    cfg.service(get_analyze);
 }
 #[cfg(test)]
 mod test {

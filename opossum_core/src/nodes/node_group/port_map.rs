@@ -5,13 +5,14 @@
 use crate::error::{OpmResult, OpossumError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use utoipa::ToSchema;
 use uuid::Uuid;
 /// Represents a mapping between externally visible port names and internal node-port pairs.
 ///
 /// The `PortMap` stores associations where an external port name (e.g., `input_1`)
 /// maps to a specific internal port name on a specific node (identified by a [`Uuid`])
 /// within a the optical graph.
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct PortMap(HashMap<String, (Uuid, String)>);
 
 impl PortMap {

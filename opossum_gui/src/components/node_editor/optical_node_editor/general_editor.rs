@@ -2,30 +2,26 @@
 use crate::components::{
     node_editor::{
         accordion::AccordionItem,
-        inputs::input_components::{
-            FlushableTextInput, LabeledCheckboxInput, LabeledInput, NodeConfigUnitInput,
-        },
+        inputs::input_components::{FlushableTextInput, LabeledCheckboxInput, LabeledInput},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
-        optical_node_editor::UINodeAttr,
     },
     scenery_editor::SelectedNode,
 };
 use dioxus::prelude::*;
-use opossum_core::J_per_cm2;
+use opossum_core::types::api_types::NodeInfo;
 
 #[component]
 pub fn GeneralEditor(
-    node_attr: ReadSignal<UINodeAttr>,
+    node_info: ReadSignal<NodeInfo>,
     active_node: Memo<SelectedNode>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let accordion_content = if node_attr.read().node_id == active_node.read().node_id {
-        let node_id = node_attr.read().node_id;
-        let node_type = node_attr.read().node_type.clone();
-        let name = node_attr.read().name.clone();
-        // let lidt = node_attr.read().lidt;
-        let inverted = node_attr.read().inverted;
+    let accordion_content = if node_info.read().uuid == active_node.read().node_id {
+        let node_id = node_info.read().uuid;
+        let node_type = node_info.read().node_type.clone();
+        let name = node_info.read().name.clone();
+        let inverted = node_info.read().inverted;
         vec![
             rsx! {
                 NodeTypeInput { node_type: node_type, label: "Node Type" }
@@ -39,31 +35,13 @@ pub fn GeneralEditor(
                     input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
                     label_class: "form-label text-secondary".to_string(),
                     readonly,
-                    on_save: move |new_val: String| {
+                    on_save: move |new_name: String| {
                         on_change.call(NodeChangeEvent {
                             node_id,
-                            action: NodeChangeAction::Name{name: new_val, graph_id: active_node.read().graph_id},
+                            action: NodeChangeAction::Name(new_name),
                         });
                     },
                 }
-            },
-            rsx! {
-                NodeConfigUnitInput {
-                        id: format!("nodeLidt_{}", node_id),
-                        label: "Damage Threshold".to_string(),
-                        // DUMMY: FIX THIS !!!!
-                        value: J_per_cm2!(1.0).value,
-                        base_unit: "J/cm²",
-                        readonly,
-                        onchange: move |new_lidt: f64| {
-                        if new_lidt >= 0.0 {
-                                on_change.call(NodeChangeEvent {
-                                    node_id,
-                                    action: NodeChangeAction::Lidt(J_per_cm2!(new_lidt)),
-                                });
-                            }
-                    }
-                    }
             },
             rsx! {
                 // no readonly here even for a reference!
@@ -90,6 +68,7 @@ pub fn GeneralEditor(
             header_id: "generalHeading",
             parent_id: "accordionNodeConfig",
             content_id: "generalCollapse",
+            level: 1,
         }
     }
 }

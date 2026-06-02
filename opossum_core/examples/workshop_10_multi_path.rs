@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates a multi-source optical system using wavelength-selective
 //! beam splitters and energy-based optical analysis.
-//! 
+//!
 //! System Overview
 //! 1. Two independent optical sources (multi-line and single-line spectra)
 //! 2. Spectral monitoring using ideal spectrometers
@@ -64,7 +64,7 @@ fn main() -> OpmResult<()> {
         )?
         .into(),
     );
-     // Create first wavelength-selective beam splitter
+    // Create first wavelength-selective beam splitter
     let bs1 = BeamSplitter::new("BS1", &splitting_config_1)?;
     let i_bs1 = scenery.add_node(bs1)?;
 
@@ -91,7 +91,6 @@ fn main() -> OpmResult<()> {
     let bs2 = BeamSplitter::new("BS2", &splitting_config_2)?;
     let i_bs2 = scenery.add_node(bs2)?;
 
-    
     // Secondary optical source: single-line spectral input injected into BS2
     let i_src2 = scenery.add_node(SourcePort::new("source 2"))?;
     // Spectrometer monitoring BS2 output channel 1
@@ -129,11 +128,10 @@ fn main() -> OpmResult<()> {
         millimeter!(100.0),
     )?;
 
-   // Route BS1 output channel 1 (via spectrometer) into BS2 input channel 1
+    // Route BS1 output channel 1 (via spectrometer) into BS2 input channel 1
     scenery.connect_nodes(i_s2, "output_1", i_bs2, "input_1", millimeter!(100.0))?;
-   // Feed second source into BS2 input channel 2
+    // Feed second source into BS2 input channel 2
     scenery.connect_nodes(i_src2, "output_1", i_bs2, "input_2", millimeter!(100.0))?;
-
 
     scenery.connect_nodes(
         i_bs2,
@@ -142,7 +140,7 @@ fn main() -> OpmResult<()> {
         "input_1",
         millimeter!(100.0),
     )?;
-    
+
     // Connect BS2 output channel 2 to spectrometer
     scenery.connect_nodes(
         i_bs2,
@@ -164,7 +162,7 @@ fn main() -> OpmResult<()> {
         ],
         nanometer!(0.5),
     )?);
-    
+
     // Energy distribution for second source:
     // single dominant laser wavelength
     let energy_data_builder_2 = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(

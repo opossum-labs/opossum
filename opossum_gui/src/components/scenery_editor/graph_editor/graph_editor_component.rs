@@ -88,6 +88,7 @@ pub fn GraphEditor(
             } else {
                 "unsaved".to_string()
             };
+            workspace_processor.send(GraphsWorkspaceAction::DeleteRootScenery);
             workspace_processor
                 .send(GraphsWorkspaceAction::AddRootSceneryTab { name: scenery_name });
         }
@@ -123,7 +124,7 @@ pub fn GraphEditor(
 
     rsx! {
         div { class: "row main-content-row",
-            div { style: "min-width:256px;", class: "col-2 sidebar",
+            div { style: "min-width:280px;", class: "col-2 sidebar",
                 NodeConfigEditor {
                     selected_nodes_memo,
                     model_modified_handler,
@@ -169,6 +170,7 @@ pub fn GraphEditor(
                                                                 workspace_processor.send(GraphsWorkspaceAction::RemoveTabs(vec![id_copy]));
                                                             }
                                                         },
+
 
                                                     }
                                                 }

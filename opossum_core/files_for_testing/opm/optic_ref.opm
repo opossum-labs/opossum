@@ -4,14 +4,12 @@
     "ports": (
         inputs: {
             "input_1": (
-                aperture: Open,
                 coating: IdealAR,
                 lidt: 10000.0,
             ),
         },
         outputs: {
             "output_1": (
-                aperture: Open,
                 coating: IdealAR,
                 lidt: 10000.0,
             ),

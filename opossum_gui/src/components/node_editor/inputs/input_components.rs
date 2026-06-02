@@ -234,7 +234,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
                 id: input_data.id,
                 label,
                 value: input_data.value.parse::<f64>().unwrap_or_default(),
-                base_unit,
+                unit_config: UnitHandling::new(&base_unit, true),
                 onchange: move |new_value: f64| {
                     input_data.callback_str.call(new_value.to_string());
                 },
@@ -352,12 +352,30 @@ pub fn LabeledInput(
     }
 }
 
+#[derive(Clone, PartialEq)]
+pub struct UnitHandling {
+    /// The base unit of the input field. Eg. "m" for length, "W" for power, etc.
+    /// This base unit will (optionally) be prefixed with the typical SI prefixes (m, k, M, etc.)
+    pub base_unit: String,
+    /// Determines, if the input field should hand SI prefixes. If `true`, values like `1000` will be
+    /// displayed as `1k`, and `0.001` will be displayed as `1m`. Also, when the user inputs values
+    /// with SI prefixes, they will be correctly parsed. If `false`, no SI prefix handling will be applied.
+    pub handle_prefix: bool,
+}
+impl UnitHandling {
+    pub fn new(base_unit: &str, handle_prefix: bool) -> Self {
+        Self {
+            base_unit: base_unit.to_string(),
+            handle_prefix,
+        }
+    }
+}
 #[component]
 pub fn NodeConfigUnitInput(
     id: String,
     label: String,
     value: ReadSignal<f64>,
-    base_unit: String,
+    unit_config: UnitHandling,
     onchange: EventHandler<f64>,
     #[props(default = false)] reciprocal: bool,
     #[props(default = false)] readonly: bool,
@@ -367,7 +385,7 @@ pub fn NodeConfigUnitInput(
             id,
             label,
             value,
-            base_unit,
+            unit_config,
             onchange,
             container_class: "form-floating border-start".to_string(),
             input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
@@ -434,7 +452,7 @@ pub fn UnitInput(
     id: String,
     label: String,
     value: ReadSignal<f64>,
-    base_unit: String,
+    unit_config: UnitHandling,
     onchange: EventHandler<f64>,
     #[props(default = false)] reciprocal: bool,
     #[props(default = String::new())] container_class: String,
@@ -444,14 +462,15 @@ pub fn UnitInput(
     #[props(default = false)] flushable_input: bool,
 ) -> Element {
     let mut val_str =
-        use_signal(|| format_si_with_base_unit(*value.read(), &base_unit, reciprocal));
+        use_signal(|| format_si_with_base_unit(*value.read(), &unit_config, reciprocal));
 
     let val_memo = use_memo(use_reactive!(|value| *value.read()));
 
     use_effect({
-        let base_unit = base_unit.clone();
+        let current_unit_config = unit_config.clone();
         move || {
-            let new_str = format_si_with_base_unit(*val_memo.read(), &base_unit, reciprocal);
+            let new_str =
+                format_si_with_base_unit(*val_memo.read(), &current_unit_config, reciprocal);
             if new_str != *val_str.peek() {
                 val_str.set(new_str);
             }
@@ -462,9 +481,10 @@ pub fn UnitInput(
         let label = label.clone();
         move |val: String| {
             let old_val = val_str();
-            if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, &base_unit) {
+            if let Ok((num_str, prefix_str)) = parse_unit_input_strict(&val, &unit_config.base_unit)
+            {
                 if let Some(parsed) = parse_si_number(&num_str, &prefix_str, reciprocal) {
-                    val_str.set(format_si_with_base_unit(parsed, &base_unit, reciprocal));
+                    val_str.set(format_si_with_base_unit(parsed, &unit_config, reciprocal));
                     onchange.call(parsed);
                 } else {
                     val_str.set(old_val);
@@ -476,7 +496,7 @@ pub fn UnitInput(
                 val_str.set(old_val);
                 OPOSSUM_UI_LOGS
                         .write()
-                        .add_log(&format!("Wrong input format for field `{label}`! Must have unit `{base_unit}` and a valid prefix."));
+                        .add_log(&format!("Wrong input format for field `{label}`! Must have unit `{}` and a valid prefix.",unit_config.base_unit));
             }
         }
     });

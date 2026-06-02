@@ -1,10 +1,11 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
+use crate::apertures::Aperture;
 use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
+use crate::nodes::ideal_filter::FilterConst;
 use crate::{
     J_per_cm2,
     analyzers::propagation_strategy::MissedSurfaceStrategy,
-    apertures::Aperture,
     centimeter,
     core_optics::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
     degree,
@@ -48,6 +49,7 @@ use nalgebra::{
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Range, path::Path};
+use uom::si::f64::Ratio;
 use uom::{
     num_traits::Zero,
     si::{
@@ -574,9 +576,9 @@ impl Rays {
         let mut beams_invalided = false;
         for ray in &mut self.ray_bundle {
             if ray.valid() {
-                let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position().xy());
+                let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position());
                 if ap_factor > 0.0 {
-                    ray.filter_energy(&FilterType::Constant(ap_factor))?;
+                    ray.filter_energy(&FilterType::Constant(FilterConst::new(ap_factor.into())?))?;
                 } else {
                     ray.add_to_pos_hist(ray.position());
                     ray.set_invalid();
@@ -1182,18 +1184,11 @@ impl Rays {
     /// Filter a ray bundle by a given filter.
     ///
     /// Filter the energy of of all `valid` rays by a given [`FilterType`].
-    /// # Errors
     ///
-    /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the range `(0.0..=1.0)`.
+    /// # Errors
+    /// This function will return an error if the underlying function for filtering a single [`Ray`] with the given
+    /// [`FilterType`] fails for any of the rays in the bundle.
     pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
-        if let FilterType::Constant(t) = filter
-            && !(0.0..=1.0).contains(t)
-        {
-            return Err(OpossumError::Other(
-                "transmission value must be in the range [0.0;1.0]".into(),
-            ));
-        }
-
         for ray in &mut self.ray_bundle {
             if (*ray).valid() {
                 ray.filter_energy(filter)?;
@@ -1731,9 +1726,9 @@ impl FluenceRays {
     ///
     /// # Errors
     /// This function errors if the factor is negative or not finite
-    pub fn change_effective_energy_by_factor(&mut self, factor: f64) -> OpmResult<()> {
+    pub fn change_effective_energy_by_factor(&mut self, factor: Ratio) -> OpmResult<()> {
         if factor.is_finite() && factor.is_sign_positive() {
-            self.effective_energy *= factor;
+            self.effective_energy = self.effective_energy * factor;
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -1791,28 +1786,28 @@ impl<'a> IntoIterator for &'a Rays {
 
 #[cfg(test)]
 mod test {
-    use core::f64;
-    use std::f64::consts::PI;
-
     use super::*;
     use crate::distributions::energy::General2DGaussian;
     use crate::distributions::position::FibonacciEllipse;
     use crate::distributions::position::FibonacciRectangle;
     use crate::distributions::position::Random;
+    use crate::prelude::ApertureShape;
     use crate::{
         apertures::{ApertureType, CircleShape},
         centimeter,
-        coatings::CoatingType,
+        coatings::CoatingConstantR,
         core_optics::optic_surface::OpticSurface,
         joule, meter, millimeter, nanometer,
         nodes::SplittingConfig,
-        radian,
+        percent, radian,
         refractive_index::{RefrIndexConst, refr_index_vaccuum},
         utils::test_helper::test_helper::check_logs,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use core::f64;
     use itertools::izip;
     use nalgebra::Vector3;
+    use std::f64::consts::PI;
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
 
@@ -2445,13 +2440,15 @@ mod test {
             joule!(1.0),
         )?);
         let mut s = OpticSurface::default();
-        s.set_coating(CoatingType::ConstantR { reflectivity: 0.2 });
-        let reflected = rays.refract_on_surface(
-            &mut s,
-            Some(&refr_index_vaccuum()),
-            true,
-            &MissedSurfaceStrategy::Stop,
-        )?;
+        s.set_coating(CoatingConstantR::new(percent!(20.0)).unwrap().into());
+        let reflected = rays
+            .refract_on_surface(
+                &mut s,
+                Some(&refr_index_vaccuum()),
+                true,
+                &MissedSurfaceStrategy::Stop,
+            )
+            .unwrap();
         assert_eq!(rays.total_energy(), joule!(0.8));
         assert_eq!(reflected.total_energy(), joule!(0.2));
         Ok(())
@@ -2459,16 +2456,24 @@ mod test {
     #[test]
     fn filter_energy() -> OpmResult<()> {
         let mut rays = Rays::default();
-        assert!(rays.filter_energy(&FilterType::Constant(0.5)).is_ok());
-        let mut rays = Rays::default();
-        assert!(rays.filter_energy(&FilterType::Constant(-0.1)).is_err());
-        let mut rays = Rays::default();
-        assert!(rays.filter_energy(&FilterType::Constant(1.1)).is_err());
+        assert!(
+            rays.filter_energy(&FilterType::Constant(
+                FilterConst::new(percent!(50.0)).unwrap()
+            ))
+            .is_ok()
+        );
         let mut ray =
             Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1054.0), joule!(1.0))?;
         rays.add_ray(ray.clone());
-        let _ = ray.filter_energy(&FilterType::Constant(0.3))?;
-        rays.filter_energy(&FilterType::Constant(0.3))?;
+        let _ = ray
+            .filter_energy(&FilterType::Constant(
+                FilterConst::new(percent!(30.0)).unwrap(),
+            ))
+            .unwrap();
+        rays.filter_energy(&FilterType::Constant(
+            FilterConst::new(percent!(30.0)).unwrap(),
+        ))
+        .unwrap();
         assert_eq!(rays.ray_bundle[0].position(), ray.position());
         assert_eq!(rays.ray_bundle[0].direction(), ray.direction());
         assert_eq!(rays.ray_bundle[0].wavelength(), ray.wavelength());
@@ -2514,9 +2519,15 @@ mod test {
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         assert_eq!(rays.total_energy(), joule!(2.0));
-        let circle_config = CircleShape::new(millimeter!(0.5), millimeter!(0.0, 0.0))?;
-        let aperture = Aperture::BinaryCircle(circle_config, ApertureType::Hole);
-        rays.apodize(&aperture, &Isometry::identity())?;
+        let circle_config = CircleShape::new(millimeter!(0.5)).unwrap();
+        let aperture = Aperture::new(
+            ApertureShape::BinaryCircle(circle_config),
+            ApertureType::Hole,
+            None,
+            None,
+        )
+        .unwrap();
+        rays.apodize(&aperture, &Isometry::identity()).unwrap();
         assert_eq!(rays.total_energy(), joule!(1.0));
         Ok(())
     }
@@ -3036,7 +3047,7 @@ mod fluence_rays_test {
         error::OpmResult,
         joule,
         light::{Ray, Rays},
-        meter, nanometer,
+        meter, nanometer, percent,
     };
 
     use super::FluenceRays;
@@ -3132,26 +3143,38 @@ mod fluence_rays_test {
         let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.))?;
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 1e-8);
 
-        assert!(fluence_rays.change_effective_energy_by_factor(-1.).is_err());
         assert!(
             fluence_rays
-                .change_effective_energy_by_factor(f64::NAN)
+                .change_effective_energy_by_factor(percent!(-100.0))
                 .is_err()
         );
         assert!(
             fluence_rays
-                .change_effective_energy_by_factor(f64::NEG_INFINITY)
+                .change_effective_energy_by_factor(percent!(f64::NAN))
                 .is_err()
         );
         assert!(
             fluence_rays
-                .change_effective_energy_by_factor(f64::INFINITY)
+                .change_effective_energy_by_factor(percent!(f64::NEG_INFINITY))
+                .is_err()
+        );
+        assert!(
+            fluence_rays
+                .change_effective_energy_by_factor(percent!(f64::INFINITY))
                 .is_err()
         );
 
-        assert!(fluence_rays.change_effective_energy_by_factor(2.).is_ok());
+        assert!(
+            fluence_rays
+                .change_effective_energy_by_factor(percent!(200.0))
+                .is_ok()
+        );
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 2e-8);
-        assert!(fluence_rays.change_effective_energy_by_factor(0.).is_ok());
+        assert!(
+            fluence_rays
+                .change_effective_energy_by_factor(percent!(0.0))
+                .is_ok()
+        );
         assert_relative_eq!(fluence_rays.clone().effective_energy.value, 0.);
         Ok(())
     }

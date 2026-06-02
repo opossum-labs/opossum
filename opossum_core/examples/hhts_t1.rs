@@ -1,5 +1,5 @@
-use opossum_core::coatings::CoatingType;
-use opossum_core::{J_per_cm2, prelude::*};
+use opossum_core::coatings::CoatingConstantR;
+use opossum_core::{J_per_cm2, percent, prelude::*};
 use opossum_core::{
     distributions::{energy::General2DGaussian, position::HexagonalTiling, spectral::LaserLines},
     refractive_index::refr_index_schott::RefrIndexSchott,
@@ -35,9 +35,9 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
     // coatings
-    let ar_coating = CoatingType::ConstantR { reflectivity: 0.01 };
+    let ar_coating = &CoatingConstantR::new(percent!(1.0))?.into();
     // apertures
-    let a_2inch = Aperture::new_circle(millimeter!(25.4), millimeter!(0., 0.), ApertureType::Hole)?;
+    let a_2inch = Aperture::new_circle(millimeter!(25.4), ApertureType::Hole, None)?;
 
     let mut scenery = NodeGroup::new("HHT Sensor Telescope T1");
     let src = scenery.add_node(SourcePort::new("Collimated Source"))?;

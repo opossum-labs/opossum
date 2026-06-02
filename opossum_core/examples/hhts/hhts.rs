@@ -46,7 +46,7 @@ fn main() -> OpmResult<()> {
     )?;
 
     // apertures
-    let a_1inch = Aperture::new_circle(millimeter!(12.7), millimeter!(0., 0.), ApertureType::Hole)?;
+    let a_1inch = Aperture::new_circle(millimeter!(12.7), ApertureType::Hole, None)?;
 
     let mut scenery = NodeGroup::new("HHT Sensor");
     let src = scenery.add_node(SourcePort::new("Source"))?;

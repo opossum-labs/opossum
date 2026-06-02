@@ -555,6 +555,17 @@ macro_rules! degree_celsius {
     };
 }
 
+///macro to create a ratio (unitless value) in percent
+#[macro_export]
+macro_rules! percent {
+    ($( $x:expr_2021 ),*) =>{
+        {
+        use uom::si::{f64::Ratio, ratio::percent};
+        $crate::uom_unit_creator![percent, Ratio, $( $x ),*]
+        }
+    };
+}
+
 #[cfg(test)]
 mod test {
     use approx::assert_relative_eq;

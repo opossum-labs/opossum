@@ -5,10 +5,20 @@
 }
 .accordion-button {
   padding: 0.5rem 0.75rem; 
-  font-size: 1rem;        
-  line-height: 1.2;
+  /* font-size: 1rem;         */
+  /* line-height: 1.2; */
   font-style: oblique;
   border-radius: 2px !important;
+}
+
+.accordion-button-h1 {
+  font-size: 1rem;        
+  line-height: 1.2;
+}
+
+.accordion-button-h2 {
+  font-size: 0.9rem;        
+  line-height: 1.;
 }
 
 .accordion-body > p {
@@ -103,7 +113,24 @@ input[type=number] {
   color: rgb(141, 141, 141) !important;
 }
 
-#laserlinesubmit, #energylaserlinesubmit{
+.dynamic-list{
+    border-radius: 0;
+    border: none;
+    max-height: 100px;
+    overflow: auto;
+}
+
+.dynamic-list>li{
+    margin: 0 0.5rem;
+    border: none;
+    border-bottom: 1px solid gray;
+    padding: 0.25rem 0.25rem 0rem 0.25rem;
+    font-size: small;
+    grid-template-columns: 110px auto auto; 
+    column-gap: 0.1rem;
+}
+
+#laserlinesubmit, #energylaserlinesubmit, #polygonPointSubmit, #stackedApertureSubmit{
     background-color:rgb(70, 70, 70) !important;
     width: 100%;
     color:white;
@@ -111,17 +138,17 @@ input[type=number] {
     padding-top: 0.3rem;
     padding-bottom: 0.3rem;
 }
-#laserlinesubmit:hover, #energylaserlinesubmit:hover{
+#laserlinesubmit:hover, #energylaserlinesubmit:hover, #polygonPointSubmit:hover, #stackedApertureSubmit:hover{
       background-color:rgb(105, 104, 104) !important;
 }
 
-#laserLineList, #energylaserLineList{
+#laserLineList, #energylaserLineList, #polygonPointList, #stackedAperturesList{
   border-radius: 0;
   border: none;
   max-height: 100px;
   overflow: auto;
 }
-#laserLineList >li, #energylaserLineList >li {
+#laserLineList >li, #energylaserLineList >li, #polygonPointList >li, #stackedAperturesList >li{
   margin: 0 0.5rem;
   border: none;
   border-bottom: 1px solid gray;

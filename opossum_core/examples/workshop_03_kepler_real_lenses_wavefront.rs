@@ -57,8 +57,7 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),    // thickness
         &refr_index_hzf52,
     )?;
-    let aperture =
-        Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
+    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Spot diagram analyzer: visualizes the ray convergence at the focus.
     let i_pl1 = scenery.add_node(lens1)?;

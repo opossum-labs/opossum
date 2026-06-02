@@ -4,7 +4,7 @@ use std::vec;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        inputs::input_components::{LabeledSelect, NodeConfigUnitInput},
+        inputs::input_components::{LabeledSelect, NodeConfigUnitInput, UnitHandling},
         optical_node_editor::alignment_editor::{
             RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation,
             on_new_translation,
@@ -30,7 +30,7 @@ use uuid::Uuid;
 #[component]
 pub fn GratingAlignmentInputs(
     alignment_sig_outside: ReadSignal<Isometry>,
-    node_properties: ReadSignal<Properties>,
+    node_properties_sig: ReadSignal<Properties>,
     on_save: EventHandler<Isometry>,
     node_id: Memo<Uuid>,
     readonly: bool,
@@ -38,14 +38,14 @@ pub fn GratingAlignmentInputs(
     let mut alignment_select_sig = use_signal(|| true);
     let alignment_memo = use_memo(move || *alignment_sig_outside.read());
     let diffraction_order_memo = use_memo(move || {
-        if let Ok(Proptype::I32(p)) = node_properties.read().get("diffraction order") {
+        if let Ok(Proptype::I32(p)) = node_properties_sig.read().get("diffraction order") {
             *p
         } else {
             -1
         }
     });
     let line_density_memo = use_memo(move || {
-        if let Ok(Proptype::LinearDensity(p)) = node_properties.read().get("line density") {
+        if let Ok(Proptype::LinearDensity(p)) = node_properties_sig.read().get("line density") {
             *p
         } else {
             num_per_mm!(1740.)
@@ -58,8 +58,8 @@ pub fn GratingAlignmentInputs(
 
     if let (true, Ok(Proptype::I32(_)), Ok(Proptype::LinearDensity(_))) = (
         *alignment_select_sig.read(),
-        node_properties.read().get("diffraction order").cloned(),
-        node_properties.read().get("line density").cloned(),
+        node_properties_sig.read().get("diffraction order").cloned(),
+        node_properties_sig.read().get("line density").cloned(),
     ) {
         element_list.push(rsx! {
             LittrowConfigEditor {
@@ -83,6 +83,7 @@ pub fn GratingAlignmentInputs(
             }
             TranslationAlignmentInputs {
                 alignment: alignment_memo,
+                axes_skip: None,
                 on_new_translation: on_new_translation(on_save, alignment_memo.into()),
                 node_id,
                 readonly,
@@ -100,6 +101,7 @@ pub fn GratingAlignmentInputs(
             }
             TranslationAlignmentInputs {
                 alignment: alignment_memo,
+                axes_skip: None,
                 on_new_translation: on_new_translation(on_save, alignment_memo.into()),
                 node_id,
                 readonly,
@@ -135,7 +137,7 @@ pub fn LittrowConfigEditor(
             id: "alignmentWavelengthGrating",
             label: "Reference wavelength",
             value: reference_wavelength_sig.read().value,
-            base_unit: "m",
+            unit_config: UnitHandling::new("m", true),
             readonly,
             onchange: move |new_length: f64| {
                 if relative_ne!(
@@ -200,7 +202,7 @@ fn AngleToLittrowComponent(
             id: "angleToLittrowGrating",
             label: "Angle",
             value: angle_from_littrow,
-            base_unit: "°",
+            unit_config: UnitHandling::new("°", true),
             readonly,
             onchange: move |angle: f64| {
                 let m_g_lambda = reference_wavelength_sig.read().get::<meter>()

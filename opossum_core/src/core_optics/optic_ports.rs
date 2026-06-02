@@ -11,7 +11,7 @@
 //!
 //! let mut ports = OpticPorts::new();
 //! ports.add(&PortType::Input, "my input").unwrap();
-//! let aperture = Aperture::new_circle(millimeter!(1.5), millimeter!(1.0, 1.0), ApertureType::Hole).unwrap();
+//! let aperture = Aperture::new_circle(millimeter!(1.5), ApertureType::Hole, Some(millimeter!(1.0, 1.0))).unwrap();
 //! ports.set_aperture(&PortType::Input, "my input", &aperture).unwrap();
 //! ```
 use crate::{
@@ -26,6 +26,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
+use utoipa::ToSchema;
 
 /// Helper function to provide the default LIDT value for Serde deserialization.
 /// We need this because Serde's `#[serde(default)]` attribute requires a function path
@@ -45,11 +46,13 @@ const fn is_default_lidt(lidt: &validated_type!(Fluence, AllPositive && AllNotNa
     lidt.get().value.is_infinite()
 }
 
+/// Ein Type-Alias, um das Makro vor dem Utoipa-Parser zu verstecken.
+pub type ValidatedLidt = validated_type!(Fluence, AllPositive && AllNotNan);
 /// Configuration of an optical port containing user-adjustable parameters.
 ///
 /// This struct is purely for configuration (State) and is serialized.
 /// It does NOT contain geometric runtime data like `GeoSurface` or `HitMap`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
 pub struct PortConfig {
     /// The aperture of the port, defining the spatial transmission.
     #[serde(default)] //, skip_serializing_if = "Aperture::is_none")]
@@ -58,8 +61,9 @@ pub struct PortConfig {
     #[serde(default, skip_serializing_if = "is_ideal_ar")]
     pub coating: CoatingType,
     /// The Laser Induced Damage Threshold (LIDT) specific to this port.
+    #[schema(value_type = f64, example = 1.5)]
     #[serde(default = "default_lidt", skip_serializing_if = "is_default_lidt")]
-    pub lidt: validated_type!(Fluence, AllPositive && AllNotNan),
+    pub lidt: ValidatedLidt,
 }
 
 impl PortConfig {
@@ -73,7 +77,7 @@ impl PortConfig {
 impl Default for PortConfig {
     fn default() -> Self {
         Self {
-            aperture: Aperture::Open,
+            aperture: Aperture::default(),
             coating: CoatingType::IdealAR,
             lidt: default_lidt(),
         }
@@ -92,7 +96,7 @@ impl Display for PortConfig {
     }
 }
 /// Type of an [`OpticPorts`]
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize, Deserialize, ToSchema)]
 pub enum PortType {
     /// input port, receiving [`LightData`](crate::light::LightData)
     Input,
@@ -246,7 +250,7 @@ impl OpticPorts {
                 )))
             },
             |config| {
-                config.coating = coating.clone();
+                config.coating = *coating;
                 Ok(())
             },
         )
@@ -345,7 +349,10 @@ impl Display for OpticPorts {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::coatings::CoatingType;
+    use crate::{
+        coatings::{CoatingConstantR, CoatingType},
+        percent,
+    };
     #[test]
     fn new() {
         let ports = OpticPorts::new();
@@ -450,7 +457,7 @@ mod test {
         ports.add(&PortType::Output, "test2")?;
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
+            "inputs:\n  <test1> aperture: Aperture { shape: Open, a_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Aperture { shape: Open, a_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
         );
         Ok(())
     }
@@ -463,7 +470,7 @@ mod test {
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test2> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Open, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
+            "inputs:\n  <test2> aperture: Aperture { shape: Open, a_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Aperture { shape: Open, a_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
         );
         Ok(())
     }
@@ -490,14 +497,15 @@ mod test {
                 .ok_or(OpossumError::OpticPort("Could not get port".to_string()))?,
             CoatingType::IdealAR
         ));
-        let coating = CoatingType::ConstantR { reflectivity: 0.5 };
-        ports.set_coating(&PortType::Input, "test1", &coating)?;
-        assert!(matches!(
-            ports
-                .coating(&PortType::Input, "test1")
-                .ok_or(OpossumError::OpticPort("Could not get port".to_string()))?,
-            CoatingType::ConstantR { reflectivity: 0.5 }
-        ));
+        let coating = CoatingConstantR::new(percent!(50.0)).unwrap();
+        ports
+            .set_coating(&PortType::Input, "test1", &coating.into())
+            .unwrap();
+        if let CoatingType::ConstantR(conf) = ports.coating(&PortType::Input, "test1").unwrap() {
+            assert_eq!(conf.reflectivity(), percent!(50.0));
+        } else {
+            panic!("Coating type is not ConstantR");
+        }
         Ok(())
     }
 }

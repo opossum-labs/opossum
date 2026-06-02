@@ -56,8 +56,11 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     // Define a circular aperture of 25 mm at the lens center
-    let aperture =
-        Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
+    let aperture = Aperture::new_circle(
+        millimeter!(25.0),
+        ApertureType::Hole,
+        Some(millimeter!(0.0, 0.0)),
+    )?;
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     let i_pl1 = scenery.add_node(lens1)?;
     let lens2 = Lens::new(

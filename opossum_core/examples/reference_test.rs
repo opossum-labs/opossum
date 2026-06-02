@@ -1,5 +1,7 @@
 use num::Zero;
-use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
+use opossum_core::{
+    analyzers::energy::EnergyConfig, nodes::ideal_filter::FilterConst, percent, prelude::*,
+};
 use std::path::Path;
 use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
@@ -7,7 +9,7 @@ fn main() -> OpmResult<()> {
     let src = scenery.add_node(SourcePort::default())?;
     let filt = scenery.add_node(IdealFilter::new(
         "50 % filter",
-        &FilterTypeBuilder::Constant(0.5),
+        &FilterTypeBuilder::Constant(FilterConst::new(percent!(50.0))?),
     )?)?;
     let reference = scenery.add_node(NodeReference::from_node(&scenery.node(filt)?)?)?;
     let detector = scenery.add_node(EnergyMeter::default())?;

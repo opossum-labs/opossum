@@ -16,6 +16,12 @@ use crate::{
 struct NonValidatedRefrIndexConst {
     pub refractive_index: f64,
 }
+impl TryFrom<NonValidatedRefrIndexConst> for RefrIndexConst {
+    type Error = String;
+    fn try_from(helper: NonValidatedRefrIndexConst) -> Result<Self, Self::Error> {
+        Self::new(helper.refractive_index).map_err(|e| e.to_string())
+    }
+}
 
 #[must_use]
 #[allow(clippy::missing_panics_doc)]
@@ -26,34 +32,26 @@ pub fn refr_index_vaccuum() -> RefractiveIndexType {
     RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap())
 }
 
-type ValidatedRefIndCOnst = validated_type!(f64, AllFinite && AllInRange::<f64>);
-
-/// Constant refractive index model
-#[derive(Clone, Serialize, ToSchema, Debug, PartialEq, Copy, EnsureValidated)]
-pub struct RefrIndexConst {
-    refractive_index: ValidatedRefIndCOnst,
-}
-
-impl<'de> serde::Deserialize<'de> for RefrIndexConst {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        //deserialize non validated struct
-        let helper = NonValidatedRefrIndexConst::deserialize(deserializer)?;
-
-        //get correct validators from default
-        Self::new(helper.refractive_index).map_err(serde::de::Error::custom)
+type ValidatedRefIndConst = validated_type!(f64, AllFinite && AllInRange::<f64>);
+impl Default for ValidatedRefIndConst {
+    fn default() -> Self {
+        validated!(
+            1.5,
+            AllFinite && (AllInRange::new(1.0, f64::INFINITY, true).unwrap())
+        )
+        .unwrap()
     }
 }
 
-fn default_ref_ind_const() -> ValidatedRefIndCOnst {
-    validated!(
-        1.5,
-        AllFinite && (AllInRange::new(1.0, f64::INFINITY, true).unwrap())
-    )
-    .unwrap()
+/// Constant refractive index model
+#[derive(
+    Default, Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy, EnsureValidated,
+)]
+#[serde(try_from = "NonValidatedRefrIndexConst")]
+pub struct RefrIndexConst {
+    refractive_index: ValidatedRefIndConst,
 }
+
 impl RefrIndexConst {
     /// Create a new constant refrective index model.
     ///
@@ -80,14 +78,6 @@ impl RefrIndexConst {
     pub fn set_refractive_index(&mut self, ref_ind: f64) -> OpmResult<()> {
         self.refractive_index.set(ref_ind)?;
         Ok(())
-    }
-}
-
-impl Default for RefrIndexConst {
-    fn default() -> Self {
-        Self {
-            refractive_index: default_ref_ind_const(),
-        }
     }
 }
 

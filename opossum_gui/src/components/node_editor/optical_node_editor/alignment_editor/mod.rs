@@ -5,17 +5,20 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::{AccordionItem, ElementList},
-        inputs::input_components::{LabeledSelect, NodeConfigUnitInput, RowedElements},
+        inputs::input_components::{
+            LabeledSelect, NodeConfigUnitInput, RowedElements, UnitHandling,
+        },
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
-        optical_node_editor::UINodeAttr,
+        optical_node_editor::alignment_editor::grating_alignment::GratingAlignmentInputs,
     },
 };
 use approx::relative_ne;
 use dioxus::prelude::*;
-use grating_alignment::GratingAlignmentInputs;
+// use grating_alignment::GratingAlignmentInputs;
 use opossum_core::{
     degree, meter,
     prelude::{Isometry, Properties},
+    types::api_types::NodeInfo,
     utils::geom_transformation::{RotationAxis, TranslationAxis},
 };
 use strum::IntoEnumIterator;
@@ -28,19 +31,19 @@ use uuid::Uuid;
 #[component]
 pub fn AlignmentEditor(
     node_id: Memo<Uuid>,
-    node_attr: ReadSignal<UINodeAttr>,
+    node_info: ReadSignal<NodeInfo>,
+    node_properties_sig: ReadSignal<Properties>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let node_prop_memo = use_memo(move || node_attr.read().properties.clone());
-    let accordion_content = if node_attr.read().node_id == *node_id.read() {
+    let accordion_content = if node_info.read().uuid == *node_id.read() {
         vec![rsx! {
             AlignmentInputs {
                 node_id,
-                alignment: node_attr.read().alignment.unwrap_or_default(),
-                node_properties: node_prop_memo,
-                node_type: node_attr.read().node_type.clone(),
+                alignment: node_info.read().alignment.unwrap_or_default(),
+                node_type: node_info.read().node_type.clone(),
                 on_change,
+                node_properties_sig,
                 readonly
             }
         }]
@@ -54,6 +57,7 @@ pub fn AlignmentEditor(
             header_id: "alignmentHeading",
             parent_id: "accordionNodeConfig",
             content_id: "alignmentCollapse",
+            level: 1,
         }
     }
 }
@@ -62,9 +66,8 @@ pub fn AlignmentEditor(
 pub fn AlignmentInputs(
     node_id: Memo<Uuid>,
     alignment: Isometry,
-    node_properties: ReadSignal<Properties>,
-    // node_properties_sig: Signal<Properties>,
     node_type: String,
+    node_properties_sig: ReadSignal<Properties>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
@@ -78,15 +81,13 @@ pub fn AlignmentInputs(
     });
 
     if node_type == "reflective grating" {
-        rsx! {
-            GratingAlignmentInputs {
-                alignment_sig_outside: alignment_sig,
-                node_properties,
-                on_save,
-                node_id,
-                readonly,
-            }
-        }
+        rsx! {GratingAlignmentInputs{
+            alignment_sig_outside: alignment_sig,
+            node_properties_sig,
+            on_save,
+            node_id,
+            readonly
+        }}
     } else {
         rsx! {
             RotationAlignmentInputs {
@@ -98,6 +99,7 @@ pub fn AlignmentInputs(
             }
             TranslationAlignmentInputs {
                 alignment: alignment_sig,
+                axes_skip: None,
                 on_new_translation: on_new_translation(on_save, alignment_sig.into()),
                 node_id,
                 readonly,
@@ -153,12 +155,12 @@ pub fn on_new_rotation(
 #[component]
 pub fn PositioningEditor(
     node_id: Memo<Uuid>,
-    node_attr: ReadSignal<UINodeAttr>,
+    node_info: ReadSignal<NodeInfo>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let accordion_content = if node_attr.read().node_id == *node_id.read() {
-        let position_opt = node_attr.read().position;
+    let accordion_content = if node_info.read().uuid == *node_id.read() {
+        let position_opt = node_info.read().isometry;
         vec![rsx! {
             PositioningInputs{
                 position_opt,
@@ -177,6 +179,7 @@ pub fn PositioningEditor(
             header_id: "positionHeading",
             parent_id: "accordionNodeConfig",
             content_id: "positionCollapse",
+            level: 1,
         }
     }
 }
@@ -241,6 +244,7 @@ pub fn PositioningInputs(
             }
             TranslationAlignmentInputs {
                 alignment: position_memo,
+                axes_skip: None,
                 on_new_translation: on_new_translation(on_position_change, position_memo.into()),
                 node_id,
                 readonly,
@@ -255,70 +259,62 @@ pub fn PositioningInputs(
 #[component]
 pub fn TranslationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
+    axes_skip: Option<Vec<TranslationAxis>>,
     on_new_translation: EventHandler<(Length, TranslationAxis)>,
     node_id: Memo<Uuid>,
     readonly: bool,
 ) -> Element {
     let id_add_on = "inputNodeAlignmentTrans";
 
-    let x_sig = use_memo(move || {
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::X)
-            .value
-    });
-    let y_sig = use_memo(move || {
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::Y)
-            .value
-    });
-    let z_sig = use_memo(move || {
-        alignment
-            .read()
-            .translation_of_axis(TranslationAxis::Z)
-            .value
+    let mut trans_input_vec = Vec::<Element>::new();
+
+    for trans_axis in TranslationAxis::iter() {
+        if let Some(ref axes_skip) = axes_skip
+            && axes_skip.contains(&trans_axis)
+        {
+            continue;
+        }
+        trans_input_vec.push(rsx! {
+            TranslationInput {
+                alignment,
+                axis: trans_axis,
+                id: format!("{id_add_on}{}{}", trans_axis, node_id.read().as_simple().to_string()),
+                on_new_translation,
+                readonly,
+            }
+        });
+    }
+    rsx! {
+        RowedElements { elements: trans_input_vec, num_per_row: 2 }
+    }
+}
+
+#[component]
+pub fn TranslationInput(
+    alignment: ReadSignal<Isometry>,
+    axis: TranslationAxis,
+    id: String,
+    on_new_translation: EventHandler<(Length, TranslationAxis)>,
+    readonly: bool,
+) -> Element {
+    let value_memo = use_memo(move || {
+        let translation = alignment.read().translation_of_axis(axis);
+        if translation.value.abs() < f64::EPSILON {
+            0.
+        } else {
+            translation.value
+        }
     });
 
     rsx! {
-        div { class: "row gy-1 gx-2",
-            div { class: "col-sm",
-                NodeConfigUnitInput {
-                    id: format!(
-                        "{id_add_on}{}{}",
-                        TranslationAxis::X,
-                        node_id.read().as_simple().to_string(),
-                    ),
-                    label: format!("{} translation", TranslationAxis::X),
-                    value: x_sig,
-                    base_unit: "m",
-                    readonly,
-                    onchange: move |new_trans: f64| {
-                        on_new_translation.call((meter!(new_trans), TranslationAxis::X));
-                    },
-                }
-            }
-            div { class: "col-sm",
-                NodeConfigUnitInput {
-                    id: format!("{id_add_on}{}", TranslationAxis::Y),
-                    label: format!("{} translation", TranslationAxis::Y),
-                    value: y_sig,
-                    base_unit: "m",
-                    readonly,
-                    onchange: move |new_trans: f64| {
-                        on_new_translation.call((meter!(new_trans), TranslationAxis::Y));
-                    },
-                }
-            }
-        }
         NodeConfigUnitInput {
-            id: format!("{id_add_on}{}", TranslationAxis::Z),
-            label: format!("{} translation", TranslationAxis::Z),
-            value: z_sig,
-            base_unit: "m",
+            id,
+            label: format!("{} translation", axis),
+            value: value_memo,
+            unit_config: UnitHandling::new("m", true),
             readonly,
             onchange: move |new_trans: f64| {
-                on_new_translation.call((meter!(new_trans), TranslationAxis::Z));
+                on_new_translation.call((meter!(new_trans), axis));
             },
         }
     }
@@ -379,7 +375,7 @@ pub fn RotationInput(
             id,
             label: format!("{} rotation", axis),
             value: value_memo,
-            base_unit: "°",
+            unit_config: UnitHandling::new("°", true),
             readonly,
             onchange: move |new_rot: f64| {
                 on_new_rotation.call((degree!(new_rot), axis));

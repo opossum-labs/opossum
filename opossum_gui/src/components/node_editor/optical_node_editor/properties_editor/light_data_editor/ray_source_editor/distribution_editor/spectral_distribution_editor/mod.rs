@@ -78,6 +78,7 @@ pub fn SpectralDistributionEditor(
             header_id: "sourceSpectralDistHeading",
             parent_id: "accordionSourceDists",
             content_id: "sourceSpectralDistCollapse",
+            level: 2,
         }
     }
 }

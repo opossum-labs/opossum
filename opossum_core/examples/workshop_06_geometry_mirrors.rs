@@ -25,8 +25,8 @@
 //! - `CoatingType` for mirror reflectivity properties
 //! - `prelude::*` brings in core optical system types and helpers
 //!
-use opossum_core::coatings::CoatingType;
-use opossum_core::prelude::*;
+use opossum_core::coatings::CoatingConstantR;
+use opossum_core::{percent, prelude::*};
 // Import `Path` from the standard library for working with file paths
 use std::path::Path;
 // Entry point for the program; returns `OpmResult<()>` to handle errors
@@ -41,7 +41,7 @@ fn main() -> OpmResult<()> {
     mirror1.set_coating(
         &PortType::Input,
         "input_1",
-        &CoatingType::ConstantR { reflectivity: 0.5 },
+        &CoatingConstantR::new(percent!(50.0))?.into(),
     )?;
     // Add the first mirror to the optical system
     let i_m1 = scenery.add_node(mirror1)?;

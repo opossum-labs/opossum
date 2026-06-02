@@ -537,6 +537,12 @@ pub trait OpticNode: Dottable {
         self.node_attr_mut().set_alignment(align);
         self.update_surfaces()
     }
+    /// Get the local alignment (decenter, tilt) of an optical node.
+    ///
+    /// This function returns `None` if no local alignment is defined for this node.
+    fn alignment(&self) -> Option<Isometry> {
+        *self.node_attr().alignment()
+    }
     /// Get a refrecne to a global configuration (if any).
     fn global_conf(&self) -> &Option<Arc<Mutex<SceneryResources>>> {
         self.node_attr().global_conf()

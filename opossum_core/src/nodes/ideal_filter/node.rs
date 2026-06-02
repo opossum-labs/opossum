@@ -1,4 +1,5 @@
 use opm_macros_lib::OpmNode;
+use uom::si::f64::Ratio;
 
 use crate::{
     analyzers::{
@@ -12,7 +13,7 @@ use crate::{
         LightData, LightRays, LightResult, Rays,
         light_result::{light_rays_to_light_result, light_result_to_light_rays},
     },
-    nodes::{FilterType, NodeRegistration},
+    nodes::{FilterType, NodeRegistration, ideal_filter::filter_types::FilterConst},
     prelude::{FilterTypeBuilder, GhostFocusConfig, OpticNode, PortType, Proptype, RayTraceConfig},
     properties::validator::Validator,
 };
@@ -27,14 +28,14 @@ inventory::submit! {
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - `front`
+///     - `input_1`
 ///   - Outputs
-///     - `rear`
+///     - `output_1`
 ///
 /// ## Properties
 ///   - `name`
 ///   - `inverted`
-///   - `filter type`
+///   - `filter type builder`: Config data for the filter type. See [`FilterTypeBuilder`] for details.
 pub struct IdealFilter {
     node_attr: NodeAttr,
 }
@@ -49,7 +50,7 @@ impl Default for IdealFilter {
                 "filter type builder",
                 "used filter algorithm",
                 Validator::NumericInRange { min: 0., max: 1. },
-                FilterTypeBuilder::Constant(1.0).into(),
+                FilterTypeBuilder::default().into(),
             )
             .unwrap();
         let mut idf = Self { node_attr };
@@ -93,18 +94,13 @@ impl IdealFilter {
     /// # Errors
     ///
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
-    pub fn set_transmission(&mut self, transmission: f64) -> OpmResult<()> {
-        if (0.0..=1.0).contains(&transmission) {
-            self.node_attr.set_property(
-                "filter type builder",
-                FilterTypeBuilder::Constant(transmission).into(),
-            )?;
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "attenuation must be in interval [0.0; 1.0]".into(),
-            ))
-        }
+    pub fn set_transmission(&mut self, transmission: Ratio) -> OpmResult<()> {
+        let transmission_constant = FilterConst::new(transmission)?;
+        self.node_attr.set_property(
+            "filter type builder",
+            FilterTypeBuilder::Constant(transmission_constant).into(),
+        )?;
+        Ok(())
     }
     /// Sets the transmission of this [`IdealFilter`] expressed as optical density.
     ///
@@ -113,15 +109,12 @@ impl IdealFilter {
     ///
     /// This function will return an error if an optical density < 0.0 was given.
     pub fn set_optical_density(&mut self, density: f64) -> OpmResult<()> {
-        if density >= 0.0 {
-            self.node_attr.set_property(
-                "filter type builder",
-                FilterTypeBuilder::Constant(f64::powf(10.0, -density)).into(),
-            )?;
-            Ok(())
-        } else {
-            Err(OpossumError::Other("optical densitiy must be >=0".into()))
-        }
+        let transmission_constant = FilterConst::new((f64::powf(10.0, -density)).into())?;
+        self.node_attr.set_property(
+            "filter type builder",
+            FilterTypeBuilder::Constant(transmission_constant).into(),
+        )?;
+        Ok(())
     }
     /// Returns the transmission factor of this [`IdealFilter`] expressed as optical density for the [`FilterType::Constant`].
     ///
@@ -130,7 +123,7 @@ impl IdealFilter {
     pub fn optical_density(&self) -> Option<f64> {
         self.filter_type()
             .map_or(None, |filter_type| match filter_type {
-                FilterType::Constant(t) => Some(-f64::log10(t)),
+                FilterType::Constant(t) => Some(-f64::log10(t.transmission().value)),
                 FilterType::Spectrum(_) => None,
             })
     }
@@ -256,6 +249,7 @@ mod test {
         nodes::test_helper::test_helper::{
             test_analyze_empty, test_analyze_wrong_data_type, test_inverted,
         },
+        percent,
         prelude::{BandFilter, Isometry},
     };
     use approx::assert_abs_diff_eq;
@@ -263,7 +257,10 @@ mod test {
     #[test]
     fn default() {
         let mut node = IdealFilter::default();
-        assert_eq!(node.filter_type().unwrap(), FilterType::Constant(1.0));
+        assert_eq!(
+            node.filter_type().unwrap(),
+            FilterType::Constant(FilterConst::default())
+        );
         assert_eq!(node.name(), "ideal filter");
         assert_eq!(node.node_type(), "ideal filter");
         assert_eq!(node.inverted(), false);
@@ -272,27 +269,35 @@ mod test {
     }
     #[test]
     fn new() {
-        assert!(IdealFilter::new("test", &FilterTypeBuilder::Constant(1.1)).is_err());
-        assert!(IdealFilter::new("test", &FilterTypeBuilder::Constant(-0.1)).is_err());
-        let node = IdealFilter::new("test", &FilterTypeBuilder::Constant(0.8)).unwrap();
+        let node = IdealFilter::new(
+            "test",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(80.0)).unwrap()),
+        )
+        .unwrap();
         assert_eq!(node.name(), "test");
-        assert_eq!(node.filter_type().unwrap(), FilterType::Constant(0.8));
+        assert_eq!(
+            node.filter_type().unwrap(),
+            FilterType::Constant(FilterConst::new(percent!(80.0)).unwrap())
+        );
     }
     #[test]
     fn set_transmission() {
         let mut node = IdealFilter::default();
-        assert!(node.set_transmission(-0.1).is_err());
-        assert!(node.set_transmission(1.1).is_err());
-        assert!(node.set_transmission(0.5).is_ok());
-        assert_eq!(node.filter_type().unwrap(), FilterType::Constant(0.5));
+        assert!(node.set_transmission(percent!(-1.0)).is_err());
+        assert!(node.set_transmission(percent!(100.1)).is_err());
+        assert!(node.set_transmission(percent!(50.0)).is_ok());
+        assert_eq!(
+            node.filter_type().unwrap(),
+            FilterType::Constant(FilterConst::new(percent!(50.0)).unwrap())
+        );
     }
     #[test]
     fn optical_density() {
         let mut node = IdealFilter::default();
         assert_eq!(node.optical_density(), Some(0.0));
-        node.set_transmission(0.1).unwrap();
+        node.set_transmission(percent!(10.0)).unwrap();
         assert_eq!(node.optical_density(), Some(1.0));
-        node.set_transmission(0.01).unwrap();
+        node.set_transmission(percent!(1.0)).unwrap();
         assert_eq!(node.optical_density(), Some(2.0));
         let node = IdealFilter::new(
             "test",
@@ -306,10 +311,16 @@ mod test {
         let mut node = IdealFilter::default();
         assert!(node.set_optical_density(-1.0).is_err());
         assert!(node.set_optical_density(1.0).is_ok());
-        assert_eq!(node.filter_type().unwrap(), FilterType::Constant(0.1));
+        assert_eq!(
+            node.filter_type().unwrap(),
+            FilterType::Constant(FilterConst::new(percent!(10.0)).unwrap())
+        );
         assert!(node.set_optical_density(f64::NAN).is_err());
         assert!(node.set_optical_density(f64::INFINITY).is_ok());
-        assert_eq!(node.filter_type().unwrap(), FilterType::Constant(0.0));
+        assert_eq!(
+            node.filter_type().unwrap(),
+            FilterType::Constant(FilterConst::new(percent!(0.0)).unwrap())
+        );
     }
     #[test]
     fn inverted() -> OpmResult<()> {
@@ -347,7 +358,11 @@ mod test {
     }
     #[test]
     fn analyze_energy_ok() {
-        let mut node = IdealFilter::new("test", &FilterTypeBuilder::Constant(0.5)).unwrap();
+        let mut node = IdealFilter::new(
+            "test",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(50.0)).unwrap()),
+        )
+        .unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
@@ -366,7 +381,11 @@ mod test {
     }
     #[test]
     fn analyzer_geometric_fixed() {
-        let mut node = IdealFilter::new("test", &FilterTypeBuilder::Constant(0.3)).unwrap();
+        let mut node = IdealFilter::new(
+            "test",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(30.0)).unwrap()),
+        )
+        .unwrap();
         node.set_isometry(Isometry::identity()).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
@@ -395,7 +414,11 @@ mod test {
     }
     #[test]
     fn analyze_inverse() {
-        let mut node = IdealFilter::new("test", &FilterTypeBuilder::Constant(0.5)).unwrap();
+        let mut node = IdealFilter::new(
+            "test",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(50.0)).unwrap()),
+        )
+        .unwrap();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());

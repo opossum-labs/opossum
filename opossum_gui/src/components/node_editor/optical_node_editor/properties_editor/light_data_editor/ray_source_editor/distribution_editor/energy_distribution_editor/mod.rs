@@ -67,6 +67,7 @@ pub fn EnergyDistributionEditor(
             header_id: "sourceEnergyDistHeading",
             parent_id: "accordionSourceDists",
             content_id: "sourceEnergyDistCollapse",
+            level: 2,
         }
     }
 }

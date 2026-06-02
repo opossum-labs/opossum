@@ -1,5 +1,6 @@
 use crate::components::node_editor::{
-    inputs::input_components::NodeConfigUnitInput, node_config_editor::NodeChangeEvent,
+    inputs::input_components::{NodeConfigUnitInput, UnitHandling},
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use approx::relative_ne;
@@ -26,7 +27,7 @@ pub fn AngleEditor(
             id: format!("angleProperty{property_key}").to_camel_case().as_str(),
             label: property_key.to_sentence_case(),
             value: angle_sig.read().get::<degree>(),
-            base_unit: "°",
+            unit_config: UnitHandling::new("°", true),
             readonly,
             onchange: move |new_angle: f64| {
                 if relative_ne!(angle_sig.read().get::< degree > (), new_angle, epsilon = 0.0) {

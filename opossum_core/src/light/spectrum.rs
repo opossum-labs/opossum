@@ -449,7 +449,7 @@ impl Spectrum {
     pub fn scale_vertical(&mut self, factor: &f64) -> OpmResult<()> {
         if factor < &0.0 {
             return Err(OpossumError::Spectrum(
-                "scaling factor mus be >= 0.0".into(),
+                "scaling factor must be >= 0.0".into(),
             ));
         }
         let spectrum = self
@@ -566,7 +566,9 @@ impl Spectrum {
     /// This function will return an error if .
     pub fn filter_with_type(&mut self, filter_type: &crate::nodes::FilterType) -> OpmResult<()> {
         match filter_type {
-            crate::nodes::FilterType::Constant(t) => self.scale_vertical(t)?,
+            crate::nodes::FilterType::Constant(t) => {
+                self.scale_vertical(&t.transmission().value)?;
+            }
             crate::nodes::FilterType::Spectrum(s2) => {
                 self.filter(s2);
             }

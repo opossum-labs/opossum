@@ -4,7 +4,7 @@ use std::cell::RefCell;
 
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
-    apertures::Aperture,
+    apertures::ApertureShape,
     core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     error::{OpmResult, OpossumError},
     light::Spectrum,
@@ -85,7 +85,7 @@ pub enum Proptype {
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
     /// A property for storing an optical [`Aperture`].
-    Aperture(Aperture),
+    Aperture(ApertureShape),
     /// A property for storing a [`Spectrum`].
     Spectrum(Spectrum),
     /// This property stores the fluence information [`FluenceData`]
