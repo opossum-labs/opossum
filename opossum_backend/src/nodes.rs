@@ -433,7 +433,7 @@ fn resolve_references(
         if let Some(referenced_node) = referenced_node_opt {
             scenery.with_node_mut(*new_id, |node| {
                 if let Ok(ref_node) = node.as_refnode_mut() {
-                    ref_node.assign_reference(&referenced_node);
+                    let _ = ref_node.assign_reference(&referenced_node);
                 }
             })?;
         }

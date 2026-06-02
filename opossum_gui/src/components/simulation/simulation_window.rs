@@ -240,6 +240,66 @@ pub fn SimulationWindow(
                         } else {
                             span { class: "me-auto text-success small", "Process finished." }
                         }
+                        if !is_running() {
+                            button {
+                                class: "btn btn-primary",
+                                title: "Open generated reports in your default web browser",
+                                onclick: move |_| {
+                                    if let Some(dir) = project_directory() {
+                                        let mut i = 0;
+                                        let mut opened_any = false;
+
+                                        loop {
+                                            let report_filename = format!("report_{}.html", i);
+                                            let report_path = dir.join(&report_filename);
+
+                                            // Prüfen, ob die Datei existiert
+                                            if report_path.exists() {
+                                                // Den Pfad in einen String umwandeln, den der Browser öffnen kann
+                                                if let Some(path_str) = report_path.to_str() {
+                                                    match webbrowser::open(path_str) {
+                                                        Ok(_) => {
+                                                            output
+                                                                .write()
+                                                                .push_str(
+                                                                    &format!("\n[INFO] Opened {}\n", report_filename),
+                                                                );
+                                                            opened_any = true;
+                                                        }
+                                                        Err(e) => {
+                                                            output
+                                                                .write()
+                                                                .push_str(
+                                                                    &format!(
+                                                                        "\n[ERROR] Failed to open {}: {}\n",
+                                                                        report_filename,
+                                                                        e,
+                                                                    ),
+                                                                );
+                                                        }
+                                                    }
+                                                }
+                                                i += 1;
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        if !opened_any {
+                                            output
+                                                .write()
+                                                .push_str(
+                                                    "\n[WARN] No reports found to open in the project directory.\n",
+                                                );
+                                        }
+                                    } else {
+                                        output
+                                            .write()
+                                            .push_str("\n[ERROR] Cannot open reports: No project directory set.\n");
+                                    }
+                                },
+                                "Open Reports"
+                            }
+                        }
                         button {
                             class: if is_running() { "btn btn-danger" } else { "btn btn-secondary" },
                             title: if is_running() { "Abort the running simulation" } else { "Close window (Esc)" },

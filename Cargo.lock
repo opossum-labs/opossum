@@ -5215,6 +5215,7 @@ dependencies = [
  "uom",
  "uuid",
  "web-sys",
+ "webbrowser",
  "winres",
 ]
 
