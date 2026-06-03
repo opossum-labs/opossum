@@ -185,7 +185,7 @@ impl OpticNode for WaveFront {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
@@ -204,7 +204,7 @@ impl OpticNode for WaveFront {
                         "Wavefront error map with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                         wf_error_map.clone().into(),
                     )
-                    .unwrap();
+                    ?;
 
                     //todo for all error maps at every wavelength!
                     props
@@ -213,7 +213,7 @@ impl OpticNode for WaveFront {
                         "Wavefront Peak-to-Valley value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                         Proptype::WfLambda(wf_error_map.ptv, wf_error_map.wavelength),
                     )
-                    .unwrap();
+                    ?;
 
                     //todo for all error maps at every wavelength!
                     props
@@ -222,17 +222,16 @@ impl OpticNode for WaveFront {
                         "Wavefront root mean square value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                         Proptype::WfLambda(wf_error_map.rms, wf_error_map.wavelength),
                     )
-                    .unwrap();
+                    ?;
                 }
 
                 if self.apodization_warning {
-                    props
-                .create(
-                    "Warning",
-                    "warning during analysis",
-                    "Rays have been apodized at input aperture. Results might not be accurate.".into(),
-                )
-                .unwrap();
+                    props.create(
+                        "Warning",
+                        "warning during analysis",
+                        "Rays have been apodized at input aperture. Results might not be accurate."
+                            .into(),
+                    )?;
                 }
             } else {
                 props
@@ -241,17 +240,17 @@ impl OpticNode for WaveFront {
                     "warning during wavefront calculation",
                     "This warning might have been created if the Wavefront monitor was used with zero distance from Source or with multiple wavelengths in a completely paraxial setup.".into(),
                 )
-                .unwrap();
+                ?;
             }
 
-            Some(NodeReport::new(
+            Ok(Some(NodeReport::new(
                 &self.node_type(),
                 &self.name(),
                 uuid,
                 props,
-            ))
+            )))
         } else {
-            None
+            Ok(None)
         }
     }
     fn node_attr(&self) -> &NodeAttr {
@@ -594,17 +593,15 @@ mod test {
     #[test]
     fn report() -> OpmResult<()> {
         let mut wf = WaveFront::default();
-        assert!(wf.node_report("").is_none());
+        assert!(wf.node_report("")?.is_none());
         wf.light_data = Some(LightData::Geometric(Rays::default()));
-        assert!(wf.node_report("").is_some());
+        assert!(wf.node_report("")?.is_some());
         wf.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
             nanometer!(1053.0),
             joule!(1.0),
             &Hexapolar::new(millimeter!(1.), 1)?,
         )?));
-        let node_report = wf.node_report("").ok_or(OpossumError::Other(
-            "Failed to generate node report for WaveFront".into(),
-        ))?;
+        let node_report = wf.node_report("")?.unwrap();
         assert_eq!(node_report.node_type(), "wavefront monitor");
         assert_eq!(node_report.name(), "wavefront monitor");
         let props = node_report.properties();

@@ -87,12 +87,12 @@ impl OpticNode for FluenceDetector {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
         let mut props = Properties::default();
         let hit_maps = self.hit_maps();
         let Some(hit_map) = hit_maps.get("input_1") else {
             warn!("could not get surface hitmap using default");
-            return None;
+            return Ok(None);
         };
 
         let mut consolidated_hit_map = hit_map.clone();
@@ -101,42 +101,34 @@ impl OpticNode for FluenceDetector {
         let Ok(Proptype::FluenceEstimator(estimator)) =
             self.node_attr.get_property("fluence estimator")
         else {
-            return None;
+            return Ok(None);
         };
 
         let fl_data = consolidated_hit_map.calc_fluence_map((95, 83), estimator);
 
         if let Ok(ref fluence_data) = fl_data {
-            props
-                .create(
-                    &format!("Fluence ({})", fluence_data.estimator()),
-                    "2D spatial energy distribution",
-                    fluence_data.clone().into(),
-                )
-                .unwrap();
-            props
-                .create(
-                    &format!("Peak Fluence ({})", fluence_data.estimator()),
-                    "Peak fluence of the distribution",
-                    Proptype::Fluence(fluence_data.peak()),
-                )
-                .unwrap();
-            props
-                .create(
-                    &format!("Total energy ({})", fluence_data.estimator()),
-                    "Total energy of the distribution",
-                    Proptype::Energy(fluence_data.total_energy()),
-                )
-                .unwrap();
+            props.create(
+                &format!("Fluence ({})", fluence_data.estimator()),
+                "2D spatial energy distribution",
+                fluence_data.clone().into(),
+            )?;
+            props.create(
+                &format!("Peak Fluence ({})", fluence_data.estimator()),
+                "Peak fluence of the distribution",
+                Proptype::Fluence(fluence_data.peak()),
+            )?;
+            props.create(
+                &format!("Total energy ({})", fluence_data.estimator()),
+                "Total energy of the distribution",
+                Proptype::Energy(fluence_data.total_energy()),
+            )?;
             if self.apodization_warning {
-                props
-                    .create(
-                        "Warning",
-                        "warning during analysis",
-                        "Rays have been apodized at input aperture. Results might not be accurate."
-                            .into(),
-                    )
-                    .unwrap();
+                props.create(
+                    "Warning",
+                    "warning during analysis",
+                    "Rays have been apodized at input aperture. Results might not be accurate."
+                        .into(),
+                )?;
             }
         } else {
             warn!(
@@ -149,14 +141,14 @@ impl OpticNode for FluenceDetector {
                     "Could not calculate the fluence map with the defined estimator. Please try another one"
                         .into(),
                 )
-                .unwrap();
+                ?;
         }
-        Some(NodeReport::new(
+        Ok(Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
             uuid,
             props,
-        ))
+        )))
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr

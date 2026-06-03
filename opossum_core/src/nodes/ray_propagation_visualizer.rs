@@ -110,7 +110,7 @@ impl OpticNode for RayPropagationVisualizer {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
         let mut props = Properties::default();
         let mut report =
             NodeReport::new(&self.node_type(), &self.name(), uuid, Properties::default());
@@ -125,13 +125,11 @@ impl OpticNode for RayPropagationVisualizer {
             if let Ok(Proptype::F64(transparency)) = self.properties().get("ray transparency") {
                 ray_position_histories.ray_transparency = *transparency;
             }
-            props
-                .create(
-                    "Ray plot",
-                    "Ray plot",
-                    Proptype::RayPositionHistory(ray_position_histories),
-                )
-                .unwrap();
+            props.create(
+                "Ray plot",
+                "Ray plot",
+                Proptype::RayPositionHistory(ray_position_histories),
+            )?;
 
             // Re-create report with properties if any were added
             report = NodeReport::new(&self.node_type(), &self.name(), uuid, props);
@@ -151,7 +149,7 @@ impl OpticNode for RayPropagationVisualizer {
                  "A propagation plot can only be calculated during a ray tracing or ghostfocus analysis.",
              ));
         }
-        Some(report)
+        Ok(Some(report))
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -476,9 +474,7 @@ mod test {
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
-        assert!(output.is_some());
-        let output = output.clone().unwrap();
-        assert_eq!(*output, input_light);
+        assert_eq!(output, Some(&input_light));
         Ok(())
     }
     #[test]
@@ -497,29 +493,33 @@ mod test {
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
-        assert!(output.is_some());
-        let output = output.clone().unwrap();
-        assert_eq!(*output, input_light);
+        assert_eq!(output, Some(&input_light));
         Ok(())
     }
     #[test]
     fn report() -> OpmResult<()> {
         let mut fd = RayPropagationVisualizer::default();
-        let node_report = fd.node_report("").unwrap();
+        let Some(node_report) = fd.node_report("")? else {
+            panic!("Report should not be `None`");
+        };
         assert_eq!(node_report.node_type(), "ray propagation");
         assert_eq!(node_report.name(), "ray propagation");
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
         fd.light_data = Some(LightData::Geometric(Rays::default()));
-        let node_report = fd.node_report("").unwrap();
+        let Some(node_report) = fd.node_report("")? else {
+            panic!("Report should not be `None`");
+        };
         assert!(!node_report.properties().contains("Ray plot"));
         fd.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
             nanometer!(1053.0),
             joule!(1.0),
             &Hexapolar::new(millimeter!(1.), 1)?,
         )?));
-        let node_report = fd.node_report("").unwrap();
+        let Some(node_report) = fd.node_report("")? else {
+            panic!("Report should not be `None`");
+        };
         assert!(node_report.properties().contains("Ray plot"));
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
@@ -528,7 +528,9 @@ mod test {
 
         // Test Apodization Warning
         fd.set_apodization_warning(true);
-        let node_report = fd.node_report("").unwrap();
+        let Some(node_report) = fd.node_report("")? else {
+            panic!("Report should not be `None`");
+        };
         assert_eq!(node_report.notes().len(), 1);
         assert_eq!(
             node_report.notes()[0].level,
@@ -539,7 +541,9 @@ mod test {
         // Test Energy Data Warning
         fd.set_apodization_warning(false);
         fd.light_data = Some(LightData::Energy(crate::light::Spectrum::default()));
-        let node_report = fd.node_report("").unwrap();
+        let Some(node_report) = fd.node_report("")? else {
+            panic!("Report should not be `None`");
+        };
         assert_eq!(node_report.notes().len(), 1);
         assert_eq!(
             node_report.notes()[0].level,

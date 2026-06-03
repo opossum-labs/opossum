@@ -104,7 +104,7 @@ impl OpticNode for SpotDiagram {
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
-    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
         let mut props = Properties::default();
         let data = &self.light_data;
         let mut report = if let Some(LightData::Geometric(rays)) = data {
@@ -116,40 +116,30 @@ impl OpticNode for SpotDiagram {
                 transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
             }
             if let Some(hit_map) = self.get_optic_surface("input_1").map(OpticSurface::hit_map) {
-                props
-                    .create("Spot diagram", "2D spot diagram", hit_map.clone().into())
-                    .unwrap();
+                props.create("Spot diagram", "2D spot diagram", hit_map.clone().into())?;
             }
             if let Some(c) = transformed_rays.energy_weighted_centroid() {
-                props
-                    .create(
-                        "centroid x",
-                        "x position of energy-weighted centroid",
-                        c.x.into(),
-                    )
-                    .unwrap();
+                props.create(
+                    "centroid x",
+                    "x position of energy-weighted centroid",
+                    c.x.into(),
+                )?;
 
-                props
-                    .create(
-                        "centroid y",
-                        "y position of energy-weighted centroid",
-                        c.y.into(),
-                    )
-                    .unwrap();
+                props.create(
+                    "centroid y",
+                    "y position of energy-weighted centroid",
+                    c.y.into(),
+                )?;
             }
             if let Some(radius) = transformed_rays.beam_radius_geo() {
-                props
-                    .create("geo beam radius", "geometric beam radius", radius.into())
-                    .unwrap();
+                props.create("geo beam radius", "geometric beam radius", radius.into())?;
             }
             if let Some(radius) = transformed_rays.energy_weighted_beam_radius_rms() {
-                props
-                    .create(
-                        "rms beam radius",
-                        "energy-weighted rms beam radius",
-                        radius.into(),
-                    )
-                    .unwrap();
+                props.create(
+                    "rms beam radius",
+                    "energy-weighted rms beam radius",
+                    radius.into(),
+                )?;
             }
             NodeReport::new(&self.node_type(), &self.name(), uuid, props)
         } else {
@@ -167,7 +157,7 @@ impl OpticNode for SpotDiagram {
                 "Rays have been apodized at input aperture. Results might not be accurate.",
             ));
         }
-        Some(report)
+        Ok(Some(report))
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -474,27 +464,35 @@ mod test {
     #[test]
     fn report() -> OpmResult<()> {
         let mut sd = SpotDiagram::default();
-        let node_report = sd.node_report("").unwrap();
+        let Some(node_report) = sd.node_report("")? else {
+            panic!("Node report should not be `None`");
+        };
         assert_eq!(node_report.node_type(), "spot diagram");
         assert_eq!(node_report.name(), "spot diagram");
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
         sd.light_data = Some(LightData::Geometric(Rays::default()));
-        let node_report = sd.node_report("").unwrap();
+        let Some(node_report) = sd.node_report("")? else {
+            panic!("Node report should not be `None`");
+        };
         assert!(node_report.properties().contains("Spot diagram"));
         sd.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
             nanometer!(1053.0),
             joule!(1.0),
             &Hexapolar::new(Length::zero(), 1)?,
         )?));
-        let node_report = sd.node_report("").unwrap();
+        let Some(node_report) = sd.node_report("")? else {
+            panic!("Node report should not be `None`");
+        };
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 5);
 
         sd.set_apodization_warning(true);
-        let node_report = sd.node_report("").unwrap();
+        let Some(node_report) = sd.node_report("")? else {
+            panic!("Node report should not be `None`");
+        };
         let notes = node_report.notes();
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].level, ReportLevel::Warning);
@@ -544,7 +542,9 @@ mod test {
 
         AnalysisRayTrace::analyze(&mut sd, incoming_data, &analyzer)?;
 
-        let node_report = sd.node_report("").unwrap();
+        let Some(node_report) = sd.node_report("")? else {
+            panic!("Node report should not be `None`");
+        };
         let node_props = node_report.properties(); // Returns &Properties
 
         // Use iterator correctly as (key, value)
@@ -582,7 +582,7 @@ mod test {
         let mut config = EnergyConfig::default();
         config.map_source(i_src, EnergyDataBuilder::default());
         doc.add_analyzer(AnalyzerType::Energy(config));
-        let reports = doc.analyze().unwrap();
+        let reports = doc.analyze()?;
         let Some(report) = reports.first() else {
             panic!("No report found");
         };

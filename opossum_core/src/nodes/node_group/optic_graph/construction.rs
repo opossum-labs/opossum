@@ -1087,6 +1087,19 @@ mod test {
         Ok(())
     }
     #[test]
+    fn delete_mapped_node() -> OpmResult<()> {
+        let mut graph = OpticGraph::default();
+        let i_d1 = graph.add_node(Dummy::default())?;
+        let i_d2 = graph.add_node(Dummy::default())?;
+        graph.map_port(i_d1, &PortType::Input, "input_1", "ext_input1")?;
+        graph.map_port(i_d2, &PortType::Input, "input_1", "ext_input2")?;
+        assert_eq!(graph.input_port_map.len(), 2);
+        graph.delete_node(i_d1)?;
+        assert_eq!(graph.input_port_map.len(), 1);
+        assert!(graph.input_port_map.contains_external_name("ext_input2"));
+        Ok(())
+    }
+    #[test]
     fn delete_node_with_ref() -> OpmResult<()> {
         let mut graph = OpticGraph::default();
         let i_d1 = graph.add_node(Dummy::default())?;

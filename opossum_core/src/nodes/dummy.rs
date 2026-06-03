@@ -178,9 +178,10 @@ mod test {
         assert!(node.as_refnode_mut().is_err());
     }
     #[test]
-    fn report() {
-        let report = Dummy::default().node_report("123");
+    fn report() -> OpmResult<()> {
+        let report = Dummy::default().node_report("123")?;
         assert!(report.is_none());
+        Ok(())
     }
     #[test]
     fn ports_inverted() -> OpmResult<()> {
@@ -214,9 +215,7 @@ mod test {
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
-        assert!(output.is_some());
-        let output = output.clone().unwrap();
-        assert_eq!(*output, input_light);
+        assert_eq!(output, Some(&input_light));
         Ok(())
     }
     #[test]
@@ -231,9 +230,7 @@ mod test {
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
-        assert!(output.is_some());
-        let output = output.clone().unwrap();
-        assert_eq!(*output, input_light);
+        assert_eq!(output, Some(&input_light));
         Ok(())
     }
 }

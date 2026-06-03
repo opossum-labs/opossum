@@ -781,7 +781,7 @@ impl NodeGroup {
                 ));
             } else {
                 let uuid_str = uuid.as_simple().to_string();
-                let node_report = node_ref.optical_ref.lock_opm()?.node_report(&uuid_str);
+                let node_report = node_ref.optical_ref.lock_opm()?.node_report(&uuid_str)?;
                 if let Some(node_report) = node_report {
                     analysis_report.add_node_report(node_report);
                 }
@@ -947,30 +947,28 @@ impl OpticNode for NodeGroup {
         self.graph.set_is_inverted(self.node_attr.inverted());
         Ok(())
     }
-    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
         let mut group_props = Properties::default();
         for node in self.graph.nodes() {
             let sub_uuid = node.uuid().as_simple().to_string();
             if let Ok(node_ref) = node.optical_ref.lock_opm()
-                && let Some(node_report) = node_ref.node_report(&sub_uuid)
+                && let Some(node_report) = node_ref.node_report(&sub_uuid)?
             {
                 let node_name = node_ref.name();
                 if !(group_props.contains(&node_name)) {
-                    group_props
-                        .create(&node_name, "", node_report.into())
-                        .unwrap();
+                    group_props.create(&node_name, "", node_report.into())?;
                 }
             }
         }
         if group_props.is_empty() {
-            None
+            Ok(None)
         } else {
-            Some(NodeReport::new(
+            Ok(Some(NodeReport::new(
                 &self.node_type(),
                 &self.name(),
                 uuid,
                 group_props,
-            ))
+            )))
         }
     }
     fn node_attr(&self) -> &NodeAttr {
@@ -1198,12 +1196,14 @@ mod test {
         raytrace_config.map_source(i_s, ray_data_builder.into());
         AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config)?;
         let uuid = scenery.node(i_e)?.uuid().as_simple().to_string();
-        let report = scenery
+        let Some(report) = scenery
             .node(i_e)?
             .optical_ref
             .lock_opm()?
-            .node_report(&uuid)
-            .unwrap();
+            .node_report(&uuid)?
+        else {
+            panic!("Report should not be `None`");
+        };
         if let Proptype::Energy(e) = report.properties().get("Energy")? {
             assert_eq!(e, &joule!(1.0));
         } else {

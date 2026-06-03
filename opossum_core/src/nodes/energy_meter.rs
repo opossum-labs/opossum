@@ -134,7 +134,7 @@ impl OpticNode for EnergyMeter {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
         let energy = self
             .light_data
             .as_ref()
@@ -152,35 +152,28 @@ impl OpticNode for EnergyMeter {
             });
         let mut props = Properties::default();
         if let Some(e) = energy {
-            props.create("Energy", "Output energy", e.into()).unwrap();
+            props.create("Energy", "Output energy", e.into())?;
         } else {
-            props
-                .create("Energy", "Output energy", "no data".into())
-                .unwrap();
+            props.create("Energy", "Output energy", "no data".into())?;
         }
-        props
-            .create(
-                "Model",
-                "type of meter",
-                self.node_attr.get_property("meter type").unwrap().clone(),
-            )
-            .unwrap();
+        props.create(
+            "Model",
+            "type of meter",
+            self.node_attr.get_property("meter type")?.clone(),
+        )?;
         if self.apodization_warning {
-            props
-                .create(
-                    "Warning",
-                    "warning during analysis",
-                    "Rays have been apodized at input aperture. Results might not be accurate."
-                        .into(),
-                )
-                .unwrap();
+            props.create(
+                "Warning",
+                "warning during analysis",
+                "Rays have been apodized at input aperture. Results might not be accurate.".into(),
+            )?;
         }
-        Some(NodeReport::new(
+        Ok(Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
             uuid,
             props,
-        ))
+        )))
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -321,7 +314,9 @@ mod test {
     #[test]
     fn report() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
-        let report = meter.node_report("123").unwrap();
+        let Some(report) = meter.node_report("123")? else {
+            panic!("Report should not be `None`");
+        };
         assert_eq!(report.name(), "energy meter");
         assert_eq!(report.node_type(), "energy meter");
         assert!(report.properties().contains("Energy"));
@@ -340,7 +335,9 @@ mod test {
         let input_data = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_data.clone());
         AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default())?;
-        let report = meter.node_report("123").unwrap();
+        let Some(report) = meter.node_report("123")? else {
+            panic!("Report should not be `None`");
+        };
         if let Ok(Proptype::Energy(e)) = report.properties().get("Energy") {
             assert_eq!(e, &joule!(1.0));
         } else {

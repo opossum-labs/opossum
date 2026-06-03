@@ -438,9 +438,14 @@ pub trait OpticNode: Dottable {
     /// Return [`NodeReport`] of the current state of this [`OpticNode`].
     ///
     /// This function must be overridden for generating output in the analysis report. Mainly
-    /// detector nodes use this feature.
-    fn node_report(&self, _uuid: &str) -> Option<NodeReport> {
-        None
+    /// detector nodes use this feature. By default `None` is returned, signalling that a node does not
+    /// provide a report at all.
+    ///
+    /// # Errors
+    ///
+    /// This function might return an error if the concrete implementations fail.
+    fn node_report(&self, _uuid: &str) -> OpmResult<Option<NodeReport>> {
+        Ok(None)
     }
     /// Get the [`NodeAttr`] (common attributes) of an [`OpticNode`].
     fn node_attr(&self) -> &NodeAttr;

@@ -167,40 +167,31 @@ impl OpticNode for Spectrometer {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
         let mut props = Properties::default();
         if let Some(spectrum) = self.get_spectrum() {
-            props
-                .create("Spectrum", "Output spectrum", spectrum.into())
-                .unwrap();
-            props
-                .create(
-                    "Model",
-                    "Spectrometer model",
-                    self.node_attr
-                        .get_property("spectrometer type")
-                        .unwrap()
-                        .clone(),
-                )
-                .unwrap();
+            props.create("Spectrum", "Output spectrum", spectrum.into())?;
+            props.create(
+                "Model",
+                "Spectrometer model",
+                self.node_attr.get_property("spectrometer type")?.clone(),
+            )?;
             if self.apodization_warning {
-                props
-                    .create(
-                        "Warning",
-                        "warning during analysis",
-                        "Rays have been apodized at input aperture. Results might not be accurate."
-                            .into(),
-                    )
-                    .unwrap();
+                props.create(
+                    "Warning",
+                    "warning during analysis",
+                    "Rays have been apodized at input aperture. Results might not be accurate."
+                        .into(),
+                )?;
             }
         }
 
-        Some(NodeReport::new(
+        Ok(Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
             uuid,
             props,
-        ))
+        )))
     }
 
     fn node_attr(&self) -> &NodeAttr {
@@ -344,9 +335,7 @@ mod test {
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
-        assert!(output.is_some());
-        let output = output.clone().unwrap();
-        assert_eq!(*output, input_light);
+        assert_eq!(output, Some(&input_light));
         Ok(())
     }
     #[test]
@@ -365,15 +354,15 @@ mod test {
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
-        assert!(output.is_some());
-        let output = output.clone().unwrap();
-        assert_eq!(*output, input_light);
+        assert_eq!(output, Some(&input_light));
         Ok(())
     }
     #[test]
     fn report() -> OpmResult<()> {
         let mut sd = Spectrometer::default();
-        let node_report = sd.node_report("").unwrap();
+        let Some(node_report) = sd.node_report("")? else {
+            panic!("Node report should not be `None`");
+        };
         assert_eq!(node_report.node_type(), "spectrometer");
         assert_eq!(node_report.name(), "spectrometer");
         let node_props = node_report.properties();
@@ -384,7 +373,9 @@ mod test {
             joule!(1.0),
             &Hexapolar::new(Length::zero(), 1)?,
         )?));
-        let node_report = sd.node_report("").unwrap();
+        let Some(node_report) = sd.node_report("")? else {
+            panic!("Node report should not be `None`");
+        };
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 2);
