@@ -79,28 +79,27 @@ impl FluenceData {
     }
     /// Returns the fluence distribution and the corresponding x and y axes in a tuple (x, y, distribution)
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function panics if the linear axis vector (linspace) could not be generated.
-    #[must_use]
-    pub fn get_fluence_distribution(&self) -> (DVector<Length>, DVector<Length>, DMatrix<Fluence>) {
-        (
+    /// This function returns an error if the linear axis vector (linspace) could not be generated.
+    pub fn get_fluence_distribution(
+        &self,
+    ) -> OpmResult<(DVector<Length>, DVector<Length>, DMatrix<Fluence>)> {
+        Ok((
             linspace(
                 self.x_range.start.value,
                 self.x_range.end.value,
                 self.interp_distribution.ncols(),
-            )
-            .unwrap()
+            )?
             .map(Length::new::<meter>),
             linspace(
                 self.y_range.start.value,
                 self.y_range.end.value,
                 self.interp_distribution.nrows(),
-            )
-            .unwrap()
+            )?
             .map(Length::new::<meter>),
             self.interp_distribution.clone(),
-        )
+        ))
     }
     /// Returns length of the x data points (columns)
     #[must_use]
@@ -169,14 +168,12 @@ impl Plottable for FluenceData {
                         self.x_range.start.get::<millimeter>(),
                         self.x_range.end.get::<millimeter>(),
                         self.interp_distribution.ncols(),
-                    )
-                    .unwrap(),
+                    )?,
                     y_dat_m: linspace(
                         self.y_range.start.get::<millimeter>(),
                         self.y_range.end.get::<millimeter>(),
                         self.interp_distribution.nrows(),
-                    )
-                    .unwrap(),
+                    )?,
                     z_dat_nxm: DMatrix::from_iterator(
                         nrows,
                         ncols,
@@ -199,6 +196,7 @@ mod test {
     use crate::{
         J_per_cm2, J_per_m2,
         core_optics::hit_map::fluence_estimator::FluenceEstimator,
+        error::OpmResult,
         joule, meter,
         properties::Proptype,
         reporting::plottable::{PlotType, Plottable},
@@ -231,7 +229,7 @@ mod test {
         assert_eq!(fluence_data.estimator(), &FluenceEstimator::Binning);
     }
     #[test]
-    fn get_fluence_distribution() {
+    fn get_fluence_distribution() -> OpmResult<()> {
         let fluence_data = FluenceData::new(
             dmatrix![
                 J_per_cm2!(1.0), J_per_cm2!(2.0);
@@ -240,7 +238,7 @@ mod test {
             meter!(0.0)..meter!(1.0),
             FluenceEstimator::Binning,
         );
-        let (x, y, distribution) = fluence_data.get_fluence_distribution();
+        let (x, y, distribution) = fluence_data.get_fluence_distribution()?;
         assert_eq!(x, vector![meter!(0.0), meter!(1.0)]);
         assert_eq!(y, vector![meter!(0.0), meter!(1.0)]);
         assert_eq!(
@@ -249,6 +247,7 @@ mod test {
             J_per_cm2!(1.0), J_per_cm2!(2.0);
             J_per_cm2!(3.0), J_per_cm2!(4.0)]
         );
+        Ok(())
     }
     #[test]
     fn len_x_y() {

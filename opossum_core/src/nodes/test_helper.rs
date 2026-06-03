@@ -79,8 +79,8 @@ pub mod test_helper {
     pub fn test_analyze_apodization_warning<T: Default + AnalysisRayTrace>() -> OpmResult<()> {
         testing_logger::setup();
         let mut node = T::default();
-        node.set_isometry(Isometry::identity()).unwrap();
-        let config = CircleShape::new(millimeter!(1.0)).unwrap();
+        node.set_isometry(Isometry::identity())?;
+        let config = CircleShape::new(millimeter!(1.0))?;
         node.set_aperture(
             &PortType::Input,
             "input_1",
@@ -89,10 +89,8 @@ pub mod test_helper {
                 ApertureType::Hole,
                 None,
                 None,
-            )
-            .unwrap(),
-        )
-        .unwrap();
+            )?,
+        )?;
         let mut input = LightResult::default();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1054.0),

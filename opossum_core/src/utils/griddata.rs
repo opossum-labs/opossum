@@ -124,8 +124,8 @@ pub fn calc_closed_poly_area(poly_coords: &[Point2<f64>]) -> OpmResult<f64> {
                     "Non-finite polygon coordinates!".into(),
                 ));
             }
-            area += poly_coords[i].x * poly_coords[j].y;
-            area -= poly_coords[i].y * poly_coords[j].x;
+            area = poly_coords[i].x.mul_add(poly_coords[j].y, area);
+            area = poly_coords[i].y.mul_add(-poly_coords[j].x, area);
         }
         Ok(area.abs() / 2.)
     }

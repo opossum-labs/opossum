@@ -75,10 +75,6 @@ impl Default for ParabolicMirror {
                         Validator::NumericIsFinite,
                     ],
                 },
-                // and_validator(vec![
-                //     angle_in_range(degree!(-180.0), degree!(180.0), false),
-                //     numeric_is_finite(),
-                // ]),
                 degree!(0.0).into(),
             )
             .unwrap();
@@ -511,35 +507,29 @@ mod test {
     use core::f64;
     use nalgebra::{Matrix4, Vector2};
     #[test]
-    fn default() {
+    fn default() -> OpmResult<()> {
         let parabola = ParabolicMirror::default();
         assert_eq!(parabola.node_attr.name().as_str(), "parabolic mirror");
 
-        let Proptype::Length(focal_length) =
-            parabola.node_attr.get_property("focal length").unwrap()
+        let Proptype::Length(focal_length) = parabola.node_attr.get_property("focal length")?
         else {
             panic!()
         };
         assert_relative_eq!(focal_length.value, 1.);
-        let Proptype::Bool(collimate) = parabola.node_attr.get_property("collimating").unwrap()
-        else {
+        let Proptype::Bool(collimate) = parabola.node_attr.get_property("collimating")? else {
             panic!()
         };
         assert!(!collimate);
 
-        let Proptype::Angle(angle) = parabola.node_attr.get_property("off-axis angle").unwrap()
-        else {
+        let Proptype::Angle(angle) = parabola.node_attr.get_property("off-axis angle")? else {
             panic!()
         };
         assert_relative_eq!(angle.value, 0.);
-        let Proptype::Vec2(dir) = parabola
-            .node_attr
-            .get_property("off-axis direction")
-            .unwrap()
-        else {
+        let Proptype::Vec2(dir) = parabola.node_attr.get_property("off-axis direction")? else {
             panic!()
         };
         assert_relative_eq!(*dir, Vector2::new(1., 0.));
+        Ok(())
     }
     #[test]
     fn new() {

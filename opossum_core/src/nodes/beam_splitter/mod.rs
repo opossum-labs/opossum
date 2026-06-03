@@ -419,10 +419,10 @@ mod test {
     use super::*;
     use crate::{core_optics::PortType, nodes::test_helper::test_helper::*};
     #[test]
-    fn default() {
+    fn default() -> OpmResult<()> {
         let mut node = BeamSplitter::default();
         assert!(matches!(
-            node.splitting_config().unwrap(),
+            node.splitting_config()?,
             SplittingConfig::Ratio(_)
         ));
         assert_eq!(node.name(), "beam splitter");
@@ -430,15 +430,15 @@ mod test {
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightpink");
         assert!(node.as_group_mut().is_err());
+        Ok(())
     }
     #[test]
-    fn new() {
-        let splitter = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6));
-        assert!(splitter.is_ok());
-        let splitter = splitter.unwrap();
+    fn new() -> OpmResult<()> {
+        let splitter = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6))?;
         assert_eq!(splitter.name(), "test");
         assert!(BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(-0.01)).is_err());
         assert!(BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(1.01)).is_err());
+        Ok(())
     }
     #[test]
     fn inverted() -> OpmResult<()> {
@@ -455,15 +455,16 @@ mod test {
         assert_eq!(output_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
     }
     #[test]
-    fn ports_inverted() {
+    fn ports_inverted() -> OpmResult<()> {
         let mut node = BeamSplitter::default();
-        node.set_inverted(true).unwrap();
+        node.set_inverted(true)?;
         let mut input_ports = node.ports().names(&PortType::Input);
         input_ports.sort();
         assert_eq!(input_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
         let mut output_ports = node.ports().names(&PortType::Output);
         output_ports.sort();
         assert_eq!(output_ports, vec!["input_1", "input_2"]);
+        Ok(())
     }
     #[test]
     fn analyze_empty() -> OpmResult<()> {

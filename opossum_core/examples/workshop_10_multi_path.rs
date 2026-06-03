@@ -50,7 +50,7 @@ fn main() -> OpmResult<()> {
     // Primary optical source emitting multiple laser lines
     let i_src = scenery.add_node(SourcePort::new("multi line source"))?;
     // Spectrometer monitoring the primary source output
-    let i_s1 = scenery.add_node(Spectrometer::new("Source 1", SpectrometerType::Ideal))?;
+    let i_s1 = scenery.add_node(Spectrometer::new("Source 1", SpectrometerType::Ideal)?)?;
 
     // BS1: wavelength-dependent separation using long-pass filter at 980 nm
     let splitting_config_1 = SplittingConfigBuilder::Spectrum(
@@ -69,10 +69,10 @@ fn main() -> OpmResult<()> {
     let i_bs1 = scenery.add_node(bs1)?;
 
     // Spectrometer monitoring BS1 output channel 1
-    let i_s2 = scenery.add_node(Spectrometer::new("BS1 Output 1", SpectrometerType::Ideal))?;
+    let i_s2 = scenery.add_node(Spectrometer::new("BS1 Output 1", SpectrometerType::Ideal)?)?;
 
     // Spectrometer monitoring BS1 output channel 2
-    let i_s3 = scenery.add_node(Spectrometer::new("BS1 Output 2", SpectrometerType::Ideal))?;
+    let i_s3 = scenery.add_node(Spectrometer::new("BS1 Output 2", SpectrometerType::Ideal)?)?;
 
     // BS2: secondary wavelength-selective beam splitter
     // Long-pass edge filter with cutoff wavelength at 1025 nm
@@ -94,9 +94,9 @@ fn main() -> OpmResult<()> {
     // Secondary optical source: single-line spectral input injected into BS2
     let i_src2 = scenery.add_node(SourcePort::new("source 2"))?;
     // Spectrometer monitoring BS2 output channel 1
-    let i_s4 = scenery.add_node(Spectrometer::new("BS2 Output 1", SpectrometerType::Ideal))?;
+    let i_s4 = scenery.add_node(Spectrometer::new("BS2 Output 1", SpectrometerType::Ideal)?)?;
     // Spectrometer monitoring BS2 output channel 2
-    let i_s5 = scenery.add_node(Spectrometer::new("BS2 Output 2", SpectrometerType::Ideal))?;
+    let i_s5 = scenery.add_node(Spectrometer::new("BS2 Output 2", SpectrometerType::Ideal)?)?;
 
     // Optical System Connections
     // Connect primary source to spectrometer

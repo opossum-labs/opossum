@@ -87,7 +87,7 @@ fn main() -> OpmResult<()> {
     // Add the ray visualizer to the system
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
     // Create a wavefront detector after the telescope system
-    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope"))?;
+    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope")?)?;
     // Connect source → shifted lens
     scenery.connect_nodes(i_src, "output_1", i_pl1, "input_1", millimeter!(20.0))?;
     // Connect shifted lens → second lens

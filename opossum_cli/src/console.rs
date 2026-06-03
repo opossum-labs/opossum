@@ -438,8 +438,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         )
         .unwrap();
         let mut reader = BufReader::new(&correct_file_path[..]);
-        let file_path3 =
-            get_args(eval_file_path_input, None, "f", &mut reader, &mut writer)?;
+        let file_path3 = get_args(eval_file_path_input, None, "f", &mut reader, &mut writer)?;
         let file_path_str3 = file_path3.to_str().unwrap();
         assert_eq!(file_path_str3, "./files_for_testing/opm/opticscenery.opm");
 

@@ -74,13 +74,14 @@ impl Default for SpotDiagram {
                 "flag that defines if the aperture is displayed in a plot",
                 false.into(),
             )
-            .unwrap();
+            .expect("Hardcoded property creation must not fail");
         let mut sd = Self {
             light_data: None,
             node_attr,
             apodization_warning: false,
         };
-        sd.update_surfaces().unwrap();
+        sd.update_surfaces()
+            .expect("Updating surfaces on a default spot diagram must not fail");
         sd
     }
 }
@@ -88,14 +89,15 @@ impl SpotDiagram {
     /// Creates a new [`SpotDiagram`].
     /// # Attributes
     /// - `name`: name of the spot diagram
-    /// # Panics    
-    /// This function panics if `update_surfaces` fails.
-    #[must_use]
-    pub fn new(name: &str) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if internally `update_surfaces` fails.
+    pub fn new(name: &str) -> OpmResult<Self> {
         let mut sd = Self::default();
         sd.node_attr.set_name(name);
-        sd.update_surfaces().unwrap();
-        sd
+        sd.update_surfaces()?;
+        Ok(sd)
     }
 }
 impl OpticNode for SpotDiagram {
@@ -366,10 +368,11 @@ mod test {
         assert!(node.as_group_mut().is_err());
     }
     #[test]
-    fn new() {
-        let spot = SpotDiagram::new("test");
+    fn new() -> OpmResult<()> {
+        let spot = SpotDiagram::new("test")?;
         assert_eq!(spot.name(), "test");
         assert!(spot.light_data.is_none());
+        Ok(())
     }
     #[test]
     fn ports() {
@@ -378,11 +381,12 @@ mod test {
         assert_eq!(spot.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn ports_inverted() {
+    fn ports_inverted() -> OpmResult<()> {
         let mut spot = SpotDiagram::default();
-        spot.set_inverted(true).unwrap();
+        spot.set_inverted(true)?;
         assert_eq!(spot.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(spot.ports().names(&PortType::Output), vec!["input_1"]);
+        Ok(())
     }
     #[test]
     fn inverted() -> OpmResult<()> {
@@ -400,52 +404,55 @@ mod test {
         test_analyze_empty::<SpotDiagram>()
     }
     #[test]
-    fn analyze_energy_wrong() {
+    fn analyze_energy_wrong() -> OpmResult<()> {
         let mut node = SpotDiagram::default();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_energy_ok() {
+    fn analyze_energy_ok() -> OpmResult<()> {
         let mut node = SpotDiagram::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
     fn analyze_apodization_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<SpotDiagram>()
     }
     #[test]
-    fn analyze_energy_inverse() {
+    fn analyze_energy_inverse() -> OpmResult<()> {
         let mut node = SpotDiagram::default();
-        node.set_inverted(true).unwrap();
+        node.set_inverted(true)?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
-    fn analyze_ghostfocus_ok() {
+    fn analyze_ghostfocus_ok() -> OpmResult<()> {
         let mut node = SpotDiagram::default();
-        node.set_isometry(Isometry::identity()).unwrap();
+        node.set_isometry(Isometry::identity())?;
         let mut input = LightRays::default();
         let light_rays = Rays::default();
         input.insert("input_1".into(), vec![light_rays.clone()]);
@@ -455,17 +462,17 @@ mod test {
             &GhostFocusConfig::default(),
             &mut vec![],
             0,
-        )
-        .unwrap();
+        )?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output[0], light_rays);
+        Ok(())
     }
     #[test]
-    fn report() {
+    fn report() -> OpmResult<()> {
         let mut sd = SpotDiagram::default();
         let node_report = sd.node_report("").unwrap();
         assert_eq!(node_report.node_type(), "spot diagram");
@@ -476,14 +483,11 @@ mod test {
         sd.light_data = Some(LightData::Geometric(Rays::default()));
         let node_report = sd.node_report("").unwrap();
         assert!(node_report.properties().contains("Spot diagram"));
-        sd.light_data = Some(LightData::Geometric(
-            Rays::new_uniform_collimated(
-                nanometer!(1053.0),
-                joule!(1.0),
-                &Hexapolar::new(Length::zero(), 1).unwrap(),
-            )
-            .unwrap(),
-        ));
+        sd.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &Hexapolar::new(Length::zero(), 1)?,
+        )?));
         let node_report = sd.node_report("").unwrap();
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
@@ -495,9 +499,10 @@ mod test {
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].level, ReportLevel::Warning);
         assert!(notes[0].message.contains("apodized"));
+        Ok(())
     }
     #[test]
-    fn test_aperture_on_hitmap() {
+    fn test_aperture_on_hitmap() -> OpmResult<()> {
         use crate::{
             analyzers::raytrace::{AnalysisRayTrace, RayTraceConfig},
             apertures::{Aperture, ApertureType},
@@ -513,39 +518,31 @@ mod test {
             ApertureType::Hole,
             None,
             None,
-        )
-        .unwrap();
+        )?;
 
-        sd.set_aperture(&PortType::Input, "input_1", &aperture)
-            .unwrap();
+        sd.set_aperture(&PortType::Input, "input_1", &aperture)?;
         sd.node_attr_mut().set_isometry(Isometry::identity());
 
-        let mut rays = Rays::from(
-            Ray::new(
-                Point3::new(millimeter!(0.0), millimeter!(0.0), millimeter!(-1.0)),
-                Vector3::new(0.0, 0.0, 1.0),
-                nanometer!(550.0),
-                joule!(1.0),
-            )
-            .unwrap(),
-        );
+        let mut rays = Rays::from(Ray::new(
+            Point3::new(millimeter!(0.0), millimeter!(0.0), millimeter!(-1.0)),
+            Vector3::new(0.0, 0.0, 1.0),
+            nanometer!(550.0),
+            joule!(1.0),
+        )?);
 
         // ray outside aperture
-        rays.add_ray(
-            Ray::new(
-                Point3::new(millimeter!(0.0), millimeter!(2.0), millimeter!(-1.0)),
-                Vector3::new(0.0, 0.0, 1.0),
-                nanometer!(550.0),
-                joule!(1.0),
-            )
-            .unwrap(),
-        );
+        rays.add_ray(Ray::new(
+            Point3::new(millimeter!(0.0), millimeter!(2.0), millimeter!(-1.0)),
+            Vector3::new(0.0, 0.0, 1.0),
+            nanometer!(550.0),
+            joule!(1.0),
+        )?);
 
         let analyzer = RayTraceConfig::default();
         let mut incoming_data = LightResult::default();
         incoming_data.insert("input_1".to_string(), LightData::Geometric(rays));
 
-        AnalysisRayTrace::analyze(&mut sd, incoming_data, &analyzer).unwrap();
+        AnalysisRayTrace::analyze(&mut sd, incoming_data, &analyzer)?;
 
         let node_report = sd.node_report("").unwrap();
         let node_props = node_report.properties(); // Returns &Properties
@@ -559,7 +556,7 @@ mod test {
         if let Proptype::HitMap(hm) = hit_map_prop.1.prop() {
             // Should verify that we only have 1 hit point (the one inside the aperture)
             // The one outside should be pruned/not present
-            let merged = hm.get_merged_rays_hit_map().unwrap();
+            let merged = hm.get_merged_rays_hit_map()?;
             let points = merged.hit_map().positions();
             assert_eq!(
                 points.len(),
@@ -573,15 +570,14 @@ mod test {
         } else {
             panic!("Property is not a HitMap");
         }
+        Ok(())
     }
     #[test]
-    fn show_warning_if_energy_analysis() {
+    fn show_warning_if_energy_analysis() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let i_src = scenery.add_node(SourcePort::default()).unwrap();
-        let i_sd = scenery.add_node(SpotDiagram::default()).unwrap();
-        scenery
-            .connect_nodes(i_src, "output_1", i_sd, "input_1", Length::zero())
-            .unwrap();
+        let i_src = scenery.add_node(SourcePort::default())?;
+        let i_sd = scenery.add_node(SpotDiagram::default())?;
+        scenery.connect_nodes(i_src, "output_1", i_sd, "input_1", Length::zero())?;
         let mut doc = OpmDocument::new(scenery);
         let mut config = EnergyConfig::default();
         config.map_source(i_src, EnergyDataBuilder::default());
@@ -601,5 +597,6 @@ mod test {
             note.message,
             "A spot diagram can only be displayed for a ray tracing or ghostfocus analysis."
         );
+        Ok(())
     }
 }

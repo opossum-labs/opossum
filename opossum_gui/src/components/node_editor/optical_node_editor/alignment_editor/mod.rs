@@ -81,13 +81,15 @@ pub fn AlignmentInputs(
     });
 
     if node_type == "reflective grating" {
-        rsx! {GratingAlignmentInputs{
-            alignment_sig_outside: alignment_sig,
-            node_properties_sig,
-            on_save,
-            node_id,
-            readonly
-        }}
+        rsx! {
+            GratingAlignmentInputs {
+                alignment_sig_outside: alignment_sig,
+                node_properties_sig,
+                on_save,
+                node_id,
+                readonly,
+            }
+        }
     } else {
         rsx! {
             RotationAlignmentInputs {

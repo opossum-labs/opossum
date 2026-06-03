@@ -19,7 +19,7 @@ fn main() -> OpmResult<()> {
         "Energy meter 1",
         opossum_core::nodes::Metertype::IdealEnergyMeter,
     )?)?;
-    let i_sd1 = scenery.add_node(SpotDiagram::new("output_1"))?;
+    let i_sd1 = scenery.add_node(SpotDiagram::new("output_1")?)?;
 
     scenery.connect_nodes(i_src, "output_1", i_l1, "input_1", Length::zero())?;
     scenery.connect_nodes(i_l1, "output_1", i_l2, "input_1", millimeter!(300.0))?;
@@ -42,8 +42,8 @@ fn main() -> OpmResult<()> {
         &SplittingConfigBuilder::FixedRatio(0.5),
     )?)?;
     let i_cb_l = cam_box.add_node(ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
-    let i_cb_sd1 = cam_box.add_node(SpotDiagram::new("Nearfield"))?;
-    let i_cb_sd2 = cam_box.add_node(SpotDiagram::new("Farfield"))?;
+    let i_cb_sd1 = cam_box.add_node(SpotDiagram::new("Nearfield")?)?;
+    let i_cb_sd2 = cam_box.add_node(SpotDiagram::new("Farfield")?)?;
     let i_cb_e = cam_box.add_node(EnergyMeter::new(
         "Energy meter",
         opossum_core::nodes::Metertype::IdealEnergyMeter,

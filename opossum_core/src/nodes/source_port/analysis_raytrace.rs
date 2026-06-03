@@ -101,15 +101,13 @@ mod test {
     }
 
     #[test]
-    fn analyze_raytrace_ok() {
+    fn analyze_raytrace_ok() -> OpmResult<()> {
         let mut node = SourcePort::default();
 
         let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
-            Hexapolar::new(millimeter!(10.), 1).unwrap().into(),
-            UniformDist::new(joule!(1.)).unwrap().into(),
-            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])
-                .unwrap()
-                .into(),
+            Hexapolar::new(millimeter!(10.), 1)?.into(),
+            UniformDist::new(joule!(1.))?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         ));
 
         // Wrap the data source inside the new RayDataBuilder
@@ -119,14 +117,13 @@ mod test {
         ray_tracing_config.map_source(node.node_attr().uuid(), ray_data_builder.clone());
 
         let output =
-            AnalysisRayTrace::analyze(&mut node, LightResult::default(), &ray_tracing_config)
-                .unwrap();
+            AnalysisRayTrace::analyze(&mut node, LightResult::default(), &ray_tracing_config)?;
 
         let LightData::Geometric(rays) = output.get("output_1").unwrap().clone() else {
             panic!("Expected LightData::Geometric");
         };
 
-        let rays_from_ray_data_builder = ray_data_builder.build().unwrap();
+        let rays_from_ray_data_builder = ray_data_builder.build()?;
         assert_eq!(
             rays.nr_of_rays(true),
             rays_from_ray_data_builder.nr_of_rays(true)
@@ -135,5 +132,6 @@ mod test {
             rays.total_energy(),
             rays_from_ray_data_builder.total_energy()
         );
+        Ok(())
     }
 }

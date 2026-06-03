@@ -537,7 +537,7 @@ mod test {
 
     use super::*;
     #[test]
-    fn test_short_pass_filter() {
+    fn test_short_pass_filter() -> OpmResult<()> {
         testing_logger::setup();
         assert!(
             EdgeFilter::new(
@@ -561,18 +561,18 @@ mod test {
             None,
             micrometer!(1.0)..micrometer!(5.0),
             micrometer!(1.0),
-        )
-        .unwrap()
+        )?
         .into();
 
-        assert_eq!(s.get_value(&micrometer!(1.0)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&micrometer!(2.0)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&micrometer!(3.0)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&micrometer!(4.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(1.0)), Some(1.0));
+        assert_eq!(s.get_value(&micrometer!(2.0)), Some(1.0));
+        assert_eq!(s.get_value(&micrometer!(3.0)), Some(1.0));
+        assert_eq!(s.get_value(&micrometer!(4.0)), Some(0.0));
+        Ok(())
     }
 
     #[test]
-    fn test_long_pass_filter() {
+    fn test_long_pass_filter() -> OpmResult<()> {
         testing_logger::setup();
         assert!(
             EdgeFilter::new(
@@ -596,17 +596,17 @@ mod test {
             None,
             micrometer!(1.0)..micrometer!(5.0),
             micrometer!(1.0),
-        )
-        .unwrap()
+        )?
         .into();
 
-        assert_eq!(s.get_value(&micrometer!(1.0)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&micrometer!(2.0)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&micrometer!(3.0)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&micrometer!(4.0)).unwrap(), 1.0);
+        assert_eq!(s.get_value(&micrometer!(1.0)), Some(0.0));
+        assert_eq!(s.get_value(&micrometer!(2.0)), Some(0.0));
+        assert_eq!(s.get_value(&micrometer!(3.0)), Some(0.0));
+        assert_eq!(s.get_value(&micrometer!(4.0)), Some(1.0));
+        Ok(())
     }
     #[test]
-    fn test_short_pass_smooth_filter() {
+    fn test_short_pass_smooth_filter() -> OpmResult<()> {
         let range = micrometer!(1.0)..micrometer!(5.0);
         let resolution = micrometer!(0.5);
         assert!(
@@ -638,15 +638,15 @@ mod test {
             Some(micrometer!(1.0)),
             range,
             resolution,
-        )
-        .unwrap()
+        )?
         .into();
 
-        assert_eq!(s.get_value(&micrometer!(1.0)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&micrometer!(2.0)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&micrometer!(2.5)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&micrometer!(3.0)).unwrap(), 0.5);
-        assert_eq!(s.get_value(&micrometer!(3.5)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&micrometer!(4.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(1.0)), Some(1.0));
+        assert_eq!(s.get_value(&micrometer!(2.0)), Some(1.0));
+        assert_eq!(s.get_value(&micrometer!(2.5)), Some(1.0));
+        assert_eq!(s.get_value(&micrometer!(3.0)), Some(0.5));
+        assert_eq!(s.get_value(&micrometer!(3.5)), Some(0.0));
+        assert_eq!(s.get_value(&micrometer!(4.0)), Some(0.0));
+        Ok(())
     }
 }

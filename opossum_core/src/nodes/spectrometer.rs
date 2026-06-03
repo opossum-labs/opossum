@@ -97,19 +97,17 @@ impl Spectrometer {
     /// * `name`: name of the  [`Spectrometer`]
     /// * `spectrometer type`: [`SpectrometerType`] of the  [`Spectrometer`]
     ///
-    /// # Panics
-    /// This function panics if
-    /// - the property `spectrometer type` can not be set.
-    #[must_use]
-    pub fn new(name: &str, spectrometer_type: SpectrometerType) -> Self {
+    /// # Errors
+    ///
+    /// This function returns an error if internally the property `spectrometer type` can not be set.
+    pub fn new(name: &str, spectrometer_type: SpectrometerType) -> OpmResult<Self> {
         let mut spect = Self::default();
         spect
             .node_attr
-            .set_property("spectrometer type", spectrometer_type.into())
-            .unwrap();
+            .set_property("spectrometer type", spectrometer_type.into())?;
         spect.node_attr.set_name(name);
-        spect.update_surfaces().unwrap();
-        spect
+        spect.update_surfaces()?;
+        Ok(spect)
     }
     /// Returns the meter type of this [`Spectrometer`].
     ///
@@ -290,19 +288,19 @@ mod test {
         assert!(node.as_group_mut().is_err());
     }
     #[test]
-    fn new() {
-        let meter = Spectrometer::new("test", SpectrometerType::HR2000);
+    fn new() -> OpmResult<()> {
+        let meter = Spectrometer::new("test", SpectrometerType::HR2000)?;
         assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
         assert_eq!(meter.spectrometer_type(), SpectrometerType::HR2000);
+        Ok(())
     }
     #[test]
-    fn set_meter_type() {
-        let mut meter = Spectrometer::new("test", SpectrometerType::Ideal);
-        meter
-            .set_spectrometer_type(SpectrometerType::HR2000)
-            .unwrap();
+    fn set_meter_type() -> OpmResult<()> {
+        let mut meter = Spectrometer::new("test", SpectrometerType::Ideal)?;
+        meter.set_spectrometer_type(SpectrometerType::HR2000)?;
         assert_eq!(meter.spectrometer_type(), SpectrometerType::HR2000);
+        Ok(())
     }
     #[test]
     fn ports() {
@@ -311,11 +309,12 @@ mod test {
         assert_eq!(meter.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn ports_inverted() {
+    fn ports_inverted() -> OpmResult<()> {
         let mut meter = Spectrometer::default();
-        meter.set_inverted(true).unwrap();
+        meter.set_inverted(true)?;
         assert_eq!(meter.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
+        Ok(())
     }
     #[test]
     fn inverted() -> OpmResult<()> {
@@ -326,50 +325,53 @@ mod test {
         test_analyze_empty::<EnergyMeter>()
     }
     #[test]
-    fn analyze_wrong() {
+    fn analyze_wrong() -> OpmResult<()> {
         let mut node = Spectrometer::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_ok() {
+    fn analyze_ok() -> OpmResult<()> {
         let mut node = Spectrometer::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
     fn analyze_apodazation_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<Spectrometer>()
     }
     #[test]
-    fn analyze_inverse() {
+    fn analyze_inverse() -> OpmResult<()> {
         let mut node = Spectrometer::default();
-        node.set_inverted(true).unwrap();
+        node.set_inverted(true)?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
 
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
-    fn report() {
+    fn report() -> OpmResult<()> {
         let mut sd = Spectrometer::default();
         let node_report = sd.node_report("").unwrap();
         assert_eq!(node_report.node_type(), "spectrometer");
@@ -377,19 +379,17 @@ mod test {
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
-        sd.light_data = Some(LightData::Geometric(
-            Rays::new_uniform_collimated(
-                nanometer!(1053.0),
-                joule!(1.0),
-                &Hexapolar::new(Length::zero(), 1).unwrap(),
-            )
-            .unwrap(),
-        ));
+        sd.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &Hexapolar::new(Length::zero(), 1)?,
+        )?));
         let node_report = sd.node_report("").unwrap();
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 2);
         assert!(node_props.contains("Spectrum"));
         assert!(node_props.contains("Model"));
+        Ok(())
     }
 }

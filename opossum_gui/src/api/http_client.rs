@@ -327,7 +327,7 @@ impl HTTPClient {
     /// This function will return an error if the response .
     pub async fn process_response_raw(&self, res: Response) -> Result<String, String> {
         if res.status().is_success() {
-            Ok(res.text().await.unwrap())
+            Ok(res.text().await.map_err(|e| e.to_string())?)
         } else {
             Err("Error deserializing response to ErrorResponse struct!".to_string())
         }
@@ -347,7 +347,7 @@ impl HTTPClient {
         res: Response,
     ) -> Result<R, String> {
         if res.status().is_success() {
-            let text = res.text().await.unwrap();
+            let text = res.text().await.map_err(|e| e.to_string())?;
             let data: R =
                 ron::from_str(&text).map_err(|e| format!("parsing of data failed: {e}"))?;
             Ok(data)

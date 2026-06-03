@@ -13,7 +13,7 @@ pub fn DynamicListComponent(
         ul {
             class: "list-group border-start dynamic-list",
             id: "stackedAperturesList",
-            for (entry_index , entry) in list_entries.iter().enumerate() {
+            for (entry_index, entry) in list_entries.iter().enumerate() {
                 {
                     let class = if let Some(editing_index) = *edit_index.read()
                         && editing_index == entry_index

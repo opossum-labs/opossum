@@ -156,7 +156,7 @@ fn PolygonPointList(
 ) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "polygonPointList",
-            for (i , point) in polygon_config.clone().points().iter().enumerate() {
+            for (i, point) in polygon_config.clone().points().iter().enumerate() {
                 {
                     let class = if i % 2 == 0 {
                         "list-group-item d-grid text-secondary"

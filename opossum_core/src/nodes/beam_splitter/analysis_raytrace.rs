@@ -101,6 +101,7 @@ mod test {
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
         core_optics::OpticNode,
+        error::OpmResult,
         joule,
         light::{LightData, LightResult, Ray, Rays},
         millimeter, nanometer,
@@ -113,24 +114,25 @@ mod test {
     };
 
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         let mut node = BeamSplitter::default();
         let input = LightResult::default();
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_one_input() {
-        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
-        node.set_isometry(Isometry::identity()).unwrap();
+    fn analyze_one_input() -> OpmResult<()> {
+        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6))?;
+        node.set_isometry(Isometry::identity())?;
         let mut input = LightResult::default();
-        let rays = Rays::from(
-            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap(),
-        );
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0., 0., 0.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
         input.insert("input_1".into(), LightData::Geometric(rays));
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         let result = output.clone().get("out1_trans1_refl2").unwrap().clone();
         let energy = if let LightData::Geometric(r) = result {
             r.total_energy().get::<uom::si::energy::joule>()
@@ -145,24 +147,26 @@ mod test {
             0.0
         };
         assert_eq!(energy, 0.4);
+        Ok(())
     }
     #[test]
-    fn analyze_two_input() {
-        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
-        node.set_isometry(Isometry::identity()).unwrap();
+    fn analyze_two_input() -> OpmResult<()> {
+        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6))?;
+        node.set_isometry(Isometry::identity())?;
         let mut input = LightResult::default();
-        let rays = Rays::from(
-            Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(1.0))
-                .unwrap(),
-        );
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0., 0., -10.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
         input.insert("input_1".into(), LightData::Geometric(rays));
-        let rays = Rays::from(
-            Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(0.5))
-                .unwrap(),
-        );
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0., 0., -10.),
+            nanometer!(1053.0),
+            joule!(0.5),
+        )?);
         input.insert("input_2".into(), LightData::Geometric(rays));
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         let energy_output1 = if let LightData::Geometric(r) =
             output.clone().get("out1_trans1_refl2").unwrap().clone()
         {
@@ -179,25 +183,27 @@ mod test {
             0.0
         };
         assert_abs_diff_eq!(energy_output2, &0.7);
+        Ok(())
     }
     #[test]
-    fn analyze_inverse() {
-        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap();
-        node.set_isometry(Isometry::identity()).unwrap();
-        node.set_inverted(true).unwrap();
+    fn analyze_inverse() -> OpmResult<()> {
+        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6))?;
+        node.set_isometry(Isometry::identity())?;
+        node.set_inverted(true)?;
         let mut input = LightResult::default();
-        let rays = Rays::from(
-            Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(1.0))
-                .unwrap(),
-        );
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0., 0., -10.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
         input.insert("out1_trans1_refl2".into(), LightData::Geometric(rays));
-        let rays = Rays::from(
-            Ray::new_collimated(millimeter!(0., 0., -10.), nanometer!(1053.0), joule!(0.5))
-                .unwrap(),
-        );
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0., 0., -10.),
+            nanometer!(1053.0),
+            joule!(0.5),
+        )?);
         input.insert("out2_trans2_refl1".into(), LightData::Geometric(rays));
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         let energy_output1 =
             if let LightData::Geometric(r) = output.clone().get("input_1").unwrap().clone() {
                 r.total_energy().get::<uom::si::energy::joule>()
@@ -212,19 +218,21 @@ mod test {
                 0.0
             };
         assert_abs_diff_eq!(energy_output2, &0.7);
+        Ok(())
     }
     #[test]
-    fn integration_not_connected_beam_splitter() {
+    fn integration_not_connected_beam_splitter() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let src = scenery.add_node(SourcePort::default()).unwrap();
-        scenery.add_node(BeamSplitter::default()).unwrap(); // add unconnected beamsplitter
+        let src = scenery.add_node(SourcePort::default())?;
+        scenery.add_node(BeamSplitter::default())?; // add unconnected beamsplitter
         let mut document = OpmDocument::new(scenery);
         let mut config = RayTraceConfig::default();
         config.map_source(
             src,
-            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1).unwrap(),
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
         );
         document.add_analyzer(AnalyzerType::RayTrace(config));
-        document.analyze().unwrap();
+        document.analyze()?;
+        Ok(())
     }
 }

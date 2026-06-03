@@ -1204,7 +1204,7 @@ mod test {
             .lock_opm()?
             .node_report(&uuid)
             .unwrap();
-        if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {
+        if let Proptype::Energy(e) = report.properties().get("Energy")? {
             assert_eq!(e, &joule!(1.0));
         } else {
             assert!(false)

@@ -6,7 +6,6 @@ use crate::{
 };
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use std::fmt::Write;
 use std::{fs, path::PathBuf, process::Stdio};
 use tempfile::tempdir;
 use tokio::{
@@ -55,7 +54,7 @@ pub fn SimulationWindow(
                         simulation_success.set(false); // Reset success state for a new run
                         output.set(String::new());
                         output.write().push_str("[INFO] Preparing simulation...\n");
-                        
+
                         let Ok(temp_dir) = tempdir() else {
                             output
                                 .write()
@@ -65,7 +64,7 @@ pub fn SimulationWindow(
                         };
                         let temp_model_file = temp_dir.path().join("temp-opossum.opm");
                         let temp_model_file_clone = temp_model_file.clone();
-                        
+
                         // Corrected function name to reflect the actual project API
                         eval_action_run(
                             api::get_document().await,
@@ -75,7 +74,7 @@ pub fn SimulationWindow(
                                 }
                             }),
                         );
-                        
+
                         let Ok(cli_path) = find_cli_executable() else {
                             output
                                 .write()
@@ -109,8 +108,9 @@ pub fn SimulationWindow(
                         let mut child = match cmd.spawn() {
                             Ok(child) => child,
                             Err(e) => {
-                                writeln!(output.write(), "[ERROR] Failed to spawn command: {e}")
-                                    .unwrap();
+                                output
+                                    .write()
+                                    .push_str(&format!("[ERROR] Failed to spawn command: {e}\n"));
                                 is_running.set(false);
                                 continue;
                             }
@@ -128,38 +128,38 @@ pub fn SimulationWindow(
 
                         loop {
                             tokio::select! {
-                                maybe_action = rx.next() => {
-                                    if matches!(maybe_action, Some(CommandAction::Abort)) {
-                                        if let Some(mut child) = child_handle.take() {
-                                            output.write().push_str("\n[WARN] Aborting process requested by user...\n");
-                                            if let Err(e) = child.kill().await {
-                                                writeln!(output.write(), "[ERROR] Failed to kill process: {e}").unwrap();
-                                            } else {
-                                                output.write().push_str("[INFO] Process aborted successfully.\n");
-                                            }
-                                        }
-                                        break;
-                                    }
-                                }
-                                result = stdout_reader.read(&mut stdout_buf), if !stdout_closed => {
-                                    match result {
-                                        Ok(0) | Err(_) => stdout_closed = true,
-                                        Ok(n) => {
-                                            let s = String::from_utf8_lossy(&stdout_buf[..n]);
-                                            output.write().push_str(&s);
-                                        },
-                                    }
-                                },
-                                result = stderr_reader.read(&mut stderr_buf), if !stderr_closed => {
-                                    match result {
-                                        Ok(0) | Err(_) => stderr_closed = true,
-                                        Ok(n) => {
-                                            let s = String::from_utf8_lossy(&stderr_buf[..n]);
-                                            output.write().push_str(&s);
-                                        },
-                                    }
-                                }
+                                                            maybe_action = rx.next() => {
+                                                                if matches!(maybe_action, Some(CommandAction::Abort)) {
+                                                                    if let Some(mut child) = child_handle.take() {
+                                                                        output.write().push_str("\n[WARN] Aborting process requested by user...\n");
+                                                                        if let Err(e) = child.kill().await {
+                                output.write().push_str(&format!("[ERROR] Failed to kill process: {e}\n"));
+                            } else {
+                                output.write().push_str("[INFO] Process aborted successfully.\n");
                             }
+                                                                    }
+                                                                    break;
+                                                                }
+                                                            }
+                                                            result = stdout_reader.read(&mut stdout_buf), if !stdout_closed => {
+                                                                match result {
+                                                                    Ok(0) | Err(_) => stdout_closed = true,
+                                                                    Ok(n) => {
+                                                                        let s = String::from_utf8_lossy(&stdout_buf[..n]);
+                                                                        output.write().push_str(&s);
+                                                                    },
+                                                                }
+                                                            },
+                                                            result = stderr_reader.read(&mut stderr_buf), if !stderr_closed => {
+                                                                match result {
+                                                                    Ok(0) | Err(_) => stderr_closed = true,
+                                                                    Ok(n) => {
+                                                                        let s = String::from_utf8_lossy(&stderr_buf[..n]);
+                                                                        output.write().push_str(&s);
+                                                                    },
+                                                                }
+                                                            }
+                                                        }
 
                             if stdout_closed && stderr_closed {
                                 break;
@@ -175,10 +175,14 @@ pub fn SimulationWindow(
                         }
 
                         if exit_success {
-                            output.write().push_str("\n[INFO] Simulation finished successfully.\n");
+                            output
+                                .write()
+                                .push_str("\n[INFO] Simulation finished successfully.\n");
                             simulation_success.set(true);
                         } else {
-                            output.write().push_str("\n[ERROR] Simulation terminated with an error or was aborted.\n");
+                            output.write().push_str(
+                                "\n[ERROR] Simulation terminated with an error or was aborted.\n",
+                            );
                             simulation_success.set(false);
                         }
                         is_running.set(false);
@@ -209,34 +213,43 @@ pub fn SimulationWindow(
         if let Some(dir) = project_directory() {
             let mut i = 0;
             let mut opened_any = false;
-            
+
             loop {
                 let report_filename = format!("report_{}.html", i);
                 let report_path = dir.join(&report_filename);
-                
+
                 if report_path.exists() {
                     if let Some(path_str) = report_path.to_str() {
                         match webbrowser::open(path_str) {
                             Ok(_) => {
-                                output.write().push_str(&format!("[INFO] Opened {}\n", report_filename));
+                                output
+                                    .write()
+                                    .push_str(&format!("[INFO] Opened {}\n", report_filename));
                                 opened_any = true;
                             }
                             Err(e) => {
-                                output.write().push_str(&format!("[ERROR] Failed to open {}: {}\n", report_filename, e));
+                                output.write().push_str(&format!(
+                                    "[ERROR] Failed to open {}: {}\n",
+                                    report_filename, e
+                                ));
                             }
                         }
                     }
                     i += 1;
                 } else {
-                    break; 
+                    break;
                 }
             }
-            
+
             if !opened_any {
-                output.write().push_str("[WARN] No reports found to open in the project directory.\n");
+                output
+                    .write()
+                    .push_str("[WARN] No reports found to open in the project directory.\n");
             }
         } else {
-            output.write().push_str("[ERROR] Cannot open reports: No project directory set.\n");
+            output
+                .write()
+                .push_str("[ERROR] Cannot open reports: No project directory set.\n");
         }
     };
 

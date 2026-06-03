@@ -551,7 +551,7 @@ pub fn LabeledSelect(
                 disabled: readonly,
                 "aria-label": label,
                 onchange: move |e| onchange.call(e),
-                for (is_selected , option) in options {
+                for (is_selected, option) in options {
                     option { selected: is_selected, value: option, {option.clone()} }
                 }
             }

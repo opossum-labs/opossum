@@ -202,7 +202,7 @@ mod test {
     use nalgebra::Vector3;
 
     #[test]
-    fn default() {
+    fn default() -> OpmResult<()> {
         let node = Wedge::default();
         assert_eq!(node.name(), "wedge");
         assert_eq!(node.node_type(), "wedge");
@@ -220,7 +220,7 @@ mod test {
         }
         if let Ok(Proptype::RefractiveIndex(p)) = node.properties().get("refractive index") {
             if let RefractiveIndexType::Const(val) = &p {
-                let idx = val.get_refractive_index(nanometer!(1000.0)).unwrap();
+                let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.5);
             } else {
                 assert!(false, "could not read refractive index constant.");
@@ -228,15 +228,16 @@ mod test {
         } else {
             assert!(false, "could not read refractive index.");
         }
+        Ok(())
     }
     #[test]
-    fn new() {
+    fn new() -> OpmResult<()> {
         assert!(
             Wedge::new(
                 "test",
                 millimeter!(-0.1),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5).unwrap()
+                &RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -245,7 +246,7 @@ mod test {
                 "test",
                 millimeter!(f64::NEG_INFINITY),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5).unwrap()
+                &RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -254,7 +255,7 @@ mod test {
                 "test",
                 millimeter!(f64::INFINITY),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5).unwrap()
+                &RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -263,7 +264,7 @@ mod test {
                 "test",
                 millimeter!(f64::NAN),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5).unwrap()
+                &RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -273,7 +274,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(f64::NEG_INFINITY),
-                &RefrIndexConst::new(1.0).unwrap()
+                &RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
@@ -282,7 +283,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(f64::INFINITY),
-                &RefrIndexConst::new(1.0).unwrap()
+                &RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
@@ -291,7 +292,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(f64::NAN),
-                &RefrIndexConst::new(1.0).unwrap()
+                &RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
@@ -300,7 +301,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(90.01),
-                &RefrIndexConst::new(1.0).unwrap()
+                &RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
@@ -309,7 +310,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(-90.01),
-                &RefrIndexConst::new(1.0).unwrap()
+                &RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
@@ -318,7 +319,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(89.99),
-                &RefrIndexConst::new(1.0).unwrap()
+                &RefrIndexConst::new(1.0)?
             )
             .is_ok()
         );
@@ -327,7 +328,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(-89.99),
-                &RefrIndexConst::new(1.0).unwrap()
+                &RefrIndexConst::new(1.0)?
             )
             .is_ok()
         );
@@ -335,9 +336,8 @@ mod test {
             "test",
             millimeter!(0.0),
             degree!(10.0),
-            &RefrIndexConst::new(1.0).unwrap(),
-        )
-        .unwrap();
+            &RefrIndexConst::new(1.0)?,
+        )?;
         assert_eq!(n.name(), "test");
         if let Ok(Proptype::Length(p)) = n.properties().get("center thickness") {
             assert_eq!(p, &millimeter!(0.0));
@@ -351,7 +351,7 @@ mod test {
         }
         if let Ok(Proptype::RefractiveIndex(p)) = n.properties().get("refractive index") {
             if let RefractiveIndexType::Const(val) = &p {
-                let idx = val.get_refractive_index(nanometer!(1000.0)).unwrap();
+                let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.0);
             } else {
                 assert!(false, "could not read refractive index constant.");
@@ -359,6 +359,7 @@ mod test {
         } else {
             assert!(false, "could not read refractive index.");
         }
+        Ok(())
     }
     #[test]
     fn ports() {
@@ -379,46 +380,46 @@ mod test {
         test_analyze_empty::<Wedge>()
     }
     #[test]
-    fn analyze_wrong_port() {
+    fn analyze_wrong_port() -> OpmResult<()> {
         let mut node = Wedge::default();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_energy_ok() {
+    fn analyze_energy_ok() -> OpmResult<()> {
         let mut node = Wedge::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
     fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
         test_analyze_wrong_data_type::<Wedge>("input_1")
     }
     #[test]
-    fn analyze_geometric_ok() {
+    fn analyze_geometric_ok() -> OpmResult<()> {
         let mut node = Wedge::default();
-        node.set_isometry(
-            Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
-        )
-        .unwrap();
+        node.set_isometry(Isometry::new(
+            millimeter!(0.0, 0.0, 10.0),
+            degree!(0.0, 0.0, 0.0),
+        )?)?;
         let mut input = LightResult::default();
-        let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
+        let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
         let input_light = LightData::Geometric(rays);
         input.insert("input_1".into(), input_light.clone());
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
@@ -428,5 +429,6 @@ mod test {
         } else {
             assert!(false, "could not get LightData");
         }
+        Ok(())
     }
 }

@@ -237,7 +237,7 @@ mod test {
     use nalgebra::Vector3;
     use num::Zero;
     #[test]
-    fn default() {
+    fn default() -> OpmResult<()> {
         let mut node = CylindricLens::default();
         assert_eq!(node.name(), "cylindric lens");
         assert_eq!(node.node_type(), "cylindric lens");
@@ -260,13 +260,14 @@ mod test {
         else {
             panic!()
         };
-        assert_eq!((*index).get_refractive_index(Length::zero()).unwrap(), 1.5);
+        assert_eq!((*index).get_refractive_index(Length::zero())?, 1.5);
+        Ok(())
     }
     #[test]
-    fn new() {
+    fn new() -> OpmResult<()> {
         let roc = millimeter!(100.0);
         let ct = millimeter!(11.0);
-        let ref_index = RefrIndexConst::new(1.5).unwrap();
+        let ref_index = RefrIndexConst::new(1.5)?;
 
         // validate center thickness
         assert!(CylindricLens::new("test", roc, roc, millimeter!(-0.1), &ref_index).is_err());
@@ -295,8 +296,8 @@ mod test {
             CylindricLens::new("test", millimeter!(f64::NEG_INFINITY), roc, ct, &ref_index).is_ok()
         );
 
-        let ref_index = RefrIndexConst::new(2.0).unwrap();
-        let node = CylindricLens::new("test", roc, roc, ct, &ref_index).unwrap();
+        let ref_index = RefrIndexConst::new(2.0)?;
+        let node = CylindricLens::new("test", roc, roc, ct, &ref_index)?;
         assert_eq!(node.name(), "test");
         let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
@@ -316,11 +317,10 @@ mod test {
             panic!()
         };
         assert_eq!(
-            (*ref_index_const)
-                .get_refractive_index(Length::zero())
-                .unwrap(),
+            (*ref_index_const).get_refractive_index(Length::zero())?,
             2.0
         );
+        Ok(())
     }
     #[test]
     fn inverted() -> OpmResult<()> {
@@ -331,41 +331,38 @@ mod test {
         test_analyze_empty::<CylindricLens>()
     }
     #[test]
-    fn analyze_wrong_port() {
+    fn analyze_wrong_port() -> OpmResult<()> {
         let mut node = CylindricLens::default();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
     fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
         test_analyze_wrong_data_type::<CylindricLens>("input_1")
     }
     #[test]
-    fn analyze_flatflat() {
+    fn analyze_flatflat() -> OpmResult<()> {
         let mut node = CylindricLens::new(
             "test",
             millimeter!(f64::INFINITY),
             millimeter!(f64::NEG_INFINITY),
             millimeter!(10.0),
-            &RefrIndexConst::new(2.0).unwrap(),
-        )
-        .unwrap();
-        node.set_isometry(Isometry::new_along_z(millimeter!(10.0)).unwrap())
-            .unwrap();
+            &RefrIndexConst::new(2.0)?,
+        )?;
+        node.set_isometry(Isometry::new_along_z(millimeter!(10.0))?)?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
-            &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(10.0), 3)?,
+        )?;
         let mut incoming_data = LightResult::default();
         incoming_data.insert("input_1".into(), LightData::Geometric(rays));
         let output =
-            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())
-                .unwrap();
+            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())?;
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             for ray in rays {
                 assert_eq!(ray.direction(), Vector3::z());
@@ -374,30 +371,28 @@ mod test {
         } else {
             assert!(false);
         }
+        Ok(())
     }
     #[test]
-    fn analyze_biconvex() {
+    fn analyze_biconvex() -> OpmResult<()> {
         // biconvex lens with index of 1.0 (="neutral" lens)
         let mut node = CylindricLens::new(
             "test",
             millimeter!(100.0),
             millimeter!(-100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0).unwrap(),
-        )
-        .unwrap();
-        node.set_isometry(Isometry::identity()).unwrap();
+            &RefrIndexConst::new(1.0)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
-            &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(10.0), 3)?,
+        )?;
         let mut incoming_data = LightResult::default();
         incoming_data.insert("input_1".into(), LightData::Geometric(rays));
         let output =
-            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())
-                .unwrap();
+            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())?;
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             for ray in rays {
                 assert_relative_eq!(ray.direction().x, 0.0);
@@ -407,5 +402,6 @@ mod test {
         } else {
             assert!(false);
         }
+        Ok(())
     }
 }

@@ -554,20 +554,17 @@ mod test {
 
     #[test]
     fn test_new_stack() -> OpmResult<()> {
-        let circle =
-            Aperture::new_circle(meter!(1.0), ApertureType::Hole, Some(meter!(0.0, 0.0)))?;
+        let circle = Aperture::new_circle(meter!(1.0), ApertureType::Hole, Some(meter!(0.0, 0.0)))?;
         let rect = Aperture::new_rectangle(
             meter!(1.0),
             meter!(1.0),
             ApertureType::Hole,
             Some(meter!(0.0, 0.0)),
             None,
-        )
-        ?;
+        )?;
 
         // Stack returns Self directly, not OpmResult
-        let stack =
-            Aperture::new_stack(vec![circle, rect], ApertureType::Obstruction, None, None)?;
+        let stack = Aperture::new_stack(vec![circle, rect], ApertureType::Obstruction, None, None)?;
 
         if let ApertureShape::Stack(config) = stack.shape {
             assert_eq!(config.apertures().len(), 2);
@@ -581,23 +578,20 @@ mod test {
     #[test]
     fn test_is_none() -> OpmResult<()> {
         assert!(ApertureShape::Open.is_none());
-        let circle =
-            Aperture::new_circle(meter!(1.0), ApertureType::Hole, Some(meter!(0.0, 0.0)))?;
+        let circle = Aperture::new_circle(meter!(1.0), ApertureType::Hole, Some(meter!(0.0, 0.0)))?;
         assert!(!circle.is_none());
         Ok(())
     }
     #[test]
     fn test_obstruction_logic() -> OpmResult<()> {
         // A circle as a hole (default)
-        let hole =
-            Aperture::new_circle(meter!(1.0), ApertureType::Hole, Some(meter!(0.0, 0.0)))?;
+        let hole = Aperture::new_circle(meter!(1.0), ApertureType::Hole, Some(meter!(0.0, 0.0)))?;
         // A circle as an obstruction
         let block = Aperture::new_circle(
             meter!(1.0),
             ApertureType::Obstruction,
             Some(meter!(0.0, 0.0)),
-        )
-        ?;
+        )?;
 
         let p_inside = meter!(0.5, 0.0, 0.0);
         let p_outside = meter!(2.0, 0.0, 0.0);

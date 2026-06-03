@@ -337,7 +337,7 @@ fn main() -> OpmResult<()> {
     let lens_1_ref1 = scenery.add_node(lens_1_ref1)?;
 
     let paraxial_lens = scenery.add_node(ParaxialSurface::new("ideal lens", millimeter!(500.))?)?;
-    let spot_diag = scenery.add_node(SpotDiagram::new("spot diagram"))?;
+    let spot_diag = scenery.add_node(SpotDiagram::new("spot diagram")?)?;
     let i_prop_vis = scenery.add_node(RayPropagationVisualizer::new(
         "Ray_positions",
         Some(Vector3::y()),
