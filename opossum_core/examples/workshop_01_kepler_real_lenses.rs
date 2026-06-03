@@ -42,8 +42,7 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     // Define a circular aperture.
-    let aperture =
-        Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
+    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
     // Attach aperture to the first lens input.
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Add first lens to the optical scene.

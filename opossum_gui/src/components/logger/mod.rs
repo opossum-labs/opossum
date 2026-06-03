@@ -49,7 +49,7 @@ where
     E: std::fmt::Display,
 {
     fn log_err_with_context(self, context: &str) {
-        if let Err(e) = self {
+        if let Err(e) = &self {
             OPOSSUM_UI_LOGS
                 .write()
                 .add_log(&format!("Error in {context}: {e}"));

@@ -33,8 +33,7 @@ fn main() -> OpmResult<()> {
     // Create the first lens with a focal length of 75 mm.
     // This lens is part of the Kepler telescope setup.
     let mut lens1 = ParaxialSurface::new("75 mm lens", millimeter!(75.0))?;
-    let aperture =
-        Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
+    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
     // Add the first lens into the optical scene.
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     let i_pl1 = scenery.add_node(lens1)?;

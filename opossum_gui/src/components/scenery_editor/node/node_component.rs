@@ -189,8 +189,8 @@ pub fn Node(
                         class: "node-body",
                         draggable: false,
                         style: format!("height: {}px;", node.node_body_height()),
-                        if node_icon.is_some() {
-                            img { src: node_icon.unwrap(), draggable: false }
+                        if let Some(icon_url) = node_icon {
+                            img { src: icon_url, draggable: false }
                         }
                         NodePorts { node: node.clone(), inverted: node.inverted() }
                     }

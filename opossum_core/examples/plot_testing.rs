@@ -44,7 +44,7 @@ fn main() -> OpmResult<()> {
         .set(&PlotArgs::PlotSize((800, 800)))?;
     let fluence_data = rays.calc_fluence_at_position(&Isometry::identity())?;
     println!("{:?}", fluence_data.peak());
-    let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
+    let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution()?;
 
     let plt_dat = PlotData::ColorMesh {
         x_dat_n: DVector::from_iterator(

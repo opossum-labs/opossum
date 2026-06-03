@@ -370,18 +370,19 @@ mod test {
         assert_relative_eq!(actual_tilt, expected_tilt, epsilon = 1e-12);
     }
     #[test]
-    fn with_rot_from_littrow_impossible_physics() {
+    fn with_rot_from_littrow_impossible_physics() -> OpmResult<()> {
         let line_density = num_per_mm!(5000.0);
         let wavelength = nanometer!(1000.0);
         let diffraction_order = 1;
 
         // x = (1 * 1e-3 mm * 5000 mm^-1) / 2 = 2.5
         // asin(2.5) is NaN!
-        let node = ReflectiveGrating::new("test", line_density, diffraction_order).unwrap();
+        let node = ReflectiveGrating::new("test", line_density, diffraction_order)?;
         let result = node.with_rot_from_littrow(wavelength, degree!(0.0));
 
         let err_msg = result.unwrap_err();
         assert_eq!(err_msg, OpossumError::Analysis("Wavelength 1000 nm is too large for grating constant 5000 lines/mm and order 1 (evanescent waves)".into()));
+        Ok(())
     }
     #[test]
     fn invalid_line_density() {
@@ -411,27 +412,29 @@ mod test {
         test_analyze_empty::<ReflectiveGrating>()
     }
     #[test]
-    fn analyze_wrong() {
+    fn analyze_wrong() -> OpmResult<()> {
         let mut node = ReflectiveGrating::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_energy_ok() {
+    fn analyze_energy_ok() -> OpmResult<()> {
         let mut node = ReflectiveGrating::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
+        Ok(())
     }
     #[test]
     fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
@@ -442,18 +445,15 @@ mod test {
         test_analyze_geometric_no_isometry::<ReflectiveGrating>("input_1");
     }
     #[test]
-    fn analyze_geometric_littrow_ok() {
-        let mut node = ReflectiveGrating::default()
-            .with_rot_from_littrow(nanometer!(1000.), degree!(0.))
-            .unwrap();
-        node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.)).unwrap())
-            .unwrap();
+    fn analyze_geometric_littrow_ok() -> OpmResult<()> {
+        let mut node =
+            ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.), degree!(0.))?;
+        node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.))?)?;
         let mut input = LightResult::default();
-        let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
+        let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
         let input_light = LightData::Geometric(rays);
         input.insert("input_1".into(), input_light.clone());
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
@@ -464,23 +464,21 @@ mod test {
         } else {
             assert!(false, "could not get LightData");
         }
+        Ok(())
     }
 
     #[test]
-    fn analyze_geometric_1deg_from_littrow_ok() {
+    fn analyze_geometric_1deg_from_littrow_ok() -> OpmResult<()> {
         let wvl = nanometer!(1000.);
         let angle_from_littrow = degree!(1.);
-        let mut node = ReflectiveGrating::default()
-            .with_rot_from_littrow(wvl, angle_from_littrow)
-            .unwrap();
-        node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.)).unwrap())
-            .unwrap();
+        let mut node =
+            ReflectiveGrating::default().with_rot_from_littrow(wvl, angle_from_littrow)?;
+        node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.))?)?;
         let mut input = LightResult::default();
-        let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
+        let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
         let input_light = LightData::Geometric(rays);
         input.insert("input_1".into(), input_light.clone());
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
@@ -494,5 +492,6 @@ mod test {
         } else {
             assert!(false, "could not get LightData");
         }
+        Ok(())
     }
 }

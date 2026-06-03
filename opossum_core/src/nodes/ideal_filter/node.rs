@@ -1,4 +1,5 @@
 use opm_macros_lib::OpmNode;
+use uom::si::f64::Ratio;
 
 use crate::{
     analyzers::{
@@ -12,7 +13,7 @@ use crate::{
         LightData, LightRays, LightResult, Rays,
         light_result::{light_rays_to_light_result, light_result_to_light_rays},
     },
-    nodes::{FilterType, NodeRegistration},
+    nodes::{FilterType, NodeRegistration, ideal_filter::filter_types::FilterConst},
     prelude::{FilterTypeBuilder, GhostFocusConfig, OpticNode, PortType, Proptype, RayTraceConfig},
     properties::validator::Validator,
 };
@@ -27,14 +28,14 @@ inventory::submit! {
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - `front`
+///     - `input_1`
 ///   - Outputs
-///     - `rear`
+///     - `output_1`
 ///
 /// ## Properties
 ///   - `name`
 ///   - `inverted`
-///   - `filter type`
+///   - `filter type builder`: Config data for the filter type. See [`FilterTypeBuilder`] for details.
 pub struct IdealFilter {
     node_attr: NodeAttr,
 }
@@ -49,7 +50,7 @@ impl Default for IdealFilter {
                 "filter type builder",
                 "used filter algorithm",
                 Validator::NumericInRange { min: 0., max: 1. },
-                FilterTypeBuilder::Constant(1.0).into(),
+                FilterTypeBuilder::default().into(),
             )
             .unwrap();
         let mut idf = Self { node_attr };
@@ -93,18 +94,13 @@ impl IdealFilter {
     /// # Errors
     ///
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
-    pub fn set_transmission(&mut self, transmission: f64) -> OpmResult<()> {
-        if (0.0..=1.0).contains(&transmission) {
-            self.node_attr.set_property(
-                "filter type builder",
-                FilterTypeBuilder::Constant(transmission).into(),
-            )?;
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "attenuation must be in interval [0.0; 1.0]".into(),
-            ))
-        }
+    pub fn set_transmission(&mut self, transmission: Ratio) -> OpmResult<()> {
+        let transmission_constant = FilterConst::new(transmission)?;
+        self.node_attr.set_property(
+            "filter type builder",
+            FilterTypeBuilder::Constant(transmission_constant).into(),
+        )?;
+        Ok(())
     }
     /// Sets the transmission of this [`IdealFilter`] expressed as optical density.
     ///
@@ -113,15 +109,12 @@ impl IdealFilter {
     ///
     /// This function will return an error if an optical density < 0.0 was given.
     pub fn set_optical_density(&mut self, density: f64) -> OpmResult<()> {
-        if density >= 0.0 {
-            self.node_attr.set_property(
-                "filter type builder",
-                FilterTypeBuilder::Constant(f64::powf(10.0, -density)).into(),
-            )?;
-            Ok(())
-        } else {
-            Err(OpossumError::Other("optical densitiy must be >=0".into()))
-        }
+        let transmission_constant = FilterConst::new((f64::powf(10.0, -density)).into())?;
+        self.node_attr.set_property(
+            "filter type builder",
+            FilterTypeBuilder::Constant(transmission_constant).into(),
+        )?;
+        Ok(())
     }
     /// Returns the transmission factor of this [`IdealFilter`] expressed as optical density for the [`FilterType::Constant`].
     ///
@@ -130,7 +123,7 @@ impl IdealFilter {
     pub fn optical_density(&self) -> Option<f64> {
         self.filter_type()
             .map_or(None, |filter_type| match filter_type {
-                FilterType::Constant(t) => Some(-f64::log10(t)),
+                FilterType::Constant(t) => Some(-f64::log10(t.transmission().value)),
                 FilterType::Spectrum(_) => None,
             })
     }
@@ -256,60 +249,81 @@ mod test {
         nodes::test_helper::test_helper::{
             test_analyze_empty, test_analyze_wrong_data_type, test_inverted,
         },
+        percent,
         prelude::{BandFilter, Isometry},
     };
     use approx::assert_abs_diff_eq;
     use uom::si::energy::joule;
     #[test]
-    fn default() {
+    fn default() -> OpmResult<()> {
         let mut node = IdealFilter::default();
-        assert_eq!(node.filter_type().unwrap(), FilterType::Constant(1.0));
+        assert_eq!(
+            node.filter_type()?,
+            FilterType::Constant(FilterConst::default())
+        );
         assert_eq!(node.name(), "ideal filter");
         assert_eq!(node.node_type(), "ideal filter");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkgray");
         assert!(node.as_group_mut().is_err());
+        Ok(())
     }
     #[test]
-    fn new() {
-        assert!(IdealFilter::new("test", &FilterTypeBuilder::Constant(1.1)).is_err());
-        assert!(IdealFilter::new("test", &FilterTypeBuilder::Constant(-0.1)).is_err());
-        let node = IdealFilter::new("test", &FilterTypeBuilder::Constant(0.8)).unwrap();
+    fn new() -> OpmResult<()> {
+        let node = IdealFilter::new(
+            "test",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(80.0))?),
+        )?;
         assert_eq!(node.name(), "test");
-        assert_eq!(node.filter_type().unwrap(), FilterType::Constant(0.8));
+        assert_eq!(
+            node.filter_type()?,
+            FilterType::Constant(FilterConst::new(percent!(80.0))?)
+        );
+        Ok(())
     }
     #[test]
-    fn set_transmission() {
+    fn set_transmission() -> OpmResult<()> {
         let mut node = IdealFilter::default();
-        assert!(node.set_transmission(-0.1).is_err());
-        assert!(node.set_transmission(1.1).is_err());
-        assert!(node.set_transmission(0.5).is_ok());
-        assert_eq!(node.filter_type().unwrap(), FilterType::Constant(0.5));
+        assert!(node.set_transmission(percent!(-1.0)).is_err());
+        assert!(node.set_transmission(percent!(100.1)).is_err());
+        assert!(node.set_transmission(percent!(50.0)).is_ok());
+        assert_eq!(
+            node.filter_type()?,
+            FilterType::Constant(FilterConst::new(percent!(50.0))?)
+        );
+        Ok(())
     }
     #[test]
-    fn optical_density() {
+    fn optical_density() -> OpmResult<()> {
         let mut node = IdealFilter::default();
         assert_eq!(node.optical_density(), Some(0.0));
-        node.set_transmission(0.1).unwrap();
+        node.set_transmission(percent!(10.0))?;
         assert_eq!(node.optical_density(), Some(1.0));
-        node.set_transmission(0.01).unwrap();
+        node.set_transmission(percent!(1.0))?;
         assert_eq!(node.optical_density(), Some(2.0));
         let node = IdealFilter::new(
             "test",
             &FilterTypeBuilder::Spectrum(BandFilter::default().into()),
-        )
-        .unwrap();
+        )?;
         assert_eq!(node.optical_density(), None);
+        Ok(())
     }
     #[test]
-    fn set_optical_density() {
+    fn set_optical_density() -> OpmResult<()> {
         let mut node = IdealFilter::default();
         assert!(node.set_optical_density(-1.0).is_err());
         assert!(node.set_optical_density(1.0).is_ok());
-        assert_eq!(node.filter_type().unwrap(), FilterType::Constant(0.1));
+        assert_eq!(
+            node.filter_type()?,
+            FilterType::Constant(FilterConst::new(percent!(10.0))?)
+        );
         assert!(node.set_optical_density(f64::NAN).is_err());
         assert!(node.set_optical_density(f64::INFINITY).is_ok());
-        assert_eq!(node.filter_type().unwrap(), FilterType::Constant(0.0));
+        assert_eq!(
+            node.filter_type()?,
+            FilterType::Constant(FilterConst::new(percent!(0.0))?)
+        );
+        Ok(())
     }
     #[test]
     fn inverted() -> OpmResult<()> {
@@ -322,67 +336,72 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn ports_inverted() {
+    fn ports_inverted() -> OpmResult<()> {
         let mut node = IdealFilter::default();
-        node.set_inverted(true).unwrap();
+        node.set_inverted(true)?;
         assert_eq!(node.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["input_1"]);
+        Ok(())
     }
     #[test]
     fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<IdealFilter>()
     }
     #[test]
-    fn analyze_wrong() {
+    fn analyze_wrong() -> OpmResult<()> {
         let mut node = IdealFilter::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
     fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
         test_analyze_wrong_data_type::<IdealFilter>("input_1")
     }
     #[test]
-    fn analyze_energy_ok() {
-        let mut node = IdealFilter::new("test", &FilterTypeBuilder::Constant(0.5)).unwrap();
+    fn analyze_energy_ok() -> OpmResult<()> {
+        let mut node = IdealFilter::new(
+            "test",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(50.0))?),
+        )?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_light.clone());
         assert!(
             AnalysisRayTrace::analyze(&mut node, input.clone(), &RayTraceConfig::default())
                 .is_err()
         );
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        let expected_output_light = LightData::Energy(create_he_ne_spec(0.5).unwrap());
+        let expected_output_light = LightData::Energy(create_he_ne_spec(0.5)?);
         assert_eq!(*output, expected_output_light);
+        Ok(())
     }
     #[test]
-    fn analyzer_geometric_fixed() {
-        let mut node = IdealFilter::new("test", &FilterTypeBuilder::Constant(0.3)).unwrap();
-        node.set_isometry(Isometry::identity()).unwrap();
+    fn analyzer_geometric_fixed() -> OpmResult<()> {
+        let mut node = IdealFilter::new(
+            "test",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(30.0))?),
+        )?;
+        node.set_isometry(Isometry::identity())?;
         let mut input = LightResult::default();
-        let input_light = LightData::Geometric(
-            Rays::new_uniform_collimated(
-                nanometer!(1054.0),
-                joule!(1.0),
-                &Hexapolar::new(millimeter!(5.0), 1).unwrap(),
-            )
-            .unwrap(),
-        );
+        let input_light = LightData::Geometric(Rays::new_uniform_collimated(
+            nanometer!(1054.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(5.0), 1)?,
+        )?);
         input.insert("input_1".into(), input_light.clone());
         assert!(
             AnalysisEnergy::analyze(&mut node, input.clone(), &EnergyConfig::default()).is_err()
         );
-        let output =
-            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
@@ -392,21 +411,24 @@ mod test {
         } else {
             panic!("wrong data LightData format")
         }
+        Ok(())
     }
     #[test]
-    fn analyze_inverse() {
-        let mut node = IdealFilter::new("test", &FilterTypeBuilder::Constant(0.5)).unwrap();
-        node.set_inverted(true).unwrap();
+    fn analyze_inverse() -> OpmResult<()> {
+        let mut node = IdealFilter::new(
+            "test",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(50.0))?),
+        )?;
+        node.set_inverted(true)?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light.clone());
-        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
-        assert!(output.is_some());
-        let output = output.clone().unwrap();
-        let expected_output_light = LightData::Energy(create_he_ne_spec(0.5).unwrap());
-        assert_eq!(*output, expected_output_light);
+        let expected_output_light = LightData::Energy(create_he_ne_spec(0.5)?);
+        assert_eq!(output, Some(&expected_output_light));
+        Ok(())
     }
 }

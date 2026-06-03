@@ -81,6 +81,7 @@ inventory::submit! {
 pub struct NodeGroup {
     #[serde(flatten)]
     node_attr: NodeAttr,
+    #[serde(default, skip_serializing_if = "OpticGraph::is_empty")]
     graph: OpticGraph,
     #[serde(skip)]
     input_port_distances: BTreeMap<String, Length>,
@@ -1203,7 +1204,7 @@ mod test {
             .lock_opm()?
             .node_report(&uuid)
             .unwrap();
-        if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {
+        if let Proptype::Energy(e) = report.properties().get("Energy")? {
             assert_eq!(e, &joule!(1.0));
         } else {
             assert!(false)

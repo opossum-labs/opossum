@@ -402,7 +402,7 @@ impl Spectrum {
             let bin_width = bin[1].0 - bin[0].0;
             let bin_center = bin[0].0;
             let bin_weight = bin[0].1 * bin_width;
-            weighted_sum += bin_center * bin_weight;
+            weighted_sum = bin_center.mul_add(bin_weight, weighted_sum);
             total_weight += bin_weight;
         }
         micrometer!(weighted_sum / total_weight)
@@ -449,7 +449,7 @@ impl Spectrum {
     pub fn scale_vertical(&mut self, factor: &f64) -> OpmResult<()> {
         if factor < &0.0 {
             return Err(OpossumError::Spectrum(
-                "scaling factor mus be >= 0.0".into(),
+                "scaling factor must be >= 0.0".into(),
             ));
         }
         let spectrum = self
@@ -566,7 +566,9 @@ impl Spectrum {
     /// This function will return an error if .
     pub fn filter_with_type(&mut self, filter_type: &crate::nodes::FilterType) -> OpmResult<()> {
         match filter_type {
-            crate::nodes::FilterType::Constant(t) => self.scale_vertical(t)?,
+            crate::nodes::FilterType::Constant(t) => {
+                self.scale_vertical(&t.transmission().value)?;
+            }
             crate::nodes::FilterType::Spectrum(s2) => {
                 self.filter(s2);
             }
@@ -717,14 +719,13 @@ impl Display for Spectrum {
 impl Debug for Spectrum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_length = Length::format_args(nanometer, Abbreviation);
-        for value in self.data() {
+        for (wavelength, value) in self.data() {
             writeln!(
                 f,
                 "{:7.2} -> {}",
-                fmt_length.with(micrometer!(value.0)),
-                value.1
-            )
-            .unwrap();
+                fmt_length.with(micrometer!(*wavelength)),
+                value
+            )?;
         }
         Ok(())
     }
@@ -794,8 +795,8 @@ mod test {
     };
     use approx::{AbsDiffEq, assert_abs_diff_eq, assert_relative_eq};
     use testing_logger;
-    fn prep() -> Spectrum {
-        Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5)).unwrap()
+    fn prep() -> OpmResult<Spectrum> {
+        Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5))
     }
     #[test]
     fn test_merge_spectra() -> OpmResult<()> {
@@ -947,30 +948,34 @@ mod test {
         assert!(s.is_err());
     }
     #[test]
-    fn range() {
-        let s = prep();
-        assert_eq!(s.range(), micrometer!(1.0)..micrometer!(4.0))
+    fn range() -> OpmResult<()> {
+        let s = prep()?;
+        assert_eq!(s.range(), micrometer!(1.0)..micrometer!(4.0));
+        Ok(())
     }
     #[test]
-    fn estimate_resolution() {
-        assert_eq!(prep().average_resolution().get::<micrometer>(), 0.5);
+    fn estimate_resolution() -> OpmResult<()> {
+        assert_eq!(prep()?.average_resolution().get::<micrometer>(), 0.5);
+        Ok(())
     }
     #[test]
-    fn set_single_peak() {
-        let mut s = prep();
+    fn set_single_peak() -> OpmResult<()> {
+        let mut s = prep()?;
         assert_eq!(s.add_single_peak(micrometer!(2.0), 1.0).is_ok(), true);
         assert_eq!(s.data[2].1, 2.0);
+        Ok(())
     }
     #[test]
-    fn set_single_peak_interpolated() {
-        let mut s = prep();
+    fn set_single_peak_interpolated() -> OpmResult<()> {
+        let mut s = prep()?;
         assert_eq!(s.add_single_peak(micrometer!(2.25), 1.0).is_ok(), true);
         assert_eq!(s.data[2].1, 1.0);
         assert_eq!(s.data[3].1, 1.0);
+        Ok(())
     }
     #[test]
     fn set_single_peak_additive() -> OpmResult<()> {
-        let mut s = prep();
+        let mut s = prep()?;
         s.add_single_peak(micrometer!(2.0), 1.0)?;
         s.add_single_peak(micrometer!(2.0), 1.0)?;
         assert_eq!(s.data[2].1, 4.0);
@@ -978,7 +983,7 @@ mod test {
     }
     #[test]
     fn set_single_peak_interp_additive() -> OpmResult<()> {
-        let mut s = prep();
+        let mut s = prep()?;
         s.add_single_peak(micrometer!(2.0), 1.0)?;
         s.add_single_peak(micrometer!(2.25), 1.0)?;
         assert_eq!(s.data[2].1, 3.0);
@@ -986,15 +991,16 @@ mod test {
         Ok(())
     }
     #[test]
-    fn set_single_peak_lower_bound() {
-        let mut s = prep();
+    fn set_single_peak_lower_bound() -> OpmResult<()> {
+        let mut s = prep()?;
         assert_eq!(s.add_single_peak(micrometer!(1.0), 1.0).is_ok(), true);
         assert_eq!(s.data[0].1, 2.0);
+        Ok(())
     }
     #[test]
-    fn set_single_peak_wrong_params() {
+    fn set_single_peak_wrong_params() -> OpmResult<()> {
         testing_logger::setup();
-        let mut s = prep();
+        let mut s = prep()?;
         assert!(s.add_single_peak(micrometer!(0.5), 1.0).is_ok());
         check_logs(
             log::Level::Warn,
@@ -1006,6 +1012,7 @@ mod test {
             vec!["peak wavelength is not in spectrum range. Spectrum unmodified."],
         );
         assert!(s.add_single_peak(micrometer!(1.5), -1.0).is_err());
+        Ok(())
     }
     #[test]
     fn add_lorentzian() -> OpmResult<()> {
@@ -1018,8 +1025,8 @@ mod test {
         Ok(())
     }
     #[test]
-    fn add_lorentzian_wrong_params() {
-        let mut s = prep();
+    fn add_lorentzian_wrong_params() -> OpmResult<()> {
+        let mut s = prep()?;
         assert!(
             s.add_lorentzian_peak(micrometer!(-5.0), micrometer!(0.5), 2.0)
                 .is_err()
@@ -1032,10 +1039,11 @@ mod test {
             s.add_lorentzian_peak(micrometer!(2.0), micrometer!(0.5), -2.0)
                 .is_err()
         );
+        Ok(())
     }
     #[test]
     fn total_energy() -> OpmResult<()> {
-        let mut s = prep();
+        let mut s = prep()?;
         s.add_single_peak(micrometer!(2.0), 1.0)?;
         assert_eq!(s.total_energy(), 1.0);
         Ok(())
@@ -1084,9 +1092,10 @@ mod test {
         Ok(())
     }
     #[test]
-    fn scale_vertical_negative() {
-        let mut s = prep();
+    fn scale_vertical_negative() -> OpmResult<()> {
+        let mut s = prep()?;
         assert!(s.scale_vertical(&-0.5).is_err());
+        Ok(())
     }
     #[test]
     fn calc_ratio_test() {
@@ -1169,9 +1178,9 @@ mod test {
     }
     #[test]
     fn add() -> OpmResult<()> {
-        let mut s = prep();
+        let mut s = prep()?;
         s.add_single_peak(micrometer!(1.75), 1.0)?;
-        let mut s2 = prep();
+        let mut s2 = prep()?;
         s2.add_single_peak(micrometer!(2.25), 0.5)?;
         s.add(&s2);
         assert_eq!(s.data_vec(), vec![0.0, 1.0, 1.5, 0.5, 0.0, 0.0, 0.0]);
@@ -1179,17 +1188,17 @@ mod test {
     }
     #[test]
     fn sub() -> OpmResult<()> {
-        let mut s = prep();
+        let mut s = prep()?;
         s.add_single_peak(micrometer!(1.75), 1.0)?;
-        let mut s2 = prep();
+        let mut s2 = prep()?;
         s2.add_single_peak(micrometer!(2.25), 0.5)?;
         s.sub(&s2);
         assert_eq!(s.data_vec(), vec![0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 0.0]);
         Ok(())
     }
     #[test]
-    fn serialize() {
-        let s = prep();
+    fn serialize() -> OpmResult<()> {
+        let s = prep()?;
         let s_ron =
             ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).unwrap();
         assert_eq!(
@@ -1209,6 +1218,7 @@ mod test {
 )"
             .to_string()
         );
+        Ok(())
     }
     #[test]
     fn deserialize() {

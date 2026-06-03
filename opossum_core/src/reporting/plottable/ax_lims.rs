@@ -137,7 +137,7 @@ impl AxLims {
         if max.relative_eq(&min, f64::EPSILON, f64::EPSILON) {
             ax_range = max.abs();
             min = max - ax_range / 2.;
-            max += ax_range * 0.5;
+            max = ax_range.mul_add(0.5, max);
         }
 
         //check if for some reason maximum is 0, then set it to 1, so that the axis spans at least some distance

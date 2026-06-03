@@ -28,7 +28,9 @@ impl AnalysisEnergy for SourcePort {
 
 #[cfg(test)]
 mod test {
-    use crate::{light::spectrum_helper::create_he_ne_spec, prelude::EnergyDataBuilder};
+    use crate::{
+        error::OpmResult, light::spectrum_helper::create_he_ne_spec, prelude::EnergyDataBuilder,
+    };
 
     use super::*;
     #[test]
@@ -44,18 +46,19 @@ mod test {
         );
     }
     #[test]
-    fn analyze_energy_ok() {
-        let light_builder = EnergyDataBuilder::Raw(create_he_ne_spec(1.0).unwrap().into());
+    fn analyze_energy_ok() -> OpmResult<()> {
+        let light_builder = EnergyDataBuilder::Raw(create_he_ne_spec(1.0)?.into());
         let mut node = SourcePort::default();
         let mut config = EnergyConfig::default();
         config.map_source(node.node_attr().uuid(), light_builder.clone());
-        let output = AnalysisEnergy::analyze(&mut node, LightResult::default(), &config).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, LightResult::default(), &config)?;
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let LightData::Energy(spectrum) = output.clone().unwrap() else {
             panic!("wrong type for output")
         };
-        assert_eq!(*spectrum, light_builder.build().unwrap());
+        assert_eq!(*spectrum, light_builder.build()?);
+        Ok(())
     }
 }

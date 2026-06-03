@@ -1,23 +1,34 @@
-use std::fmt::Display;
+use std::{collections::BTreeMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::{nodes::ConnectionInfo, opm_document::AnalyzerInfo, prelude::AnalyzerType};
+use crate::{
+    analyzers::Analyzable,
+    coatings::CoatingType,
+    core_optics::optic_ports::{PortConfig, ValidatedLidt},
+    nodes::ConnectionInfo,
+    opm_document::AnalyzerInfo,
+    prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
+};
+
+// ============================================================================
+// GENERAL TYPES & ERRORS
+// ============================================================================
 
 /// Structure holding the version information
 #[derive(ToSchema, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct VersionInfo {
-    /// version of the OPOSSUM API backend
+    /// Version of the OPOSSUM API backend
     #[schema(example = "0.1.0")]
     pub backend_version: String,
-    /// version of the OPOSSUM library (possibly including the git hash)
+    /// Version of the OPOSSUM library (possibly including the git hash)
     #[schema(example = "0.6.0-18-g80cb67f (2025/02/19 15:29)")]
     pub opossum_version: String,
     /// Most current software version on GitHub (`None`, if not accessible)
     pub latest_github_version: Option<String>,
-    /// URL of the release informateion (`None`, if not accessible)
+    /// URL of the release information (`None`, if not accessible)
     pub release_url: Option<String>,
     /// True, if GitHub Version is newer than the local one
     pub update_available: bool,
@@ -39,47 +50,96 @@ impl VersionInfo {
 /// Structure holding information about an (optical) node type
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct NodeType {
+    /// The internal identifier of the node type
+    #[schema(example = "Lens")]
     pub node_type: String,
+    /// A human-readable description of the node type
     pub description: String,
 }
+
 impl Display for NodeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.node_type)
     }
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Clone, Debug, PartialEq)]
+/// Standardized error response for API failures
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct ErrorResponse {
+    /// HTTP status code
+    #[schema(example = 400)]
+    pub status: u16,
+    /// High-level category of the error (e.g., `Parse Error`, `OpticScenery`)
+    #[schema(example = "OpticScenery")]
+    pub category: String,
+    /// Detailed error message
+    #[schema(example = "UUID not found in the current model")]
+    pub message: String,
+}
+
+impl ErrorResponse {
+    #[must_use]
+    pub fn new(status: u16, category: &str, message: &str) -> Self {
+        Self {
+            status,
+            category: category.to_string(),
+            message: message.to_string(),
+        }
+    }
+    #[must_use]
+    pub fn not_found() -> Self {
+        Self::new(404, "General", "Resource not found")
+    }
+}
+
+// ============================================================================
+// NODES & PROPERTIES
+// ============================================================================
+
+/// Comprehensive information about an optical node in the scenery
+#[derive(Serialize, Deserialize, Default, ToSchema, Clone, Debug, PartialEq)]
 pub struct NodeInfo {
-    uuid: Uuid,
-    name: String,
-    inverted: bool,
-    node_type: String,
-    input_ports: Vec<String>,
-    output_ports: Vec<String>,
-    gui_position: Option<(f64, f64)>,
+    pub uuid: Uuid,
+    #[schema(example = "Main Focusing Lens")]
+    pub name: String,
+    #[schema(example = "Lens")]
+    pub node_type: String,
+    /// Indicates if the node is physically inverted in the optical path
+    pub inverted: bool,
+    /// The 2D coordinates on the frontend canvas
+    #[schema(example = json!([100.0, 200.0]))]
+    pub gui_position: Option<(f64, f64)>,
+    /// Global 3D position and rotation
+    #[schema(value_type = Option<Object>)]
+    pub isometry: Option<Isometry>,
+    /// Local alignment (decenter and tilt)
+    #[schema(value_type = Option<Object>)]
+    pub alignment: Option<Isometry>,
+    /// List of available input port names
+    pub input_ports: Vec<String>,
+    /// List of available output port names
+    pub output_ports: Vec<String>,
 }
 
 impl NodeInfo {
-    #[must_use]
-    pub const fn new(
-        uuid: Uuid,
-        name: String,
-        inverted: bool,
-        node_type: String,
-        input_ports: Vec<String>,
-        output_ports: Vec<String>,
-        gui_position: Option<(f64, f64)>,
+    /// Create a `NodeInfo` struct from this [`OpticNode`]
+    pub fn from_analyzable(
+        node: &dyn Analyzable,
+        gui_position: Option<Option<(f64, f64)>>,
     ) -> Self {
         Self {
-            uuid,
-            name,
-            inverted,
-            node_type,
-            input_ports,
-            output_ports,
-            gui_position,
+            uuid: node.node_attr().uuid(),
+            name: node.name(),
+            inverted: node.inverted(),
+            node_type: node.node_type(),
+            input_ports: node.ports().names(&PortType::Input),
+            output_ports: node.ports().names(&PortType::Output),
+            gui_position: gui_position.unwrap_or_else(|| node.gui_position().map(|p| (p.x, p.y))),
+            isometry: node.isometry(),
+            alignment: node.alignment(),
         }
     }
+
     #[must_use]
     pub const fn uuid(&self) -> Uuid {
         self.uuid
@@ -115,11 +175,43 @@ impl NodeInfo {
         self.output_ports = outputs;
     }
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
-pub struct NewRefNode {
-    referring_node: Uuid,
+
+/// Request payload to create a standard optical node
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
+pub struct NewNode {
+    #[schema(example = "Lens")]
+    node_type: String,
+    #[schema(example = json!([0.0, 0.0]))]
     gui_position: (f64, f64),
 }
+
+impl NewNode {
+    #[must_use]
+    pub const fn new(node_type: String, gui_position: (f64, f64)) -> Self {
+        Self {
+            node_type,
+            gui_position,
+        }
+    }
+    #[must_use]
+    pub fn node_type(&self) -> &str {
+        &self.node_type
+    }
+    #[must_use]
+    pub const fn gui_position(&self) -> (f64, f64) {
+        self.gui_position
+    }
+}
+
+/// Request payload to create a reference node pointing to an existing node
+#[derive(Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy)]
+pub struct NewRefNode {
+    /// UUID of the optical node this reference points to
+    referring_node: Uuid,
+    #[schema(example = json!([50.0, -20.0]))]
+    gui_position: (f64, f64),
+}
+
 impl NewRefNode {
     #[must_use]
     pub const fn new(referring_node: Uuid, gui_position: (f64, f64)) -> Self {
@@ -137,20 +229,61 @@ impl NewRefNode {
         self.referring_node
     }
 }
-/// Connection Information
+
+/// Request payload for partial updates of a node's properties
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
+pub struct UpdateNodeRequest {
+    /// The new name of the node
+    #[schema(example = "Lens 1")]
+    pub name: Option<String>,
+
+    /// The new inverted status of the node
+    #[schema(example = true)]
+    pub inverted: Option<bool>,
+
+    /// The new base isometry (position and rotation in 3D space)
+    #[schema(value_type = Option<Object>)]
+    pub isometry: Option<Option<Isometry>>, // Option<Option> erlaubt explizites Null-Setzen!
+
+    /// The new alignment isometry (local decenter and tilt)
+    #[schema(value_type = Option<Object>)]
+    pub alignment: Option<Isometry>,
+
+    /// The GUI position on the 2D canvas
+    #[schema(example = json!([100.5, 200.0]))]
+    pub gui_position: Option<Option<(f64, f64)>>,
+}
+
+/// Response payload containing the physical and custom properties of a node
+#[derive(Debug, Serialize, ToSchema, Deserialize)]
+pub struct NodePropertiesResponse {
+    #[schema(value_type = Object)] // Hides internal Properties structure from Utoipa
+    pub properties: Properties,
+    /// True if the properties belong to a reference node
+    pub is_reference: bool,
+}
+
+// ============================================================================
+// CONNECTIONS
+// ============================================================================
+
+/// Information about a connection between two optical ports
 #[derive(ToSchema, Clone, PartialEq, Serialize, Deserialize, Debug)]
 pub struct ConnectInfo {
     /// UUID of the source node
     src_uuid: Uuid,
-    /// name of the (outgoing) source port
+    /// Name of the (outgoing) source port
+    #[schema(example = "output_1")]
     src_port: String,
     /// UUID of the target node
     target_uuid: Uuid,
-    /// name of the (incoming) target port
+    /// Name of the (incoming) target port
+    #[schema(example = "input_1")]
     target_port: String,
-    /// geometric distance between nodes (optical axis) in meters.
+    /// Geometric distance between nodes (optical axis) in meters
+    #[schema(example = 0.05)]
     distance: f64,
-    /// Flag for reference-node indication. true if target node is a reference node.
+    /// True if the target node is a reference node
     target_is_reference: bool,
 }
 
@@ -217,32 +350,112 @@ impl ConnectInfo {
         self.target_is_reference
     }
 }
-#[derive(Clone, Serialize, Deserialize, ToSchema, Debug)]
-pub struct NewNode {
-    node_type: String,
-    gui_position: (f64, f64),
+
+/// Request payload to update the distance of an existing connection
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct UpdateConnectionRequest {
+    /// UUID of the source node (used to identify the connection)
+    pub src_uuid: Uuid,
+    /// Name of the source port (used to identify the connection)
+    #[schema(example = "output_1")]
+    pub src_port: String,
+    /// The new geometric distance in meters
+    #[schema(example = 0.15)]
+    pub distance: f64,
 }
-impl NewNode {
-    #[must_use]
-    pub const fn new(node_type: String, gui_position: (f64, f64)) -> Self {
-        Self {
-            node_type,
-            gui_position,
-        }
-    }
-    #[must_use]
-    pub fn node_type(&self) -> &str {
-        &self.node_type
-    }
-    #[must_use]
-    pub const fn gui_position(&self) -> (f64, f64) {
-        self.gui_position
-    }
+// ============================================================================
+// PORTS & PORT MAPPINGS
+// ============================================================================
+
+/// Response payload containing port configurations (Aperture, Coating, LIDT)
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct NodePortsResponse {
+    /// The input ports of the node (accounts for node inversion)
+    pub inputs: BTreeMap<String, PortConfig>,
+    /// The output ports of the node (accounts for node inversion)
+    pub outputs: BTreeMap<String, PortConfig>,
 }
+
+/// Request payload for partial updates of a specific port
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
+pub struct UpdatePortRequest {
+    /// The new aperture of the port
+    pub aperture: Option<Aperture>,
+    /// The new coating of the port
+    pub coating: Option<CoatingType>,
+    /// The new Laser Induced Damage Threshold
+    #[schema(value_type = Option<f64>)]
+    pub lidt: Option<ValidatedLidt>,
+}
+
+/// Request payload to expose an internal node's port to a parent group
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+pub struct AddPortMappingRequest {
+    pub internal_node_id: Uuid,
+    #[schema(example = "input_1")]
+    pub internal_port_name: String,
+    #[schema(example = "group_in_1")]
+    pub external_port_name: String,
+    pub port_type: PortType,
+}
+
+/// Query parameters to remove a port mapping
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
+pub struct RemovePortMapQuery {
+    /// External port name of the group port mapping
+    #[schema(example = "group_in_1")]
+    pub external_port_name: String,
+    /// Type of the port (Input or Output)
+    pub port_type: PortType,
+}
+
+/// Response payload containing the internal-to-external port mappings of a group
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct PortMappingsResponse {
+    pub inputs: PortMap,
+    pub outputs: PortMap,
+}
+
+/// Response payload containing lists of available mapped port names
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct PortNamesResponse {
+    pub inputs: Vec<String>,
+    pub outputs: Vec<String>,
+}
+
+/// Response payload after removing a port map, containing affected connections
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RemovePortMapResponse {
+    /// True if a mapping was actually found and removed
+    pub port_removed: bool,
+    /// Connections that were disconnected as a result
+    pub connections: Vec<ConnectInfo>,
+    /// UUID of the parent group
+    pub parent_group_uuid: Uuid,
+}
+
+// ============================================================================
+// ANALYZERS
+// ============================================================================
+
+/// Request payload to create a new analyzer
 #[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct NewAnalyzerInfo {
     pub analyzer_type: AnalyzerType,
+    #[schema(example = json!([0.0, 0.0]))]
     pub gui_position: (f64, f64),
+}
+
+/// Request payload for partial updates of an analyzer's properties
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
+pub struct UpdateAnalyzerInfo {
+    // The new Analyzertype including its configuration
+    #[schema(value_type = Option<Object>)]
+    pub analyzer_type: Option<AnalyzerType>,
+
+    // The new position of the analyzer
+    #[schema(example = json!([0.0, 0.0]))]
+    pub gui_position: Option<Option<(f64, f64)>>,
 }
 
 impl From<AnalyzerInfo> for NewAnalyzerInfo {
@@ -267,52 +480,26 @@ impl NewAnalyzerInfo {
     }
 }
 
-/// Structure holding an error mesaage
-#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
-pub struct ErrorResponse {
-    /// HTTP status
-    #[schema(example = "400")]
-    status: u16,
-    /// Error category (normally corresponds to `OpossumError` enum)
-    #[schema(example = "OpticScenery")]
-    category: String,
-    /// Description message of the error
-    message: String,
+// ============================================================================
+// MACRO OPERATIONS
+// ============================================================================
+
+/// Request payload to group existing nodes into a new sub-group
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct ConvertToGroupRequest {
+    /// UUID of the group in which the nodes are currently contained
+    pub group_id: Uuid,
+    /// List of node UUIDs that should be wrapped into a new group node
+    pub nodes_to_convert: Vec<Uuid>,
 }
-impl ErrorResponse {
-    #[must_use]
-    pub fn new(status: u16, category: &str, message: &str) -> Self {
-        Self {
-            status,
-            category: category.to_string(),
-            message: message.to_string(),
-        }
-    }
-    #[must_use]
-    pub fn not_found() -> Self {
-        Self {
-            status: 404, // StatusCode::NOT_FOUND,
-            category: "api not found".to_string(),
-            message: "the OPOSSUM API endpoint was not found".to_string(),
-        }
-    }
-    #[must_use]
-    pub const fn status(&self) -> u16 {
-        self.status
-    }
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn category(&self) -> &str {
-        &self.category
-    }
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-}
-impl std::fmt::Display for ErrorResponse {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
-    }
+
+/// Request payload to move nodes between different groups
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct MoveNodesRequest {
+    /// UUID of the source group from which the nodes will be removed
+    pub source_group_id: Uuid,
+    /// UUID of the destination group where nodes will be inserted
+    pub target_group_id: Uuid,
+    /// List of node UUIDs to move
+    pub nodes_to_move: Vec<Uuid>,
 }

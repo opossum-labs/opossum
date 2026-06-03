@@ -4,8 +4,9 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let cam_aperture = Aperture::new_rectangle(
         millimeter!(11.33),
         millimeter!(7.13),
-        millimeter!(0., 0.),
         ApertureType::Hole,
+        None,
+        None,
     )?;
 
     let mut cb = NodeGroup::new("CamBox 1w");
@@ -24,7 +25,7 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
         &SplittingConfigBuilder::FixedRatio(0.04),
     )?)?;
     let ff_lens = cb.add_node(ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
-    let mut node = SpotDiagram::new("FF cam");
+    let mut node = SpotDiagram::new("FF cam")?;
     node.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
     let ff_cam = cb.add_node(node)?;
 
@@ -62,7 +63,7 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
         "nf bs",
         &SplittingConfigBuilder::FixedRatio(0.5),
     )?)?;
-    let mut node = SpotDiagram::new("NF cam");
+    let mut node = SpotDiagram::new("NF cam")?;
     node.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
     node.set_property("plot aperture", true.into())?;
     let nf_cam = cb.add_node(node)?;

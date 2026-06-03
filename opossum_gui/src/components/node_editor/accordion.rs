@@ -4,28 +4,29 @@ use dioxus::prelude::*;
 #[component]
 pub fn AccordionItem(
     elements: Vec<Element>,
-    header: &'static str,
-    header_id: &'static str,
-    parent_id: &'static str,
-    content_id: &'static str,
+    header: String,
+    header_id: String,
+    parent_id: String,
+    content_id: String,
+    level: usize,
 ) -> Element {
     rsx! {
         div { class: "accordion-item bg-dark text-light",
-            h6 { class: "accordion-header", id: header_id,
+            h6 { class: "accordion-header", id: &header_id,
                 button {
-                    class: "accordion-button collapsed bg-dark text-light",
+                    class: "accordion-button accordion-button-h{level} collapsed bg-dark text-light",
                     r#type: "button",
                     "data-mdb-collapse-init": "",
                     "data-mdb-target": format!("#{content_id}"),
                     "aria-expanded": "false",
-                    "aria-controls": content_id,
+                    "aria-controls": &content_id,
                     {header}
                 }
             }
             div {
-                id: content_id,
+                id: &content_id,
                 class: "accordion-collapse collapse  bg-dark",
-                "aria-labelledby": header_id,
+                "aria-labelledby": &header_id,
                 "data-mdb-parent": format!("#{parent_id}"),
                 div { class: "accordion-body  bg-dark",
                     for element in elements {

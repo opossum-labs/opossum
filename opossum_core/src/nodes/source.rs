@@ -94,8 +94,9 @@ impl Source {
     ///
     /// The light to be emitted from this source is defined in a [`LightData`] structure.
     ///
-    /// # Panics
-    /// Panics if [`Properties`](crate::properties::Properties) `light data` can not be set
+    /// # Errors
+    ///
+    /// This function returns an error if internally [`Properties`](crate::properties::Properties) `light data` can not be set
     ///
     /// ## Example
     ///
@@ -106,16 +107,14 @@ impl Source {
     /// let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0).unwrap()));
     /// let source=Source::new("My Source", light_data_builder);
     /// ```
-    #[must_use]
-    pub fn new(name: &str, light_data_builder: LightDataBuilder) -> Self {
+    pub fn new(name: &str, light_data_builder: LightDataBuilder) -> OpmResult<Self> {
         let mut source = Self::default();
         source.node_attr.set_name(name);
         source
             .node_attr
-            .set_property("light data", light_data_builder.into())
-            .unwrap();
-        source.update_surfaces().unwrap();
-        source
+            .set_property("light data", light_data_builder.into())?;
+        source.update_surfaces()?;
+        Ok(source)
     }
 
     /// Sets the alignment wavelength for an optical scenery
@@ -148,8 +147,7 @@ impl Source {
 }
 impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let light_prop = self.node_attr.get_property("light data").unwrap();
-        if let Proptype::LightDataBuilder(data) = &light_prop {
+        if let Ok(Proptype::LightDataBuilder(data)) = &self.node_attr.get_property("light data") {
             write!(f, "Source: {data}")
         } else {
             warn!("Source: could not read light data property");
@@ -330,18 +328,17 @@ mod test {
     use core::f64;
 
     #[test]
-    fn default() {
+    fn default() -> OpmResult<()> {
         let mut node = Source::default();
         assert_eq!(node.name(), "source");
         assert_eq!(node.node_type(), "source");
         assert_eq!(node.isometry(), Some(Isometry::identity()));
-        if let Proptype::Isometry(iso) = node.properties().get("light data iso").unwrap() {
+        if let Proptype::Isometry(iso) = node.properties().get("light data iso")? {
             assert!(iso.is_none());
         } else {
             panic!("wrong type for `light data iso` property");
         };
-        if let Proptype::LengthOption(wvl) = node.properties().get("alignment wavelength").unwrap()
-        {
+        if let Proptype::LengthOption(wvl) = node.properties().get("alignment wavelength")? {
             assert!(wvl.is_none());
         } else {
             panic!("wrong type for `alignment wavelength` property");
@@ -349,17 +346,19 @@ mod test {
         assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.node_color(), "slateblue");
         assert!(node.as_group_mut().is_err());
+        Ok(())
     }
     #[test]
-    fn new() {
+    fn new() -> OpmResult<()> {
         let source = Source::new(
             "test",
             LightDataBuilder::Geometric(RayDataSource::default()),
-        );
+        )?;
         assert_eq!(source.name(), "test");
+        Ok(())
     }
     #[test]
-    fn set_alignment_wavelength() {
+    fn set_alignment_wavelength() -> OpmResult<()> {
         let mut node = Source::default();
         assert!(node.set_alignment_wavelength(nanometer!(0.0)).is_err());
         assert!(node.set_alignment_wavelength(nanometer!(f64::NAN)).is_err());
@@ -374,26 +373,27 @@ mod test {
         assert!(node.set_alignment_wavelength(nanometer!(-0.1)).is_err());
         assert!(node.set_alignment_wavelength(nanometer!(600.0)).is_ok());
         let Proptype::LengthOption(wavelength) =
-            node.node_attr.get_property("alignment wavelength").unwrap()
+            node.node_attr.get_property("alignment wavelength")?
         else {
             panic!("wrong proptype")
         };
         assert_eq!(wavelength, &Some(nanometer!(600.0)));
+        Ok(())
     }
     #[test]
-    fn set_property() {
+    fn set_property() -> OpmResult<()> {
         let mut node = Source::default();
         node.set_property(
             "alignment wavelength",
             Proptype::LengthOption(Some(nanometer!(600.0))),
-        )
-        .unwrap();
+        )?;
         let Proptype::LengthOption(wavelength) =
-            node.node_attr.get_property("alignment wavelength").unwrap()
+            node.node_attr.get_property("alignment wavelength")?
         else {
             panic!("wrong proptype")
         };
         assert_eq!(wavelength, &Some(nanometer!(600.0)));
+        Ok(())
     }
     #[test]
     fn is_invertable() {
@@ -408,52 +408,48 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn test_set_light_data() {
+    fn test_set_light_data() -> OpmResult<()> {
         let mut src = Source::default();
-        if let Proptype::LightDataBuilder(light_data) = src.properties().get("light data").unwrap()
-        {
+        if let Proptype::LightDataBuilder(light_data) = src.properties().get("light data")? {
             assert_matches!(light_data.clone(), LightDataBuilder::Geometric(_));
         }
-        src.set_light_data(LightDataBuilder::Energy(EnergyDataBuilder::default()))
-            .unwrap();
-        if let Proptype::LightDataBuilder(light_data) = src.properties().get("light data").unwrap()
-        {
+        src.set_light_data(LightDataBuilder::Energy(EnergyDataBuilder::default()))?;
+        if let Proptype::LightDataBuilder(light_data) = src.properties().get("light data")? {
             assert_matches!(light_data.clone(), LightDataBuilder::Energy(_));
         }
+        Ok(())
     }
 
     #[test]
-    fn analyze_energy_ok() {
-        let light_builder = LightDataBuilder::Energy(create_he_ne_spec(1.0).unwrap().into());
-        let mut node = Source::new("test", light_builder.clone());
+    fn analyze_energy_ok() -> OpmResult<()> {
+        let light_builder = LightDataBuilder::Energy(create_he_ne_spec(1.0)?.into());
+        let mut node = Source::new("test", light_builder.clone())?;
         let output =
-            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())
-                .unwrap();
+            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        assert_eq!(*output, light_builder.build().unwrap());
+        assert_eq!(*output, light_builder.build()?);
+        Ok(())
     }
 
     #[test]
-    fn analyze_raytrace_ok() {
+    fn analyze_raytrace_ok() -> OpmResult<()> {
         let mut node = Source::default();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
-            &Hexapolar::new(millimeter!(1.0), 0).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(1.0), 0)?,
+        )?;
         let light_data_builder = LightDataBuilder::Geometric(rays.into());
-        node.set_light_data(light_data_builder).unwrap();
+        node.set_light_data(light_data_builder)?;
         let output = AnalysisRayTrace::analyze(
             &mut node,
             LightResult::default(),
             &RayTraceConfig::default(),
-        )
-        .unwrap();
+        )?;
         let light_data = output.get("output_1").unwrap();
         if let LightData::Geometric(rays) = light_data {
             assert_eq!(rays.nr_of_rays(true), 1);
@@ -465,27 +461,25 @@ mod test {
         } else {
             panic!("no geometric light data found")
         }
+        Ok(())
     }
     #[test]
-    fn analyze_raytrace_light_data_iso() {
+    fn analyze_raytrace_light_data_iso() -> OpmResult<()> {
         let mut node = Source::default();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
-            &Hexapolar::new(millimeter!(1.0), 0).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(1.0), 0)?,
+        )?;
         let light_data_builder = LightDataBuilder::Geometric(rays.into());
-        node.set_light_data(light_data_builder).unwrap();
-        let light_iso = Isometry::new_translation(millimeter!(0.0, 1.0, 0.0)).unwrap();
-        node.set_property("light data iso", Some(light_iso).into())
-            .unwrap();
+        node.set_light_data(light_data_builder)?;
+        let light_iso = Isometry::new_translation(millimeter!(0.0, 1.0, 0.0))?;
+        node.set_property("light data iso", Some(light_iso).into())?;
         let output = AnalysisRayTrace::analyze(
             &mut node,
             LightResult::default(),
             &RayTraceConfig::default(),
-        )
-        .unwrap();
+        )?;
         let light_data = output.get("output_1").unwrap();
         if let LightData::Geometric(rays) = light_data {
             assert_eq!(rays.nr_of_rays(true), 1);
@@ -497,19 +491,19 @@ mod test {
         } else {
             panic!("no geometric light data found")
         }
+        Ok(())
     }
     #[test]
-    fn calc_node_position_ok_alignement_wavelength_set() {
+    fn calc_node_position_ok_alignement_wavelength_set() -> OpmResult<()> {
         let mut node = Source::default();
-        node.set_alignment_wavelength(nanometer!(630.0)).unwrap();
+        node.set_alignment_wavelength(nanometer!(630.0))?;
         let light_data_builder = LightDataBuilder::Geometric(Rays::default().into());
-        node.set_light_data(light_data_builder).unwrap();
+        node.set_light_data(light_data_builder)?;
         let output = AnalysisRayTrace::calc_node_positions(
             &mut node,
             LightResult::default(),
             &RayTraceConfig::default(),
-        )
-        .unwrap();
+        )?;
         let light_data = output.get("output_1").unwrap();
         if let LightData::Geometric(rays) = light_data {
             assert_eq!(rays.nr_of_rays(true), 1);
@@ -518,18 +512,18 @@ mod test {
         } else {
             panic!("no geometric light data found")
         }
+        Ok(())
     }
     #[test]
-    fn analyze_ghost_focus_ok() {
+    fn analyze_ghost_focus_ok() -> OpmResult<()> {
         let mut node = Source::default();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
-            &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
-        )
-        .unwrap();
+            &Hexapolar::new(millimeter!(1.0), 1)?,
+        )?;
         let light_data_builder = LightDataBuilder::Geometric(rays.clone().into());
-        node.set_light_data(light_data_builder).unwrap();
+        node.set_light_data(light_data_builder)?;
         let mut light_rays = LightRays::new();
         light_rays.insert("input_1".into(), vec![rays]);
         let output = AnalysisGhostFocus::analyze(
@@ -540,9 +534,10 @@ mod test {
             0,
         );
         assert!(output.is_ok());
+        Ok(())
     }
     #[test]
-    fn debug() {
+    fn debug() -> OpmResult<()> {
         assert_eq!(format!("{:?}", Source::default()), "Source: Rays");
         assert_eq!(
             format!(
@@ -550,9 +545,10 @@ mod test {
                 Source::new(
                     "hallo",
                     LightDataBuilder::Geometric(RayDataSource::default())
-                )
+                )?
             ),
             "Source: Rays"
         );
+        Ok(())
     }
 }

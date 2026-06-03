@@ -88,6 +88,7 @@ pub fn GraphEditor(
             } else {
                 "unsaved".to_string()
             };
+            workspace_processor.send(GraphsWorkspaceAction::DeleteRootScenery);
             workspace_processor
                 .send(GraphsWorkspaceAction::AddRootSceneryTab { name: scenery_name });
         }
@@ -123,7 +124,7 @@ pub fn GraphEditor(
 
     rsx! {
         div { class: "row main-content-row",
-            div { style: "min-width:256px;", class: "col-2 sidebar",
+            div { style: "min-width:280px;", class: "col-2 sidebar",
                 NodeConfigEditor {
                     selected_nodes_memo,
                     model_modified_handler,
@@ -150,7 +151,7 @@ pub fn GraphEditor(
                         let tab_order = workspace.tab_order().read().clone();
                         rsx! {
                             TabList { class: "editor-tab-list",
-                                for (i , id) in tab_order.iter().enumerate() {
+                                for (i, id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabTrigger {
                                             key: "{id.as_simple().to_string()}",
@@ -182,7 +183,7 @@ pub fn GraphEditor(
                                 id: "graphEditorContentContainer",
                                 class: "graph-editor-tab-content",
                                 onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea),
-                                for (i , id) in tab_order.iter().enumerate() {
+                                for (i, id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabContent {
                                             key: "{id.as_simple().to_string()}",

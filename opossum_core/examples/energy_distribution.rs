@@ -25,7 +25,7 @@ fn main() -> OpmResult<()> {
     )?;
 
     let fluence_data = rays.calc_fluence_at_position(&Isometry::identity())?;
-    let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
+    let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution()?;
 
     let mut plt_params = PlotParameters::default();
     plt_params

@@ -13,7 +13,7 @@ pub fn detector_group() -> OpmResult<NodeGroup> {
         Some(Vector3::x()),
     )?)?;
     let paraxial_lens = cb.add_node(ParaxialSurface::new("ideal lens", millimeter!(500.))?)?;
-    let spot_monitor = SpotDiagram::new("spot diagram");
+    let spot_monitor = SpotDiagram::new("spot diagram")?;
     let spot_diag = cb.add_node(spot_monitor)?;
 
     cb.connect_nodes(

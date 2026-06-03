@@ -12,7 +12,6 @@ pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {
         .as_ref()
         .unwrap()
         .rotation();
-    // rot.z = degree!(0.01);
     let grating_1 = grating_1.with_tilt(rot)?;
 
     let i_g1 = cb.add_node(grating_1)?;
@@ -35,7 +34,6 @@ pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {
         .as_ref()
         .unwrap()
         .rotation();
-    // rot.z = degree!(0.01);
     let grating_4 = grating_4.with_tilt(rot)?;
 
     let i_g4 = cb.add_node(grating_4)?;

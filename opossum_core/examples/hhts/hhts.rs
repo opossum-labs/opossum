@@ -46,7 +46,7 @@ fn main() -> OpmResult<()> {
     )?;
 
     // apertures
-    let a_1inch = Aperture::new_circle(millimeter!(12.7), millimeter!(0., 0.), ApertureType::Hole)?;
+    let a_1inch = Aperture::new_circle(millimeter!(12.7), ApertureType::Hole, None)?;
 
     let mut scenery = NodeGroup::new("HHT Sensor");
     let src = scenery.add_node(SourcePort::new("Source"))?;
@@ -273,7 +273,7 @@ fn main() -> OpmResult<()> {
     let mut group_det_1w = NodeGroup::new("Detectors 1w");
 
     let det_prop = group_det_1w.add_node(RayPropagationVisualizer::new("Propagation", None)?)?;
-    let det_wavefront_1w = group_det_1w.add_node(WaveFront::new("Wavefront"))?;
+    let det_wavefront_1w = group_det_1w.add_node(WaveFront::new("Wavefront")?)?;
     let cambox_1w = group_det_1w.add_node(cambox_1w()?)?;
     let det_energy_1w =
         group_det_1w.add_node(EnergyMeter::new("Energy", Metertype::IdealEnergyMeter)?)?;
@@ -400,7 +400,7 @@ fn main() -> OpmResult<()> {
     let mut group_det_2w = NodeGroup::new("Detectors 2w");
 
     let det_prop_2w = group_det_2w.add_node(RayPropagationVisualizer::new("Propagation", None)?)?;
-    let det_wavefront_2w = group_det_2w.add_node(WaveFront::new("Wavefront"))?;
+    let det_wavefront_2w = group_det_2w.add_node(WaveFront::new("Wavefront")?)?;
     let det_energy_2w =
         group_det_2w.add_node(EnergyMeter::new("Energy", Metertype::IdealEnergyMeter)?)?;
     let cambox_2w = group_det_2w.add_node(cambox_2w()?)?;

@@ -59,6 +59,11 @@ pub struct OpticGraph {
 }
 
 impl OpticGraph {
+    /// Checks if the optic graph is empty (contains no nodes).
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.g.node_count() == 0
+    }
     /// Returns `true` if the graph is inverted.
     #[must_use]
     pub const fn is_inverted(&self) -> bool {

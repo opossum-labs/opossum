@@ -1,3 +1,4 @@
+use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 use dioxus::html::geometry::euclid::default::{Point2D, Rect};
 use opossum_core::{
     prelude::{AnalyzerType, PortType},
@@ -6,7 +7,6 @@ use opossum_core::{
 use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
 
-use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 /// Represents all possible user or system actions within the graphs workspace.
 /// These actions drive state updates such as selection, navigation, editing,
 /// layout changes, and persistence.
@@ -306,6 +306,7 @@ pub enum GraphsWorkspaceAction {
         pos: Point2D<f64>,
         /// The ID of the node to update.
         node_id: Uuid,
+        is_optical: bool,
     },
 
     /// Deletes a node from the graph.

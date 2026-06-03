@@ -36,7 +36,7 @@ pub fn FilterTypeEditor(
     match &*filter_type_builder_sig.read() {
         FilterTypeBuilder::Constant(transmission) => element_list.push(rsx! {
             ConstantFilterTypeEditor {
-                transmission: *transmission,
+                transmission: transmission.transmission().value,
                 on_transmission_change: on_save,
                 readonly,
             }

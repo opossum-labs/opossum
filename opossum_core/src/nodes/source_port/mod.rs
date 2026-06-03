@@ -124,27 +124,19 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn integration_test() {
+    fn integration_test() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let i_src = scenery.add_node(SourcePort::default()).unwrap();
-        let i_l = scenery
-            .add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0)).unwrap())
-            .unwrap();
-        let i_sd = scenery
-            .add_node(RayPropagationVisualizer::default())
-            .unwrap();
-        scenery
-            .connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(50.0))
-            .unwrap();
-        scenery
-            .connect_nodes(i_l, "output_1", i_sd, "input_1", millimeter!(150.0))
-            .unwrap();
+        let i_src = scenery.add_node(SourcePort::default())?;
+        let i_l = scenery.add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0))?)?;
+        let i_sd = scenery.add_node(RayPropagationVisualizer::default())?;
+        scenery.connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(i_l, "output_1", i_sd, "input_1", millimeter!(150.0))?;
 
-        let ray_data_builder =
-            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 10).unwrap();
+        let ray_data_builder = round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 10)?;
         let mut ray_trace_config = RayTraceConfig::default();
         ray_trace_config.map_source(i_src, ray_data_builder);
         let analyzer = RayTracingAnalyzer::new(ray_trace_config);
         assert!(analyzer.analyze(&mut scenery).is_ok());
+        Ok(())
     }
 }

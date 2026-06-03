@@ -324,7 +324,7 @@ mod test {
     use super::OpticSurface;
     use crate::{
         J_per_cm2,
-        apertures::{Aperture, ApertureType, CircleShape},
+        apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
         coatings::CoatingType,
         error::{OpmResult, OpossumError},
         geometry::{Sphere, geo_surface::GeoSurfaceRef},
@@ -340,7 +340,7 @@ mod test {
     #[test]
     fn default() {
         let os = OpticSurface::default();
-        assert!(matches!(os.aperture, Aperture::Open));
+        assert!(matches!(os.aperture.shape(), ApertureShape::Open));
         assert!(matches!(os.coating, CoatingType::IdealAR));
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 0);
@@ -354,7 +354,7 @@ mod test {
             OpticSurface::new(
                 gs.clone(),
                 CoatingType::IdealAR,
-                Aperture::Open,
+                Aperture::default(),
                 J_per_cm2!(f64::NAN)
             )
             .is_err()
@@ -363,7 +363,7 @@ mod test {
             OpticSurface::new(
                 gs.clone(),
                 CoatingType::IdealAR,
-                Aperture::Open,
+                Aperture::default(),
                 J_per_cm2!(f64::NEG_INFINITY)
             )
             .is_err()
@@ -372,7 +372,7 @@ mod test {
             OpticSurface::new(
                 gs.clone(),
                 CoatingType::IdealAR,
-                Aperture::Open,
+                Aperture::default(),
                 J_per_cm2!(-0.1)
             )
             .is_err()
@@ -381,16 +381,18 @@ mod test {
             OpticSurface::new(
                 gs.clone(),
                 CoatingType::IdealAR,
-                Aperture::Open,
+                Aperture::default(),
                 J_per_cm2!(f64::INFINITY)
             )
             .is_ok()
         );
 
-        let aperture = Aperture::BinaryCircle(
-            CircleShape::new(meter!(1.0), meter!(0.0, 0.0))?,
+        let aperture = Aperture::new(
+            ApertureShape::BinaryCircle(CircleShape::new(meter!(1.0))?),
             ApertureType::Hole,
-        );
+            Some(meter!(0.0, 0.0)),
+            None,
+        )?;
         let os = OpticSurface::new(
             GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
                 meter!(1.0),

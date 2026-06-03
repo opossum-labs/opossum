@@ -53,8 +53,7 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),
         &refr_index_hzf52,
     )?;
-    let aperture =
-        Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
+    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     let i_pl1 = scenery.add_node(lens1)?;
     // 4. Second lens: 50 mm focal length, 10 mm thickness
@@ -71,8 +70,8 @@ fn main() -> OpmResult<()> {
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
     // 6. Spot diagram analyzers at image plane
-    let i_sd4 = scenery.add_node(SpotDiagram::new("spot at image"))?;
-    let i_sd5 = scenery.add_node(SpotDiagram::new("spot at image"))?;
+    let i_sd4 = scenery.add_node(SpotDiagram::new("spot at image")?)?;
+    let i_sd5 = scenery.add_node(SpotDiagram::new("spot at image")?)?;
     // 7. Connect nodes in order
     // Point source → first spot diagram → lens1 → lens2 → ray propagation → second spot diagram
     scenery.connect_nodes(i_src, "output_1", i_sd5, "input_1", millimeter!(0.0))?;

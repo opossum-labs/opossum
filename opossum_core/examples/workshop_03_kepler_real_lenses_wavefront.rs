@@ -37,7 +37,7 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     // 2. Define Wavefront Visualizers
     // WaveFront nodes capture phase information of the light at specific points in the system.
-    let i_sd5 = scenery.add_node(WaveFront::new("wavefront before telescope"))?;
+    let i_sd5 = scenery.add_node(WaveFront::new("wavefront before telescope")?)?;
     // Define refractive index data for HZF52 glass over 300–2000 nm
     let refr_index_hzf52 = RefrIndexSchott::new(
         3.26760058E+000,
@@ -57,13 +57,12 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),    // thickness
         &refr_index_hzf52,
     )?;
-    let aperture =
-        Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
+    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Spot diagram analyzer: visualizes the ray convergence at the focus.
     let i_pl1 = scenery.add_node(lens1)?;
     // Second lens: 50 mm focal length, 10 mm thickness..
-    let i_sd6 = scenery.add_node(SpotDiagram::new("spot diagram at focus"))?;
+    let i_sd6 = scenery.add_node(SpotDiagram::new("spot diagram at focus")?)?;
     let lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
@@ -76,7 +75,7 @@ fn main() -> OpmResult<()> {
     let mut ray_prop_vis = RayPropagationVisualizer::new("propagation", None)?;
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
-    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope"))?;
+    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope")?)?;
     // === 5. Connect Components ===
     // Connect nodes in order to create the optical path:
     // Light source → pre-telescope wavefront → first lens → spot diagram → second lens → ray propagation → post-telescope wavefront.

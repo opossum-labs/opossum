@@ -71,7 +71,6 @@ impl WorkspaceHandlers {
         self.apply_drag
             .call((graph_id, relative_shift, current_zoom, mouse_to_graph_shift));
     }
-
     pub fn clear_selected_nodes(&self, graph_id: Uuid) {
         self.clear_selected_nodes.call(graph_id);
     }
@@ -90,23 +89,18 @@ impl WorkspaceHandlers {
     pub fn add_new_group_tab(&self, graph_info: GraphInfo) {
         self.add_new_group_tab.call(graph_info);
     }
-
     pub fn set_root_scenery_id(&self, id: Uuid) {
         self.set_root_scenery_id.call(id);
     }
-
     pub fn remove_tabs(&self, ids: Vec<Uuid>) {
         self.remove_tabs.call(ids);
     }
-
     pub fn set_needs_saving(&self, value: bool) {
         self.set_needs_saving.call(value);
     }
-
     pub fn clear_workspace(&self) {
         self.clear_workspace.call(());
     }
-
     pub fn set_active_tab(&self, id: Uuid) {
         self.set_active_tab.call(id);
     }

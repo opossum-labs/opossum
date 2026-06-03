@@ -24,7 +24,7 @@ pub fn AnalyzerNodeEditor(
     let node_id = use_memo(move || active_node.read().node_id);
     let resource_future = use_resource(move || async move {
         let node_id = *node_id.read();
-        match api::get_analyzer_info(node_id).await {
+        match api::get_analyzer(node_id).await {
             Ok(analyzer_info) => Some(analyzer_info),
             Err(err_str) => {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str);

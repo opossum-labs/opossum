@@ -289,8 +289,7 @@ mod test {
         let input_data = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_data.clone());
         let result = AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default())?;
-        assert!(result.contains_key("output_1"));
-        assert_eq!(result.get("output_1").unwrap(), &input_data);
+        assert_eq!(result.get("output_1"), Some(&input_data));
         Ok(())
     }
     #[test]
@@ -305,8 +304,7 @@ mod test {
         let input_data = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_data.clone());
         let result = AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default())?;
-        assert!(result.contains_key("input_1"));
-        assert_eq!(result.get("input_1").unwrap(), &input_data);
+        assert_eq!(result.get("input_1"), Some(&input_data));
         Ok(())
     }
     #[test]

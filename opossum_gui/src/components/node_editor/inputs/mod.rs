@@ -1,3 +1,4 @@
+pub mod dynamic_list;
 pub mod input_components;
 use approx::relative_eq;
 use dioxus::prelude::*;
@@ -8,6 +9,8 @@ use opossum_core::{
 use regex::Regex;
 use std::{fmt::Display, str::FromStr};
 use strum::IntoEnumIterator;
+
+use crate::components::node_editor::inputs::input_components::UnitHandling;
 
 const EXP_NOTATION_MIN: i32 = -30;
 const EXP_NOTATION_MAX: i32 = 30;
@@ -341,8 +344,20 @@ pub fn format_exp_number_notation(x: f64) -> String {
 /// and the specified base unit is appended. The `reciprocal` flag indicates
 /// whether the SI prefix should be inverted (e.g. "m" becomes "k").
 /// Infinite values are rendered as `"∞"` followed by the base unit.
-pub fn format_si_with_base_unit(value: f64, base_unit: &str, reciprocal: bool) -> String {
-    format!("{}{}", format_si_notation(value, reciprocal), base_unit,)
+pub fn format_si_with_base_unit(
+    value: f64,
+    unit_config: &UnitHandling,
+    reciprocal: bool,
+) -> String {
+    if unit_config.handle_prefix {
+        format!(
+            "{}{}",
+            format_si_notation(value, reciprocal),
+            unit_config.base_unit
+        )
+    } else {
+        format!("{} {}", value, unit_config.base_unit)
+    }
 }
 
 /// Splits a floating-point value into an engineering mantissa and exponent.

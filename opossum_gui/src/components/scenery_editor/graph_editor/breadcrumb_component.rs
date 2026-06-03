@@ -8,7 +8,7 @@ pub fn BreadCrumbs(
 ) -> Element {
     rsx! {
         div { class: "graph-breadcrumbs",
-            for (i , (id , name)) in bread_crumbs.iter().enumerate() {
+            for (i, (id, name)) in bread_crumbs.iter().enumerate() {
                 {
                     let name = name.clone();
                     let id = *id;

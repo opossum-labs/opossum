@@ -347,57 +347,47 @@ mod test {
     use num::Zero;
 
     #[test]
-    fn analyze_empty() {
+    fn analyze_empty() -> OpmResult<()> {
         let mut node = OpticGraph::default();
-        let output = node
-            .analyze_energy(&LightResult::default(), &EnergyConfig::default())
-            .unwrap();
+        let output = node.analyze_energy(&LightResult::default(), &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
     #[test]
-    fn analyze_subtree_warning() {
+    fn analyze_subtree_warning() -> OpmResult<()> {
         let mut graph = OpticGraph::default();
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity()).unwrap();
-        let d1 = graph.add_node(dummy).unwrap();
+        dummy.set_isometry(Isometry::identity())?;
+        let d1 = graph.add_node(dummy)?;
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity()).unwrap();
-        let d2 = graph.add_node(dummy).unwrap();
+        dummy.set_isometry(Isometry::identity())?;
+        let d2 = graph.add_node(dummy)?;
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity()).unwrap();
-        let d3 = graph.add_node(dummy).unwrap();
+        dummy.set_isometry(Isometry::identity())?;
+        let d3 = graph.add_node(dummy)?;
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity()).unwrap();
-        let d4 = graph.add_node(dummy).unwrap();
-        graph
-            .connect_nodes(d1, "output_1", d2, "input_1", Length::zero())
-            .unwrap();
-        graph
-            .connect_nodes(d3, "output_1", d4, "input_1", Length::zero())
-            .unwrap();
-        graph
-            .map_port(d1, &PortType::Input, "input_1", "input_1")
-            .unwrap();
+        dummy.set_isometry(Isometry::identity())?;
+        let d4 = graph.add_node(dummy)?;
+        graph.connect_nodes(d1, "output_1", d2, "input_1", Length::zero())?;
+        graph.connect_nodes(d3, "output_1", d4, "input_1", Length::zero())?;
+        graph.map_port(d1, &PortType::Input, "input_1", "input_1")?;
         let input = LightResult::default();
         testing_logger::setup();
-        graph
-            .analyze_energy(&input, &EnergyConfig::default())
-            .unwrap();
+        graph.analyze_energy(&input, &EnergyConfig::default())?;
         check_logs(
             log::Level::Warn,
             vec!["group contains unconnected sub-trees. Analysis might not be complete."],
         );
+        Ok(())
     }
     #[test]
-    fn analyze_stale_node() {
+    fn analyze_stale_node() -> OpmResult<()> {
         let mut graph = OpticGraph::default();
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity()).unwrap();
-        let d1 = graph.add_node(dummy).unwrap();
-        let _ = graph.add_node(Dummy::new("stale node")).unwrap();
-        graph
-            .map_port(d1, &PortType::Input, "input_1", "input_1")
-            .unwrap();
+        dummy.set_isometry(Isometry::identity())?;
+        let d1 = graph.add_node(dummy)?;
+        let _ = graph.add_node(Dummy::new("stale node"))?;
+        graph.map_port(d1, &PortType::Input, "input_1", "input_1")?;
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Fourier);
         testing_logger::setup();
@@ -413,33 +403,27 @@ mod test {
                 "graph contains stale (completely unconnected) node 'stale node' (dummy). Skipping.",
             ],
         );
+        Ok(())
     }
-    fn prepare_group() -> OpticGraph {
+    fn prepare_group() -> OpmResult<OpticGraph> {
         let mut graph = OpticGraph::default();
-        let g1_n1 = graph.add_node(Dummy::default()).unwrap();
-        let g1_n2 = graph
-            .add_node(BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6)).unwrap())
-            .unwrap();
-        graph
-            .map_port(g1_n2, &PortType::Output, "out1_trans1_refl2", "output_1")
-            .unwrap();
-        graph
-            .map_port(g1_n1, &PortType::Input, "input_1", "input_1")
-            .unwrap();
-        graph
-            .connect_nodes(g1_n1, "output_1", g1_n2, "input_1", Length::zero())
-            .unwrap();
-        graph
+        let g1_n1 = graph.add_node(Dummy::default())?;
+        let g1_n2 = graph.add_node(BeamSplitter::new(
+            "test",
+            &SplittingConfigBuilder::FixedRatio(0.6),
+        )?)?;
+        graph.map_port(g1_n2, &PortType::Output, "out1_trans1_refl2", "output_1")?;
+        graph.map_port(g1_n1, &PortType::Input, "input_1", "input_1")?;
+        graph.connect_nodes(g1_n1, "output_1", g1_n2, "input_1", Length::zero())?;
+        Ok(graph)
     }
     #[test]
-    fn analyze_ok() {
-        let mut graph = prepare_group();
+    fn analyze_ok() -> OpmResult<()> {
+        let mut graph = prepare_group()?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_light.clone());
-        let output = graph.analyze_energy(&input, &EnergyConfig::default());
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = graph.analyze_energy(&input, &EnergyConfig::default())?;
         assert!(output.contains_key("output_1"));
         let output = output.get("output_1").unwrap().clone();
         let energy = if let LightData::Energy(s) = output {
@@ -448,24 +432,24 @@ mod test {
             panic!()
         };
         assert_abs_diff_eq!(energy, 0.6);
+        Ok(())
     }
     #[test]
-    fn analyze_wrong_input_data() {
-        let mut graph = prepare_group();
+    fn analyze_wrong_input_data() -> OpmResult<()> {
+        let mut graph = prepare_group()?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("wrong".into(), input_light.clone());
-        let output = graph
-            .analyze_energy(&input, &EnergyConfig::default())
-            .unwrap();
+        let output = graph.analyze_energy(&input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn analyze_inverse() {
-        let mut graph = prepare_group();
+    fn analyze_inverse() -> OpmResult<()> {
+        let mut graph = prepare_group()?;
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         graph.set_is_inverted(true);
         input.insert("output_1".into(), input_light);
         let output = graph.analyze_energy(&input, &EnergyConfig::default());
@@ -479,23 +463,21 @@ mod test {
             panic!()
         };
         assert_abs_diff_eq!(energy, 0.6);
+        Ok(())
     }
     #[test]
-    fn analyze_inverse_with_src() {
+    fn analyze_inverse_with_src() -> OpmResult<()> {
         let mut graph = OpticGraph::default();
-        let g1_n1 = graph.add_node(SourcePort::default()).unwrap();
-        let g1_n2 = graph.add_node(Dummy::default()).unwrap();
-        graph
-            .map_port(g1_n2, &PortType::Output, "output_1", "output_1")
-            .unwrap();
-        graph
-            .connect_nodes(g1_n1, "output_1", g1_n2, "input_1", Length::zero())
-            .unwrap();
+        let g1_n1 = graph.add_node(SourcePort::default())?;
+        let g1_n2 = graph.add_node(Dummy::default())?;
+        graph.map_port(g1_n2, &PortType::Output, "output_1", "output_1")?;
+        graph.connect_nodes(g1_n1, "output_1", g1_n2, "input_1", Length::zero())?;
         graph.set_is_inverted(true);
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("output_1".into(), input_light);
         let output = graph.analyze_energy(&input, &EnergyConfig::default());
         assert!(output.is_ok());
+        Ok(())
     }
 }

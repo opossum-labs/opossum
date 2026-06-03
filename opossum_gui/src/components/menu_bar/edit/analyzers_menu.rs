@@ -25,7 +25,7 @@ pub fn AnalyzersMenu(on_analyzer_selected: EventHandler<AnalyzerType>) -> Elemen
         _ => vec![],
     };
     rsx! {
-        for (analyzer_type , analyzer_name) in analyzer_list.into_iter() {
+        for (analyzer_type, analyzer_name) in analyzer_list.into_iter() {
             {
                 rsx! {
                     li {

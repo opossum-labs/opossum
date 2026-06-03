@@ -61,8 +61,11 @@ fn main() -> OpmResult<()> {
     )?
     .with_decenter(millimeter!(0.0, 5.0, 0.0))?;
     // Define a circular aperture with 25 mm radius
-    let aperture =
-        Aperture::new_circle(millimeter!(25.0), millimeter!(0., 0.), ApertureType::Hole)?;
+    let aperture = Aperture::new_circle(
+        millimeter!(25.0),
+        ApertureType::Hole,
+        Some(millimeter!(0.0, 0.0)),
+    )?;
     // Apply the aperture to the input side of the first lens
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Add the first lens to the optical system
@@ -84,7 +87,7 @@ fn main() -> OpmResult<()> {
     // Add the ray visualizer to the system
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
     // Create a wavefront detector after the telescope system
-    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope"))?;
+    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope")?)?;
     // Connect source → shifted lens
     scenery.connect_nodes(i_src, "output_1", i_pl1, "input_1", millimeter!(20.0))?;
     // Connect shifted lens → second lens

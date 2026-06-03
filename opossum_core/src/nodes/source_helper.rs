@@ -102,15 +102,12 @@ mod test {
     use approx::assert_abs_diff_eq;
     use uom::si::energy::joule;
     #[test]
-    fn test_round_collimated_ray_source() {
+    fn test_round_collimated_ray_source() -> OpmResult<()> {
         assert!(round_collimated_ray_builder(millimeter!(1.0), joule!(-0.1), 3).is_err());
         assert!(round_collimated_ray_builder(millimeter!(1.0), joule!(f64::NAN), 3).is_err());
         assert!(round_collimated_ray_builder(millimeter!(1.0), joule!(f64::INFINITY), 3).is_err());
         assert!(round_collimated_ray_builder(millimeter!(-0.1), joule!(1.0), 3).is_err());
-        let rays = round_collimated_ray_builder(Length::zero(), joule!(1.0), 3)
-            .unwrap()
-            .build()
-            .unwrap();
+        let rays = round_collimated_ray_builder(Length::zero(), joule!(1.0), 3)?.build()?;
         assert_eq!(rays.nr_of_rays(true), 1);
         assert_abs_diff_eq!(
             rays.total_energy().get::<joule>(),
@@ -118,26 +115,21 @@ mod test {
             epsilon = 10.0 * f64::EPSILON
         );
 
-        let rays = round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 3)
-            .unwrap()
-            .build()
-            .unwrap();
+        let rays = round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 3)?.build()?;
         assert_abs_diff_eq!(
             rays.total_energy().get::<joule>(),
             1.0,
             epsilon = 10.0 * f64::EPSILON
         );
         assert_eq!(rays.nr_of_rays(true), 37);
+        Ok(())
     }
     #[test]
-    fn test_point_ray_source() {
+    fn test_point_ray_source() -> OpmResult<()> {
         assert!(point_ray_builder(degree!(-0.1), Energy::zero()).is_err());
         assert!(point_ray_builder(degree!(180.0), Energy::zero()).is_err());
         assert!(point_ray_builder(degree!(190.0), Energy::zero()).is_err());
-        let rays = point_ray_builder(Angle::zero(), joule!(1.0))
-            .unwrap()
-            .build()
-            .unwrap();
+        let rays = point_ray_builder(Angle::zero(), joule!(1.0))?.build()?;
         assert_abs_diff_eq!(
             rays.total_energy().get::<joule>(),
             1.0,
@@ -145,24 +137,19 @@ mod test {
         );
         assert_eq!(rays.nr_of_rays(true), 1);
 
-        let rays = point_ray_builder(degree!(1.0), joule!(1.0))
-            .unwrap()
-            .build()
-            .unwrap();
+        let rays = point_ray_builder(degree!(1.0), joule!(1.0))?.build()?;
         assert_abs_diff_eq!(
             rays.total_energy().get::<joule>(),
             1.0,
             epsilon = 10.0 * f64::EPSILON
         );
         assert_eq!(rays.nr_of_rays(true), 61);
+        Ok(())
     }
     #[test]
-    fn test_point_ray_source_cone_angle_correctness() {
+    fn test_point_ray_source_cone_angle_correctness() -> OpmResult<()> {
         let cone_angle = degree!(10.0);
-        let rays = point_ray_builder(cone_angle, joule!(1.0))
-            .unwrap()
-            .build()
-            .unwrap();
+        let rays = point_ray_builder(cone_angle, joule!(1.0))?.build()?;
 
         let expected_half_angle = (cone_angle / 2.0).value;
         let axis = nalgebra::Vector3::new(0.0, 0.0, 1.0);
@@ -185,9 +172,10 @@ mod test {
             max_angle,
             expected_half_angle
         );
+        Ok(())
     }
     #[test]
-    fn test_collimated_line_source() {
+    fn test_collimated_line_source() -> OpmResult<()> {
         assert!(collimated_line_ray_builder(millimeter!(1.0), joule!(-0.1), 1).is_err());
         assert!(collimated_line_ray_builder(millimeter!(1.0), joule!(f64::NAN), 1).is_err());
         assert!(collimated_line_ray_builder(millimeter!(1.0), joule!(f64::INFINITY), 1).is_err());
@@ -197,10 +185,7 @@ mod test {
         assert!(collimated_line_ray_builder(millimeter!(f64::INFINITY), joule!(1.0), 1).is_err());
         assert!(collimated_line_ray_builder(millimeter!(1.0), joule!(1.0), 0).is_err());
 
-        let rays = collimated_line_ray_builder(millimeter!(1.0), joule!(1.0), 2)
-            .unwrap()
-            .build()
-            .unwrap();
+        let rays = collimated_line_ray_builder(millimeter!(1.0), joule!(1.0), 2)?.build()?;
         assert_abs_diff_eq!(
             rays.total_energy().get::<joule>(),
             1.0,
@@ -210,5 +195,6 @@ mod test {
         let ray = rays.iter().collect::<Vec<&Ray>>();
         assert_eq!(ray[0].position(), millimeter!(0., -0.5, 0.));
         assert_eq!(ray[1].position(), millimeter!(0., 0.5, 0.));
+        Ok(())
     }
 }

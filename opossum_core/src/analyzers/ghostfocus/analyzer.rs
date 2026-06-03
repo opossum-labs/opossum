@@ -224,7 +224,7 @@ mod test_ghost_focus_analyzer {
     use super::*;
     use crate::{
         analyzers::Analyzer,
-        coatings::CoatingType,
+        coatings::CoatingConstantR,
         core_optics::{
             PortType,
             optic_node::{Alignable, OpticNode},
@@ -235,6 +235,7 @@ mod test_ghost_focus_analyzer {
         nodes::{
             Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror, round_collimated_ray_builder,
         },
+        percent,
     };
     #[test]
     fn empty_report() -> OpmResult<()> {
@@ -252,12 +253,12 @@ mod test_ghost_focus_analyzer {
         lens.set_coating(
             &PortType::Input,
             "input_1",
-            &CoatingType::ConstantR { reflectivity: 0.2 },
+            &CoatingConstantR::new(percent!(20.0))?.into(),
         )?;
         lens.set_coating(
             &PortType::Output,
             "output_1",
-            &CoatingType::ConstantR { reflectivity: 0.2 },
+            &CoatingConstantR::new(percent!(20.0))?.into(),
         )?;
         let i_l = scenery.add_node(lens)?;
         let mir1 = scenery.add_node(ThinMirror::new("mir 1").with_tilt(degree!(45., 0., 0.))?)?;
@@ -303,11 +304,12 @@ mod test_ghost_focus_analyzer {
 mod test_ghost_analysis_nested_groups_inversion {
     use crate::{
         analyzers::ghostfocus::config::GhostFocusConfig,
-        coatings::CoatingType,
+        coatings::CoatingConstantR,
         distributions::{position::Hexapolar, spectral::LaserLines},
         error::OpmResult,
         joule, millimeter, nanometer,
         nodes::{Lens, NodeGroup, SourcePort},
+        percent,
         prelude::{
             AnalyzerType, CollimatedSrc, OpmDocument, OpticNode, PortType, RayDataSource,
             RefrIndexConst,
@@ -333,12 +335,12 @@ mod test_ghost_analysis_nested_groups_inversion {
         lens_01.set_coating(
             &PortType::Input,
             "input_1",
-            &CoatingType::ConstantR { reflectivity: 0.01 },
+            &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_01.set_coating(
             &PortType::Output,
             "output_1",
-            &CoatingType::ConstantR { reflectivity: 0.01 },
+            &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
 
         let mut lens_02 = Lens::new(
@@ -351,12 +353,12 @@ mod test_ghost_analysis_nested_groups_inversion {
         lens_02.set_coating(
             &PortType::Input,
             "input_1",
-            &CoatingType::ConstantR { reflectivity: 0.01 },
+            &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_02.set_coating(
             &PortType::Output,
             "output_1",
-            &CoatingType::ConstantR { reflectivity: 0.01 },
+            &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
 
         let src = scenery.add_node(SourcePort::new("Collimated Source"))?;
@@ -373,12 +375,12 @@ mod test_ghost_analysis_nested_groups_inversion {
         lens_1.set_coating(
             &PortType::Input,
             "input_1",
-            &CoatingType::ConstantR { reflectivity: 0.01 },
+            &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_1.set_coating(
             &PortType::Output,
             "output_1",
-            &CoatingType::ConstantR { reflectivity: 0.01 },
+            &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
 
         let mut group_1 = NodeGroup::new("Group 1");
@@ -395,12 +397,12 @@ mod test_ghost_analysis_nested_groups_inversion {
         lens_2.set_coating(
             &PortType::Input,
             "input_1",
-            &CoatingType::ConstantR { reflectivity: 0.01 },
+            &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_2.set_coating(
             &PortType::Output,
             "output_1",
-            &CoatingType::ConstantR { reflectivity: 0.01 },
+            &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         let mut group_2 = NodeGroup::new("Group 2");
         group_2.set_expand_view(true)?;
@@ -416,12 +418,12 @@ mod test_ghost_analysis_nested_groups_inversion {
         lens_3.set_coating(
             &PortType::Input,
             "input_1",
-            &CoatingType::ConstantR { reflectivity: 0.01 },
+            &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_3.set_coating(
             &PortType::Output,
             "output_1",
-            &CoatingType::ConstantR { reflectivity: 0.01 },
+            &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         let mut group_3 = NodeGroup::new("Group 3");
         group_3.set_expand_view(true)?;

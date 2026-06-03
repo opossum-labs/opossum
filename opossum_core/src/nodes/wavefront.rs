@@ -74,14 +74,13 @@ impl WaveFront {
     /// Creates a new [`WaveFront`] Monitor with the given `name`.
     /// # Attributes
     /// - `name`: name of the [`WaveFront`] Monitor
-    /// # Panics
-    /// This function panics if `update_surfaces` fails.
-    #[must_use]
-    pub fn new(name: &str) -> Self {
+    /// # Errors
+    /// This function returns an error if `update_surfaces` fails.
+    pub fn new(name: &str) -> OpmResult<Self> {
         let mut wf = Self::default();
         wf.node_attr.set_name(name);
-        wf.update_surfaces().unwrap();
-        wf
+        wf.update_surfaces()?;
+        Ok(wf)
     }
 }
 /// This [`WaveFrontData`] struct holds a vector of wavefront-error maps.
@@ -513,10 +512,11 @@ mod test {
         assert!(node.as_group_mut().is_err());
     }
     #[test]
-    fn new() {
-        let meter = WaveFront::new("test");
+    fn new() -> OpmResult<()> {
+        let meter = WaveFront::new("test")?;
         assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
+        Ok(())
     }
     #[test]
     fn ports() {

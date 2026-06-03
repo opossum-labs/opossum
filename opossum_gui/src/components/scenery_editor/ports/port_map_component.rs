@@ -12,10 +12,18 @@ pub fn PortMapComponent(
 ) -> Element {
     match port_type {
         PortType::Input => rsx! {
-            InputPortMapComponent { on_context_menu_handler, rel_port_position, external_port}
+            InputPortMapComponent {
+                on_context_menu_handler,
+                rel_port_position,
+                external_port,
+            }
         },
         PortType::Output => rsx! {
-            OutputPortMapComponent { on_context_menu_handler, rel_port_position, external_port }
+            OutputPortMapComponent {
+                on_context_menu_handler,
+                rel_port_position,
+                external_port,
+            }
         },
     }
 }
