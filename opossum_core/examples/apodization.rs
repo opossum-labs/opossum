@@ -11,23 +11,13 @@ fn main() -> OpmResult<()> {
         millimeter!(15.),
         ApertureType::Hole,
         None,
-        None,
+        Some(degree!(10.0)),
     )?;
 
     dummy.set_aperture(&PortType::Input, "input_1", &aperture)?;
-    let dummy = dummy.with_decenter(millimeter!(-5.0, 5.0, 0.0))?;
 
     let i_d = scenery.add_node(dummy)?;
-    let mut sd = SpotDiagram::default();
-    sd.set_property("plot aperture", true.into())?;
-    let sd_aperture = Aperture::new_rectangle(
-        millimeter!(1.0),
-        millimeter!(5.0),
-        ApertureType::Hole,
-        None,
-        None,
-    )?;
-    sd.set_aperture(&PortType::Input, "input_1", &sd_aperture)?;
+    let sd = SpotDiagram::default();
     let i_sd = scenery.add_node(sd)?;
 
     scenery.connect_nodes(i_src, "output_1", i_d, "input_1", millimeter!(50.0))?;
