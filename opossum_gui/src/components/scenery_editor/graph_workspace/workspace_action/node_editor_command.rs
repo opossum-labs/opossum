@@ -84,13 +84,13 @@ pub fn node_editor_command(
             NodeEditorCommand::CenterGraph => {
                 workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
                     graph_id: active_tab(),
-                    save_changes: true,
+                    save_changes: false,
                 });
             }
             NodeEditorCommand::ZoomToFit => {
                 workspace_processor.send(GraphsWorkspaceAction::ZoomToFit {
                     graph_id: active_tab(),
-                    save_changes: true,
+                    save_changes: false,
                 });
             }
             NodeEditorCommand::LoadFile(path) => {
