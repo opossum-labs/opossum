@@ -6,14 +6,17 @@ In other words, the position distribution determines where rays start in space, 
 
 ## General Concepts
 
-Physically, a real light source emits energy continuously over an area. In ray-tracing simulations, a continuous optical beam is not modeled directly. Instead, it is approximated using a finite number of rays. The position distribution answers the question:
+Physically, a real light source emits energy continuously over an area. In ray-tracing simulations, this continuous optical field is approximated using a finite number of rays.
 
-“How do we place discrete rays so they accurately represent a continuous optical beam?”
+The position distribution defines how these discrete rays are placed so that they represent the continuous optical beam as accurately as possible.
+
+In simple terms, it answers the question:
+
+“How should rays be distributed in space to best approximate a continuous optical beam?”
 
 The choice of distribution affects how many rays are required to obtain stable results, how uniform the spot diagram appears, and whether clusters, gaps, or regular geometric patterns become visible in the sampled beam.
 
-The spot diagram therefore provides a convenient way to compare the sampling behavior of different position distributions and to evaluate the effect of increasing the number of rays.
-
+The spot diagram therefore provides a convenient way to compare different position distributions and to evaluate how the result changes as the number of rays increases.
 ### spot Diagrams
 
 The spot diagram in the ray tracing analysis report is the main tool to visualize the effect of a position distribution. Because every ray starts from a defined spatial pattern, the final spot diagram reflects:
