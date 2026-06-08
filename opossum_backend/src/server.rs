@@ -1,5 +1,3 @@
-#![allow(clippy::needless_for_each)] // This is necessary because of linter errors for #[derive(OpenApi)]
-
 use actix_cors::Cors;
 use actix_web::{App, HttpResponse, HttpServer, dev::Server, middleware::Logger, web};
 use std::net::Ipv4Addr;
@@ -30,9 +28,8 @@ async fn not_found() -> HttpResponse {
 /// The server binds to the port specified by the `OPOSSUM_PORT` environment variable,
 /// or defaults to `8001` if not set.
 ///
-/// # Panics
-///
-/// Panics if the server cannot bind to the specified network interface and port.
+/// If configuration or binding fails, the process logs the error to stderr
+/// and exits gracefully with error code 1.
 pub fn start() -> Server {
     #[derive(OpenApi)]
     #[openapi(
@@ -59,17 +56,21 @@ pub fn start() -> Server {
     init_logger();
     let app_state = web::Data::new(AppState::default());
 
-    // Read OPOSSUM_PORT from environment variables, default to 8001 if not set.
-    let port: u16 = std::env::var("OPOSSUM_PORT")
-        .unwrap_or_else(|_| "8001".to_string())
-        .parse()
-        .expect("OPOSSUM_PORT must be a valid port number");
+    // Read OPOSSUM_PORT safely. Exit with error if the value is invalid.
+    let port: u16 = std::env::var("OPOSSUM_PORT").map_or(8001, |val| {
+        val.parse().unwrap_or_else(|e| {
+            eprintln!("Invalid OPOSSUM_PORT environment variable '{val}': {e}");
+            std::process::exit(1);
+        })
+    });
 
-    // Read OPOSSUM_WORKERS from environment variables, default to 2 if not set.
-    let workers: usize = std::env::var("OPOSSUM_WORKERS")
-        .unwrap_or_else(|_| "2".to_string())
-        .parse()
-        .expect("OPOSSUM_WORKERS must be a valid number of workers");
+    // Read OPOSSUM_WORKERS safely. Exit with error if the value is invalid.
+    let workers: usize = std::env::var("OPOSSUM_WORKERS").map_or(2, |val| {
+        val.parse().unwrap_or_else(|e| {
+            eprintln!("Invalid OPOSSUM_WORKERS environment variable '{val}': {e}");
+            std::process::exit(1);
+        })
+    });
 
     let srv = HttpServer::new({
         let app_state = app_state.clone();
@@ -99,7 +100,11 @@ pub fn start() -> Server {
     })
     .workers(workers)
     .bind((Ipv4Addr::UNSPECIFIED, port))
-    .unwrap_or_else(|e| panic!("Failed to bind server to port {port}: {e}"))
+    .unwrap_or_else(|e| {
+        // Exit gracefully with error code 1 instead of panicking.
+        eprintln!("Failed to bind server to port {port}: {e}");
+        std::process::exit(1);
+    })
     .run();
 
     app_state.register_server_handle(srv.handle());
