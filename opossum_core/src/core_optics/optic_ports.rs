@@ -3,7 +3,7 @@
 //!
 //! The optical ports represent an interface of an optical element. The ports define the way how nodes can be connected to each other.
 //! For example, a simple filter contains one input and one output port. Each port has a unique name, an [`Aperture`] (set to
-//! [`Aperture::Open`] by default), and a [`CoatingType`] ([`CoatingType::IdealAR`] by default). Furthermore, [`OpticPorts`] can be
+//! `no aperture` by default), and a [`CoatingType`] ([`CoatingType::IdealAR`] by default). Furthermore, [`OpticPorts`] can be
 //! inverted (see inverted optic nodes). In this case input and output ports are swapped.
 //! ```rust
 //! use opossum_core::prelude::*;

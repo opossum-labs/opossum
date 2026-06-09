@@ -70,7 +70,7 @@ impl FilterConst {
         self.transmission.get()
     }
 }
-/// Config data builder for an [`IdealFilter`].
+/// Config data builder for an [`IdealFilter`](crate::nodes::IdealFilter).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
 pub enum FilterTypeBuilder {
     /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0
@@ -125,7 +125,7 @@ impl DefaultFromName for FilterTypeBuilder {
     }
 }
 
-/// Config data for an [`IdealFilter`].
+/// Config data for an [`IdealFilter`](crate::nodes::IdealFilter).
 #[derive(Debug, Clone, PartialEq)]
 pub enum FilterType {
     /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0

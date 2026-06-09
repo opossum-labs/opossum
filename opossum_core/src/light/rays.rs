@@ -20,7 +20,7 @@ use crate::{
     light::{Ray, Spectrum},
     meter, millimeter, nanometer,
     nodes::{
-        FilterType, SplittingConfig, WaveFrontData, WaveFrontErrorMap,
+        FilterType, SplittingConfig,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
     },
@@ -44,8 +44,7 @@ use itertools::{Itertools, izip};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{
-    DMatrix, DVector, Matrix2xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3, distance,
-    vector,
+    DMatrix, DVector, Matrix2xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector3, distance, vector,
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Range, path::Path};
@@ -568,7 +567,8 @@ impl Rays {
     ///
     /// This function only affects `valid` [`Ray`]s in the bundle. This functions returns `true` if valid beams have been invalidated due to the
     /// apodization. Otherwise the functions returns `false`. **Note**: This only works with "binary" [`Aperture`]s. If using a non-binary aperture
-    /// (e.g. [`Aperture::Gaussian`]), rays are filtered but not invalidated. Hence the return type is always `false`.
+    /// (e.g. Gaussian), rays are filtered but not invalidated. Hence the return type is always `false`.
+    ///
     /// # Errors
     ///
     /// This function returns an error if a single ray cannot be properly apodized (e.g. filter factor outside (0.0..=1.0)).
@@ -736,129 +736,6 @@ impl Rays {
         }
         center_wvl /= self.total_energy().value;
         Some(center_wvl)
-    }
-    /// Returns the wavefront of the bundle of [`Rays`] at the center wavelength or at each band of the spectrum with a defined resolution.
-    /// This function calculates the wavefront of a ray bundle as multiple of its wavelength with reference to the ray that is closest to the optical axis.
-    /// # Attributes
-    /// - `center_wavelength_flag`: flag to define if the center wavelength should be used for calculation or if a wavefront for all spectral components should be analyzed
-    ///
-    /// # Errors
-    /// This function errors for the moment if `center_wavelength_flag` is set to false
-    ///
-    /// # Panics
-    /// This method panics if the usize `to_f64()`conversion fails. This is not expected.
-    pub fn get_wavefront_data_in_units_of_wvl(
-        &self,
-        center_wavelength_flag: bool,
-        average_flag: bool,
-        monitor_isometry: &Isometry,
-    ) -> OpmResult<WaveFrontData> {
-        if center_wavelength_flag {
-            // calculate coherent wavefront average with the assumption of the center wavelength only
-            let center_wavelength = self.get_center_wavelength().ok_or_else(|| {
-                OpossumError::Other("Cannot determine center wavelength of empty ray bundle".into())
-            })?;
-            let wvls = self.get_unique_wavelengths(true)?;
-
-            if average_flag {
-                warn!(
-                    "Averaging wavefronts over the spectrum is not yet implemented. Using the center wavelength only is an approximation that assumes all wavefronts are similar in shape. This may not be accurate for broad spectra or systems with significant chromatic aberrations."
-                );
-                Err(OpossumError::Other(
-                    "Averaging wavefronts over the spectrum is not yet implemented".into(),
-                ))
-            } else {
-                let closest_wvl = wvls.iter().fold(wvls[0], |a, &b| {
-                    if (b - center_wavelength).abs() < (a - center_wavelength).abs() {
-                        b
-                    } else {
-                        a
-                    }
-                });
-
-                let mut rays_at_closest_wvl = Self::default();
-
-                //sort rays into spectral resolution fields
-                for ray in &self.ray_bundle {
-                    if relative_eq!(
-                        ray.wavelength().value,
-                        closest_wvl.value,
-                        epsilon = 10. * f64::EPSILON
-                    ) {
-                        rays_at_closest_wvl.add_ray(ray.clone());
-                    }
-                }
-
-                let wf_err = rays_at_closest_wvl
-                    .wavefront_error_at_pos_in_units_of_wvl(closest_wvl, monitor_isometry);
-                Ok(WaveFrontData {
-                    wavefront_error_maps: vec![WaveFrontErrorMap::new(&wf_err, closest_wvl)?],
-                })
-            }
-        } else {
-            // get wavefront data for every spectral component
-            let (rays_sorted_by_spectrum, wvls) =
-                self.split_ray_bundle_by_wavelength(nanometer!(10. * f64::EPSILON), true)?;
-
-            let mut wf_error = Vec::<MatrixXx3<f64>>::with_capacity(rays_sorted_by_spectrum.len());
-            for (rays, wvl) in rays_sorted_by_spectrum.iter().zip(wvls.iter()) {
-                if !rays.ray_bundle.is_empty() {
-                    wf_error
-                        .push(rays.wavefront_error_at_pos_in_units_of_wvl(*wvl, monitor_isometry));
-                }
-            }
-
-            let mut wf_error_maps =
-                Vec::<WaveFrontErrorMap>::with_capacity(rays_sorted_by_spectrum.len());
-            for (wf_map, wvl) in wf_error.iter().zip(wvls.iter()) {
-                wf_error_maps.push(WaveFrontErrorMap::new(wf_map, *wvl)?);
-            }
-
-            Ok(WaveFrontData {
-                wavefront_error_maps: wf_error_maps,
-            })
-        }
-    }
-    /// Calculates the wavefront error of a ray bundle with a specified wavelength at a certain position along the optical axis in the optical system
-    /// # Attributes
-    /// - `wavelength`: wave length that is used for this wavefront calculation
-    ///
-    /// # Returns
-    /// This method returns a Matrix with 3 columns for the x(1) & y(2) axes and the negative optical path(3) and a dynamic number of rows. x & y referes to the transverse extend of the beam with reference to its the optical axis
-    #[must_use]
-    pub fn wavefront_error_at_pos_in_units_of_wvl(
-        &self,
-        wavelength: Length,
-        monitor_isometry: &Isometry,
-    ) -> MatrixXx3<f64> {
-        let wvl = wavelength.get::<nanometer>();
-        let mut wave_front_err = MatrixXx3::from_element(self.nr_of_rays(true), 0.);
-        let mut min_radius = f64::INFINITY;
-        let mut path_length_at_center = 0.;
-        for (i, ray) in self.ray_bundle.iter().filter(|r| r.valid()).enumerate() {
-            let pos_in_monitor_frame = monitor_isometry.inverse_transform_point(&ray.position());
-            let position = Vector2::new(
-                pos_in_monitor_frame.x.get::<millimeter>(),
-                pos_in_monitor_frame.y.get::<millimeter>(),
-            );
-            wave_front_err[(i, 0)] = position.x;
-            wave_front_err[(i, 1)] = position.y;
-            //the wavefront error has the negative sign of the optical path difference
-            wave_front_err[(i, 2)] = -ray.path_length().get::<nanometer>();
-
-            let radius = position.x.mul_add(position.x, position.y * position.y);
-            if radius < min_radius {
-                min_radius = radius;
-                path_length_at_center = wave_front_err[(i, 2)];
-            }
-        }
-
-        for mut wf_err in wave_front_err.row_iter_mut() {
-            wf_err[2] -= path_length_at_center;
-            wf_err[2] /= wvl;
-        }
-
-        wave_front_err
     }
 
     /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx2<f64>]` transformed by an [`Isometry`].
@@ -2654,106 +2531,7 @@ mod test {
         }
         Ok(())
     }
-    #[test]
-    fn get_wavefront_data_in_units_of_wvl() -> OpmResult<()> {
-        //empty rays vector
-        let rays = Rays::from(Vec::<Ray>::new());
-        let wf_data = rays.get_wavefront_data_in_units_of_wvl(true, false, &Isometry::identity());
-        assert!(wf_data.is_err());
 
-        let mut rays = Rays::new_hexapolar_point_source(
-            Point3::origin(),
-            degree!(90.),
-            5,
-            nanometer!(1000.),
-            joule!(1.),
-        )?;
-        let _ = propagate(&mut rays, millimeter!(1.0));
-        let wf_data =
-            rays.get_wavefront_data_in_units_of_wvl(true, false, &Isometry::identity())?;
-        assert!(wf_data.wavefront_error_maps.len() == 1);
-        rays.add_ray(Ray::new(
-            Point3::origin(),
-            Vector3::y(),
-            nanometer!(1005.),
-            joule!(1.),
-        )?);
-        let wf_data =
-            rays.get_wavefront_data_in_units_of_wvl(false, false, &Isometry::identity())?;
-
-        assert!(wf_data.wavefront_error_maps.len() == 2);
-        rays.add_ray(Ray::new(
-            Point3::origin(),
-            Vector3::y(),
-            nanometer!(1007.),
-            joule!(1.),
-        )?);
-
-        let wf_data =
-            rays.get_wavefront_data_in_units_of_wvl(false, false, &Isometry::identity())?;
-
-        assert!(wf_data.wavefront_error_maps.len() == 3);
-        Ok(())
-    }
-    #[test]
-    fn wavefront_error_at_pos_in_units_of_wvl() -> OpmResult<()> {
-        let mut rays = Rays::new_hexapolar_point_source(
-            Point3::origin(),
-            degree!(90.),
-            1,
-            nanometer!(1000.),
-            joule!(1.),
-        )?;
-
-        let mut s = OpticSurface::default();
-        s.set_isometry(Isometry::new_along_z(millimeter!(10.0))?);
-        rays.refract_on_surface(
-            &mut s,
-            Some(&refr_index_vaccuum()),
-            true,
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        let wf_error =
-            rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.), &Isometry::identity());
-        for (i, val) in wf_error.column(2).iter().enumerate() {
-            if i != 0 {
-                assert_relative_eq!(
-                    val,
-                    &(10000. * (1. - f64::sqrt(2.))),
-                    epsilon = 100000. * f64::EPSILON
-                );
-            } else {
-                assert_abs_diff_eq!(val, &0.0)
-            }
-        }
-        let mut rays = Rays::new_hexapolar_point_source(
-            Point3::origin(),
-            degree!(90.),
-            1,
-            nanometer!(500.),
-            joule!(1.),
-        )?;
-        rays.refract_on_surface(
-            &mut s,
-            Some(&refr_index_vaccuum()),
-            true,
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        let wf_error =
-            rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.), &Isometry::identity());
-        for (i, val) in wf_error.column(2).iter().enumerate() {
-            if i != 0 {
-                assert_relative_eq!(
-                    val,
-                    &(20000. * (1. - f64::sqrt(2.))),
-                    epsilon = 100000. * f64::EPSILON
-                );
-            } else {
-                assert_abs_diff_eq!(val, &0.0)
-            }
-        }
-        Ok(())
-    }
     #[test]
     fn get_xy_rays_pos() -> OpmResult<()> {
         let rays = Rays::new_hexapolar_point_source(

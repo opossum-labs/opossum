@@ -137,7 +137,7 @@ impl Aperture {
 
     /// Calculate the transmission factor of a given point on this aperture. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.
-    /// The transmission factor is calculated by the [`apodize`](ApertureShape::apodize()) function of the respective shape. If the aperture type is `Obstruction`, the transmission factor is inverted.
+    /// The transmission factor is calculated by the [`apodize`](Aperture::apodize()) function of the respective shape. If the aperture type is `Obstruction`, the transmission factor is inverted.
     /// The point is transformed by the inverse of the isometry of the aperture before the apodization is calculated.
     /// Hole aperture: transmission factor is the same as the apodization of the shape.
     /// Obstruction aperture: transmission factor is 1.0 - apodization of the shape.
