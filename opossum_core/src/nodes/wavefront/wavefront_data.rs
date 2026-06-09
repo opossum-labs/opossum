@@ -51,6 +51,7 @@ impl WaveFrontData {
         center_wavelength_flag: bool,
         average_flag: bool,
         monitor_isometry: &Isometry,
+        remove_tilt: bool,
     ) -> OpmResult<Self> {
         if center_wavelength_flag {
             let center_wavelength = rays.get_center_wavelength().ok_or_else(|| {
@@ -86,8 +87,11 @@ impl WaveFrontData {
                     }
                 }
 
-                let map =
+                let mut map =
                     WaveFrontMap::from_rays(&rays_at_closest_wvl, closest_wvl, monitor_isometry)?;
+                if remove_tilt {
+                    map.remove_tilt()?;
+                }
                 Ok(Self {
                     wavefront_error_maps: vec![map],
                 })
@@ -101,7 +105,11 @@ impl WaveFrontData {
             let mut wf_error_maps = Vec::with_capacity(rays_sorted_by_spectrum.len());
             for (bundle, &wvl) in rays_sorted_by_spectrum.iter().zip(wvls.iter()) {
                 if !bundle.is_empty() {
-                    wf_error_maps.push(WaveFrontMap::from_rays(bundle, wvl, monitor_isometry)?);
+                    let mut map = WaveFrontMap::from_rays(bundle, wvl, monitor_isometry)?;
+                    if remove_tilt {
+                        map.remove_tilt()?;
+                    }
+                    wf_error_maps.push(map);
                 }
             }
 
@@ -265,6 +273,53 @@ impl WaveFrontMap {
         );
         self.ptv = ptv;
         self.rms = rms;
+        Ok(())
+    }
+
+    /// Removes the tilt from the wavefront map by fitting a 2D plane using a least-squares
+    /// approach and subtracting it from the optical path differences.
+    ///
+    /// At least 3 valid wavefront points are needed to calculate the tilt. Otherwise the wavefront is unmodified.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the internal SVD (single value decomposition) calculation fails.
+    pub fn remove_tilt(&mut self) -> OpmResult<()> {
+        let n = self.x.len();
+
+        // We need at least 3 points to define a plane
+        if n < 3 {
+            return Ok(());
+        }
+
+        // Build the design matrix M and the observation vector Z
+        let mut m = MatrixXx3::zeros(n);
+        let mut z = DVector::zeros(n);
+
+        for i in 0..n {
+            m[(i, 0)] = self.x[i];
+            m[(i, 1)] = self.y[i];
+            m[(i, 2)] = 1.0;
+            z[i] = self.opd[i]; // (Hier 'opd' oder 'wf_map' nutzen, je nachdem, ob du es umbenannt hast)
+        }
+
+        // Solve the least-squares problem using Singular Value Decomposition (SVD)
+        let svd = m.svd(true, true);
+        let params = svd
+            .solve(&z, 1e-7)
+            .map_err(|e| OpossumError::Other(format!("SVD failed to calculate tilt plane: {e}")))?;
+
+        let tilt_x = params[0];
+        let tilt_y = params[1];
+
+        // Subtract the pure tilt from the data
+        for i in 0..n {
+            self.opd[i] -= tilt_x * self.x[i] + tilt_y * self.y[i];
+        }
+
+        // Recalculate PtV and RMS since the data has changed
+        self.calc_wavefront_statistics()?;
+
         Ok(())
     }
 
@@ -545,7 +600,8 @@ mod test {
     fn wavefront_data_from_rays() -> OpmResult<()> {
         //empty rays vector
         assert!(
-            WaveFrontData::from_rays(&Rays::default(), true, false, &Isometry::identity()).is_err()
+            WaveFrontData::from_rays(&Rays::default(), true, false, &Isometry::identity(), false)
+                .is_err()
         );
 
         let mut rays = Rays::new_hexapolar_point_source(
@@ -556,7 +612,7 @@ mod test {
             joule!(1.),
         )?;
         propagate(&mut rays, millimeter!(1.0))?;
-        let wf_data = WaveFrontData::from_rays(&rays, true, false, &Isometry::identity())?;
+        let wf_data = WaveFrontData::from_rays(&rays, true, false, &Isometry::identity(), false)?;
         assert!(wf_data.wavefront_error_maps.len() == 1);
         rays.add_ray(Ray::new(
             Point3::origin(),
@@ -564,7 +620,7 @@ mod test {
             nanometer!(1005.),
             joule!(1.),
         )?);
-        let wf_data = WaveFrontData::from_rays(&rays, false, false, &Isometry::identity())?;
+        let wf_data = WaveFrontData::from_rays(&rays, false, false, &Isometry::identity(), false)?;
 
         assert!(wf_data.wavefront_error_maps.len() == 2);
         rays.add_ray(Ray::new(
@@ -573,7 +629,7 @@ mod test {
             nanometer!(1007.),
             joule!(1.),
         )?);
-        let wf_data = WaveFrontData::from_rays(&rays, false, false, &Isometry::identity())?;
+        let wf_data = WaveFrontData::from_rays(&rays, false, false, &Isometry::identity(), false)?;
 
         assert!(wf_data.wavefront_error_maps.len() == 3);
         Ok(())
@@ -609,6 +665,83 @@ mod test {
         let wvf_map = WaveFrontMap::from_rays(&rays, wvl, &Isometry::identity())?;
         assert_eq!(wvf_map.ptv, 1.0);
         assert_abs_diff_eq!(wvf_map.rms, 0.5);
+        Ok(())
+    }
+    #[test]
+    fn remove_tilt_pure_tilt() -> OpmResult<()> {
+        // Test a wave front only consisting of a pure tilt and an offset (piston).
+        // Z = 2.0*X - 3.0*Y + 0.5
+        let n = 9;
+        let mut wf_dat = MatrixXx3::zeros(n);
+        let mut idx = 0;
+        for x in -1..=1 {
+            for y in -1..=1 {
+                wf_dat[(idx, 0)] = x as f64;
+                wf_dat[(idx, 1)] = y as f64;
+                wf_dat[(idx, 2)] = 2.0 * (x as f64) - 3.0 * (y as f64) + 0.5;
+                idx += 1;
+            }
+        }
+
+        let mut wf_map = WaveFrontMap::new(&wf_dat, nanometer!(1000.0))?;
+
+        // Check befote
+        // Max @ (1, -1) = 2 - (-3) + 0.5 = 5.5
+        // Min @ (-1, 1) = -2 - 3 + 0.5 = -4.5
+        // PtV = 5.5 - (-4.5) = 10.0
+        assert_relative_eq!(wf_map.ptv(), 10.0, epsilon = 1e-12);
+
+        wf_map.remove_tilt()?;
+
+        // After removal -> PtV should be zero
+        assert_relative_eq!(wf_map.ptv(), 0.0, epsilon = 1e-12);
+        assert_relative_eq!(wf_map.rms(), 0.0, epsilon = 1e-12);
+
+        Ok(())
+    }
+    #[test]
+    fn remove_tilt_with_aberration() -> OpmResult<()> {
+        // Test Wavefront with Defokus und strong Tilt.
+        // Z = (X^2 + Y^2) + 5.0*X
+        let n = 5;
+        let mut wf_dat = MatrixXx3::zeros(n);
+        let coords = [(0.0, 1.0), (1.0, 0.0), (0.0, -1.0), (-1.0, 0.0), (0.0, 0.0)];
+
+        for (i, &(x, y)) in coords.iter().enumerate() {
+            wf_dat[(i, 0)] = x;
+            wf_dat[(i, 1)] = y;
+            wf_dat[(i, 2)] = (x * x + y * y) + 5.0 * x;
+        }
+
+        let mut wf_map = WaveFrontMap::new(&wf_dat, nanometer!(1000.0))?;
+
+        // Before: Values are 1.0, 6.0, 1.0, -4.0, 0.0 -> PtV = 10.0
+        assert_relative_eq!(wf_map.ptv(), 10.0, epsilon = 1e-12);
+
+        wf_map.remove_tilt()?;
+
+        // After: only defocus should remain (X^2 + Y^2).
+        // Expected values 1.0, 1.0, 1.0, 1.0, 0.0 -> PtV = 1.0
+        assert_relative_eq!(wf_map.ptv(), 1.0, epsilon = 1e-12);
+
+        Ok(())
+    }
+    #[test]
+    fn remove_tilt_too_few_points() -> OpmResult<()> {
+        // Need at least 3 points
+        let mut wf_dat = MatrixXx3::zeros(2);
+        wf_dat[(0, 2)] = 1.0;
+        wf_dat[(1, 2)] = 5.0;
+
+        let mut wf_map = WaveFrontMap::new(&wf_dat, nanometer!(1000.0))?;
+        assert_relative_eq!(wf_map.ptv(), 4.0, epsilon = 1e-8);
+
+        // Should not return an error but simply not modify wave front
+        wf_map.remove_tilt()?;
+
+        // PtV still 4.0
+        assert_relative_eq!(wf_map.ptv(), 4.0, epsilon = 1e-8);
+
         Ok(())
     }
 }

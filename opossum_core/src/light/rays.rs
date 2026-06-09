@@ -568,7 +568,7 @@ impl Rays {
     /// This function only affects `valid` [`Ray`]s in the bundle. This functions returns `true` if valid beams have been invalidated due to the
     /// apodization. Otherwise the functions returns `false`. **Note**: This only works with "binary" [`Aperture`]s. If using a non-binary aperture
     /// (e.g. Gaussian), rays are filtered but not invalidated. Hence the return type is always `false`.
-    /// 
+    ///
     /// # Errors
     ///
     /// This function returns an error if a single ray cannot be properly apodized (e.g. filter factor outside (0.0..=1.0)).

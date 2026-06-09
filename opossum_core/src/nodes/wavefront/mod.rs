@@ -9,7 +9,7 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{NodeAttr, OpticNode, PortType},
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     geometry::geo_surface::GeoSurfaceRef,
     light::{LightData, LightResult},
     nodes::NodeRegistration,
@@ -56,9 +56,17 @@ unsafe impl Send for WaveFront {}
 impl Default for WaveFront {
     /// create a wavefront monitor.
     fn default() -> Self {
+        let mut node_attr = NodeAttr::new("wavefront monitor");
+        node_attr
+            .create_property(
+                "remove tilt",
+                "remove a wavefront tilt (plane surface)",
+                false.into(),
+            )
+            .unwrap();
         let mut wf = Self {
             light_data: None,
-            node_attr: NodeAttr::new("wavefront monitor"),
+            node_attr,
             apodization_warning: false,
             reference_surface: None, // Use standard plane surface as reference
         };
@@ -124,7 +132,13 @@ impl OpticNode for WaveFront {
             let iso = self
                 .effective_surface_iso("input_1")
                 .unwrap_or_else(|_| Isometry::identity());
-            let wf_data_opt = wavefront_data::WaveFrontData::from_rays(rays, true, false, &iso);
+            let Ok(Proptype::Bool(remove_tilt)) = self.node_attr.get_property("remove tilt") else {
+                return Err(OpossumError::Analysis(
+                    "cannot read `remove tilt`collimation flag".into(),
+                ));
+            };
+            let wf_data_opt =
+                wavefront_data::WaveFrontData::from_rays(rays, true, false, &iso, *remove_tilt);
 
             if let Ok(ref wf_data) = wf_data_opt
                 && !wf_data.wavefront_error_maps.is_empty()
@@ -155,6 +169,13 @@ impl OpticNode for WaveFront {
                         Proptype::WfLambda(wf_error_map.rms(), wf_error_map.wavelength()),
                     )
                     ?;
+                    if *remove_tilt {
+                        props.create(
+                            "Note",
+                            "note",
+                            "A possible wavefront tilt has been subtracted.".into(),
+                        )?;
+                    }
                 }
 
                 if self.apodization_warning {
