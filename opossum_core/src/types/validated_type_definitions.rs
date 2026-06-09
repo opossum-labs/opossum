@@ -17,7 +17,7 @@ use uom::si::f64::{Angle, Length};
 pub type ValidatedSideLengths2D = validated_type!(Point2<Length>, AllNormal && AllPositive);
 
 impl ValidatedSideLengths2D {
-    /// Attempts to create a new [`ValidatedSideLengths`] instance.
+    /// Attempts to create a new [`ValidatedSideLengths2D`] instance.
     ///
     /// # Errors
     /// Returns an error if any component is non-finite or not strictly positive.
@@ -41,7 +41,7 @@ impl Default for ValidatedSideLengths2D {
 pub type ValidatedCenter2D = validated_type!(Point2<Length>, AllFinite);
 
 impl ValidatedCenter2D {
-    /// Attempts to create a new [`ValidatedCenter`] instance.
+    /// Attempts to create a new [`ValidatedCenter2D`] instance.
     ///
     /// # Errors
     /// Returns an error if any coordinate is NaN or infinite.
@@ -65,7 +65,7 @@ impl Default for ValidatedCenter2D {
 pub type ValidatedAngle1D = validated_type!(Angle, AllFinite);
 
 impl ValidatedAngle1D {
-    /// Attempts to create a new [`ValidatedAngle`] instance.
+    /// Attempts to create a new [`ValidatedAngle1D`] instance.
     ///
     /// # Errors
     /// Returns an error if angle is NaN or infinite.
