@@ -57,7 +57,7 @@ pub trait GeoSurface: Send + Sync + Debug {
 /// Reference for a [`GeoSurface`].
 ///
 /// This struct is necessary in order to implement a Default trait on a `Arc<Mutex<GeoSurface>>`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GeoSurfaceRef(pub Arc<Mutex<dyn GeoSurface>>);
 
 impl Default for GeoSurfaceRef {

@@ -14,7 +14,7 @@ use crate::{
         ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
     },
     nodes::{
-        Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontErrorMap,
+        Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontMap,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ideal_filter::FilterTypeBuilder,
         ray_propagation_visualizer::RayPositionHistories,
@@ -93,7 +93,7 @@ pub enum Proptype {
     /// This property stores the fluence estimator strategy [`FluenceEstimator`]
     FluenceEstimator(FluenceEstimator),
     /// This property stores the wavefront Information [`WaveFrontErrorMap`]
-    WaveFrontData(WaveFrontErrorMap),
+    WaveFrontData(WaveFrontMap),
     /// This property stores the ray position history of all [`Rays`](crate::light::Rays) during propagation through the optic scenery
     RayPositionHistory(RayPositionHistories),
     /// This property stores the ray position history of all [`Rays`](crate::light::Rays), separated by their bounce level,
@@ -426,7 +426,7 @@ mod test {
             "Ocean Optics HR2000".to_string()
         );
         assert_eq!(
-            Proptype::WaveFrontData(WaveFrontErrorMap::default())
+            Proptype::WaveFrontData(WaveFrontMap::default())
                 .to_html("id", "property_name",0)
                 ?,
             "<img src=\"data_0/id_property_name.png\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()

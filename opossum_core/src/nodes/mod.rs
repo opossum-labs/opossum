@@ -59,7 +59,8 @@ pub use reference::NodeReference;
 pub use reflective_grating::ReflectiveGrating;
 pub use spectrometer::{Spectrometer, SpectrometerType};
 pub use thin_mirror::ThinMirror;
-pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
+pub use wavefront::WaveFront;
+pub use wavefront::wavefront_data::{WaveFrontData, WaveFrontMap};
 
 pub use source::Source;
 pub use source_helper::{
