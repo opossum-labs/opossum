@@ -924,7 +924,7 @@ impl NodeGroup {
 impl OpticNode for NodeGroup {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
-        let ports_to_be_set = self.node_attr.ports();
+        let ports_to_be_set = self.node_attr.raw_ports();
         for p in self.graph.port_map(&PortType::Input).port_names() {
             ports.add(&PortType::Input, &p).unwrap();
         }

@@ -38,7 +38,7 @@ pub async fn get_ports(
         .node_attr()
         .clone();
 
-    let ports = node_attr.ports();
+    let ports = node_attr.raw_ports();
 
     let response = NodePortsResponse {
         inputs: ports.ports(&PortType::Input).clone(),
@@ -81,7 +81,7 @@ pub async fn patch_port(
         .lock()
         .scenery_mut()
         .with_node_attr_mut(uuid, |node_attr| {
-            let port_map = node_attr.ports_mut().ports_mut(&port_type);
+            let port_map = node_attr.raw_ports_mut().ports_mut(&port_type);
 
             if let Some(port) = port_map.get_mut(&port_name) {
                 if let Some(new_aperture) = update_data.aperture {
