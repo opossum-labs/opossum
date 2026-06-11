@@ -42,8 +42,9 @@ pub async fn get_analyzers() -> Result<Vec<AnalyzerItemDto>, String> {
 /// - the Analyzer with the given id was not found.
 pub async fn delete_analyzer(id: Uuid) -> Result<Uuid, String> {
     HTTP_API_CLIENT()
-        .delete::<String, Uuid>(&format!("/api/analyzers/{id}"), String::new())
+        .delete_no_content(&format!("/api/analyzers/{id}"))
         .await
+        .map(|_| id)
 }
 /// Update the analyzer configuration of an analyzer node.
 /// This function sends a POST request to the server to update the analyzer type
