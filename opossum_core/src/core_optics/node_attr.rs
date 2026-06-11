@@ -241,15 +241,24 @@ impl NodeAttr {
     pub const fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;
     }
-    /// Returns a reference to the optic ports of this [`NodeAttr`].
+    /// Returns a reference to the stored optic ports of this [`NodeAttr`].
+    ///
+    /// **Warning**: This method only returns the internally stored port configuration.
+    /// For virtual nodes like [`NodeReference`](crate::nodes::NodeReference), this might be empty. To get the
+    /// effective ports of an optical element, always use the `ports()` method
+    /// of the [`OpticNode`](crate::core_optics::OpticNode) trait instead!
     #[must_use]
-    pub const fn ports(&self) -> &OpticPorts {
+    pub const fn raw_ports(&self) -> &OpticPorts {
         &self.ports
     }
 
     /// Returns a mutable reference to the optic ports of this [`NodeAttr`].
+    ///
+    /// **Warning**: See [`raw_ports()`](NodeAttr::raw_ports). Use 
+    /// the [`OpticNode`](crate::core_optics::OpticNode) trait methods for
+    /// safe modifications of effective ports.
     #[must_use]
-    pub const fn ports_mut(&mut self) -> &mut OpticPorts {
+    pub const fn raw_ports_mut(&mut self) -> &mut OpticPorts {
         &mut self.ports
     }
     /// Sets the apertures of this [`NodeAttr`].

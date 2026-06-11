@@ -215,7 +215,7 @@ pub trait OpticNode: Dottable {
     }
     /// Return the available (input & output) ports of this [`OpticNode`].
     fn ports(&self) -> OpticPorts {
-        let mut ports = self.node_attr().ports().clone();
+        let mut ports = self.node_attr().raw_ports().clone();
         if self.node_attr().inverted() {
             ports.set_inverted(true);
         }
@@ -225,7 +225,7 @@ pub trait OpticNode: Dottable {
     /// Return the available (input & output) ports of this [`OpticNode`] as mutables.
     fn ports_mut(&mut self) -> &mut OpticPorts {
         let inverted = self.node_attr().inverted();
-        let ports = self.node_attr_mut().ports_mut();
+        let ports = self.node_attr_mut().raw_ports_mut();
         if inverted {
             ports.set_inverted(true);
         }
@@ -469,7 +469,7 @@ pub trait OpticNode: Dottable {
             node_attr_mut.set_align_like_node_at_distance(*node_idx, *distance);
         }
         node_attr_mut.update_properties(node_attributes.properties().clone());
-        node_attr_mut.set_ports(node_attributes.ports().clone());
+        node_attr_mut.set_ports(node_attributes.raw_ports().clone());
         node_attr_mut.set_uuid(node_attributes.uuid());
         node_attr_mut.set_gui_position(node_attributes.gui_position());
         Ok(())
