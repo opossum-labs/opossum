@@ -5,7 +5,7 @@ mod graph_workspace_state;
 pub use editor_state::{DragStatus, EditorState, EditorStateStoreExt};
 pub use graph_store::{
     GraphInfo, GraphState, GraphStateStoreExt, GraphStore, GraphStoreStoreExt,
-    GraphStoreStoreImplExt, optimize_layout_and_sync,
+    GraphStoreStoreImplExt, optimize_layout,
 };
 pub use graph_workspace_state::{
     GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
