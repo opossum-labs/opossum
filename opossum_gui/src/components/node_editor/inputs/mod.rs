@@ -216,7 +216,7 @@ pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Opt
 
 pub fn parse_exp_input_strict(input: &str) -> OpmResult<String> {
     let regex = Regex::new(r"^[+-]?(?:(\d+([.,]\d*)?)|([.,]\d+))([eE][+-]?\d+)?$")
-        .map_err(|e| OpossumError::Other(format!("Error compiling regex: {}", e)))?;
+        .map_err(|e| OpossumError::Other(format!("Error compiling regex: {e}")))?;
     let trimmed = input.trim().replace(',', ".");
     if regex.is_match(&trimmed) {
         return Ok(trimmed);
@@ -247,7 +247,7 @@ pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> OpmResult<(Strin
     let regex = Regex::new(
         r"^(?P<value>[+-]?(?:\d*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d*)?)\s*(?P<unit>\S+)$",
     )
-    .map_err(|e| OpossumError::Other(format!("Error compiling regex: {}", e)))?;
+    .map_err(|e| OpossumError::Other(format!("Error compiling regex: {e}")))?;
 
     let valid_prefixes = [
         'q', 'r', 'y', 'z', 'a', 'f', 'p', 'n', 'µ', 'u', 'm', 'k', 'M', 'G', 'T', 'P', 'E', 'Z',
@@ -256,7 +256,7 @@ pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> OpmResult<(Strin
 
     let caps = regex
         .captures(input.trim())
-        .ok_or(OpossumError::Other("error during capture".into()))?;
+        .ok_or_else(|| OpossumError::Other("error during capture".into()))?;
 
     let value = caps.name("value").unwrap().as_str().replace(',', ".");
     if value.is_empty() {

@@ -446,6 +446,15 @@ pub struct NewAnalyzerInfo {
     pub gui_position: (f64, f64),
 }
 
+/// Data Transfer Object to securely send an analyzer with its corresponding ID to the client.
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct AnalyzerItemDto {
+    /// The unique identifier of the analyzer.
+    pub id: Uuid,
+    /// The actual data of the analyzer.
+    pub info: AnalyzerInfo,
+}
+
 /// Request payload for partial updates of an analyzer's properties
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
 pub struct UpdateAnalyzerInfo {

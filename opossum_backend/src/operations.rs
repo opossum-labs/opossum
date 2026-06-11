@@ -20,7 +20,8 @@ use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::{OpticNode, PortMap, PortType, Proptype},
     types::api_types::{
-        ConnectInfo, ConvertToGroupRequest, ErrorResponse, MoveNodesRequest, NodeInfo,
+        AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest, ErrorResponse, MoveNodesRequest,
+        NodeInfo,
     },
     utils::LockExt,
 };
@@ -47,21 +48,28 @@ async fn post_copy_nodes(
 ) -> Result<(), BackEndErrorResponse> {
     let mut all_nodes_found = true;
     let node_ids_to_copy = node_id.into_inner();
-    //get optic ref of nde that should be copied
+
+    // Get optic ref of node that should be copied
     let document = data.document.lock();
     let mut copied_nodes_set = data.node_copy_cache.lock();
     copied_nodes_set.clear();
+
     for id in &node_ids_to_copy {
         if let Ok((node_ref_to_copy, _)) = document.scenery().node_recursive(*id) {
             copied_nodes_set.push(NodeCacheItem::Optical(node_ref_to_copy));
         } else if let Some(analyzer) = document.analyzers().get(id).cloned() {
-            copied_nodes_set.push(NodeCacheItem::Analyzer(analyzer));
+            // Save the DTO in cache so we retain the ID
+            copied_nodes_set.push(NodeCacheItem::Analyzer(AnalyzerItemDto {
+                id: *id,
+                info: analyzer,
+            }));
         } else {
             all_nodes_found = false;
         }
     }
     drop(copied_nodes_set);
     drop(document);
+
     if all_nodes_found {
         Ok(())
     } else {
@@ -72,6 +80,7 @@ async fn post_copy_nodes(
         ))
     }
 }
+
 /// Delete all nodes that have been cut out previously and
 ///
 /// This function sends already copied nodes to the frontend
@@ -91,13 +100,15 @@ async fn post_cut_nodes(
     let mut nodes_to_delete = vec![];
     let mut analyzers_to_delete = vec![];
     let mut node_cache = data.node_copy_cache.lock();
+
     while let Some(cache) = node_cache.pop() {
         match cache {
             NodeCacheItem::Optical(optic_ref) => {
                 nodes_to_delete.push(optic_ref.uuid());
             }
-            NodeCacheItem::Analyzer(analyzer_info) => {
-                analyzers_to_delete.push(analyzer_info.id());
+            NodeCacheItem::Analyzer(analyzer_dto) => {
+                // Access the ID inside the DTO
+                analyzers_to_delete.push(analyzer_dto.id);
             }
         }
     }
@@ -118,9 +129,9 @@ async fn post_cut_nodes(
     };
 
     if scenery_id == paste_in_group_id {
-        for analyzer in &analyzers_to_delete {
-            deleted_nodes.push(*analyzer);
-            document.remove_analyzer(*analyzer)?;
+        for analyzer_id in &analyzers_to_delete {
+            deleted_nodes.push(*analyzer_id);
+            document.remove_analyzer(*analyzer_id)?;
         }
     }
 
@@ -132,6 +143,7 @@ async fn post_cut_nodes(
 
     Ok(Json((deleted_nodes, group_id)))
 }
+
 /// Paste copied nodes
 ///
 /// This function sends already copied nodes to the frontend
@@ -153,7 +165,7 @@ async fn post_paste_nodes(
 ) -> Result<
     Json<(
         HashMap<Uuid, Vec<NodeInfo>>,
-        Vec<AnalyzerInfo>,
+        Vec<AnalyzerItemDto>, // Updated return type to AnalyzerItemDto
         HashMap<Uuid, Vec<ConnectInfo>>,
     )>,
     BackEndErrorResponse,
@@ -167,21 +179,22 @@ async fn post_paste_nodes(
     let shift = Point2::new(node_pos.0 - min_pos.x, node_pos.1 - min_pos.y);
 
     let mut copied_optical_nodes = Vec::<OpticRef>::new();
-    let mut copied_analyzer_nodes = Vec::<AnalyzerInfo>::new();
+    let mut copied_analyzer_nodes = Vec::<AnalyzerItemDto>::new();
 
     for cache in data.node_copy_cache.lock().iter() {
         match cache {
             NodeCacheItem::Optical(optic_ref) => copied_optical_nodes.push(optic_ref.clone()),
-            NodeCacheItem::Analyzer(analyzer_info) => {
-                copied_analyzer_nodes.push(analyzer_info.clone());
+            NodeCacheItem::Analyzer(analyzer_dto) => {
+                copied_analyzer_nodes.push(analyzer_dto.clone());
             }
         }
     }
 
     let mut analyzers = Vec::new();
     if paste_in_scenery {
-        for analyzer in &copied_analyzer_nodes {
-            analyzers.push(copy_analyzer(&data, shift, analyzer));
+        for analyzer_dto in &copied_analyzer_nodes {
+            // Pass the internal AnalyzerInfo to copy_analyzer
+            analyzers.push(copy_analyzer(&data, shift, &analyzer_dto.info));
         }
     }
 
@@ -195,7 +208,7 @@ async fn post_paste_nodes(
     let mut node_id_link = HashMap::<Uuid, Uuid>::new();
     let mut input_port_maps = HashMap::<Uuid, PortMap>::new();
     let mut output_port_maps = HashMap::<Uuid, PortMap>::new();
-    // node_id_link.insert(paste_group_id, paste_group_id);
+
     collect_optical_nodes_to_copy_recursive(
         scenery,
         paste_group_id,
@@ -252,6 +265,7 @@ async fn post_paste_nodes(
     }
     Ok(Json((grouped_node_infos, analyzers, grouped_connect_info)))
 }
+
 fn upper_left_corner_of_nodes(
     nodes: &[NodeCacheItem],
 ) -> Result<Point2<f64>, BackEndErrorResponse> {
@@ -263,8 +277,12 @@ fn upper_left_corner_of_nodes(
                 let node = optical_node.optical_ref.lock_opm()?;
                 node.gui_position().unwrap_or_else(Point2::origin)
             }
-            NodeCacheItem::Analyzer(analyzer) => {
-                analyzer.gui_position().unwrap_or_else(Point2::origin)
+            NodeCacheItem::Analyzer(analyzer_dto) => {
+                // Access info from DTO
+                analyzer_dto
+                    .info
+                    .gui_position()
+                    .unwrap_or_else(Point2::origin)
             }
         };
 
@@ -274,6 +292,7 @@ fn upper_left_corner_of_nodes(
 
     Ok(corner)
 }
+
 fn reconfigure_ports(
     scenery: &mut NodeGroup,
     input_port_maps: &HashMap<Uuid, PortMap>,
@@ -281,7 +300,7 @@ fn reconfigure_ports(
     node_id_link: &HashMap<Uuid, Uuid>,
     grouped_node_infos: &mut HashMap<Uuid, Vec<NodeInfo>>,
 ) -> Result<(), BackEndErrorResponse> {
-    //output port maps
+    // output port maps
     for (old_group_id, output_port_map) in output_port_maps {
         for (external_port_name, (input_node, internal_port_name)) in output_port_map {
             if let (Some(new_group_id), Some(new_mapped_node_id)) =
@@ -298,7 +317,7 @@ fn reconfigure_ports(
             }
         }
     }
-    //input port maps
+    // input port maps
     for (old_group_id, input_port_map) in input_port_maps {
         for (external_port_name, (input_node, internal_port_name)) in input_port_map {
             if let (Some(new_group_id), Some(new_mapped_node_id)) =
@@ -318,7 +337,7 @@ fn reconfigure_ports(
     let inverted_node_link: HashMap<Uuid, Uuid> =
         node_id_link.iter().map(|(k, v)| (*v, *k)).collect();
 
-    //set ports
+    // set ports
     for node_info in grouped_node_infos.values_mut() {
         for n in node_info {
             if n.node_type() == "group"
@@ -335,6 +354,7 @@ fn reconfigure_ports(
     }
     Ok(())
 }
+
 #[allow(clippy::significant_drop_tightening)]
 fn resolve_references(
     scenery: &mut NodeGroup,
@@ -375,6 +395,7 @@ fn resolve_references(
 
     Ok(())
 }
+
 fn remap_connections(
     connections: &mut HashMap<Uuid, Vec<ConnectionInfo>>,
     node_id_link: &HashMap<Uuid, Uuid>,
@@ -394,18 +415,32 @@ fn remap_connections(
         }
     }
 }
+
 fn copy_analyzer(
     data: &web::Data<AppState>,
     shift: Point2<f64>,
     analyzer: &AnalyzerInfo,
-) -> AnalyzerInfo {
+) -> AnalyzerItemDto {
     let old_pos = analyzer.gui_position().unwrap_or_default();
     let new_pos = Point2::new(old_pos.x + shift.x, old_pos.y + shift.y);
-    let new_analyzer = AnalyzerInfo::new(analyzer.analyzer_type().clone(), Uuid::new_v4(), new_pos);
     let mut document = data.document.lock();
-    document.add_analyzer_info(&new_analyzer);
-    new_analyzer
+
+    // Add analyzer with new position, let opm_document generate the UUID
+    let new_id = document.add_analyzer_with_position(
+        analyzer.analyzer_type().clone(),
+        Some((new_pos.x, new_pos.y)),
+    );
+
+    // Retrieve the newly created info struct
+    let new_info = document.analyzers().get(&new_id).cloned().unwrap();
+    drop(document);
+    // Construct and return the DTO
+    AnalyzerItemDto {
+        id: new_id,
+        info: new_info,
+    }
 }
+
 #[allow(clippy::too_many_arguments)]
 pub fn collect_optical_nodes_to_copy_recursive(
     scenery: &mut NodeGroup,
@@ -471,6 +506,7 @@ pub fn collect_optical_nodes_to_copy_recursive(
     grouped_node_infos.push((group_id_to_insert, optical_nodes, is_root_group));
     Ok(())
 }
+
 fn set_copied_connections(
     scenery: &mut NodeGroup,
     group_id: Uuid,
@@ -521,6 +557,7 @@ fn set_copied_connections(
 
     Ok(result)
 }
+
 pub fn collect_optical_node_to_copy(
     scenery: &NodeGroup,
     group_id: Uuid,
@@ -555,6 +592,7 @@ pub fn collect_optical_node_to_copy(
 
     Ok(new_node_ref)
 }
+
 pub fn copy_from_optic_ref(
     scenery: &NodeGroup,
     optic_ref: &OpticRef,
@@ -599,6 +637,7 @@ pub fn copy_from_optic_ref(
 
     Ok((new_node_ref, old_node_id))
 }
+
 fn get_shifted_pos_of_ref(
     optic_ref: &OpticRef,
     shift: Point2<f64>,
@@ -619,7 +658,6 @@ fn get_shifted_pos_of_ref(
 /// group and wrapped into a newly created group node.
 #[utoipa::path(
     tag = "operations",
-    // params(...) wurde komplett entfernt!
     request_body(
         content = ConvertToGroupRequest,
         description = "Information about the parent group and the nodes to convert",
@@ -633,22 +671,22 @@ fn get_shifted_pos_of_ref(
 #[post("/convert_to_group")]
 pub async fn post_convert_nodes_to_group(
     data: web::Data<AppState>,
-    request: web::Json<ConvertToGroupRequest>, // <-- Wir nehmen nun unser neues Struct entgegen
+    request: web::Json<ConvertToGroupRequest>,
 ) -> Result<Json<(NodeInfo, Vec<ConnectInfo>)>, BackEndErrorResponse> {
-    // Entpacke die Daten aus dem Request-Body
+    // Unpack data from the request body
     let req = request.into_inner();
     let group_id = req.group_id;
     let nodes_to_convert = req.nodes_to_convert;
 
-    //collect data
+    // Collect data
     let (node_refs, pos) = collect_node_refs_and_pos(&data, &nodes_to_convert);
     let all_connections = collect_group_connections(&data, group_id)?;
     let split = split_sort_connections(&data, &all_connections, &nodes_to_convert);
 
-    //create new group: add nodes and connections
+    // Create new group: add nodes and connections
     let new_group = build_new_group_from_refs_and_conns(node_refs, &split)?;
 
-    //addnew group to scenery
+    // Add new group to scenery
     let new_group_id = add_converted_group_to_scenery(
         &data,
         group_id,
@@ -658,7 +696,7 @@ pub async fn post_convert_nodes_to_group(
         &split.output,
     )?;
 
-    //create the nodeinfo struct for the GUI
+    // Create the nodeinfo struct for the GUI
     let new_group_node_info = create_new_group_node_info(&data, new_group_id, pos)?;
 
     let mut external_connections = split.input;
@@ -673,7 +711,6 @@ pub async fn post_convert_nodes_to_group(
 /// the target group, including their internal connections.
 #[utoipa::path(
     tag = "operations",
-    // params(...) wurde komplett entfernt!
     request_body(
         content = MoveNodesRequest,
         description = "Information about the source group, target group, and nodes to move",
@@ -687,15 +724,15 @@ pub async fn post_convert_nodes_to_group(
 #[post("/move_nodes")]
 pub async fn post_move_nodes(
     data: web::Data<AppState>,
-    request: web::Json<MoveNodesRequest>, // <-- Wir nehmen das neue Struct entgegen
+    request: web::Json<MoveNodesRequest>,
 ) -> Result<(), BackEndErrorResponse> {
-    // Entpacke die Daten aus dem Request-Body
+    // Unpack data from the request body
     let req = request.into_inner();
     let from_group_id = req.source_group_id;
     let drop_group_id = req.target_group_id;
     let mut nodes_to_drop = req.nodes_to_move;
 
-    //collect data
+    // Collect data
     let (node_refs, _) = collect_node_refs_and_pos(&data, &nodes_to_drop);
     let all_connections = collect_group_connections(&data, from_group_id)?;
     let split = split_sort_connections(&data, &all_connections, &nodes_to_drop);
@@ -703,7 +740,7 @@ pub async fn post_move_nodes(
     let mut document = data.document.lock();
     let scenery: &mut opossum_core::prelude::NodeGroup = document.scenery_mut();
 
-    //delete nodes_to_drop from original scenery. Important to do this befor inserting the optic_refs as they will then also removed
+    // Delete nodes_to_drop from original scenery
     while let Some(node) = nodes_to_drop.pop() {
         let deleted = scenery.delete_node(node)?;
         for del_id in &deleted {
@@ -711,12 +748,12 @@ pub async fn post_move_nodes(
         }
     }
 
-    //add nodes_to_drop to group
+    // Add nodes_to_drop to group
     for node_ref in &node_refs {
         scenery.with_group_node_mut(drop_group_id, |g| g.add_node_ref(node_ref.clone()))??;
     }
 
-    //connect nodes if there are any
+    // Connect nodes if there are any
     for conn in &split.inside {
         scenery.with_group_node_mut(drop_group_id, |g| connect_from_info(g, conn))??;
     }

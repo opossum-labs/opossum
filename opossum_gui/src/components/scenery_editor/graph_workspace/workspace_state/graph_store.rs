@@ -12,9 +12,8 @@ use dioxus::{
     prelude::*,
 };
 use opossum_core::{
-    opm_document::AnalyzerInfo,
     prelude::{PortMap, PortType},
-    types::api_types::{ConnectInfo, NewAnalyzerInfo, NodeInfo},
+    types::api_types::{AnalyzerItemDto, ConnectInfo, NewAnalyzerInfo, NodeInfo},
     utils::to_f64,
 };
 use rust_sugiyama::{configure::Config, from_edges};
@@ -127,10 +126,10 @@ impl<Lens> Store<GraphStore, Lens> {
             .write()
             .extend(nodes.iter().map(|node| (node.uuid(), node.into())));
     }
-    fn add_analyzers(&mut self, analyzers: &[AnalyzerInfo]) {
+    fn add_analyzers(&mut self, analyzers: &[AnalyzerItemDto]) {
         self.nodes()
             .write()
-            .extend(analyzers.iter().map(|node| (node.id(), node.into())));
+            .extend(analyzers.iter().map(|dto| (dto.id, dto.into())));
     }
     fn set_name_of_node(&mut self, node_id: Uuid, name: String) {
         if let Some(mut node) = self.nodes().get(node_id) {
@@ -164,7 +163,7 @@ impl<Lens> Store<GraphStore, Lens> {
             .iter()
             .map(|n| (n.1.id(), n.1.z_index()))
             .collect();
-        node_elements.sort_by(|e_1, e_2| e_1.1.cmp(&e_2.1));
+        node_elements.sort_by_key(|e_1| e_1.1);
         for element in node_elements.iter().enumerate() {
             if let Some(mut node) = self.nodes().get(element.1.0) {
                 node.write().set_z_index(element.0);

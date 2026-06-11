@@ -126,7 +126,7 @@ pub fn on_new_translation(
             } else {
                 OPOSSUM_UI_LOGS
                     .write()
-                    .add_log(format!("Failed to set alignment for axis {axis}!",).as_str());
+                    .add_log(format!("Failed to set alignment for axis {axis}!").as_str());
             }
         }
     })
@@ -148,7 +148,7 @@ pub fn on_new_rotation(
             } else {
                 OPOSSUM_UI_LOGS
                     .write()
-                    .add_log(format!("Failed to set alignment for axis {axis}!",).as_str());
+                    .add_log(format!("Failed to set alignment for axis {axis}!").as_str());
             }
         }
     })

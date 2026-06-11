@@ -1,7 +1,6 @@
 use actix_web::dev::ServerHandle;
 use opossum_core::{
-    core_optics::OpticRef,
-    opm_document::{AnalyzerInfo, OpmDocument},
+    core_optics::OpticRef, opm_document::OpmDocument, types::api_types::AnalyzerItemDto,
 };
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -31,5 +30,5 @@ impl Clone for AppState {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum NodeCacheItem {
     Optical(OpticRef),
-    Analyzer(AnalyzerInfo),
+    Analyzer(AnalyzerItemDto),
 }

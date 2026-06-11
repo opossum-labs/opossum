@@ -7,7 +7,7 @@ use opossum_core::{
     error::OpossumError,
     opm_document::AnalyzerInfo,
     prelude::AnalyzerType,
-    types::api_types::{ErrorResponse, NewAnalyzerInfo, UpdateAnalyzerInfo},
+    types::api_types::{AnalyzerItemDto, ErrorResponse, NewAnalyzerInfo, UpdateAnalyzerInfo},
 };
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -111,21 +111,23 @@ pub async fn delete_analyzer(
 /// Get a list of all analyzers of this model
 #[utoipa::path(
     tag = "analyzer",
-    responses((status = OK, description = "List of analyzers", body = Vec<AnalyzerInfo>)),
+    responses((status = OK, description = "List of analyzers", body = Vec<AnalyzerItemDto>)),
 )]
 #[get("")]
 pub async fn get_analyzers(data: web::Data<AppState>) -> HttpResponse {
     let analyzers_map = data.document.lock().analyzers();
-    let analyzers: Vec<AnalyzerInfo> = analyzers_map
-        .values()
-        .map(|a| {
-            AnalyzerInfo::new(
-                a.analyzer_type().clone(),
-                a.id(),
-                a.gui_position().map_or(Point2::new(0.0, 0.0), |p| p),
-            )
+
+    // Transform the HashMap into a list of DTOs containing the Uuid and the AnalyzerInfo
+    let analyzers: Vec<AnalyzerItemDto> = analyzers_map
+        .into_iter()
+        .map(|(id, info)| {
+            AnalyzerItemDto {
+                id,
+                info, // info already contains the correct gui_position logic internally
+            }
         })
         .collect();
+
     HttpResponse::Ok().json(analyzers)
 }
 

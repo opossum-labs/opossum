@@ -6,13 +6,13 @@ use crate::{
 };
 use dioxus::prelude::*;
 use futures_util::StreamExt;
+use std::fmt::Write;
 use std::{fs, path::PathBuf, process::Stdio};
 use tempfile::tempdir;
 use tokio::{
     io::{AsyncReadExt, BufReader},
     process::Child,
 };
-
 // Message types to control the simulation execution
 enum CommandAction {
     Run,
@@ -108,9 +108,10 @@ pub fn SimulationWindow(
                         let mut child = match cmd.spawn() {
                             Ok(child) => child,
                             Err(e) => {
-                                output
-                                    .write()
-                                    .push_str(&format!("[ERROR] Failed to spawn command: {e}\n"));
+                                let _ = writeln!(
+                                    output.write(),
+                                    "[ERROR] Failed to spawn command: {e}"
+                                );
                                 is_running.set(false);
                                 continue;
                             }
@@ -133,7 +134,7 @@ pub fn SimulationWindow(
                                                                     if let Some(mut child) = child_handle.take() {
                                                                         output.write().push_str("\n[WARN] Aborting process requested by user...\n");
                                                                         if let Err(e) = child.kill().await {
-                                output.write().push_str(&format!("[ERROR] Failed to kill process: {e}\n"));
+                                let _ = writeln!(output.write(), "[ERROR] Failed to kill process: {e}");
                             } else {
                                 output.write().push_str("[INFO] Process aborted successfully.\n");
                             }
@@ -167,12 +168,13 @@ pub fn SimulationWindow(
                         }
 
                         // Check the exit status of the process to determine actual success
-                        let mut exit_success = false;
-                        if let Some(mut child) = child_handle.take() {
-                            if let Ok(status) = child.wait().await {
-                                exit_success = status.success();
-                            }
-                        }
+                        let exit_success = if let Some(mut child) = child_handle.take()
+                            && let Ok(status) = child.wait().await
+                        {
+                            status.success()
+                        } else {
+                            false
+                        };
 
                         if exit_success {
                             output
@@ -215,23 +217,21 @@ pub fn SimulationWindow(
             let mut opened_any = false;
 
             loop {
-                let report_filename = format!("report_{}.html", i);
+                let report_filename = format!("report_{i}.html");
                 let report_path = dir.join(&report_filename);
 
                 if report_path.exists() {
                     if let Some(path_str) = report_path.to_str() {
                         match webbrowser::open(path_str) {
-                            Ok(_) => {
-                                output
-                                    .write()
-                                    .push_str(&format!("[INFO] Opened {}\n", report_filename));
+                            Ok(()) => {
+                                let _ = writeln!(output.write(), "[INFO] Opened {report_filename}");
                                 opened_any = true;
                             }
                             Err(e) => {
-                                output.write().push_str(&format!(
-                                    "[ERROR] Failed to open {}: {}\n",
-                                    report_filename, e
-                                ));
+                                let _ = writeln!(
+                                    output.write(),
+                                    "[ERROR] Failed to open {report_filename}: {e}"
+                                );
                             }
                         }
                     }
