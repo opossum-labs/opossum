@@ -32,17 +32,15 @@ use ron::{extensions::Extensions, ser::PrettyConfig};
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnalyzerInfo {
     analyzer_type: AnalyzerType,
-    id: Uuid,
     gui_position: Option<(f64, f64)>,
 }
 impl AnalyzerInfo {
     /// Creates a new [`AnalyzerInfo`].
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
-    pub fn new(analyzer_type: AnalyzerType, id: Uuid, gui_position: Point2<f64>) -> Self {
+    pub fn new(analyzer_type: AnalyzerType, gui_position: Point2<f64>) -> Self {
         Self {
             analyzer_type,
-            id,
             gui_position: Some((gui_position.x, gui_position.y)),
         }
     }
@@ -63,11 +61,6 @@ impl AnalyzerInfo {
     /// Sets the analyzer type of this [`AnalyzerInfo`].
     pub fn set_analyzer_type(&mut self, analyzer_type: &AnalyzerType) {
         self.analyzer_type = analyzer_type.clone();
-    }
-    /// Returns the id of this [`AnalyzerInfo`].
-    #[must_use]
-    pub const fn id(&self) -> Uuid {
-        self.id
     }
 }
 
@@ -210,12 +203,13 @@ impl OpmDocument {
     }
     /// Add an analyzer to this [`OpmDocument`].
     pub fn add_analyzer(&mut self, analyzer_type: AnalyzerType) -> Uuid {
+        let id = Uuid::new_v4();
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
-            id: Uuid::new_v4(),
             gui_position: None,
         };
-        self.add_analyzer_info(&analyzer_info)
+        self.analyzers.insert(id, analyzer_info);
+        id
     }
     /// Add an analyzer (with a GUI position) to this [`OpmDocument`].
     pub fn add_analyzer_with_position(
@@ -223,19 +217,20 @@ impl OpmDocument {
         analyzer_type: AnalyzerType,
         gui_position: Option<(f64, f64)>,
     ) -> Uuid {
+        let id = Uuid::new_v4();
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
-            id: Uuid::new_v4(),
             gui_position,
         };
-        self.add_analyzer_info(&analyzer_info)
+        self.analyzers.insert(id, analyzer_info);
+        id
     }
     /// Add an analyzer to this [`OpmDocument`].
-    pub fn add_analyzer_info(&mut self, analyzer_info: &AnalyzerInfo) -> Uuid {
-        self.analyzers
-            .insert(analyzer_info.id, analyzer_info.clone());
-        analyzer_info.id
-    }
+    // pub fn add_analyzer_info(&mut self, analyzer_info: &AnalyzerInfo) -> Uuid {
+    //     self.analyzers
+    //         .insert(analyzer_info.id, analyzer_info.clone());
+    //     analyzer_info.id
+    // }
     /// Remove an analyzer from this [`OpmDocument`].
     ///
     /// This function removes an [`AnalyzerType`] with the given [`Uuid`] from this [`OpmDocument`].
@@ -570,7 +565,6 @@ mod test {
     fn analyzer_info_set_analyzer_type() {
         let mut at = AnalyzerInfo::new(
             AnalyzerType::Energy(EnergyConfig::default()),
-            Uuid::nil(),
             Point2::new(1.0, 2.0),
         );
         at.set_analyzer_type(&AnalyzerType::GhostFocus(GhostFocusConfig::default()));
@@ -580,7 +574,6 @@ mod test {
     fn analyzer_info_set_gui_position() {
         let mut at = AnalyzerInfo::new(
             AnalyzerType::Energy(EnergyConfig::default()),
-            Uuid::nil(),
             Point2::new(1.0, 2.0),
         );
         let new_position = Point2::new(3.0, 4.0);

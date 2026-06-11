@@ -34,37 +34,35 @@ pub fn AnalyzerNodeEditor(
     });
     match &*resource_future.read_unchecked() {
         Some(Some(analyzer_info)) => {
-            if analyzer_info.id() == *node_id.read() {
-                rsx! {
+            // Die if-Abfrage nach der ID wurde komplett entfernt,
+            // da die Info implizit zur node_id gehört!
+            rsx! {
+                div {
+                    h6 { "Analyzer Configuration" }
                     div {
-                        h6 { "Analyzer Configuration" }
-                        div {
-                            class: "accordion accordion-borderless bg-dark ",
-                            id: "accordionAnalyzerConfig",
-                            NodeTypeInput {
-                                node_type: format!("{}", analyzer_info.analyzer_type()),
-                                label: "Analyzer Type",
-                            }
-                            {
-                                match analyzer_info.analyzer_type().clone() {
-                                    AnalyzerType::Energy(_) => rsx! {},
-                                    AnalyzerType::RayTrace(ray_trace_config) => {
-                                        rsx! {
-                                            RayTraceEditor { node_id, ray_trace_config, on_change }
-                                        }
+                        class: "accordion accordion-borderless bg-dark ",
+                        id: "accordionAnalyzerConfig",
+                        NodeTypeInput {
+                            node_type: format!("{}", analyzer_info.analyzer_type()),
+                            label: "Analyzer Type",
+                        }
+                        {
+                            match analyzer_info.analyzer_type().clone() {
+                                AnalyzerType::Energy(_) => rsx! {},
+                                AnalyzerType::RayTrace(ray_trace_config) => {
+                                    rsx! {
+                                        RayTraceEditor { node_id, ray_trace_config, on_change }
                                     }
-                                    AnalyzerType::GhostFocus(ghost_focus_config) => {
-                                        rsx! {
-                                            GhostFocusEditor { node_id, ghost_focus_config, on_change }
-                                        }
+                                }
+                                AnalyzerType::GhostFocus(ghost_focus_config) => {
+                                    rsx! {
+                                        GhostFocusEditor { node_id, ghost_focus_config, on_change }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            } else {
-                rsx! {}
             }
         }
         _ => {

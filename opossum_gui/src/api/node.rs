@@ -1,12 +1,11 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
-    opm_document::AnalyzerInfo,
     prelude::*,
     types::api_types::{
-        AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, MoveNodesRequest, NewNode,
-        NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse, PortMappingsResponse,
-        PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest,
-        UpdatePortRequest,
+        AddPortMappingRequest, AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest,
+        MoveNodesRequest, NewNode, NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse,
+        PortMappingsResponse, PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest,
+        UpdateNodeRequest, UpdatePortRequest,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -101,7 +100,7 @@ pub async fn post_paste_nodes(
 ) -> Result<
     (
         HashMap<Uuid, Vec<NodeInfo>>,
-        Vec<AnalyzerInfo>,
+        Vec<AnalyzerItemDto>,
         HashMap<Uuid, Vec<ConnectInfo>>,
     ),
     String,
@@ -109,7 +108,7 @@ pub async fn post_paste_nodes(
     HTTP_API_CLIENT()
         .post::<(Uuid, (f64, f64)), (
             HashMap<Uuid, Vec<NodeInfo>>,
-            Vec<AnalyzerInfo>,
+            Vec<AnalyzerItemDto>,
             HashMap<Uuid, Vec<ConnectInfo>>,
         )>("/api/operations/paste_nodes", (group_id, (pos.x, pos.y)))
         .await

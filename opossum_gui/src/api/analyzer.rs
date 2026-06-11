@@ -5,7 +5,7 @@ use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::AnalyzerType,
-    types::api_types::{NewAnalyzerInfo, UpdateAnalyzerInfo},
+    types::api_types::{AnalyzerItemDto, NewAnalyzerInfo, UpdateAnalyzerInfo},
 };
 use uuid::Uuid;
 
@@ -28,9 +28,10 @@ pub async fn post_add_analyzer(new_analyzer_info: NewAnalyzerInfo) -> Result<Uui
 ///
 /// This function will return an error if
 /// - the returned data cannot be parsed (deserialized) into the correct data type.
-pub async fn get_analyzers() -> Result<Vec<AnalyzerInfo>, String> {
+pub async fn get_analyzers() -> Result<Vec<AnalyzerItemDto>, String> {
+    // Update the return type and the generic type parsing the HTTP response
     HTTP_API_CLIENT()
-        .get::<Vec<AnalyzerInfo>>("/api/analyzers")
+        .get::<Vec<AnalyzerItemDto>>("/api/analyzers")
         .await
 }
 /// Send request to delete an analyzer with the given id.

@@ -8,11 +8,10 @@ use dioxus::{
 };
 use futures_util::StreamExt;
 use opossum_core::{
-    opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, PortType},
     types::api_types::{
-        ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, NodePortsResponse,
-        PortMappingsResponse, UpdateConnectionRequest,
+        AnalyzerItemDto, ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo,
+        NodePortsResponse, PortMappingsResponse, UpdateConnectionRequest,
     },
 };
 use serde_json::Value;
@@ -475,9 +474,9 @@ async fn process_paste_nodes(
                 }
             }
             for a in &analyzer_nodes {
-                let analyzer_id = a.id();
+                let analyzer_id = a.id; // <-- ID aus dem DTO
                 ws_handler.nodes.add_analyzer_node(
-                    NewAnalyzerInfo::from(a.clone()),
+                    NewAnalyzerInfo::from(a.info.clone()), // <-- info aus dem DTO extrahieren
                     analyzer_id,
                     graph_id,
                 );
@@ -917,7 +916,8 @@ async fn process_fill_graph_of_group(
     if *root_scenery_id.read() == group_id {
         eval_action_run(
             api::get_analyzers().await,
-            Some(move |analyzers: Vec<AnalyzerInfo>| {
+            // Typ auf Vec<AnalyzerItemDto> geändert:
+            Some(move |analyzers: Vec<AnalyzerItemDto>| {
                 ws_handler.nodes.add_group_analyzers(group_id, analyzers);
             }),
         );

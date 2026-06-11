@@ -7,9 +7,8 @@ use crate::components::scenery_editor::graph_workspace::{
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{
-    opm_document::AnalyzerInfo,
     prelude::PortType,
-    types::api_types::{NewAnalyzerInfo, NodeInfo},
+    types::api_types::{AnalyzerItemDto, NewAnalyzerInfo, NodeInfo},
 };
 use uuid::Uuid;
 
@@ -23,7 +22,7 @@ pub struct NodeHandlers {
     invert_node: EventHandler<(Uuid, bool, Uuid)>,
     set_node_name: EventHandler<(String, Uuid, Uuid, bool)>,
     add_group_nodes: EventHandler<(Uuid, Vec<NodeInfo>)>,
-    add_group_analyzers: EventHandler<(Uuid, Vec<AnalyzerInfo>)>,
+    add_group_analyzers: EventHandler<(Uuid, Vec<AnalyzerItemDto>)>,
     remove_droppable_group: EventHandler<()>,
     update_group_ports: EventHandler<(Vec<String>, Vec<String>, Uuid)>,
     remove_group_port: EventHandler<(String, Uuid, PortType)>,
@@ -132,7 +131,7 @@ impl NodeHandlers {
         self.add_group_nodes.call((group_id, nodes));
     }
 
-    pub fn add_group_analyzers(&self, group_id: Uuid, analyzers: Vec<AnalyzerInfo>) {
+    pub fn add_group_analyzers(&self, group_id: Uuid, analyzers: Vec<AnalyzerItemDto>) {
         self.add_group_analyzers.call((group_id, analyzers));
     }
 
@@ -340,8 +339,8 @@ fn add_group_nodes_handler(
 }
 fn add_group_analyzers_handler(
     workspace: Store<GraphsWorkspaceState>,
-) -> EventHandler<(Uuid, Vec<AnalyzerInfo>)> {
-    EventHandler::new(move |(group_id, analyzers): (Uuid, Vec<AnalyzerInfo>)| {
+) -> EventHandler<(Uuid, Vec<AnalyzerItemDto>)> {
+    EventHandler::new(move |(group_id, analyzers): (Uuid, Vec<AnalyzerItemDto>)| {
         with_graph_store(workspace, group_id, false, |store| {
             store.add_analyzers(&analyzers);
         });

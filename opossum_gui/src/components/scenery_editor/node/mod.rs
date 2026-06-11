@@ -4,7 +4,9 @@ use dioxus::{
     prelude::*,
 };
 use opossum_core::{
-    opm_document::AnalyzerInfo, prelude::*, types::api_types::NodeInfo, utils::to_f64,
+    prelude::*,
+    types::api_types::{AnalyzerItemDto, NodeInfo},
+    utils::to_f64,
 };
 use uuid::Uuid;
 mod graph_node_components;
@@ -243,15 +245,17 @@ impl From<&NodeInfo> for NodeElement {
     }
 }
 
-impl From<&AnalyzerInfo> for NodeElement {
-    fn from(analyzer_info: &AnalyzerInfo) -> Self {
-        let position = analyzer_info
+impl From<&AnalyzerItemDto> for NodeElement {
+    fn from(dto: &AnalyzerItemDto) -> Self {
+        let position = dto
+            .info
             .gui_position()
             .map_or_else(Point2D::zero, |p| Point2D::new(p.x, p.y));
+
         Self::new(
-            format!("{}", analyzer_info.analyzer_type()),
-            NodeType::Analyzer(analyzer_info.analyzer_type().clone()),
-            analyzer_info.id(),
+            format!("{}", dto.info.analyzer_type()),
+            NodeType::Analyzer(dto.info.analyzer_type().clone()),
+            dto.id,
             position,
             Ports::default(),
             false,

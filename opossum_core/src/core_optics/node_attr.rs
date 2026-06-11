@@ -254,7 +254,7 @@ impl NodeAttr {
 
     /// Returns a mutable reference to the optic ports of this [`NodeAttr`].
     ///
-    /// **Warning**: See [`raw_ports()`](NodeAttr::raw_ports). Use 
+    /// **Warning**: See [`raw_ports()`](NodeAttr::raw_ports). Use
     /// the [`OpticNode`](crate::core_optics::OpticNode) trait methods for
     /// safe modifications of effective ports.
     #[must_use]
