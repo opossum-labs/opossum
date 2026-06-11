@@ -30,7 +30,7 @@ use crate::{
             GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
             WorkSpaceSignalHandlers,
             workspace_action::GraphsWorkspaceAction,
-            workspace_state::{GraphInfo, optimize_layout_and_sync},
+            workspace_state::{GraphInfo, optimize_layout},
         },
         node::MIN_NODE_BODY_HEIGHT,
     },
@@ -578,26 +578,59 @@ async fn process_optimize_layout(
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
-    let Some(edges) = workspace
-        .tabs()
-        .get(graph_id)
-        .map(|g| g.graph_store().edges().read().clone())
-    else {
-        OPOSSUM_UI_LOGS.write().add_log(&format!(
-            "No graph with id '{}' found",
-            graph_id.as_simple()
-        ));
-        return;
+    // --- READ PHASE: Fetch nodes and edges ---
+    let (nodes, edges) = {
+        let graph = workspace.tabs().get(graph_id);
+        let Some(graph) = graph else {
+            OPOSSUM_UI_LOGS.write().add_log(&format!(
+                "No graph with id '{}' found",
+                graph_id.as_simple()
+            ));
+            return;
+        };
+
+        let store = graph.graph_store();
+        (store.nodes().read().clone(), store.edges().read().clone())
     };
 
-    eval_action_run(
-        optimize_layout_and_sync(edges).await,
-        Some(move |new_positions| {
-            ws_handler
-                .nodes
-                .update_node_positions(new_positions, graph_id);
-        }),
-    );
+    // --- CALCULATION PHASE: Determine new positions (Pure) ---
+    // Note: ensure optimize_layout is imported from graph_workspace::workspace_state
+    let new_positions = optimize_layout(&nodes, &edges);
+
+    // --- ASYNC PHASE: Sync with backend ---
+    let mut sync_failed = false;
+
+    for (node_id, pos) in &new_positions {
+        // Determine the type of the node to call the correct API endpoint
+        let is_optical = nodes
+            .get(node_id)
+            .is_none_or(|node| matches!(node.node_type(), NodeType::Optical(_)));
+
+        let api_result = if is_optical {
+            api::update_node_position(*node_id, *pos).await
+        } else {
+            api::update_analyzer_position_ron(*node_id, *pos).await
+        };
+
+        if let Err(err_str) = api_result {
+            OPOSSUM_UI_LOGS.write().add_log(&format!(
+                "Failed to sync position for node {node_id}: {err_str}"
+            ));
+            sync_failed = true;
+        }
+    }
+
+    // --- WRITE PHASE: Update UI state if successful ---
+    // If you want partial updates even on errors, remove the `!sync_failed` check.
+    if sync_failed {
+        OPOSSUM_UI_LOGS
+            .write()
+            .add_log("Layout optimization finished with synchronization errors.");
+    } else {
+        ws_handler
+            .nodes
+            .update_node_positions(new_positions, graph_id);
+    }
 }
 
 async fn process_add_analyzer(

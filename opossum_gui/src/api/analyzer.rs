@@ -44,7 +44,7 @@ pub async fn delete_analyzer(id: Uuid) -> Result<Uuid, String> {
     HTTP_API_CLIENT()
         .delete_no_content(&format!("/api/analyzers/{id}"))
         .await
-        .map(|_| id)
+        .map(|()| id)
 }
 /// Update the analyzer configuration of an analyzer node.
 /// This function sends a POST request to the server to update the analyzer type

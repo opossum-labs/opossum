@@ -1,11 +1,8 @@
-use crate::{
-    OPOSSUM_UI_LOGS, api,
-    components::scenery_editor::{
-        NodeElement, NodeType, SelectedNode,
-        constants::{SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
-        graph_workspace::EditorState,
-        ports::ports_component::Ports,
-    },
+use crate::components::scenery_editor::{
+    NodeElement, NodeType, SelectedNode,
+    constants::{NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
+    graph_workspace::EditorState,
+    ports::ports_component::Ports,
 };
 use dioxus::{
     html::geometry::euclid::default::{Point2D, Rect, Size2D},
@@ -325,46 +322,134 @@ impl GraphStore {
     }
 }
 
-pub async fn optimize_layout_and_sync(
-    edges: Vec<ConnectInfo>,
-) -> Result<HashMap<Uuid, Point2D<f64>>, String> {
-    let sugiyama_config = Config {
-        vertex_spacing: SUGIYAMA_VERTEX_SPACING,
-        ..Default::default()
-    };
-    let mut reg = UuidRegistry::new();
-    let edges_u32: Vec<(u32, u32)> = edges
-        .iter()
-        .map(|edge| {
-            let src = reg.register(edge.src_uuid());
-            let target = reg.register(edge.target_uuid());
-            (src, target)
-        })
-        .collect();
-
-    let layouts = from_edges(&edges_u32, &sugiyama_config);
+/// Calculates optimized positions for all nodes in the graph.
+/// Places Analyzers at the top, disconnected nodes below them,
+/// and the connected Sugiyama layout at the bottom.
+#[must_use]
+pub fn optimize_layout(
+    nodes: &HashMap<Uuid, NodeElement>,
+    edges: &[ConnectInfo],
+) -> HashMap<Uuid, Point2D<f64>> {
     let mut new_positions = HashMap::new();
-    let mut height = 0f64;
-    for (layout, group_height, _) in layouts {
-        for l in layout {
-            if let Some(uuid) = reg.get_uuid(u32::try_from(l.0).unwrap()) {
-                let pos = Point2D::new(
-                    to_f64(l.1.1),
-                    SUGIYAMA_VERT_PATH_FACTOR.mul_add(to_f64(l.1.0), height),
-                );
-                new_positions.insert(uuid, pos);
+    let mut connected_node_ids = HashSet::new();
+
+    // Determine which nodes are part of a connection
+    for edge in edges {
+        connected_node_ids.insert(edge.src_uuid());
+        connected_node_ids.insert(edge.target_uuid());
+    }
+
+    let mut analyzers = Vec::new();
+    let mut disconnected_nodes = Vec::new();
+
+    // Categorize nodes
+    for (id, node) in nodes {
+        match node.node_type() {
+            NodeType::Analyzer(_) => analyzers.push(*id),
+            NodeType::Optical(_) => {
+                if !connected_node_ids.contains(id) {
+                    disconnected_nodes.push(*id);
+                }
             }
         }
-        height += to_f64(group_height * SUGIYAMA_VERTEX_SPACING);
     }
-    for (id, pos) in &new_positions {
-        if let Err(err_str) = api::update_node_position(*id, *pos).await {
-            // If any API call fails, log it and return an error for the whole operation.
-            OPOSSUM_UI_LOGS.write().add_log(&err_str);
-            return Err(format!("Failed to sync position for node {id}"));
+
+    // Sort to ensure a deterministic layout (always the same order on repeated calls)
+    analyzers.sort();
+    disconnected_nodes.sort();
+
+    // Define layout spacing constants
+    let h_gap = 50.0; // Horizontal gap between single nodes
+    let v_gap = 100.0; // Vertical gap between rows and subgraphs
+
+    let mut current_y = 0.0;
+
+    // --- Row 1: Analyzers ---
+    if !analyzers.is_empty() {
+        let mut current_x = 0.0;
+        let mut max_row_height = 0.0;
+
+        for id in &analyzers {
+            new_positions.insert(*id, Point2D::new(current_x, current_y));
+            current_x += NODE_WIDTH + h_gap;
+
+            if let Some(node) = nodes.get(id) {
+                let height = node.get_bounding_box().height();
+                if height > max_row_height {
+                    max_row_height = height;
+                }
+            }
+        }
+        current_y += max_row_height + v_gap;
+    }
+
+    // --- Row 2: Disconnected Optical Nodes ---
+    if !disconnected_nodes.is_empty() {
+        let mut current_x = 0.0;
+        let mut max_row_height = 0.0;
+
+        for id in &disconnected_nodes {
+            new_positions.insert(*id, Point2D::new(current_x, current_y));
+            current_x += NODE_WIDTH + h_gap;
+
+            if let Some(node) = nodes.get(id) {
+                let height = node.get_bounding_box().height();
+                if height > max_row_height {
+                    max_row_height = height;
+                }
+            }
+        }
+        current_y += max_row_height + v_gap;
+    }
+
+    // --- Row 3: Connected Nodes (Sugiyama Layout) ---
+    if !connected_node_ids.is_empty() && !edges.is_empty() {
+        let sugiyama_config = Config {
+            vertex_spacing: SUGIYAMA_VERTEX_SPACING,
+            ..Default::default()
+        };
+
+        let mut reg = UuidRegistry::new();
+        let edges_u32: Vec<(u32, u32)> = edges
+            .iter()
+            .map(|edge| {
+                let src = reg.register(edge.src_uuid());
+                let target = reg.register(edge.target_uuid());
+                (src, target)
+            })
+            .collect();
+
+        let layouts = from_edges(&edges_u32, &sugiyama_config);
+
+        // Use current_y as the starting point for the connected graphs.
+        let mut current_sugiyama_y = current_y;
+
+        for (layout, _group_height, _) in layouts {
+            let mut max_y_in_group = current_sugiyama_y;
+
+            for l in layout {
+                if let Some(uuid) = reg.get_uuid(u32::try_from(l.0).unwrap()) {
+                    // X position from Sugiyama
+                    let x = to_f64(l.1.1);
+
+                    // Y position: calculate base Y from Sugiyama and add our vertical offset
+                    let base_y = to_f64(l.1.0) * SUGIYAMA_VERT_PATH_FACTOR;
+                    let final_y = current_sugiyama_y + base_y;
+
+                    new_positions.insert(uuid, Point2D::new(x, final_y));
+
+                    // Track the lowest point of this specific subgraph to know where the next one should start
+                    if final_y > max_y_in_group {
+                        max_y_in_group = final_y;
+                    }
+                }
+            }
+            // Start the next subgraph directly below the current one, adding a sensible gap
+            current_sugiyama_y = max_y_in_group + v_gap;
         }
     }
-    Ok(new_positions)
+
+    new_positions
 }
 
 struct UuidRegistry {
