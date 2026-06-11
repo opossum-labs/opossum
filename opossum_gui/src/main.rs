@@ -193,6 +193,14 @@ fn MainApp() -> Element {
         document::Stylesheet { href: MDB_SUB_CSS }
         document::Stylesheet { href: MDB_ACC_CSS }
         document::Script { src: MDB_JS }
+
+        // Disable the default browser context menu globally, but only in release builds.
+        // Custom Dioxus context menus (e.g., in the Graph Editor) will still work
+        // because preventDefault() only stops the browser's native menu.
+        if !cfg!(debug_assertions) {
+            script { "document.addEventListener('contextmenu', event => event.preventDefault());" }
+        }
+
         App {}
     }
 }
