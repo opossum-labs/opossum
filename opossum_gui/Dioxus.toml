@@ -12,6 +12,7 @@ short_description = "Open-source optic simulation system and unified modeler"
 long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
 category = "Utility"
 icon = ["assets/Logo_square.png"]
+# resources = ["./opm_examples"]
 
 # Workaround for Dioxus bundling bug
 external_bin = [

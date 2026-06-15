@@ -50,6 +50,20 @@ impl Drop for StagingGuard {
     }
 }
 
+/// Ein Wächter, der das temporäre Examples-Verzeichnis löscht, wenn er out-of-scope geht.
+struct ExamplesGuard {
+    path: PathBuf,
+}
+
+impl Drop for ExamplesGuard {
+    fn drop(&mut self) {
+        if self.path.exists() {
+            println!("🧹 Cleaning up temporary examples directory...");
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+}
+
 fn task_bundle() -> Result<(), anyhow::Error> {
     let sh = Shell::new()?;
     println!("🦀 Start build process for OPOSSUM...");
@@ -62,10 +76,19 @@ fn task_bundle() -> Result<(), anyhow::Error> {
         cmd!(sh, "cargo build --release -p opossum_cli").run()?;
         cmd!(sh, "cargo build --release -p opossum_backend").run()?;
     }
-    // 3. Create staging area and rename/copy binaries
-    let staging_path = Path::new("opossum_gui/staging").to_path_buf();
-    let _guard = StagingGuard {
+    // 3. Create staging and examples area and rename/copy binaries
+    let cwd = env::current_dir()?;
+    let staging_path = cwd.join("opossum_gui").join("staging");
+    let examples_target_dir = cwd.join("opossum_gui").join("opm_examples");
+
+    // --- TOP LEVEL GUARDS ---
+    // Diese Variablen MÜSSEN hier oben stehen, damit sie erst am GANZ am Ende
+    // der task_bundle() Funktion gelöscht werden (nach dem dx bundle).
+    let _staging_guard = StagingGuard {
         path: staging_path.clone(),
+    };
+    let _examples_guard = ExamplesGuard {
+        path: examples_target_dir.clone(),
     };
     {
         println!("\n🚚 Staging binaries...");
@@ -102,7 +125,29 @@ fn task_bundle() -> Result<(), anyhow::Error> {
             }
         }
     }
-    // 4. Bundling
+    // 4. Generate Examples
+    {
+        println!("\n📚 Generating example files...");
+        
+        if !examples_target_dir.exists() {
+            fs::create_dir_all(&examples_target_dir)?;
+        }
+
+        let examples = vec![
+            "workshop_00_kepler_paraxial",
+        ];
+
+        let _env_guard = sh.push_env(
+            "OPOSSUM_EXAMPLES_OUT_DIR", 
+            examples_target_dir.to_str().unwrap()
+        );
+
+        for example in examples {
+            println!("   -> Generating {}...", example);
+            cmd!(sh, "cargo run --release -p opossum_core --example {example}").run()?;
+        }
+    }
+    // 5. Bundling
     {
         println!("\n🎨 Running Dioxus Bundle...");
         let _dir = sh.push_dir("opossum_gui");
