@@ -99,6 +99,24 @@ impl HTTPClient {
             Err(format!("Error on put request on route: \"{route}\""))
         }
     }
+    /// Send a PUT request with a raw string body, but expect a JSON response.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the request fails or if the response cannot be deserialized into the expected type.
+    pub async fn put_string_receive_json<R: Serialize + DeserializeOwned>(
+        &self,
+        route: &str,
+        body: String,
+    ) -> Result<R, String> {
+        // Use .body() to send the raw string exactly as it is, NOT .json()
+        let res = self.client().put(self.url(route)).body(body).send().await;
+        if let Ok(response) = res {
+            self.process_response::<R>(response).await
+        } else {
+            Err(format!("Error on put request on route: \"{route}\""))
+        }
+    }
     /// Send a PUT request to the given route with the provided body.
     ///
     /// # Errors

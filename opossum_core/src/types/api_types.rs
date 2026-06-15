@@ -512,3 +512,9 @@ pub struct MoveNodesRequest {
     /// List of node UUIDs to move
     pub nodes_to_move: Vec<Uuid>,
 }
+/// The payload returned to the GUI after successfully loading an OPM file.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct LoadDocumentResponse {
+    pub name: String,
+    pub needs_autolayout: bool,
+}

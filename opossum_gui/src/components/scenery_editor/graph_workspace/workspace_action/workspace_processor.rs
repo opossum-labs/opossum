@@ -192,6 +192,7 @@ pub fn use_workspace_processor(
                                 group_name,
                                 workspace_handlers,
                                 root_graph_id.into(),
+                                workspace, // <-- Hier übergeben wir workspace
                             )
                             .await;
                         }
@@ -210,6 +211,7 @@ pub fn use_workspace_processor(
                             to_graph_id,
                             workspace_handlers,
                             root_graph_id,
+                            workspace, // <-- Hier übergeben wir workspace
                         )
                         .await;
                     }
@@ -326,7 +328,7 @@ pub fn use_workspace_processor(
                     } => {
                         process_jump_to_mapped_port(
                             root_graph_id.into(),
-                            workspace,
+                            workspace, // <-- workspace war hier schon drin
                             workspace_handlers,
                             mapped_node_id,
                             parent.0,
@@ -390,7 +392,14 @@ async fn process_jump_to_mapped_port(
     if group_tab_already_open {
         ws_handler.workspace.set_active_tab(parent_id);
     } else {
-        process_open_group_tab(parent_id, parent_name, ws_handler, root_scenery_id).await;
+        process_open_group_tab(
+            parent_id,
+            parent_name,
+            ws_handler,
+            root_scenery_id,
+            workspace,
+        )
+        .await;
     }
 
     ws_handler
@@ -841,13 +850,20 @@ async fn process_drop_nodes_into_group(
     drop_group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
     root_scenery_id: Memo<Uuid>,
+    workspace: ReadStore<GraphsWorkspaceState>,
 ) {
     match api::drop_nodes_into_group(nodes.clone(), from_group_id, drop_group_id).await {
         Ok(_) => {
-            //remove nodes that have been dropped into a group from graph
             ws_handler.nodes.remove_nodes(nodes, from_group_id);
 
-            process_fill_graph_of_group(root_scenery_id.into(), drop_group_id, ws_handler).await;
+            process_fill_graph_of_group(
+                root_scenery_id.into(),
+                drop_group_id,
+                ws_handler,
+                false,
+                workspace,
+            )
+            .await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -888,6 +904,7 @@ async fn process_open_group_tab(
     group_name: String,
     ws_handler: WorkSpaceSignalHandlers,
     root_scenery_id: ReadSignal<Uuid>,
+    workspace: ReadStore<GraphsWorkspaceState>,
 ) {
     eval_action_run(
         api::get_group_hierarchy(group_id).await,
@@ -900,13 +917,16 @@ async fn process_open_group_tab(
             ws_handler.workspace.add_new_group_tab(graph_info);
         }),
     );
-    process_fill_graph_of_group(root_scenery_id, group_id, ws_handler).await;
+
+    process_fill_graph_of_group(root_scenery_id, group_id, ws_handler, false, workspace).await;
 }
 
 async fn process_fill_graph_of_group(
     root_scenery_id: ReadSignal<Uuid>,
     group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
+    needs_autolayout: bool,
+    workspace: ReadStore<GraphsWorkspaceState>, // <-- Neu: Workspace
 ) {
     eval_action_run(
         api::get_nodes(group_id).await,
@@ -916,6 +936,7 @@ async fn process_fill_graph_of_group(
     eval_action_run(
         api::get_port_maps_of_group(group_id).await,
         Some(move |port_mappings_response: PortMappingsResponse| {
+            // ... (Dein existierender Code für Port-Mappings)
             for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
                 &port_mappings_response.inputs
             {
@@ -943,18 +964,32 @@ async fn process_fill_graph_of_group(
         api::get_connections(group_id).await,
         Some(move |connect_infos: Vec<ConnectInfo>| {
             ws_handler.edges.add_group_edges(group_id, connect_infos);
+
+            // Layout für Sub-Gruppen starten
+            if needs_autolayout && *root_scenery_id.read() != group_id {
+                dioxus::prelude::spawn(async move {
+                    process_optimize_layout(workspace, ws_handler, group_id).await;
+                });
+            }
         }),
     );
 
     if *root_scenery_id.read() == group_id {
         eval_action_run(
             api::get_analyzers().await,
-            // Typ auf Vec<AnalyzerItemDto> geändert:
             Some(move |analyzers: Vec<AnalyzerItemDto>| {
                 ws_handler.nodes.add_group_analyzers(group_id, analyzers);
+
+                // Layout für die Root-Scenery starten
+                if needs_autolayout {
+                    dioxus::prelude::spawn(async move {
+                        process_optimize_layout(workspace, ws_handler, group_id).await;
+                    });
+                }
             }),
         );
     }
+
     ws_handler.view.center_graph(group_id, false);
 }
 
@@ -973,12 +1008,22 @@ async fn process_load_from_file(
             return;
         }
     };
+
     match api::put_document(opm_string).await {
-        Ok(name) => {
-            process_add_root_scenery_tab(workspace, ws_handler, name).await;
+        Ok(response) => {
+            process_add_root_scenery_tab(workspace, ws_handler, response.name).await;
             set_file_path_handler.call(Some(path));
+
             let scenery_id = *scenery_id_sig.read();
-            process_fill_graph_of_group(scenery_id_sig.into(), scenery_id, ws_handler).await;
+
+            process_fill_graph_of_group(
+                scenery_id_sig.into(),
+                scenery_id,
+                ws_handler,
+                response.needs_autolayout,
+                workspace, // <-- Workspace durchreichen
+            )
+            .await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
