@@ -11,7 +11,10 @@ use crate::{
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     reporting::analysis_report::AnalysisReport,
-    utils::file_utils::{create_f_path, create_file_instance},
+    utils::{
+        LockExt,
+        file_utils::{create_f_path, create_file_instance},
+    },
 };
 use log::{info, warn};
 use nalgebra::Point2;
@@ -320,6 +323,24 @@ impl OpmDocument {
         let mut output = create_file_instance(dot_path, "scenery", "svg")?;
         let f_path = create_f_path(dot_path, "scenery", "dot");
         self.scenery.toplevel_dot_svg(&f_path, &mut output)
+    }
+    /// Checks if any node or analyzer in the document is missing its GUI coordinates.
+    /// This is used to signal the frontend that an automatic layout is required.
+    #[must_use]
+    pub fn needs_autolayout(&self) -> bool {
+        // 1. Check if any analyzer is missing its GUI position
+        if self.analyzers.values().any(|a| a.gui_position().is_none()) {
+            return true;
+        }
+        // 2. Check optical nodes
+        for node_ref in self.scenery.nodes() {
+            if let Ok(node) = node_ref.optical_ref.lock_opm()
+                && node.gui_position().is_none()
+            {
+                return true;
+            }
+        }
+        false
     }
 }
 

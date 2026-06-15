@@ -9,7 +9,7 @@ use log::{error, info, warn};
 use opossum_core::{
     core_optics::{OpticNode, SceneryResources},
     opm_document::OpmDocument,
-    types::api_types::ErrorResponse,
+    types::api_types::{ErrorResponse, LoadDocumentResponse},
 };
 use std::{path::PathBuf, str::FromStr};
 use tokio::sync::mpsc;
@@ -79,27 +79,41 @@ async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackE
         .content_type(RON_MEDIA_TYPE)
         .body(document.to_opm_file_string()?))
 }
-#[utoipa::path(tag = "document", request_body(content = String,
-    description = "OPM file as string",
-    content_type = "text/plain",
-),
-    responses((status = 200, description = "OPM file sucessfully parsed"),
-    (status = 400, description = "Error parsing OPM file", body = ErrorResponse))
+#[utoipa::path(
+    tag = "document", 
+    request_body(
+        content = String,
+        description = "OPM file as string",
+        content_type = "text/plain",
+    ),
+    responses(
+        // Hier wurde 'body = LoadDocumentResponse' hinzugefügt
+        (status = 200, description = "OPM file successfully parsed", body = LoadDocumentResponse),
+        (status = 400, description = "Error parsing OPM file", body = ErrorResponse)
+    )
 )]
 /// Load a document from an OPM file string
 ///
 /// This function reads a OPM model from the given OPM file string and replaces the current
-/// document.
+/// document. It also evaluates if the newly loaded document is missing GUI coordinates.
 #[put("")]
 async fn put_document(
     data: web::Data<AppState>,
     opm_file_string: String,
-) -> Result<Json<String>, BackEndErrorResponse> {
+) -> Result<Json<LoadDocumentResponse>, BackEndErrorResponse> {
     let mut document = data.document.lock();
     *document = OpmDocument::from_string(&opm_file_string)?;
+
     let name = document.scenery().node_attr().name();
+    // Check if the graph is missing GUI coordinates using the method we defined earlier
+    let needs_autolayout = document.needs_autolayout();
+
     drop(document);
-    Ok(Json(name))
+
+    Ok(Json(LoadDocumentResponse {
+        name,
+        needs_autolayout,
+    }))
 }
 
 #[utoipa::path(tag = "document", request_body(content = String,

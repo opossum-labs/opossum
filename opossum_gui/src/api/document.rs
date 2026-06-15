@@ -1,3 +1,4 @@
+use opossum_core::types::api_types::LoadDocumentResponse;
 use uuid::Uuid;
 
 use crate::HTTP_API_CLIENT;
@@ -32,8 +33,9 @@ pub async fn get_document() -> Result<String, String> {
 /// This function will return an error if
 /// - the `OPM` file cannot be parsed
 /// - the scenery cannot be constructed from the file data.
-pub async fn put_document(opm_string: String) -> Result<String, String> {
+pub async fn put_document(opm_string: String) -> Result<LoadDocumentResponse, String> {
+    // Use regular .put() instead of .put_string() to deserialize the JSON response
     HTTP_API_CLIENT()
-        .put_string("/api/document", opm_string)
+        .put_string_receive_json::<LoadDocumentResponse>("/api/document", opm_string)
         .await
 }

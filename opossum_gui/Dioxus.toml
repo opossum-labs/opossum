@@ -12,6 +12,17 @@ short_description = "Open-source optic simulation system and unified modeler"
 long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
 category = "Utility"
 icon = ["assets/Logo_square.png"]
+resources = ["opm_examples/workshop_00_kepler_paraxial.opm",
+            "opm_examples/workshop_01_kepler_real_lenses.opm",
+            "opm_examples/workshop_02_kepler_chromatism.opm",
+            "opm_examples/workshop_03_kepler_wavefront.opm",
+            "opm_examples/workshop_04_kepler_imaging_point.opm",
+            "opm_examples/workshop_06_geometry_mirrors.opm",
+            "opm_examples/workshop_07_geometry_shifted_lens.opm",
+            "opm_examples/workshop_08_reference_node.opm",
+            "opm_examples/workshop_09_phelix.opm",
+            "opm_examples/workshop_10_multi_path.opm",
+            "opm_examples/workshop_11_ghostfocus.opm"]
 
 # Workaround for Dioxus bundling bug
 external_bin = [

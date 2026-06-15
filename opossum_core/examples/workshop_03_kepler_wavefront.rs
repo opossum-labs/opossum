@@ -16,7 +16,7 @@
 //!
 //! Distances between components are specified in millimeters.
 use opossum_core::{nodes::round_collimated_ray_builder, prelude::*};
-use std::path::Path;
+use std::{env, path::Path};
 /// Entry point for the Kepler wavefront aberration example.
 ///
 /// # Returns
@@ -96,7 +96,13 @@ fn main() -> OpmResult<()> {
     // === 7. Save the Document ===
     // The final optical system, including all components and analyzers, is saved as an OPM file.
     doc.add_analyzer(AnalyzerType::RayTrace(config));
-    doc.save_to_file(Path::new(
-        "./opossum_core/playground/workshop_03_kepler_wavefront.opm",
-    ))
+
+    // Read the output directory from the environment, fallback to playground
+    let out_dir = env::var("OPOSSUM_EXAMPLES_OUT_DIR")
+        .unwrap_or_else(|_| "./opossum_core/playground".to_string());
+    let out_path = Path::new(&out_dir).join("workshop_03_kepler_wavefront.opm");
+
+    // Save the complete optical system to a file.
+    // This file can be reopened in the framework for visualization or analysis.
+    doc.save_to_file(&out_path)
 }

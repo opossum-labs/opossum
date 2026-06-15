@@ -3,6 +3,7 @@
 /.vscode
 /doc/book/book/
 /opossum_core/playground/*
+/opossum_gui/assets/examples/
 # exception to the rule
 !playground/.gitkeep 
 .VSCodeCounter
