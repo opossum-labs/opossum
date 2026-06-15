@@ -27,7 +27,7 @@
 //! - `prelude::*` brings in core optical system types, unit macros (e.g. millimeter!, nanometer!, joule!), and optical building blocks (sources, lenses, detectors, wavefront)
 use opossum_core::prelude::*;
 /// Import `Path` from the standard library for working with file paths
-use std::path::Path;
+use std::{env, path::Path};
 /// Entry point for the program; returns `OpmResult<()>` to handle simulation errors safely
 fn main() -> OpmResult<()> {
     // Create a NodeGroup container holding all optical components in the system
@@ -110,8 +110,13 @@ fn main() -> OpmResult<()> {
     );
     // Add ray tracing analysis to the document
     doc.add_analyzer(AnalyzerType::RayTrace(config));
-    // Save the optical simulation as a reusable .opm project file
-    doc.save_to_file(Path::new(
-        "./opossum_core/playground/workshop_07_geometry_shifted_lens.opm",
-    ))
+
+    // Read the output directory from the environment, fallback to playground
+    let out_dir = env::var("OPOSSUM_EXAMPLES_OUT_DIR")
+        .unwrap_or_else(|_| "./opossum_core/playground".to_string());
+    let out_path = Path::new(&out_dir).join("workshop_07_geometry_shifted_lens.opm");
+
+    // Save the complete optical system to a file.
+    // This file can be reopened in the framework for visualization or analysis.
+    doc.save_to_file(&out_path)
 }

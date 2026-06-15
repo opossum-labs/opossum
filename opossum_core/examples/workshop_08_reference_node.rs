@@ -29,6 +29,7 @@
 use nalgebra::Point2;
 use opossum_core::distributions::{energy::UniformDist, position::Grid, spectral::LaserLines};
 use opossum_core::prelude::*;
+use std::env;
 use std::path::Path;
 // Entry point for the simulation; returns `OpmResult<()>` for safe execution
 fn main() -> OpmResult<()> {
@@ -93,8 +94,13 @@ fn main() -> OpmResult<()> {
     config.map_source(i_src, ray_data_source.into());
     // Add ray tracing analyzer
     doc.add_analyzer(AnalyzerType::RayTrace(config));
-    // Save simulation setup to file
-    doc.save_to_file(Path::new(
-        "./opossum_core/playground/workshop_08_reference_node.opm",
-    ))
+
+    // Read the output directory from the environment, fallback to playground
+    let out_dir = env::var("OPOSSUM_EXAMPLES_OUT_DIR")
+        .unwrap_or_else(|_| "./opossum_core/playground".to_string());
+    let out_path = Path::new(&out_dir).join("workshop_08_reference_node.opm");
+
+    // Save the complete optical system to a file.
+    // This file can be reopened in the framework for visualization or analysis.
+    doc.save_to_file(&out_path)
 }

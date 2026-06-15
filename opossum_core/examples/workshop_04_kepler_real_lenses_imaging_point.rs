@@ -28,6 +28,7 @@
 //! This workshop helps us understand how to minimize such aberrations and optimize imaging quality.
 use opossum_core::distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines};
 use opossum_core::prelude::*;
+use std::env;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
@@ -94,7 +95,13 @@ fn main() -> OpmResult<()> {
     );
     // 9. Add ray trace analyzer and save
     doc.add_analyzer(AnalyzerType::RayTrace(config));
-    doc.save_to_file(Path::new(
-        "./opossum_core/playground/workshop_04_kepler_imaging_point.opm",
-    ))
+
+    // Read the output directory from the environment, fallback to playground
+    let out_dir = env::var("OPOSSUM_EXAMPLES_OUT_DIR")
+        .unwrap_or_else(|_| "./opossum_core/playground".to_string());
+    let out_path = Path::new(&out_dir).join("workshop_04_kepler_imaging_point.opm");
+
+    // Save the complete optical system to a file.
+    // This file can be reopened in the framework for visualization or analysis.
+    doc.save_to_file(&out_path)
 }

@@ -103,13 +103,13 @@ async fn put_document(
 ) -> Result<Json<LoadDocumentResponse>, BackEndErrorResponse> {
     let mut document = data.document.lock();
     *document = OpmDocument::from_string(&opm_file_string)?;
-    
+
     let name = document.scenery().node_attr().name();
     // Check if the graph is missing GUI coordinates using the method we defined earlier
-    let needs_autolayout = document.needs_autolayout(); 
-    
+    let needs_autolayout = document.needs_autolayout();
+
     drop(document);
-    
+
     Ok(Json(LoadDocumentResponse {
         name,
         needs_autolayout,

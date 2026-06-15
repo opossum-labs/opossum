@@ -50,6 +50,7 @@ use opossum_core::{
     distributions::{energy::UniformDist, position::Grid, spectral::LaserLines},
     properties::Proptype,
 };
+use std::env;
 use std::path::Path;
 use uom::si::f64::Length;
 
@@ -291,10 +292,14 @@ fn main() -> OpmResult<()> {
     // Add analyzer
     doc.add_analyzer(AnalyzerType::RayTrace(config));
 
-    // Export simulation document
-    doc.save_to_file(Path::new(
-        "./opossum_core/playground/workshop_09_phelix.opm",
-    ))
+    // Read the output directory from the environment, fallback to playground
+    let out_dir = env::var("OPOSSUM_EXAMPLES_OUT_DIR")
+        .unwrap_or_else(|_| "./opossum_core/playground".to_string());
+    let out_path = Path::new(&out_dir).join("workshop_09_phelix.opm");
+
+    // Save the complete optical system to a file.
+    // This file can be reopened in the framework for visualization or analysis.
+    doc.save_to_file(&out_path)
 }
 
 /// Construct a simplified amplifier stage.

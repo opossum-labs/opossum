@@ -37,7 +37,7 @@
 //! - `opossum_core::analyzers::energy::EnergyConfig` provides energy analysis tools
 //! - `std::path::Path` is used for saving the simulation output file
 use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
-use std::path::Path;
+use std::{env, path::Path};
 
 /// Entry point of the optical simulation.
 ///
@@ -176,8 +176,13 @@ fn main() -> OpmResult<()> {
     config.map_source(i_src2, energy_data_builder_2.into());
     // Attach analyzer to document
     doc.add_analyzer(AnalyzerType::Energy(config));
-    // Save simulation output to OPM file
-    doc.save_to_file(Path::new(
-        "./opossum_core/playground/workshop_10_multi_path.opm",
-    ))
+
+    // Read the output directory from the environment, fallback to playground
+    let out_dir = env::var("OPOSSUM_EXAMPLES_OUT_DIR")
+        .unwrap_or_else(|_| "./opossum_core/playground".to_string());
+    let out_path = Path::new(&out_dir).join("workshop_10_multi_path.opm");
+
+    // Save the complete optical system to a file.
+    // This file can be reopened in the framework for visualization or analysis.
+    doc.save_to_file(&out_path)
 }

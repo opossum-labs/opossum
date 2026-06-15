@@ -334,10 +334,10 @@ impl OpmDocument {
         }
         // 2. Check optical nodes
         for node_ref in self.scenery.nodes() {
-            if let Ok(node) = node_ref.optical_ref.lock_opm() {
-                if node.gui_position().is_none() {
-                    return true;
-                }
+            if let Ok(node) = node_ref.optical_ref.lock_opm()
+                && node.gui_position().is_none()
+            {
+                return true;
             }
         }
         false

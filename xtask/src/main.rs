@@ -36,7 +36,6 @@ fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// Ein Wächter, der den Staging-Ordner löscht, wenn er out-of-scope geht.
 struct StagingGuard {
     path: PathBuf,
 }
@@ -50,7 +49,6 @@ impl Drop for StagingGuard {
     }
 }
 
-/// Ein Wächter, der das temporäre Examples-Verzeichnis löscht, wenn er out-of-scope geht.
 struct ExamplesGuard {
     path: PathBuf,
 }
@@ -81,9 +79,6 @@ fn task_bundle() -> Result<(), anyhow::Error> {
     let staging_path = cwd.join("opossum_gui").join("staging");
     let examples_target_dir = cwd.join("opossum_gui").join("opm_examples");
 
-    // --- TOP LEVEL GUARDS ---
-    // Diese Variablen MÜSSEN hier oben stehen, damit sie erst am GANZ am Ende
-    // der task_bundle() Funktion gelöscht werden (nach dem dx bundle).
     let _staging_guard = StagingGuard {
         path: staging_path.clone(),
     };
@@ -119,32 +114,46 @@ fn task_bundle() -> Result<(), anyhow::Error> {
 
             if src.exists() {
                 fs::copy(&src, &dest)?;
-                println!("   -> Staged für Dioxus: {}", dest_filename);
+                println!("   -> Staged for Dioxus: {}", dest_filename);
             } else {
-                return Err(anyhow::anyhow!("Binary nicht gefunden: {}", src.display()));
+                return Err(anyhow::anyhow!("Binary not found: {}", src.display()));
             }
         }
     }
     // 4. Generate Examples
     {
         println!("\n📚 Generating example files...");
-        
+
         if !examples_target_dir.exists() {
             fs::create_dir_all(&examples_target_dir)?;
         }
 
         let examples = vec![
             "workshop_00_kepler_paraxial",
+            "workshop_01_kepler_real_lenses",
+            "workshop_02_kepler_chromatism",
+            "workshop_03_kepler_wavefront",
+            "workshop_04_kepler_imaging_point",
+            "workshop_06_geometry_mirrors",
+            "workshop_07_geometry_shifted_lens",
+            "workshop_08_reference_node",
+            "workshop_09_phelix",
+            "workshop_10_multi_path",
+            "workshop_11_ghostfocus",
         ];
 
         let _env_guard = sh.push_env(
-            "OPOSSUM_EXAMPLES_OUT_DIR", 
-            examples_target_dir.to_str().unwrap()
+            "OPOSSUM_EXAMPLES_OUT_DIR",
+            examples_target_dir.to_str().unwrap(),
         );
 
         for example in examples {
             println!("   -> Generating {}...", example);
-            cmd!(sh, "cargo run --release -p opossum_core --example {example}").run()?;
+            cmd!(
+                sh,
+                "cargo run --release -p opossum_core --example {example}"
+            )
+            .run()?;
         }
     }
     // 5. Bundling
