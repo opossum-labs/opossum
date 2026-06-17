@@ -6,6 +6,7 @@ use crate::{
             AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
             AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
         },
+        app,
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
         menu_bar::{
@@ -43,16 +44,17 @@ pub fn App() -> Element {
         });
     let mut cxt_command = use_signal(|| None::<CxtCommand>);
 
-    // global signals
-    let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
+    // Define global signals
+
+    // The default proejct dir is stored on app config
+    let mut project_directory: Signal<Option<PathBuf>> =
+        use_signal(|| APP_CONFIG().report_dir().cloned());
     let mut model_file_path_sig: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut model_modified_sig: Signal<bool> = use_signal(|| false);
 
     // status for "Unsaved Changes" dialog
     let mut pending_action = use_signal(|| Option::<PendingAction>::None);
     let mut show_alert = use_signal(|| false);
-
-    let _ = APP_CONFIG();
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
@@ -87,11 +89,17 @@ pub fn App() -> Element {
             if path.as_os_str().is_empty() {
                 spawn(async move {
                     if let Some(folder) = select_folder_path().await {
-                        project_directory.set(Some(folder));
+                        project_directory.set(Some(folder.clone()));
+                        let mut app_config = APP_CONFIG.write();
+                        app_config.set_report_dir(&folder).unwrap();
+                        app_config.to_file().unwrap();
                     }
                 });
             } else {
-                project_directory.set(Some(path));
+                project_directory.set(Some(path.clone()));
+                let mut app_config = APP_CONFIG.write();
+                app_config.set_report_dir(&path).unwrap();
+                app_config.to_file().unwrap();
             }
         }
         AppCommand::Quit => {
