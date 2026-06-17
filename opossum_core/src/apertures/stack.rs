@@ -99,12 +99,17 @@ impl Shape for StackShape {
         transmission
     }
 }
-pub fn plot_circle(conf: CircleShape, isometry: &Isometry) -> OpmResult<Vec<PlotSeries>> {
-    let circle_points = ellipse(
+pub fn plot_circle(conf: CircleShape, isometry: Option<&Isometry>) -> OpmResult<Vec<PlotSeries>> {
+    // Extract translation values if isometry exists, otherwise default to 0.0 (identity)
+    let (trans_x, trans_y) = isometry.map_or((0.0, 0.0), |iso| {
         (
-            isometry.translation().x.get::<millimeter>(),
-            isometry.translation().y.get::<millimeter>(),
-        ),
+            iso.translation().x.get::<millimeter>(),
+            iso.translation().y.get::<millimeter>(),
+        )
+    });
+
+    let circle_points = ellipse(
+        (trans_x, trans_y),
         (
             conf.radius().get::<millimeter>(),
             conf.radius().get::<millimeter>(),

@@ -22,7 +22,9 @@ use uom::si::f64::Length;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct RayDataBuilder {
     source: RayDataSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
     isometry: Option<Isometry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     alignment_wavelength: Option<Length>,
 }
 
