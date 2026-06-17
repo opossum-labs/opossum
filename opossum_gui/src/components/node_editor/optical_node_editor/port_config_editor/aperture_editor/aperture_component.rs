@@ -32,20 +32,30 @@ pub fn ApertureEditor(
     readonly: bool,
 ) -> Element {
     let mut aperture_sig = use_signal(|| aperture.clone());
-    let alignment_sig = use_memo(move || *aperture.isometry());
+    
+    // Fallback to Isometry::identity() if the option is None
+    let alignment_sig = use_memo(move || {
+        aperture.isometry().cloned().unwrap_or_default()
+    });
 
     let on_alignment_change = EventHandler::new(move |alignment: Isometry| {
-        let ap_iso = *aperture_sig.read().isometry();
-        if alignment != ap_iso {
+        let current_iso = aperture_sig.read().isometry().cloned().unwrap_or_default();
+        if alignment != current_iso {
             aperture_sig.write().set_isometry(alignment);
             on_change.call(aperture_sig.read().clone());
         }
     });
 
-    let on_shape_change = EventHandler::new(move |aperture: ApertureShape| {
+    let on_shape_change = EventHandler::new(move |shape: ApertureShape| {
         let ap_shape = aperture_sig.read().shape().clone();
-        if aperture != ap_shape {
-            aperture_sig.write().set_shape(aperture);
+        if shape != ap_shape {
+            aperture_sig.write().set_shape(shape.clone());
+            
+            // Reset the isometry if the shape is set to "Open"
+            if matches!(shape, ApertureShape::Open) {
+                aperture_sig.write().set_isometry(Isometry::default());
+            }
+            
             on_change.call(aperture_sig.read().clone());
         }
     });
@@ -58,23 +68,37 @@ pub fn ApertureEditor(
         }
     });
 
+    // 1. Extract values outside of RSX to completely bypass macro parsing limitations
+    let current_shape = aperture_sig.read().shape().clone();
+    let is_open_shape = matches!(current_shape, ApertureShape::Open);
+
+    // 2. Pre-render the specific sub-input view before entering the main rsx! block
+    let shape_specific_input = match &current_shape {
+        ApertureShape::BinaryPolygon(polygon_config) => rsx! {
+            PolygonApertureInput {
+                polygon_config: polygon_config.clone(),
+                on_shape_change,
+                readonly,
+            }
+        },
+        ApertureShape::Stack(stacked_aperture) => rsx! {
+            StackedApertureInput {
+                stacked_aperture: stacked_aperture.clone(),
+                on_shape_change,
+                readonly,
+            }
+        },
+        ApertureShape::Open => rsx! {}, // Empty element for open shape
+        _ => rsx! {
+            RowedInputs { inputs: get_aperture_input_data(&current_shape, on_shape_change, readonly) }
+        },
+    };
+
     let mut aperture_inputs = vec![];
 
     aperture_inputs.push(
-
     rsx! {
-        LabeledSelect {
-            id: "apertureTypeSelector",
-            label: "Aperture type",
-            options: select_options_from_enum_iterator(aperture_sig.read().aperture_type(), None),
-            readonly,
-            onchange: move |e: Event<FormData>| {
-                let val = e.value();
-                if let Some(aperture_type) = ApertureType::default_from_name(val.as_str()) {
-                    on_type_change.call(aperture_type);
-                }
-            },
-        }
+        // 1. Aperture Shape Selector is now first
         LabeledSelect {
             id: "apertureShapeSelector",
             label: "Aperture shape",
@@ -87,48 +111,45 @@ pub fn ApertureEditor(
                 }
             },
         }
-        div { class: "accordion-content-wrapper-div border-start",
-            {
-                if let ApertureShape::BinaryPolygon(polygon_config) = aperture_sig.read().shape()
-                {
-                    rsx! {
-                        PolygonApertureInput {
-                            polygon_config: polygon_config.clone(),
-                            on_shape_change,
-                            readonly,
-                        }
+
+        // Render remaining controls only if shape is not "Open"
+        if !is_open_shape {
+            LabeledSelect {
+                id: "apertureTypeSelector",
+                label: "Aperture type",
+                options: select_options_from_enum_iterator(aperture_sig.read().aperture_type(), None),
+                readonly,
+                onchange: move |e: Event<FormData>| {
+                    let val = e.value();
+                    if let Some(aperture_type) = ApertureType::default_from_name(val.as_str()) {
+                        on_type_change.call(aperture_type);
                     }
-                } else if let ApertureShape::Stack(stacked_aperture) = aperture_sig
-                    .read()
-                    .shape()
-                {
-                    rsx! {
-                        StackedApertureInput {
-                            stacked_aperture: stacked_aperture.clone(),
-                            on_shape_change,
-                            readonly,
-                        }
-                    }
-                } else {
-                    rsx! {
-                        RowedInputs { inputs: get_aperture_input_data(aperture_sig.read().shape(), on_shape_change, readonly) }
-                    }
-                }
+                },
             }
         }
-        RotationAlignmentInputs {
-            alignment: alignment_sig,
-            axes_skip: Some(vec![RotationAxis::Pitch, RotationAxis::Yaw]),
-            on_new_rotation: on_new_rotation(on_alignment_change, alignment_sig.into()),
-            node_id,
-            readonly,
+
+        if !is_open_shape {
+            div { class: "accordion-content-wrapper-div border-start", {shape_specific_input} }
         }
-        TranslationAlignmentInputs {
-            alignment: alignment_sig,
-            axes_skip: Some(vec![TranslationAxis::Z]),
-            on_new_translation: on_new_translation(on_alignment_change, alignment_sig.into()),
-            node_id,
-            readonly,
+
+        if !is_open_shape {
+            RotationAlignmentInputs {
+                alignment: alignment_sig,
+                axes_skip: Some(vec![RotationAxis::Pitch, RotationAxis::Yaw]),
+                on_new_rotation: on_new_rotation(on_alignment_change, alignment_sig.into()),
+                node_id,
+                readonly,
+            }
+        }
+
+        if !is_open_shape {
+            TranslationAlignmentInputs {
+                alignment: alignment_sig,
+                axes_skip: Some(vec![TranslationAxis::Z]),
+                on_new_translation: on_new_translation(on_alignment_change, alignment_sig.into()),
+                node_id,
+                readonly,
+            }
         }
     });
 

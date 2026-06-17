@@ -1,18 +1,21 @@
 // --- Common imports ---
-use crate::{APP_CONFIG, components::{
-    alert_dialog::{
-        AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
-        AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
+use crate::{
+    APP_CONFIG,
+    components::{
+        alert_dialog::{
+            AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
+            AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
+        },
+        context_menu::cx_menu::{ContextMenu, CxtCommand},
+        logger::logger_component::Logger,
+        menu_bar::{
+            menu_bar_component::{AppCommand, MenuBar},
+            project_helper::{select_folder_path, select_open_path, select_save_path},
+        },
+        scenery_editor::{GraphEditor, NodeEditorCommand},
+        short_cuts::{PendingAction, get_action_from_event},
     },
-    context_menu::cx_menu::{ContextMenu, CxtCommand},
-    logger::logger_component::Logger,
-    menu_bar::{
-        menu_bar_component::{AppCommand, MenuBar},
-        project_helper::{select_folder_path, select_open_path, select_save_path},
-    },
-    scenery_editor::{GraphEditor, NodeEditorCommand},
-    short_cuts::{PendingAction, get_action_from_event},
-}};
+};
 use dioxus::prelude::*;
 use std::path::PathBuf;
 
@@ -49,8 +52,8 @@ pub fn App() -> Element {
     let mut pending_action = use_signal(|| Option::<PendingAction>::None);
     let mut show_alert = use_signal(|| false);
 
-    let _=APP_CONFIG();
-    
+    let _ = APP_CONFIG();
+
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
             node_editor_command_handler.call(Some(NodeEditorCommand::DeleteAll));
@@ -92,6 +95,10 @@ pub fn App() -> Element {
             }
         }
         AppCommand::Quit => {
+            // Save config file (even if not changed for automatic migration of file format)
+            if let Err(e) = APP_CONFIG.read().to_file() {
+                eprintln!("Fehler beim Speichern der AppConfig beim Beenden: {e}");
+            }
             #[cfg(not(target_arch = "wasm32"))]
             {
                 #[cfg(not(debug_assertions))]
