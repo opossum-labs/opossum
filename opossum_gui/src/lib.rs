@@ -2,19 +2,37 @@ use std::{
     process::Child,
     sync::{Arc, Mutex},
 };
+mod api;
+mod app_config;
+mod components;
 
 use api::http_client::HTTPClient;
+use app_config::AppConfig;
 use components::{context_menu::cx_menu::CxMenu, logger::Logs};
 use dioxus::signals::{GlobalSignal, Signal};
-
-mod api;
-mod components;
 
 pub use components::app::App;
 
 static OPOSSUM_UI_LOGS: GlobalSignal<Logs> = Signal::global(Logs::new);
 pub static HTTP_API_CLIENT: GlobalSignal<HTTPClient> = Signal::global(HTTPClient::new);
 static CONTEXT_MENU: GlobalSignal<Option<CxMenu>> = Signal::global(|| None::<CxMenu>);
+
+pub static APP_CONFIG: GlobalSignal<AppConfig> = Signal::global(|| {
+    match AppConfig::from_file() {
+        Ok(config) => config,
+        Err(_) => {
+            // Falls das Laden fehlschlägt, erstelle ein Default
+            let default_config = AppConfig::default();
+            
+            // Versuche, die neue Default-Konfiguration sofort auf die Platte zu schreiben
+            if let Err(e) = default_config.to_file() {
+                eprintln!("Warnung: Konnte Default-Config nicht speichern: {}", e);
+            }
+            
+            default_config
+        }
+    }
+});
 
 #[derive(Clone, Default)]
 pub struct ProcessHandle {

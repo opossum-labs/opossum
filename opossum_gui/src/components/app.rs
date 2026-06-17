@@ -1,5 +1,5 @@
 // --- Common imports ---
-use crate::components::{
+use crate::{APP_CONFIG, components::{
     alert_dialog::{
         AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
         AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
@@ -12,7 +12,7 @@ use crate::components::{
     },
     scenery_editor::{GraphEditor, NodeEditorCommand},
     short_cuts::{PendingAction, get_action_from_event},
-};
+}};
 use dioxus::prelude::*;
 use std::path::PathBuf;
 
@@ -49,6 +49,8 @@ pub fn App() -> Element {
     let mut pending_action = use_signal(|| Option::<PendingAction>::None);
     let mut show_alert = use_signal(|| false);
 
+    let _=APP_CONFIG();
+    
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
             node_editor_command_handler.call(Some(NodeEditorCommand::DeleteAll));
