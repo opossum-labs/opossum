@@ -457,7 +457,7 @@ mod test {
         ports.add(&PortType::Output, "test2")?;
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1> aperture: Aperture { shape: Open, a_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Aperture { shape: Open, a_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
+            "inputs:\n  <test1> aperture: Aperture { shape: Open, a_type: Hole, isometry: None }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Aperture { shape: Open, a_type: Hole, isometry: None }, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
         );
         Ok(())
     }
@@ -465,12 +465,11 @@ mod test {
     fn display_entries_inverted() -> OpmResult<()> {
         let mut ports = OpticPorts::new();
         ports.add(&PortType::Input, "test1")?;
-
         ports.add(&PortType::Output, "test2")?;
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test2> aperture: Aperture { shape: Open, a_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Aperture { shape: Open, a_type: Hole, isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } }, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
+            "inputs:\n  <test2> aperture: Aperture { shape: Open, a_type: Hole, isometry: None }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Aperture { shape: Open, a_type: Hole, isometry: None }, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
         );
         Ok(())
     }

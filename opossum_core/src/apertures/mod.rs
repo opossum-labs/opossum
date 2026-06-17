@@ -41,6 +41,7 @@ use crate::{
 };
 use core::f64;
 use nalgebra::{Matrix2xX, MatrixXx2, Point2, Point3};
+use num::Zero;
 use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
@@ -100,7 +101,8 @@ pub struct Aperture {
     a_type: ApertureType,
     #[validate(skip)]
     #[schema(value_type = Object)]
-    isometry: Isometry,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    isometry: Option<Isometry>,
 }
 
 impl Aperture {
@@ -114,19 +116,33 @@ impl Aperture {
         center_shift: Option<Point2<Length>>,
         rotation: Option<Angle>,
     ) -> OpmResult<Self> {
-        let validated_center =
-            ValidatedCenter2D::try_new(center_shift.unwrap_or_else(Point2::origin))?;
-        let validated_rotation =
-            ValidatedAngle1D::try_new(rotation.unwrap_or_else(|| degree!(0.0)))?;
+        // Check if the center shift is provided and differs from the origin
+        let has_effective_shift = center_shift.is_some_and(|p| p != Point2::origin());
 
-        let isometry = Isometry::new(
-            Point3::new(
-                validated_center.get().x,
-                validated_center.get().y,
-                meter!(0.0),
-            ),
-            Point3::new(degree!(0.0), degree!(0.0), *validated_rotation.get()),
-        )?;
+        // Check if the rotation is provided and differs from zero
+        let has_effective_rotation = rotation.is_some_and(|r| r != Angle::zero());
+
+        // Only construct an isometry if we actually deviate from the identity state
+        let isometry = if has_effective_shift || has_effective_rotation {
+            let validated_center =
+                ValidatedCenter2D::try_new(center_shift.unwrap_or_else(Point2::origin))?;
+            let validated_rotation =
+                ValidatedAngle1D::try_new(rotation.unwrap_or_else(Angle::zero))?;
+
+            let iso = Isometry::new(
+                Point3::new(
+                    validated_center.get().x,
+                    validated_center.get().y,
+                    meter!(0.0),
+                ),
+                Point3::new(degree!(0.0), degree!(0.0), *validated_rotation.get()),
+            )?;
+
+            Some(iso)
+        } else {
+            // No transformation needed; isometry remains None
+            None
+        };
 
         Ok(Self {
             shape,
@@ -143,8 +159,15 @@ impl Aperture {
     /// Obstruction aperture: transmission factor is 1.0 - apodization of the shape.
     #[must_use]
     pub fn apodize(&self, point: &Point3<Length>) -> f64 {
-        let transformed_point = self.isometry.inverse_transform_point(point);
-        let base_transmission = self.shape.apodize(&transformed_point);
+        // If isometry is present, transform the point; otherwise, use the point as-is
+        let base_transmission = self.isometry.as_ref().map_or_else(
+            || self.shape.apodize(point),
+            |iso| {
+                let transformed_point = iso.inverse_transform_point(point);
+                self.shape.apodize(&transformed_point)
+            },
+        );
+
         if matches!(self.a_type, ApertureType::Obstruction) {
             1.0 - base_transmission
         } else {
@@ -162,10 +185,10 @@ impl Aperture {
     pub const fn aperture_type(&self) -> &ApertureType {
         &self.a_type
     }
-    /// Returns a reference to the isometry of this [`Aperture`].
+    /// Returns an optional reference to the isometry of this [`Aperture`].
     #[must_use]
-    pub const fn isometry(&self) -> &Isometry {
-        &self.isometry
+    pub const fn isometry(&self) -> Option<&Isometry> {
+        self.isometry.as_ref()
     }
     /// Set the shape of this [`Aperture`].
     pub fn set_shape(&mut self, shape: ApertureShape) {
@@ -177,9 +200,16 @@ impl Aperture {
     }
 
     /// Set the isometry of this [`Aperture`].
-    pub const fn set_isometry(&mut self, iso: Isometry) {
-        self.isometry = iso;
+    /// It will only store the isometry if it deviates from the identity transformation.
+    pub fn set_isometry(&mut self, iso: Isometry) {
+        // Note: If your library supports .is_identity(), use: if iso.is_identity()
+        if iso == Isometry::identity() {
+            self.isometry = None;
+        } else {
+            self.isometry = Some(iso);
+        }
     }
+
     /// Create a new circular aperture.
     ///
     /// # Errors
@@ -370,9 +400,7 @@ impl Plottable for Aperture {
         let plt_series_opt = match plt_type {
             PlotType::Line2D(_) | PlotType::Scatter2D(_) => match &self.shape {
                 ApertureShape::Open => None,
-                ApertureShape::BinaryCircle(conf) => {
-                    Some(stack::plot_circle(*conf, self.isometry())?)
-                }
+                ApertureShape::BinaryCircle(conf) => Some(stack::plot_circle(*conf, iso)?),
                 ApertureShape::BinaryRectangle(conf) => {
                     let mut points = [
                         Point2::new(conf.width() / 2., conf.height() / 2.),
@@ -381,10 +409,13 @@ impl Plottable for Aperture {
                         Point2::new(conf.width() / 2., -conf.height() / 2.),
                     ];
                     for p in &mut points {
-                        let transformed_p =
-                            iso.transform_point(&Point3::new(p.x, p.y, meter!(0.0)));
-                        p.x = transformed_p.x;
-                        p.y = transformed_p.y;
+                        // Transform the point only if an isometry is present
+                        if let Some(iso) = iso {
+                            let transformed_p =
+                                iso.transform_point(&Point3::new(p.x, p.y, meter!(0.0)));
+                            p.x = transformed_p.x;
+                            p.y = transformed_p.y;
+                        }
                     }
                     let plt_data_points = points
                         .iter()
@@ -418,11 +449,16 @@ impl Plottable for Aperture {
                     )])
                 }
                 ApertureShape::Gaussian(conf) => {
-                    let circle_points = ellipse(
+                    // Extract translation values if isometry exists, otherwise default to 0.0
+                    let (trans_x, trans_y) = iso.map_or((0.0, 0.0), |iso| {
                         (
                             iso.translation().x.get::<millimeter>(),
                             iso.translation().y.get::<millimeter>(),
-                        ),
+                        )
+                    });
+
+                    let circle_points = ellipse(
+                        (trans_x, trans_y),
                         (
                             conf.sigma().0.get::<millimeter>() * 2.,
                             conf.sigma().1.get::<millimeter>() * 2.,

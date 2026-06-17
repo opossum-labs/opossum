@@ -35,6 +35,7 @@ use ron::{extensions::Extensions, ser::PrettyConfig};
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnalyzerInfo {
     analyzer_type: AnalyzerType,
+    #[serde(skip_serializing_if = "Option::is_none")]
     gui_position: Option<(f64, f64)>,
 }
 impl AnalyzerInfo {
