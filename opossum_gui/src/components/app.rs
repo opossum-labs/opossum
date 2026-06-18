@@ -1,17 +1,21 @@
 // --- Common imports ---
-use crate::components::{
-    alert_dialog::{
-        AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
-        AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
+use crate::{
+    APP_CONFIG,
+    components::{
+        alert_dialog::{
+            AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
+            AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
+        },
+        context_menu::cx_menu::{ContextMenu, CxtCommand},
+        logger::logger_component::Logger,
+        menu_bar::{
+            menu_bar_component::{AppCommand, MenuBar},
+            project_helper::{select_folder_path, select_open_path, select_save_path},
+        },
+        scenery_editor::{GraphEditor, NodeEditorCommand},
+        settings_dialog::SettingsDialog,
+        short_cuts::{PendingAction, get_action_from_event},
     },
-    context_menu::cx_menu::{ContextMenu, CxtCommand},
-    logger::logger_component::Logger,
-    menu_bar::{
-        menu_bar_component::{AppCommand, MenuBar},
-        project_helper::{select_folder_path, select_open_path, select_save_path},
-    },
-    scenery_editor::{GraphEditor, NodeEditorCommand},
-    short_cuts::{PendingAction, get_action_from_event},
 };
 use dioxus::prelude::*;
 use std::path::PathBuf;
@@ -40,14 +44,18 @@ pub fn App() -> Element {
         });
     let mut cxt_command = use_signal(|| None::<CxtCommand>);
 
-    // global signals
-    let mut project_directory: Signal<Option<PathBuf>> = use_signal(|| None);
+    // Define global signals
+
+    // The default proejct dir is stored on app config
+    let mut project_directory: Signal<Option<PathBuf>> =
+        use_signal(|| APP_CONFIG().report_dir().cloned());
     let mut model_file_path_sig: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut model_modified_sig: Signal<bool> = use_signal(|| false);
 
     // status for "Unsaved Changes" dialog
     let mut pending_action = use_signal(|| Option::<PendingAction>::None);
     let mut show_alert = use_signal(|| false);
+    let mut show_settings = use_signal(|| false);
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
@@ -82,14 +90,27 @@ pub fn App() -> Element {
             if path.as_os_str().is_empty() {
                 spawn(async move {
                     if let Some(folder) = select_folder_path().await {
-                        project_directory.set(Some(folder));
+                        project_directory.set(Some(folder.clone()));
+                        let mut app_config = APP_CONFIG.write();
+                        app_config.set_report_dir(&folder).unwrap();
+                        app_config.to_file().unwrap();
                     }
                 });
             } else {
-                project_directory.set(Some(path));
+                project_directory.set(Some(path.clone()));
+                let mut app_config = APP_CONFIG.write();
+                app_config.set_report_dir(&path).unwrap();
+                app_config.to_file().unwrap();
             }
         }
+        AppCommand::Settings => {
+            show_settings.set(true);
+        }
         AppCommand::Quit => {
+            // Save config file (even if not changed for automatic migration of file format)
+            if let Err(e) = APP_CONFIG.read().to_file() {
+                eprintln!("Fehler beim Speichern der AppConfig beim Beenden: {e}");
+            }
             #[cfg(not(target_arch = "wasm32"))]
             {
                 #[cfg(not(debug_assertions))]
@@ -339,6 +360,7 @@ pub fn App() -> Element {
             }
         }
         SimulationWindow { show_simulation: run_simulation, project_directory }
+        SettingsDialog { show: show_settings, project_directory }
     }
 
     // #[cfg(target_arch = "wasm32")]

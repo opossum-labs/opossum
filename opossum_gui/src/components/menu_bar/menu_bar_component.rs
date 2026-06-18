@@ -36,6 +36,7 @@ pub enum AppCommand {
     ZoomToFit,
     Quit,
     Simulate,
+    Settings,
 }
 
 #[component]
@@ -100,6 +101,10 @@ pub fn MenuBar(
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::Report,
                                 on_click: move |_| on_menu_action.call(AppCommand::SetReportDir(PathBuf::new())),
+                            }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::Settings,
+                                on_click: move |_| on_menu_action.call(AppCommand::Settings),
                             }
                             li {
                                 hr { class: "dropdown-divider" }

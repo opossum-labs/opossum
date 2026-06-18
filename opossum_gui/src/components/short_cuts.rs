@@ -20,6 +20,7 @@ pub enum ShortCutAction {
     New,
     Report,
     Simulate,
+    Settings,
     Quit,
 }
 
@@ -35,6 +36,7 @@ impl fmt::Display for ShortCutAction {
             Self::New => "New Project",
             Self::Report => "Set Report Directory",
             Self::Simulate => "Start Simulation",
+            Self::Settings => "Settings",
             Self::Quit => "Quit",
         };
         write!(f, "{text}")
@@ -53,6 +55,7 @@ impl From<ShortCutAction> for AppCommand {
             ShortCutAction::New => Self::NewProject,
             ShortCutAction::Report => Self::SetReportDir(PathBuf::new()),
             ShortCutAction::Simulate => Self::Simulate,
+            ShortCutAction::Settings => Self::Settings,
             ShortCutAction::Quit => Self::Quit,
         }
     }
@@ -95,6 +98,10 @@ pub static SHORTCUTS: LazyLock<HashMap<ShortCutAction, Shortcut>> = LazyLock::ne
     m.insert(
         ShortCutAction::Simulate,
         Shortcut::new(false, false, true, "S", ShortCutAction::Simulate),
+    );
+    m.insert(
+        ShortCutAction::Settings,
+        Shortcut::new(true, false, true, ",", ShortCutAction::Settings),
     );
     m.insert(
         ShortCutAction::Quit,
