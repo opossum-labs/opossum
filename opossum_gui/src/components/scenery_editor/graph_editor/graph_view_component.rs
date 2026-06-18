@@ -22,7 +22,7 @@ use uuid::Uuid;
 pub fn GraphViewEditor(
     model_modified_sig: ReadSignal<bool>,
     model_modified_handler: EventHandler<bool>,
-    model_file_path_sig: ReadSignal<Option<PathBuf>>,
+    model_file_path: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     current_mouse_pos: Signal<Point2D<f64>>,
     graph_state: ReadStore<GraphState>,
@@ -154,7 +154,7 @@ pub fn GraphViewEditor(
                         shift().y,
                         zoom(),
                     ),
-                    for (_, node) in graph_store.nodes().iter() {
+                    for (_ , node) in graph_store.nodes().iter() {
                         {
                             rsx! {
                                 Node {

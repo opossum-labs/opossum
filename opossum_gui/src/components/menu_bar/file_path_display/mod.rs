@@ -5,11 +5,11 @@ use std::path::{Path, PathBuf};
 
 #[component]
 pub fn FilePathDisplay(
-    model_file_path_sig: ReadSignal<Option<PathBuf>>,
+    model_file_path: ReadSignal<Option<PathBuf>>,
     model_modified_sig: ReadSignal<bool>,
 ) -> Element {
     let path_info = use_memo(move || {
-        model_file_path_sig().as_ref().map_or_else(
+        model_file_path().as_ref().map_or_else(
             || {
                 (
                     "unsaved.opm".to_string(),

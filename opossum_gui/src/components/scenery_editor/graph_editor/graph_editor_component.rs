@@ -25,7 +25,7 @@ pub fn GraphEditor(
     node_editor_command_handler: EventHandler<Option<NodeEditorCommand>>,
     model_modified_sig: ReadSignal<bool>,
     model_modified_handler: EventHandler<bool>,
-    model_file_path_sig: ReadSignal<Option<PathBuf>>,
+    model_file_path: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     root_tab_open_handler: EventHandler<bool>,
 ) -> Element {
@@ -59,7 +59,7 @@ pub fn GraphEditor(
     });
 
     use_effect(move || {
-        if let Some(path) = &*model_file_path_sig.read()
+        if let Some(path) = &*model_file_path.read()
             && let Some(os_fname) = path.file_stem()
             && let Some(fname) = os_fname.to_str()
         {
@@ -80,7 +80,7 @@ pub fn GraphEditor(
 
     use_effect(move || {
         if *root_graph_id.peek() == Uuid::nil() {
-            let scenery_name = if let Some(path) = &*model_file_path_sig.peek()
+            let scenery_name = if let Some(path) = &*model_file_path.peek()
                 && let Some(os_fname) = path.file_stem()
                 && let Some(fname) = os_fname.to_str()
             {
@@ -151,7 +151,7 @@ pub fn GraphEditor(
                         let tab_order = workspace.tab_order().read().clone();
                         rsx! {
                             TabList { class: "editor-tab-list",
-                                for (i, id) in tab_order.iter().enumerate() {
+                                for (i , id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabTrigger {
                                             key: "{id.as_simple().to_string()}",
@@ -183,7 +183,7 @@ pub fn GraphEditor(
                                 id: "graphEditorContentContainer",
                                 class: "graph-editor-tab-content",
                                 onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea),
-                                for (i, id) in tab_order.iter().enumerate() {
+                                for (i , id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabContent {
                                             key: "{id.as_simple().to_string()}",
@@ -193,7 +193,7 @@ pub fn GraphEditor(
                                             GraphViewEditor {
                                                 model_modified_sig,
                                                 model_modified_handler,
-                                                model_file_path_sig,
+                                                model_file_path,
                                                 model_file_path_handler,
                                                 current_mouse_pos: current_mouse_in_editor_pos,
                                                 graph_state,

@@ -1,6 +1,6 @@
 use crate::components::menu_bar::menu_bar_component::AppCommand;
 use dioxus::prelude::*;
-use std::{collections::HashMap, fmt, path::PathBuf, sync::LazyLock};
+use std::{collections::HashMap, fmt, sync::LazyLock};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PendingAction {
@@ -18,7 +18,6 @@ pub enum ShortCutAction {
     SaveAs,
     Open,
     New,
-    Report,
     Simulate,
     Settings,
     Quit,
@@ -34,7 +33,6 @@ impl fmt::Display for ShortCutAction {
             Self::SaveAs => "Save As...",
             Self::Open => "Open Project",
             Self::New => "New Project",
-            Self::Report => "Set Report Directory",
             Self::Simulate => "Start Simulation",
             Self::Settings => "Settings",
             Self::Quit => "Quit",
@@ -53,7 +51,6 @@ impl From<ShortCutAction> for AppCommand {
             ShortCutAction::SaveAs => Self::SaveAs,
             ShortCutAction::Open => Self::OpenTrigger,
             ShortCutAction::New => Self::NewProject,
-            ShortCutAction::Report => Self::SetReportDir(PathBuf::new()),
             ShortCutAction::Simulate => Self::Simulate,
             ShortCutAction::Settings => Self::Settings,
             ShortCutAction::Quit => Self::Quit,
@@ -90,10 +87,6 @@ pub static SHORTCUTS: LazyLock<HashMap<ShortCutAction, Shortcut>> = LazyLock::ne
     m.insert(
         ShortCutAction::AutoLayout,
         Shortcut::new(true, true, false, "A", ShortCutAction::AutoLayout),
-    );
-    m.insert(
-        ShortCutAction::Report,
-        Shortcut::new(true, false, false, "R", ShortCutAction::Report),
     );
     m.insert(
         ShortCutAction::Simulate,

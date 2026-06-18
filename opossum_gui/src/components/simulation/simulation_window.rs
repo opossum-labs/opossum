@@ -1,6 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{
-    OPOSSUM_UI_LOGS,
+    APP_CONFIG, OPOSSUM_UI_LOGS,
     api::{self, eval_action_run},
     components::simulation::utils::find_cli_executable,
 };
@@ -22,7 +22,7 @@ enum CommandAction {
 #[component]
 pub fn SimulationWindow(
     show_simulation: Signal<bool>,
-    project_directory: ReadSignal<Option<PathBuf>>,
+    model_file_path: ReadSignal<Option<PathBuf>>,
 ) -> Element {
     let mut output = use_signal(String::new);
     let mut is_running = use_signal(|| false);
@@ -54,7 +54,41 @@ pub fn SimulationWindow(
                         simulation_success.set(false); // Reset success state for a new run
                         output.set(String::new());
                         output.write().push_str("[INFO] Preparing simulation...\n");
+                        let app_config = APP_CONFIG();
 
+                        let Some(report_base_dir) = app_config.report_dir() else {
+                            output
+                                .write()
+                                .push_str("[ERROR] No report base directory set.\n");
+                            is_running.set(false);
+                            continue;
+                        };
+                        let model_file_name = model_file_path().map_or_else(
+                            || PathBuf::from("default"),
+                            |model_file_path| PathBuf::from(model_file_path.file_stem().unwrap()),
+                        );
+                        let report_dir = report_base_dir.join(model_file_name);
+                        // --- Clean up directory before simulation ---
+                        if report_dir.exists() {
+                            output
+                                .write()
+                                .push_str("[INFO] Cleaning up old report files...\n");
+                            if let Err(e) = fs::remove_dir_all(&report_dir) {
+                                let _ = writeln!(
+                                    output.write(),
+                                    "[WARN] Could not clear old report directory: {e}"
+                                );
+                            }
+                        }
+                        // Creat new, empty folder
+                        if let Err(e) = fs::create_dir_all(&report_dir) {
+                            let _ = writeln!(
+                                output.write(),
+                                "[ERROR] Could not create report directory: {e}"
+                            );
+                            is_running.set(false);
+                            continue;
+                        }
                         let Ok(temp_dir) = tempdir() else {
                             output
                                 .write()
@@ -79,13 +113,6 @@ pub fn SimulationWindow(
                             output
                                 .write()
                                 .push_str("[ERROR] Opossum CLI executable not found.\n");
-                            is_running.set(false);
-                            continue;
-                        };
-                        let Some(report_dir) = project_directory() else {
-                            output
-                                .write()
-                                .push_str("[ERROR] No project directory set.\n");
                             is_running.set(false);
                             continue;
                         };
@@ -212,45 +239,54 @@ pub fn SimulationWindow(
 
     // Closure to handle opening the reports
     let open_reports = move |_| {
-        if let Some(dir) = project_directory() {
-            let mut i = 0;
-            let mut opened_any = false;
+        let app_config = APP_CONFIG();
 
-            loop {
-                let report_filename = format!("report_{i}.html");
-                let report_path = dir.join(&report_filename);
-
-                if report_path.exists() {
-                    if let Some(path_str) = report_path.to_str() {
-                        // Using our safe helper wrapper to handle UNC paths correctly
-                        match open_report_safely(path_str) {
-                            Ok(()) => {
-                                let _ = writeln!(output.write(), "[INFO] Opened {report_filename}");
-                                opened_any = true;
-                            }
-                            Err(e) => {
-                                let _ = writeln!(
-                                    output.write(),
-                                    "[ERROR] Failed to open {report_filename}: {e}"
-                                );
-                            }
-                        }
-                    }
-                    i += 1;
-                } else {
-                    break;
-                }
-            }
-
-            if !opened_any {
-                output
-                    .write()
-                    .push_str("[WARN] No reports found to open in the project directory.\n");
-            }
-        } else {
+        let Some(report_base_dir) = app_config.report_dir() else {
             output
                 .write()
-                .push_str("[ERROR] Cannot open reports: No project directory set.\n");
+                .push_str("[ERROR] No report base directory set.\n");
+            is_running.set(false);
+            return;
+        };
+        let model_file_name = model_file_path().map_or_else(
+            || PathBuf::from("default"),
+            |file_path| PathBuf::from(file_path.file_stem().unwrap()),
+        );
+        let report_dir = report_base_dir.join(model_file_name);
+
+        let mut i = 0;
+        let mut opened_any = false;
+
+        loop {
+            let report_filename = format!("report_{i}.html");
+            let report_path = report_dir.join(&report_filename);
+
+            if report_path.exists() {
+                if let Some(path_str) = report_path.to_str() {
+                    // Using our safe helper wrapper to handle UNC paths correctly
+                    match open_report_safely(path_str) {
+                        Ok(()) => {
+                            let _ = writeln!(output.write(), "[INFO] Opened {report_filename}");
+                            opened_any = true;
+                        }
+                        Err(e) => {
+                            let _ = writeln!(
+                                output.write(),
+                                "[ERROR] Failed to open {report_filename}: {e}"
+                            );
+                        }
+                    }
+                }
+                i += 1;
+            } else {
+                break;
+            }
+        }
+
+        if !opened_any {
+            output
+                .write()
+                .push_str("[WARN] No reports found to open in the project directory.\n");
         }
     };
 

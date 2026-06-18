@@ -28,7 +28,6 @@ pub enum AppCommand {
     OpenTrigger, // start `Open` dialog
     Save,
     SaveAs,
-    SetReportDir(PathBuf),
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     AutoLayout,
@@ -41,7 +40,7 @@ pub enum AppCommand {
 
 #[component]
 pub fn MenuBar(
-    model_file_path_sig: ReadSignal<Option<PathBuf>>,
+    model_file_path: ReadSignal<Option<PathBuf>>,
     model_modified_sig: ReadSignal<bool>,
     on_menu_action: EventHandler<AppCommand>,
     root_tab_open: ReadSignal<bool>,
@@ -97,10 +96,6 @@ pub fn MenuBar(
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::SaveAs,
                                 on_click: move |_| on_menu_action.call(AppCommand::SaveAs),
-                            }
-                            MenuListItemShortCut {
-                                short_cut_action: ShortCutAction::Report,
-                                on_click: move |_| on_menu_action.call(AppCommand::SetReportDir(PathBuf::new())),
                             }
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::Settings,
@@ -220,7 +215,7 @@ pub fn MenuBar(
                         }
                     }
                     // Display File Path
-                    FilePathDisplay { model_file_path_sig, model_modified_sig }
+                    FilePathDisplay { model_file_path, model_modified_sig }
                 }
             }
             ExpandOnClick { maximize_symbol }
