@@ -3,7 +3,6 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use nalgebra::Vector3;
 use opossum_core::{
-    error::OpmResult,
     geometry::{Cylinder, Parabola, Plane, Sphere, geo_surface::GeoSurface},
     joule,
     light::Ray,
@@ -27,22 +26,23 @@ fn criterion_config() -> Criterion {
 }
 
 /// Benchmarks for the Plane surface
-fn plane_benchmarks(c: &mut Criterion) -> OpmResult<()> {
+fn plane_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Plane Intersection");
-    let surface = Plane::new(Isometry::new_along_z(millimeter!(10.0))?);
+    let surface = Plane::new(Isometry::new_along_z(millimeter!(10.0)).unwrap());
 
     // --- Scenarios ---
-    let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
+    let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
     let off_axis_ray =
-        Ray::new_collimated(millimeter!(2.0, 2.0, 0.0), nanometer!(1053.0), joule!(1.0))?;
+        Ray::new_collimated(millimeter!(2.0, 2.0, 0.0), nanometer!(1053.0), joule!(1.0)).unwrap();
     let angled_ray = Ray::new(
         millimeter!(0.0, 0.0, 0.0),
         Vector3::new(0.1, -0.1, 1.0),
         nanometer!(1053.0),
         joule!(1.0),
-    )?;
+    )
+    .unwrap();
     let miss_ray =
-        Ray::new_collimated(millimeter!(0.0, 0.0, 20.0), nanometer!(1053.0), joule!(1.0))?;
+        Ray::new_collimated(millimeter!(0.0, 0.0, 20.0), nanometer!(1053.0), joule!(1.0)).unwrap();
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
@@ -58,28 +58,32 @@ fn plane_benchmarks(c: &mut Criterion) -> OpmResult<()> {
         b.iter(|| surface.calc_intersect_and_normal(&miss_ray))
     });
     group.finish();
-    Ok(())
 }
 
 /// Benchmarks for the Sphere surface
-fn sphere_benchmarks(c: &mut Criterion) -> OpmResult<()> {
+fn sphere_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Sphere Intersection");
     // Sphere with vertex at z=20mm
-    let surface = Sphere::new(millimeter!(10.0), Isometry::new_along_z(millimeter!(20.0))?)?;
+    let surface = Sphere::new(
+        millimeter!(10.0),
+        Isometry::new_along_z(millimeter!(20.0)).unwrap(),
+    )
+    .unwrap();
 
     // --- Scenarios ---
-    let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
+    let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
     let off_axis_ray =
-        Ray::new_collimated(millimeter!(5.0, 0.0, 0.0), nanometer!(1053.0), joule!(1.0))?;
+        Ray::new_collimated(millimeter!(5.0, 0.0, 0.0), nanometer!(1053.0), joule!(1.0)).unwrap();
     let angled_ray = Ray::new(
         millimeter!(0.0, 0.0, 0.0),
         Vector3::new(0.1, 0.0, 1.0), // Angled towards the surface
         nanometer!(1053.0),
         joule!(1.0),
-    )?;
+    )
+    .unwrap();
     // This ray is outside the sphere's radius of 10mm
     let miss_ray =
-        Ray::new_collimated(millimeter!(10.1, 0.0, 0.0), nanometer!(1053.0), joule!(1.0))?;
+        Ray::new_collimated(millimeter!(10.1, 0.0, 0.0), nanometer!(1053.0), joule!(1.0)).unwrap();
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
@@ -95,27 +99,31 @@ fn sphere_benchmarks(c: &mut Criterion) -> OpmResult<()> {
         b.iter(|| surface.calc_intersect_and_normal(&miss_ray))
     });
     group.finish();
-    Ok(())
 }
 
 /// Benchmarks for the Cylinder surface
-fn cylinder_benchmarks(c: &mut Criterion) -> OpmResult<()> {
+fn cylinder_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Cylinder Intersection");
-    let surface = Cylinder::new(millimeter!(10.0), Isometry::new_along_z(millimeter!(20.0))?)?;
+    let surface = Cylinder::new(
+        millimeter!(10.0),
+        Isometry::new_along_z(millimeter!(20.0)).unwrap(),
+    )
+    .unwrap();
 
     // --- Scenarios ---
-    let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
+    let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
     let off_axis_ray =
-        Ray::new_collimated(millimeter!(5.0, 5.0, 0.0), nanometer!(1053.0), joule!(1.0))?;
+        Ray::new_collimated(millimeter!(5.0, 5.0, 0.0), nanometer!(1053.0), joule!(1.0)).unwrap();
     let angled_ray = Ray::new(
         millimeter!(0.0, 0.0, 0.0),
         Vector3::new(0.2, 0.2, 1.0), // Angled towards the surface
         nanometer!(1053.0),
         joule!(1.0),
-    )?;
+    )
+    .unwrap();
     // This ray is outside the cylinder's radius of 10mm on the curved axis
     let miss_ray =
-        Ray::new_collimated(millimeter!(10.1, 0.0, 0.0), nanometer!(1053.0), joule!(1.0))?;
+        Ray::new_collimated(millimeter!(10.1, 0.0, 0.0), nanometer!(1053.0), joule!(1.0)).unwrap();
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
@@ -131,35 +139,37 @@ fn cylinder_benchmarks(c: &mut Criterion) -> OpmResult<()> {
         b.iter(|| surface.calc_intersect_and_normal(&miss_ray))
     });
     group.finish();
-    Ok(())
 }
 
 /// Benchmarks for the Parabola surface
-fn parabola_benchmarks(c: &mut Criterion) -> OpmResult<()> {
+fn parabola_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Parabola Intersection");
     let surface = Parabola::new(
-        millimeter!(20.0),                        // focal length
-        Isometry::new_along_z(millimeter!(5.0))?, // vertex at z=5mm
-    )?;
+        millimeter!(20.0),                                // focal length
+        Isometry::new_along_z(millimeter!(5.0)).unwrap(), // vertex at z=5mm
+    )
+    .unwrap();
 
     // --- Scenarios ---
     // All rays start behind the parabola's vertex
-    let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
+    let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
     let off_axis_ray =
-        Ray::new_collimated(millimeter!(5.0, -5.0, 0.0), nanometer!(1053.0), joule!(1.0))?;
+        Ray::new_collimated(millimeter!(5.0, -5.0, 0.0), nanometer!(1053.0), joule!(1.0)).unwrap();
     let angled_ray = Ray::new(
         millimeter!(0.0, 0.0, 0.0),
         Vector3::new(-0.1, 0.1, 1.0), // Angled towards the surface
         nanometer!(1053.0),
         joule!(1.0),
-    )?;
+    )
+    .unwrap();
     // This ray starts "behind" the surface and travels away from it
     let miss_ray = Ray::new(
         millimeter!(0.0, 0.0, 6.0),
         Vector3::z(),
         nanometer!(1053.0),
         joule!(1.0),
-    )?;
+    )
+    .unwrap();
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
@@ -175,8 +185,6 @@ fn parabola_benchmarks(c: &mut Criterion) -> OpmResult<()> {
         b.iter(|| surface.calc_intersect_and_normal(&miss_ray))
     });
     group.finish();
-
-    Ok(())
 }
 
 // Register the benchmark groups using the custom configuration from the function above.

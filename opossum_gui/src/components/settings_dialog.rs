@@ -1,19 +1,13 @@
 use crate::APP_CONFIG;
 use crate::components::menu_bar::project_helper::select_folder_path;
 use dioxus::prelude::*;
-use std::path::PathBuf;
 
 #[component]
-pub fn SettingsDialog(
-    show: Signal<bool>,
-    mut project_directory: Signal<Option<PathBuf>>,
-) -> Element {
+pub fn SettingsDialog(show: Signal<bool>) -> Element {
     if !show() {
         return rsx! {};
     }
-
     let mut active_tab = use_signal(|| 0);
-
     rsx! {
       div {
         class: "modal d-block",
@@ -73,7 +67,7 @@ pub fn SettingsDialog(
                 style: "background-color: #1e1e1e; border-radius: 0 0 4px 0;",
                 match active_tab() {
                     0 => rsx! {
-                      GeneralSettingsTab { project_directory }
+                      GeneralSettingsTab {}
                     },
                     1 => rsx! {
                       PhysicsSettingsTab {}
@@ -112,7 +106,7 @@ pub fn SettingsDialog(
 }
 
 #[component]
-fn GeneralSettingsTab(mut project_directory: Signal<Option<PathBuf>>) -> Element {
+fn GeneralSettingsTab() -> Element {
     let config = APP_CONFIG();
     let current_path_str = config.report_dir().map_or_else(
         || "No default dir set".to_string(),
@@ -139,7 +133,6 @@ fn GeneralSettingsTab(mut project_directory: Signal<Option<PathBuf>>) -> Element
               onclick: move |_| {
                   spawn(async move {
                       if let Some(folder) = select_folder_path().await {
-                          project_directory.set(Some(folder.clone()));
                           let mut app_config = APP_CONFIG.write();
                           if let Err(e) = app_config.set_report_dir(&folder) {
                               eprintln!("Error setting directory: {e}");

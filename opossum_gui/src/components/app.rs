@@ -10,7 +10,7 @@ use crate::{
         logger::logger_component::Logger,
         menu_bar::{
             menu_bar_component::{AppCommand, MenuBar},
-            project_helper::{select_folder_path, select_open_path, select_save_path},
+            project_helper::{select_open_path, select_save_path},
         },
         scenery_editor::{GraphEditor, NodeEditorCommand},
         settings_dialog::SettingsDialog,
@@ -45,11 +45,7 @@ pub fn App() -> Element {
     let mut cxt_command = use_signal(|| None::<CxtCommand>);
 
     // Define global signals
-
-    // The default proejct dir is stored on app config
-    let mut project_directory: Signal<Option<PathBuf>> =
-        use_signal(|| APP_CONFIG().report_dir().cloned());
-    let mut model_file_path_sig: Signal<Option<PathBuf>> = use_signal(|| None);
+    let mut model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut model_modified_sig: Signal<bool> = use_signal(|| false);
 
     // status for "Unsaved Changes" dialog
@@ -69,7 +65,7 @@ pub fn App() -> Element {
             });
         }
         AppCommand::Save => {
-            if let Some(path) = model_file_path_sig.read().clone() {
+            if let Some(path) = model_file_path.read().clone() {
                 node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
             } else {
                 spawn(async move {
@@ -85,23 +81,6 @@ pub fn App() -> Element {
                     node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
                 }
             });
-        }
-        AppCommand::SetReportDir(path) => {
-            if path.as_os_str().is_empty() {
-                spawn(async move {
-                    if let Some(folder) = select_folder_path().await {
-                        project_directory.set(Some(folder.clone()));
-                        let mut app_config = APP_CONFIG.write();
-                        app_config.set_report_dir(&folder).unwrap();
-                        app_config.to_file().unwrap();
-                    }
-                });
-            } else {
-                project_directory.set(Some(path.clone()));
-                let mut app_config = APP_CONFIG.write();
-                app_config.set_report_dir(&path).unwrap();
-                app_config.to_file().unwrap();
-            }
         }
         AppCommand::Settings => {
             show_settings.set(true);
@@ -139,16 +118,16 @@ pub fn App() -> Element {
         AppCommand::Simulate => {
             #[cfg(not(target_arch = "wasm32"))]
             {
-                if project_directory.read().is_some() {
-                    run_simulation.set(true);
-                } else {
-                    spawn(async move {
-                        if let Some(folder) = select_folder_path().await {
-                            project_directory.set(Some(folder));
-                            run_simulation.set(true);
-                        }
-                    });
-                }
+                // if project_directory.read().is_some() {
+                //     run_simulation.set(true);
+                // } else {
+                //     spawn(async move {
+                //         if let Some(folder) = select_folder_path().await {
+                //             project_directory.set(Some(folder));
+                run_simulation.set(true);
+                //         }
+                //     });
+                // }
             }
         }
     };
@@ -180,7 +159,7 @@ pub fn App() -> Element {
             }
         }
         AppCommand::Save => {
-            if let Some(path) = model_file_path_sig.read().clone() {
+            if let Some(path) = model_file_path.read().clone() {
                 node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
             } else {
                 execute_immediate(AppCommand::SaveAs);
@@ -344,9 +323,9 @@ pub fn App() -> Element {
                     cxt_command.set(cxt_cmd_opt);
                 }),
                 on_menu_action: process_command_for_menu,
-                model_file_path_sig,
+                model_file_path,
                 model_file_path_handler: EventHandler::new(move |path_opt: Option<PathBuf>| {
-                    model_file_path_sig.set(path_opt);
+                    model_file_path.set(path_opt);
                 }),
                 model_modified_sig,
                 model_modified_handler: EventHandler::new(move |is_modified: bool| {
@@ -359,8 +338,8 @@ pub fn App() -> Element {
                 on_alert_cancel,
             }
         }
-        SimulationWindow { show_simulation: run_simulation, project_directory }
-        SettingsDialog { show: show_settings, project_directory }
+        SimulationWindow { show_simulation: run_simulation, model_file_path }
+        SettingsDialog { show: show_settings }
     }
 
     // #[cfg(target_arch = "wasm32")]
@@ -392,7 +371,7 @@ pub fn App() -> Element {
 fn CommonAppLayout(
     cxt_command_handler: EventHandler<Option<CxtCommand>>,
     on_menu_action: EventHandler<AppCommand>,
-    model_file_path_sig: ReadSignal<Option<PathBuf>>,
+    model_file_path: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     model_modified_handler: EventHandler<bool>,
     model_modified_sig: ReadSignal<bool>,
@@ -435,7 +414,7 @@ fn CommonAppLayout(
             div { class: "row",
                 div { class: "col",
                     MenuBar {
-                        model_file_path_sig,
+                        model_file_path,
                         model_modified_sig,
                         on_menu_action,
                         root_tab_open,
@@ -445,9 +424,9 @@ fn CommonAppLayout(
             GraphEditor {
                 command: node_editor_command,
                 node_editor_command_handler,
-                model_modified_handler,
                 model_modified_sig,
-                model_file_path_sig,
+                model_modified_handler,
+                model_file_path,
                 model_file_path_handler,
                 root_tab_open_handler,
             }
