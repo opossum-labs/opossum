@@ -343,7 +343,6 @@ pub fn SimulationWindow(
     }
 }
 
-
 /// -------------------
 /// Workaround function
 /// -------------------
@@ -365,6 +364,5 @@ fn open_report_safely(path_str: &str) -> std::io::Result<()> {
     }
 
     // Fallback for local Windows paths, Linux, and macOS
-    webbrowser::open(path_str)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+    webbrowser::open(path_str).map_err(|e| std::io::Error::other(e.to_string()))
 }

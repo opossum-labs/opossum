@@ -32,14 +32,12 @@ pub fn ApertureEditor(
     readonly: bool,
 ) -> Element {
     let mut aperture_sig = use_signal(|| aperture.clone());
-    
+
     // Fallback to Isometry::identity() if the option is None
-    let alignment_sig = use_memo(move || {
-        aperture.isometry().cloned().unwrap_or_default()
-    });
+    let alignment_sig = use_memo(move || aperture.isometry().copied().unwrap_or_default());
 
     let on_alignment_change = EventHandler::new(move |alignment: Isometry| {
-        let current_iso = aperture_sig.read().isometry().cloned().unwrap_or_default();
+        let current_iso = aperture_sig.read().isometry().copied().unwrap_or_default();
         if alignment != current_iso {
             aperture_sig.write().set_isometry(alignment);
             on_change.call(aperture_sig.read().clone());
@@ -50,12 +48,12 @@ pub fn ApertureEditor(
         let ap_shape = aperture_sig.read().shape().clone();
         if shape != ap_shape {
             aperture_sig.write().set_shape(shape.clone());
-            
+
             // Reset the isometry if the shape is set to "Open"
             if matches!(shape, ApertureShape::Open) {
                 aperture_sig.write().set_isometry(Isometry::default());
             }
-            
+
             on_change.call(aperture_sig.read().clone());
         }
     });

@@ -14,14 +14,14 @@ pub struct SceneryResources {
     /// Default path for report directory
     #[schema(value_type=String)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub report_dir: Option<PathBuf>
+    pub report_dir: Option<PathBuf>,
 }
 
 impl Default for SceneryResources {
     fn default() -> Self {
         Self {
             ambient_refr_index: refr_index_vaccuum(),
-            report_dir: None
+            report_dir: None,
         }
     }
 }

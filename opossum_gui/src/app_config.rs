@@ -3,7 +3,7 @@ use opossum_core::{
     error::{OpmResult, OpossumError},
     nanometer,
 };
-use ron::{extensions::Extensions, ser::PrettyConfig};
+use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
@@ -22,7 +22,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         let report_base_dir = UserDirs::new()
             .and_then(|user_dirs| user_dirs.document_dir().map(|p| p.join("opossum_reports")));
-        AppConfig {
+        Self {
             report_dir: report_base_dir,
             default_wavelength: nanometer!(1053.0),
         }
@@ -49,7 +49,7 @@ impl AppConfig {
     }
     pub fn to_file(&self) -> OpmResult<()> {
         let config = PrettyConfig::new()
-            .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
+            // .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
             .new_line("\n");
         let serialized = ron::ser::to_string_pretty(&self, config).map_err(|e| {
             OpossumError::OpticScenery(format!("serialization of config failed: {e}"))
@@ -63,7 +63,6 @@ impl AppConfig {
         if let Some(parent) = config_file.parent() {
             fs::create_dir_all(parent).ok();
         }
-        println!("Writing config to {}", &config_file.display());
         let mut output = File::create(&config_file).map_err(|e| {
             OpossumError::OpticScenery(format!(
                 "could not create file path: {}: {}",
@@ -80,7 +79,7 @@ impl AppConfig {
         })?;
         Ok(())
     }
-    pub fn report_dir(&self) -> Option<&PathBuf> {
+    pub const fn report_dir(&self) -> Option<&PathBuf> {
         self.report_dir.as_ref()
     }
     pub fn set_report_dir(&mut self, report_dir: &Path) -> OpmResult<()> {
@@ -95,6 +94,6 @@ impl AppConfig {
     }
     fn config_file() -> Option<PathBuf> {
         ProjectDirs::from("org", "Opossumlabs", "Opossum")
-            .and_then(|project_dirs| Some(project_dirs.config_local_dir().join("config.ron")))
+            .map(|project_dirs| project_dirs.config_local_dir().join("config.ron"))
     }
 }

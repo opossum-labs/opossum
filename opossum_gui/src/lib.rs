@@ -18,20 +18,15 @@ pub static HTTP_API_CLIENT: GlobalSignal<HTTPClient> = Signal::global(HTTPClient
 static CONTEXT_MENU: GlobalSignal<Option<CxMenu>> = Signal::global(|| None::<CxMenu>);
 
 pub static APP_CONFIG: GlobalSignal<AppConfig> = Signal::global(|| {
-    match AppConfig::from_file() {
-        Ok(config) => config,
-        Err(_) => {
-            // Falls das Laden fehlschlägt, erstelle ein Default
-            let default_config = AppConfig::default();
-            
-            // Versuche, die neue Default-Konfiguration sofort auf die Platte zu schreiben
-            if let Err(e) = default_config.to_file() {
-                eprintln!("Warnung: Konnte Default-Config nicht speichern: {}", e);
-            }
-            
-            default_config
+    AppConfig::from_file().unwrap_or_else(|_| {
+        // Use default if loading fails
+        let default_config = AppConfig::default();
+        // Try to write new config
+        if let Err(e) = default_config.to_file() {
+            eprintln!("Warning: Couldn't write default config: {e}");
         }
-    }
+        default_config
+    })
 });
 
 #[derive(Clone, Default)]

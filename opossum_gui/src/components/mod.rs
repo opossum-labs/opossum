@@ -4,6 +4,7 @@ pub mod logger;
 pub mod menu_bar;
 pub mod node_editor;
 pub mod scenery_editor;
+pub mod settings_dialog;
 pub mod short_cuts;
 pub mod simulation;
 // pub mod plot;

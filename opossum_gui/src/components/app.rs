@@ -6,7 +6,6 @@ use crate::{
             AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
             AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
         },
-        app,
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
         menu_bar::{
@@ -14,6 +13,7 @@ use crate::{
             project_helper::{select_folder_path, select_open_path, select_save_path},
         },
         scenery_editor::{GraphEditor, NodeEditorCommand},
+        settings_dialog::SettingsDialog,
         short_cuts::{PendingAction, get_action_from_event},
     },
 };
@@ -55,6 +55,7 @@ pub fn App() -> Element {
     // status for "Unsaved Changes" dialog
     let mut pending_action = use_signal(|| Option::<PendingAction>::None);
     let mut show_alert = use_signal(|| false);
+    let mut show_settings = use_signal(|| false);
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
@@ -101,6 +102,9 @@ pub fn App() -> Element {
                 app_config.set_report_dir(&path).unwrap();
                 app_config.to_file().unwrap();
             }
+        }
+        AppCommand::Settings => {
+            show_settings.set(true);
         }
         AppCommand::Quit => {
             // Save config file (even if not changed for automatic migration of file format)
@@ -356,6 +360,7 @@ pub fn App() -> Element {
             }
         }
         SimulationWindow { show_simulation: run_simulation, project_directory }
+        SettingsDialog { show: show_settings, project_directory }
     }
 
     // #[cfg(target_arch = "wasm32")]
