@@ -1,6 +1,8 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, pin::Pin};
 
-use actix_web::web;
+use actix_web::{
+    FromRequest, HttpRequest, dev::Payload, web::{self},
+};
 use nalgebra::Point2;
 use opossum_core::{
     core_optics::OpticRef,
@@ -10,6 +12,7 @@ use opossum_core::{
     types::api_types::{ConnectInfo, NodeInfo},
     utils::LockExt,
 };
+use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use crate::{app_state::AppState, error::BackEndErrorResponse};
@@ -330,4 +333,50 @@ pub fn create_new_group_node_info(
         &*new_group_node,
         Some(Some((pos.x, pos.y))),
     ))
+}
+
+/// Custom extractor to handle Rusty Object Notation (RON) payloads
+pub struct Ron<T>(pub T);
+
+impl<T> Ron<T> {
+    /// Deconstruct to get the inner value
+    pub fn into_inner(self) -> T {
+        self.0
+    }
+}
+
+impl<T> FromRequest for Ron<T>
+where
+    T: DeserializeOwned + 'static,
+{
+    // Use your custom error response type directly
+    type Error = BackEndErrorResponse;
+    type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
+
+    fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
+        // Reuse Actix's built-in String extractor to read the request body
+        let string_fut = String::from_request(req, payload);
+
+        Box::pin(async move {
+            // 1. Extract the raw string payload and map potential Actix errors
+            let body_str = string_fut.await.map_err(|err| {
+                BackEndErrorResponse::new(
+                    400,
+                    "Payload Error",
+                    &format!("Failed to read request body: {err}"),
+                )
+            })?;
+            
+            // 2. Deserialize the RON string into the target type T
+            let data = ron::de::from_str(&body_str).map_err(|err| {
+                BackEndErrorResponse::new(
+                    400,
+                    "Parse Error",
+                    &format!("Failed to deserialize payload: {err}"),
+                )
+            })?;
+
+            Ok(Ron(data))
+        })
+    }
 }

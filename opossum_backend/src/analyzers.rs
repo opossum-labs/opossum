@@ -14,7 +14,7 @@ use opossum_core::{
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
-use crate::{app_state::AppState, error::BackEndErrorResponse};
+use crate::{app_state::AppState, error::BackEndErrorResponse, helper_functions::Ron};
 
 /// Get an analyzer by UUID
 ///
@@ -149,16 +149,10 @@ pub async fn get_analyzers(data: web::Data<AppState>) -> HttpResponse {
 pub async fn patch_analyzer(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    body: String,
+    body: Ron<AnalyzerType>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    let analyzer_type: AnalyzerType = ron::de::from_str(&body).map_err(|e| {
-        BackEndErrorResponse::new(
-            400,
-            "Parse Error",
-            &format!("Failed to deserialize UpdateAnalyzerInfo: {e}"),
-        )
-    })?;
+    let analyzer_type = body.into_inner();
     if let Some(analyzer_info) = data.document.lock().analyzer_mut(uuid) {
         analyzer_info.set_analyzer_type(&analyzer_type);
     } else {
