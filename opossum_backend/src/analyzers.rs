@@ -16,6 +16,40 @@ use uuid::Uuid;
 
 use crate::{app_state::AppState, error::BackEndErrorResponse, helper_functions::Ron};
 
+// --- NEW INTERNAL HELPER FUNCTION FOR RECURSIVE SOURCE PORT LOOKUP ---
+fn get_all_source_port_uuids(scenery: &NodeGroup) -> Vec<Uuid> {
+    let mut collected = Vec::new();
+    let root_uuid = scenery.node_attr().uuid();
+
+    fn walk(scenery: &NodeGroup, current_group: Uuid, collected: &mut Vec<Uuid>) {
+        let children_res = scenery.with_group_node(current_group, |g| {
+            g.nodes()
+                .iter()
+                .map(|n| {
+                    let node = n.optical_ref.lock_opm()?;
+                    let node_type = node.node_attr().node_type().to_string();
+                    let node_uuid = node.node_attr().uuid();
+                    drop(node);
+                    Ok((node_uuid, node_type))
+                })
+                .collect::<Result<Vec<(Uuid, String)>, OpossumError>>()
+        });
+
+        if let Ok(Ok(nodes_data)) = children_res {
+            for (child_uuid, node_type) in nodes_data {
+                if node_type == "source port" {
+                    collected.push(child_uuid);
+                } else if scenery.with_group_node(child_uuid, |_| {}).is_ok() {
+                    walk(scenery, child_uuid, collected);
+                }
+            }
+        }
+    }
+
+    walk(scenery, root_uuid, &mut collected);
+    collected
+}
+
 /// Get an analyzer by UUID
 ///
 /// Returns all information (`AnalyzerInfo`) of the analyzer specified by its UUID.
@@ -84,10 +118,35 @@ pub async fn post_analyzer(
     analyzer: web::Json<NewAnalyzerInfo>,
 ) -> HttpResponse {
     let new_analyzer_info = analyzer.into_inner();
-    let uuid = data.document.lock().add_analyzer_with_position(
+    let mut document = data.document.lock();
+    
+    // 1. Create the analyzer core instance
+    let uuid = document.add_analyzer_with_position(
         new_analyzer_info.analyzer_type,
         Some(new_analyzer_info.gui_position),
     );
+
+    // 2. Automatically populate default mappings for all currently existing source ports
+    let source_uuids = get_all_source_port_uuids(document.scenery());
+    if let Some(analyzer_info) = document.analyzer_mut(uuid) {
+        let mut a_type = analyzer_info.analyzer_type().clone();
+        
+        for port_uuid in source_uuids {
+            match &mut a_type {
+                AnalyzerType::Energy(config) => {
+                    config.map_source(port_uuid, Default::default());
+                }
+                AnalyzerType::RayTrace(config) => {
+                    config.map_source(port_uuid, Default::default());
+                }
+                AnalyzerType::GhostFocus(config) => {
+                    config.map_source(port_uuid, Default::default());
+                }
+            }
+        }
+        analyzer_info.set_analyzer_type(&a_type);
+    }
+
     HttpResponse::Created().json(uuid) // 201 Created
 }
 
@@ -321,6 +380,7 @@ pub async fn put_analyzer_gui_position(
     }
     Ok(HttpResponse::NoContent().finish())
 }
+
 /// Get all available `SourcePort` nodes (UUID and Name) in the entire document recursively
 #[utoipa::path(
     tag = "analyzer",
@@ -384,6 +444,7 @@ pub async fn get_available_sources(
 
     Ok(HttpResponse::Ok().json(collected_sources))
 }
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_available_sources);
     cfg.service(get_analyzers);

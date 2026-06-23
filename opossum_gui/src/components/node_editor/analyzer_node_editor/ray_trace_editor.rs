@@ -143,10 +143,10 @@ pub fn RayTraceEditor(
 
             // --- Sektion für das Zuordnen von SourcePort Eigenschaften ---
             div { class: "mt-4 border-top pt-3 text-light",
-                h6 { class: "text-secondary mb-3", "Ray Trace Sources (SourcePorts)" }
+                h6 { class: "text-secondary mb-3", "Sources Definitions" }
 
                 if sources_list.is_empty() {
-                    div { class: "text-muted small italic", "No Source Ports found in this model." }
+                    div { class: "text-muted small italic", "No Source Ports found." }
                 }
 
                 {

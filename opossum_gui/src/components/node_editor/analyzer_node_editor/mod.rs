@@ -1,4 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
+pub mod energy_editor;
 pub mod ghost_focus_editor;
 pub mod ray_trace_editor;
 
@@ -6,6 +7,7 @@ use crate::components::{
     node_editor::{
         analyzer_node_editor::{
             ghost_focus_editor::GhostFocusEditor, ray_trace_editor::RayTraceEditor,
+            energy_editor::EnergyEditor, // <-- NEU
         },
         node_config_editor::NodeChangeEvent,
         optical_node_editor::general_editor::NodeTypeInput,
@@ -35,7 +37,7 @@ pub fn AnalyzerNodeEditor(
     match &*resource_future.read_unchecked() {
         Some(Some(analyzer_info)) => {
             rsx! {
-                // --- GLOBAL SCROLL CONTAINER MOVED HERE ---
+                // --- GLOBAL SCROLL CONTAINER ---
                 // Provides unified vertical scrolling for all analyzer types
                 div {
                     class: "analyzer-node-editor-container p-1",
@@ -51,7 +53,11 @@ pub fn AnalyzerNodeEditor(
                         }
                         {
                             match analyzer_info.analyzer_type().clone() {
-                                AnalyzerType::Energy(_) => rsx! {},
+                                AnalyzerType::Energy(energy_config) => {
+                                    rsx! {
+                                        EnergyEditor { node_id, energy_config, on_change }
+                                    }
+                                }
                                 AnalyzerType::RayTrace(ray_trace_config) => {
                                     rsx! {
                                         RayTraceEditor { node_id, ray_trace_config, on_change }

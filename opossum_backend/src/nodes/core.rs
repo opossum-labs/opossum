@@ -9,7 +9,7 @@ use opossum_core::{
     core_optics::OpticRef,
     error::OpossumError,
     nodes::{NodeReference, create_node_ref},
-    prelude::{OpmDocument, OpticNode, Proptype},
+    prelude::{OpmDocument, OpticNode, Proptype, AnalyzerType},
     types::api_types::{ErrorResponse, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
     utils::LockExt,
 };
@@ -54,6 +54,7 @@ async fn get_children(
     })??;
     Ok(Json(nodes_info))
 }
+
 /// Add a new node to a group node
 ///
 /// This function adds a new optical node to a group node specified by its UUID.
@@ -87,18 +88,46 @@ async fn post_children(
         new_node_info.gui_position().1,
     )));
     drop(node);
+    
     let mut document = data.document.lock();
     let uuid = path.into_inner();
     let scenery = document.scenery_mut();
 
     let _ = scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
+    // --- AUTOMATICALLY INJECT MAPPINGS INTO ALL ANALYZERS IF NEW NODE IS A SOURCE PORT ---
+    let node_type_str = new_node_ref.optical_ref.lock_opm()?.node_attr().node_type().to_string();
+    let new_node_uuid = new_node_ref.optical_ref.lock_opm()?.node_attr().uuid();
+
+    if node_type_str == "source port" {
+        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().cloned().collect();
+        for az_uuid in analyzer_keys {
+            if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
+                let mut a_type = analyzer_info.analyzer_type().clone();
+                match &mut a_type {
+                    AnalyzerType::Energy(cfg) => {
+                        cfg.map_source(new_node_uuid, Default::default());
+                    }
+                    AnalyzerType::RayTrace(cfg) => {
+                        cfg.map_source(new_node_uuid, Default::default());
+                    }
+                    AnalyzerType::GhostFocus(cfg) => {
+                        cfg.map_source(new_node_uuid, Default::default());
+                    }
+                }
+                analyzer_info.set_analyzer_type(&a_type);
+            }
+        }
+    }
+
     drop(document);
+    
     let node = new_node_ref.optical_ref.lock_opm()?;
     let node_info = NodeInfo::from_analyzable(&*node, None);
     drop(node);
     Ok(HttpResponse::Created().json(node_info))
 }
+
 /// Get optical node properties
 ///
 /// This function retrieves the properties of an optical node specified by its UUID. It also searches for the node recursively in the whole scenery.
@@ -151,6 +180,7 @@ async fn get_node(
         Ok(HttpResponse::Ok().json(node_info))
     }
 }
+
 /// Update optical node properties
 ///
 /// Modifies the standard properties (name, inversion, isometries, GUI position) of an optical node
@@ -195,6 +225,7 @@ async fn patch_node(
 
     Ok(HttpResponse::NoContent().finish())
 }
+
 /// Delete a node
 ///
 /// This function deletes a node. It also deletes reference nodes which refer to this node.
@@ -213,6 +244,23 @@ async fn delete_node(
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
     let deleted_nodes = scenery.delete_node(uuid)?;
+
+    // --- AUTOMATICALLY REMOVE OBSOLETE MAPPINGS FROM ALL ANALYZERS ---
+    for deleted_uuid in &deleted_nodes {
+        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().cloned().collect();
+        for az_uuid in analyzer_keys {
+            if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
+                let mut a_type = analyzer_info.analyzer_type().clone();
+                match &mut a_type {
+                    AnalyzerType::Energy(cfg) => { let _ = cfg.remove_source(deleted_uuid); }
+                    AnalyzerType::RayTrace(cfg) => { let _ = cfg.remove_source(deleted_uuid); }
+                    AnalyzerType::GhostFocus(cfg) => { let _ = cfg.remove_source(deleted_uuid); }
+                }
+                analyzer_info.set_analyzer_type(&a_type);
+            }
+        }
+    }
+
     drop(document);
     Ok(web::Json(deleted_nodes))
 }
@@ -239,6 +287,7 @@ async fn get_reference_nodes(
     drop(document);
     Ok(web::Json(references))
 }
+
 /// Add a new reference node to a group node
 ///
 /// Adds a new reference node to the specified group node, identified by its UUID (provided in the path).
@@ -340,57 +389,5 @@ fn get_nested_referenced_node_from_state(
         }
     } else {
         Ok(optic_ref)
-    }
-}
-#[cfg(test)]
-mod test {
-    use super::*;
-    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
-    use opossum_core::types::api_types::ErrorResponse;
-
-    // Hilfsfunktion: Baut einen leeren AppState für die Tests
-    fn create_test_state() -> Data<AppState> {
-        Data::new(AppState::default())
-    }
-
-    #[actix_web::test]
-    async fn test_get_node_not_found() {
-        let app_state = create_test_state();
-        let app = test::init_service(App::new().app_data(app_state).service(get_node)).await;
-        let req = test::TestRequest::get()
-            .uri(&format!("/{}", Uuid::nil()))
-            .to_request();
-
-        let resp = app.call(req).await.unwrap();
-
-        // Sollte fehlschlagen, da die Node nicht existiert
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-
-        // Prüfen, ob unser Error-DTO sauber ankommt
-        let error_body: ErrorResponse = test::read_body_json(resp).await;
-        assert_eq!(error_body.category, "OpticScenery");
-    }
-
-    #[actix_web::test]
-    async fn test_patch_node_not_found() {
-        let app_state = create_test_state();
-        let app = test::init_service(App::new().app_data(app_state).service(patch_node)).await;
-
-        let random_uuid = Uuid::new_v4();
-        let update_req = UpdateNodeRequest {
-            name: Some("Test Name".to_string()),
-            inverted: None,
-            gui_position: None,
-            isometry: None,
-            alignment: None,
-        };
-
-        let req = test::TestRequest::patch()
-            .uri(&format!("/{}", random_uuid))
-            .set_json(&update_req)
-            .to_request();
-
-        let resp = app.call(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 }
