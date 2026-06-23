@@ -180,9 +180,7 @@ fn SourcePortCard(
     let existing_source = ray_trace_config_sig
         .read()
         .get_source(&port_uuid)
-        .map(|builder| builder.source().clone())
-        .unwrap_or_else(|| RayDataSource::default());
-
+        .map_or_else(RayDataSource::default, |builder| builder.source().clone());
     rsx! {
         div { class: "card bg-dark border-secondary mb-2",
             div {

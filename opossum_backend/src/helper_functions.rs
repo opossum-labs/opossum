@@ -378,7 +378,7 @@ where
                 )
             })?;
 
-            Ok(Ron(data))
+            Ok(Self(data))
         })
     }
 }

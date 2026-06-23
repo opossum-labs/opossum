@@ -96,7 +96,7 @@ pub async fn get_analyzer(uuid: Uuid) -> Result<AnalyzerInfo, String> {
         .get_ron::<AnalyzerInfo>(&format!("/api/analyzers/{uuid}"))
         .await
 }
-/// Get a list of SourcePort Nodes in the scenery.
+/// Get a list of `SourcePort` Nodes in the scenery.
 ///
 /// This returns a list with a Uuid <-> node name mapping.
 pub async fn get_available_sources() -> Result<Vec<SourcePortDto>, String> {

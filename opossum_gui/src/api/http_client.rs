@@ -149,11 +149,10 @@ impl HTTPClient {
         body: B,
     ) -> Result<(), String> {
         let res = self.client().put(self.url(route)).json(&body).send().await;
-        if let Ok(_response) = res {
-            Ok(())
-        } else {
-            Err(format!("Error on put request on route: \"{route}\""))
-        }
+        res.map_or_else(
+            |_| Err(format!("Error on put request on route: \"{route}\"")),
+            |_response| Ok(()),
+        )
     }
     /// Send a PATCH request to the given route with the provided body.
     ///

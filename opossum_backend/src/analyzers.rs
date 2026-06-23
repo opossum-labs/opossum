@@ -5,6 +5,7 @@ use actix_web::{
 use opossum_core::{
     core_optics::OpticNode,
     error::OpossumError,
+    light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
     opm_document::AnalyzerInfo,
     prelude::AnalyzerType,
@@ -18,16 +19,13 @@ use crate::{app_state::AppState, error::BackEndErrorResponse, helper_functions::
 
 // --- NEW INTERNAL HELPER FUNCTION FOR RECURSIVE SOURCE PORT LOOKUP ---
 fn get_all_source_port_uuids(scenery: &NodeGroup) -> Vec<Uuid> {
-    let mut collected = Vec::new();
-    let root_uuid = scenery.node_attr().uuid();
-
     fn walk(scenery: &NodeGroup, current_group: Uuid, collected: &mut Vec<Uuid>) {
         let children_res = scenery.with_group_node(current_group, |g| {
             g.nodes()
                 .iter()
                 .map(|n| {
                     let node = n.optical_ref.lock_opm()?;
-                    let node_type = node.node_attr().node_type().to_string();
+                    let node_type = node.node_attr().node_type();
                     let node_uuid = node.node_attr().uuid();
                     drop(node);
                     Ok((node_uuid, node_type))
@@ -46,6 +44,8 @@ fn get_all_source_port_uuids(scenery: &NodeGroup) -> Vec<Uuid> {
         }
     }
 
+    let mut collected = Vec::new();
+    let root_uuid = scenery.node_attr().uuid();
     walk(scenery, root_uuid, &mut collected);
     collected
 }
@@ -134,19 +134,19 @@ pub async fn post_analyzer(
         for port_uuid in source_uuids {
             match &mut a_type {
                 AnalyzerType::Energy(config) => {
-                    config.map_source(port_uuid, Default::default());
+                    config.map_source(port_uuid, EnergyDataBuilder::default());
                 }
                 AnalyzerType::RayTrace(config) => {
-                    config.map_source(port_uuid, Default::default());
+                    config.map_source(port_uuid, RayDataBuilder::default());
                 }
                 AnalyzerType::GhostFocus(config) => {
-                    config.map_source(port_uuid, Default::default());
+                    config.map_source(port_uuid, RayDataBuilder::default());
                 }
             }
         }
         analyzer_info.set_analyzer_type(&a_type);
     }
-
+    drop(document);
     HttpResponse::Created().json(uuid) // 201 Created
 }
 
@@ -276,13 +276,6 @@ pub async fn put_analyzer_gui_position(
 pub async fn get_available_sources(
     data: web::Data<AppState>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
-    let document = data.document.lock();
-    let scenery = document.scenery().clone();
-    let root_uuid = scenery.node_attr().uuid();
-    drop(document);
-
-    let mut collected_sources = Vec::new();
-
     // Local helper function for recursive tree walk
     fn walk_scenery(
         scenery: &NodeGroup,
@@ -294,9 +287,9 @@ pub async fn get_available_sources(
                 .iter()
                 .map(|n| {
                     let node = n.optical_ref.lock_opm()?;
-                    let node_type = node.node_attr().node_type().to_string();
+                    let node_type = node.node_attr().node_type();
                     let node_uuid = node.node_attr().uuid();
-                    let node_name = node.node_attr().name().to_string();
+                    let node_name = node.node_attr().name();
                     drop(node);
                     Ok((node_uuid, node_type, node_name))
                 })
@@ -321,6 +314,12 @@ pub async fn get_available_sources(
         }
         Ok(())
     }
+
+    let document = data.document.lock();
+    let scenery = document.scenery().clone();
+    let root_uuid = scenery.node_attr().uuid();
+    drop(document);
+    let mut collected_sources = Vec::new();
 
     walk_scenery(&scenery, root_uuid, &mut collected_sources)
         .map_err(|e| BackEndErrorResponse::new(500, "OpticScenery", &e.to_string()))?;

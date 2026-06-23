@@ -89,7 +89,7 @@ fn SourcePortCard(
         .read()
         .get_source(&port_uuid)
         .cloned()
-        .unwrap_or_else(|| EnergyDataBuilder::default());
+        .unwrap_or_else(EnergyDataBuilder::default);
 
     rsx! {
       div { class: "card bg-dark border-secondary mb-2",

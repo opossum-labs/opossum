@@ -173,9 +173,7 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                         }
                     }
                     NodeChangeAction::AnalyzerType(analyzer_type) => {
-                        api::update_analyzer_config_ron(uuid, analyzer_type)
-                            .await
-                            .map(|_| ())
+                        api::update_analyzer_config_ron(uuid, analyzer_type).await
                     }
                 };
 

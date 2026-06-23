@@ -8,6 +8,7 @@ use nalgebra::Point2;
 use opossum_core::{
     core_optics::OpticRef,
     error::OpossumError,
+    light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::{NodeReference, create_node_ref},
     prelude::{AnalyzerType, OpmDocument, OpticNode, Proptype},
     types::api_types::{ErrorResponse, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
@@ -96,28 +97,23 @@ async fn post_children(
     let _ = scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     // --- AUTOMATICALLY INJECT MAPPINGS INTO ALL ANALYZERS IF NEW NODE IS A SOURCE PORT ---
-    let node_type_str = new_node_ref
-        .optical_ref
-        .lock_opm()?
-        .node_attr()
-        .node_type()
-        .to_string();
+    let node_type_str = new_node_ref.optical_ref.lock_opm()?.node_attr().node_type();
     let new_node_uuid = new_node_ref.optical_ref.lock_opm()?.node_attr().uuid();
 
     if node_type_str == "source port" {
-        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().cloned().collect();
+        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
         for az_uuid in analyzer_keys {
             if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
                 let mut a_type = analyzer_info.analyzer_type().clone();
                 match &mut a_type {
                     AnalyzerType::Energy(cfg) => {
-                        cfg.map_source(new_node_uuid, Default::default());
+                        cfg.map_source(new_node_uuid, EnergyDataBuilder::default());
                     }
                     AnalyzerType::RayTrace(cfg) => {
-                        cfg.map_source(new_node_uuid, Default::default());
+                        cfg.map_source(new_node_uuid, RayDataBuilder::default());
                     }
                     AnalyzerType::GhostFocus(cfg) => {
-                        cfg.map_source(new_node_uuid, Default::default());
+                        cfg.map_source(new_node_uuid, RayDataBuilder::default());
                     }
                 }
                 analyzer_info.set_analyzer_type(&a_type);
@@ -252,7 +248,7 @@ async fn delete_node(
 
     // --- AUTOMATICALLY REMOVE OBSOLETE MAPPINGS FROM ALL ANALYZERS ---
     for deleted_uuid in &deleted_nodes {
-        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().cloned().collect();
+        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
         for az_uuid in analyzer_keys {
             if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
                 let mut a_type = analyzer_info.analyzer_type().clone();
