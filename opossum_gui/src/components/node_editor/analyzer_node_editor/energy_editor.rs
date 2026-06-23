@@ -1,13 +1,16 @@
-use crate::OPOSSUM_UI_LOGS;
-use crate::components::node_editor::node_config_editor::{NodeChangeAction, NodeChangeEvent};
-// Import the existing EnergySourceEditor and the backend API functions
-use crate::components::node_editor::optical_node_editor::properties_editor::light_data_editor::energy_source_editor::EnergySourceEditor;
-use crate::api;
-
+use crate::{
+    OPOSSUM_UI_LOGS, api,
+    components::node_editor::{
+        analyzer_node_editor::light_data_editor::energy_source_editor::EnergySourceEditor,
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    },
+};
 use dioxus::prelude::*;
-use opossum_core::analyzers::energy::EnergyConfig;
-use opossum_core::prelude::{AnalyzerType, EnergyDataBuilder, LightDataBuilder};
-use opossum_core::types::api_types::SourcePortDto;
+use opossum_core::{
+    analyzers::energy::EnergyConfig,
+    prelude::{AnalyzerType, EnergyDataBuilder, LightDataBuilder},
+    types::api_types::SourcePortDto,
+};
 use uuid::Uuid;
 
 #[component]
@@ -17,7 +20,7 @@ pub fn EnergyEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let energy_config_sig = use_signal(|| energy_config);
-    
+
     // Signal to store the slim DTOs of all available SourcePorts in the model
     let mut available_sources = use_signal(Vec::<SourcePortDto>::new);
 
@@ -82,7 +85,8 @@ fn SourcePortCard(
     let port_name = port.name;
 
     // Safely look up the existing configuration via the mapped energy builder inside the core state
-    let existing_source = energy_config_sig.read()
+    let existing_source = energy_config_sig
+        .read()
         .get_source(&port_uuid)
         .cloned()
         .unwrap_or_else(|| EnergyDataBuilder::default());

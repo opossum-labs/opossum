@@ -119,7 +119,7 @@ pub async fn post_analyzer(
 ) -> HttpResponse {
     let new_analyzer_info = analyzer.into_inner();
     let mut document = data.document.lock();
-    
+
     // 1. Create the analyzer core instance
     let uuid = document.add_analyzer_with_position(
         new_analyzer_info.analyzer_type,
@@ -130,7 +130,7 @@ pub async fn post_analyzer(
     let source_uuids = get_all_source_port_uuids(document.scenery());
     if let Some(analyzer_info) = document.analyzer_mut(uuid) {
         let mut a_type = analyzer_info.analyzer_type().clone();
-        
+
         for port_uuid in source_uuids {
             match &mut a_type {
                 AnalyzerType::Energy(config) => {
@@ -221,123 +221,6 @@ pub async fn patch_analyzer(
             "UUID not found in analyzers",
         ));
     }
-    Ok(HttpResponse::NoContent().finish())
-}
-
-/// Map a `SourcePort` node to a light definition in an analyzer
-///
-/// Adds or updates the light definition (e.g. `RayDataBuilder` or `EnergyDataBuilder`)
-/// for a specific `SourcePort` node inside this analyzer's configuration.
-#[utoipa::path(
-    tag = "analyzer",
-    params(
-        ("analyzer_uuid" = Uuid, Path, description = "UUID of the analyzer"),
-        ("node_uuid" = Uuid, Path, description = "UUID of the SourcePort node")
-    ),
-    request_body(content = String, description = "Source configuration as RON string", content_type = "application/ron"),
-    responses(
-        (status = NO_CONTENT, description = "Source mapping successfully created/updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "Invalid RON format or UUID not found", content_type="application/json")
-    )
-)]
-#[put("/{analyzer_uuid}/sources/{node_uuid}")]
-pub async fn put_analyzer_source(
-    data: web::Data<AppState>,
-    path: web::Path<(Uuid, Uuid)>,
-    body: String,
-) -> Result<HttpResponse, BackEndErrorResponse> {
-    let (analyzer_uuid, node_uuid) = path.into_inner();
-    let mut document = data.document.lock();
-
-    let analyzer_info = document
-        .analyzer_mut(analyzer_uuid)
-        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "Analyzer UUID not found"))?;
-
-    let mut a_type = analyzer_info.analyzer_type().clone();
-
-    // Dynamisches Parsen basierend auf dem Analyzer-Typ
-    match &mut a_type {
-        AnalyzerType::Energy(config) => {
-            let builder: opossum_core::light::lightdata::energy_data_builder::EnergyDataBuilder =
-                ron::from_str(&body).map_err(|e| {
-                    BackEndErrorResponse::new(
-                        400,
-                        "Parse Error",
-                        &format!("Failed to parse EnergyDataBuilder: {e}"),
-                    )
-                })?;
-            config.map_source(node_uuid, builder);
-        }
-        AnalyzerType::RayTrace(config) => {
-            let builder: opossum_core::light::lightdata::ray_data_builder::RayDataBuilder =
-                ron::from_str(&body).map_err(|e| {
-                    BackEndErrorResponse::new(
-                        400,
-                        "Parse Error",
-                        &format!("Failed to parse RayDataBuilder: {e}"),
-                    )
-                })?;
-            config.map_source(node_uuid, builder);
-        }
-        AnalyzerType::GhostFocus(config) => {
-            let builder: opossum_core::light::lightdata::ray_data_builder::RayDataBuilder =
-                ron::from_str(&body).map_err(|e| {
-                    BackEndErrorResponse::new(
-                        400,
-                        "Parse Error",
-                        &format!("Failed to parse RayDataBuilder for GhostFocus: {e}"),
-                    )
-                })?;
-            config.map_source(node_uuid, builder);
-        }
-    }
-    analyzer_info.set_analyzer_type(&a_type);
-    drop(document);
-    Ok(HttpResponse::NoContent().finish())
-}
-
-/// Remove a `SourcePort` mapping from an analyzer
-///
-/// Removes the specific `SourcePort` light definition from this analyzer's configuration.
-#[utoipa::path(
-    tag = "analyzer",
-    params(
-        ("analyzer_uuid" = Uuid, Path, description = "UUID of the analyzer"),
-        ("node_uuid" = Uuid, Path, description = "UUID of the SourcePort node to remove")
-    ),
-    responses(
-        (status = NO_CONTENT, description = "Source mapping successfully removed"),
-        (status = NOT_FOUND, body = ErrorResponse, description = "Analyzer UUID not found", content_type="application/json")
-    )
-)]
-#[delete("/{analyzer_uuid}/sources/{node_uuid}")]
-pub async fn delete_analyzer_source(
-    data: web::Data<AppState>,
-    path: web::Path<(Uuid, Uuid)>,
-) -> Result<HttpResponse, BackEndErrorResponse> {
-    let (analyzer_uuid, node_uuid) = path.into_inner();
-    let mut document = data.document.lock();
-
-    let analyzer_info = document
-        .analyzer_mut(analyzer_uuid)
-        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "Analyzer UUID not found"))?;
-
-    let mut a_type = analyzer_info.analyzer_type().clone();
-
-    match &mut a_type {
-        AnalyzerType::Energy(config) => {
-            let _ = config.remove_source(&node_uuid);
-        }
-        AnalyzerType::RayTrace(config) => {
-            let _ = config.remove_source(&node_uuid);
-        }
-        AnalyzerType::GhostFocus(config) => {
-            let _ = config.remove_source(&node_uuid);
-        }
-    }
-    analyzer_info.set_analyzer_type(&a_type);
-    drop(document);
-
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -452,7 +335,5 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_analyzer);
     cfg.service(patch_analyzer);
     cfg.service(delete_analyzer);
-    cfg.service(put_analyzer_source);
-    cfg.service(delete_analyzer_source);
     cfg.service(put_analyzer_gui_position);
 }

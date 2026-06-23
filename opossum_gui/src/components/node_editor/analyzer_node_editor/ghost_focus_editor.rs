@@ -1,19 +1,18 @@
 use crate::OPOSSUM_UI_LOGS;
+use crate::api;
 use crate::components::node_editor::{
+    analyzer_node_editor::light_data_editor::ray_source_editor::RaySourceEditor,
     inputs::{
         input_components::{FlushableTextInput, LabeledSelect},
         select_options_from_enum_iterator,
     },
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
-// Import the RaySourceEditor and the unified API client module
-use crate::components::node_editor::optical_node_editor::properties_editor::light_data_editor::ray_source_editor::RaySourceEditor;
-use crate::api;
 
 use dioxus::prelude::*;
 use opossum_core::{
     core_optics::hit_map::fluence_estimator::FluenceEstimator,
-    prelude::{AnalyzerType, GhostFocusConfig, RayDataSource, LightDataBuilder},
+    prelude::{AnalyzerType, GhostFocusConfig, LightDataBuilder, RayDataSource},
     types::api_types::SourcePortDto,
     utils::default_from_name::DefaultFromName,
 };
@@ -26,7 +25,7 @@ pub fn GhostFocusEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let mut ghost_focus_config_sig = use_signal(|| ghost_focus_config);
-    
+
     // Signal to store the slim DTOs of all available SourcePorts in the model
     let mut available_sources = use_signal(Vec::<SourcePortDto>::new);
 
@@ -139,7 +138,8 @@ fn SourcePortCard(
     let port_name = port.name;
 
     // Safely look up the existing configuration via the mapped source builder inside the core state
-    let existing_source = ghost_focus_config_sig.read()
+    let existing_source = ghost_focus_config_sig
+        .read()
         .get_source(&port_uuid)
         .map(|builder| builder.source().clone())
         .unwrap_or_else(|| RayDataSource::default());

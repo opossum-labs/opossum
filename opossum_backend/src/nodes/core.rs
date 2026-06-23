@@ -9,7 +9,7 @@ use opossum_core::{
     core_optics::OpticRef,
     error::OpossumError,
     nodes::{NodeReference, create_node_ref},
-    prelude::{OpmDocument, OpticNode, Proptype, AnalyzerType},
+    prelude::{AnalyzerType, OpmDocument, OpticNode, Proptype},
     types::api_types::{ErrorResponse, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
     utils::LockExt,
 };
@@ -88,7 +88,7 @@ async fn post_children(
         new_node_info.gui_position().1,
     )));
     drop(node);
-    
+
     let mut document = data.document.lock();
     let uuid = path.into_inner();
     let scenery = document.scenery_mut();
@@ -96,7 +96,12 @@ async fn post_children(
     let _ = scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     // --- AUTOMATICALLY INJECT MAPPINGS INTO ALL ANALYZERS IF NEW NODE IS A SOURCE PORT ---
-    let node_type_str = new_node_ref.optical_ref.lock_opm()?.node_attr().node_type().to_string();
+    let node_type_str = new_node_ref
+        .optical_ref
+        .lock_opm()?
+        .node_attr()
+        .node_type()
+        .to_string();
     let new_node_uuid = new_node_ref.optical_ref.lock_opm()?.node_attr().uuid();
 
     if node_type_str == "source port" {
@@ -121,7 +126,7 @@ async fn post_children(
     }
 
     drop(document);
-    
+
     let node = new_node_ref.optical_ref.lock_opm()?;
     let node_info = NodeInfo::from_analyzable(&*node, None);
     drop(node);
@@ -252,9 +257,15 @@ async fn delete_node(
             if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
                 let mut a_type = analyzer_info.analyzer_type().clone();
                 match &mut a_type {
-                    AnalyzerType::Energy(cfg) => { let _ = cfg.remove_source(deleted_uuid); }
-                    AnalyzerType::RayTrace(cfg) => { let _ = cfg.remove_source(deleted_uuid); }
-                    AnalyzerType::GhostFocus(cfg) => { let _ = cfg.remove_source(deleted_uuid); }
+                    AnalyzerType::Energy(cfg) => {
+                        let _ = cfg.remove_source(deleted_uuid);
+                    }
+                    AnalyzerType::RayTrace(cfg) => {
+                        let _ = cfg.remove_source(deleted_uuid);
+                    }
+                    AnalyzerType::GhostFocus(cfg) => {
+                        let _ = cfg.remove_source(deleted_uuid);
+                    }
                 }
                 analyzer_info.set_analyzer_type(&a_type);
             }

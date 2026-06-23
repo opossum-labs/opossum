@@ -1,13 +1,15 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 pub mod energy_editor;
 pub mod ghost_focus_editor;
+mod light_data_editor;
 pub mod ray_trace_editor;
 
 use crate::components::{
     node_editor::{
         analyzer_node_editor::{
-            ghost_focus_editor::GhostFocusEditor, ray_trace_editor::RayTraceEditor,
             energy_editor::EnergyEditor, // <-- NEU
+            ghost_focus_editor::GhostFocusEditor,
+            ray_trace_editor::RayTraceEditor,
         },
         node_config_editor::NodeChangeEvent,
         optical_node_editor::general_editor::NodeTypeInput,

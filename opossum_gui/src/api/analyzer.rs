@@ -5,9 +5,7 @@ use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::AnalyzerType,
-    types::api_types::{
-        AnalyzerItemDto, NewAnalyzerInfo, SourcePortDto,
-    },
+    types::api_types::{AnalyzerItemDto, NewAnalyzerInfo, SourcePortDto},
 };
 use uuid::Uuid;
 
@@ -80,7 +78,7 @@ pub async fn update_analyzer_position(
 ) -> Result<(), String> {
     let position = (gui_position.x, gui_position.y);
     HTTP_API_CLIENT()
-        .put_receive_no_content::<(f64,f64)>(
+        .put_receive_no_content::<(f64, f64)>(
             &format!("/api/analyzers/{node_id}/gui_position"),
             position,
         )
@@ -98,54 +96,9 @@ pub async fn get_analyzer(uuid: Uuid) -> Result<AnalyzerInfo, String> {
         .get_ron::<AnalyzerInfo>(&format!("/api/analyzers/{uuid}"))
         .await
 }
-/// Maps a `SourcePort` node to a light definition in an analyzer configuration using a RON string.
+/// Get a list of SourcePort Nodes in the scenery.
 ///
-/// # Errors
-///
-/// Returns an error if the network request fails or the backend returns a non-success status.
-pub async fn put_analyzer_source(
-    analyzer_uuid: Uuid,
-    node_uuid: Uuid,
-    source_ron: String,
-) -> Result<(), String> {
-    let route = format!("/api/analyzers/{analyzer_uuid}/sources/{node_uuid}");
-    let url = HTTP_API_CLIENT().url(&route);
-
-    let res = HTTP_API_CLIENT()
-        .client()
-        .put(url)
-        .header("Content-Type", "application/ron")
-        .body(source_ron)
-        .send()
-        .await;
-
-    match res {
-        Ok(resp) => {
-            if resp.status().is_success() {
-                Ok(())
-            } else {
-                let status = resp.status();
-                let text = resp
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "<failed to read body>".into());
-                Err(format!("HTTP {status} on \"{route}\": {text}"))
-            }
-        }
-        Err(_) => Err(format!("Error on put request to route: \"{route}\"")),
-    }
-}
-
-/// Removes a `SourcePort` light definition mapping from an analyzer configuration.
-///
-/// # Errors
-///
-/// Returns an error if the deletion fails on the backend.
-pub async fn delete_analyzer_source(analyzer_uuid: Uuid, node_uuid: Uuid) -> Result<(), String> {
-    let route = format!("/api/analyzers/{analyzer_uuid}/sources/{node_uuid}");
-    HTTP_API_CLIENT().delete_no_content(&route).await
-}
-
+/// This returns a list with a Uuid <-> node name mapping.
 pub async fn get_available_sources() -> Result<Vec<SourcePortDto>, String> {
     HTTP_API_CLIENT()
         .get::<Vec<SourcePortDto>>("/api/analyzers/available_sources")

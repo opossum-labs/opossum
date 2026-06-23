@@ -1,7 +1,9 @@
 use std::{collections::HashSet, pin::Pin};
 
 use actix_web::{
-    FromRequest, HttpRequest, dev::Payload, web::{self},
+    FromRequest, HttpRequest,
+    dev::Payload,
+    web::{self},
 };
 use nalgebra::Point2;
 use opossum_core::{
@@ -366,7 +368,7 @@ where
                     &format!("Failed to read request body: {err}"),
                 )
             })?;
-            
+
             // 2. Deserialize the RON string into the target type T
             let data = ron::de::from_str(&body_str).map_err(|err| {
                 BackEndErrorResponse::new(

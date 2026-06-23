@@ -10,7 +10,6 @@ mod i32_editor;
 mod isometry_option_editor;
 mod length_editor;
 mod length_option_editor;
-pub mod light_data_editor;
 mod linear_density_editor;
 mod refractive_index_editor;
 mod splitter_type_editor;
@@ -25,10 +24,9 @@ use crate::components::node_editor::{
         f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
         fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
         isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
-        length_option_editor::LengthOptionEditor, light_data_editor::LightDataEditor,
-        linear_density_editor::LinearDensityEditor, refractive_index_editor::RefractiveIndexEditor,
-        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
-        vec2_editor::Vec2Editor,
+        length_option_editor::LengthOptionEditor, linear_density_editor::LinearDensityEditor,
+        refractive_index_editor::RefractiveIndexEditor, splitter_type_editor::SplitterTypeEditor,
+        string_editor::StringEditor, vec2_editor::Vec2Editor,
     },
 };
 use dioxus::prelude::*;
@@ -193,15 +191,7 @@ fn get_optical_editor(
                 readonly,
             }
         }),
-        Proptype::LightDataBuilder(light_data_builder) => Some(rsx! {
-            LightDataEditor {
-                node_id,
-                light_data_builder,
-                property_key,
-                on_change,
-                readonly,
-            }
-        }),
+        Proptype::LightDataBuilder(_light_data_builder) => Some(rsx! { "no longer available" }),
         Proptype::RefractiveIndex(ref_ind_type) => Some(rsx! {
             RefractiveIndexEditor {
                 node_id,

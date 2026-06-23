@@ -9,12 +9,12 @@ use ray_type_selection::RayDataBuilderSelector;
 
 use crate::components::node_editor::{
     accordion::ElementList,
-    inputs::input_components::RowedInputs,
-    optical_node_editor::properties_editor::light_data_editor::ray_source_editor::{
+    analyzer_node_editor::light_data_editor::ray_source_editor::{
         distribution_editor::DistributionEditor,
         image_source_editor::get_image_source_input_params,
         point_source_editor::ReferenceLengthEditor,
     },
+    inputs::input_components::RowedInputs,
 };
 
 #[component]

@@ -1,20 +1,19 @@
 use crate::OPOSSUM_UI_LOGS;
-use crate::components::node_editor::inputs::input_components::{NodeConfigUnitInput, UnitHandling};
+use crate::api;
 use crate::components::node_editor::{
+    analyzer_node_editor::light_data_editor::ray_source_editor::RaySourceEditor,
     inputs::{
-        input_components::{FlushableTextInput, LabeledSelect},
+        input_components::{FlushableTextInput, LabeledSelect, NodeConfigUnitInput, UnitHandling},
         select_options_from_enum_iterator,
     },
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
-// Import the RaySourceEditor
-use crate::components::node_editor::optical_node_editor::properties_editor::light_data_editor::ray_source_editor::RaySourceEditor;
-use crate::api;
 
 use dioxus::prelude::*;
-use opossum_core::analyzers::propagation_strategy::MissedSurfaceStrategy;
-use opossum_core::types::api_types::SourcePortDto;
-use opossum_core::{joule, prelude::*, utils::default_from_name::DefaultFromName};
+use opossum_core::{
+    analyzers::propagation_strategy::MissedSurfaceStrategy, joule, prelude::*,
+    types::api_types::SourcePortDto, utils::default_from_name::DefaultFromName,
+};
 use uom::si::f64::Energy;
 use uuid::Uuid;
 
@@ -178,7 +177,8 @@ fn SourcePortCard(
     let port_uuid = port.uuid;
     let port_name = port.name;
 
-    let existing_source = ray_trace_config_sig.read()
+    let existing_source = ray_trace_config_sig
+        .read()
         .get_source(&port_uuid)
         .map(|builder| builder.source().clone())
         .unwrap_or_else(|| RayDataSource::default());
