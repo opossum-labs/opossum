@@ -34,10 +34,13 @@ pub fn AnalyzerNodeEditor(
     });
     match &*resource_future.read_unchecked() {
         Some(Some(analyzer_info)) => {
-            // Die if-Abfrage nach der ID wurde komplett entfernt,
-            // da die Info implizit zur node_id gehört!
             rsx! {
+                // --- GLOBAL SCROLL CONTAINER MOVED HERE ---
+                // Provides unified vertical scrolling for all analyzer types
                 div {
+                    class: "analyzer-node-editor-container p-1",
+                    style: "max-height: 75vh; overflow-y: auto; overflow-x: hidden; padding-right: 4px;",
+
                     h6 { "Analyzer Configuration" }
                     div {
                         class: "accordion accordion-borderless bg-dark ",

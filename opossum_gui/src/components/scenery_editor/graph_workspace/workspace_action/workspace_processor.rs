@@ -164,7 +164,7 @@ pub fn use_workspace_processor(
                         let res = if is_optical {
                             api::update_node_position(node_id, pos).await
                         } else {
-                            api::update_analyzer_position_ron(node_id, pos).await
+                            api::update_analyzer_position(node_id, pos).await
                         };
                         eval_action_run(
                             res,
@@ -618,7 +618,7 @@ async fn process_optimize_layout(
         let api_result = if is_optical {
             api::update_node_position(*node_id, *pos).await
         } else {
-            api::update_analyzer_position_ron(*node_id, *pos).await
+            api::update_analyzer_position(*node_id, *pos).await
         };
 
         if let Err(err_str) = api_result {

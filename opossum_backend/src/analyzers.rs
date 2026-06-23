@@ -2,12 +2,14 @@ use actix_web::{
     HttpRequest, HttpResponse, delete, get, patch, post, put,
     web::{self},
 };
-use nalgebra::Point2;
 use opossum_core::{
+    core_optics::OpticNode,
     error::OpossumError,
+    nodes::NodeGroup,
     opm_document::AnalyzerInfo,
     prelude::AnalyzerType,
-    types::api_types::{AnalyzerItemDto, ErrorResponse, NewAnalyzerInfo, UpdateAnalyzerInfo},
+    types::api_types::{AnalyzerItemDto, ErrorResponse, NewAnalyzerInfo, SourcePortDto},
+    utils::LockExt,
 };
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -132,12 +134,14 @@ pub async fn get_analyzers(data: web::Data<AppState>) -> HttpResponse {
 }
 
 /// Update the analyzer config of an analyzer node
+///
+/// *Note*: This only updates the analyzer config. A GUI position is unchanged
 #[utoipa::path(
     tag = "analyzer",
     params(("uuid" = Uuid, Path, description = "UUID of the analyzer")),
-    request_body(content = String, description = "updated config of analyzer", content_type = "application/ron", example= "\"analyzer_type\""),
+    request_body(content = AnalyzerType, description = "updated config of analyzer", content_type = "application/ron", example= "\"analyzer_type\""),
     responses(
-        (status = NO_CONTENT, description = "Analyzer config successfully updated"), // <-- HIER: 204 No Content
+        (status = NO_CONTENT, description = "Analyzer config successfully updated"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "Invalid RON or UUID not found", content_type="application/json")
     )
 )]
@@ -148,7 +152,7 @@ pub async fn patch_analyzer(
     body: String,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    let analyzer_update: UpdateAnalyzerInfo = ron::de::from_str(&body).map_err(|e| {
+    let analyzer_type: AnalyzerType = ron::de::from_str(&body).map_err(|e| {
         BackEndErrorResponse::new(
             400,
             "Parse Error",
@@ -156,13 +160,7 @@ pub async fn patch_analyzer(
         )
     })?;
     if let Some(analyzer_info) = data.document.lock().analyzer_mut(uuid) {
-        if let Some(analyzer_type) = analyzer_update.analyzer_type {
-            analyzer_info.set_analyzer_type(&analyzer_type);
-        }
-        if let Some(gui_position) = analyzer_update.gui_position {
-            let pos = gui_position.map(|(x, y)| Point2::new(x, y));
-            analyzer_info.set_gui_position(pos);
-        }
+        analyzer_info.set_analyzer_type(&analyzer_type);
     } else {
         return Err(BackEndErrorResponse::new(
             404,
@@ -329,8 +327,71 @@ pub async fn put_analyzer_gui_position(
     }
     Ok(HttpResponse::NoContent().finish())
 }
+/// Get all available `SourcePort` nodes (UUID and Name) in the entire document recursively
+#[utoipa::path(
+    tag = "analyzer",
+    responses(
+        (status = OK, description = "List of all available SourcePort pairs in the document", body = Vec<SourcePortDto>),
+        (status = INTERNAL_SERVER_ERROR, body = ErrorResponse, description = "Internal tree traversal error")
+    )
+)]
+#[get("/available_sources")]
+pub async fn get_available_sources(
+    data: web::Data<AppState>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let document = data.document.lock();
+    let scenery = document.scenery().clone();
+    let root_uuid = scenery.node_attr().uuid();
+    drop(document);
 
+    let mut collected_sources = Vec::new();
+
+    // Local helper function for recursive tree walk
+    fn walk_scenery(
+        scenery: &NodeGroup,
+        current_group_uuid: Uuid,
+        collected: &mut Vec<SourcePortDto>,
+    ) -> Result<(), OpossumError> {
+        let children_res = scenery.with_group_node(current_group_uuid, |g| {
+            g.nodes()
+                .iter()
+                .map(|n| {
+                    let node = n.optical_ref.lock_opm()?;
+                    let node_type = node.node_attr().node_type().to_string();
+                    let node_uuid = node.node_attr().uuid();
+                    let node_name = node.node_attr().name().to_string();
+                    drop(node);
+                    Ok((node_uuid, node_type, node_name))
+                })
+                .collect::<Result<Vec<(Uuid, String, String)>, OpossumError>>()
+        });
+
+        if let Ok(Ok(nodes_data)) = children_res {
+            for (child_uuid, node_type, node_name) in nodes_data {
+                if node_type == "source port" {
+                    // Collect only the minimal required information
+                    collected.push(SourcePortDto {
+                        uuid: child_uuid,
+                        name: node_name,
+                    });
+                } else {
+                    // Recurse deeper if the node acts as a sub-group
+                    if scenery.with_group_node(child_uuid, |_| {}).is_ok() {
+                        walk_scenery(scenery, child_uuid, collected)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    walk_scenery(&scenery, root_uuid, &mut collected_sources)
+        .map_err(|e| BackEndErrorResponse::new(500, "OpticScenery", &e.to_string()))?;
+
+    Ok(HttpResponse::Ok().json(collected_sources))
+}
 pub fn config(cfg: &mut ServiceConfig<'_>) {
+    cfg.service(get_available_sources);
     cfg.service(get_analyzers);
     cfg.service(get_analyzer);
     cfg.service(post_analyzer);

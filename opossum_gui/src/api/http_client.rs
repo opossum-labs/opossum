@@ -136,7 +136,25 @@ impl HTTPClient {
             Err(format!("Error on put request on route: \"{route}\""))
         }
     }
-
+    /// Send a PUT request to the given route with the provided body.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the request fails (e.g. the route is not reachable)
+    /// - the response cannot be deserialized into the expected type
+    pub async fn put_receive_no_content<B: Serialize + DeserializeOwned>(
+        &self,
+        route: &str,
+        body: B,
+    ) -> Result<(), String> {
+        let res = self.client().put(self.url(route)).json(&body).send().await;
+        if let Ok(_response) = res {
+            Ok(())
+        } else {
+            Err(format!("Error on put request on route: \"{route}\""))
+        }
+    }
     /// Send a PATCH request to the given route with the provided body.
     ///
     /// # Errors

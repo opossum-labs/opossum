@@ -10,7 +10,7 @@ mod i32_editor;
 mod isometry_option_editor;
 mod length_editor;
 mod length_option_editor;
-mod light_data_editor;
+pub mod light_data_editor;
 mod linear_density_editor;
 mod refractive_index_editor;
 mod splitter_type_editor;

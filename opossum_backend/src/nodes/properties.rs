@@ -80,7 +80,7 @@ pub async fn get_properties(
         content_type = "application/ron"
     ),
     responses(
-        (status = NO_CONTENT, description = "Property successfully updated"), // <-- HIER: NO_CONTENT
+        (status = NO_CONTENT, description = "Property successfully updated"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID/Property not found or invalid RON format", content_type="application/json")
     )
 )]

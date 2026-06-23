@@ -1,8 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-mod energy_source_editor;
+pub mod energy_source_editor;
 mod light_data_builder_selection;
-mod ray_source_editor;
+pub mod ray_source_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,

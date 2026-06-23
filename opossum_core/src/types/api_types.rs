@@ -518,3 +518,8 @@ pub struct LoadDocumentResponse {
     pub name: String,
     pub needs_autolayout: bool,
 }
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema, PartialEq)]
+pub struct SourcePortDto {
+    pub uuid: Uuid,
+    pub name: String,
+}
